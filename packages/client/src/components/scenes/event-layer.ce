@@ -1,0 +1,20 @@
+<Container sortableChildren={true}>
+    @for ((event,id) of events) {
+        <Character id={id} object={event} isMe={false}  />
+    }
+
+    @for ((player,id) of players) {
+        <Character id={id} object={player} isMe={true} />
+    }
+</Container>
+
+<script>
+    import { effect, signal, computed, mount } from 'canvasengine'
+    import { inject } from "../../core/inject";
+    import { RpgClientEngine } from "../../RpgClientEngine";
+    import Character from "../character.ce";
+   
+    const engine = inject(RpgClientEngine);
+    const players = engine.sceneMap.players
+    const events = engine.sceneMap.events
+</script>

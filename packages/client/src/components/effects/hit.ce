@@ -1,0 +1,87 @@
+<Text x y zIndex={10000} color scale size={30} text />
+
+<script>
+  import { animatedSignal, mount, signal, tick } from "canvasengine";
+  import { Direction } from "@rpgjs/common";
+  const {
+    text,
+    direction,
+    onFinish,
+    duration,
+    color,
+    x: positionX,
+    y: positionY
+  } = defineProps({
+    duration: {
+      default: 1000
+    },
+    color: {
+      default: 'black'
+    }
+  });
+
+  const scale = animatedSignal(1, {
+    duration: duration(),
+  });
+
+  // Generate random initial position
+  const randomPosition = () => Math.floor(Math.random() * 60);
+  const initialY = randomPosition();
+  const x = signal(positionX());
+  const y = signal(positionY() - initialY);
+
+  // Initial velocity
+  let velocityX = 0;
+  let velocityY = 0;
+
+  // Set initial velocity based on direction
+  const speed = 200;
+  switch (direction()) {
+    case Direction.Left:
+      velocityX = speed;
+      break;
+    case Direction.Right:
+      velocityX = -speed;
+      break;
+    case Direction.Up:
+      velocityY = speed;
+      break;
+    case Direction.Down:
+      velocityY = -speed;
+      break;
+  }
+
+  // Add some randomness to the velocity
+  velocityX += (Math.random() - 0.5) * 100;
+  velocityY += (Math.random() - 0.5) * 100;
+
+  const gravity = 500; // Gravity effect
+  const deceleration = 0.98; // Deceleration factor
+
+  mount(() => {
+    scale.set(0.1);
+  });
+
+  let elapsedTime = 0;
+
+  tick(({ deltaTime }) => {
+    elapsedTime += deltaTime;
+    
+    if (elapsedTime < duration()) {
+      // Update position
+      x.update((x) => x + (velocityX * deltaTime) / 1000);
+      y.update((y) => y + (velocityY * deltaTime) / 1000);
+
+      // Apply gravity
+      velocityY += (gravity * deltaTime) / 1000;
+
+      // Apply deceleration
+      velocityX *= deceleration;
+      velocityY *= deceleration;
+    } else {
+      if (onFinish) {
+        onFinish();
+      }
+    }
+  });
+</script>

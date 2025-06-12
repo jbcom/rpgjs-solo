@@ -1,0 +1,13 @@
+<Container>
+    <TiledMap map basePath="map" createLayersPerTilesZ={true} objectLayer={() => <EventLayerComponent />}  />
+</Container>
+
+<script>
+    import { EventLayerComponent } from "@rpgjs/client";
+    import { TiledMap } from "@canvasengine/presets";
+    import { signal } from "canvasengine";
+
+    const { data, children } = defineProps()
+
+    const map = signal(data())
+</script>

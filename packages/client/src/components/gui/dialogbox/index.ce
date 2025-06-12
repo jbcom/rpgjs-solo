@@ -1,0 +1,194 @@
+<Container justifyContent="center" alignItems="center" width="100%" height="100%">
+  <Container
+    ref="dialogbox"
+    scale={{ x: scaleX }}
+    anchor={[0.5, 0.5]}
+    width={700}
+    height
+    controls
+    positionType="absolute"
+    bottom={10}
+  >
+  <Rect width={700} height={250} color="#1a1a2e" />
+    <Rect
+      x={0}
+      y={0}
+      width={700}
+      height
+      color="#1a1a2e"
+      alpha={0.9}
+      borderRadius={10}
+      border
+      shadow
+    />
+      <Container
+        flexDirection="row"
+        width={700}
+        height
+        alpha={contentOpacity}
+      >
+        <Container flexDirection="column">
+          <Text
+            text
+            color="#fff"
+            fontSize={18}
+            margin={40}
+            typewriter
+            style={textStyle}
+          />
+          @if (visibleSelection) {
+            <Selection selectedIndex={0} items={choices} onSelect />
+          }
+        </Container>
+    </Container>
+</Container>  
+
+  
+</Container>
+<script>
+  import Selection from './selection.ce'
+
+  import {
+    animatedSignal,
+    computed,
+    effect,
+    signal,
+    trigger,
+    mount
+  } from "canvasengine";
+
+  import { inject } from "../../../core/inject";
+  import { RpgClientEngine } from "../../../RpgClientEngine";
+
+  const {
+    message,
+    choices: _choices,
+    onFinish,
+    onInteraction
+  } = defineProps();
+
+  const client = inject(RpgClientEngine);
+  const keyboardControls = client.globalConfig.keyboardControls;
+
+  client.stopProcessingInput = true;
+  let isDestroyed = false;
+
+  const texts = [message()]
+  const height = signal(250);
+  const isTextCompleted = signal(false);
+
+  const drawSpeaker = (g) => {
+    g.beginFill(0xffa500); // Orange color
+    g.lineStyle(2, 0x000000); // Black border
+    g.moveTo(0, 0);
+    g.lineTo(70, 0);
+    g.lineTo(80, 15);
+    g.lineTo(70, 30);
+    g.lineTo(0, 30);
+    g.lineTo(0, 0);
+    g.endFill();
+  };
+
+  const border = signal({ width: 5, color: "#595971" });
+  const shadow = signal({ color: "#000", blur: 10, offsetX: 10, offsetY: 10 });
+
+  const contentOpacity = animatedSignal(0, {
+    duration: 1000,
+  });
+
+  const scaleX = animatedSignal(0, {
+    duration: 500,
+  });
+
+  scaleX.set(1);
+  contentOpacity.set(1);
+
+  const currentTextIndex = signal(0);
+  const currentText = computed(() => texts?.[currentTextIndex()] ?? '');
+  const isChoiceDisplayed = signal(false);
+
+  const text = computed(() => {
+    const current = currentText();
+    return typeof current === "string" ? current : current.text;
+  });
+
+  const choices = computed(() => {
+    //const current = currentText();
+    //return typeof current === "string" ? null : current.choices;
+    return _choices;
+  });
+
+  const visibleSelection = computed(() => isChoiceDisplayed() && choices().length != 0)
+
+  const triggerSkip = trigger();
+
+  const typewriter = {
+    speed: 0.3,
+    skip: triggerSkip,
+    onComplete: () => {
+      isTextCompleted.set(true);
+    }
+  }
+
+  const textStyle = {
+    wordWrap: true,
+    wordWrapWidth: 700 - 256 - 80
+  }
+
+  const face = signal({ x: 0, y: 0, width: 256, height: 256 });
+
+  mount((element) => {
+    const [dialogbox] = element.props.children
+    return () => {
+      dialogbox.directives.controls.onDestroy()
+      isDestroyed = true;
+      // Wait destroy is finished before start processing input
+      setTimeout(() => {
+        client.stopProcessingInput = false;
+      }, 500)
+    }
+  })
+
+  const controls = signal({
+    next: {
+      bind: keyboardControls.action,
+      keyDown(e) {
+        if (isDestroyed) return;
+        if (isChoiceDisplayed()) {
+          // If choices are displayed, do nothing (wait for selection)
+          return;
+        }
+
+        // If text is still typing, just skip (fast forward) the animation
+        if (!isTextCompleted()) {
+          triggerSkip.start();
+          isTextCompleted.set(true);
+        }
+        else {
+          const isFinished = currentTextIndex() === texts.length - 1;
+          currentTextIndex.update((index) => {
+            if (index < texts.length - 1) {
+              return index + 1;
+            }
+            return index;
+          });
+          isChoiceDisplayed.set(false);
+          isTextCompleted.set(false);
+          if (isFinished && onFinish) {
+            onFinish();
+          } 
+        }
+      },
+    },
+  });
+
+  const onSelect = (index) => {
+    onFinish(index);
+  }
+  
+  effect(() => {
+    if (choices().length != 0) {
+      isChoiceDisplayed.set(true);
+    }
+  });
+</script>

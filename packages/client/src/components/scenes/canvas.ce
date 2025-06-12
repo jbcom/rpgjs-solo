@@ -1,0 +1,51 @@
+<Canvas width={@engine.width} height={@engine.height}>
+  <Viewport worldWidth worldHeight clamp>
+    @if (sceneData) {
+      <SceneMap />
+    }
+  </Viewport>
+  @for (gui of gui) {
+    <Container display="flex">
+      @if (gui.display) {
+        <gui.component ...gui.data() onFinish={(data) => {
+          onGuiFinish(gui, data)
+        }} onInteraction={(name, data) => {
+          onGuiInteraction(gui, name, data)
+        }} /> 
+      }
+    </Container>
+  } 
+</Canvas>
+
+<script>
+  import { signal, computed, effect } from "canvasengine";
+  import { inject } from "../../core/inject";
+  import { RpgClientEngine } from "../../RpgClientEngine";
+  import SceneMap from './draw-map.ce'
+  import { RpgGui } from "../../Gui/Gui";
+
+  const engine = inject(RpgClientEngine);
+  const guiService = inject(RpgGui);
+  const sceneData = engine.sceneMap.data
+  const gui = guiService.gui
+  const worldWidth = computed(() => sceneData()?.width)
+  const worldHeight = computed(() => sceneData()?.height)
+
+  effect(() => {
+     if (sceneData() && !sceneData().component) {
+       throw new Error("Warning ! You need to define a component for the scene. Use provideLoadMap() to define a component for the scene.")
+     }
+  })
+
+  const onGuiFinish = (gui, data) => {
+    guiService.guiClose(gui.name, data)
+  }
+
+  const onGuiInteraction = (gui, name, data) => {
+    guiService.guiInteraction(gui.name, name, data)
+  }
+  
+  const clamp = {
+    direction: "all"
+  }
+</script>

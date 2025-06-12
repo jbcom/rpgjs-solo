@@ -1,0 +1,23 @@
+<Sprite image rectangle x y zIndex />
+
+<script>
+const {
+    image,
+    rect,
+    drawIn,
+    id,
+} = defineProps()
+
+const rectangle = {
+    x: rect[0],
+    y: rect[1],
+    width: rect[2],
+    height: rect[3]
+}
+
+const x = drawIn[0]
+const y = drawIn[1]
+
+const zIndex = y + rectangle.height
+</script>
+

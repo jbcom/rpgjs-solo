@@ -1,0 +1,67 @@
+<Container controls flexDirection="column" margin={[0, 0, 0, 50]}>
+    @for ((item,index) of items) { 
+      <ItemMenu text={@item.@text} isSelected={@selected(@index)} /> 
+    }
+</Container>
+
+<script>
+  import { signal, computed, mount } from "canvasengine";
+  import ItemMenu from "./itemMenu.ce";
+  import { RpgClientEngine } from "../../../RpgClientEngine";
+  import { inject } from "../../../core/inject";
+
+  const {
+    items,
+    wrapAround,
+    onSelect,
+    selectedIndex,
+  } = defineProps();
+
+  const client = inject(RpgClientEngine);
+  const keyboardControls = client.globalConfig.keyboardControls;
+
+  const selected = (index) => {
+    return computed(() => {
+      return index === selectedIndex();
+    })
+  }
+
+  mount((element) => {
+    return () => {
+      element.directives.controls.onDestroy()
+    }
+  })
+
+  const controls = signal({
+    down: {
+      bind: keyboardControls.down,
+      keyDown() {
+        selectedIndex.update((currentIndex) => {
+          if (wrapAround) {
+            return (currentIndex + 1) % items().length;
+          } else {
+            return Math.min(currentIndex + 1, items().length - 1);
+          }
+        });
+      },
+    },
+    up: {
+      bind: keyboardControls.up,
+      keyDown() {
+        selectedIndex.update((currentIndex) => {
+          if (wrapAround) {
+            return (currentIndex - 1 + items().length) % items().length;
+          } else {
+            return Math.max(currentIndex - 1, 0);
+          }
+        });
+      },
+    },
+    enter: {
+      bind: keyboardControls.action,
+      keyDown() {
+        onSelect?.(selectedIndex());
+      },
+    },
+  });
+</script>

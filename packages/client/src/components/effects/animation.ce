@@ -1,0 +1,19 @@
+<Sprite sheet x y anchor={0.5} />
+
+<script>
+  import { signal } from "canvasengine";
+  import { RpgClientEngine } from "../../RpgClientEngine";
+  import { inject } from "../../core/inject";
+
+  const { x, y, name, onFinish } = defineProps();
+
+  const client = inject(RpgClientEngine);
+  const spritesheets = client.spritesheets;
+
+  const sheet = {
+    definition: spritesheets.get(name()),
+    playing: 'default',
+    onFinish
+  };
+
+</script>

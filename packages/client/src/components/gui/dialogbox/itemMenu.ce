@@ -1,0 +1,23 @@
+<Container>
+    <Rect width height color="#595971" alpha visible={isSelected} />
+    <Container flexDirection="row" alignItems="center" justifyContent="center">
+        <Text text color="#fff" fontSize={18} margin={10} />
+    </Container>
+</Container>
+
+<script>
+import { animatedSignal } from "canvasengine";
+
+const { text, isSelected } = defineProps();
+
+const alpha = animatedSignal(1, {
+    repeatType: "reverse",
+    duration: 500,
+    repeat: Infinity,
+});
+
+alpha.set(0.5);
+
+const height = 40;
+const width = 256;
+</script>

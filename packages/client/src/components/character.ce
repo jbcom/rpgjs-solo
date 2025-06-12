@@ -1,0 +1,104 @@
+<Container x y zIndex={y} viewportFollow={isMe} controls>
+  <Particle emit={@emitParticleTrigger} settings={@particleSettings} zIndex={1000} name={particleName} />
+  @for (graphicId of graphics) {
+    <Sprite sheet={@sheet(@graphicId)} direction tint />
+  }
+  <!-- <Ellipse 
+    x={shadow.@x} 
+    y={shadow.@y} 
+    width={shadow.@width} 
+    height={shadow.@height} 
+    color="black" 
+    blur={10} 
+    alpha={0.5}
+  /> -->
+</Container>
+
+<script>
+  import { signal, effect, mount, computed } from "canvasengine";
+  import { Particle } from "@canvasengine/presets";
+  import { GameEngineToken } from "@rpgjs/common";
+  import { RpgClientEngine } from "../RpgClientEngine";
+  import { inject } from "../core/inject";  
+  import { Direction } from "@rpgjs/common";
+  import Hit from "./effects/hit.ce";
+
+  const { object, id, isMe } = defineProps();
+
+  const client = inject(RpgClientEngine);
+
+  const spritesheets = client.spritesheets;
+
+  const x = object.x;
+  const y = object.y;
+  const tint = object.tint;
+  const direction = object.direction;
+  const animationName = object.animationName;
+  const emitParticleTrigger = object.emitParticleTrigger;
+  const particleSettings = client.particleSettings;
+  const particleName = object.particleName;
+  const graphics = object.graphics;
+
+  const hitbox = object.hitbox;
+  const widthShadow = 10;
+  const shadow = computed(() => ({
+    x: hitbox().w / 2,
+    y: hitbox().h - (hitbox().h / 2),
+    width: hitbox().w + widthShadow,
+    height: hitbox().h,
+  }))
+  const canControls = () => isMe() && object.canMove()
+  const keyboardControls = client.globalConfig.keyboardControls;
+
+  const controls = signal({
+    down: {
+      repeat: true,
+      bind: keyboardControls.down,
+      keyDown() {
+        if (canControls()) client.processInput({ input: Direction.Down })
+      },
+    },
+    up: {
+      repeat: true,
+      bind: keyboardControls.up,
+      keyDown() {
+        if (canControls()) client.processInput({ input: Direction.Up })
+      },
+    },
+    left: {
+      repeat: true,
+      bind: keyboardControls.left,
+      keyDown() {
+        if (canControls()) client.processInput({ input: Direction.Left })
+      },
+    },
+    right: {
+      repeat: true,
+      bind: keyboardControls.right,
+      keyDown() {
+        if (canControls()) client.processInput({ input: Direction.Right })
+      },
+    },
+    action: {
+      bind: keyboardControls.action,
+      keyDown() {
+        if (canControls()) {
+          client.processAction({ action: 'action' })
+          // particleName.set('hit') 
+          // emitParticleTrigger.start()
+          // object.flash('red')
+        }
+      },
+    },
+  });
+
+  const sheet = (graphicId) => {
+    return {
+      definition: spritesheets.get(graphicId),
+      playing: animationName,
+      params: {
+        direction
+      },
+    };
+  }
+</script>
