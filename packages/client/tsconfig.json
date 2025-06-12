@@ -25,6 +25,11 @@
     },
     "include": [
         "src",
+        "src/types/**/*",
         "node_modules/canvasengine/*"
+    ],
+    "typeRoots": [
+        "node_modules/@types",
+        "src/types"
     ],
   }

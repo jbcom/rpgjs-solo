@@ -4,6 +4,10 @@ export const packages = (type: "build" | "dev") => {
   const samplePath = "sample";
   return [
     {
+      name: "tiled",
+      buildScript
+    },
+    {
       name: "vite",
       buildScript
     },
@@ -18,19 +22,17 @@ export const packages = (type: "build" | "dev") => {
     {
       name: "client",
       buildScript,
-      dependencies: [`${basePath}/common/dist/index.d.ts`],
+      dependencies: [`${basePath}/common/dist/index.d.ts`, `${basePath}/tiled/dist/index.d.ts`],
     },
     {
       name: "server",
       buildScript,
-      dependencies: [`${basePath}/common/dist/index.d.ts`],
+      dependencies: [`${basePath}/common/dist/index.d.ts`, `${basePath}/tiled/dist/index.d.ts`],
     },
     {
       name: "tiledmap",
       buildScript,
       dependencies: [
-        `${basePath}/common/dist/index.d.ts`,
-        `${basePath}/tiled/dist/index.d.ts`,
         `${basePath}/server/dist/index.d.ts`,
         `${basePath}/client/dist/index.d.ts`,
         `${basePath}/vite/dist/index.d.ts`,
