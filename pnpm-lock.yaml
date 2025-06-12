@@ -8,25 +8,24 @@ importers:
 
   .:
     dependencies:
-      execa:
-        specifier: ^9.5.2
-        version: 9.5.2
-      tsx:
-        specifier: ^4.19.3
-        version: 4.19.3
-      wait-on:
-        specifier: ^8.0.3
-        version: 8.0.3
-    devDependencies:
       bumpp:
         specifier: ^10.1.1
         version: 10.1.1
       changeset:
         specifier: ^0.2.6
         version: 0.2.6
+      execa:
+        specifier: ^9.5.2
+        version: 9.5.2
       pnpm:
         specifier: ^10.12.1
         version: 10.12.1
+      tsx:
+        specifier: ^4.19.3
+        version: 4.19.3
+      wait-on:
+        specifier: ^8.0.3
+        version: 8.0.3
 
   packages/client:
     dependencies:
