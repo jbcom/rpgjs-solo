@@ -220,7 +220,7 @@ export class MapClass extends TiledProperties {
         const level = this.tilesIndex[zA]
         const obj: TileInfo = {
             tiles: [],
-            hasCollision: true,
+            hasCollision: false,
             isOverlay: false,
             objectGroups: [],
             tileIndex

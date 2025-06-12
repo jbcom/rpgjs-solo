@@ -1,21 +1,65 @@
-import { Direction, LiteralDirection, RpgShape, Vector2d } from '@rpgjs/common'
-import { Utils } from '@rpgjs/common'
-import { Behavior, ClientMode, MoveMode, MoveTo, PositionXY, SocketEvents, SocketMethods, Tick } from '@rpgjs/types'
-import { Observable, Subscription, takeUntil, Subject, tap, switchMap, of, from, debounceTime } from 'rxjs'
-import { RpgServerEngine } from '../server'
-import { RpgEvent, RpgPlayer } from './Player'
+import { type Constructor } from "@rpgjs/common";
+import { RpgCommonPlayer, Matter, Direction } from "@rpgjs/common";
+import { 
+  MovementManager, 
+  MovementStrategy,
+  LinearMove,
+  Dash,
+  Knockback,
+  PathFollow,
+  Oscillate,
+  CompositeMovement,
+  SeekAvoid,
+  LinearRepulsion,
+  IceMovement,
+  ProjectileMovement,
+  ProjectileType,
+  random,
+  isFunction,
+  capitalize
+} from "@rpgjs/common";
+import { RpgMap } from "../rooms/map";
+import { Observable, Subscription, takeUntil, Subject, tap, switchMap, of, from } from 'rxjs';
+import { RpgPlayer } from "./Player";
 
-const {
-    arrayFlat,
-    random,
-    isFunction,
-    capitalize
-} = Utils
+
+interface PlayerWithMixins extends RpgCommonPlayer {
+  getCurrentMap(): RpgMap;
+  id: string;
+  server: any;
+  _destroy$: Subject<void>;
+  frequency: number;
+  nbPixelInTile: number;
+  moveByDirection: (direction: Direction, deltaTimeInt: number) => Promise<boolean>;
+  changeDirection: (direction: Direction) => boolean;
+}
+
+export interface IMoveManager {
+  addMovement(strategy: MovementStrategy): void;
+  removeMovement(strategy: MovementStrategy): boolean;
+  clearMovements(): void;
+  hasActiveMovements(): boolean;
+  getActiveMovements(): MovementStrategy[];
+  
+  moveTo(target: RpgCommonPlayer | { x: number, y: number }): void;
+  stopMoveTo(): void;
+  dash(direction: { x: number, y: number }, speed?: number, duration?: number): void;
+  knockback(direction: { x: number, y: number }, force?: number, duration?: number): void;
+  followPath(waypoints: Array<{ x: number, y: number }>, speed?: number, loop?: boolean): void;
+  oscillate(direction: { x: number, y: number }, amplitude?: number, period?: number): void;
+  applyIceMovement(direction: { x: number, y: number }, maxSpeed?: number): void;
+  shootProjectile(type: ProjectileType, direction: { x: number, y: number }, speed?: number): void;
+  moveRoutes(routes: Routes): Promise<boolean>;
+  infiniteMoveRoute(routes: Routes): void;
+  breakRoutes(force?: boolean): void;
+  replayRoutes(): void;
+}
+
 
 function wait(sec: number) {
-    return new Promise((resolve) => {
-        setTimeout(resolve, sec * 1000)
-    })
+  return new Promise((resolve) => {
+      setTimeout(resolve, sec * 1000)
+  })
 }
 
 type CallbackTileMove = (player: RpgPlayer, map) => Direction[]
@@ -23,23 +67,23 @@ type CallbackTurnMove = (player: RpgPlayer, map) => string
 type Routes = (string | Promise<any> | Direction | Direction[] | Function)[]
 
 export enum Frequency {
-    Lowest = 600,
-    Lower = 400,
-    Low = 200,
-    High = 100,
-    Higher = 50,
-    Highest = 25,
-    None = 0
+  Lowest = 600,
+  Lower = 400,
+  Low = 200,
+  High = 100,
+  Higher = 50,
+  Highest = 25,
+  None = 0
 }
 
 export enum Speed {
-    Slowest = 0.2,
-    Slower = 0.5,
-    Slow = 1,
-    Normal = 3,
-    Fast = 5,
-    Faster = 7,
-    Fastest = 10
+  Slowest = 0.2,
+  Slower = 0.5,
+  Slow = 1,
+  Normal = 3,
+  Fast = 5,
+  Faster = 7,
+  Fastest = 10
 }
 
 /** 
@@ -71,262 +115,375 @@ export enum Speed {
 * */
 class MoveList {
 
-    repeatMove(direction: Direction, repeat: number): Direction[] {
-        return new Array(repeat).fill(direction)
-    }
+  repeatMove(direction: Direction, repeat: number): Direction[] {
+      // Safety check for valid repeat value
+      if (!Number.isFinite(repeat) || repeat < 0 || repeat > 10000) {
+          console.warn('Invalid repeat value:', repeat, 'using default value 1');
+          repeat = 1;
+      }
+      
+      // Ensure repeat is an integer
+      repeat = Math.floor(repeat);
+      
+      // Additional safety check - ensure repeat is a safe integer
+      if (repeat < 0 || repeat > Number.MAX_SAFE_INTEGER || !Number.isSafeInteger(repeat)) {
+          console.warn('Unsafe repeat value:', repeat, 'using default value 1');
+          repeat = 1;
+      }
+      
+      try {
+          return new Array(repeat).fill(direction);
+      } catch (error) {
+          console.error('Error creating array with repeat:', repeat, error);
+          return [direction]; // Return single direction as fallback
+      }
+  }
 
-    private repeatTileMove(direction: string, repeat: number, propMap: string): CallbackTileMove {
-        return (player: RpgPlayer, map): Direction[] => {
-            const repeatTile = Math.floor(map[propMap] / player.speed) * repeat
-            return this[direction](repeatTile)
-        }
-    }
+  private repeatTileMove(direction: string, repeat: number, propMap: string): CallbackTileMove {
+      return (player: RpgPlayer, map): Direction[] => {
+          const playerSpeed = typeof player.speed === 'function' ? player.speed() : player.speed;
+          
+          // Safety checks
+          if (!playerSpeed || playerSpeed <= 0) {
+              console.warn('Invalid player speed:', playerSpeed, 'using default speed 3');
+              return this[direction](repeat);
+          }
+          
+          const repeatTile = Math.floor((map[propMap] || 32) / playerSpeed) * repeat;
+          
+          // Additional safety check for the calculated repeat value
+          if (!Number.isFinite(repeatTile) || repeatTile < 0 || repeatTile > 10000) {
+              console.warn('Calculated repeatTile is invalid:', repeatTile, 'using original repeat:', repeat);
+              return this[direction](repeat);
+          }
+          
+          // Final safety check before calling the method
+          if (!Number.isSafeInteger(repeatTile)) {
+              console.warn('repeatTile is not a safe integer:', repeatTile, 'using original repeat:', repeat);
+              return this[direction](repeat);
+          }
+          
+          try {
+              return this[direction](repeatTile);
+          } catch (error) {
+              console.error('Error calling direction method with repeatTile:', repeatTile, error);
+              return this[direction](repeat); // Fallback to original repeat
+          }
+      }
+  }
 
-    right(repeat: number = 1): Direction[] {
-        return this.repeatMove(Direction.Right, repeat)
-    }
+  right(repeat: number = 1): Direction[] {
+      return this.repeatMove(Direction.Right, repeat)
+  }
 
-    left(repeat: number = 1): Direction[] {
-        return this.repeatMove(Direction.Left, repeat)
-    }
+  left(repeat: number = 1): Direction[] {
+      return this.repeatMove(Direction.Left, repeat)
+  }
 
-    up(repeat: number = 1): Direction[] {
-        return this.repeatMove(Direction.Up, repeat)
-    }
+  up(repeat: number = 1): Direction[] {
+      return this.repeatMove(Direction.Up, repeat)
+  }
 
-    down(repeat: number = 1): Direction[] {
-        return this.repeatMove(Direction.Down, repeat)
-    }
+  down(repeat: number = 1): Direction[] {
+      return this.repeatMove(Direction.Down, repeat)
+  }
 
-    wait(sec: number): Promise<unknown> {
-        return wait(sec)
-    }
+  wait(sec: number): Promise<unknown> {
+      return wait(sec)
+  }
 
-    random(repeat: number = 1): Direction[] {
-        return new Array(repeat).fill(null).map(() => [
-            Direction.Right,
-            Direction.Left,
-            Direction.Up,
-            Direction.Down
-        ][random(0, 3)])
-    }
+  random(repeat: number = 1): Direction[] {
+      // Safety check for valid repeat value
+      if (!Number.isFinite(repeat) || repeat < 0 || repeat > 10000) {
+          console.warn('Invalid repeat value in random:', repeat, 'using default value 1');
+          repeat = 1;
+      }
+      
+      // Ensure repeat is an integer
+      repeat = Math.floor(repeat);
+      
+      // Additional safety check - ensure repeat is a safe integer
+      if (repeat < 0 || repeat > Number.MAX_SAFE_INTEGER || !Number.isSafeInteger(repeat)) {
+          console.warn('Unsafe repeat value in random:', repeat, 'using default value 1');
+          repeat = 1;
+      }
+      
+      try {
+          return new Array(repeat).fill(null).map(() => [
+              Direction.Right,
+              Direction.Left,
+              Direction.Up,
+              Direction.Down
+          ][random(0, 3)]);
+      } catch (error) {
+          console.error('Error creating random array with repeat:', repeat, error);
+          return [Direction.Down]; // Return single direction as fallback
+      }
+  }
 
-    tileRight(repeat: number = 1): CallbackTileMove {
-        return this.repeatTileMove('right', repeat, 'tileWidth')
-    }
+  tileRight(repeat: number = 1): CallbackTileMove {
+      return this.repeatTileMove('right', repeat, 'tileWidth')
+  }
 
-    tileLeft(repeat: number = 1): CallbackTileMove {
-        return this.repeatTileMove('left', repeat, 'tileWidth')
-    }
+  tileLeft(repeat: number = 1): CallbackTileMove {
+      return this.repeatTileMove('left', repeat, 'tileWidth')
+  }
 
-    tileUp(repeat: number = 1): CallbackTileMove {
-        return this.repeatTileMove('up', repeat, 'tileHeight')
-    }
+  tileUp(repeat: number = 1): CallbackTileMove {
+      return this.repeatTileMove('up', repeat, 'tileHeight')
+  }
 
-    tileDown(repeat: number = 1): CallbackTileMove {
-        return this.repeatTileMove('down', repeat, 'tileHeight')
-    }
+  tileDown(repeat: number = 1): CallbackTileMove {
+      return this.repeatTileMove('down', repeat, 'tileHeight')
+  }
 
-    tileRandom(repeat: number = 1): CallbackTileMove {
-        return (player: RpgPlayer, map): Direction[] => {
-            let directions: Direction[] = []
-            for (let i = 0; i < repeat; i++) {
-                const randFn: CallbackTileMove = [
-                    this.tileRight(),
-                    this.tileLeft(),
-                    this.tileUp(),
-                    this.tileDown()
-                ][random(0, 3)]
-                directions = [
-                    ...directions,
-                    ...randFn(player, map)
-                ]
-            }
-            return directions
-        }
-    }
+  tileRandom(repeat: number = 1): CallbackTileMove {
+      return (player: RpgPlayer, map): Direction[] => {
+          // Safety check for valid repeat value
+          if (!Number.isFinite(repeat) || repeat < 0 || repeat > 1000) {
+              console.warn('Invalid repeat value in tileRandom:', repeat, 'using default value 1');
+              repeat = 1;
+          }
+          
+          // Ensure repeat is an integer
+          repeat = Math.floor(repeat);
+          
+          let directions: Direction[] = []
+          for (let i = 0; i < repeat; i++) {
+              const randFn: CallbackTileMove = [
+                  this.tileRight(),
+                  this.tileLeft(),
+                  this.tileUp(),
+                  this.tileDown()
+              ][random(0, 3)]
+              
+              try {
+                  const newDirections = randFn(player, map);
+                  if (Array.isArray(newDirections)) {
+                      directions = [...directions, ...newDirections];
+                  }
+              } catch (error) {
+                  console.warn('Error in tileRandom iteration:', error);
+                  // Continue with next iteration instead of breaking
+              }
+              
+              // Safety check to prevent excessive array growth
+              if (directions.length > 10000) {
+                  console.warn('tileRandom generated too many directions, truncating');
+                  break;
+              }
+          }
+          return directions
+      }
+  }
 
-    private _awayFromPlayerDirection(player: RpgPlayer, otherPlayer: RpgPlayer): number {
-        const directionOtherPlayer = otherPlayer.getDirection()
-        let newDirection = 0
-        switch (directionOtherPlayer) {
-            case Direction.Left:
-            case Direction.Right:
-                if (otherPlayer.position.x > player.position.x) {
-                    newDirection = Direction.Left
-                }
-                else {
-                    newDirection = Direction.Right
-                }
-                break
-            case Direction.Up:
-            case Direction.Down:
-                if (otherPlayer.position.y > player.position.y) {
-                    newDirection = Direction.Up
-                }
-                else {
-                    newDirection = Direction.Down
-                }
-                break
-        }
-        return newDirection
-    }
+  private _awayFromPlayerDirection(player: RpgPlayer, otherPlayer: RpgPlayer): Direction {
+      const directionOtherPlayer = otherPlayer.getDirection()
+      let newDirection: Direction = Direction.Down
 
-    private _towardPlayerDirection(player: RpgPlayer, otherPlayer: RpgPlayer): number {
-        const directionOtherPlayer = otherPlayer.getDirection()
-        let newDirection = 0
-        switch (directionOtherPlayer) {
-            case Direction.Left:
-            case Direction.Right:
-                if (otherPlayer.position.x > player.position.x) {
-                    newDirection = Direction.Right
-                }
-                else {
-                    newDirection = Direction.Left
-                }
-                break
-            case Direction.Up:
-            case Direction.Down:
-                if (otherPlayer.position.y > player.position.y) {
-                    newDirection = Direction.Down
-                }
-                else {
-                    newDirection = Direction.Up
-                }
-                break
-        }
-        return newDirection
-    }
+      switch (directionOtherPlayer) {
+          case Direction.Left:
+          case Direction.Right:
+              if (otherPlayer.x() > player.x()) {
+                  newDirection = Direction.Left
+              }
+              else {
+                  newDirection = Direction.Right
+              }
+              break
+          case Direction.Up:
+          case Direction.Down:
+              if (otherPlayer.y() > player.y()) {
+                  newDirection = Direction.Up
+              }
+              else {
+                  newDirection = Direction.Down
+              }
+              break
+      }
+      return newDirection
+  }
 
-    private _awayFromPlayer({ isTile, typeMov }: { isTile: boolean, typeMov: string }, otherPlayer: RpgPlayer, repeat: number = 1) {
-        const method = (dir: number) => {
-            const direction: string = LiteralDirection[dir]
-            return this[isTile ? 'tile' + capitalize(direction) : direction](repeat)
-        }
-        return (player: RpgPlayer, map) => {
-            let newDirection = 0
-            switch (typeMov) {
-                case 'away':
-                    newDirection = this._awayFromPlayerDirection(player, otherPlayer)
-                    break;
-                case 'toward':
-                    newDirection = this._towardPlayerDirection(player, otherPlayer)
-                    break
-            }
-            let direction: any = method(newDirection)
-            if (isFunction(direction)) {
-                direction = direction(player, map)
-            }
-            return direction
-        }
-    }
+  private _towardPlayerDirection(player: RpgPlayer, otherPlayer: RpgPlayer): Direction {
+      const directionOtherPlayer = otherPlayer.getDirection()
+      let newDirection: Direction = Direction.Down
+ 
+      switch (directionOtherPlayer) {
+          case Direction.Left:
+          case Direction.Right:
+              if (otherPlayer.x() > player.x()) {
+                  newDirection = Direction.Right
+              }
+              else {
+                  newDirection = Direction.Left
+              }
+              break
+          case Direction.Up:
+          case Direction.Down:
+              if (otherPlayer.y() > player.y()) {
+                  newDirection = Direction.Down
+              }
+              else {
+                  newDirection = Direction.Up
+              }
+              break
+      }
+      return newDirection
+  }
 
-    towardPlayer(player: RpgPlayer, repeat: number = 1) {
-        return this._awayFromPlayer({ isTile: false, typeMov: 'toward' }, player, repeat)
-    }
+  private _awayFromPlayer({ isTile, typeMov }: { isTile: boolean, typeMov: string }, otherPlayer: RpgPlayer, repeat: number = 1) {
+      const method = (dir: Direction) => {
+          const direction: string = DirectionNames[dir as any] || 'down'
+          return this[isTile ? 'tile' + capitalize(direction) : direction](repeat)
+      }
+      return (player: RpgPlayer, map) => {
+          let newDirection: Direction = Direction.Down
+          switch (typeMov) {
+              case 'away':
+                  newDirection = this._awayFromPlayerDirection(player, otherPlayer)
+                  break;
+              case 'toward':
+                  newDirection = this._towardPlayerDirection(player, otherPlayer)
+                  break
+          }
+          let direction: any = method(newDirection)
+          if (isFunction(direction)) {
+              direction = direction(player, map)
+          }
+          return direction
+      }
+  }
 
-    tileTowardPlayer(player: RpgPlayer, repeat: number = 1) {
-        return this._awayFromPlayer({ isTile: true, typeMov: 'toward' }, player, repeat)
-    }
+  towardPlayer(player: RpgPlayer, repeat: number = 1) {
+      return this._awayFromPlayer({ isTile: false, typeMov: 'toward' }, player, repeat)
+  }
 
-    awayFromPlayer(player: RpgPlayer, repeat: number = 1): CallbackTileMove {
-        return this._awayFromPlayer({ isTile: false, typeMov: 'away' }, player, repeat)
-    }
+  tileTowardPlayer(player: RpgPlayer, repeat: number = 1) {
+      return this._awayFromPlayer({ isTile: true, typeMov: 'toward' }, player, repeat)
+  }
 
-    tileAwayFromPlayer(player: RpgPlayer, repeat: number = 1): CallbackTileMove {
-        return this._awayFromPlayer({ isTile: true, typeMov: 'away' }, player, repeat)
-    }
+  awayFromPlayer(player: RpgPlayer, repeat: number = 1): CallbackTileMove {
+      return this._awayFromPlayer({ isTile: false, typeMov: 'away' }, player, repeat)
+  }
 
-    turnLeft(): string {
-        return 'turn-' + Direction.Left
-    }
+  tileAwayFromPlayer(player: RpgPlayer, repeat: number = 1): CallbackTileMove {
+      return this._awayFromPlayer({ isTile: true, typeMov: 'away' }, player, repeat)
+  }
 
-    turnRight(): string {
-        return 'turn-' + Direction.Right
-    }
+  turnLeft(): string {
+      return 'turn-' + Direction.Left
+  }
 
-    turnUp(): string {
-        return 'turn-' + Direction.Up
-    }
+  turnRight(): string {
+      return 'turn-' + Direction.Right
+  }
 
-    turnDown(): string {
-        return 'turn-' + Direction.Down
-    }
+  turnUp(): string {
+      return 'turn-' + Direction.Up
+  }
 
-    turnRandom(): string {
-        return [
-            this.turnRight(),
-            this.turnLeft(),
-            this.turnUp(),
-            this.turnDown()
-        ][random(0, 3)]
-    }
+  turnDown(): string {
+      return 'turn-' + Direction.Down
+  }
 
-    turnAwayFromPlayer(otherPlayer: RpgPlayer): CallbackTurnMove {
-        return (player: RpgPlayer) => {
-            const direction = this._awayFromPlayerDirection(player, otherPlayer)
-            return 'turn-' + direction
-        }
-    }
+  turnRandom(): string {
+      return [
+          this.turnRight(),
+          this.turnLeft(),
+          this.turnUp(),
+          this.turnDown()
+      ][random(0, 3)]
+  }
 
-    turnTowardPlayer(otherPlayer: RpgPlayer): CallbackTurnMove {
-        return (player: RpgPlayer) => {
-            const direction = this._towardPlayerDirection(player, otherPlayer)
-            return 'turn-' + direction
-        }
-    }
+  turnAwayFromPlayer(otherPlayer: RpgPlayer): CallbackTurnMove {
+      return (player: RpgPlayer) => {
+          const direction = this._awayFromPlayerDirection(player, otherPlayer)
+          return 'turn-' + direction
+      }
+  }
+
+  turnTowardPlayer(otherPlayer: RpgPlayer): CallbackTurnMove {
+      return (player: RpgPlayer) => {
+          const direction = this._towardPlayerDirection(player, otherPlayer)
+          return 'turn-' + direction
+      }
+  }
 }
 
-export const Move = new MoveList()
+// Direction mapping for string conversion
+const DirectionNames: { [key: string]: string } = {
+  [Direction.Up]: 'up',
+  [Direction.Down]: 'down',
+  [Direction.Left]: 'left',
+  [Direction.Right]: 'right'
+};
 
-export class MoveManager {
-    private movingSubscription: Subscription
-    private _infiniteRoutes: Routes
-    private _finishRoute: Function
+export const Move = new MoveList();
 
-    /** 
-     * Changes the player's speed
-     * 
-     * ```ts
-     * player.speed = 1
-     * ```
-     * 
-     * You can use Speed enum
-     * 
-     * ```ts
-     * import { Speed } from '@rpgjs/server'
-     * player.speed = Speed.Slow
-     * ```
-     * 
-     * @title Change Speed
-     * @prop {number} player.speed
-     * @enum {number}
-     * 
-     * Speed.Slowest | 0.2
-     * Speed.Slower | 0.5
-     * Speed.Slow | 1
-     * Speed.Normal | 3
-     * Speed.Fast | 5
-     * Speed.Faster | 7
-     * Speed.Fastest | 10
-     * @default 3
-     * @memberof MoveManager
-     * */
-    speed: number
-
-    /** 
-     * Blocks the movement. The player will not be able to move even if he presses the direction keys on the keyboard.
-     * 
-     * ```ts
-     * player.canMove = false
-     * ```
-     * 
-     * @title Block movement
-     * @prop {boolean} player.canMove
-     * @default true
-     * @memberof MoveManager
-     * */
-    canMove: boolean
+/**
+ * Move Manager mixin
+ * 
+ * Adds comprehensive movement management capabilities to a player class.
+ * Provides access to all available movement strategies and utility methods
+ * for common movement patterns.
+ * 
+ * ## Features
+ * - **Strategy Management**: Add, remove, and query movement strategies
+ * - **Predefined Movements**: Quick access to common movement patterns
+ * - **Composite Movements**: Combine multiple strategies
+ * - **Physics Integration**: Seamless integration with Matter.js physics
+ * 
+ * ## Available Movement Strategies
+ * - `LinearMove`: Constant velocity movement
+ * - `Dash`: Quick burst movement
+ * - `Knockback`: Push effect with decay
+ * - `PathFollow`: Follow waypoint sequences
+ * - `Oscillate`: Back-and-forth patterns
+ * - `SeekAvoid`: AI pathfinding with obstacle avoidance
+ * - `LinearRepulsion`: Smoother obstacle avoidance
+ * - `IceMovement`: Slippery surface physics
+ * - `ProjectileMovement`: Ballistic trajectories
+ * - `CompositeMovement`: Combine multiple strategies
+ * 
+ * @param Base - The base class to extend
+ * @returns A new class with comprehensive movement management capabilities
+ * 
+ * @example
+ * ```ts
+ * // Basic usage
+ * class MyPlayer extends WithMoveManager(RpgCommonPlayer) {
+ *   onInput(direction: { x: number, y: number }) {
+ *     // Apply dash movement on input
+ *     this.dash(direction, 8, 200);
+ *   }
+ * 
+ *   onIceTerrain() {
+ *     // Switch to ice physics
+ *     this.clearMovements();
+ *     this.applyIceMovement({ x: 1, y: 0 }, 4);
+ *   }
+ * 
+ *   createPatrol() {
+ *     // Create patrol path
+ *     const waypoints = [
+ *       { x: 100, y: 100 },
+ *       { x: 300, y: 100 },
+ *       { x: 300, y: 300 }
+ *     ];
+ *     this.followPath(waypoints, 2, true);
+ *   }
+ * }
+ * ```
+ */
+export function WithMoveManager<TBase extends Constructor<RpgCommonPlayer>>(
+  Base: TBase
+): Constructor<IMoveManager> & TBase {
+  return class extends Base implements IMoveManager {
+    
+    // Private properties for infinite route management
+    private _infiniteRoutes: Routes | null = null;
+    private _finishRoute: ((value: boolean) => void) | null = null;
+    private _isInfiniteRouteActive: boolean = false;
 
     /** 
     * The player passes through the other players (or vice versa). But the player does not go through the events.
@@ -340,7 +497,13 @@ export class MoveManager {
     * @default true
     * @memberof MoveManager
     * */
-    throughOtherPlayer: boolean
+    set throughOtherPlayer(value: boolean) {
+      this._throughOtherPlayer.set(value);
+    }
+
+    get throughOtherPlayer(): boolean {
+      return this._throughOtherPlayer();
+    }
 
     /** 
      * The player goes through the event or the other players (or vice versa)
@@ -354,7 +517,13 @@ export class MoveManager {
      * @default false
      * @memberof MoveManager
      * */
-    through: boolean
+    set through(value: boolean) {
+      this._through.set(value);
+    }
+    
+    get through(): boolean {
+      return this._through();
+    }
 
     /** 
      * The frequency allows to put a stop time between each movement in the array of the moveRoutes() method.
@@ -385,271 +554,692 @@ export class MoveManager {
      * @default 0
      * @memberof MoveManager
      * */
-    frequency: number
+    set frequency(value: number) {
+      this._frequency.set(value);
+    }
+
+    get frequency(): number {
+      return this._frequency();
+    }
+    
+    /**
+     * Add a custom movement strategy to this entity
+     * 
+     * Allows adding any custom MovementStrategy implementation.
+     * Multiple strategies can be active simultaneously.
+     * 
+     * @param strategy - The movement strategy to add
+     * 
+     * @example
+     * ```ts
+     * // Add custom movement
+     * const customMove = new LinearMove(5, 0, 1000);
+     * player.addMovement(customMove);
+     * 
+     * // Add multiple movements
+     * player.addMovement(new Dash(8, { x: 1, y: 0 }, 200));
+     * player.addMovement(new Oscillate({ x: 0, y: 1 }, 10, 1000));
+     * ```
+     */
+    addMovement(strategy: MovementStrategy): void {
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      if (!map) return;
+      
+      map.moveManager.add((this as unknown as PlayerWithMixins).id, strategy);
+    }
 
     /**
-     * Gives an itinerary. 
+     * Remove a specific movement strategy from this entity
      * 
-     * You can create your own motion function:
+     * @param strategy - The strategy instance to remove
+     * @returns True if the strategy was found and removed
      * 
+     * @example
      * ```ts
-     * import { Direction } from '@rpgjs/server'
+     * const dashMove = new Dash(8, { x: 1, y: 0 }, 200);
+     * player.addMovement(dashMove);
      * 
-     * const customMove = () => {
-     *      return [Direction.Left, Direction.Up]
+     * // Later, remove the specific movement
+     * const removed = player.removeMovement(dashMove);
+     * console.log('Movement removed:', removed);
+     * ```
+     */
+    removeMovement(strategy: MovementStrategy): boolean {
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      if (!map) return false;
+      
+      return map.moveManager.remove((this as unknown as PlayerWithMixins).id, strategy);
+    }
+
+    /**
+     * Remove all active movement strategies from this entity
+     * 
+     * Stops all current movements immediately.
+     * 
+     * @example
+     * ```ts
+     * // Stop all movements when player dies
+     * player.clearMovements();
+     * 
+     * // Clear movements before applying new ones
+     * player.clearMovements();
+     * player.dash({ x: 1, y: 0 });
+     * ```
+     */
+    clearMovements(): void {
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      if (!map) return;
+      
+      map.moveManager.clear((this as unknown as PlayerWithMixins).id);
+    }
+
+    /**
+     * Check if this entity has any active movement strategies
+     * 
+     * @returns True if entity has active movements
+     * 
+     * @example
+     * ```ts
+     * // Don't accept input while movements are active
+     * if (!player.hasActiveMovements()) {
+     *   player.dash(inputDirection);
      * }
      * 
-     * player.moveRoutes([ customMove() ])
+     * // Check before adding new movement
+     * if (player.hasActiveMovements()) {
+     *   player.clearMovements();
+     * }
      * ```
+     */
+    hasActiveMovements(): boolean {
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      if (!map) return false;
+      
+      return map.moveManager.hasActiveStrategies((this as unknown as PlayerWithMixins).id);
+    }
+
+    /**
+     * Get all active movement strategies for this entity
      * 
-     * Your function can also return a function:
+     * @returns Array of active movement strategies
      * 
-     *  ```ts
-     * import { Direction, RpgPlayer } from '@rpgjs/server'
+     * @example
+     * ```ts
+     * // Check what movements are currently active
+     * const movements = player.getActiveMovements();
+     * console.log(`Player has ${movements.length} active movements`);
      * 
-     * // This function can be found in another file. By returning a function, you have access to the player who is making a move.
-     * const customMove = (otherPlayer: RpgPlayer) => {
-     *      return (player: RpgPlayer, map) => {
-     *          return otherPlayer.position.x > player.position.x ? Direction.Left : Direction.Right
-     *      }
+     * // Find specific movement type
+     * const hasDash = movements.some(m => m instanceof Dash);
+     * ```
+     */
+    getActiveMovements(): MovementStrategy[] {
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      if (!map) return [];
+      
+      return map.moveManager.getStrategies((this as unknown as PlayerWithMixins).id);
+    }
+
+    /**
+     * Move toward a target player or position using AI pathfinding
+     * 
+     * Uses SeekAvoid strategy for intelligent pathfinding with obstacle avoidance.
+     * The entity will seek toward the target while avoiding obstacles.
+     * 
+     * @param target - Target player or position to move toward
+     * 
+     * @example
+     * ```ts
+     * // Move toward another player
+     * const targetPlayer = game.getPlayer('player2');
+     * player.moveTo(targetPlayer);
+     * 
+     * // Move toward a specific position
+     * player.moveTo({ x: 300, y: 200 });
+     * 
+     * // Stop the movement later
+     * player.stopMoveTo();
+     * ```
+     */
+    moveTo(target: RpgCommonPlayer | { x: number, y: number }): void {
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      if (!map) return;
+      
+      let targetBody: Matter.Body | null = null;
+      
+      if ('id' in target) {
+        // Target is a player
+        targetBody = map.physic.getBody(target.id);
+      } else {
+        // Target is a position - create a temporary target function
+        const getTargetPos = () => Matter.Vector.create(target.x, target.y);
+        map.moveManager.add(
+          (this as unknown as PlayerWithMixins).id, 
+          new SeekAvoid(map.physic, getTargetPos, 3, 50, 5)
+        );
+        return;
+      }
+      
+      if (targetBody) {
+        map.moveManager.add(
+          (this as unknown as PlayerWithMixins).id, 
+          new SeekAvoid(map.physic, targetBody, 3, 50, 5)
+        );
+      }
+    }
+
+    /**
+     * Stop the current moveTo behavior
+     * 
+     * Removes any active SeekAvoid strategies.
+     * 
+     * @example
+     * ```ts
+     * // Start following a target
+     * player.moveTo(targetPlayer);
+     * 
+     * // Stop following when target is reached
+     * if (distanceToTarget < 10) {
+     *   player.stopMoveTo();
+     * }
+     * ```
+     */
+    stopMoveTo(): void {
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      if (!map) return;
+      
+      const strategies = this.getActiveMovements();
+      strategies.forEach(strategy => {
+        if (strategy instanceof SeekAvoid || strategy instanceof LinearRepulsion) {
+          this.removeMovement(strategy);
+        }
+      });
+    }
+
+    /**
+     * Perform a dash movement in the specified direction
+     * 
+     * Applies high-speed movement for a short duration.
+     * 
+     * @param direction - Normalized direction vector
+     * @param speed - Movement speed (default: 8)
+     * @param duration - Duration in milliseconds (default: 200)
+     * 
+     * @example
+     * ```ts
+     * // Dash right
+     * player.dash({ x: 1, y: 0 });
+     * 
+     * // Dash diagonally with custom speed and duration
+     * player.dash({ x: 0.7, y: 0.7 }, 12, 300);
+     * 
+     * // Dash in input direction
+     * player.dash(inputDirection, 10, 150);
+     * ```
+     */
+    dash(direction: { x: number, y: number }, speed: number = 8, duration: number = 200): void {
+      this.addMovement(new Dash(speed, direction, duration));
+    }
+
+    /**
+     * Apply knockback effect in the specified direction
+     * 
+     * Creates a push effect that gradually decreases over time.
+     * 
+     * @param direction - Normalized direction vector
+     * @param force - Initial knockback force (default: 5)
+     * @param duration - Duration in milliseconds (default: 300)
+     * 
+     * @example
+     * ```ts
+     * // Knockback from explosion
+     * const explosionDir = { x: -1, y: 0 };
+     * player.knockback(explosionDir, 8, 400);
+     * 
+     * // Light knockback from attack
+     * player.knockback(attackDirection, 3, 200);
+     * ```
+     */
+    knockback(direction: { x: number, y: number }, force: number = 5, duration: number = 300): void {
+      this.addMovement(new Knockback(direction, force, duration));
+    }
+
+    /**
+     * Follow a sequence of waypoints
+     * 
+     * Entity will move through each waypoint in order.
+     * 
+     * @param waypoints - Array of x,y positions to follow
+     * @param speed - Movement speed (default: 2)
+     * @param loop - Whether to loop back to start (default: false)
+     * 
+     * @example
+     * ```ts
+     * // Create a patrol route
+     * const patrolPoints = [
+     *   { x: 100, y: 100 },
+     *   { x: 300, y: 100 },
+     *   { x: 300, y: 300 },
+     *   { x: 100, y: 300 }
+     * ];
+     * player.followPath(patrolPoints, 3, true);
+     * 
+     * // One-time path to destination
+     * player.followPath([{ x: 500, y: 200 }], 4);
+     * ```
+     */
+    followPath(waypoints: Array<{ x: number, y: number }>, speed: number = 2, loop: boolean = false): void {
+      this.addMovement(new PathFollow(waypoints, speed, loop));
+    }
+
+    /**
+     * Apply oscillating movement pattern
+     * 
+     * Entity moves back and forth along the specified axis.
+     * 
+     * @param direction - Primary oscillation axis (normalized)
+     * @param amplitude - Maximum distance from center (default: 50)
+     * @param period - Time for complete cycle in ms (default: 2000)
+     * 
+     * @example
+     * ```ts
+     * // Horizontal oscillation
+     * player.oscillate({ x: 1, y: 0 }, 100, 3000);
+     * 
+     * // Vertical oscillation
+     * player.oscillate({ x: 0, y: 1 }, 30, 1500);
+     * 
+     * // Diagonal oscillation
+     * player.oscillate({ x: 0.7, y: 0.7 }, 75, 2500);
+     * ```
+     */
+    oscillate(direction: { x: number, y: number }, amplitude: number = 50, period: number = 2000): void {
+      this.addMovement(new Oscillate(direction, amplitude, period));
+    }
+
+    /**
+     * Apply ice movement physics
+     * 
+     * Creates slippery movement with gradual acceleration and inertia.
+     * Perfect for ice terrains or slippery surfaces.
+     * 
+     * @param direction - Target movement direction
+     * @param maxSpeed - Maximum speed when fully accelerated (default: 4)
+     * 
+     * @example
+     * ```ts
+     * // Apply ice physics when on ice terrain
+     * if (onIceTerrain) {
+     *   player.applyIceMovement(inputDirection, 5);
      * }
      * 
-     * player.moveRoutes([ customMove(otherPlayer) ])
+     * // Update direction when input changes
+     * iceMovement.setTargetDirection(newDirection);
      * ```
+     */
+    applyIceMovement(direction: { x: number, y: number }, maxSpeed: number = 4): void {
+      this.addMovement(new IceMovement(direction, maxSpeed));
+    }
+
+    /**
+     * Shoot a projectile in the specified direction
      * 
-     * the function contains two parameters:
+     * Creates projectile movement with various trajectory types.
      * 
-     * - `player`: the player concerned by the movement
-     * - `map`: The information of the current map
+     * @param type - Type of projectile trajectory
+     * @param direction - Normalized direction vector
+     * @param speed - Projectile speed (default: 200)
      * 
-     * @title Give an itinerary
-     * @method player.moveRoutes(routes)
-     * @param {Array<Move>} routes
-     * @returns {Promise}
-     * @memberof MoveManager
-     * @example 
-     * 
+     * @example
      * ```ts
-     * import { Move } from '@rpgjs/server'
+     * // Shoot arrow
+     * player.shootProjectile(ProjectileType.Straight, { x: 1, y: 0 }, 300);
      * 
-     * await player.moveRoutes([ Move.tileLeft(), Move.tileDown(2) ])
-     * // The path is over when the promise is resolved
+     * // Throw grenade with arc
+     * player.shootProjectile(ProjectileType.Arc, { x: 0.7, y: 0.7 }, 150);
+     * 
+     * // Bouncing projectile
+     * player.shootProjectile(ProjectileType.Bounce, { x: 1, y: 0 }, 100);
+     * ```
+     */
+    shootProjectile(type: ProjectileType, direction: { x: number, y: number }, speed: number = 200): void {
+      const config = {
+        speed,
+        direction,
+        maxRange: type === ProjectileType.Straight ? 500 : undefined,
+        maxHeight: type === ProjectileType.Arc ? 100 : undefined,
+        gravity: type !== ProjectileType.Straight ? 400 : undefined,
+        maxBounces: type === ProjectileType.Bounce ? 3 : undefined,
+        bounciness: type === ProjectileType.Bounce ? 0.6 : undefined
+      };
+      
+      this.addMovement(new ProjectileMovement(type, config));
+    }
+
+    /**
+     * Give an itinerary to follow using movement strategies
+     * 
+     * Executes a sequence of movements and actions in order. Each route can be:
+     * - A Direction enum value for basic movement
+     * - A string starting with "turn-" for direction changes
+     * - A function that returns directions or actions
+     * - A Promise for async operations
+     * 
+     * The method processes routes sequentially, respecting the entity's frequency
+     * setting for timing between movements.
+     * 
+     * @param routes - Array of movement instructions to execute
+     * @returns Promise that resolves when all routes are completed
+     * 
+     * @example
+     * ```ts
+     * // Basic directional movements
+     * await player.moveRoutes([
+     *   Direction.Right,
+     *   Direction.Up,
+     *   Direction.Left
+     * ]);
+     * 
+     * // Mix of movements and turns
+     * await player.moveRoutes([
+     *   Direction.Right,
+     *   'turn-' + Direction.Up,
+     *   Direction.Up
+     * ]);
+     * 
+     * // Using functions for dynamic behavior
+     * const customMove = (player, map) => [Direction.Right, Direction.Down];
+     * await player.moveRoutes([customMove]);
+     * 
+     * // With async operations
+     * await player.moveRoutes([
+     *   Direction.Right,
+     *   new Promise(resolve => setTimeout(resolve, 1000)), // Wait 1 second
+     *   Direction.Left
+     * ]);
      * ```
      */
     moveRoutes(routes: Routes): Promise<boolean> {
-        let count = 0
-        let frequence = 0
-        this.breakRoutes() // break previous route
-        return new Promise(async (resolve) => {
-            this._finishRoute = resolve
-            routes = routes.map((route: any) => {
-                if (isFunction(route)) {
-                    const map = this.getCurrentMap()
-                    if (!map) {
-                        return undefined
-                    }
-                    return route.apply(route, [this, map])
-                }
-                return route
-            })
-            routes = arrayFlat(routes)
-            const move = (): Observable<any> => {
-                // If movement continues while the player no longer exists or is no longer on the map
-                if (!this) {
-                    return of(null)
-                }
-                // if map not exists
-                if (!this.getCurrentMap()) {
-                    return of(null)
-                }
-                if (count >= this['nbPixelInTile']) {
-                    if (frequence < this.frequency) {
-                        frequence++
-                        return of(null)
-                    }
-                }
-
-                frequence = 0
-                count++
-
-                const [route] = routes
-
-                if (route === undefined) {
-                    this.breakRoutes()
-                    return of(null)
-                }
-
-                let ob$ = new Observable()
-
-                switch (route) {
-                    case Direction.Left:
-                    case Direction.Down:
-                    case Direction.Right:
-                    case Direction.Up:
-                        ob$ = from(this.moveByDirection(route, 1))
-                        break
-                    case 'turn-' + Direction.Left:
-                        ob$ = of(this.changeDirection(Direction.Left))
-                        break
-                    case 'turn-' + Direction.Right:
-                        ob$ = of(this.changeDirection(Direction.Right))
-                        break
-                    case 'turn-' + Direction.Up:
-                        ob$ = of(this.changeDirection(Direction.Up))
-                        break
-                    case 'turn-' + Direction.Down:
-                        ob$ = of(this.changeDirection(Direction.Down))
-                        break
-                }
-
-                return ob$.pipe(
-                    tap(() => {
-                        routes.shift()
-                    })
-                )
+      let count = 0;
+      let frequence = 0;
+      const player = this as unknown as PlayerWithMixins;
+      
+      // Break any existing route movement
+      this.clearMovements();
+      
+      return new Promise(async (resolve) => {
+        // Store the resolve function for potential breaking
+        this._finishRoute = resolve;
+        
+        // Process function routes first
+        const processedRoutes = routes.map((route: any) => {
+          if (typeof route === 'function') {
+            const map = player.getCurrentMap();
+            if (!map) {
+              return undefined;
             }
-            this.movingSubscription = this.server.tick
-                .pipe(
-                    takeUntil(
-                        this._destroy$.pipe(
-                            tap(() => {
-                                this.breakRoutes(true)
-                            })
-                        )),
-                    switchMap(move)
-                )
-                .subscribe()
-        })
+            return route.apply(route, [player, map]);
+          }
+          return route;
+        });
+        
+        // Flatten nested arrays
+        const flatRoutes = this.flattenRoutes(processedRoutes);
+        let routeIndex = 0;
+        
+        const executeNextRoute = async (): Promise<void> => {
+          // Check if player still exists and is on a map
+          if (!player || !player.getCurrentMap()) {
+            this._finishRoute = null;
+            resolve(false);
+            return;
+          }
+          
+          // Handle frequency timing
+          if (count >= (player.nbPixelInTile || 32)) {
+            if (frequence < (player.frequency || 0)) {
+              frequence++;
+              setTimeout(executeNextRoute, 16); // ~60fps timing
+              return;
+            }
+          }
+          
+          frequence = 0;
+          count++;
+          
+          // Check if we've completed all routes
+          if (routeIndex >= flatRoutes.length) {
+            this._finishRoute = null;
+            resolve(true);
+            return;
+          }
+          
+          const currentRoute = flatRoutes[routeIndex];
+          routeIndex++;
+          
+          if (currentRoute === undefined) {
+            executeNextRoute();
+            return;
+          }
+          
+          try {
+            // Handle different route types
+            if (typeof currentRoute === 'object' && 'then' in currentRoute) {
+              // Handle Promise
+              await currentRoute;
+              executeNextRoute();
+            } else if (typeof currentRoute === 'string' && currentRoute.startsWith('turn-')) {
+              // Handle turn commands
+              const directionStr = currentRoute.replace('turn-', '');
+              let direction: Direction = Direction.Down;
+              
+              // Convert string direction to Direction enum
+              switch (directionStr) {
+                case 'up':
+                case Direction.Up:
+                  direction = Direction.Up;
+                  break;
+                case 'down':
+                case Direction.Down:
+                  direction = Direction.Down;
+                  break;
+                case 'left':
+                case Direction.Left:
+                  direction = Direction.Left;
+                  break;
+                case 'right':
+                case Direction.Right:
+                  direction = Direction.Right;
+                  break;
+              }
+              
+              if (player.changeDirection) {
+                player.changeDirection(direction);
+              }
+              executeNextRoute();
+            } else if (typeof currentRoute === 'number') {
+              // Handle Direction enum values
+              if (player.moveByDirection) {
+                await player.moveByDirection(currentRoute as unknown as Direction, 1);
+              } else {
+                // Fallback to movement strategy - use direction as velocity components
+                let vx = 0, vy = 0;
+                const direction = currentRoute as unknown as Direction;
+                switch (direction) {
+                  case Direction.Right: vx = 1; break;
+                  case Direction.Left: vx = -1; break;
+                  case Direction.Down: vy = 1; break;
+                  case Direction.Up: vy = -1; break;
+                }
+                this.addMovement(new LinearMove(vx * (player.speed?.() || 3), vy * (player.speed?.() || 3), 100));
+                setTimeout(executeNextRoute, 100);
+                return;
+              }
+              executeNextRoute();
+            } else {
+              // Unknown route type, skip
+              executeNextRoute();
+            }
+          } catch (error) {
+            console.warn('Error executing route:', error);
+            executeNextRoute();
+          }
+        };
+        
+        executeNextRoute();
+      });
+    }
+    
+    /**
+     * Utility method to flatten nested route arrays
+     * 
+     * @private
+     * @param routes - Routes array that may contain nested arrays
+     * @returns Flattened array of routes
+     */
+    private flattenRoutes(routes: any[]): any[] {
+      const result: any[] = [];
+      
+      for (const route of routes) {
+        if (Array.isArray(route)) {
+          result.push(...this.flattenRoutes(route));
+        } else {
+          result.push(route);
+        }
+      }
+      
+      return result;
     }
 
     /**
-     * Giving a path that repeats itself in a loop to a character
+     * Give a path that repeats itself in a loop to a character
      * 
-     * You can stop the movement at any time with `breakRoutes()` and replay it with `replayRoutes()`.
+     * Creates an infinite movement pattern that continues until manually stopped.
+     * The routes will repeat in a continuous loop, making it perfect for patrol
+     * patterns, ambient movements, or any repetitive behavior.
      * 
-     * @title Infinite Move Routes
-     * @method player.infiniteMoveRoute(routes)
-     * @param {Array<Move>} routes
-     * @returns {void}
-     * @memberof MoveManager
-     * @example 
+     * You can stop the movement at any time with `breakRoutes()` and replay it 
+     * with `replayRoutes()`.
      * 
+     * @param routes - Array of movement instructions to repeat infinitely
+     * 
+     * @example
      * ```ts
-     * import { Move } from '@rpgjs/server'
+     * // Create an infinite random movement pattern
+     * player.infiniteMoveRoute([Move.random()]);
      * 
-     * player.infiniteMoveRoute([ Move.tileRandom() ])
+     * // Create a patrol route
+     * player.infiniteMoveRoute([
+     *   Direction.Right,
+     *   Direction.Right,
+     *   Direction.Down,
+     *   Direction.Left,
+     *   Direction.Left,
+     *   Direction.Up
+     * ]);
+     * 
+     * // Mix movements and rotations
+     * player.infiniteMoveRoute([
+     *   Move.turnRight(),
+     *   Direction.Right,
+     *   Move.wait(1),
+     *   Move.turnLeft(),
+     *   Direction.Left
+     * ]);
      * ```
      */
     infiniteMoveRoute(routes: Routes): void {
-        this._infiniteRoutes = routes
+      this._infiniteRoutes = routes;
+      this._isInfiniteRouteActive = true;
 
-        const move = (isBreaking: boolean) => {
-            if (isBreaking) return
-            this.moveRoutes(routes).then(move)
-        }
+      const executeInfiniteRoute = (isBreaking: boolean = false) => {
+        if (isBreaking || !this._isInfiniteRouteActive) return;
+        
+        this.moveRoutes(routes).then((completed) => {
+          // Only continue if the route completed successfully and we're still active
+          if (completed && this._isInfiniteRouteActive) {
+            executeInfiniteRoute();
+          }
+        }).catch((error) => {
+          console.warn('Error in infinite route execution:', error);
+          // Try to continue even if there was an error
+          if (this._isInfiniteRouteActive) {
+            setTimeout(() => executeInfiniteRoute(), 100);
+          }
+        });
+      };
 
-        move(false)
+      executeInfiniteRoute();
     }
 
     /**
-     * Works only for infinite movements. You must first use the method `infiniteMoveRoute()`
+     * Stop an infinite movement
      * 
-     * @title Stop an infinite movement
-     * @method player.breakRoutes(force=false)
-     * @param {boolean} [force] Forces the stop of the infinite movement
-     * @returns {void}
-     * @memberof MoveManager
-     * @example 
+     * Works only for infinite movements created with `infiniteMoveRoute()`.
+     * This method stops the current route execution and prevents the next
+     * iteration from starting.
      * 
+     * @param force - Forces the stop of the infinite movement immediately
+     * 
+     * @example
      * ```ts
-     * import { Move } from '@rpgjs/server'
+     * // Start infinite movement
+     * player.infiniteMoveRoute([Move.random()]);
      * 
-     * player.infiniteMoveRoute([ Move.tileRandom() ])
-     * player.breakRoutes(true)
+     * // Stop it when player enters combat
+     * if (inCombat) {
+     *   player.breakRoutes(true);
+     * }
+     * 
+     * // Gentle stop (completes current route first)
+     * player.breakRoutes();
      * ```
      */
     breakRoutes(force: boolean = false): void {
-        if (this._finishRoute) {
-            this.movingSubscription?.unsubscribe()
-            this._finishRoute(force)
-        }
+      this._isInfiniteRouteActive = false;
+      
+      if (force) {
+        // Force stop by clearing all movements immediately
+        this.clearMovements();
+      }
+      
+      // If there's an active route promise, resolve it
+      if (this._finishRoute) {
+        this._finishRoute(force);
+        this._finishRoute = null;
+      }
     }
 
     /**
-     * Works only for infinite movements. You must first use the method `infiniteMoveRoute()`
-     * If the road was stopped with `breakRoutes()`, you can restart it with this method
+     * Replay an infinite movement
      * 
-     * @title Replay an infinite movement
-     * @method player.replayRoutes()
-     * @returns {void}
-     * @memberof MoveManager
-     * @example 
+     * Works only for infinite movements that were previously created with 
+     * `infiniteMoveRoute()`. If the route was stopped with `breakRoutes()`, 
+     * you can restart it with this method using the same route configuration.
      * 
+     * @example
      * ```ts
-     * import { Move } from '@rpgjs/server'
+     * // Create infinite movement
+     * player.infiniteMoveRoute([Move.random()]);
      * 
-     * player.infiniteMoveRoute([ Move.tileRandom() ])
-     * player.breakRoutes(true)
-     * player.replayRoutes()
+     * // Stop it temporarily
+     * player.breakRoutes(true);
+     * 
+     * // Resume the same movement pattern
+     * player.replayRoutes();
+     * 
+     * // Stop and start with different conditions
+     * if (playerNearby) {
+     *   player.breakRoutes();
+     * } else {
+     *   player.replayRoutes();
+     * }
      * ```
      */
     replayRoutes(): void {
-        if (this._infiniteRoutes) this.infiniteMoveRoute(this._infiniteRoutes)
+      if (this._infiniteRoutes && !this._isInfiniteRouteActive) {
+        this.infiniteMoveRoute(this._infiniteRoutes);
+      }
     }
-
-    /**
-     * Move the event to another event, a player, a shape or a specific position.
-     * The event will avoid obstacles, but you can tell if it is stuck or has completed its path
-     * 
-     * @title Move To
-     * @method player.moveTo()
-     * @param {RpgPlayer|RpgEvent|RpgShape|Position} target the target
-     * @param {object} [options] - animate. Set a boolean to use default parameters
-     * @param {boolean} [options.infinite=false] - moves infinitely towards the target, you have to stop its movement manually with the method `stopMoveTo()`
-     * @param {() => void} [options.onComplete] - Callback when the event arrives at the destination
-     * @param {(duration:number) => void} [options.onStuck] - callback when the event is blocked against a wall. Duration gives you the duration (in frames) of the blocking time
-     * @returns {Observable<void>}
-     * @since 3.2.0
-     * @memberof MoveManager
-     * @example 
-     * 
-     * ```ts
-     * import { Move } from '@rpgjs/server'
-     * 
-     * player.moveTo(otherPlayer).subscribe()
-     * ```
-     */
-    moveTo(event: RpgEvent, options?: MoveTo): Observable<void>
-    moveTo(player: RpgPlayer, options?: MoveTo): Observable<void>
-    moveTo(position: PositionXY, options?: MoveTo): Observable<void>
-    moveTo(shape: RpgShape, options?: MoveTo): Observable<void>
-    moveTo(position: RpgPlayer | RpgShape | PositionXY, options?: MoveTo): Observable<void> {
-        return this['_moveTo'](this.server.tick, position, options)
-    }
-
-    // TODO
-    setMoveMode(mode: MoveMode): void {
-        if (mode.checkCollision) this.checkCollision = mode.checkCollision
-        if (mode.clientMode) this.clientModeMove = mode.clientMode
-        if (mode.behavior) this.behavior = mode.behavior
-        this.emit(SocketEvents.CallMethod, {
-            objectId: this.id,
-            name: SocketMethods.ModeMove,
-            params: [mode]
-        })
-    }
-}
-
-export interface MoveManager {
-    moveByDirection: (direction: Direction, deltaTimeInt: number) => Promise<boolean>
-    changeDirection: (direction: Direction) => boolean
-    getCurrentMap: any
-    checkCollision: boolean
-    clientModeMove: ClientMode
-    behavior: Behavior
-    emit(name: SocketEvents, params: any)
-    id: string
-    server: RpgServerEngine
-    position: Vector2d
-    _destroy$: Subject<void>
+  };
 }

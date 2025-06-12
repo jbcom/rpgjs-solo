@@ -1,7 +1,6 @@
 import { RpgPlayer } from '../Player/Player'
-import { EventEmitter } from '@rpgjs/common'
 
-export class Gui extends EventEmitter {
+export class Gui {
 
     private _close: Function = () => {}
     private _blockPlayerInput: boolean = false
@@ -10,7 +9,7 @@ export class Gui extends EventEmitter {
         public id: string,
         protected player: RpgPlayer,
     ) {
-        super()
+        
     }
 
     open(data?, {
@@ -18,14 +17,13 @@ export class Gui extends EventEmitter {
         blockPlayerInput = false
     } = {}): Promise<any> {
         return new Promise((resolve) => {
-            this.player.moving = false
             this.player.emit('gui.open', {
                 guiId: this.id,
                 data
             })
             this._blockPlayerInput = blockPlayerInput
             if (blockPlayerInput) {
-                this.player.canMove = false
+               this.player.canMove.set(false)
             }
             if (!waitingAction) {
                 resolve(null)
@@ -39,7 +37,7 @@ export class Gui extends EventEmitter {
     close(data?) {
         this.player.emit('gui.exit', this.id)
         if (this._blockPlayerInput) {
-            this.player.canMove = true
+            this.player.canMove.set(true)
         }
         this._close(data)
     }

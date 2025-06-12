@@ -1,32 +1,32 @@
 {
   "name": "@rpgjs/common",
-  "version": "4.3.0",
-  "description": "",
-  "main": "lib/index.js",
-  "types": "./lib/index.d.ts",
+  "version": "5.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && npm run build:browser",
-    "watch": "tsc -w",
-    "build:browser": "RPG_TYPE=rpg npx rpgjs build"
+    "dev": "vite build --watch",
+    "test": "vitest",
+    "build": "vite build"
   },
   "keywords": [],
-  "author": "Samuel Ronce",
+  "author": "",
   "license": "MIT",
+  "description": "",
   "dependencies": {
-    "@rpgjs/tiled": "^4.3.0",
-    "@rpgjs/types": "^4.0.5",
-    "rbush": "^3.0.1",
-    "rxjs": "^7.8.0",
-    "sat": "^0.9.0",
-    "workerpool": "^6.4.0"
+    "@dimforge/rapier2d": "^0.17.3",
+    "@signe/di": "^2.3.1",
+    "@signe/reactive": "^2.3.1",
+    "@signe/sync": "^2.3.1",
+    "matter-js": "^0.20.0",
+    "rxjs": "^7.8.2"
   },
-  "gitHead": "5abe6ca78be96524d74a052a230f2315c900ddee",
   "devDependencies": {
-    "@rpgjs/compiler": "^4.3.0",
-    "typescript": "^5.0.4"
+    "vite": "^6.2.5",
+    "vite-plugin-dts": "^4.5.3",
+    "vitest": "^3.1.1"
   },
   "type": "module"
 }

@@ -1,15 +1,48 @@
-import { Utils } from '@rpgjs/common'
-import { 
-    MAXHP, 
-    MAXSP,
-} from '../presets'
+import { Constructor, isString, RpgCommonPlayer } from "@rpgjs/common";
+import { MAXHP, MAXSP } from "../presets";
 
-const { 
-    isString
-} = Utils
+export interface IWithParameterManager {
+  parameters: Map<string, any>
+  hp: number
+  sp: number
+  exp: number
+  level: number
+  expForNextlevel: number
+  param: { [key: string]: number }
+  paramsModifier: { [key: string]: { value?: number, rate?: number } }
+}
 
-export class ParameterManager {
+interface PlayerWithMixins extends RpgCommonPlayer {
+    databaseById?(id: string): any;  
+}
 
+/**
+ * Mixin that adds parameter management functionality to a player class.
+ * 
+ * This mixin provides comprehensive parameter management including:
+ * - Health Points (HP) and Skill Points (SP) management
+ * - Experience and level progression system
+ * - Custom parameter creation and modification
+ * - Parameter modifiers for temporary stat changes
+ * 
+ * @template TBase - The base class constructor type
+ * @param Base - The base class to extend
+ * @returns A new class that extends the base with parameter management capabilities
+ * 
+ * @example
+ * ```ts
+ * class MyPlayer extends WithParameterManager(BasePlayer) {
+ *   constructor() {
+ *     super();
+ *     this.addParameter('strength', { start: 10, end: 100 });
+ *   }
+ * }
+ * ```
+ */
+export function WithParameterManager<TBase extends Constructor<RpgCommonPlayer>>(
+  Base: TBase
+): TBase & Constructor<IWithParameterManager> {
+  return class extends Base implements IWithParameterManager {
     private _paramsModifier: {
         [key: string]: {
             value?: number,
@@ -20,12 +53,7 @@ export class ParameterManager {
     private _parameters: Map<string, {
         start: number,
         end: number
-    }>
-
-    private _hp = 0
-    private _sp = 0
-    private _exp: number = 0
-    private _level: number = 0
+    }> = new Map()
 
      /** 
      * ```ts
@@ -99,11 +127,11 @@ export class ParameterManager {
             this['execMethod']('onDead') 
             val = 0
         }
-        this._hp = val
+        this._hp.set(val)
     }
 
     get hp(): number {
-        return this._hp
+        return this._hp()
     }
 
     /** 
@@ -123,11 +151,11 @@ export class ParameterManager {
         if (val > this.param[MAXSP]) {
             val = this.param[MAXSP]
         }
-        this._sp = val
+        this._sp.set(val)
     }
 
     get sp(): number {
-        return this._sp
+        return this._sp()
     }
 
     /** 
@@ -151,16 +179,16 @@ export class ParameterManager {
      * @memberof ParameterManager
      * */
     set exp(val: number) {
-        this._exp = val
+        this._exp.set(val)
         const lastLevel = this.level
-        while (this.expForNextlevel < this._exp) {
+        while (this.expForNextlevel < this._exp()) {
             this.level += 1
         }
         //const hasNewLevel = player.level - lastLevel
     }
 
     get exp(): number {
-        return this._exp
+        return this._exp()
     }
 
     /** 
@@ -184,13 +212,14 @@ export class ParameterManager {
      * @memberof ParameterManager
      * */
     set level(val: number) {
-        const lastLevel = this._level
+        const lastLevel = this._level()
         if (this.finalLevel && val > this.finalLevel) {
             val = this.finalLevel
         }
-        if (this._class) {
-            for (let i = this._level ; i <= val; i++) {
-                for (let skill of this._class.skillsToLearn) {
+        const currentClass = this._class && this._class()
+        if (currentClass && 'skillsToLearn' in currentClass && Array.isArray(currentClass.skillsToLearn)) {
+            for (let i = this._level() ; i <= val; i++) {
+                for (let skill of currentClass.skillsToLearn as any[]) {
                     if (skill.level == i) {
                         this['learnSkill'](skill.skill)
                     }
@@ -201,11 +230,11 @@ export class ParameterManager {
         if (hasNewLevel > 0) {
             this['execMethod']('onLevelUp', <any>[hasNewLevel])   
         }
-        this._level = val
+        this._level.set(val)
     }
 
     get level(): number {
-        return this._level
+        return this._level()
     }
 
      /** 
@@ -264,7 +293,7 @@ export class ParameterManager {
                 changeParam(prop)
                 return
             }
-            for (let el of this[prop]) {
+            for (let el of this[prop]()) {
                 if (!el.paramsModifier) continue
                 changeParam(el.paramsModifier)
             }
@@ -342,7 +371,6 @@ export class ParameterManager {
         }
     }) {
         this._paramsModifier = val
-        this.changeRoomState('param')
     }
 
     get parameters() {
@@ -419,7 +447,6 @@ export class ParameterManager {
         else if (name == MAXSP && this.sp > maxSp) {
             this.sp = maxSp
         }
-        this.changeRoomState('param.' + name)
     }
 
     /** 
@@ -470,10 +497,5 @@ export class ParameterManager {
     allRecovery(): void {
         this.recovery({ hp: 1, sp: 1 })
     }
-}
-
-export interface ParameterManager {
-    _class,
-    $schema,
-    changeRoomState(key: string): void
+  }
 }

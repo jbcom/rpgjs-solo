@@ -11,10 +11,13 @@ export class Tileset extends TiledProperties {
         Object.assign(this, tileset)
         this.margin = this.margin ?? 0
         this.spacing = this.spacing ?? 0
-        for (let tile of tileset.tiles) {
+        // Handle both 'tiles' and 'tile' property names
+        const tilesArray = tileset.tiles || (tileset as any).tile || []
+        for (let tile of tilesArray) {
             this.addTile(tile)
         }
         Reflect.deleteProperty(this, 'tiles')
+        Reflect.deleteProperty(this, 'tile')
     }
 
     addTile(tileObj: TilesetTile): Tile {

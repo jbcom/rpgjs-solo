@@ -1,10 +1,9 @@
-import { ModuleType } from '@rpgjs/common'
-import { SceneMap } from './Scene/Map'
 import { RpgClientEngine } from './RpgClientEngine'
-import { RpgComponent } from './Components/Component'
 import { Loader } from 'pixi.js'
 
 type RpgClass<T = any> = new (...args: any[]) => T
+type RpgComponent = any
+type SceneMap = any
 
 export interface RpgClientEngineHooks {
     /**
@@ -219,7 +218,7 @@ export interface RpgClient {
      * @prop { { client: null | Function, server: null | Function }[]} [imports]
      * @memberof RpgClient
      */
-    imports?: ModuleType[]
+    imports?: any
 
     /**
      * Object containing the hooks concerning the engine
@@ -271,7 +270,7 @@ export interface RpgClient {
      * @prop {Array<Class>} [spritesheets]
      * @memberof RpgClient
      * */
-    spritesheets?: RpgClass[],
+    spritesheets?: any[],
 
     /** 
      * Array containing the list of VueJS components
@@ -374,4 +373,9 @@ export interface RpgClient {
     scenes?: {
         map: RpgSceneMapHooks
     }
+
+    effects?: {
+        id: string,
+        component: any
+    }[]
 }

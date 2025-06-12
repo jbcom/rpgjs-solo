@@ -1,50 +1,60 @@
-import { Utils } from '@rpgjs/common'
-import { Effect, ClassHooks, ItemClass, ItemInstance, WeaponInstance, ArmorInstance, WeaponClass, ArmorClass } from '@rpgjs/database'
-import { ItemLog } from '../logs'
-import { EffectManager } from './EffectManager'
-import { GoldManager } from './GoldManager'
-import { StateManager } from './StateManager'
+import { isInstanceOf, isString, Item, type Constructor } from "@rpgjs/common";
+import { RpgCommonPlayer, Matter } from "@rpgjs/common";
+import { ATK, PDEF, SDEF } from "../presets";
+import { ItemLog } from "../logs";
+import { ArmorInstance, ItemClass, ItemInstance, WeaponInstance } from "@rpgjs/database";
 
-import {
-    ATK,
-    PDEF,
-    SDEF
-} from '../presets'
+// Ajout des enums manquants
+enum Effect {
+  CAN_NOT_ITEM = 'CAN_NOT_ITEM'
+}
 
-const {
-    isString,
-    isInstanceOf,
-    applyMixins
-} = Utils
+enum ClassHooks {
+  canEquip = 'canEquip'
+}
 
+/**
+ * Interface defining what MoveManager adds to a class
+ */
+export interface IItemManager {
+  databaseById(id: string): ItemClass;
+}
 
-type Inventory = { nb: number, item: ItemInstance }
+type Inventory = { nb: number; item: ItemInstance };
 
-export class ItemManager {
-
-    items: Inventory[]
-    equipments: ItemInstance[] = []
+/**
+ * Move Manager mixin
+ *
+ * Adds methods to manage player movement
+ *
+ * @param Base - The base class to extend
+ * @returns A new class with move management capabilities
+ */
+export function WithItemManager<TBase extends Constructor<RpgCommonPlayer>>(
+  Base: TBase
+): Constructor<IItemManager> & TBase {
+  return class extends Base implements IItemManager {
 
     /**
-    * Retrieves the information of an object: the number and the instance 
-    * @title Get Item
-    * @method player.getItem(itemClass)
-    * @param {ItemClass | string} itemClass Identifier of the object if the parameter is a string
-    * @returns {{ nb: number, item: instance of ItemClass }}
-    * @memberof ItemManager
-    * @example
-    * 
-    * ```ts
-    * import Potion from 'your-database/potion'
-    * 
-    * player.addItem(Potion, 5)
-    * const inventory = player.getItem(Potion)
-    * console.log(inventory) // { nb: 5, item: <instance of Potion> }
-    *  ```
-    */
-    getItem(itemClass: ItemClass | string): Inventory {
-        const index: number = this._getItemIndex(itemClass)
-        return this.items[index]
+     * Retrieves the information of an object: the number and the instance
+     * @title Get Item
+     * @method player.getItem(itemClass)
+     * @param {ItemClass | string} itemClass Identifier of the object if the parameter is a string
+     * @returns {{ nb: number, item: instance of ItemClass }}
+     * @memberof ItemManager
+     * @example
+     *
+     * ```ts
+     * import Potion from 'your-database/potion'
+     *
+     * player.addItem(Potion, 5)
+     * const inventory = player.getItem(Potion)
+     * console.log(inventory) // { nb: 5, item: <instance of Potion> }
+     *  ```
+     */
+    getItem(itemClass: ItemClass | string): Item {
+      const index: number = this._getItemIndex(itemClass);
+      return this.items()[index];
     }
 
     /**
@@ -55,73 +65,70 @@ export class ItemManager {
      * @returns {boolean}
      * @memberof ItemManager
      * @example
-     * 
+     *
      * ```ts
      * import Potion from 'your-database/potion'
-     * 
+     *
      * player.hasItem(Potion) // false
      *  ```
      */
     hasItem(itemClass: ItemClass | string): boolean {
-        return !!this.getItem(itemClass)
+      return !!this.getItem(itemClass);
     }
 
     _getItemIndex(itemClass: ItemClass | string): number {
-        return this.items.findIndex((it: Inventory): boolean => {
-            if (isString(itemClass)) {
-                return it.item.id == itemClass
-            }
-            return isInstanceOf(it.item, itemClass)
-        })
+      return this.items().findIndex((it: Item): boolean => {
+        if (isString(itemClass)) {
+          return it.id() == itemClass;
+        }
+        return isInstanceOf(it, itemClass);
+      });
     }
     /**
      * Add an item in the player's inventory. You can give more than one by specifying `nb`
-     * 
+     *
      * `onAdd()` method is called on the ItemClass
-     * 
+     *
      * @title Add Item
      * @method player.addItem(item,nb=1)
-     * @param {ItemClass} itemClass 
+     * @param {ItemClass} itemClass
      * @param {number} [nb] Default 1
      * @returns {{ nb: number, item: instance of ItemClass }}
      * @memberof ItemManager
      * @example
-     * 
+     *
      * ```ts
      * import Potion from 'your-database/potion'
      * player.addItem(Potion, 5)
      *  ```
      */
-    addItem(itemClass: ItemClass | string, nb: number = 1): Inventory {
-        if (isString(itemClass)) itemClass = this.databaseById(itemClass)
-        let itemIndex: number = this._getItemIndex(itemClass)
-        if (itemIndex != -1) {
-            this.items[itemIndex].nb += nb
-        }
-        else {
-            const instance = new (itemClass as ItemClass)()
-            this.items.push({
-                item: instance,
-                nb
-            })
-            itemIndex = this.items.length - 1
-        }
-        const { item } = this.items[itemIndex]
-        this['execMethod']('onAdd', [this], item)
-        return this.items[itemIndex]
+    addItem(itemId: string, nb: number = 1): Item {
+      const data = this.databaseById(itemId);
+      const item = this.items().find((it) => it.id() == itemId);
+      let instance: Item;
+      if (item) {
+        instance = item;
+        instance.quantity.update((it) => it + nb);
+      } else {
+        instance = new Item(data);
+        instance.id.set(itemId);
+        this.items().push(instance);
+      }
+      this["execMethod"]("onAdd", [this], instance);
+      return instance;
     }
 
     /**
      * Deletes an item. Decreases the value `nb`. If the number falls to 0, then the item is removed from the inventory. The method then returns `undefined`
-     * 
+     *
      * `onRemove()` method is called on the ItemClass
-     * 
+     *
      * @title Remove Item
      * @method player.removeItem(item,nb=1)
      * @param {ItemClass | string} itemClass string is item id
      * @param {number} [nb] Default 1
      * @returns {{ nb: number, item: instance of ItemClass } | undefined}
-     * @throws {ItemLog} notInInventory 
+     * @throws {ItemLog} notInInventory
      * If the object is not in the inventory, an exception is raised
      *  ```
      * {
@@ -131,10 +138,10 @@ export class ItemManager {
      * ```
      * @memberof ItemManager
      * @example
-     * 
+     *
      * ```ts
      * import Potion from 'your-database/potion'
-     * 
+     *
      * try {
      *    player.removeItem(Potion, 5)
      * }
@@ -143,34 +150,36 @@ export class ItemManager {
      * }
      * ```
      */
-    removeItem(itemClass: ItemClass | string, nb: number = 1): Inventory | undefined {
-        const itemIndex: number = this._getItemIndex(itemClass)
-        if (itemIndex == -1) {
-            throw ItemLog.notInInventory(itemClass)
-        }
-        const currentNb: number = this.items[itemIndex].nb
-        const { item } = this.items[itemIndex]
-        if (currentNb - nb <= 0) {
-            this.items.splice(itemIndex, 1)
-        }
-        else {
-            this.items[itemIndex].nb -= nb
-        }
-        this['execMethod']('onRemove', [this], item)
-        return this.items[itemIndex]
+    removeItem(
+      itemClass: ItemClass | string,
+      nb: number = 1
+    ): Item | undefined {
+      const itemIndex: number = this._getItemIndex(itemClass);
+      if (itemIndex == -1) {
+        throw ItemLog.notInInventory(itemClass);
+      }
+      const currentNb: number = this.items()[itemIndex].quantity();
+      const item = this.items()[itemIndex];
+      if (currentNb - nb <= 0) {
+        this.items().splice(itemIndex, 1);
+      } else {
+        this.items()[itemIndex].quantity.update((it) => it - nb);
+      }
+      this["execMethod"]("onRemove", [this], item);
+      return this.items()[itemIndex];
     }
 
     /**
      * Purchases an item and reduces the amount of gold
-     * 
+     *
      * `onAdd()` method is called on the ItemClass
-     * 
+     *
      * @title Buy Item
      * @method player.buyItem(item,nb=1)
      * @param {ItemClass | string} itemClass string is item id
      * @param {number} [nb] Default 1
      * @returns {{ nb: number, item: instance of ItemClass }}
-     * @throws {ItemLog} haveNotPrice 
+     * @throws {ItemLog} haveNotPrice
      * If you have not set a price on the item
      *  ```
      * {
@@ -178,7 +187,7 @@ export class ItemManager {
      *      msg: '...'
      * }
      * ```
-     * @throws {ItemLog} notEnoughGold 
+     * @throws {ItemLog} notEnoughGold
      * If the player does not have enough money
      *  ```
      * {
@@ -188,10 +197,10 @@ export class ItemManager {
      * ```
      * @memberof ItemManager
      * @example
-     * 
+     *
      * ```ts
      * import Potion from 'your-database/potion'
-     * 
+     *
      * try {
      *    player.buyItem(Potion)
      * }
@@ -200,31 +209,30 @@ export class ItemManager {
      * }
      * ```
      */
-    buyItem(itemClass: ItemClass | string, nb = 1): Inventory {
-        if (isString(itemClass)) itemClass = this.databaseById(itemClass)
-        const ItemClass = itemClass as ItemClass
-        if (!ItemClass.price) {
-            throw ItemLog.haveNotPrice(itemClass)
-        }
-        const totalPrice = nb * ItemClass.price
-        if (this.gold < totalPrice) {
-            throw ItemLog.notEnoughGold(itemClass, nb)
-        }
-        this.gold -= totalPrice
-        return this.addItem(ItemClass, nb)
+    buyItem(itemId: string, nb = 1): Item {
+      const data = this.databaseById(itemId);
+      if (!data.price) {
+        throw ItemLog.haveNotPrice(itemId);
+      }
+      const totalPrice = nb * data.price;
+      if (this._gold() < totalPrice) {
+        throw ItemLog.notEnoughGold(itemId, nb);
+      }
+      this._gold.update((gold) => gold - totalPrice);
+      return this.addItem(itemId, nb);
     }
 
     /**
      * Sell an item and the player wins the amount of the item divided by 2
-     * 
+     *
      * `onRemove()` method is called on the ItemClass
-     * 
+     *
      * @title Sell Item
      * @method player.sellItem(item,nb=1)
      * @param {ItemClass | string} itemClass string is item id
      * @param {number} [nbToSell] Default 1
      * @returns {{ nb: number, item: instance of ItemClass }}
-     * @throws {ItemLog} haveNotPrice 
+     * @throws {ItemLog} haveNotPrice
      * If you have not set a price on the item
      *   ```
      * {
@@ -232,7 +240,7 @@ export class ItemManager {
      *      msg: '...'
      * }
      * ```
-     * @throws {ItemLog} notInInventory 
+     * @throws {ItemLog} notInInventory
      * If the object is not in the inventory, an exception is raised
      *  ```
      * {
@@ -240,7 +248,7 @@ export class ItemManager {
      *      msg: '...'
      * }
      * ```
-     * @throws {ItemLog} tooManyToSell 
+     * @throws {ItemLog} tooManyToSell
      * If the number of items for sale exceeds the number of actual items in the inventory
      *  ```
      * {
@@ -250,10 +258,10 @@ export class ItemManager {
      * ```
      * @memberof ItemManager
      * @example
-     * 
+     *
      * ```ts
      * import Potion from 'your-database/potion'
-     * 
+     *
      * try {
      *     player.addItem(Potion)
      *     player.sellItem(Potion)
@@ -263,82 +271,81 @@ export class ItemManager {
      * }
      * ```
      */
-    sellItem(itemClass: ItemClass | string, nbToSell = 1): Inventory {
-        if (isString(itemClass)) itemClass = this.databaseById(itemClass)
-        const ItemClass = itemClass as ItemClass
-        const inventory = this.getItem(ItemClass)
-        if (!inventory) {
-            throw ItemLog.notInInventory(itemClass)
-        }
-        const { item, nb } = inventory
-        if (nb - nbToSell < 0) {
-            throw ItemLog.tooManyToSell(itemClass, nbToSell, nb)
-        }
-        if (!ItemClass.price) {
-            throw ItemLog.haveNotPrice(itemClass)
-        }
-        this.gold += (ItemClass.price / 2) * nbToSell
-        this.removeItem(ItemClass, nbToSell)
-        return inventory
+    sellItem(itemId: string, nbToSell = 1): Item {
+      const data = this.databaseById(itemId);
+      const inventory = this.getItem(itemId);
+      if (!inventory) {
+        throw ItemLog.notInInventory(itemId);
+      }
+      const quantity = inventory.quantity();
+      if (quantity - nbToSell < 0) {
+        throw ItemLog.tooManyToSell(itemId, nbToSell, quantity);
+      }
+      if (!data.price) {
+        throw ItemLog.haveNotPrice(itemId);
+      }
+      this._gold.update((gold) => gold + (data.price / 2) * nbToSell);
+      this.removeItem(itemId, nbToSell);
+      return inventory;
     }
 
-    private getParamItem(name: string): number {
-        let nb = 0
-        for (let item of this.equipments) {
-            nb += item[name] || 0
-        }
-        const modifier = this.paramsModifier[name]
-        if (modifier) {
-            if (modifier.value) nb += modifier.value
-            if (modifier.rate) nb *= modifier.rate
-        }
-        return nb
+    getParamItem(name: string): number {
+      let nb = 0;
+      for (let item of this.equipments()) {
+        nb += item[name] || 0;
+      }
+      const modifier = (this as any).paramsModifier?.[name];
+      if (modifier) {
+        if (modifier.value) nb += modifier.value;
+        if (modifier.rate) nb *= modifier.rate;
+      }
+      return nb;
     }
 
     /**
      * recover the attack sum of items equipped on the player.
-     * 
+     *
      * @title Get the player's attack
      * @prop {number} player.atk
      * @memberof ItemManager
      */
     get atk(): number {
-        return this.getParamItem(ATK)
+      return this.getParamItem(ATK);
     }
 
     /**
-    * recover the physic defense sum of items equipped on the player.
-    * 
-    * @title Get the player's pdef
-    * @prop {number} player.pdef
-    * @memberof ItemManager
-    */
+     * recover the physic defense sum of items equipped on the player.
+     *
+     * @title Get the player's pdef
+     * @prop {number} player.pdef
+     * @memberof ItemManager
+     */
     get pdef(): number {
-        return this.getParamItem(PDEF)
+      return this.getParamItem(PDEF);
     }
 
     /**
-    * recover the skill defense sum of items equipped on the player.
-    * 
-    * @title Get the player's sdef
-    * @prop {number} player.sdef
-    * @memberof ItemManager
-    */
+     * recover the skill defense sum of items equipped on the player.
+     *
+     * @title Get the player's sdef
+     * @prop {number} player.sdef
+     * @memberof ItemManager
+     */
     get sdef(): number {
-        return this.getParamItem(SDEF)
+      return this.getParamItem(SDEF);
     }
 
     /**
      *  Use an object. Applies effects and states. Removes the object from the inventory then
-     * 
+     *
      * `onUse()` method is called on the ItemClass (If the use has worked)
      * `onRemove()` method is called on the ItemClass
-     * 
+     *
      * @title Use an Item
      * @method player.useItem(item,nb=1)
      * @param {ItemClass | string} itemClass string is item id
      * @returns {{ nb: number, item: instance of ItemClass }}
-     * @throws {ItemLog} restriction 
+     * @throws {ItemLog} restriction
      * If the player has the `Effect.CAN_NOT_ITEM` effect
      *   ```
      * {
@@ -346,7 +353,7 @@ export class ItemManager {
      *      msg: '...'
      * }
      * ```
-     * @throws {ItemLog} notInInventory 
+     * @throws {ItemLog} notInInventory
      * If the object is not in the inventory, an exception is raised
      *  ```
      * {
@@ -354,7 +361,7 @@ export class ItemManager {
      *      msg: '...'
      * }
      * ```
-     * @throws {ItemLog} notUseItem 
+     * @throws {ItemLog} notUseItem
      * If the `consumable` property is on false
      *  ```
      * {
@@ -362,7 +369,7 @@ export class ItemManager {
      *      msg: '...'
      * }
      * ```
-     * @throws {ItemLog} chanceToUseFailed 
+     * @throws {ItemLog} chanceToUseFailed
      * Chance to use the item has failed. Chances of use is defined with `ItemClass.hitRate`
      *  ```
      * {
@@ -371,15 +378,15 @@ export class ItemManager {
      * }
      * ```
      * > the item is still deleted from the inventory
-     * 
+     *
      * `onUseFailed()` method is called on the ItemClass
-     * 
+     *
      * @memberof ItemManager
      * @example
-     * 
+     *
      * ```ts
      * import Potion from 'your-database/potion'
-     * 
+     *
      * try {
      *     player.addItem(Potion)
      *     player.useItem(Potion)
@@ -389,29 +396,29 @@ export class ItemManager {
      * }
      * ```
      */
-    useItem(itemClass: ItemClass | string): Inventory {
-        const inventory = this.getItem(itemClass)
-        if (this.hasEffect(Effect.CAN_NOT_ITEM)) {
-            throw ItemLog.restriction(itemClass)
-        }
-        if (!inventory) {
-            throw ItemLog.notInInventory(itemClass)
-        }
-        const { item } = inventory
-        if (item.consumable === false) {
-            throw ItemLog.notUseItem(itemClass)
-        }
-        const hitRate = item.hitRate ?? 1
-        if (Math.random() > hitRate) {
-            this.removeItem(itemClass)
-            this['execMethod']('onUseFailed', [this], item)
-            throw ItemLog.chanceToUseFailed(itemClass)
-        }
-        this.applyEffect(item)
-        this.applyStates(<any>this, <any>item)
-        this['execMethod']('onUse', [this], item)
-        this.removeItem(itemClass)
-        return inventory
+    useItem(itemId: string): Item {
+      const inventory = this.getItem(itemId);
+      if ((this as any).hasEffect?.(Effect.CAN_NOT_ITEM)) {
+        throw ItemLog.restriction(itemId);
+      }
+      if (!inventory) {
+        throw ItemLog.notInInventory(itemId);
+      }
+      const item = inventory;
+      if ((item as any).consumable === false) {
+        throw ItemLog.notUseItem(itemId);
+      }
+      const hitRate = (item as any).hitRate ?? 1;
+      if (Math.random() > hitRate) {
+        this.removeItem(itemId);
+        this["execMethod"]("onUseFailed", [this], item);
+        throw ItemLog.chanceToUseFailed(itemId);
+      }
+      (this as any).applyEffect?.(item);
+      (this as any).applyStates?.(this, item);
+      this["execMethod"]("onUse", [this], item);
+      this.removeItem(itemId);
+      return inventory;
     }
 
     /**
@@ -463,41 +470,43 @@ export class ItemManager {
      * }
      * ```
      */
-    equip(itemClass: WeaponClass | ArmorClass | string, equip: boolean = true): void {
-        const inventory: Inventory = this.getItem(itemClass)
-        if (!inventory) {
-            throw ItemLog.notInInventory(itemClass)
-        }
-        if ((itemClass as ItemClass)._type == 'item') {
-            throw ItemLog.invalidToEquiped(itemClass)
-        }
+    equip(
+      itemId: string,
+      equip: boolean = true
+    ): void {
+      const inventory: Item = this.getItem(itemId);
+      if (!inventory) {
+        throw ItemLog.notInInventory(itemId);
+      }
+      const data = this.databaseById(itemId);
+      if (data._type == "item") {
+        throw ItemLog.invalidToEquiped(itemId);
+      }
 
-        if (this._class && this._class[ClassHooks.canEquip]) {
-            const canEquip = this['execMethodSync'](ClassHooks.canEquip, [inventory.item, this], this._class)
-            if (!canEquip) {
-                throw ItemLog.canNotEquip(itemClass)
-            }
+      if (this._class && this._class()[ClassHooks.canEquip]) {
+        const canEquip = this["execMethodSync"](
+          ClassHooks.canEquip,
+          [inventory, this],
+          this._class()
+        );
+        if (!canEquip) {
+          throw ItemLog.canNotEquip(itemId);
         }
+      }
 
-        const item: WeaponInstance | ArmorInstance = inventory.item as any
-        
-        if (item.equipped && equip) {
-            throw ItemLog.isAlreadyEquiped(itemClass)
-        }
-        item.equipped = equip
-        if (!equip) {
-            const index = this.equipments.findIndex(it => it.id == item.id)
-            this.equipments.splice(index, 1)
-        }
-        else {
-            this.equipments.push(item)
-        }
-        this['execMethod']('onEquip', [this, equip], item)
+      const item = inventory;
+
+      if ((item as any).equipped && equip) {
+        throw ItemLog.isAlreadyEquiped(itemId);
+      }
+      (item as any).equipped = equip;
+      if (!equip) {
+        const index = this.equipments().findIndex((it) => it.id() == item.id());
+        this.equipments().splice(index, 1);
+      } else {
+        this.equipments().push(item);
+      }
+      this["execMethod"]("onEquip", [this, equip], item);
     }
-}
-
-applyMixins(ItemManager, [GoldManager, StateManager, EffectManager])
-
-export interface ItemManager extends GoldManager, StateManager, EffectManager {
-    databaseById(itemClass: any),
+  };
 }

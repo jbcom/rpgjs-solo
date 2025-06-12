@@ -1,6 +1,4 @@
-import { Utils } from '@rpgjs/common'
-
-const { random } = Utils
+import { random } from "@rpgjs/common"
 
 export const MAXHP: string = 'maxHp'
 export const MAXSP: string = 'maxSp'

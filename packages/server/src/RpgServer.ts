@@ -1,13 +1,17 @@
-import { ModuleType, RpgShape, Direction, Control } from '@rpgjs/common'
-import { RpgClassEvent, RpgEvent, RpgPlayer } from './Player/Player'
-import { RpgMap } from './Game/Map'
-import { RpgServerEngine } from './server'
-import { MapOptions } from './decorators/map'
-import { RpgClassMap } from './Scenes/Map'
-import { TiledMap } from '@rpgjs/tiled'
-import { WorldMap } from './Game/WorldMaps'
-import { MatchMakerOption, RpgMatchMaker } from './MatchMaker'
-import { IStoreState } from './Interfaces/StateStore'
+import { RpgPlayer } from "./Player/Player"
+import { type RpgMap } from "./rooms/map"
+import { RpgServerEngine } from "./RpgServerEngine"
+
+type RpgShape = any
+type RpgClassMap<T> = any
+type RpgClassEvent<T> = any
+type RpgEvent = any
+type MatchMakerOption = any
+type RpgMatchMaker = any
+type IStoreState = any
+type TiledMap = any
+type WorldMap = any
+type MapOptions = any
 
 export interface RpgServerEngineHooks {
     /**
@@ -152,7 +156,7 @@ export interface RpgPlayerHooks {
     * @prop { (player: RpgPlayer, data: { input: Direction | Control | string, moving: boolean }) => any } [onInput]
     * @memberof RpgPlayerHooks
     */
-    onInput?: (player: RpgPlayer, data: { input: Direction | Control | string, moving: boolean }) => any
+    onInput?: (player: RpgPlayer, data: any) => any
 
     /**
     *  When the player leaves the map
@@ -223,6 +227,22 @@ export interface RpgPlayerHooks {
     canChangeMap?: (player: RpgPlayer, nextMap: RpgClassMap<RpgMap>) => boolean | Promise<boolean>
 }
 
+export interface RpgEventHooks {
+    onInit?: (event: RpgEvent) => any,
+    onAction?: (event: RpgEvent, player: RpgPlayer) => any
+    onBeforeCreated?: (object: any, map: RpgMap) => any
+    onDetectInShape?: (event: RpgEvent, player: RpgPlayer, shape: RpgShape) => any
+    onDetectOutShape?: (event: RpgEvent, player: RpgPlayer, shape: RpgShape) => any
+    onInShape?: (event: RpgEvent, shape: RpgShape) => any
+    onOutShape?: (event: RpgEvent, shape: RpgShape) => any
+    onPlayerTouch?: (event: RpgEvent, player: RpgPlayer) => any
+    onChanges?: (event: RpgEvent, player: RpgPlayer) => any
+}
+
+export interface RpgMapHooks {
+    onBeforeUpdate<T = RpgMap>(mapData: any, map: T): T
+}
+
 export interface RpgServer {
     /**
      * Add hooks to the player or engine. All modules can listen to the hook
@@ -275,7 +295,7 @@ export interface RpgServer {
      * @prop { { client: null | Function, server: null | Function }[]} [imports]
      * @memberof RpgServer
      */
-    imports?: ModuleType[]
+    imports?: any
 
     /**
      * Object containing the hooks concerning the engine
@@ -394,6 +414,10 @@ export interface RpgServer {
      * @memberof RpgServer
      * */
     maps?: RpgClassMap<RpgMap>[] | MapOptions[] | string[] | TiledMap[],
+
+    map?: RpgMapHooks
+
+    event?: RpgEventHooks
 
     /**
      * Array of all events. Each element is an `RpgEvent` class

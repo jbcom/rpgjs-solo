@@ -9,7 +9,7 @@
       "sourceMap": true,
       "strictNullChecks": true,
       "strictPropertyInitialization": false,
-      "moduleResolution": "node",
+      "moduleResolution": "bundler",
       "esModuleInterop": true,
       "removeComments": false,
       "noUnusedParameters": false,
@@ -24,7 +24,7 @@
       "skipLibCheck": true
     },
     "include": [
-        "src"
+        "src",
+        "node_modules/canvasengine/*"
     ],
-    
   }

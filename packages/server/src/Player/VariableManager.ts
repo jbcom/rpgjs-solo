@@ -1,5 +1,24 @@
-export class VariableManager {
-    variables: Map<string, any>
+import { type Constructor } from "@rpgjs/common";
+import { RpgCommonPlayer } from "@rpgjs/common";
+
+/**
+ * Interface defining what MoveManager adds to a class
+ */
+export interface IWithVariableManager {
+  variables: Map<string, any>
+}
+
+/**
+ * Move Manager mixin
+ * 
+ * Adds methods to manage player movement
+ * 
+ * @param Base - The base class to extend
+ * @returns A new class with move management capabilities
+ */
+export function WithVariableManager<TBase extends Constructor<RpgCommonPlayer>>(Base: TBase) {
+  return class extends Base implements IWithVariableManager {
+    variables: Map<string, any> = new Map()
 
     /** 
      * Assign a variable to the player
@@ -52,4 +71,5 @@ export class VariableManager {
     removeVariable(key: string) {
         return this.variables.delete(key)
     }
+  };
 }

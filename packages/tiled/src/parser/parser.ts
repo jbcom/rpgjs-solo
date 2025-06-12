@@ -3,7 +3,7 @@ import { TiledMap } from '../types/Map'
 import { TilesetTile } from '../types/Tile'
 import { TiledTileset } from '../types/Tileset'
 import { Buffer } from 'buffer'
-import path from 'path'
+import { getBaseName, joinPath } from '../utils'
 
 export class TiledParser {
   private layers: Map<number, any> = new Map()
@@ -35,9 +35,9 @@ export class TiledParser {
   }
 
   getImagePath(image: string) {
-    const baseName = path.dirname(this.filePath)
+    const baseName = getBaseName(this.filePath)
     if (this.filePath.startsWith('http')) return new URL(image, this.filePath).href
-    return path.join(baseName, image)
+    return joinPath(baseName, image)
   }
 
   transform = (obj) => {

@@ -1,11 +1,10 @@
 import { TiledParser } from "./parser"
-import axios from 'axios'
-import fs from 'fs'
 import { TiledMap } from "../types/Map"
 import { TiledTileset } from "../types/Tileset"
-import path from "path"
+import { joinPath } from "../utils"
 
 type ParseOptions = { getOnlyBasename?: boolean }
+
 
 export class TiledParserFile {
     private basePath: string
@@ -77,26 +76,25 @@ export class TiledParserFile {
             loadContent(file)
         }
         else if (isHttp || (TiledParserFile.isBrowser() && process.env.NODE_ENV != 'test')) {
-            let url = isHttp ? file : path.join(this.basePath, this.staticDir, file)
+            let url = isHttp ? file : joinPath(this.basePath, this.staticDir, file)
             // @ts-ignore
             if (TiledParserFile.isBrowser() && window.urlCache) {
                 // @ts-ignore
                 url = window.urlCache[file]
             }
-            axios.get(url).then(res => res.data).then(loadContent)
+            fetch(url)
+                .then(response => response.text())
+                .then(loadContent)
+                .catch(err => cb(null, err))
         }
         else {
             let filepath = file
             if (file.startsWith('/')) {
-                filepath = path.join(this.basePath ? this.basePath: '', file)
+                filepath = joinPath(this.basePath ? this.basePath: '', file)
             }
             if (this.staticDir) {
-                filepath = path.join(this.staticDir, file)
+                filepath = joinPath(this.staticDir, file)
             }
-            fs.readFile(path.normalize(filepath), 'utf-8', (err, data) => {
-                if (err) return cb(null, err)
-                loadContent(data)
-            })
             return
         }   
     }

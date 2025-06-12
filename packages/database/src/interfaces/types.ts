@@ -1,1 +1,0 @@
-export type DatabaseTypes = 'item' | 'weapon' | 'armor' | 'class' | 'enemy' | 'skill' | 'state' | 'actor' | 'effect'

@@ -1,7 +1,24 @@
-export class GoldManager {
-    private _gold: number = 0
+import { type Constructor } from "@rpgjs/common";
+import { RpgCommonPlayer } from "@rpgjs/common";
 
-     /** 
+/**
+ * Interface defining what MoveManager adds to a class
+ */
+export interface IGoldManager {
+  
+}
+
+/**
+ * Move Manager mixin
+ * 
+ * Adds methods to manage player gold
+ * 
+ * @param Base - The base class to extend
+ * @returns A new class with gold management capabilities
+ */
+export function WithGoldManager<TBase extends Constructor<RpgCommonPlayer>>(Base: TBase) {
+  return class extends Base implements IGoldManager {
+    /** 
      * You can change the game money
      * 
      * ```ts
@@ -17,10 +34,11 @@ export class GoldManager {
         if (val < 0) {
             val = 0
         }
-        this._gold = val
+        this._gold.set(val)
     }
 
     get gold(): number {
-        return this._gold
+        return this._gold()
     }
+  };
 }

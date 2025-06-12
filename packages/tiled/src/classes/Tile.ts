@@ -8,8 +8,14 @@ export class Tile extends TileGid {
 
     constructor(public tile: TileInfo | { gid: number }) {
         super(tile)
+        // Store the properties before Object.assign to avoid overwriting them
+        const preservedProperties = this.properties
         Reflect.deleteProperty(tile, 'gid')
         Object.assign(this, tile)
+        // Restore properties if they were overwritten by Object.assign
+        if (preservedProperties && Object.keys(preservedProperties).length > 0) {
+            this.properties = { ...preservedProperties, ...this.properties }
+        }
     } 
 }
 

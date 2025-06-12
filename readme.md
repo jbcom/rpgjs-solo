@@ -1,5 +1,3 @@
-![Header icon](/docs/header.png)
-
 <p align="center">
   <img src="https://img.shields.io/npm/v/@rpgjs/server" alt="Version">
   <img src="https://img.shields.io/npm/dm/@rpgjs/server" alt="Downloads">
@@ -7,7 +5,7 @@
   <img src="https://img.shields.io/github/commit-activity/m/RSamaium/RPG-JS" alt="Activity">
 </p>
 
-# RPG JS v4 : Create RPG and MMORPG in your browser
+# RPG JS v5 [wip] : Create RPG and MMORPG in your browser
 
 RPG JS is a versatile TypeScript framework meticulously designed to empower developers in the creation of both traditional Role-Playing Games (RPGs) and immersive Massively Multiplayer Online Role-Playing Games (MMORPGs). Our primary objective is to offer a seamless development experience where your codebase remains consistent, regardless of the game's nature.
 
@@ -17,8 +15,6 @@ With RPG JS, we aspire to provide developers with a robust foundation that adapt
 
 - Website: [https://rpgjs.dev](https://rpgjs.dev)
 - Documentation: [https://docs.rpgjs.dev](https://docs.rpgjs.dev)
-- Examples: [https://playground.rpgjs.dev](https://playground.rpgjs.dev)
-- Community: [https://community.rpgjs.dev](https://community.rpgjs.dev)
 
 ## Demo 
 
@@ -66,16 +62,6 @@ To contribute to the developments, install the sources locally:
 
 ```bash
 git clone https://github.com/RSamaium/RPG-JS.git
-npm install
-npm run dev
-```
-
-The game can be found in `@rpgjs/sample2` package.
-
-### For documentation
-
-```sh
-cd docs 
 npm install
 npm run dev
 ```
