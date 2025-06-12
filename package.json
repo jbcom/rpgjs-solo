@@ -1,9 +1,10 @@
 {
   "name": "rpgjs",
-  "version": "5.0.0",
+  "version": "5.0.0-alpha.0",
   "scripts": {
     "build": "tsx bin/build.ts",
     "dev": "tsx bin/dev.ts",
+    "clean": "tsx bin/clean.ts",
     "release": "bumpp package.json packages/*/package.json --all",
     "changeset": "changeset",
     "publish:packages": "changeset publish",
