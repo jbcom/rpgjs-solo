@@ -7,19 +7,18 @@
     "clean": "tsx bin/clean.ts",
     "release": "bumpp package.json packages/*/package.json --all",
     "changeset": "changeset",
-    "publish:packages": "pnpm changeset publish",
-    "version:packages": "pnpm changeset version"
+    "publish:packages": "changeset publish",
+    "version:packages": "changeset version"
   },
   "author": "Samuel Ronce",
   "license": "MIT",
   "description": "RPGJS is a framework for creating RPG/MMORPG games",
   "dependencies": {
-    "execa": "^9.5.2",
-    "tsx": "^4.19.3",
-    "wait-on": "^8.0.3",
     "bumpp": "^10.1.1",
-    "changeset": "^0.2.6",
-    "pnpm": "^10.12.1"
+    "execa": "^9.5.2",
+    "pnpm": "^10.12.1",
+    "tsx": "^4.19.3",
+    "wait-on": "^8.0.3"
   },
   "keywords": [
     "rpg",
@@ -31,5 +30,8 @@
   "publishConfig": {
     "access": "public"
   },
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "@changesets/cli": "^2.29.4"
+  }
 }
