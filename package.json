@@ -6,9 +6,8 @@
     "dev": "tsx bin/dev.ts",
     "clean": "tsx bin/clean.ts",
     "release": "bumpp package.json packages/*/package.json --all",
-    "changeset": "changeset",
-    "publish:packages": "changeset publish",
-    "version:packages": "changeset version"
+    "version": "tsx bin/version.ts",
+    "publish": "pnpm -r publish"
   },
   "author": "Samuel Ronce",
   "license": "MIT",
