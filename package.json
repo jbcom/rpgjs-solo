@@ -26,9 +26,7 @@
     "javascript",
     "typescript"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
+  "private": true,
   "type": "module",
   "devDependencies": {
     "@changesets/cli": "^2.29.4",
