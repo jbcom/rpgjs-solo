@@ -15,7 +15,7 @@
   "license": "MIT",
   "description": "",
   "dependencies": {
-    "@rpgjs/common": "5.0.0-alpha.3",
+    "@rpgjs/common": "workspace:*",
     "@rpgjs/database": "^4.3.0",
     "@signe/di": "^2.3.2",
     "@signe/reactive": "^2.3.2",

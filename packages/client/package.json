@@ -22,7 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "@canvasengine/presets": "2.0.0-beta.22",
-    "@rpgjs/common": "5.0.0-alpha.3",
+    "@rpgjs/common": "workspace:*",
     "@signe/di": "^2.3.3",
     "@signe/room": "^2.3.3",
     "@signe/sync": "^2.3.3",
