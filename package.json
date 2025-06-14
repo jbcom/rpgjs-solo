@@ -32,6 +32,7 @@
   },
   "type": "module",
   "devDependencies": {
-    "@changesets/cli": "^2.29.4"
+    "@changesets/cli": "^2.29.4",
+    "@types/node": "^24.0.1"
   }
 }
