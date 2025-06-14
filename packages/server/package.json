@@ -1,6 +1,6 @@
 {
   "name": "@rpgjs/server",
-  "version": "5.0.0-alpha.2",
+  "version": "5.0.0-alpha.3",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "publishConfig": {
@@ -15,7 +15,7 @@
   "license": "MIT",
   "description": "",
   "dependencies": {
-    "@rpgjs/common": "workspace:*",
+    "@rpgjs/common": "5.0.0-alpha.3",
     "@rpgjs/database": "^4.3.0",
     "@signe/di": "^2.3.2",
     "@signe/reactive": "^2.3.2",

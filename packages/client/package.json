@@ -1,6 +1,6 @@
 {
   "name": "@rpgjs/client",
-  "version": "5.0.0-alpha.2",
+  "version": "5.0.0-alpha.3",
   "description": "RPGJS is a framework for creating RPG/MMORPG games",
   "main": "dist/index.js",
   "types": "./dist/index.d.ts",
@@ -22,7 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "@canvasengine/presets": "2.0.0-beta.22",
-    "@rpgjs/common": "workspace:*",
+    "@rpgjs/common": "5.0.0-alpha.3",
     "@signe/di": "^2.3.3",
     "@signe/room": "^2.3.3",
     "@signe/sync": "^2.3.3",
