@@ -199,3 +199,102 @@ export async function buildSequentially(packages: PackageConfig[]) {
         process.exit(1);
     }
 }
+
+/**
+ * Builds packages in parallel for watch mode
+ * 
+ * This function is specifically designed for development mode where packages
+ * need to run in watch mode simultaneously. Unlike sequential builds, this
+ * function starts all packages at once and doesn't wait for them to complete,
+ * as watch mode processes run indefinitely.
+ * 
+ * @param packages - Array of package configurations to build in parallel
+ * @returns Promise that resolves when all watch processes are started
+ * @example
+ * ```typescript
+ * await buildInParallel([
+ *   { name: 'common', buildScript: 'dev' },
+ *   { name: 'client', buildScript: 'dev', dependencies: ['packages/common/dist/index.d.ts'] }
+ * ]);
+ * ```
+ */
+export async function buildInParallel(packages: PackageConfig[]) {
+    if (!packages || packages.length === 0) {
+        console.warn('⚠️  No packages to build');
+        return;
+    }
+
+    console.log(`🏗️  Starting parallel build process for ${packages.length} packages...`);
+    
+    try {
+        // Clean all dist directories first for a fresh start
+        await cleanAllDistDirectories(packages);
+        
+        // Start all packages in parallel
+        const buildPromises = packages.map(async (pkg) => {
+            const basePath = pkg.name === 'sample' ? '.' : 'packages';
+            const packagePath = path.join(basePath, pkg.name);
+            
+            try {
+                // Verify package directory exists
+                await fs.access(packagePath);
+            } catch (error) {
+                throw new Error(`Package directory not found: ${packagePath}`);
+            }
+
+            // Wait for dependencies if specified
+            if (pkg.dependencies && pkg.dependencies.length > 0) {
+                console.log(`⏳ Waiting for ${pkg.name} dependencies...`);
+                await waitOn({
+                    resources: pkg.dependencies,
+                    timeout: 120000,
+                    interval: 1000,
+                    verbose: false
+                });
+            }
+
+            console.log(`🚀 Starting ${pkg.name} in watch mode...`);
+            
+            // Start the watch process (don't await it as it runs indefinitely)
+            const childProcess = execa('npm', ['run', pkg.buildScript], {
+                cwd: packagePath,
+                ...createStdio(pkg.name)
+            });
+
+            // Handle process events
+            childProcess.catch(err => {
+                console.error(`❌ ${pkg.name} watch process failed:`, err);
+            });
+
+            return childProcess;
+        });
+
+        // Start all processes
+        const processes = await Promise.all(buildPromises);
+        
+        console.log('\n🎉 All packages started in watch mode!');
+        console.log('💡 Press Ctrl+C to stop all watch processes');
+        
+        // Handle graceful shutdown
+        const handleShutdown = () => {
+            console.log('\n🛑 Shutting down all watch processes...');
+            processes.forEach(process => {
+                if (!process.killed) {
+                    process.kill('SIGTERM');
+                }
+            });
+            process.exit(0);
+        };
+
+        process.on('SIGINT', handleShutdown);
+        process.on('SIGTERM', handleShutdown);
+        
+        // Wait for all processes to complete (they won't in watch mode)
+        await Promise.all(processes);
+        
+    } catch (error) {
+        console.error('\n❌ Parallel build process failed:', error);
+        console.error('💡 Tip: Check the error above and ensure all dependencies are properly configured');
+        process.exit(1);
+    }
+}

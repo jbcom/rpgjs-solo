@@ -7,7 +7,7 @@
     import { TiledMap } from "@canvasengine/presets";
     import { signal } from "canvasengine";
 
-    const { data, children } = defineProps()
+    const { data } = defineProps()
 
     const map = signal(data())
 </script>

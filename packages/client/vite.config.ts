@@ -24,7 +24,7 @@ export default defineConfig({
       fileName: 'index'
     },
     rollupOptions: {
-      external: [/@rpgjs/, 'esbuild', 'canvasengine', '@canvasengine/presets', 'rxjs'],
+      external: [/@rpgjs/, 'esbuild', 'canvasengine', '@canvasengine/presets', 'rxjs', 'pixi.js'],
       output: {
         preserveModules: true,
         preserveModulesRoot: 'src'

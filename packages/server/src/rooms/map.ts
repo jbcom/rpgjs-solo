@@ -220,6 +220,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     })
 
     const { x, y, event } = eventObj;
+
     let id = eventObj.id || generateShortUUID()
     let eventInstance: RpgPlayer;
 

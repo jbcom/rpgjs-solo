@@ -1,24 +1,8 @@
 <Container sound={backgroundMusic} >
   <Container sound={backgroundAmbientSound} />
 
-  <!-- <Sprite image={map.@fullImage} scale /> -->
-
   <sceneComponent() data={map.@data} />
   
-  <!-- <Container sortableChildren={true}>
-    @for (obj of middleLayer) {
-      <ElementMap ...obj image={map.@gridImage} scale /> 
-    }
-
-    @for ((event,id) of events) {
-      <Character id={id} object={event} isMe={false}  />
-    }
-  
-    @for ((player,id) of players) {
-      <Character id={id} object={player} isMe={true} />
-    }
-  </Container> -->
-
   @for (effect of effects) {
     <Container>
       @for (animation of effect.current) {
@@ -43,8 +27,6 @@
     const backgroundAmbientSound = { src: mapParams?.backgroundAmbientSound, autoplay: true, loop: true }
     
     const data = signal(map().data)
-    // const middleLayer = computed(() => data().filter(obj => obj.layer === 1))
-    // const topLayer = computed(() => data().filter(obj => obj.layer === 2))
 
     const scale = mapParams?.scale || 1
     const worldWidth = (mapParams?.width || 2048) * scale

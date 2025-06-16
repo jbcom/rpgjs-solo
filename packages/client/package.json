@@ -20,14 +20,16 @@
   ],
   "author": "Samuel Ronce",
   "license": "MIT",
+  "peerDependencies": {
+    "canvasengine": "^2.0.0-beta.22",
+    "@canvasengine/presets": "^2.0.0-beta.22",
+    "pixi.js": "^8.9.2"
+  },
   "dependencies": {
-    "@canvasengine/presets": "2.0.0-beta.22",
     "@rpgjs/common": "workspace:*",
     "@signe/di": "^2.3.3",
     "@signe/room": "^2.3.3",
     "@signe/sync": "^2.3.3",
-    "canvasengine": "2.0.0-beta.22",
-    "pixi.js": "^8.10.1",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
