@@ -1,4 +1,4 @@
-import { type Constructor } from "@rpgjs/common";
+import { PlayerCtor, type Constructor } from "@rpgjs/common";
 import { RpgCommonPlayer, Matter, Direction } from "@rpgjs/common";
 import { 
   MovementManager, 
@@ -34,26 +34,7 @@ interface PlayerWithMixins extends RpgCommonPlayer {
   changeDirection: (direction: Direction) => boolean;
 }
 
-export interface IMoveManager {
-  addMovement(strategy: MovementStrategy): void;
-  removeMovement(strategy: MovementStrategy): boolean;
-  clearMovements(): void;
-  hasActiveMovements(): boolean;
-  getActiveMovements(): MovementStrategy[];
-  
-  moveTo(target: RpgCommonPlayer | { x: number, y: number }): void;
-  stopMoveTo(): void;
-  dash(direction: { x: number, y: number }, speed?: number, duration?: number): void;
-  knockback(direction: { x: number, y: number }, force?: number, duration?: number): void;
-  followPath(waypoints: Array<{ x: number, y: number }>, speed?: number, loop?: boolean): void;
-  oscillate(direction: { x: number, y: number }, amplitude?: number, period?: number): void;
-  applyIceMovement(direction: { x: number, y: number }, maxSpeed?: number): void;
-  shootProjectile(type: ProjectileType, direction: { x: number, y: number }, speed?: number): void;
-  moveRoutes(routes: Routes): Promise<boolean>;
-  infiniteMoveRoute(routes: Routes): void;
-  breakRoutes(force?: boolean): void;
-  replayRoutes(): void;
-}
+
 
 
 function wait(sec: number) {
@@ -475,15 +456,37 @@ export const Move = new MoveList();
  * }
  * ```
  */
-export function WithMoveManager<TBase extends Constructor<RpgCommonPlayer>>(
-  Base: TBase
-): Constructor<IMoveManager> & TBase {
-  return class extends Base implements IMoveManager {
+/**
+ * Move Manager Mixin
+ * 
+ * Provides comprehensive movement management capabilities to any class. This mixin handles
+ * various types of movement including pathfinding, physics-based movement, route following,
+ * and advanced movement strategies like dashing, knockback, and projectile movement.
+ * 
+ * @param Base - The base class to extend with movement management
+ * @returns Extended class with movement management methods
+ * 
+ * @example
+ * ```ts
+ * class MyPlayer extends WithMoveManager(BasePlayer) {
+ *   constructor() {
+ *     super();
+ *     this.frequency = Frequency.High;
+ *   }
+ * }
+ * 
+ * const player = new MyPlayer();
+ * player.moveTo({ x: 100, y: 100 });
+ * player.dash({ x: 1, y: 0 }, 8, 200);
+ * ```
+ */
+export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
+  return class extends Base {
     
-    // Private properties for infinite route management
-    private _infiniteRoutes: Routes | null = null;
-    private _finishRoute: ((value: boolean) => void) | null = null;
-    private _isInfiniteRouteActive: boolean = false;
+    // Properties for infinite route management
+    _infiniteRoutes: Routes | null = null;
+    _finishRoute: ((value: boolean) => void) | null = null;
+    _isInfiniteRouteActive: boolean = false;
 
     /** 
     * The player passes through the other players (or vice versa). But the player does not go through the events.
@@ -1097,7 +1100,7 @@ export function WithMoveManager<TBase extends Constructor<RpgCommonPlayer>>(
      * @param routes - Routes array that may contain nested arrays
      * @returns Flattened array of routes
      */
-    private flattenRoutes(routes: any[]): any[] {
+    flattenRoutes(routes: any[]): any[] {
       const result: any[] = [];
       
       for (const route of routes) {
@@ -1241,5 +1244,11 @@ export function WithMoveManager<TBase extends Constructor<RpgCommonPlayer>>(
         this.infiniteMoveRoute(this._infiniteRoutes);
       }
     }
-  };
+  } as unknown as TBase;
 }
+
+/**
+ * Type helper to extract the interface from the WithMoveManager mixin
+ * This provides the type without duplicating method signatures
+ */
+export type IMoveManager = InstanceType<ReturnType<typeof WithMoveManager>>;

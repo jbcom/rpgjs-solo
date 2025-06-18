@@ -3,6 +3,7 @@ import {
   isArray,
   isInstanceOf,
   isString,
+  PlayerCtor,
   RpgCommonPlayer,
 } from "@rpgjs/common";
 import { SkillLog } from "../logs";
@@ -20,22 +21,36 @@ interface SkillManagerDependencies {
   applyStates(player: RpgPlayer, skill: any): void;
 }
 
-/**
- * Interface defining what SkillManager adds to a class
- */
-export interface IWithSkillManager {
-  getSkill(skillClass: any | string): any;
-  learnSkill(skillId: any | string): any;
-  forgetSkill(skillId: any | string): any;
-  useSkill(skillId: any | string, otherPlayer?: RpgPlayer | RpgPlayer[]): any;
-}
 
-export function WithSkillManager<TBase extends Constructor<RpgCommonPlayer & SkillManagerDependencies>>(
-  Base: TBase
-): Constructor<IWithSkillManager> & TBase {
-  return class extends Base implements IWithSkillManager {
-    private _getSkillIndex(skillClass: any | string) {
-      return this.skills().findIndex((skill) => {
+
+/**
+ * Skill Manager Mixin
+ * 
+ * Provides skill management capabilities to any class. This mixin handles
+ * learning, forgetting, and using skills, including SP cost management,
+ * hit rate calculations, and skill effects application.
+ * 
+ * @param Base - The base class to extend with skill management
+ * @returns Extended class with skill management methods
+ * 
+ * @example
+ * ```ts
+ * class MyPlayer extends WithSkillManager(BasePlayer) {
+ *   constructor() {
+ *     super();
+ *     // Skill system is automatically initialized
+ *   }
+ * }
+ * 
+ * const player = new MyPlayer();
+ * player.learnSkill(Fire);
+ * player.useSkill(Fire, targetPlayer);
+ * ```
+ */
+export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase) {
+  return class extends Base {
+    _getSkillIndex(skillClass: any | string) {
+      return (this as any).skills().findIndex((skill) => {
         if (isString(skill)) {
           return skill.id == skillClass;
         }
@@ -94,7 +109,7 @@ export function WithSkillManager<TBase extends Constructor<RpgCommonPlayer & Ski
       if (this.getSkill(skillId)) {
         throw SkillLog.alreadyLearned(skillId);
       }
-      const instance = this.databaseById(skillId);
+      const instance = (this as any).databaseById(skillId);
       this.skills().push(instance);
       this["execMethod"]("onLearn", [this], instance);
       return instance;
@@ -131,7 +146,7 @@ export function WithSkillManager<TBase extends Constructor<RpgCommonPlayer & Ski
      * @memberof SkillManager
      */
     forgetSkill(skillId: any | string) {
-      if (isString(skillId)) skillId = this.databaseById(skillId);
+      if (isString(skillId)) skillId = (this as any).databaseById(skillId);
       const index = this._getSkillIndex(skillId);
       if (index == -1) {
         throw SkillLog.notLearned(skillId);
@@ -219,16 +234,16 @@ export function WithSkillManager<TBase extends Constructor<RpgCommonPlayer & Ski
      */
     useSkill(skillId: any | string, otherPlayer?: RpgPlayer | RpgPlayer[]) {
       const skill = this.getSkill(skillId);
-      if (this.hasEffect(Effect.CAN_NOT_SKILL)) {
+      if ((this as any).hasEffect(Effect.CAN_NOT_SKILL)) {
         throw SkillLog.restriction(skillId);
       }
       if (!skill) {
         throw SkillLog.notLearned(skillId);
       }
-      if (skill.spCost > this.sp) {
-        throw SkillLog.notEnoughSp(skillId, skill.spCost, this.sp);
+      if (skill.spCost > (this as any).sp) {
+        throw SkillLog.notEnoughSp(skillId, skill.spCost, (this as any).sp);
       }
-      this.sp -= skill.spCost / (this.hasEffect(Effect.HALF_SP_COST) ? 2 : 1);
+      (this as any).sp -= skill.spCost / ((this as any).hasEffect(Effect.HALF_SP_COST) ? 2 : 1);
       const hitRate = skill.hitRate ?? 1;
       if (Math.random() > hitRate) {
         this["execMethod"]("onUseFailed", [this, otherPlayer], skill);
@@ -240,12 +255,18 @@ export function WithSkillManager<TBase extends Constructor<RpgCommonPlayer & Ski
           players = [otherPlayer];
         }
         for (let player of players) {
-          this.applyStates(player, skill);
-          player.applyDamage(this, skill);
+          (this as any).applyStates(player, skill);
+          (player as any).applyDamage(this, skill);
         }
       }
       this["execMethod"]("onUse", [this, otherPlayer], skill);
       return skill;
     }
-  };
+  } as unknown as TBase;
 }
+
+/**
+ * Type helper to extract the interface from the WithSkillManager mixin
+ * This provides the type without duplicating method signatures
+ */
+export type ISkillManager = InstanceType<ReturnType<typeof WithSkillManager>>;

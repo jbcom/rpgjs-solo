@@ -1,20 +1,6 @@
-import { Constructor, isString, RpgCommonPlayer } from "@rpgjs/common";
+import { isString, PlayerCtor } from "@rpgjs/common";
 import { MAXHP, MAXSP } from "../presets";
 
-export interface IWithParameterManager {
-  parameters: Map<string, any>
-  hp: number
-  sp: number
-  exp: number
-  level: number
-  expForNextlevel: number
-  param: { [key: string]: number }
-  paramsModifier: { [key: string]: { value?: number, rate?: number } }
-}
-
-interface PlayerWithMixins extends RpgCommonPlayer {
-    databaseById?(id: string): any;  
-}
 
 /**
  * Mixin that adds parameter management functionality to a player class.
@@ -39,18 +25,40 @@ interface PlayerWithMixins extends RpgCommonPlayer {
  * }
  * ```
  */
-export function WithParameterManager<TBase extends Constructor<RpgCommonPlayer>>(
-  Base: TBase
-): TBase & Constructor<IWithParameterManager> {
-  return class extends Base implements IWithParameterManager {
-    private _paramsModifier: {
+/**
+ * Parameter Manager Mixin
+ * 
+ * Provides comprehensive parameter management functionality to any class. This mixin handles
+ * health points (HP), skill points (SP), experience and level progression, custom parameters,
+ * and parameter modifiers for temporary stat changes.
+ * 
+ * @param Base - The base class to extend with parameter management
+ * @returns Extended class with parameter management methods
+ * 
+ * @example
+ * ```ts
+ * class MyPlayer extends WithParameterManager(BasePlayer) {
+ *   constructor() {
+ *     super();
+ *     this.addParameter('strength', { start: 10, end: 100 });
+ *   }
+ * }
+ * 
+ * const player = new MyPlayer();
+ * player.hp = 100;
+ * player.level = 5;
+ * ```
+ */
+export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
+  return class extends Base {
+    _paramsModifier: {
         [key: string]: {
             value?: number,
             rate?: number
         }
     } = {}
 
-    private _parameters: Map<string, {
+    _parameters: Map<string, {
         start: number,
         end: number
     }> = new Map()
@@ -127,11 +135,11 @@ export function WithParameterManager<TBase extends Constructor<RpgCommonPlayer>>
             this['execMethod']('onDead') 
             val = 0
         }
-        this._hp.set(val)
+        (this as any)._hp.set(val)
     }
 
     get hp(): number {
-        return this._hp()
+        return (this as any)._hp()
     }
 
     /** 
@@ -497,5 +505,7 @@ export function WithParameterManager<TBase extends Constructor<RpgCommonPlayer>>
     allRecovery(): void {
         this.recovery({ hp: 1, sp: 1 })
     }
-  }
+  } as unknown as TBase;
 }
+
+export type IParameterManager = InstanceType<ReturnType<typeof WithParameterManager>>;

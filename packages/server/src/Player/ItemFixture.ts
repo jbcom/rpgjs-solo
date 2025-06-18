@@ -1,11 +1,10 @@
 import { ItemInstance } from "@rpgjs/database";
-import { RpgCommonPlayer, type Constructor } from "@rpgjs/common";
-export class ItemFixture {}
+import { PlayerCtor } from "@rpgjs/common";
 
-export function WithItemFixture<TBase extends Constructor<RpgCommonPlayer>>(
+export function WithItemFixture<TBase extends PlayerCtor>(
   Base: TBase
 ) {
-  return class extends Base implements IItemFixture {
+  return class extends Base {
     protected getFeature(name, prop): any {
       const array = {};
       for (let item of this.equipments()) {
@@ -21,7 +20,7 @@ export function WithItemFixture<TBase extends Constructor<RpgCommonPlayer>>(
       }
       return Object.values(array);
     }
-  };
+  } as unknown as TBase;
 }
 
 export interface ItemFixture {

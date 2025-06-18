@@ -1,44 +1,41 @@
-import { type Constructor } from "@rpgjs/common";
-import { RpgCommonPlayer } from "@rpgjs/common";
+import { PlayerCtor } from "@rpgjs/common";
 
-/**
- * Interface defining what MoveManager adds to a class
- */
-export interface IGoldManager {
-  
+export interface GoldManager {
+  /**
+   * You can change the game money
+   *
+   * ```ts
+   * player.gold += 100
+   * ```
+   *
+   * @title Change Gold
+   * @prop {number} player.gold
+   * @default 0
+   * @memberof GoldManager
+   * */
+  gold: number;
 }
 
-/**
- * Move Manager mixin
- * 
- * Adds methods to manage player gold
- * 
- * @param Base - The base class to extend
- * @returns A new class with gold management capabilities
- */
-export function WithGoldManager<TBase extends Constructor<RpgCommonPlayer>>(Base: TBase) {
-  return class extends Base implements IGoldManager {
-    /** 
-     * You can change the game money
-     * 
-     * ```ts
-     * player.gold += 100
-     * ```
-     * 
-     * @title Change Gold
-     * @prop {number} player.gold
-     * @default 0
-     * @memberof GoldManager
-     * */
+export function WithGoldManager<TBase extends PlayerCtor>(
+  Base: TBase
+): new (...args: ConstructorParameters<TBase>) => InstanceType<TBase> &
+  GoldManager {
+  return class extends Base {
     set gold(val: number) {
-        if (val < 0) {
-            val = 0
-        }
-        this._gold.set(val)
+      if (val < 0) {
+        val = 0;
+      }
+      this._gold.set(val);
     }
 
     get gold(): number {
-        return this._gold()
+      return this._gold();
     }
-  };
+  } as unknown as any;
 }
+
+/**
+ * Type helper to extract the interface from the WithGoldManager mixin
+ * This provides the type without duplicating method signatures
+ */
+export type IGoldManager = InstanceType<ReturnType<typeof WithGoldManager>>;

@@ -8,6 +8,7 @@ export function Event() {
       this.setGraphic("female");
     },
     async onAction(player: RpgPlayer) {
+      player.gold = 100;
       player.showText("Hello World", {
         talkWith: this
       });

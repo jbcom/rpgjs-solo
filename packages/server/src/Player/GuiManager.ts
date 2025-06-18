@@ -1,17 +1,34 @@
 import { RpgPlayer } from "./Player";
 import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui } from "../Gui";
 import { DialogOptions, Choice } from "../Gui/DialogGui";
-import { Constructor, RpgCommonPlayer } from "@rpgjs/common";
+import { PlayerCtor } from "@rpgjs/common";
 
-export interface IGuiManager {
-    emit: any;
-    removeGui: (guiId: string, data?: any) => void;
-  }
-
-export function WithGuiManager<TBase extends Constructor<RpgCommonPlayer>>(
-  Base: TBase
-) {
-  return class extends Base implements IGuiManager {
+/**
+ * GUI Manager Mixin
+ * 
+ * Provides graphical user interface management capabilities to any class. This mixin handles
+ * dialog boxes, menus, notifications, shops, and custom GUI components. It manages the
+ * complete GUI system including opening, closing, and data passing between client and server.
+ * 
+ * @param Base - The base class to extend with GUI management
+ * @returns Extended class with GUI management methods
+ * 
+ * @example
+ * ```ts
+ * class MyPlayer extends WithGuiManager(BasePlayer) {
+ *   constructor() {
+ *     super();
+ *     // GUI system is automatically initialized
+ *   }
+ * }
+ * 
+ * const player = new MyPlayer();
+ * await player.showText('Hello World!');
+ * player.callMainMenu();
+ * ```
+ */
+export function WithGuiManager<TBase extends PlayerCtor>(Base: TBase) {
+  return class extends Base {
     _gui: { [id: string]: Gui } = {};
 
     /**
@@ -253,11 +270,11 @@ export function WithGuiManager<TBase extends Constructor<RpgCommonPlayer>>(
       }
     }
 
-    private _attachedGui(players: RpgPlayer[] | RpgPlayer, display: boolean) {
+    _attachedGui(players: RpgPlayer[] | RpgPlayer, display: boolean) {
       if (!Array.isArray(players)) {
         players = [players] as RpgPlayer[];
       }
-      this.emit("gui.tooltip", {
+      (this as any).emit("gui.tooltip", {
         players: (players as RpgPlayer[]).map((player) => player.id),
         display,
       });
@@ -313,5 +330,11 @@ export function WithGuiManager<TBase extends Constructor<RpgCommonPlayer>>(
       const _players = players || this;
       this._attachedGui(_players as RpgPlayer[], false);
     }
-  };
+  } as unknown as TBase;
 }
+
+/**
+ * Type helper to extract the interface from the WithGuiManager mixin
+ * This provides the type without duplicating method signatures
+ */
+export type IGuiManager = InstanceType<ReturnType<typeof WithGuiManager>>;

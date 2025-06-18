@@ -59,10 +59,6 @@ export const packages = (type: "build" | "dev") => {
   return [
     // Core packages (no dependencies)
     {
-      name: "tiled",
-      buildScript
-    },
-    {
       name: "vite", 
       buildScript
     },
@@ -75,12 +71,12 @@ export const packages = (type: "build" | "dev") => {
     {
       name: "client",
       buildScript,
-      dependencies: createDependencies(packagesPath, ['common', 'tiled']),
+      dependencies: createDependencies(packagesPath, ['common']),
     },
     {
       name: "server",
       buildScript,
-      dependencies: createDependencies(packagesPath, ['common', 'tiled']),
+      dependencies: createDependencies(packagesPath, ['common']),
     },
     
     // Packages depending on client/server
@@ -94,7 +90,7 @@ export const packages = (type: "build" | "dev") => {
     {
       name: samplePath,
       buildScript,
-      dependencies: createDependencies(packagesPath, ['client', 'server', 'vite', 'tiled', 'tiledmap']),
+      dependencies: createDependencies(packagesPath, ['client', 'server', 'vite', 'tiledmap']),
     },
   ];
 };

@@ -1,1 +1,0 @@
-Time was saved on writing the types. Thanks to  https://github.com/excaliburjs/excalibur-tiled/blob/main/src

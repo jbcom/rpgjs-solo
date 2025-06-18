@@ -1,9 +1,6 @@
 import { RpgMap, RpgServer } from "@rpgjs/server";
-import { TiledParser, MapClass } from "@rpgjs/tiled";
+import { MapClass } from "@canvasengine/tiled";
 import { defineModule } from "@rpgjs/common";
-
-// Import TileInfo depuis le bon endroit
-import type { TileInfo } from "@rpgjs/tiled/src/classes/Map";
 
 // Extend RpgMap interface to include tiled property
 declare module "@rpgjs/server" {

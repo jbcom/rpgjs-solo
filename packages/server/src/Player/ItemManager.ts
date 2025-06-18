@@ -1,4 +1,4 @@
-import { isInstanceOf, isString, Item, type Constructor } from "@rpgjs/common";
+import { isInstanceOf, isString, Item, PlayerCtor, type Constructor } from "@rpgjs/common";
 import { RpgCommonPlayer, Matter } from "@rpgjs/common";
 import { ATK, PDEF, SDEF } from "../presets";
 import { ItemLog } from "../logs";
@@ -13,27 +13,34 @@ enum ClassHooks {
   canEquip = 'canEquip'
 }
 
-/**
- * Interface defining what MoveManager adds to a class
- */
-export interface IItemManager {
-  databaseById(id: string): ItemClass;
-}
-
 type Inventory = { nb: number; item: ItemInstance };
 
 /**
- * Move Manager mixin
+ * Item Manager Mixin
  *
- * Adds methods to manage player movement
+ * Provides comprehensive item management capabilities to any class. This mixin handles
+ * inventory management, item usage, equipment, buying/selling, and item effects.
+ * It manages the complete item system including restrictions, transactions, and equipment.
  *
- * @param Base - The base class to extend
- * @returns A new class with move management capabilities
+ * @param Base - The base class to extend with item management
+ * @returns Extended class with item management methods
+ * 
+ * @example
+ * ```ts
+ * class MyPlayer extends WithItemManager(BasePlayer) {
+ *   constructor() {
+ *     super();
+ *     // Item system is automatically initialized
+ *   }
+ * }
+ * 
+ * const player = new MyPlayer();
+ * player.addItem('potion', 5);
+ * player.useItem('potion');
+ * ```
  */
-export function WithItemManager<TBase extends Constructor<RpgCommonPlayer>>(
-  Base: TBase
-): Constructor<IItemManager> & TBase {
-  return class extends Base implements IItemManager {
+export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
+  return class extends Base {
 
     /**
      * Retrieves the information of an object: the number and the instance
@@ -54,7 +61,7 @@ export function WithItemManager<TBase extends Constructor<RpgCommonPlayer>>(
      */
     getItem(itemClass: ItemClass | string): Item {
       const index: number = this._getItemIndex(itemClass);
-      return this.items()[index];
+      return (this as any).items()[index];
     }
 
     /**
@@ -77,7 +84,7 @@ export function WithItemManager<TBase extends Constructor<RpgCommonPlayer>>(
     }
 
     _getItemIndex(itemClass: ItemClass | string): number {
-      return this.items().findIndex((it: Item): boolean => {
+      return (this as any).items().findIndex((it: Item): boolean => {
         if (isString(itemClass)) {
           return it.id() == itemClass;
         }
@@ -103,8 +110,8 @@ export function WithItemManager<TBase extends Constructor<RpgCommonPlayer>>(
      *  ```
      */
     addItem(itemId: string, nb: number = 1): Item {
-      const data = this.databaseById(itemId);
-      const item = this.items().find((it) => it.id() == itemId);
+      const data = (this as any).databaseById(itemId);
+      const item = (this as any).items().find((it) => it.id() == itemId);
       let instance: Item;
       if (item) {
         instance = item;
@@ -112,9 +119,9 @@ export function WithItemManager<TBase extends Constructor<RpgCommonPlayer>>(
       } else {
         instance = new Item(data);
         instance.id.set(itemId);
-        this.items().push(instance);
+        (this as any).items().push(instance);
       }
-      this["execMethod"]("onAdd", [this], instance);
+      (this as any)["execMethod"]("onAdd", [this], instance);
       return instance;
     }
 
@@ -210,7 +217,7 @@ export function WithItemManager<TBase extends Constructor<RpgCommonPlayer>>(
      * ```
      */
     buyItem(itemId: string, nb = 1): Item {
-      const data = this.databaseById(itemId);
+      const data = (this as any).databaseById(itemId);
       if (!data.price) {
         throw ItemLog.haveNotPrice(itemId);
       }
@@ -272,7 +279,7 @@ export function WithItemManager<TBase extends Constructor<RpgCommonPlayer>>(
      * ```
      */
     sellItem(itemId: string, nbToSell = 1): Item {
-      const data = this.databaseById(itemId);
+      const data = (this as any).databaseById(itemId);
       const inventory = this.getItem(itemId);
       if (!inventory) {
         throw ItemLog.notInInventory(itemId);
@@ -478,7 +485,7 @@ export function WithItemManager<TBase extends Constructor<RpgCommonPlayer>>(
       if (!inventory) {
         throw ItemLog.notInInventory(itemId);
       }
-      const data = this.databaseById(itemId);
+      const data = (this as any).databaseById(itemId);
       if (data._type == "item") {
         throw ItemLog.invalidToEquiped(itemId);
       }
@@ -508,5 +515,11 @@ export function WithItemManager<TBase extends Constructor<RpgCommonPlayer>>(
       }
       this["execMethod"]("onEquip", [this, equip], item);
     }
-  };
+  } as unknown as TBase;
 }
+
+/**
+ * Type helper to extract the interface from the WithItemManager mixin
+ * This provides the type without duplicating method signatures
+ */
+export type IItemManager = InstanceType<ReturnType<typeof WithItemManager>>;

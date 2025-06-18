@@ -5,33 +5,42 @@ import {
   RpgCommonPlayer,
   ShowAnimationParams,
   Constructor,
-  ZoneOptions,
 } from "@rpgjs/common";
-import { WithComponentManager, IComponentManager } from "./ComponentManager";
+import { IComponentManager, WithComponentManager } from "./ComponentManager";
 import { RpgMap } from "../rooms/map";
 import { Context, inject } from "@signe/di";
 import { IGuiManager, WithGuiManager } from "./GuiManager";
 import { MockConnection } from "@signe/room";
 import { IMoveManager, WithMoveManager } from "./MoveManager";
 import { IGoldManager, WithGoldManager } from "./GoldManager";
-import { IWithVariableManager, WithVariableManager } from "./VariableManager";
+import { WithVariableManager, type IVariableManager } from "./VariableManager";
 import { sync } from "@signe/sync";
 import { signal } from "@signe/reactive";
 import {
-  IWithParameterManager,
+  IParameterManager,
   WithParameterManager,
 } from "./ParameterManager";
 import { WithItemFixture } from "./ItemFixture";
-import { WithStateManager } from "./StateManager";
-import { WithItemManager } from "./ItemManager";
+import { IItemManager, WithItemManager } from "./ItemManager";
 import { lastValueFrom } from "rxjs";
-import { WithBattleManager } from "./BattleManager";
-import { WithEffectManager } from "./EffectManager";
-import { WithSkillManager, IWithSkillManager } from "./SkillManager";
+import { IEffectManager, WithEffectManager } from "./EffectManager";
 import { AGI, AGI_CURVE, DEX, DEX_CURVE, INT, INT_CURVE, MAXHP, MAXHP_CURVE, MAXSP, MAXSP_CURVE, STR, STR_CURVE } from "../presets";
-import { WithClassManager } from "./ClassManager";
-import { WithElementManager } from "./ElementManager";
+import { IElementManager, WithElementManager } from "./ElementManager";
+import { ISkillManager, WithSkillManager } from "./SkillManager";
+import { IBattleManager, WithBattleManager } from "./BattleManager";
+import { IClassManager, WithClassManager } from "./ClassManager";
+import { IStateManager, WithStateManager } from "./StateManager";
 
+// Local interface for ZoneOptions to avoid import issues
+interface ZoneOptions {
+  x?: number;
+  y?: number;
+  radius: number;
+  angle?: number;
+  direction?: any;
+  linkedTo?: string;
+  limitedByWalls?: boolean;
+}
 
 /**
  * Combines multiple RpgCommonPlayer mixins into one
@@ -46,27 +55,44 @@ function combinePlayerMixins<T extends Constructor<RpgCommonPlayer>>(
     mixins.reduce((ExtendedClass, mixin) => mixin(ExtendedClass), Base);
 }
 
-const PlayerMixins = combinePlayerMixins([
+// Start with basic mixins that work
+const BasicPlayerMixins = combinePlayerMixins([
   WithComponentManager,
   WithEffectManager,
   WithGuiManager,
   WithMoveManager,
   WithGoldManager,
-  WithVariableManager,
   WithParameterManager,
   WithItemFixture,
-  WithStateManager,
   WithItemManager,
-  WithSkillManager,
-  WithClassManager,
-  WithBattleManager,
   WithElementManager,
+  WithVariableManager,
+  WithStateManager,
+  WithClassManager,
+  WithSkillManager,
+  WithBattleManager,
 ]);
 
 /**
  * RPG Player class with component management capabilities
+ * 
+ * Combines all player mixins to provide a complete player implementation
+ * with graphics, movement, inventory, skills, and battle capabilities.
+ * 
+ * @example
+ * ```ts
+ * // Create a new player
+ * const player = new RpgPlayer();
+ * 
+ * // Set player graphics
+ * player.setGraphic("hero");
+ * 
+ * // Add parameters and items
+ * player.addParameter("strength", { start: 10, end: 100 });
+ * player.addItem(sword);
+ * ```
  */
-export class RpgPlayer extends PlayerMixins(RpgCommonPlayer) {
+export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   map: RpgMap | null = null;
   context?: Context;
   conn: MockConnection | null = null;
@@ -75,20 +101,21 @@ export class RpgPlayer extends PlayerMixins(RpgCommonPlayer) {
 
   constructor() {
     super();
-    this.expCurve = {
+    // Use type assertion to access mixin properties
+    (this as any).expCurve = {
         basis: 30,
         extra: 20,
         accelerationA: 30,
         accelerationB: 30
-    }
+    };
 
-    this.addParameter(MAXHP, MAXHP_CURVE)
-    this.addParameter(MAXSP, MAXSP_CURVE)
-    this.addParameter(STR, STR_CURVE)
-    this.addParameter(INT, INT_CURVE)
-    this.addParameter(DEX, DEX_CURVE)
-    this.addParameter(AGI, AGI_CURVE)
-    this.allRecovery()
+    (this as any).addParameter(MAXHP, MAXHP_CURVE);
+    (this as any).addParameter(MAXSP, MAXSP_CURVE);
+    (this as any).addParameter(STR, STR_CURVE);
+    (this as any).addParameter(INT, INT_CURVE);
+    (this as any).addParameter(DEX, DEX_CURVE);
+    (this as any).addParameter(AGI, AGI_CURVE);
+    (this as any).allRecovery();
   }
 
   async execMethod(method: string, methodData: any[] = [], target?: any) {
@@ -268,12 +295,25 @@ export class RpgEvent extends RpgPlayer {
   }
 }
 
-export interface RpgPlayer
-  extends RpgCommonPlayer,
-    IComponentManager,
-    IGuiManager,
-    IMoveManager,
-    IGoldManager,
-    IWithVariableManager,
-    IWithParameterManager,
-    IWithSkillManager {}
+
+/**
+ * Interface extension for RpgPlayer
+ * 
+ * Extends the RpgPlayer class with additional interfaces from mixins.
+ * This provides proper TypeScript support for all mixin methods and properties.
+ */
+export interface RpgPlayer extends 
+IVariableManager, 
+IMoveManager, 
+IGoldManager, 
+IComponentManager, 
+IGuiManager, 
+IItemManager, 
+IEffectManager,
+IParameterManager,
+IElementManager,
+ISkillManager,
+IBattleManager,
+IClassManager,
+IStateManager
+ {} 

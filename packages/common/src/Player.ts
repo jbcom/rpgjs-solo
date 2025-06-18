@@ -4,6 +4,7 @@ import * as Matter from 'matter-js';
 import { MovementManager } from "./movement";
 import { Item } from "./database";
 import { Observable } from "rxjs";
+import { Constructor } from "./Utils";
 
 export enum Direction {
   Up = 'up',
@@ -264,3 +265,5 @@ export class RpgCommonPlayer {
   }
 
 }
+
+export type PlayerCtor<T extends RpgCommonPlayer = RpgCommonPlayer> = Constructor<T>

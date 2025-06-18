@@ -21,8 +21,8 @@
   "author": "Samuel Ronce",
   "license": "MIT",
   "peerDependencies": {
-    "canvasengine": "^2.0.0-beta.22",
-    "@canvasengine/presets": "^2.0.0-beta.22",
+    "@canvasengine/presets": "*",
+    "canvasengine": "*",
     "pixi.js": "^8.9.2"
   },
   "dependencies": {
@@ -33,7 +33,7 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@canvasengine/compiler": "2.0.0-beta.21",
+    "@canvasengine/compiler": "2.0.0-beta.24",
     "vite": "^6.2.5",
     "vite-plugin-dts": "^4.5.3",
     "vitest": "^3.1.1"
