@@ -17,15 +17,12 @@ export function provideTiledMap(options: {
     provideLoadMap?.(async (map) => {
       "use client";
       const response = await fetch(`${options.basePath}/${map}.tmx`);
-      const mapData = (await response.text()).replace(
-        /source="([^"]+)"/g,
-        `source="${options.basePath}/$1"`
-      );
+      const mapData = (await response.text());
       const parser = new TiledParser(mapData);
       const parsedMap = parser.parseMap();
       const tilesets: any = [];
       for (let tileset of parsedMap.tilesets) {
-        const response = await fetch(`${tileset.source}`);
+        const response = await fetch(`${options.basePath}/${tileset.source}`);
         const tilesetData = await response.text();
         const parser = new TiledParser(tilesetData);
         const parsedTileset = parser.parseTileset();
@@ -43,6 +40,9 @@ export function provideTiledMap(options: {
         component: Tiled,
         parsedMap,
         id: map,
+        params: {
+          basePath: options.basePath,
+        },
       };
 
       if (options.onLoadMap) {

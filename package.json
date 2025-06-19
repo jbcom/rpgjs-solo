@@ -1,6 +1,6 @@
 {
   "name": "rpgjs",
-  "version": "5.0.0-alpha.6",
+  "version": "5.0.0-alpha.7",
   "scripts": {
     "build": "tsx bin/build.ts",
     "dev": "tsx bin/dev.ts",

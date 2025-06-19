@@ -1,7 +1,7 @@
 <Container sound={backgroundMusic} >
   <Container sound={backgroundAmbientSound} />
 
-  <sceneComponent() data={map.@data} />
+  <sceneComponent() data={map.@data} params={map.@params} />
   
   @for (effect of effects) {
     <Container>
@@ -21,6 +21,7 @@
     const effects = engine.effects
     const map = engine.sceneMap.data
     const sceneComponent = computed(() => map()?.component)
+    const sceneParams = map()?.params
     const mapParams = map().params
     const animations = engine.sceneMap.animations
     const backgroundMusic = { src: mapParams?.backgroundMusic, autoplay: true, loop: true }
