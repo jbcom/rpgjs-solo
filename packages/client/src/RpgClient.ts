@@ -12,7 +12,7 @@ export interface RpgClientEngineHooks {
      * @prop { (engine: RpgClientEngine) => boolean | any } [onStart]
      * @memberof RpgEngineHooks
      */
-    onStart?: (engine: RpgClientEngine) => boolean | void
+    onStart?: (engine: RpgClientEngine) => boolean | void | Promise<boolean | void>
 
     /**
      * Each frame

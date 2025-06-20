@@ -227,20 +227,251 @@ export interface RpgPlayerHooks {
     canChangeMap?: (player: RpgPlayer, nextMap: RpgClassMap<RpgMap>) => boolean | Promise<boolean>
 }
 
+/**
+ * Event hooks interface for handling various event lifecycle methods
+ * 
+ * @interface RpgEventHooks
+ * @since 4.0.0
+ */
 export interface RpgEventHooks {
+    /**
+     * Called as soon as the event is created on the map
+     * 
+     * @param {RpgEvent} event - The event instance being initialized
+     * @returns {any} 
+     * @memberof RpgEventHooks
+     * @example
+     * ```ts
+     * const eventHooks: RpgEventHooks = {
+     *     onInit(event) {
+     *         console.log(`Event ${event.name} initialized`)
+     *         event.graphic('default-sprite')
+     *     }
+     * }
+     * ```
+     */
     onInit?: (event: RpgEvent) => any,
+
+    /**
+     * Called when the event collides with a player and the player presses the action key
+     * 
+     * @param {RpgEvent} event - The event being interacted with
+     * @param {RpgPlayer} player - The player performing the action
+     * @returns {any}
+     * @memberof RpgEventHooks
+     * @example
+     * ```ts
+     * const eventHooks: RpgEventHooks = {
+     *     onAction(event, player) {
+     *         player.showText('You activated the chest!')
+     *         player.addItem('POTION', 1)
+     *     }
+     * }
+     * ```
+     */
     onAction?: (event: RpgEvent, player: RpgPlayer) => any
+
+    /**
+     * Called before an event object is created and added to the map
+     * Allows modification of event properties before instantiation
+     * 
+     * @param {any} object - The event object data before creation
+     * @param {RpgMap} map - The map where the event will be created
+     * @returns {any}
+     * @memberof RpgEventHooks
+     * @example
+     * ```ts
+     * const eventHooks: RpgEventHooks = {
+     *     onBeforeCreated(object, map) {
+     *         // Modify event properties based on map conditions
+     *         if (map.id === 'dungeon') {
+     *             object.graphic = 'monster-sprite'
+     *         }
+     *     }
+     * }
+     * ```
+     */
     onBeforeCreated?: (object: any, map: RpgMap) => any
+
+    /**
+     * Called when a player or another event enters a shape attached to this event
+     * 
+     * @param {RpgEvent} event - The event with the attached shape
+     * @param {RpgPlayer} player - The player entering the shape
+     * @param {RpgShape} shape - The shape being entered
+     * @returns {any}
+     * @since 4.1.0
+     * @memberof RpgEventHooks
+     * @example
+     * ```ts
+     * const eventHooks: RpgEventHooks = {
+     *     onDetectInShape(event, player, shape) {
+     *         console.log(`Player ${player.name} entered detection zone`)
+     *         player.showText('You are being watched...')
+     *     }
+     * }
+     * ```
+     */
     onDetectInShape?: (event: RpgEvent, player: RpgPlayer, shape: RpgShape) => any
+
+    /**
+     * Called when a player or another event leaves a shape attached to this event
+     * 
+     * @param {RpgEvent} event - The event with the attached shape
+     * @param {RpgPlayer} player - The player leaving the shape
+     * @param {RpgShape} shape - The shape being left
+     * @returns {any}
+     * @since 4.1.0
+     * @memberof RpgEventHooks
+     * @example
+     * ```ts
+     * const eventHooks: RpgEventHooks = {
+     *     onDetectOutShape(event, player, shape) {
+     *         console.log(`Player ${player.name} left detection zone`)
+     *         player.showText('You escaped the watch...')
+     *     }
+     * }
+     * ```
+     */
     onDetectOutShape?: (event: RpgEvent, player: RpgPlayer, shape: RpgShape) => any
+
+    /**
+     * Called when the event enters a shape on the map
+     * 
+     * @param {RpgEvent} event - The event entering the shape
+     * @param {RpgShape} shape - The shape being entered
+     * @returns {any}
+     * @memberof RpgEventHooks
+     * @example
+     * ```ts
+     * const eventHooks: RpgEventHooks = {
+     *     onInShape(event, shape) {
+     *         console.log(`Event entered shape: ${shape.id}`)
+     *         event.speed = 1 // Slow down in this area
+     *     }
+     * }
+     * ```
+     */
     onInShape?: (event: RpgEvent, shape: RpgShape) => any
+
+    /**
+     * Called when the event leaves a shape on the map
+     * 
+     * @param {RpgEvent} event - The event leaving the shape
+     * @param {RpgShape} shape - The shape being left
+     * @returns {any}
+     * @memberof RpgEventHooks
+     * @example
+     * ```ts
+     * const eventHooks: RpgEventHooks = {
+     *     onOutShape(event, shape) {
+     *         console.log(`Event left shape: ${shape.id}`)
+     *         event.speed = 3 // Resume normal speed
+     *     }
+     * }
+     * ```
+     */
     onOutShape?: (event: RpgEvent, shape: RpgShape) => any
+
+    /**
+     * Called when the event collides with a player (without requiring action key press)
+     * 
+     * @param {RpgEvent} event - The event touching the player
+     * @param {RpgPlayer} player - The player being touched
+     * @returns {any}
+     * @memberof RpgEventHooks
+     * @example
+     * ```ts
+     * const eventHooks: RpgEventHooks = {
+     *     onPlayerTouch(event, player) {
+     *         player.hp -= 10 // Damage on touch
+     *         player.showText('Ouch! You touched a spike!')
+     *     }
+     * }
+     * ```
+     */
     onPlayerTouch?: (event: RpgEvent, player: RpgPlayer) => any
+
+    /**
+     * Called whenever any event on the map (including itself) is executed or changes state
+     * Useful for creating reactive events that respond to map state changes
+     * 
+     * @param {RpgEvent} event - The event listening for changes
+     * @param {RpgPlayer} player - The player involved in the change
+     * @returns {any}
+     * @memberof RpgEventHooks
+     * @example
+     * ```ts
+     * const eventHooks: RpgEventHooks = {
+     *     onChanges(event, player) {
+     *         // Change chest graphic based on game state
+     *         if (player.getVariable('BATTLE_END')) {
+     *             event.graphic('chest-open')
+     *         } else {
+     *             event.graphic('chest-close')
+     *         }
+     *     }
+     * }
+     * ```
+     */
     onChanges?: (event: RpgEvent, player: RpgPlayer) => any
 }
 
+/**
+ * Map hooks interface for handling map lifecycle events
+ * 
+ * @interface RpgMapHooks
+ * @since 4.0.0
+ */
 export interface RpgMapHooks {
-    onBeforeUpdate<T = RpgMap>(mapData: any, map: T): T
+    /**
+     * Called before a map is updated with new data
+     * Allows modification of map data before the update is applied
+     * 
+     * The `mapData` parameter contains the loaded map data (retrieved from request body)
+     * You can modify the map before the update is processed
+     * 
+     * @template T - Type of the incoming map data
+     * @template U - Type of the map instance (defaults to RpgMap)
+     * @param {T} mapData - The map data loaded from external source (e.g., request body)
+     * @param {U} map - The current map instance being updated
+     * @returns {U | Promise<U>} The modified map instance or a promise resolving to it
+     * @memberof RpgMapHooks
+     * @example
+     * ```ts
+     * const mapHooks: RpgMapHooks = {
+     *     onBeforeUpdate(mapData, map) {
+     *         // Modify map properties based on incoming data
+     *         if (mapData.weather === 'rain') {
+     *             map.setWeatherEffect('rain')
+     *         }
+     *         
+     *         // Add custom properties from external data
+     *         map.customProperty = mapData.customValue
+     *         
+     *         return map
+     *     }
+     * }
+     * ```
+     * 
+     * @example
+     * ```ts
+     * // Async example with database operations
+     * const mapHooks: RpgMapHooks = {
+     *     async onBeforeUpdate(mapData, map) {
+     *         // Load additional data from database
+     *         const additionalData = await database.getMapExtras(map.id)
+     *         
+     *         // Apply modifications
+     *         map.events = [...map.events, ...additionalData.events]
+     *         map.npcs = additionalData.npcs
+     *         
+     *         return map
+     *     }
+     * }
+     * ```
+     */
+    onBeforeUpdate<T, U = RpgMap>(mapData: T, map: U): U | Promise<U>
 }
 
 export interface RpgServer {
