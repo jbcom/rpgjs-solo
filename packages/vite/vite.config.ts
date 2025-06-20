@@ -36,7 +36,8 @@ export default defineConfig({
         'vite',
         'vite-plugin-dts',
         '@canvasengine/compiler',
-        'chokidar'
+        'chokidar',
+        'ws'
       ]
     }
   },

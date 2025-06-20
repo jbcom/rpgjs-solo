@@ -2,3 +2,6 @@ export { tiledMapFolderPlugin, type DataFolderPluginOptions } from './tiled-map-
 export { rpgjsModuleViteConfig } from './module-config';
 export { directivePlugin, type DirectivePluginOptions } from './directive-plugin';
 export { removeImportsPlugin, type RemoveImportsPluginOptions } from './remove-imports-plugin';
+export { replaceConfigImport } from './replace-config-import';
+export { rpgjs } from './rpgjs-plugin';
+export { serverPlugin } from './server-plugin';
