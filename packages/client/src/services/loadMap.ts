@@ -9,6 +9,9 @@ export class LoadMapService {
   private updateMapService: UpdateMapService;
 
   constructor(private context: Context, private options: LoadMapOptions) {
+    if (context['side'] === 'server') {
+      return
+    }
     this.updateMapService = inject(context, UpdateMapToken);
   }
 
@@ -23,7 +26,12 @@ export function provideLoadMap(options: LoadMapOptions) {
   return [
     {
       provide: UpdateMapToken,
-      useFactory: (context: Context) => console.warn('UpdateMapToken is not overridden'),
+      useFactory: (context: Context) => {
+        if (context['side'] === 'client') {
+          console.warn('UpdateMapToken is not overridden')
+        }
+        return
+      },
     },
     {
       provide: LoadMapToken,

@@ -1,5 +1,6 @@
 import { createServer, Move, provideServerModules, RpgPlayer } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
+import { provideLoadMap } from "@rpgjs/client";
 
 export function Event() {
   return {
@@ -24,6 +25,7 @@ export default createServer({
         player: {
           onConnected: (player: RpgPlayer) => {
             player.changeMap("simplemap");
+            console.log("player connected", player.id)
           },
           onJoinMap: (player: RpgPlayer) => {
             player.teleport({
@@ -41,5 +43,6 @@ export default createServer({
         ],
       },
     ]),
+    provideLoadMap(() => {})
   ],
 });

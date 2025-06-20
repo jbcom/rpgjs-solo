@@ -5,3 +5,4 @@ export { removeImportsPlugin, type RemoveImportsPluginOptions } from './remove-i
 export { replaceConfigImport } from './replace-config-import';
 export { rpgjs } from './rpgjs-plugin';
 export { serverPlugin } from './server-plugin';
+export { entryPointPlugin, type EntryPointPluginOptions } from './entry-point-plugin';

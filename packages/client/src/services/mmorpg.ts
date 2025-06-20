@@ -6,23 +6,28 @@ import { AbstractWebsocket, WebSocketToken } from "./AbstractSocket";
 import { UpdateMapService, UpdateMapToken } from "@rpgjs/common";
 
 interface MmorpgOptions {
-    host: string;
+    host?: string;
 }
 
 class BridgeWebsocket extends AbstractWebsocket {
     private socket: any;
 
-  constructor(protected context: Context, private options: MmorpgOptions) {
+  constructor(protected context: Context, private options: MmorpgOptions = {}) {
     super(context);
   }
 
-  async connection() {
+  async connection(listeners?: (data: any) => void) {
     // tmp
     class Room {
         
     }
     const instance = new Room()
-    this.socket = await connectionRoom(this.options, instance)
+    this.socket = await connectionRoom({
+        host: this.options.host || window.location.host,
+        room: "lobby-1",
+    }, instance)
+
+    listeners?.(this.socket)
   }
 
   on(key: string, callback: (data: any) => void) {
@@ -35,6 +40,17 @@ class BridgeWebsocket extends AbstractWebsocket {
 
   emit(event: string, data: any) {
     this.socket.emit(event, data);
+  }
+
+  updateProperties({ room }: { room: any }) {
+    this.socket.conn.updateProperties({
+      room: room,
+      host: this.options.host
+    })
+  }
+
+  async reconnect(listeners?: (data: any) => void) {
+   this.socket.conn.reconnect()
   }
 }
 

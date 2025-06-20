@@ -6,8 +6,10 @@ interface SetupOptions {
   providers: Providers;
 }
 
+
 export async function startGame(options: SetupOptions) {
   const context = new Context();
+  context['side'] = 'client'
   setInject(context);
 
   await injector(context, options.providers);
