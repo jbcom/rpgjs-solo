@@ -35,6 +35,8 @@ export class RpgClientEngine<T = any> {
   renderer: PIXI.Renderer;
   tick: Observable<number>;
   playerIdSignal = signal<string | null>(null);
+  spriteComponentsBehind = signal<any[]>([]);
+  spriteComponentsInFront = signal<any[]>([]);
 
   constructor(public context: Context) {
     this.webSocket = inject(context, WebSocketToken);
@@ -67,6 +69,7 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-gui-load", this).subscribe();
     this.hooks.callHooks("client-particles-load", this).subscribe();
     this.hooks.callHooks("client-effects-load", this).subscribe();
+    this.hooks.callHooks("client-sprite-load", this).subscribe();
 
   
     await this.webSocket.connection(() => {
@@ -133,6 +136,42 @@ export class RpgClientEngine<T = any> {
   addParticle(particle: any) {
     this.particleSettings.emitters.push(particle)
     return particle;
+  }
+
+  /**
+   * Add a component to render behind sprites
+   * Components added with this method will be displayed with a lower z-index than the sprite
+   * 
+   * @param component - The component to add behind sprites
+   * @returns The added component
+   * 
+   * @example
+   * ```ts
+   * // Add a shadow component behind all sprites
+   * engine.addSpriteComponentBehind(ShadowComponent);
+   * ```
+   */
+  addSpriteComponentBehind(component: any) {
+    this.spriteComponentsBehind.update((components: any[]) => [...components, component])
+    return component
+  }
+
+  /**
+   * Add a component to render in front of sprites
+   * Components added with this method will be displayed with a higher z-index than the sprite
+   * 
+   * @param component - The component to add in front of sprites
+   * @returns The added component
+   * 
+   * @example
+   * ```ts
+   * // Add a health bar component in front of all sprites
+   * engine.addSpriteComponentInFront(HealthBarComponent);
+   * ```
+   */
+  addSpriteComponentInFront(component: any) {
+    this.spriteComponentsInFront.update((components: any[]) => [...components, component])
+    return component
   }
 
   addEffect(effect: {

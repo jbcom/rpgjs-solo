@@ -30,6 +30,6 @@
     ],
     "typeRoots": [
         "node_modules/@types",
-        "node_modules/@rpgjs/client"
+        "src/types"
     ],
   }

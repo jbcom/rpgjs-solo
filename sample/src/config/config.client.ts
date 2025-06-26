@@ -4,6 +4,7 @@ import {
   provideClientModules,
 } from "@rpgjs/client";
 import { provideTiledMap } from "@rpgjs/tiledmap/client";
+import Tooltip from "../components/tooltip.ce";
 
 export default {
   providers: [
@@ -13,6 +14,12 @@ export default {
     provideClientGlobalConfig(),
     provideClientModules([
       {
+        sprite: {
+          componentsInFront: [Tooltip],
+          onInit: (sprite) => {
+            console.log(sprite)
+          }
+        },
         spritesheets: [
           {
             id: "hero",

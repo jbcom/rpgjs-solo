@@ -1,10 +1,10 @@
 <Container sortableChildren={true}>
     @for ((event,id) of events) {
-        <Character id={id} object={event} isMe={false}  />
+        <Character id={id} object={event}  />
     }
 
     @for ((player,id) of players) {
-        <Character id={id} object={player} isMe={true} />
+        <Character id={id} object={player} />
     }
 </Container>
 

@@ -1,9 +1,10 @@
+import { ComponentFunction } from 'canvasengine'
 import { RpgClientEngine } from './RpgClientEngine'
-import { Loader } from 'pixi.js'
+import { Loader, Container } from 'pixi.js'
 
 type RpgClass<T = any> = new (...args: any[]) => T
-type RpgComponent = any
-type SceneMap = any
+type RpgComponent = Container
+type SceneMap = Container
 
 export interface RpgClientEngineHooks {
     /**
@@ -65,6 +66,36 @@ export interface RpgClientEngineHooks {
 }
 
 export interface RpgSpriteHooks {
+    /**
+     * Array of components to render behind the sprite
+     * These components will be displayed with a lower z-index than the sprite itself
+     * 
+     * @prop { ComponentFunction[] } [componentsBehind]
+     * @memberof RpgSpriteHooks
+     * @example
+     * ```ts
+     * const sprite: RpgSpriteHooks = {
+     *   componentsBehind: [ShadowComponent, AuraComponent]
+     * }
+     * ```
+     */
+    componentsBehind?: ComponentFunction[]
+    
+    /**
+     * Array of components to render in front of the sprite
+     * These components will be displayed with a higher z-index than the sprite itself
+     * 
+     * @prop { ComponentFunction[] } [componentsInFront]
+     * @memberof RpgSpriteHooks
+     * @example
+     * ```ts
+     * const sprite: RpgSpriteHooks = {
+     *   componentsInFront: [HealthBarComponent, StatusEffectComponent]
+     * }
+     * ```
+     */
+    componentsInFront?: ComponentFunction[]
+    
     /**
      * As soon as the sprite is initialized
      * 
@@ -178,14 +209,13 @@ export interface RpgClient {
      * @example
      * 
      * ```ts
-     * import { RpgClient, RpgModule } from '@rpgjs/client'
+     * import { RpgClient, defineModule } from '@rpgjs/client'
      * 
-     * @RpgModule<RpgClient>({
+     * defineModule<RpgClient>({
      *     hooks: {
      *        player: ['onAuth']
      *    }
      * })
-     * class RpgClientEngine { }
      * ```
      * 
      * Emit the hook:
@@ -224,7 +254,7 @@ export interface RpgClient {
      * Object containing the hooks concerning the engine
      * 
      * ```ts
-     * import { RpgClientEngine, RpgClientEngineHooks, RpgModule, RpgClient } from '@rpgjs/client'
+     * import { RpgClientEngine, RpgClientEngineHooks, defineModule, RpgClient } from '@rpgjs/client'
      * 
      * const engine: RpgClientEngineHooks = {
      *      onConnected(engine: RpgClientEngine) {
@@ -232,10 +262,9 @@ export interface RpgClient {
      *      }
      * }
      * 
-     * @RpgModule<RpgClient>({
+     * defineModule<RpgClient>({
      *      engine
      * })
-     * class RpgClientModule {}
      * ```
      * 
      * @prop {RpgClientEngineHooks} [engine]
@@ -245,29 +274,32 @@ export interface RpgClient {
 
     /** 
      * Array containing the list of spritesheets
-     * An element contains a class with the `@Spritesheet` decorator
+     * Each element is a simple object containing spritesheet definitions
      * 
      * ```ts
-     * import { Spritesheet, Animation, Direction, RpgClient, RpgModule } from '@rpgjs/client'
+     * import { defineModule, RpgClient } from '@rpgjs/client'
      * 
-     * @Spritesheet({
-     *      id: 'chest',
-     *      image: require('./assets/chest.png'),
-     *      // other options
-     * })
-     * class Chest  { }
-     * 
-     * @RpgModule<RpgClient>({
+     * defineModule<RpgClient>({
      *      spritesheets: [
-     *          Chest
+     *          {
+     *              id: 'chest',
+     *              image: require('./assets/chest.png'),
+     *              framesWidth: 32,
+     *              framesHeight: 32,
+     *              animations: {
+     *                  default: {
+     *                      frames: [0, 1, 2],
+     *                      duration: 1000
+     *                  }
+     *              }
+     *          }
      *      ]
      * })
-     * class RpgClientEngine {}
      * ```
      * 
      * [Guide: Create Sprite](/guide/create-sprite.html)
      * 
-     * @prop {Array<Class>} [spritesheets]
+     * @prop {Array<Object>} [spritesheets]
      * @memberof RpgClient
      * */
     spritesheets?: any[],
@@ -275,72 +307,49 @@ export interface RpgClient {
     /** 
      * Array containing the list of VueJS components
      * 
-     * ```ts
-     * import { RpgClient, RpgModule } from '@rpgjs/client'
-     * 
-     * const component = {
-     *      name: 'my-gui',
-     *      template: `
-     *          <div>
-     *              Component
-     *          </div>
-     *      `
-     * }
-     * 
-     * @RpgModule<RpgClient>({
-     *      gui: [
-     *          component
-     *      ]
-     * })
-     * class RpgClientEngine {}
-     * ```
      * 
      * [Guide: Create GUI](/guide/create-gui.html)
      * 
-     * @prop {Array<Component of VueJS>} [gui]
+     * @prop {Array<Component of CanvasEngine>} [gui]
      * @memberof RpgClient
      * */
-    gui?: any[],
+    gui?: ComponentFunction[],
 
     /** 
      * Array containing the list of sounds
-     * An element contains a class with the `@Sound` decorator
+     * Each element is a simple object containing sound definitions
      * 
      * ```ts
-     * import { Sound, RpgModule, RpgClient } from '@rpgjs/client'
+     * import { defineModule, RpgClient } from '@rpgjs/client'
      * 
-     * @Sound({
-     *      sounds: {
-     *          town: require('./assets/Town_Theme.ogg')
-     *      }
+     * defineModule<RpgClient>({
+     *      sounds: [
+     *          {
+     *              town: require('./assets/Town_Theme.ogg'),
+     *              battle: require('./assets/Battle_Theme.ogg')
+     *          }
+     *      ]
      * })
-     * class Sounds {}
-     * 
-     * @RpgModule<RpgClient>({
-     *      sounds: [ Sounds ]
-     * })
-     * class RpgClientEngine {}
      * ```
      * 
-     * @prop {Array<Class>} [sounds]
+     * @prop {Array<Object>} [sounds]
      * @memberof RpgClient
      * */
-    sounds?: RpgClass[],
+    sounds?: any[],
 
     /** 
      * Give the `RpgSprite` class. A Sprite represents a player or an event
      * 
      * ```ts
-     * import { RpgSprite, RpgSpriteHooks, RpgClient, RpgModule } from '@rpgjs/client'
+     * import { RpgSprite, RpgSpriteHooks, RpgClient, defineModule } from '@rpgjs/client'
      * 
      * export const sprite: RpgSpriteHooks = {
      *    onInit(sprite: RpgSprite) {}
      * }
      * 
-     * @RpgModule<RpgClient>({
+     * defineModule<RpgClient>({
      *      sprite
      * })
-     * class RpgClientEngine {}
      * ``` 
      * 
      * @prop {RpgSpriteHooks} [sprite]
@@ -352,19 +361,18 @@ export interface RpgClient {
      * Reference the scenes of the game. Here you can put your own class that inherits RpgSceneMap
      * 
      * ```ts
-     * import { RpgSceneMapHooks, RpgClient, RpgModule } from '@rpgjs/client'
+     * import { RpgSceneMapHooks, RpgClient, defineModule } from '@rpgjs/client'
      * 
      * export const sceneMap: RpgSceneMapHooks = {
      *     
      * }
      * 
-     * @RpgModule<RpgClient>({
+     * defineModule<RpgClient>({
      *      scenes: {
      *          // If you put the RpgSceneMap scene, Thhe key is called mandatory `map`
      *          map: sceneMap
      *      }
      * })
-     * class RpgClientEngine {}
      * ``` 
      * 
      * @prop { [sceneName: string]: RpgSceneMapHooks } [scenes]
@@ -376,6 +384,6 @@ export interface RpgClient {
 
     effects?: {
         id: string,
-        component: any
+        component: ComponentFunction
     }[]
 }

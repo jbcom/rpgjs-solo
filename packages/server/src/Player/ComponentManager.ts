@@ -24,9 +24,24 @@ import { RpgCommonPlayer } from "@rpgjs/common";
  * player.setGraphic(["hero_idle", "hero_walk"]);
  * ```
  */
-export function WithComponentManager<TBase extends PlayerCtor>(Base: TBase) {
+export function WithComponentManager<TBase extends PlayerCtor>(Base: TBase): new (...args: ConstructorParameters<TBase>) => InstanceType<TBase> & IComponentManager {
   return class extends Base {
-    /**
+    setGraphic(graphic: string | string[]): void {
+       if (Array.isArray(graphic)) {
+         this.graphics.set(graphic);
+       } else {
+         this.graphics.set([graphic]);
+       }
+     }
+  } as unknown as any;
+}
+
+/**
+ * Interface for component management capabilities
+ * Defines the method signature that will be available on the player
+ */
+export interface IComponentManager {
+  /**
      * Set the graphic(s) for this player
      *
      * Allows setting either a single graphic or multiple graphics for the player.
@@ -54,18 +69,5 @@ export function WithComponentManager<TBase extends PlayerCtor>(Base: TBase) {
      * player.setGraphic(["mage_cast_1", "mage_cast_2", "mage_cast_3"]);
      * ```
      */
-         setGraphic(graphic: string | string[]): void {
-       if (Array.isArray(graphic)) {
-         this.graphics.set(graphic);
-       } else {
-         this.graphics.set([graphic]);
-       }
-     }
-  } as unknown as TBase;
+  setGraphic(graphic: string | string[]): void;
 }
-
-/**
- * Type helper to extract the interface from the WithComponentManager mixin
- * This provides the type without duplicating method signatures
- */
-export type IComponentManager = InstanceType<ReturnType<typeof WithComponentManager>>;

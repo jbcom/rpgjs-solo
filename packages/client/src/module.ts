@@ -63,6 +63,24 @@ export function provideClientModules(modules: RpgClient[]) {
           },
         };
       }
+      if (module.sprite) {
+        const sprite = {...module.sprite};
+        module.sprite = {
+          ...sprite,
+          load: (engine: RpgClientEngine) => {
+            if (sprite.componentsBehind) {
+              sprite.componentsBehind.forEach((component) => {
+                engine.addSpriteComponentBehind(component);
+              });
+            }
+            if (sprite.componentsInFront) {
+              sprite.componentsInFront.forEach((component) => {
+                engine.addSpriteComponentInFront(component);
+              });
+            }
+          },
+        };
+      }
       return module;
     });
     return modules

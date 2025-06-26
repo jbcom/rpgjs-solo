@@ -1,0 +1,9 @@
+<Container>
+    <DOMContainer>
+        <p>test</p>
+    </DOMContainer>
+</Container>
+
+<script>
+    const { object } = defineProps();
+</script>
