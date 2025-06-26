@@ -8,9 +8,9 @@ import { load } from "@signe/sync";
 import { RpgClientMap } from "./Game/Map"
 import { RpgGui } from "./Gui/Gui";
 import { EffectManager } from "./Game/EffectManager";
-import { lastValueFrom } from "rxjs";
+import { lastValueFrom, Observable } from "rxjs";
 import { GlobalConfigToken } from "./module";
-import { ClientIo } from "@signe/room";
+import * as PIXI from "pixi.js";
 
 export class RpgClientEngine<T = any> {
   private guiService: RpgGui;
@@ -22,7 +22,6 @@ export class RpgClientEngine<T = any> {
   public globalConfig: T;
   public sceneComponent: any;
   stopProcessingInput = false;
-
   width = signal("100%");
   height = signal("100%");
   spritesheets: Map<string, any> = new Map();
@@ -33,6 +32,9 @@ export class RpgClientEngine<T = any> {
   } = {
     emitters: []
   }
+  renderer: PIXI.Renderer;
+  tick: Observable<number>;
+  playerIdSignal = signal<string | null>(null);
 
   constructor(public context: Context) {
     this.webSocket = inject(context, WebSocketToken);
@@ -45,9 +47,20 @@ export class RpgClientEngine<T = any> {
   async start() {
     this.selector = document.body.querySelector("#rpg") as HTMLElement;
 
-    await bootstrapCanvas(this.selector, Canvas);
+    const { app, canvasElement } = await bootstrapCanvas(this.selector, Canvas);
+    this.renderer = app.renderer as PIXI.Renderer;
+    this.tick = canvasElement?.propObservables?.context['tick'].observable
 
     await lastValueFrom(this.hooks.callHooks("client-engine-onStart", this));
+
+    // wondow is resize
+    window.addEventListener('resize', () => {
+      this.hooks.callHooks("client-engine-onWindowResize", this).subscribe();
+    })
+
+    this.tick.subscribe((tick) => {
+      this.hooks.callHooks("client-engine-onStep", this, tick).subscribe();
+    })
 
     this.hooks.callHooks("client-spritesheets-load", this).subscribe();
     this.hooks.callHooks("client-sounds-load", this).subscribe();
@@ -64,6 +77,8 @@ export class RpgClientEngine<T = any> {
 
   private initListeners() {
     this.webSocket.on("sync", (data) => {
+      if (data.pId) this.playerIdSignal.set(data.pId)
+      this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: data }).subscribe();
       load(this.sceneMap, data, true);
     });
 
@@ -79,6 +94,18 @@ export class RpgClientEngine<T = any> {
       const player = this.sceneMap.getObjectById(object);
       this.getEffect(id).displayEffect(params, player)
     });
+
+    this.webSocket.on('open', () => {
+      this.hooks.callHooks("client-engine-onConnected", this, this.socket).subscribe();
+    })
+
+    this.webSocket.on('close', () => {
+      this.hooks.callHooks("client-engine-onDisconnected", this, this.socket).subscribe();
+    })
+
+    this.webSocket.on('error', (error) => {
+      this.hooks.callHooks("client-engine-onConnectError", this, error, this.socket).subscribe();
+    })
   }
   
   private async loadScene(mapId: string) {
@@ -131,11 +158,25 @@ export class RpgClientEngine<T = any> {
   }
 
   processInput({ input }: { input: number }) {
+    this.hooks.callHooks("client-engine-onInput", this, { input, playerId: this.playerId }).subscribe();
     this.webSocket.emit('move', { input })
   }
 
   processAction({ action }: { action: number }) {
     if (this.stopProcessingInput) return;
+    this.hooks.callHooks("client-engine-onInput", this, { input: 'action', playerId: this.playerId }).subscribe();
     this.webSocket.emit('action', { action })
+  }
+
+  get PIXI() {
+    return PIXI
+  }
+
+  get socket() {
+    return this.webSocket
+  }
+  
+  get playerId() {
+    return this.playerIdSignal()
   }
 }

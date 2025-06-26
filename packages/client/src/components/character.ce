@@ -15,9 +15,9 @@
 </Container>
 
 <script>
-  import { signal, effect, mount, computed } from "canvasengine";
+  import { signal, effect, mount, computed, tick } from "canvasengine";
   import { Particle } from "@canvasengine/presets";
-  import { GameEngineToken } from "@rpgjs/common";
+  import { GameEngineToken, ModulesToken } from "@rpgjs/common";
   import { RpgClientEngine } from "../RpgClientEngine";
   import { inject } from "../core/inject";  
   import { Direction } from "@rpgjs/common";
@@ -26,6 +26,7 @@
   const { object, id, isMe } = defineProps();
 
   const client = inject(RpgClientEngine);
+  const hooks = inject(ModulesToken);
 
   const spritesheets = client.spritesheets;
 
@@ -101,4 +102,18 @@
       },
     };
   }
+
+  mount((element) => {
+    hooks.callHooks("client-sprite-onInit", element.componentInstance)
+    hooks.callHooks("client-sceneMap-onAddSprite", client.sceneMap, element.componentInstance)
+
+    return () => {
+      hooks.callHooks("client-sprite-onDestroy", element.componentInstance)
+      hooks.callHooks("client-sceneMap-onRemoveSprite", client.sceneMap, element.componentInstance)
+    }
+  })
+
+  tick(() => {
+    hooks.callHooks("client-sprite-onUpdate")
+  })
 </script>
