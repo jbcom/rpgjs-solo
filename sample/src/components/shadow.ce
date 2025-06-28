@@ -1,0 +1,24 @@
+<Ellipse 
+    x={shadow.@x} 
+    y={shadow.@y} 
+    width={shadow.@width} 
+    height={shadow.@height} 
+    color="black" 
+    blur={10} 
+    alpha={0.5}
+/>
+
+<script>
+    import { computed } from "canvasengine";
+
+    const { object } = defineProps();
+
+    const hitbox = object.hitbox;
+    const widthShadow = 20;
+    const shadow = computed(() => ({
+        x: hitbox().w / 2,
+        y: hitbox().h,
+        width: hitbox().w + widthShadow,
+        height: hitbox().h,
+    }))
+</script>

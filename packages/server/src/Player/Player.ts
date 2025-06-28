@@ -178,6 +178,24 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     });
   }
 
+  setAnimation(animationName: string, nbTimes: number = Infinity) {
+    const map = this.getCurrentMap();
+    if (!map) return;
+    if (nbTimes === Infinity) {
+      this.animationName.set(animationName);
+    }
+    else {
+      map.$broadcast({
+        type: "setAnimation",
+        value: {
+          animationName,
+          nbTimes,
+          object: this.id,
+        },
+      });
+    }
+  }
+
   showAnimation(params: ShowAnimationParams) {}
 
   /**

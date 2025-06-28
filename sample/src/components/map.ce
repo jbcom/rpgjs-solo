@@ -1,0 +1,8 @@
+<Container>
+    <Sprite image="background.jpg" />
+    <EventLayerComponent />
+</Container>
+
+<script>
+import { EventLayerComponent } from "@rpgjs/client"
+</script>

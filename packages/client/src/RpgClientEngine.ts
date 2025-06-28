@@ -98,6 +98,12 @@ export class RpgClientEngine<T = any> {
       this.getEffect(id).displayEffect(params, player)
     });
 
+    this.webSocket.on("setAnimation", (data) => {
+      const { animationName, nbTimes, object } = data;
+      const player = this.sceneMap.getObjectById(object);
+      player.setAnimation(animationName, nbTimes)
+    })
+
     this.webSocket.on('open', () => {
       this.hooks.callHooks("client-engine-onConnected", this, this.socket).subscribe();
     })

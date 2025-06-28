@@ -7,7 +7,7 @@
   <Particle emit={@emitParticleTrigger} settings={@particleSettings} zIndex={1000} name={particleName} />
   <Container>
     @for (graphicId of graphics) {
-      <Sprite sheet={@sheet(@graphicId)} direction tint />
+      <Sprite sheet={@sheet(@graphicId)} direction tint hitbox />
     }
   </Container>
   @for (component of componentsInFront) {
@@ -15,15 +15,6 @@
       <component object />
     </Container>
   } 
-  <!-- <Ellipse 
-    x={shadow.@x} 
-    y={shadow.@y} 
-    width={shadow.@width} 
-    height={shadow.@height} 
-    color="black" 
-    blur={10} 
-    alpha={0.5}
-  /> -->
 </Container>
 
 <script>
@@ -46,24 +37,21 @@
   const componentsInFront = client.spriteComponentsInFront;
   const isMe = computed(() => id() === playerId);
 
-  const x = object.x;
-  const y = object.y;
-  const tint = object.tint;
-  const direction = object.direction;
-  const animationName = object.animationName;
-  const emitParticleTrigger = object.emitParticleTrigger;
-  const particleSettings = client.particleSettings;
-  const particleName = object.particleName;
-  const graphics = object.graphics;
+  const { 
+    x, 
+    y, 
+    tint, 
+    direction, 
+    animationName, 
+    animationCurrentIndex,
+    emitParticleTrigger, 
+    particleName, 
+    graphics, 
+    hitbox 
+  } = object;
 
-  const hitbox = object.hitbox;
-  const widthShadow = 10;
-  const shadow = computed(() => ({
-    x: hitbox().w / 2,
-    y: hitbox().h - (hitbox().h / 2),
-    width: hitbox().w + widthShadow,
-    height: hitbox().h,
-  }))
+  const particleSettings = client.particleSettings;
+
   const canControls = () => isMe() && object.canMove()
   const keyboardControls = client.globalConfig.keyboardControls;
 
@@ -116,8 +104,30 @@
       params: {
         direction
       },
+      onFinish() {
+        animationCurrentIndex.update(index => index + 1)
+      }
     };
   }
+
+  // Track animation changes to reset animation state when needed
+  let previousAnimationName = animationName();
+  effect(() => {
+    const currentAnimationName = animationName();
+    
+    // If animation changed externally (not through setAnimation), reset the state
+    if (currentAnimationName !== previousAnimationName && object.animationIsPlaying && object.animationIsPlaying()) {
+      // Check if this is a movement animation (walk, stand) that should interrupt custom animations
+      const movementAnimations = ['walk', 'stand'];
+      if (movementAnimations.includes(currentAnimationName)) {
+        if (typeof object.resetAnimationState === 'function') {
+          object.resetAnimationState();
+        }
+      }
+    }
+    
+    previousAnimationName = currentAnimationName;
+  });
 
   mount((element) => {
     hooks.callHooks("client-sprite-onInit", element.componentInstance)

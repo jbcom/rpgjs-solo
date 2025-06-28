@@ -2,39 +2,44 @@ import {
   Presets,
   provideClientGlobalConfig,
   provideClientModules,
+  provideLoadMap,
 } from "@rpgjs/client";
-import { provideTiledMap } from "@rpgjs/tiledmap/client";
-import Tooltip from "../components/tooltip.ce";
+import Map from "../components/map.ce";
+import Shadow from "../components/shadow.ce";
 
 export default {
   providers: [
-    provideTiledMap({
-      basePath: "map",
+    provideLoadMap(() => {
+       return {
+          component: Map,
+          width: 2048,
+          height: 1536,
+       }
     }),
     provideClientGlobalConfig(),
     provideClientModules([
       {
         sprite: {
-          componentsInFront: [Tooltip],
+          componentsBehind: [Shadow],
           onInit: (sprite) => {
             console.log(sprite)
           }
         },
         spritesheets: [
-          {
+          Presets.LPCSpritesheetPreset({
             id: "hero",
-            width: 96,
-            height: 128,
-            image: "male.png",
-            ...Presets.RMSpritesheet(3, 4),
-          },
-          {
-            id: "female",
-            width: 96,
-            height: 128,
-            image: "female.png",
-            ...Presets.RMSpritesheet(3, 4),
-          },
+            imageSource: "hero.png",
+            width: 1728,
+            height: 5568,
+            ratio: 1.5,
+          }),
+          Presets.LPCSpritesheetPreset({
+            id: "monster",
+            imageSource: "monster.png",
+            width: 1728,
+            height: 5568,
+            ratio: 1.5,
+          }),
         ],
       },
     ]),

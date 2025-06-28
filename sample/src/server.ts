@@ -1,6 +1,4 @@
 import { createServer, Move, provideServerModules, RpgPlayer } from "@rpgjs/server";
-import { provideTiledMap } from "@rpgjs/tiledmap/server";
-import { provideLoadMap } from "@rpgjs/client";
 
 export function Event() {
   return {
@@ -19,21 +17,24 @@ export function Event() {
 
 export default createServer({
   providers: [
-    provideTiledMap(),
     provideServerModules([
       {
         player: {
           onConnected: (player: RpgPlayer) => {
             player.changeMap("simplemap");
-            console.log("player connected", player.id)
           },
           onJoinMap: (player: RpgPlayer) => {
             player.teleport({
-              x: 250,
-              y: 250,
+              x: 1000,
+              y: 400,
             });
             player.setGraphic("hero");
           },
+          onInput(player: RpgPlayer, input: any) {
+            if (input.action) {
+              player.setAnimation("attack3", 1);
+            }
+          }
         },
         maps: [
           {
@@ -42,7 +43,6 @@ export default createServer({
           },
         ],
       },
-    ]),
-    provideLoadMap(() => {})
+    ])
   ],
 });
