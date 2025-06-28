@@ -57,8 +57,7 @@ The callback function must return an object with the following properties:
 
 Your map component should be a CanvasEngine component that receives the map data through props:
 
-```ts
-// MyMapComponent.ce
+```html
 <Container>
     <TileMap tiles={mapTiles} />
     <EventLayerComponent />
@@ -92,7 +91,7 @@ const mapData = data()
 
 To display game events (NPCs, interactive objects, etc.), include the `EventLayerComponent` in your map component:
 
-```ts
+```html
 <Container>
     <!-- Your map rendering -->
     <MyTileRenderer tiles={tiles} />

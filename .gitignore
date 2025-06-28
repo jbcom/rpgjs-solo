@@ -11,4 +11,4 @@ docs/others/*
 cache
 packages/**/browser
 vitest.config.ts.timestamp*
-cache
+docs/.vitepress/cache

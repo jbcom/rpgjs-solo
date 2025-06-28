@@ -6,10 +6,9 @@ This guide explains how to access the RPG-JS client engine and retrieve events a
 
 To access the RPG-JS client engine in a `.ce` file, you need to use the dependency injection system:
 
-```javascript
+```html
 <script>
-import { inject } from "../../core/inject";
-import { RpgClientEngine } from "../../RpgClientEngine";
+import { inject, RpgClientEngine } from "@rpgjs/client";
 
 const engine = inject(RpgClientEngine);
 </script>
@@ -19,10 +18,9 @@ const engine = inject(RpgClientEngine);
 
 Once you have injected the engine, you can access the events and players through the scene map:
 
-```javascript
+```html
 <script>
-import { inject } from "../../core/inject";
-import { RpgClientEngine } from "../../RpgClientEngine";
+import { inject, RpgClientEngine } from "@rpgjs/client";
 
 const engine = inject(RpgClientEngine);
 const players = engine.sceneMap.players;
@@ -50,7 +48,7 @@ const events = engine.sceneMap.events;   // Signal<Record<string, RpgClientEvent
 
 Here's a complete example showing how to use the engine injection to display events and players:
 
-```javascript
+```html
 <Container sortableChildren={true}>
     @for ((event, id) of events) {
         <Character id={id} object={event} isMe={false} />
@@ -62,8 +60,7 @@ Here's a complete example showing how to use the engine injection to display eve
 </Container>
 
 <script>
-    import { inject } from "../../core/inject";
-    import { RpgClientEngine } from "../../RpgClientEngine";
+    import { inject, RpgClientEngine } from "@rpgjs/client";
     import Character from "../character.ce";
    
     const engine = inject(RpgClientEngine);
