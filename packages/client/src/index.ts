@@ -8,6 +8,6 @@ export * from "./services/loadMap";
 export * from "./module";
 export * from "./Gui/Gui";
 export * from "./components/gui";
-export * from "./components/effects";
+export * from "./components/animations";
 export * from "./presets";
 export * from "./components";

@@ -5,6 +5,7 @@ const guideMenu = [{
     { text: "Getting Started", link: "/guide/get-started" },
     { text: "Create Module", link: "/guide/create-module" },
     { text: "Create Shape", link: "/guide/create-shape" },
+    { text: "Display Animations", link: "/guide/display-animations" },
     { text: "Create Movement", link: "/guide/create-movement" },
     { text: "Sprite Components", link: "/guide/sprite-components" },
     { text: "Battle AI", link: "/guide/battle-ai" }

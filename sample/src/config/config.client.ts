@@ -40,6 +40,13 @@ export default {
             height: 5568,
             ratio: 1.5,
           }),
+          {
+            id: "animation",
+            width: 1024,
+            height: 1024,
+            image: "exp.png",
+            ...Presets.AnimationSpritesheetPreset(4, 4),
+          }
         ],
       },
     ]),

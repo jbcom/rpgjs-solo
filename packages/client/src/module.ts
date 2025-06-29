@@ -43,12 +43,12 @@ export function provideClientModules(modules: RpgClient[]) {
           },
         };
       }
-      if (module.effects) {
-        const effects = [...module.effects];
-        module.effects = {
+      if (module.componentAnimations) {
+        const componentAnimations = [...module.componentAnimations];
+        module.componentAnimations = {
           load: (engine: RpgClientEngine) => {
-            effects.forEach((effect) => {
-              engine.addEffect(effect);
+            componentAnimations.forEach((componentAnimation) => {
+              engine.addComponentAnimation(componentAnimation);
             });
           },
         };

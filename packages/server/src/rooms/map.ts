@@ -292,16 +292,83 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     delete this.events()[eventId]
   }
 
-  showAnimation(animationName: string, object: RpgPlayer) {
+  /**
+   * Display a component animation at a specific position on the map
+   * 
+   * This method broadcasts a component animation to all clients connected to the map,
+   * allowing temporary visual effects to be displayed at any location on the map.
+   * Component animations are custom Canvas Engine components that can display
+   * complex effects with custom logic and parameters.
+   * 
+   * @param id - The ID of the component animation to display
+   * @param position - The x, y coordinates where to display the animation
+   * @param params - Parameters to pass to the component animation
+   * 
+   * @example
+   * ```ts
+   * // Show explosion at specific coordinates
+   * map.showComponentAnimation("explosion", { x: 300, y: 400 }, {
+   *   intensity: 2.5,
+   *   duration: 1500
+   * });
+   * 
+   * // Show area damage effect
+   * map.showComponentAnimation("area-damage", { x: player.x, y: player.y }, {
+   *   radius: 100,
+   *   color: "red",
+   *   damage: 50
+   * });
+   * 
+   * // Show treasure spawn effect
+   * map.showComponentAnimation("treasure-spawn", { x: 150, y: 200 }, {
+   *   sparkle: true,
+   *   sound: "treasure-appear"
+   * });
+   * ```
+   */
+  showComponentAnimation(id: string, position: { x: number, y: number }, params: any) {
     this.$broadcast({
-      type: 'showEffect',
+      type: "showComponentAnimation",
       value: {
-        id: 'animation',
-        params: {
-          name: animationName
-        },
-        object: object.id
-      }
+        id,
+        params,
+        position,
+      },
+    });
+  }
+
+  /**
+   * Display a spritesheet animation at a specific position on the map
+   * 
+   * This method displays a temporary visual animation using a spritesheet at any
+   * location on the map. It's a convenience method that internally uses showComponentAnimation
+   * with the built-in 'animation' component. This is useful for spell effects, environmental
+   * animations, or any visual feedback that uses predefined spritesheets.
+   * 
+   * @param position - The x, y coordinates where to display the animation
+   * @param graphic - The ID of the spritesheet to use for the animation
+   * @param animationName - The name of the animation within the spritesheet (default: 'default')
+   * 
+   * @example
+   * ```ts
+   * // Show explosion at specific coordinates
+   * map.showAnimation({ x: 100, y: 200 }, "explosion");
+   * 
+   * // Show spell effect at player position
+   * const playerPos = { x: player.x, y: player.y };
+   * map.showAnimation(playerPos, "spell-effects", "lightning");
+   * 
+   * // Show environmental effect
+   * map.showAnimation({ x: 300, y: 150 }, "nature-effects", "wind-gust");
+   * 
+   * // Show portal opening animation
+   * map.showAnimation({ x: 500, y: 400 }, "portals", "opening");
+   * ```
+   */
+  showAnimation(position: { x: number, y: number }, graphic: string, animationName: string = 'default') {
+    this.showComponentAnimation('animation', position, {
+      graphic,
+      animationName,
     })
   }
 }

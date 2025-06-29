@@ -382,7 +382,33 @@ export interface RpgClient {
         map: RpgSceneMapHooks
     }
 
-    effects?: {
+    /** 
+     * Array containing the list of component animations
+     * Each element defines a temporary component to display for animations like hits, effects, etc.
+     * 
+     * ```ts
+     * import { defineModule, RpgClient } from '@rpgjs/client'
+     * import HitComponent from './hit.ce'
+     * import ExplosionComponent from './explosion.ce'
+     * 
+     * defineModule<RpgClient>({
+     *      componentAnimations: [
+     *          {
+     *              id: 'hit',
+     *              component: HitComponent
+     *          },
+     *          {
+     *              id: 'explosion',
+     *              component: ExplosionComponent
+     *          }
+     *      ]
+     * })
+     * ```
+     * 
+     * @prop {Array<{id: string, component: ComponentFunction}>} [componentAnimations]
+     * @memberof RpgClient
+     * */
+    componentAnimations?: {
         id: string,
         component: ComponentFunction
     }[]

@@ -178,6 +178,32 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     });
   }
 
+  /**
+   * Set the current animation of the player's sprite
+   * 
+   * This method changes the animation state of the player's current sprite.
+   * It's used to trigger character animations like attack, skill, or custom movements.
+   * When `nbTimes` is set to a finite number, the animation will play that many times
+   * before returning to the previous animation state.
+   * 
+   * @param animationName - The name of the animation to play (e.g., 'attack', 'skill', 'walk')
+   * @param nbTimes - Number of times to repeat the animation (default: Infinity for continuous)
+   * 
+   * @example
+   * ```ts
+   * // Set continuous walk animation
+   * player.setAnimation('walk');
+   * 
+   * // Play attack animation 3 times then return to previous state
+   * player.setAnimation('attack', 3);
+   * 
+   * // Play skill animation once
+   * player.setAnimation('skill', 1);
+   * 
+   * // Set idle/stand animation
+   * player.setAnimation('stand');
+   * ```
+   */
   setAnimation(animationName: string, nbTimes: number = Infinity) {
     const map = this.getCurrentMap();
     if (!map) return;
@@ -196,7 +222,6 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     }
   }
 
-  showAnimation(params: ShowAnimationParams) {}
 
   /**
    * Run the change detection cycle. Normally, as soon as a hook is called in a class, the cycle is started. But you can start it manually
@@ -273,11 +298,35 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     );
   }
 
-  broadcastEffect(id: string, params: any) {
+  /**
+   * Show a temporary component animation on this player
+   * 
+   * This method broadcasts a component animation to all clients, allowing
+   * temporary visual effects like hit indicators, spell effects, or status animations
+   * to be displayed on the player.
+   * 
+   * @param id - The ID of the component animation to display
+   * @param params - Parameters to pass to the component animation
+   * 
+   * @example
+   * ```ts
+   * // Show a hit animation with damage text
+   * player.showComponentAnimation("hit", {
+   *   text: "150",
+   *   color: "red"
+   * });
+   * 
+   * // Show a heal animation
+   * player.showComponentAnimation("heal", {
+   *   amount: 50
+   * });
+   * ```
+   */
+  showComponentAnimation(id: string, params: any) {
     const map = this.getCurrentMap();
     if (!map) return;
     map.$broadcast({
-      type: "showEffect",
+      type: "showComponentAnimation",
       value: {
         id,
         params,
@@ -286,8 +335,46 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     });
   }
 
+  /**
+   * Display a spritesheet animation on the player
+   * 
+   * This method displays a temporary visual animation using a spritesheet.
+   * The animation can either be displayed as an overlay on the player or replace
+   * the player's current graphic temporarily. This is useful for spell effects,
+   * transformations, or other visual feedback that uses predefined spritesheets.
+   * 
+   * @param graphic - The ID of the spritesheet to use for the animation
+   * @param animationName - The name of the animation within the spritesheet (default: 'default')
+   * @param replaceGraphic - Whether to replace the player's sprite with the animation (default: false)
+   * 
+   * @example
+   * ```ts
+   * // Show explosion animation as overlay on player
+   * player.showAnimation("explosion");
+   * 
+   * // Show specific spell effect animation
+   * player.showAnimation("spell-effects", "fireball");
+   * 
+   * // Transform player graphic temporarily with animation
+   * player.showAnimation("transformation", "werewolf", true);
+   * 
+   * // Show healing effect on player
+   * player.showAnimation("healing-effects", "holy-light");
+   * ```
+   */
+  showAnimation(graphic: string, animationName: string = 'default', replaceGraphic: boolean = false) {
+    if (replaceGraphic) {
+      this.setAnimation(animationName, 1);
+      return
+    }
+    this.showComponentAnimation("animation", {
+      graphic,
+      animationName,
+    });
+  }
+
   showHit(text: string) {
-    this.broadcastEffect("hit", {
+    this.showComponentAnimation("hit", {
       text,
       direction: this.direction(),
     });

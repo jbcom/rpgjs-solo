@@ -1,10 +1,10 @@
 import { generateUID, RpgCommonPlayer } from "@rpgjs/common";
 import { signal } from "canvasengine";
 
-export class EffectManager {
+export class AnimationManager {
   current = signal<any[]>([]);
 
-  displayEffect(params: any, player: RpgCommonPlayer) {
+  displayEffect(params: any, player: RpgCommonPlayer | { x: number, y: number }) {
     const id = generateUID();
     this.current().push({
       ...params,

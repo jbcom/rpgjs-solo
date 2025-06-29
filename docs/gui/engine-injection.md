@@ -78,7 +78,7 @@ const engine = inject(RpgClientEngine);
 
 // Scene and map data
 const sceneData = engine.sceneMap.data;
-const effects = engine.effects;
+const componentAnimations = engine.componentAnimations;
 
 // Resources
 const spritesheets = engine.spritesheets;

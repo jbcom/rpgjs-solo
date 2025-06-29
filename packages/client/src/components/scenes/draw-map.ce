@@ -3,10 +3,10 @@
 
   <sceneComponent() data={map.@data} params={map.@params} />
   
-  @for (effect of effects) {
+  @for (componentAnimation of componentAnimations) {
     <Container>
-      @for (animation of effect.current) {
-        <effect.component ...animation />
+      @for (animation of componentAnimation.current) {
+        <componentAnimation.component ...animation />
       }
     </Container>
   }
@@ -18,7 +18,7 @@
     import { RpgClientEngine } from "../../RpgClientEngine";
 
     const engine = inject(RpgClientEngine);
-    const effects = engine.effects
+    const componentAnimations = engine.componentAnimations
     const map = engine.sceneMap.data
     const sceneComponent = computed(() => map()?.component)
     const sceneParams = map()?.params

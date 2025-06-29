@@ -7,10 +7,11 @@ import { Hooks, ModulesToken } from "@rpgjs/common";
 import { load } from "@signe/sync";
 import { RpgClientMap } from "./Game/Map"
 import { RpgGui } from "./Gui/Gui";
-import { EffectManager } from "./Game/EffectManager";
+import { AnimationManager } from "./Game/AnimationManager";
 import { lastValueFrom, Observable } from "rxjs";
 import { GlobalConfigToken } from "./module";
 import * as PIXI from "pixi.js";
+import { PrebuiltComponentAnimations } from "./components/animations";
 
 export class RpgClientEngine<T = any> {
   private guiService: RpgGui;
@@ -26,7 +27,7 @@ export class RpgClientEngine<T = any> {
   height = signal("100%");
   spritesheets: Map<string, any> = new Map();
   sounds: Map<string, any> = new Map();
-  effects: any[] = [];
+  componentAnimations: any[] = [];
   particleSettings: {
     emitters: any[]
   } = {
@@ -44,6 +45,11 @@ export class RpgClientEngine<T = any> {
     this.loadMapService = inject(context, LoadMapToken);
     this.hooks = inject<Hooks>(context, ModulesToken);
     this.globalConfig = inject(context, GlobalConfigToken)
+
+    this.addComponentAnimation({
+      id: "animation",
+      component: PrebuiltComponentAnimations.Animation
+    })
   }
 
   async start() {
@@ -68,7 +74,7 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-sounds-load", this).subscribe();
     this.hooks.callHooks("client-gui-load", this).subscribe();
     this.hooks.callHooks("client-particles-load", this).subscribe();
-    this.hooks.callHooks("client-effects-load", this).subscribe();
+    this.hooks.callHooks("client-componentAnimations-load", this).subscribe();
     this.hooks.callHooks("client-sprite-load", this).subscribe();
 
   
@@ -89,13 +95,13 @@ export class RpgClientEngine<T = any> {
       this.loadScene(data.mapId);
     });
 
-    this.webSocket.on("showEffect", (data) => {
-      const { params, object, id } = data;
-      if (!object) {
-        throw new Error("Object not found");
+    this.webSocket.on("showComponentAnimation", (data) => {
+      const { params, object, position, id } = data;
+      if (!object && position === undefined) {
+        throw new Error("Please provide an object or x and y coordinates");
       }
-      const player = this.sceneMap.getObjectById(object);
-      this.getEffect(id).displayEffect(params, player)
+      const player = object ? this.sceneMap.getObjectById(object) : undefined;
+      this.getComponentAnimation(id).displayEffect(params, player || position)
     });
 
     this.webSocket.on("setAnimation", (data) => {
@@ -180,26 +186,69 @@ export class RpgClientEngine<T = any> {
     return component
   }
 
-  addEffect(effect: {
+  /**
+   * Add a component animation to the engine
+   * 
+   * Component animations are temporary visual effects that can be displayed
+   * on sprites or objects, such as hit indicators, spell effects, or status animations.
+   * 
+   * @param componentAnimation - The component animation configuration
+   * @param componentAnimation.id - Unique identifier for the animation
+   * @param componentAnimation.component - The component function to render
+   * @returns The added component animation configuration
+   * 
+   * @example
+   * ```ts
+   * // Add a hit animation component
+   * engine.addComponentAnimation({
+   *   id: 'hit',
+   *   component: HitComponent
+   * });
+   * 
+   * // Add an explosion effect component
+   * engine.addComponentAnimation({
+   *   id: 'explosion',
+   *   component: ExplosionComponent
+   * });
+   * ```
+   */
+  addComponentAnimation(componentAnimation: {
     component: any,
     id: string
   }) {
-    const instance = new EffectManager()
-    this.effects.push({
-      id: effect.id,
-      component: effect.component,
+    const instance = new AnimationManager()
+    this.componentAnimations.push({
+      id: componentAnimation.id,
+      component: componentAnimation.component,
       instance: instance,
       current: instance.current
     })
-    return effect;
+    return componentAnimation;
   }
 
-  getEffect(id: string): EffectManager {
-    const effect = this.effects.find((effect) => effect.id === id)
-    if (!effect) {
-      throw new Error(`Effect with id ${id} not found`)
+  /**
+   * Get a component animation by its ID
+   * 
+   * Retrieves the EffectManager instance for a specific component animation,
+   * which can be used to display the animation on sprites or objects.
+   * 
+   * @param id - The unique identifier of the component animation
+   * @returns The EffectManager instance for the animation
+   * @throws Error if the component animation is not found
+   * 
+   * @example
+   * ```ts
+   * // Get the hit animation and display it
+   * const hitAnimation = engine.getComponentAnimation('hit');
+   * hitAnimation.displayEffect({ text: "Critical!" }, player);
+   * ```
+   */
+  getComponentAnimation(id: string): AnimationManager {
+    const componentAnimation = this.componentAnimations.find((componentAnimation) => componentAnimation.id === id)
+    if (!componentAnimation) {
+      throw new Error(`Component animation with id ${id} not found`)
     }
-    return effect.instance
+    return componentAnimation.instance
   }
 
   processInput({ input }: { input: number }) {

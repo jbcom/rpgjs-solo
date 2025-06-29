@@ -32,7 +32,11 @@ export default createServer({
           },
           onInput(player: RpgPlayer, input: any) {
             if (input.action) {
-              player.setAnimation("attack3", 1);
+              // player.setAnimation("attack3", 1);
+              const map = player.getCurrentMap();
+              if (map) {
+                player.showAnimation("animation");
+              }
             }
           }
         },
