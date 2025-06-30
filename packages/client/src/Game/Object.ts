@@ -1,4 +1,5 @@
 import { RpgCommonPlayer } from "@rpgjs/common";
+import { sync } from "@signe/sync";
 import { trigger, signal } from "canvasengine";
 import { Subscription } from "rxjs";
 
@@ -8,6 +9,8 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   particleName = signal('')
   animationCurrentIndex = signal(0)
   animationIsPlaying = signal(false)
+  _param = signal({})
+  
   private animationSubscription?: Subscription
 
   flash(color: string, duration: number = 100) {

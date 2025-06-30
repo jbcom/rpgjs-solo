@@ -28,13 +28,16 @@ export default createServer({
               x: 1000,
               y: 400,
             });
+           
             player.setGraphic("hero");
+            console.log(player.param)
           },
           onInput(player: RpgPlayer, input: any) {
             if (input.action) {
               // player.setAnimation("attack3", 1);
               const map = player.getCurrentMap();
               if (map) {
+                player.level = 2
                 player.showAnimation("animation");
               }
             }

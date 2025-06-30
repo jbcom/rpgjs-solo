@@ -15,7 +15,7 @@ import { IMoveManager, WithMoveManager } from "./MoveManager";
 import { IGoldManager, WithGoldManager } from "./GoldManager";
 import { WithVariableManager, type IVariableManager } from "./VariableManager";
 import { sync } from "@signe/sync";
-import { signal } from "@signe/reactive";
+import { computed, signal } from "@signe/reactive";
 import {
   IParameterManager,
   WithParameterManager,

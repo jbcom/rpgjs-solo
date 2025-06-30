@@ -129,6 +129,10 @@
     previousAnimationName = currentAnimationName;
   });
 
+  effect(() => {
+    console.log(object._param())
+  })
+
   mount((element) => {
     hooks.callHooks("client-sprite-onInit", element.componentInstance)
     hooks.callHooks("client-sceneMap-onAddSprite", client.sceneMap, element.componentInstance)
