@@ -34,9 +34,8 @@ export default {
         },
         sceneMap: {
           onAfterLoading: (scene) => {
-            const gui = inject(RpgGui)
-            const engine = inject(RpgClientEngine)
-            gui.display('wood-ui', {}, [engine.scene.currentPlayer])
+            // No need to manually display GUI with dependencies anymore
+            // The GUI will auto-display when dependencies are resolved
           },
         },
         spritesheets: [
@@ -66,6 +65,11 @@ export default {
           {
             id: "wood-ui",
             component: WoodUiComponent,
+            autoDisplay: true,
+            dependencies: () => {
+              const engine = inject(RpgClientEngine)
+              return [engine.scene.currentPlayer]
+            }
           }
         ],
         componentAnimations: [

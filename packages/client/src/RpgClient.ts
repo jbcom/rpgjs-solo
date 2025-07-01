@@ -1,4 +1,4 @@
-import { ComponentFunction } from 'canvasengine'
+import { ComponentFunction, Signal } from 'canvasengine'
 import { RpgClientEngine } from './RpgClientEngine'
 import { Loader, Container } from 'pixi.js'
 import { RpgClientObject } from './Game/Object'
@@ -306,17 +306,42 @@ export interface RpgClient {
     spritesheets?: any[],
 
     /** 
-     * Array containing the list of VueJS components
+     * Array containing the list of GUI components
      * 
+     * ```ts
+     * import { defineModule, RpgClient } from '@rpgjs/client'
+     * import InventoryComponent from './inventory.ce'
+     * 
+     * defineModule<RpgClient>({
+     *      gui: [
+     *          {
+     *              id: 'inventory',
+     *              component: InventoryComponent,
+     *              autoDisplay: true,
+     *              dependencies: () => [playerSignal, inventorySignal]
+     *          }
+     *      ]
+     * })
+     * ```
      * 
      * [Guide: Create GUI](/guide/create-gui.html)
      * 
-     * @prop {Array<Component of CanvasEngine>} [gui]
+     * @prop {Array<GuiOptions>} [gui]
      * @memberof RpgClient
      * */
     gui?: {
         id: string,
-        component: ComponentFunction
+        component: ComponentFunction,
+        /**
+         * Auto display the GUI when added to the system
+         * @default false
+         */
+        autoDisplay?: boolean,
+        /**
+         * Function that returns an array of Signal dependencies
+         * The GUI will only display when all dependencies are resolved (!= undefined)
+         */
+        dependencies?: () => Signal[]
     }[],
 
     /** 

@@ -69,6 +69,172 @@ Here's a complete example showing how to use the engine injection to display eve
 </script>
 ```
 
+## GUI System with Dependencies
+
+RPG-JS provides an advanced GUI system that supports automatic display management based on signal dependencies. This allows you to create GUIs that only appear when certain conditions are met.
+
+### Basic GUI Configuration
+
+```typescript
+import { defineModule, RpgClient } from '@rpgjs/client'
+import InventoryComponent from './inventory.ce'
+
+defineModule<RpgClient>({
+    gui: [
+        {
+            id: 'inventory',
+            component: InventoryComponent
+        }
+    ]
+})
+```
+
+### Auto Display
+
+You can configure a GUI to automatically display when it's added to the system:
+
+```typescript
+defineModule<RpgClient>({
+    gui: [
+        {
+            id: 'inventory',
+            component: InventoryComponent,
+            autoDisplay: true  // GUI will show immediately when loaded
+        }
+    ]
+})
+```
+
+### Dependencies-Based Display
+
+The most powerful feature is the ability to define dependencies that must be resolved before the GUI appears:
+
+```typescript
+import { inject, RpgClientEngine } from "@rpgjs/client";
+
+defineModule<RpgClient>({
+    gui: [
+        {
+            id: 'player-stats',
+            component: PlayerStatsComponent,
+            autoDisplay: true,
+            dependencies: () => {
+                const engine = inject(RpgClientEngine);
+                return [
+                    engine.scene.currentPlayer,  // Wait for player to be loaded
+                ];
+            }
+        }
+    ]
+})
+```
+
+### Advanced Dependencies Example
+
+Here's a more complex example showing multiple dependencies:
+
+```typescript
+defineModule<RpgClient>({
+    gui: [
+        {
+            id: 'shop-interface',
+            component: ShopComponent,
+            autoDisplay: true,
+            dependencies: () => {
+                const engine = inject(RpgClientEngine);
+                const gui = inject(RpgGui);
+                
+                return [
+                    engine.scene.currentPlayer,     // Player must be loaded
+                    engine.scene.data,              // Scene data must be available
+                    someCustomSignal                // Your custom signal
+                ];
+            }
+        },
+        {
+            id: 'minimap',
+            component: MinimapComponent,
+            autoDisplay: true,
+            dependencies: () => {
+                const engine = inject(RpgClientEngine);
+                return [
+                    engine.scene.data,              // Wait for map data
+                   computed(() => engine.scene.players().length == 0 ? undefined : engine.scene.players())           // Wait for players data
+                ];
+            }
+        }
+    ]
+})
+```
+
+### Manual GUI Control
+
+You can still manually control GUIs using the `RpgGui` service:
+
+```typescript
+// In a .ce component or hook
+import { inject, RpgGui, RpgClientEngine } from "@rpgjs/client";
+
+const gui = inject(RpgGui);
+const engine = inject(RpgClientEngine);
+
+// Display a GUI manually
+gui.display('inventory', { items: [] });
+
+// Display with runtime dependencies (overrides config dependencies)
+gui.display('shop', { shopId: 1 }, [engine.scene.currentPlayer]);
+
+// Hide a GUI
+gui.hide('inventory');
+
+// Check if GUI exists
+if (gui.exists('inventory')) {
+    // GUI is registered
+}
+```
+
+### Best Practices for GUI Dependencies
+
+1. **Specific Dependencies**: Only include signals that are truly required for your GUI
+2. **Avoid Circular Dependencies**: Don't create dependency chains that could cause loops
+3. **Performance**: Keep dependency arrays small for better performance
+4. **Error Handling**: Ensure your dependencies can handle undefined states gracefully
+5. **Testing**: Test your GUIs with different loading scenarios
+
+### Common Dependency Patterns
+
+```typescript
+// Wait for player authentication
+dependencies: () => [inject(RpgClientEngine).playerIdSignal]
+
+// Wait for scene to be fully loaded
+dependencies: () => {
+    const engine = inject(RpgClientEngine);
+    return [engine.scene.data, engine.scene.currentPlayer];
+}
+
+// Wait for specific game state
+dependencies: () => {
+    const engine = inject(RpgClientEngine);
+    return [
+        engine.scene.currentPlayer,
+        customGameStateSignal,
+        inventorySignal
+    ];
+}
+
+// Multiple related GUIs
+dependencies: () => {
+    const engine = inject(RpgClientEngine);
+    const gui = inject(RpgGui);
+    return [
+        engine.scene.currentPlayer,
+        // Wait for another GUI to be ready
+        gui.get('main-menu')?.display
+    ];
+}
+```
+
 ## Additional Engine Properties
 
 The engine provides access to many other useful properties:
@@ -108,6 +274,8 @@ This creates a seamless real-time experience where your UI components stay synch
 2. **Signal Access**: Access signals directly - they will automatically update your component
 3. **Performance**: Signals are optimized for performance and only trigger updates when data actually changes
 4. **Type Safety**: Use TypeScript for better development experience with proper typing
+5. **GUI Dependencies**: Use the dependency system to ensure GUIs only appear when appropriate data is available
+6. **Memory Management**: The system automatically handles subscription cleanup, but be mindful of creating custom subscriptions
 
 ## Common Use Cases
 
@@ -115,4 +283,7 @@ This creates a seamless real-time experience where your UI components stay synch
 - **Event Interaction**: Show interactive events on the map  
 - **Real-time Updates**: Automatically update UI when game state changes
 - **Character Movement**: Track and display character positions
-- **Game Effects**: Access and display visual effects 
+- **Game Effects**: Access and display visual effects
+- **Conditional GUIs**: Show/hide interfaces based on game state
+- **Loading States**: Display GUIs only when required data is available
+- **Progressive Enhancement**: Build interfaces that enhance as more data becomes available 
