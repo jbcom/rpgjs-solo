@@ -1,24 +1,24 @@
 import { signal } from "@signe/reactive";
 import { id, sync, users } from "@signe/sync";
-import * as Matter from 'matter-js';
+import * as Matter from "matter-js";
 import { MovementManager } from "./movement";
 import { Item } from "./database";
 import { Observable } from "rxjs";
 import { Constructor } from "./Utils";
 
 export enum Direction {
-  Up = 'up',
-  Down = 'down',
-  Left = 'left',
-  Right = 'right'
+  Up = "up",
+  Down = "down",
+  Left = "left",
+  Right = "right",
 }
 
 export enum Animation {
-  Stand = 'stand',
-  Walk = 'walk',
-  Attack = 'attack',
-  Defense = 'defense',
-  Skill = 'skill'
+  Stand = "stand",
+  Walk = "walk",
+  Attack = "attack",
+  Defense = "defense",
+  Skill = "skill",
 }
 
 export interface Hitbox {
@@ -46,7 +46,7 @@ export interface AttachShapeOptions {
   /** If true, walls (static hitboxes) stop vision */
   limitedByWalls?: boolean;
   /** Indicate where the shape is placed relative to the player */
-  positioning?: 'center' | 'top' | 'bottom' | 'left' | 'right';
+  positioning?: "center" | "top" | "bottom" | "left" | "right";
   /** The name of the shape */
   name?: string;
   /** An object to retrieve information when interacting with the shape */
@@ -55,23 +55,24 @@ export interface AttachShapeOptions {
 
 export class RpgCommonPlayer {
   @id() id: string;
-  @sync() name = signal('');
+  @sync() name = signal("");
+  @sync() type = signal("");
   @sync() x = signal(0);
   @sync() y = signal(0);
   @sync() z = signal(0);
-  @sync() tint = signal('white');
+  @sync() tint = signal("white");
   @sync() direction = signal(Direction.Down);
   @sync() speed = signal(4);
   @sync() graphics = signal<any>([]);
   @sync() canMove = signal(true);
   @sync() hitbox = signal<Hitbox>({
     w: 32,
-    h: 32
+    h: 32,
   });
   @sync() _gold = signal(0);
-  @sync() animationName = signal('stand');
-  @sync() _hp = signal(0);
-  @sync() _sp = signal(0);
+  @sync() animationName = signal("stand");
+  @sync() hpSignal = signal(0);
+  @sync() spSignal = signal(0);
   @sync() _exp = signal(0);
   @sync() _level = signal(0);
   @sync() _class = signal({});
@@ -90,14 +91,14 @@ export class RpgCommonPlayer {
 
   /**
    * Change the player's facing direction
-   * 
+   *
    * Updates the direction the player is facing, which affects animations
    * and directional abilities. This should be called when the player
    * intends to move in a specific direction, not when they are pushed
    * by physics or sliding.
-   * 
+   *
    * @param direction - The new direction to face
-   * 
+   *
    * @example
    * ```ts
    * // Player presses right arrow key
@@ -110,9 +111,9 @@ export class RpgCommonPlayer {
 
   /**
    * Get the current facing direction
-   * 
+   *
    * @returns Current direction the player is facing
-   * 
+   *
    * @example
    * ```ts
    * const currentDirection = player.getDirection();
@@ -127,18 +128,18 @@ export class RpgCommonPlayer {
 
   /**
    * Set the intended movement direction
-   * 
+   *
    * This should be called when the player intends to move in a direction,
    * typically from input handling. This direction will be used to update
    * the player's facing direction regardless of physics interactions.
-   * 
+   *
    * @param direction - The intended movement direction, or null if not moving
-   * 
+   *
    * @example
    * ```ts
    * // Player presses down arrow key
    * player.setIntendedDirection(Direction.Down);
-   * 
+   *
    * // Player releases all movement keys
    * player.setIntendedDirection(null);
    * ```
@@ -153,9 +154,9 @@ export class RpgCommonPlayer {
 
   /**
    * Get the intended movement direction
-   * 
+   *
    * @returns The direction the player intends to move, or null if not moving
-   * 
+   *
    * @example
    * ```ts
    * const intended = player.getIntendedDirection();
@@ -170,14 +171,14 @@ export class RpgCommonPlayer {
 
   /**
    * Apply physics body position to player coordinates
-   * 
+   *
    * Synchronizes the player's position with their physics body after
    * physics calculations. This method no longer automatically changes
    * the player's direction based on position changes, as direction
    * should be controlled by intended movement instead.
-   * 
+   *
    * @param body - The Matter.js physics body
-   * 
+   *
    * @example
    * ```ts
    * // Called automatically by physics system
@@ -190,8 +191,10 @@ export class RpgCommonPlayer {
     const height = body.bounds.max.y - body.bounds.min.y;
     const topLeftX = body.position.x - width / 2;
     const topLeftY = body.position.y - height / 2;
-    
-    const posChanged = Math.round(this.x()) !== Math.round(topLeftX) || Math.round(this.y()) !== Math.round(topLeftY);
+
+    const posChanged =
+      Math.round(this.x()) !== Math.round(topLeftX) ||
+      Math.round(this.y()) !== Math.round(topLeftY);
     if (posChanged) {
       // Only update position, do not change direction based on physics movement
       // Direction should be controlled by intended movement via setIntendedDirection()
@@ -205,8 +208,7 @@ export class RpgCommonPlayer {
     if (graphic) {
       if (Array.isArray(graphic)) {
         this.graphics.set(graphic);
-      }
-      else {
+      } else {
         this.graphics.set([graphic]);
       }
     }
@@ -214,20 +216,20 @@ export class RpgCommonPlayer {
 
   /**
    * Create a temporary and moving hitbox relative to the player's position
-   * 
+   *
    * Creates a temporary hitbox that moves through multiple positions sequentially,
    * with all coordinates being relative to the player's current position.
    * For example, you can use it for player attacks, spells, or area effects
    * that should follow the player's position.
-   * 
+   *
    * The method creates a zone sensor that moves through the specified hitbox positions
    * at the given speed, detecting collisions with other players and events at each step.
-   * 
+   *
    * @param hitboxes - Array of hitbox positions relative to player position
    * @param options - Configuration options for the movement
    * @param map - Reference to the map instance for physics access
    * @returns Observable that emits arrays of hit entities and completes when movement is finished
-   * 
+   *
    * @example
    * ```ts
    * // Create a forward attack relative to player position
@@ -247,14 +249,14 @@ export class RpgCommonPlayer {
    */
   createMovingHitbox(
     hitboxes: Array<{ x: number; y: number; width: number; height: number }>,
-    options: { speed?: number } = {},
+    options: { speed?: number } = {}
   ): Observable<any[]> {
     // Convert relative positions to absolute positions based on player's current position
-    const absoluteHitboxes = hitboxes.map(hitbox => ({
+    const absoluteHitboxes = hitboxes.map((hitbox) => ({
       x: this.x() + hitbox.x,
       y: this.y() + hitbox.y,
       width: hitbox.width,
-      height: hitbox.height
+      height: hitbox.height,
     }));
 
     // Delegate to the map's createMovingHitbox method with absolute positions
@@ -262,9 +264,17 @@ export class RpgCommonPlayer {
   }
 
   getCurrentMap() {
-    return this['map'];
+    return this["map"];
   }
 
+  get hp(): number {
+    return this.hpSignal();
+  }
+
+  get sp(): number {
+    return this.spSignal();
+  }
 }
 
-export type PlayerCtor<T extends RpgCommonPlayer = RpgCommonPlayer> = Constructor<T>
+export type PlayerCtor<T extends RpgCommonPlayer = RpgCommonPlayer> =
+  Constructor<T>;

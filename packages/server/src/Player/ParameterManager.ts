@@ -577,12 +577,9 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
             this['execMethod']('onDead') 
             val = 0
         }
-        (this as any)._hp.set(val)
+        this.hpSignal.set(val)
     }
 
-    get hp(): number {
-        return (this as any)._hp()
-    }
 
     /** 
      * Changes the skill points
@@ -601,12 +598,10 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
         if (val > this.param[MAXSP]) {
             val = this.param[MAXSP]
         }
-        this._sp.set(val)
+        this.spSignal.set(val)
     }
 
-    get sp(): number {
-        return this._sp()
-    }
+   
 
     /** 
      * Changing the player's experience. 
