@@ -1,4 +1,4 @@
-<Container x y zIndex={y} viewportFollow={isMe} controls>
+<Container x y zIndex={y} viewportFollow={isMe} controls onBeforeDestroy>
   @for (component of componentsBehind) {
     <Container>
       <component object />
@@ -19,6 +19,7 @@
 
 <script>
   import { signal, effect, mount, computed, tick } from "canvasengine";
+  import { lastValueFrom } from "rxjs";
   import { Particle } from "@canvasengine/presets";
   import { GameEngineToken, ModulesToken } from "@rpgjs/common";
   import { RpgClientEngine } from "../RpgClientEngine";
@@ -127,23 +128,20 @@
     }
     
     previousAnimationName = currentAnimationName;
+    
   });
 
-  effect(() => {
-    console.log(object._param())
-  })
+  const onBeforeDestroy = async () => {
+    await lastValueFrom(hooks.callHooks("client-sprite-onDestroy", object)) 
+    await lastValueFrom(hooks.callHooks("client-sceneMap-onRemoveSprite", client.sceneMap, object))
+  }
 
   mount((element) => {
-    hooks.callHooks("client-sprite-onInit", element.componentInstance)
-    hooks.callHooks("client-sceneMap-onAddSprite", client.sceneMap, element.componentInstance)
-
-    return () => {
-      hooks.callHooks("client-sprite-onDestroy", element.componentInstance)
-      hooks.callHooks("client-sceneMap-onRemoveSprite", client.sceneMap, element.componentInstance)
-    }
+    hooks.callHooks("client-sprite-onInit", object).subscribe()
+    hooks.callHooks("client-sceneMap-onAddSprite", client.sceneMap, object).subscribe()
   })
 
   tick(() => {
-    hooks.callHooks("client-sprite-onUpdate")
+    hooks.callHooks("client-sprite-onUpdate").subscribe()
   })
 </script>

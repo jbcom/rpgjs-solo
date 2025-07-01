@@ -1,9 +1,10 @@
 import { ComponentFunction } from 'canvasengine'
 import { RpgClientEngine } from './RpgClientEngine'
 import { Loader, Container } from 'pixi.js'
+import { RpgClientObject } from './Game/Object'
 
 type RpgClass<T = any> = new (...args: any[]) => T
-type RpgComponent = Container
+type RpgComponent = RpgClientObject
 type SceneMap = Container
 
 export interface RpgClientEngineHooks {

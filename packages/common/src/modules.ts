@@ -77,6 +77,7 @@ export class Hooks {
       this.moduleHooks[hookId] = new Subject<any>();
     }
 
+
     // Create an Observable that will execute all hook functions when subscribed
     return new Observable<any[]>((subscriber) => {
       if (this.hookFunctions[hookId] && this.hookFunctions[hookId].length > 0) {

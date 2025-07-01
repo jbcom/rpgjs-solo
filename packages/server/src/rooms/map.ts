@@ -270,6 +270,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     eventInstance.x.set(x);
     eventInstance.y.set(y);
+    if (event.name) eventInstance.name.set(event.name);
   
     this.events()[id] = eventInstance;
 
@@ -286,6 +287,14 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   getEvents(): RpgEvent[] {
     return Object.values(this.events())
+  }
+
+  getEventBy(cb: (event: RpgEvent) => boolean): RpgEvent | undefined {
+    return this.getEventsBy(cb)[0]
+  }
+
+  getEventsBy(cb: (event: RpgEvent) => boolean): RpgEvent[] {
+    return this.getEvents().filter(cb)
   }
 
   removeEvent(eventId: string) {

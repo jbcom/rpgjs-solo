@@ -9,8 +9,9 @@ import Shadow from "../components/shadow.ce";
 
 export default {
   providers: [
-    provideLoadMap(() => {
+    provideLoadMap((id: string) => {
        return {
+          id,
           component: Map,
           width: 2048,
           height: 1536,
@@ -21,8 +22,8 @@ export default {
       {
         sprite: {
           componentsBehind: [Shadow],
-          onInit: (sprite) => {
-            console.log(sprite)
+          async onDestroy(sprite) {
+            await sprite.flash('red', 1000)
           }
         },
         spritesheets: [

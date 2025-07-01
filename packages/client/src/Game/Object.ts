@@ -14,11 +14,14 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   private animationSubscription?: Subscription
 
   flash(color: string, duration: number = 100) {
-    const lastTint = this.tint()
-    this.tint.set(color);
-    setTimeout(() => {
-      this.tint.set(lastTint)
-    }, duration)
+    return new Promise((resolve) => {
+      const lastTint = this.tint()
+      this.tint.set(color);
+      setTimeout(() => {
+        this.tint.set(lastTint)
+        resolve(true)
+      }, duration)
+    })
   }
 
   /**

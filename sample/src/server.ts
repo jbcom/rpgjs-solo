@@ -4,7 +4,7 @@ export function Event() {
   return {
     name: "EV-1",
     onInit() {
-      this.setGraphic("female");
+      this.setGraphic("hero");
     },
     async onAction(player: RpgPlayer) {
       player.gold = 100;
@@ -36,17 +36,15 @@ export default createServer({
             if (input.action) {
               // player.setAnimation("attack3", 1);
               const map = player.getCurrentMap();
-              if (map) {
-                player.level = 2
-                player.showAnimation("animation");
-              }
+              const event = map?.getEventBy(event => event.name() === "EV-1");
+              event?.remove();
             }
           }
         },
         maps: [
           {
             id: "simplemap",
-            events: [Event()],
+            events: [{x: 1000, y: 600, event: Event()}],
           },
         ],
       },

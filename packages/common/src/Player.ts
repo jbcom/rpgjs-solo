@@ -55,6 +55,7 @@ export interface AttachShapeOptions {
 
 export class RpgCommonPlayer {
   @id() id: string;
+  @sync() name = signal('');
   @sync() x = signal(0);
   @sync() y = signal(0);
   @sync() z = signal(0);
