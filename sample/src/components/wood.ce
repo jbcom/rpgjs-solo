@@ -1,0 +1,18 @@
+<Container x={realX} y={realY} alpha flexDirection="row" alignItems="center">
+    <Sprite image="wood.png" width={64} />
+    <Text text="+1" />
+</Container>
+
+<script>
+    import { computed, animatedSignal } from "canvasengine";
+
+    const { x, y, object, onFinish } = defineProps()
+    const duration = 700
+    
+    const realY = animatedSignal(y() - object.hitbox().h - 50, { duration, onComplete: onFinish })
+    const alpha = animatedSignal(1, { duration })
+    const realX = x() - object.hitbox().w / 2 - 25
+
+    realY.update(y => y - 50)
+    alpha.set(0)
+</script>

@@ -137,7 +137,7 @@
   }
 
   mount((element) => {
-    hooks.callHooks("client-sprite-onInit", object).subscribe()
+    hooks.callHooks("client-sprite-onAdd", object).subscribe()
     hooks.callHooks("client-sceneMap-onAddSprite", client.sceneMap, object).subscribe()
   })
 

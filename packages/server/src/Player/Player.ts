@@ -14,7 +14,7 @@ import { MockConnection } from "@signe/room";
 import { IMoveManager, WithMoveManager } from "./MoveManager";
 import { IGoldManager, WithGoldManager } from "./GoldManager";
 import { WithVariableManager, type IVariableManager } from "./VariableManager";
-import { sync } from "@signe/sync";
+import { sync, type } from "@signe/sync";
 import { computed, signal } from "@signe/reactive";
 import {
   IParameterManager,
@@ -117,6 +117,14 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     (this as any).addParameter(AGI, AGI_CURVE);
     (this as any).allRecovery();
   }
+  
+  _onInit() {
+    this.hooks.callHooks("server-playerProps-load", this).subscribe();
+  }
+
+  get hooks() {
+    return inject<Hooks>(this.context as any, ModulesToken);
+  }
 
   async execMethod(method: string, methodData: any[] = [], target?: any) {
     let ret: any;
@@ -124,8 +132,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       ret = await target[method](...methodData);
     }
     else {
-      const hooks = inject<Hooks>(this.context as any, ModulesToken);
-      ret = await lastValueFrom(hooks
+      ret = await lastValueFrom(this.hooks
         .callHooks(`server-player-${method}`, target ?? this, ...methodData));
     }
     this.syncChanges()
@@ -322,7 +329,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * });
    * ```
    */
-  showComponentAnimation(id: string, params: any) {
+  showComponentAnimation(id: string, params: any = {}) {
     const map = this.getCurrentMap();
     if (!map) return;
     map.$broadcast({
@@ -335,56 +342,30 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     });
   }
 
-  /**
-   * Display a spritesheet animation on the player
-   * 
-   * This method displays a temporary visual animation using a spritesheet.
-   * The animation can either be displayed as an overlay on the player or replace
-   * the player's current graphic temporarily. This is useful for spell effects,
-   * transformations, or other visual feedback that uses predefined spritesheets.
-   * 
-   * @param graphic - The ID of the spritesheet to use for the animation
-   * @param animationName - The name of the animation within the spritesheet (default: 'default')
-   * @param replaceGraphic - Whether to replace the player's sprite with the animation (default: false)
-   * 
-   * @example
-   * ```ts
-   * // Show explosion animation as overlay on player
-   * player.showAnimation("explosion");
-   * 
-   * // Show specific spell effect animation
-   * player.showAnimation("spell-effects", "fireball");
-   * 
-   * // Transform player graphic temporarily with animation
-   * player.showAnimation("transformation", "werewolf", true);
-   * 
-   * // Show healing effect on player
-   * player.showAnimation("healing-effects", "holy-light");
-   * ```
-   */
-  showAnimation(graphic: string, animationName: string = 'default', replaceGraphic: boolean = false) {
-    if (replaceGraphic) {
-      this.setAnimation(animationName, 1);
-      return
-    }
-    this.showComponentAnimation("animation", {
-      graphic,
-      animationName,
-    });
-  }
-
   showHit(text: string) {
     this.showComponentAnimation("hit", {
       text,
       direction: this.direction(),
     });
   }
+
+  /**
+   * Set the sync schema for the map
+   * @param schema - The schema to set
+   */
+  setSync(schema: any) {
+    for (let key in schema) {
+      this[key] = type(signal(null), key, {
+        syncWithClient: schema[key]?.$syncWithClient,
+        persist: schema[key]?.$permanent,
+      }, this)
+    }
+  }
 }
 
 export class RpgEvent extends RpgPlayer {
   override async execMethod(methodName: string, methodData: any[] = [], instance = this) {
-    const hooks = inject<Hooks>(this.context as any, ModulesToken);
-    await lastValueFrom(hooks
+    await lastValueFrom(this.hooks
       .callHooks(`server-event-${methodName}`, instance, ...methodData));
     if (!instance[methodName]) {
       return;

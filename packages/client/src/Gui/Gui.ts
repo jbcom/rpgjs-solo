@@ -1,10 +1,12 @@
 import { Context, inject } from "@signe/di";
-import { signal } from "canvasengine";
+import { signal, Signal } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "../services/AbstractSocket";
-import { PrebuiltGui } from "../components/gui";
+import { DialogboxComponent } from "../components/gui";
+import { combineLatest } from "rxjs";
 
 interface GuiOptions {
-  name: string;
+  name?: string;
+  id?: string;
   component: any;
   display?: boolean;
   data?: any;
@@ -22,7 +24,7 @@ export class RpgGui {
     this.webSocket = inject(context, WebSocketToken);
     this.add({
       name: "rpg-dialog",
-      component: PrebuiltGui.Dialogbox,
+      component: DialogboxComponent,
     });
   }
 
@@ -52,8 +54,8 @@ export class RpgGui {
   }
 
   add(gui: GuiOptions) {
-    this.gui()[gui.name] = {
-      name: gui.name,
+    this.gui()[gui.name || gui.id] = {
+      name: gui.name || gui.id,
       component: gui.component,
       display: signal(gui.display || false),
       data: signal(gui.data || {}),
@@ -75,9 +77,18 @@ export class RpgGui {
     return this.gui();
   }
 
-  display(id: string, data = {}) {
+  display(id: string, data = {}, dependencies: Signal[] = []) {
     if (!this.exists(id)) {
       throw throwError(id);
+    }
+    if (dependencies.length > 0) {
+      combineLatest(dependencies.map(dependency => dependency.observable)).subscribe((values) => {
+        if (values.every(value => value !== undefined)) {
+          this.get(id).data.set(data);
+          this.get(id).display.set(true);
+        }
+      })
+      return
     }
     this.get(id).data.set(data);
     this.get(id).display.set(true);

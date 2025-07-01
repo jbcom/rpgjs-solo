@@ -1,4 +1,4 @@
-import { createServer, Move, provideServerModules, RpgPlayer } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, effect } from "@rpgjs/server";
 
 export function Event() {
   return {
@@ -20,24 +20,24 @@ export default createServer({
     provideServerModules([
       {
         player: {
+          props: {
+            wood: Number
+          },
           onConnected: (player: RpgPlayer) => {
             player.changeMap("simplemap");
           },
-          onJoinMap: (player: RpgPlayer) => {
+          onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             player.teleport({
               x: 1000,
               y: 400,
             });
            
             player.setGraphic("hero");
-            console.log(player.param)
           },
           onInput(player: RpgPlayer, input: any) {
             if (input.action) {
-              // player.setAnimation("attack3", 1);
-              const map = player.getCurrentMap();
-              const event = map?.getEventBy(event => event.name() === "EV-1");
-              event?.remove();
+             player.wood.update(wood => wood + 1)
+             player.showComponentAnimation('wood')
             }
           }
         },

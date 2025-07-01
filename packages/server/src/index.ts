@@ -7,3 +7,4 @@ export * from "./Player/Player";
 export * from "./module";
 export * from "./rooms/map";
 export * from "./presets";
+export * from "@signe/reactive";

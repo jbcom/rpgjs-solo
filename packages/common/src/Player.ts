@@ -53,7 +53,7 @@ export interface AttachShapeOptions {
   properties?: object;
 }
 
-export class RpgCommonPlayer {
+export abstract class RpgCommonPlayer {
   @id() id: string;
   @sync() name = signal("");
   @sync() type = signal("");
@@ -201,6 +201,47 @@ export class RpgCommonPlayer {
       this.x.set(topLeftX);
       this.y.set(topLeftY);
     }
+  }
+
+  abstract setAnimation(animationName: string, nbTimes: number): void;
+  abstract showComponentAnimation(id: string, params: any): void;
+
+  /**
+   * Display a spritesheet animation on the player
+   * 
+   * This method displays a temporary visual animation using a spritesheet.
+   * The animation can either be displayed as an overlay on the player or replace
+   * the player's current graphic temporarily. This is useful for spell effects,
+   * transformations, or other visual feedback that uses predefined spritesheets.
+   * 
+   * @param graphic - The ID of the spritesheet to use for the animation
+   * @param animationName - The name of the animation within the spritesheet (default: 'default')
+   * @param replaceGraphic - Whether to replace the player's sprite with the animation (default: false)
+   * 
+   * @example
+   * ```ts
+   * // Show explosion animation as overlay on player
+   * player.showAnimation("explosion");
+   * 
+   * // Show specific spell effect animation
+   * player.showAnimation("spell-effects", "fireball");
+   * 
+   * // Transform player graphic temporarily with animation
+   * player.showAnimation("transformation", "werewolf", true);
+   * 
+   * // Show healing effect on player
+   * player.showAnimation("healing-effects", "holy-light");
+   * ```
+   */
+  showAnimation(graphic: string, animationName: string = 'default', replaceGraphic: boolean = false) {
+    if (replaceGraphic) {
+      this.setAnimation(animationName, 1);
+      return
+    }
+    this.showComponentAnimation("animation", {
+      graphic,
+      animationName,
+    });
   }
 
   _showAnimation(params: ShowAnimationParams) {

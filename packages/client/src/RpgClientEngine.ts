@@ -18,7 +18,7 @@ export class RpgClientEngine<T = any> {
   private webSocket: AbstractWebsocket;
   private loadMapService: LoadMapService;
   private hooks: Hooks;
-  private sceneMap: RpgClientMap = new RpgClientMap();
+  private sceneMap: RpgClientMap
   private selector: HTMLElement;
   public globalConfig: T;
   public sceneComponent: any;
@@ -53,6 +53,7 @@ export class RpgClientEngine<T = any> {
   }
 
   async start() {
+    this.sceneMap = new RpgClientMap()
     this.selector = document.body.querySelector("#rpg") as HTMLElement;
 
     const { app, canvasElement } = await bootstrapCanvas(this.selector, Canvas);
@@ -124,6 +125,7 @@ export class RpgClientEngine<T = any> {
   }
   
   private async loadScene(mapId: string) {
+    this.hooks.callHooks("client-sceneMap-onBeforeLoading", this.sceneMap).subscribe();
     this.webSocket.updateProperties({ room: mapId })
     await this.webSocket.reconnect(() => {
       this.initListeners()
@@ -272,5 +274,13 @@ export class RpgClientEngine<T = any> {
   
   get playerId() {
     return this.playerIdSignal()
+  }
+
+  get scene() {
+    return this.sceneMap
+  }
+
+  getCurrentPlayer() {
+    return this.sceneMap.getCurrentPlayer()
   }
 }

@@ -1,7 +1,7 @@
 import { Action, MockConnection, Request, Room, RoomOnJoin } from "@signe/room";
 import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, ZoneData } from "@rpgjs/common";
 import { RpgPlayer, RpgEvent } from "../Player/Player";
-import { generateShortUUID, sync, users } from "@signe/sync";
+import { generateShortUUID, sync, type, users } from "@signe/sync";
 import { signal } from "@signe/reactive";
 import { inject } from "@signe/di";
 import { context } from "../core/context";;
@@ -80,6 +80,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }, () => {
       player.animationName.set('stand')
     })
+    player._onInit()
     this.dataIsReady$.pipe(
       finalize(() => {
         this.hooks
@@ -379,6 +380,19 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       graphic,
       animationName,
     })
+  }
+
+  /**
+   * Set the sync schema for the map
+   * @param schema - The schema to set
+   */
+  setSync(schema: any) {
+    for (let key in schema) {
+      this[key] = type(signal(null), key, {
+        syncWithClient: schema[key]?.$syncWithClient,
+        persist: schema[key]?.$permanent,
+      }, this)
+    }
   }
 }
 

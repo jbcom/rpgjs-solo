@@ -1,7 +1,9 @@
-import { RpgCommonPlayer } from "@rpgjs/common";
+import { Hooks, ModulesToken, RpgCommonPlayer } from "@rpgjs/common";
 import { sync } from "@signe/sync";
 import { trigger, signal } from "canvasengine";
 import { Subscription } from "rxjs";
+import { inject } from "../core/inject";
+import { RpgClientEngine } from "../RpgClientEngine";
 
 export abstract class RpgClientObject extends RpgCommonPlayer {
   abstract type: string;
@@ -10,6 +12,15 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   animationCurrentIndex = signal(0)
   animationIsPlaying = signal(false)
   _param = signal({})
+
+  constructor() {
+    super()
+    this.hooks.callHooks("client-sprite-onInit", this).subscribe();
+  }
+
+  get hooks() {
+    return inject<Hooks>(ModulesToken);
+  }
   
   private animationSubscription?: Subscription
 
@@ -87,5 +98,10 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
       }
     })
     this.animationName.set(animationName);
+  }
+
+  showComponentAnimation(id: string, params: any) {
+    const engine = inject(RpgClientEngine)
+    engine.getComponentAnimation(id).displayEffect(params, this)
   }
 }   

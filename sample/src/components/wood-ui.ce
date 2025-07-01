@@ -1,0 +1,24 @@
+<BoxComponent width={120} height={70} top={10} left={10}>
+    <Container positionType="absolute">
+        <Container flexDirection="row" alignItems="center" top={0}>
+            <Sprite image="wood.png" width={64} />
+            <Text text={`: ${wood}`} color="white" />
+        </Container>    
+    </Container>
+</BoxComponent>
+
+<script>
+    import { BoxComponent, RpgClientEngine, inject } from "@rpgjs/client";
+    import { effect } from "canvasengine";
+    
+    const engine = inject(RpgClientEngine)
+
+    console.log( engine.playerIdSignal())
+
+    const wood = computed(() => {
+        const currentPlayer = engine.getCurrentPlayer()
+        return currentPlayer.wood()
+    })
+
+    console.log(BoxComponent)
+</script>

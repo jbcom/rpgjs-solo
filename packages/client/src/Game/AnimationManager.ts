@@ -11,6 +11,7 @@ export class AnimationManager {
       id,
       x: player.x,
       y: player.y,
+      object: player,
       onFinish: () => {
         const index = this.current().findIndex((value) => value.id === id);
         this.current().splice(index, 1);

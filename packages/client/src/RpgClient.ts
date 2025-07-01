@@ -314,7 +314,10 @@ export interface RpgClient {
      * @prop {Array<Component of CanvasEngine>} [gui]
      * @memberof RpgClient
      * */
-    gui?: ComponentFunction[],
+    gui?: {
+        id: string,
+        component: ComponentFunction
+    }[],
 
     /** 
      * Array containing the list of sounds
@@ -382,6 +385,8 @@ export interface RpgClient {
     scenes?: {
         map: RpgSceneMapHooks
     }
+
+    sceneMap?: RpgSceneMapHooks
 
     /** 
      * Array containing the list of component animations

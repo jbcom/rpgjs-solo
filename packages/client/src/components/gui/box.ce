@@ -1,0 +1,19 @@
+<Container positionType="absolute" top={top} left={left}>
+    <Container
+      anchor={[0.5, 0.5]}
+      height
+      width
+    >
+    <Rect width height color={_color} />
+    <Container attach={child}></Container>
+  </Container>  
+</Container>
+
+<script>
+  import { RpgClientEngine, inject } from "../../index";
+
+  const { width, height, children, color, top, left } = defineProps();
+  const engine = inject(RpgClientEngine)
+  const child = children[0]
+  const _color = computed(() => engine.globalConfig.gui?.windowColor || color?.() || "#1a1a2e")
+</script>
