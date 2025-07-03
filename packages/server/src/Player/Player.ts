@@ -96,6 +96,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   map: RpgMap | null = null;
   context?: Context;
   conn: MockConnection | null = null;
+  touchSide: boolean = false; // Protection contre les changements de map en boucle
 
   @sync(RpgPlayer) events = signal<RpgEvent[]>([]);
 
@@ -165,6 +166,118 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       positions,
     });
     return true;
+  }
+
+  /**
+   * Auto change map when player touches map borders
+   * 
+   * Cette méthode vérifie si le joueur touche les bords de la map actuelle
+   * et effectue automatiquement un changement vers la map adjacente si elle existe.
+   * 
+   * @param nextPosition - La prochaine position du joueur
+   * @returns Promise<boolean> - true si un changement de map a eu lieu
+   * 
+   * @example
+   * ```ts
+   * // Appelé automatiquement par le système de mouvement
+   * const changed = await player.autoChangeMap({ x: newX, y: newY });
+   * if (changed) {
+   *   console.log('Player changed map automatically');
+   * }
+   * ```
+   */
+  async autoChangeMap(nextPosition: { x: number; y: number }): Promise<boolean> {
+    const map = this.getCurrentMap() as any; // Cast pour accéder aux propriétés étendues
+    if (!map) return false;
+
+    const worldMaps = map.getInWorldMaps?.();
+    let ret: boolean = false;
+
+    if (worldMaps && map) {
+      const direction = this.getDirection();
+      const marginLeftRight = (map.tileWidth ?? 32) / 2;
+      const marginTopDown = (map.tileHeight ?? 32) / 2;
+
+      // Position monde actuelle du joueur
+      const worldPositionX = (map.worldX ?? 0) + this.x();
+      const worldPositionY = (map.worldY ?? 0) + this.y();
+
+      const changeMap = async (adjacentCoords: {x: number, y: number}, positionCalculator: (nextMapInfo: any) => {x: number, y: number}) => {
+        if (this.touchSide) {
+          return false;
+        }
+        this.touchSide = true;
+
+        const [nextMap] = worldMaps.getAdjacentMaps(map, adjacentCoords);
+        if (!nextMap) {
+          this.touchSide = false;
+          return false;
+        }
+
+        const id = nextMap.id as string;
+        const nextMapInfo = worldMaps.getMapInfo(id);
+        if (!nextMapInfo) {
+          this.touchSide = false;
+          return false;
+        }
+
+        const newPosition = positionCalculator(nextMapInfo);
+        const success = await this.changeMap(id, newPosition);
+        
+        // Reset touchSide après un délai pour permettre le changement
+        setTimeout(() => {
+          this.touchSide = false;
+        }, 100);
+
+        return !!success;
+      };
+
+      // Vérifier le bord gauche
+      if (nextPosition.x < marginLeftRight && direction === "left") {
+        ret = await changeMap({
+          x: (map.worldX ?? 0) - 1,
+          y: worldPositionY
+        }, nextMapInfo => ({
+          x: nextMapInfo.width - (this.hitbox().w) - marginLeftRight,
+          y: (map.worldY ?? 0) - (nextMapInfo.y ?? 0) + nextPosition.y
+        }));
+      }
+      // Vérifier le bord droit  
+      else if (nextPosition.x > (map.widthPx ?? map.width ?? 0) - this.hitbox().w - marginLeftRight && direction === "right") {
+        ret = await changeMap({
+          x: (map.worldX ?? 0) + (map.widthPx ?? map.width ?? 0) + 1,
+          y: worldPositionY
+        }, nextMapInfo => ({
+          x: marginLeftRight,
+          y: (map.worldY ?? 0) - (nextMapInfo.y ?? 0) + nextPosition.y
+        }));
+      }
+      // Vérifier le bord haut
+      else if (nextPosition.y < marginTopDown && direction === "up") {
+        ret = await changeMap({
+          x: worldPositionX,
+          y: (map.worldY ?? 0) - 1
+        }, nextMapInfo => ({
+          x: (map.worldX ?? 0) - (nextMapInfo.x ?? 0) + nextPosition.x,
+          y: nextMapInfo.height - this.hitbox().h - marginTopDown
+        }));
+      }
+      // Vérifier le bord bas
+      else if (nextPosition.y > (map.heightPx ?? map.height ?? 0) - this.hitbox().h - marginTopDown && direction === "down") {
+        ret = await changeMap({
+          x: worldPositionX,
+          y: (map.worldY ?? 0) + (map.heightPx ?? map.height ?? 0) + 1
+        }, nextMapInfo => ({
+          x: (map.worldX ?? 0) - (nextMapInfo.x ?? 0) + nextPosition.x,
+          y: marginTopDown
+        }));
+      }
+      else {
+        this.touchSide = false;
+      }
+    }
+
+    return ret;
   }
 
   async teleport(positions: { x: number; y: number }) {

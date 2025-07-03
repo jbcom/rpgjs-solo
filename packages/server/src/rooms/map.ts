@@ -118,8 +118,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 
   @Action('move')
-  onInput(player: RpgPlayer, input: any) {
-   this.movePlayer(player, input.input)
+  async onInput(player: RpgPlayer, input: any) {
+   await this.movePlayer(player, input.input)
   }
 
   @Request({
