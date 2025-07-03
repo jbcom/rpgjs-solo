@@ -53,3 +53,6 @@ export function provideTiledMap(options: {
     }),
   ]);
 }
+
+// Export world maps functionality
+export { WorldMapsManager, RpgTiledWorldMap, WorldMapConfig } from './world-maps';

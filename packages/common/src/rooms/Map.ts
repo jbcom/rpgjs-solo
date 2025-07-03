@@ -77,7 +77,39 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     });
   }
 
-  movePlayer(player: T, direction: Direction) {
+  async movePlayer(player: T, direction: Direction) {
+    // Calculer la prochaine position avant le mouvement
+    const currentX = player.x();
+    const currentY = player.y();
+    const speed = player.speed();
+    
+    let nextX = currentX;
+    let nextY = currentY;
+    
+    switch (direction) {
+      case Direction.Left:
+        nextX = currentX - speed;
+        break;
+      case Direction.Right:
+        nextX = currentX + speed;
+        break;
+      case Direction.Up:
+        nextY = currentY - speed;
+        break;
+      case Direction.Down:
+        nextY = currentY + speed;
+        break;
+    }
+
+    // Vérifier le changement automatique de map si la méthode existe
+    if (typeof (player as any).autoChangeMap === 'function') {
+      const mapChanged = await (player as any).autoChangeMap({ x: nextX, y: nextY });
+      if (mapChanged) {
+        return; // Ne pas continuer le mouvement si la map a changé
+      }
+    }
+
+    // Effectuer le mouvement normal
     this.physic.moveBody(player, direction);
   }
 

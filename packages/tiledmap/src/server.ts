@@ -1,11 +1,17 @@
 import { RpgMap, RpgServer } from "@rpgjs/server";
 import { MapClass } from "@canvasengine/tiled";
 import { defineModule } from "@rpgjs/common";
+import { WorldMapsManager, RpgTiledWorldMap } from "./world-maps";
 
-// Extend RpgMap interface to include tiled property
+// Extend RpgMap interface to include tiled property and world maps
 declare module "@rpgjs/server" {
   interface RpgMap {
     tiled?: MapClass;
+    worldX?: number;
+    worldY?: number;
+    tileWidth?: number;
+    tileHeight?: number;
+    worldMapsManager?: WorldMapsManager;
   }
 }
 
@@ -17,6 +23,7 @@ declare module "@rpgjs/server" {
  */
 export interface RpgTiledMap extends RpgMap {
   tiled: MapClass;
+  getInWorldMaps?(): WorldMapsManager | null;
 }
 
 /**
@@ -108,6 +115,18 @@ export default defineModule<RpgServer>({
 
       // Attach Tiled instance to the map
       (map as any).tiled = tiledMap;
+
+      // Add world maps properties
+      (map as any).worldX = mapData.worldX ?? 0;
+      (map as any).worldY = mapData.worldY ?? 0;
+      (map as any).tileWidth = tiledMap.tilewidth;
+      (map as any).tileHeight = tiledMap.tileheight;
+      (map as any).worldMapsManager = mapData.worldMapsManager;
+
+      // Add getInWorldMaps method
+      (map as any).getInWorldMaps = function(): WorldMapsManager | null {
+        return this.worldMapsManager ?? null;
+      };
 
       // Initialize hitboxes array
       mapData.hitboxes = mapData.hitboxes || [];
