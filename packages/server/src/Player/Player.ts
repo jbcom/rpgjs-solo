@@ -96,7 +96,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   map: RpgMap | null = null;
   context?: Context;
   conn: MockConnection | null = null;
-  touchSide: boolean = false; // Protection contre les changements de map en boucle
+  touchSide: boolean = false; // Protection against map change loops
 
   @sync(RpgPlayer) events = signal<RpgEvent[]>([]);
 
@@ -171,15 +171,15 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   /**
    * Auto change map when player touches map borders
    * 
-   * Cette méthode vérifie si le joueur touche les bords de la map actuelle
-   * et effectue automatiquement un changement vers la map adjacente si elle existe.
+   * This method checks if the player touches the current map borders
+   * and automatically performs a change to the adjacent map if it exists.
    * 
-   * @param nextPosition - La prochaine position du joueur
-   * @returns Promise<boolean> - true si un changement de map a eu lieu
+   * @param nextPosition - The next position of the player
+   * @returns Promise<boolean> - true if a map change occurred
    * 
    * @example
    * ```ts
-   * // Appelé automatiquement par le système de mouvement
+   * // Called automatically by the movement system
    * const changed = await player.autoChangeMap({ x: newX, y: newY });
    * if (changed) {
    *   console.log('Player changed map automatically');
@@ -187,10 +187,10 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * ```
    */
   async autoChangeMap(nextPosition: { x: number; y: number }): Promise<boolean> {
-    const map = this.getCurrentMap() as any; // Cast pour accéder aux propriétés étendues
+    const map = this.getCurrentMap() as any; // Cast to access extended properties
     if (!map) return false;
 
-    const worldMaps = map.getInWorldMaps?.();
+    const worldMaps = map.getWorldMapsManager?.();
     let ret: boolean = false;
 
     if (worldMaps && map) {
@@ -198,7 +198,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       const marginLeftRight = (map.tileWidth ?? 32) / 2;
       const marginTopDown = (map.tileHeight ?? 32) / 2;
 
-      // Position monde actuelle du joueur
+      // Current world position of the player
       const worldPositionX = (map.worldX ?? 0) + this.x();
       const worldPositionY = (map.worldY ?? 0) + this.y();
 
@@ -224,7 +224,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
         const newPosition = positionCalculator(nextMapInfo);
         const success = await this.changeMap(id, newPosition);
         
-        // Reset touchSide après un délai pour permettre le changement
+        // Reset touchSide after a delay to allow the change
         setTimeout(() => {
           this.touchSide = false;
         }, 100);
@@ -232,7 +232,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
         return !!success;
       };
 
-      // Vérifier le bord gauche
+      // Check left border
       if (nextPosition.x < marginLeftRight && direction === "left") {
         ret = await changeMap({
           x: (map.worldX ?? 0) - 1,
@@ -242,7 +242,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
           y: (map.worldY ?? 0) - (nextMapInfo.y ?? 0) + nextPosition.y
         }));
       }
-      // Vérifier le bord droit  
+      // Check right border
       else if (nextPosition.x > (map.widthPx ?? map.width ?? 0) - this.hitbox().w - marginLeftRight && direction === "right") {
         ret = await changeMap({
           x: (map.worldX ?? 0) + (map.widthPx ?? map.width ?? 0) + 1,
@@ -252,7 +252,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
           y: (map.worldY ?? 0) - (nextMapInfo.y ?? 0) + nextPosition.y
         }));
       }
-      // Vérifier le bord haut
+      // Check top border
       else if (nextPosition.y < marginTopDown && direction === "up") {
         ret = await changeMap({
           x: worldPositionX,
@@ -262,7 +262,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
           y: nextMapInfo.height - this.hitbox().h - marginTopDown
         }));
       }
-      // Vérifier le bord bas
+      // Check bottom border
       else if (nextPosition.y > (map.heightPx ?? map.height ?? 0) - this.hitbox().h - marginTopDown && direction === "down") {
         ret = await changeMap({
           x: worldPositionX,

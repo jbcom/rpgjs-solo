@@ -1,46 +1,57 @@
 # World Maps Implementation
 
-## Vue d'ensemble
+## Overview
 
-Implémentation d'un système de world maps permettant le changement automatique entre maps adjacentes lorsqu'un joueur touche les bords d'une map.
+Implementation of a world maps system allowing automatic change between adjacent maps when a player touches the map borders.
 
-## Architecture existante analysée
+## Analyzed existing architecture
 
-### Structures trouvées :
-- **RpgMap** (`packages/server/src/rooms/map.ts`) : Classe principale des maps
-- **RpgTiledMap** (`packages/tiledmap/src/server.ts`) : Extension pour maps Tiled
-- **RpgPlayer** (`packages/server/src/Player/Player.ts`) : Joueurs avec méthode `changeMap`
-- **RpgCommonPhysic** (`packages/common/src/Physic.ts`) : Système de physique et collisions
+### Found structures:
+- **RpgMap** (`packages/server/src/rooms/map.ts`) : Main map class
+- **RpgTiledMap** (`packages/tiledmap/src/server.ts`) : Extension for Tiled maps
+- **RpgPlayer** (`packages/server/src/Player/Player.ts`) : Players with `changeMap` method
+- **RpgCommonPhysic** (`packages/common/src/Physic.ts`) : Physics and collision system
 
-### Fonctionnalités existantes :
-- `player.changeMap(mapId, position)` : Changement de map manuel
-- Système de coordonnées x, y pour les joueurs
-- Détection des bords de map via hitboxes statiques
-- Propriétés `widthPx`, `heightPx` dans les maps Tiled
+### Existing features:
+- `player.changeMap(mapId, position)` : Manual map change
+- x, y coordinate system for players
+- Map border detection via static hitboxes
+- `widthPx`, `heightPx` properties in Tiled maps
 
-## Interfaces nécessaires
+## Required interfaces
 
 ```typescript
-// Interface pour les informations de world map
-export interface RpgTiledWorldMap {
+// Interface for world map information
+export interface WorldMapInfo {
   id: string;
-  x: number;      // Position X dans le monde
-  y: number;      // Position Y dans le monde  
-  width: number;  // Largeur en pixels
-  height: number; // Hauteur en pixels
-  worldX: number; // Coordonnée X mondiale
-  worldY: number; // Coordonnée Y mondiale
-  widthPx: number;  // Largeur en pixels (alias)
-  heightPx: number; // Hauteur en pixels (alias)
-  tileWidth: number;  // Largeur d'une tile
-  tileHeight: number; // Hauteur d'une tile
+  x: number;           // World X position
+  y: number;           // World Y position
+  width: number;       // Width in pixels
+  height: number;      // Height in pixels
+  worldX: number;      // World X coordinate (alias for x)
+  worldY: number;      // World Y coordinate (alias for y)
+  widthPx: number;     // Width in pixels (alias for width)
+  heightPx: number;    // Height in pixels (alias for height)
+  tileWidth: number;   // Tile width
+  tileHeight: number;  // Tile height
 }
 
-// Interface pour la gestion des world maps
-export interface WorldMapsManager {
-  getAdjacentMaps(map: RpgTiledWorldMap, coordinates: {x: number, y: number}): RpgTiledWorldMap[];
-  getMapInfo(mapId: string): RpgTiledWorldMap | null;
-  getAllMaps(): RpgTiledWorldMap[];
+// Configuration for a world map
+export interface WorldMapConfig {
+  id: string;
+  worldX: number;
+  worldY: number;
+  width: number;
+  height: number;
+  tileWidth?: number;
+  tileHeight?: number;
+}
+
+// World Maps Manager
+export class WorldMapsManager {
+  getAdjacentMaps(map: WorldMapInfo, coordinates: {x: number, y: number}): WorldMapInfo[];
+  getMapInfo(mapId: string): WorldMapInfo | null;
+  getAllMaps(): WorldMapInfo[];
 }
 ```
 
@@ -126,88 +137,87 @@ const worldMaps = [
 
 ---
 
-## 🎯 IMPLÉMENTATION RÉALISÉE
+## 🎯 IMPLEMENTED SOLUTION
 
-### Fichiers modifiés :
+### Modified files:
 
-#### 1. `packages/tiledmap/src/world-maps.ts` ✅ CRÉÉ
-- **WorldMapsManager** : Gestionnaire principal des world maps
-- **RpgTiledWorldMap** : Interface pour les informations de map
-- **WorldMapConfig** : Configuration des world maps
-- Méthodes pour trouver maps adjacentes et calculer positions
+#### 1. `packages/common/src/rooms/WorldMaps.ts` ✅ CREATED
+- **WorldMapsManager** : Main world maps manager
+- **WorldMapInfo** : Interface for map information  
+- **WorldMapConfig** : Configuration for world maps
+- Methods to find adjacent maps and calculate positions
 
-#### 2. `packages/tiledmap/src/server.ts` ✅ MODIFIÉ
-- Extension de l'interface RpgMap avec propriétés world maps
-- Ajout de `worldX`, `worldY`, `tileWidth`, `tileHeight`, `worldMapsManager`
-- Méthode `getInWorldMaps()` pour accéder au gestionnaire
-- Hook `onBeforeUpdate` étendu pour configurer les world maps
+#### 2. `packages/common/src/rooms/Map.ts` ✅ MODIFIED
+- Added world maps properties to RpgCommonMap
+- Added `worldX`, `worldY`, `tileWidth`, `tileHeight`, `worldMapsManager`
+- Method `getWorldMapsManager()` to access the manager
+- Enhanced `movePlayer()` to support autoChangeMap
 
-#### 3. `packages/tiledmap/src/index.ts` ✅ MODIFIÉ
-- Export des nouvelles classes et interfaces world maps
-- `WorldMapsManager`, `RpgTiledWorldMap`, `WorldMapConfig` disponibles
+#### 3. `packages/common/src/index.ts` ✅ MODIFIED
+- Export of new world maps classes and interfaces
+- `WorldMapsManager`, `WorldMapInfo`, `WorldMapConfig` available
 
-#### 4. `packages/server/src/Player/Player.ts` ✅ MODIFIÉ
-- Propriété `touchSide` pour protection anti-spam
-- Méthode **`autoChangeMap(nextPosition)`** complète :
-  - Détection des 4 bords de map (gauche, droite, haut, bas)
-  - Calcul des maps adjacentes via WorldMapsManager
-  - Calcul automatique des nouvelles positions
-  - Protection contre les changements en boucle
+#### 4. `packages/server/src/Player/Player.ts` ✅ MODIFIED
+- Property `touchSide` for anti-spam protection
+- Method **`autoChangeMap(nextPosition)`** complete:
+  - Detection of 4 map borders (left, right, top, bottom)
+  - Calculation of adjacent maps via WorldMapsManager
+  - Automatic calculation of new positions
+  - Protection against loop changes
 
-#### 5. `packages/common/src/rooms/Map.ts` ✅ MODIFIÉ
-- Méthode `movePlayer()` rendue asynchrone
-- Appel à `autoChangeMap()` avant le mouvement physique
-- Calcul prédictif de la prochaine position
+#### 5. `packages/server/src/rooms/map.ts` ✅ MODIFIED
+- Action `move` made asynchronous to support `autoChangeMap()`
 
-#### 6. `packages/server/src/rooms/map.ts` ✅ MODIFIÉ
-- Action `move` rendue asynchrone pour supporter `autoChangeMap()`
+### Implemented features:
 
-### Fonctionnalités implémentées :
+✅ **Automatic map change**
+- Real-time map border detection
+- Smooth transition to adjacent maps
+- Intelligent calculation of new positions
 
-✅ **Changement automatique de map**
-- Détection des bords de map en temps réel
-- Transition fluide vers maps adjacentes
-- Calcul intelligent des nouvelles positions
+✅ **World maps manager**
+- Flexible configuration of maps and their relationships
+- Spatial index for optimal performance
+- Utility methods for navigation
 
-✅ **Gestionnaire de world maps**
-- Configuration flexible des maps et leurs relations
-- Index spatial pour performance optimale
-- Méthodes utilitaires pour navigation
+✅ **Anti-spam protection**
+- `touchSide` flag with automatic timeout
+- Prevents loop changes
 
-✅ **Protection anti-spam**
-- Flag `touchSide` avec timeout automatique
-- Prévient les changements en boucle
+✅ **Advanced position calculations**
+- Relative preservation of player position
+- Margins based on tile size
+- Support for player hitboxes
 
-✅ **Calculs de position avancés**
-- Préservation relative de la position du joueur
-- Marges basées sur la taille des tiles
-- Support des hitboxes de joueur
-
-### Utilisation du système :
+### System usage:
 
 ```typescript
-// 1. Configurer les world maps
+import { WorldMapsManager } from "@rpgjs/common";
+
+// 1. Configure the world maps
 const worldMaps = new WorldMapsManager();
 worldMaps.configure([
   { id: "town", worldX: 0, worldY: 0, width: 1024, height: 768 },
   { id: "forest", worldX: 1024, worldY: 0, width: 1024, height: 768 }
 ]);
 
-// 2. Attacher à une map
+// 2. Attach to a map
 mapData.worldMapsManager = worldMaps;
 mapData.worldX = 0;
 mapData.worldY = 0;
+mapData.tileWidth = 32;
+mapData.tileHeight = 32;
 
-// 3. Le système fonctionne automatiquement !
-// Quand un joueur touche un bord, il change automatiquement de map
+// 3. The system works automatically!
+// When a player touches a border, they automatically change maps
 ```
 
-### Tests recommandés :
+### Recommended tests:
 
-1. **Test de base** : Joueur va d'une map à l'adjacente
-2. **Test des 4 directions** : Vérifier tous les bords
-3. **Test anti-spam** : Mouvement rapide près des bords
-4. **Test de position** : Vérifier que la position relative est préservée
-5. **Test sans map adjacente** : Vérifier que rien ne se passe
+1. **Basic test**: Player goes from one map to the adjacent one
+2. **4 directions test**: Check all borders
+3. **Anti-spam test**: Rapid movement near borders
+4. **Position test**: Verify that relative position is preserved
+5. **No adjacent map test**: Verify that nothing happens
 
-Le système est maintenant **complètement implémenté** et prêt à être utilisé ! 🚀
+The system is now **completely implemented** and ready to use! 🚀

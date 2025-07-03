@@ -4,6 +4,7 @@ import { Direction, RpgCommonPlayer } from "../Player";
 import { RpgCommonPhysic } from "../Physic";
 import { Observable, share, Subject } from "rxjs";
 import { Knockback, LinearMove, MovementManager } from "../movement";
+import { WorldMapsManager, WorldMapInfo } from "./WorldMaps";
 
 type Hitboxes = {
   id: string;
@@ -22,7 +23,14 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   
   data = signal<any | null>(null);
   physic = new RpgCommonPhysic();
-  moveManager = new MovementManager()
+  moveManager = new MovementManager();
+  
+  // World Maps properties
+  worldX?: number;
+  worldY?: number;
+  tileWidth?: number;
+  tileHeight?: number;
+  worldMapsManager?: WorldMapsManager;
 
 
   /**
@@ -94,7 +102,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   }
 
   async movePlayer(player: T, direction: Direction) {
-    // Calculer la prochaine position avant le mouvement
+    // Calculate next position before movement
     const currentX = player.x();
     const currentY = player.y();
     const speed = player.speed();
@@ -117,15 +125,15 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         break;
     }
 
-    // Vérifier le changement automatique de map si la méthode existe
+    // Check for automatic map change if the method exists
     if (typeof (player as any).autoChangeMap === 'function') {
       const mapChanged = await (player as any).autoChangeMap({ x: nextX, y: nextY });
       if (mapChanged) {
-        return; // Ne pas continuer le mouvement si la map a changé
+        return; // Don't continue movement if map changed
       }
     }
 
-    // Effectuer le mouvement normal
+    // Perform normal movement
     this.physic.moveBody(player, direction);
   }
 
@@ -182,6 +190,23 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
   getObjectById(id: string) {
     return this.players()[id] ?? this.events()[id];
+  }
+
+  /**
+   * Get the world maps manager
+   * 
+   * @returns WorldMapsManager instance or null if not configured
+   * 
+   * @example
+   * ```ts
+   * const worldMaps = map.getWorldMapsManager();
+   * if (worldMaps) {
+   *   const adjacentMaps = worldMaps.getAdjacentMaps(currentMap, coordinates);
+   * }
+   * ```
+   */
+  getWorldMapsManager(): WorldMapsManager | null {
+    return this.worldMapsManager ?? null;
   }
 
   /**
