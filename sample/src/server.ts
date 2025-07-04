@@ -50,6 +50,11 @@ export default createServer({
             //  player.showComponentAnimation('wood')
             
             }
+            // if (input.action) {
+            //  player.wood.update(wood => wood + 1)
+            //  player.showComponentAnimation('wood')
+            // }
+            player.gui("RpgComponentExample").open()
           }
         },
         maps: [
