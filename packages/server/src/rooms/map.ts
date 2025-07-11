@@ -399,4 +399,5 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 export interface RpgMap {
   $send: (conn: MockConnection, data: any) => void; 
   $broadcast: (data: any) => void;
+  $sessionTransfer: (userOrPublicId: any | string, targetRoomId: string) => void;
 }

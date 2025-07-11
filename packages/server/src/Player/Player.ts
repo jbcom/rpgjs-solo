@@ -14,7 +14,7 @@ import { MockConnection } from "@signe/room";
 import { IMoveManager, WithMoveManager } from "./MoveManager";
 import { IGoldManager, WithGoldManager } from "./GoldManager";
 import { WithVariableManager, type IVariableManager } from "./VariableManager";
-import { sync, type } from "@signe/sync";
+import { createStatesSnapshot, load, sync, type } from "@signe/sync";
 import { computed, signal } from "@signe/reactive";
 import {
   IParameterManager,
@@ -159,6 +159,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     mapId: string,
     positions?: { x: number; y: number; z?: number } | string
   ): Promise<any | null | boolean> {
+    const room = this.getCurrentMap();
     this.emit("changeMap", {
       mapId: 'map-' + mapId,
       positions,
@@ -183,6 +184,19 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       type,
       value,
     });
+  }
+
+  async save() {
+    const snapshot = createStatesSnapshot(this)
+    await lastValueFrom(this.hooks.callHooks("server-player-onSave", this, snapshot))
+    return JSON.stringify(snapshot)
+  }
+
+  async load(snapshot: string) {
+    const data = JSON.parse(snapshot)
+    const dataLoaded = load(this, data)
+    await lastValueFrom(this.hooks.callHooks("server-player-onLoad", this, dataLoaded))
+    return dataLoaded
   }
 
   /**

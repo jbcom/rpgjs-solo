@@ -62,15 +62,15 @@ export default {
           }
         ],
         gui: [
-          {
-            id: "wood-ui",
-            component: WoodUiComponent,
-            autoDisplay: true,
-            dependencies: () => {
-              const engine = inject(RpgClientEngine)
-              return [engine.scene.currentPlayer]
-            }
-          }
+          // {
+          //   id: "wood-ui",
+          //   component: WoodUiComponent,
+          //   autoDisplay: true,
+          //   dependencies: () => {
+          //     const engine = inject(RpgClientEngine)
+          //     return [engine.scene.currentPlayer]
+          //   }
+          // }
         ],
         componentAnimations: [
           {

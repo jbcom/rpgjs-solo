@@ -26,10 +26,12 @@
     "pixi.js": "^8.9.2"
   },
   "dependencies": {
-    "@rpgjs/common": "workspace:*",
-    "@signe/di": "^2.3.3",
-    "@signe/room": "^2.3.3",
-    "@signe/sync": "^2.3.3",
+    "@rpgjs/client": "*",
+    "@rpgjs/common": "*",
+    "@rpgjs/server": "*",
+    "@signe/di": "^2.4.0",
+    "@signe/room": "^2.4.0",
+    "@signe/sync": "^2.4.0",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

@@ -59,6 +59,7 @@
 
   import { inject } from "../../../core/inject";
   import { RpgClientEngine } from "../../../RpgClientEngine";
+  import BoxComponent from "../box.ce";
 
   const {
     message,

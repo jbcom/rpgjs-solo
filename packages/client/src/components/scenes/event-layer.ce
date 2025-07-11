@@ -6,6 +6,10 @@
     @for ((player,id) of players) {
         <Character id={id} object={player} />
     }
+
+    @for (child of children) {
+        <child />
+    }
 </Container>
 
 <script>
@@ -15,6 +19,8 @@
     import Character from "../character.ce";
    
     const engine = inject(RpgClientEngine);
+    const { children } = defineProps()
+    
     const players = engine.sceneMap.players
     const events = engine.sceneMap.events
 </script>

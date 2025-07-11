@@ -17,10 +17,10 @@
   "dependencies": {
     "@rpgjs/common": "workspace:*",
     "@rpgjs/database": "^4.3.0",
-    "@signe/di": "^2.3.2",
-    "@signe/reactive": "^2.3.2",
-    "@signe/room": "^2.3.2",
-    "@signe/sync": "^2.3.2",
+    "@signe/di": "^2.4.0",
+    "@signe/reactive": "^2.4.0",
+    "@signe/room": "^2.4.0",
+    "@signe/sync": "^2.4.0",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

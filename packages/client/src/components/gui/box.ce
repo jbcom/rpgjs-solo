@@ -1,8 +1,6 @@
 <Container positionType="absolute" top={top} left={left}>
     <Container
       anchor={[0.5, 0.5]}
-      height
-      width
     >
     <Rect width height color={_color} />
     <Container attach={child}></Container>

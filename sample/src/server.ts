@@ -23,7 +23,8 @@ export default createServer({
           props: {
             wood: Number
           },
-          onConnected: (player: RpgPlayer) => {
+          onConnected: async (player: RpgPlayer) => {
+            
             player.changeMap("simplemap");
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
@@ -31,13 +32,13 @@ export default createServer({
               x: 1000,
               y: 400,
             });
-           
             player.setGraphic("hero");
           },
           onInput(player: RpgPlayer, input: any) {
             if (input.action) {
-             player.wood.update(wood => wood + 1)
-             player.showComponentAnimation('wood')
+            //  player.wood.update(wood => wood + 1)
+            //  player.showComponentAnimation('wood')
+            
             }
           }
         },

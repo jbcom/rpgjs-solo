@@ -1,6 +1,8 @@
 <Container>
     <Sprite image="background.jpg" />
-    <EventLayerComponent />
+    <EventLayerComponent>
+        <Text text="Hello World" />
+    </EventLayerComponent>
 </Container>
 
 <script>
