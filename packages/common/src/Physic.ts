@@ -266,22 +266,106 @@ export class RpgCommonPhysic {
    * 
    * @example
    * ```ts
-   * // Add a wall
+   * // Add a rectangular wall
    * physic.addStaticHitbox('wall1', 100, 50, 32, 128);
    * ```
    */
-  addStaticHitbox(id: string, x: number, y: number, width: number, height: number): string {
+  addStaticHitbox(id: string, x: number, y: number, width: number, height: number): string;
+  
+  /**
+   * Add a static hitbox with polygon shape (immovable objects like walls, obstacles)
+   * 
+   * @param id - Unique identifier for the hitbox
+   * @param points - Array of 2D points [[x1, y1], [x2, y2], ...] to create a polygon
+   * @returns The id of the created hitbox
+   * 
+   * @example
+   * ```ts
+   * // Add a triangular obstacle
+   * physic.addStaticHitbox('triangle1', [
+   *   [100, 100],
+   *   [150, 50],
+   *   [200, 100]
+   * ]);
+   * ```
+   */
+  addStaticHitbox(id: string, points: number[][]): string;
+  
+  addStaticHitbox(id: string, xOrPoints: number | number[][], y?: number, width?: number, height?: number): string {
     if (this.hitboxes.has(id)) {
       throw new Error(`Hitbox with id ${id} already exists`);
     }
 
-    // Create body with center position to match movable hitboxes
-    const centerX = x + width/2;
-    const centerY = y + height/2;
-    const body = Matter.Bodies.rectangle(centerX, centerY, width, height, {
-      isStatic: true,
-      label: id
-    });
+    let body: Matter.Body;
+
+    if (Array.isArray(xOrPoints)) {
+      // Create polygon from points
+      const points = xOrPoints;
+      if (points.length < 3) {
+        throw new Error(`Polygon must have at least 3 points, got ${points.length}`);
+      }
+      
+      // Validate points
+      for (let i = 0; i < points.length; i++) {
+        const point = points[i];
+        if (!Array.isArray(point) || point.length !== 2 || typeof point[0] !== 'number' || typeof point[1] !== 'number') {
+          throw new Error(`Invalid point at index ${i}: ${JSON.stringify(point)}. Expected [x, y] with numbers.`);
+        }
+      }
+      
+      // Calculate the center of the provided points
+      let centerX = 0, centerY = 0;
+      for (const point of points) {
+        centerX += point[0];
+        centerY += point[1];
+      }
+      centerX /= points.length;
+      centerY /= points.length;
+      
+      // Convert points to relative coordinates (centered at origin)
+      const vertices = points.map(point => ({ 
+        x: point[0] - centerX, 
+        y: point[1] - centerY 
+      }));
+      
+      // Try to create the polygon body
+      try {
+        body = Matter.Bodies.fromVertices(0, 0, [vertices], {
+          isStatic: true,
+          label: id
+        });
+        
+        // Ensure the body is created successfully
+        if (!body) {
+          throw new Error(`Matter.Bodies.fromVertices returned null/undefined`);
+        }
+        
+        // Additional validation - check if the body has vertices
+        if (!body.vertices || body.vertices.length === 0) {
+          throw new Error(`Created body has no vertices`);
+        }
+        
+        // Position the body at the calculated center
+        Matter.Body.setPosition(body, { x: centerX, y: centerY });
+        
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to create polygon body from points ${JSON.stringify(points)}: ${errorMessage}`);
+      }
+    } else {
+      // Create rectangle
+      const x = xOrPoints;
+      if (y === undefined || width === undefined || height === undefined) {
+        throw new Error('Rectangle hitbox requires x, y, width, and height parameters');
+      }
+      
+      const centerX = x + width/2;
+      const centerY = y + height/2;
+      body = Matter.Bodies.rectangle(centerX, centerY, width, height, {
+        isStatic: true,
+        label: id
+      });
+    }
     
     Matter.Composite.add(this.world, body);
     
@@ -559,6 +643,7 @@ export class RpgCommonPhysic {
         // Check if both are movable - if so, skip automatic handling (we handle it manually)
         const hitboxA = this.hitboxes.get(idA);
         const hitboxB = this.hitboxes.get(idB);
+        
         
         if (hitboxA?.type === 'movable' && hitboxB?.type === 'movable') {
           // Skip automatic collision handling for movable-to-movable collisions
@@ -1002,6 +1087,55 @@ export class RpgCommonPhysic {
    */
   getWorld(): Matter.World {
     return this.world;
+  }
+
+  /**
+   * Get debug information about all hitboxes
+   * 
+   * Useful for debugging collision issues
+   * 
+   * @returns Array of hitbox debug information
+   * 
+   * @example
+   * ```ts
+   * // Debug all hitboxes
+   * const info = physic.getDebugInfo();
+   * console.log('All hitboxes:', info);
+   * ```
+   */
+  getDebugInfo(): Array<{
+    id: string;
+    type: 'static' | 'movable';
+    position: { x: number; y: number };
+    bounds: { min: { x: number; y: number }; max: { x: number; y: number } };
+    verticesCount: number;
+    isPolygon: boolean;
+  }> {
+    const info: Array<{
+      id: string;
+      type: 'static' | 'movable';
+      position: { x: number; y: number };
+      bounds: { min: { x: number; y: number }; max: { x: number; y: number } };
+      verticesCount: number;
+      isPolygon: boolean;
+    }> = [];
+    
+    for (const [id, hitboxData] of this.hitboxes.entries()) {
+      const body = hitboxData.body;
+      info.push({
+        id,
+        type: hitboxData.type,
+        position: { x: body.position.x, y: body.position.y },
+        bounds: {
+          min: { x: body.bounds.min.x, y: body.bounds.min.y },
+          max: { x: body.bounds.max.x, y: body.bounds.max.y }
+        },
+        verticesCount: body.vertices.length,
+        isPolygon: body.vertices.length > 4 // Rectangles have 4 vertices
+      });
+    }
+    
+    return info;
   }
 
   /* ----------------------------------------------------------------------- */

@@ -21,6 +21,10 @@ export default {
           component: Map,
           width: 2048,
           height: 1536,
+          data: {
+            
+          },
+          hitboxes: []
        }
     }),
     provideClientGlobalConfig(),

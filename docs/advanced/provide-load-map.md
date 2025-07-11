@@ -52,6 +52,7 @@ The callback function must return an object with the following properties:
 - **`height`** - Map height in pixels (used for viewport calculations)  
 - **`events`** - Map events data
 - **`id`** - Map identifier (defaults to the mapId parameter)
+- **`hitboxes`** - Array of collision hitboxes for the map
 
 ## Creating a Map Component
 
@@ -114,3 +115,126 @@ The `EventLayerComponent` automatically handles:
 - NPC and event rendering  
 - Character animations and interactions
 - Proper layering and sorting
+
+### Adding Custom Elements to EventLayerComponent
+
+You can add custom elements inside `EventLayerComponent` that will be automatically sorted by zIndex with the rest of the elements:
+
+```html
+<Container>
+    <MyTileRenderer tiles={tiles} />
+    
+    <EventLayerComponent>
+        <!-- Custom elements will be auto-sorted by zIndex -->
+        <Text text="Hello World" x={100} y={100} zIndex={5} />
+        <Sprite image="custom-effect.png" x={200} y={150} zIndex={10} />
+        <Container x={300} y={200} zIndex={1}>
+            <Circle radius={20} color="red" />
+        </Container>
+    </EventLayerComponent>
+</Container>
+
+<script>
+    import { EventLayerComponent } from "@rpgjs/client"
+    import { Text, Sprite, Circle } from "canvasengine"
+    
+    const { data } = defineProps()
+    const mapData = data()
+    const tiles = signal(mapData.layers)
+</script>
+```
+
+## Hitboxes Configuration
+
+The `hitboxes` property allows you to define collision areas for the map. Each hitbox can be either rectangular or polygonal:
+
+### Rectangular Hitboxes
+
+```ts
+return {
+  data: mapData,
+  component: MyMapComponent,
+  width: 2048,
+  height: 1536,
+  hitboxes: [
+    {
+      id: "wall1",           // Optional: unique identifier
+      x: 100,                // X position in pixels
+      y: 50,                 // Y position in pixels
+      width: 32,             // Width in pixels
+      height: 128            // Height in pixels
+    },
+    {
+      id: "obstacle1",
+      x: 300,
+      y: 200,
+      width: 64,
+      height: 64
+    }
+  ]
+}
+```
+
+### Polygonal Hitboxes
+
+```ts
+return {
+  data: mapData,
+  component: MyMapComponent,
+  width: 2048,
+  height: 1536,
+  hitboxes: [
+    {
+      id: "triangle1",       // Optional: unique identifier
+      points: [              // Array of [x, y] coordinates
+        [100, 100],
+        [150, 50],
+        [200, 100]
+      ]
+    },
+    {
+      id: "complex-shape",
+      points: [
+        [400, 300],
+        [450, 250],
+        [500, 300],
+        [450, 350]
+      ]
+    }
+  ]
+}
+```
+
+### Mixed Hitboxes
+
+You can combine both rectangular and polygonal hitboxes in the same array:
+
+```ts
+return {
+  data: mapData,
+  component: MyMapComponent,
+  width: 2048,
+  height: 1536,
+  hitboxes: [
+    // Rectangular hitbox
+    {
+      id: "wall1",
+      x: 100,
+      y: 50,
+      width: 32,
+      height: 128
+    },
+    // Polygonal hitbox
+    {
+      id: "triangle1",
+      points: [
+        [100, 100],
+        [150, 50],
+        [200, 100]
+      ]
+    }
+  ]
+}
+```
+
+**Note:** If no `id` is provided, a unique identifier will be automatically generated for each hitbox.

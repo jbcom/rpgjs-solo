@@ -7,3 +7,4 @@ export * from "./PrebuiltGui";
 export * from "./movement";
 export * as Matter from "matter-js";
 export * from "./database";
+export * from "./Physic";

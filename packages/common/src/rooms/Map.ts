@@ -5,6 +5,17 @@ import { RpgCommonPhysic } from "../Physic";
 import { Observable, share, Subject } from "rxjs";
 import { Knockback, LinearMove, MovementManager } from "../movement";
 
+type Hitboxes = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} | {
+  id: string;
+  points: number[][];
+}
+
 export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   abstract players: Signal<Record<string, T>>;
   abstract events: Signal<Record<string, any>>;
@@ -43,7 +54,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   );
 
   loadPhysic() {
-    const hitboxes = this.data().hitboxes ?? [];
+    const hitboxes: Hitboxes[] = this.data().hitboxes ?? [];
 
     const gap = 100;
     this.physic.addStaticHitbox('map-width-left', -gap, 0, gap, this.data().height);
@@ -52,7 +63,12 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     this.physic.addStaticHitbox('map-height-bottom', 0, this.data().height, this.data().width, gap);
 
     for (let staticHitbox of hitboxes) {
-      this.physic.addStaticHitbox(staticHitbox.id ?? generateShortUUID(), staticHitbox.x, staticHitbox.y, staticHitbox.width, staticHitbox.height);
+      if ('x' in staticHitbox) {
+        this.physic.addStaticHitbox(staticHitbox.id ?? generateShortUUID(), staticHitbox.x, staticHitbox.y, staticHitbox.width, staticHitbox.height);
+      }
+      else if ('points' in staticHitbox) {
+        this.physic.addStaticHitbox(staticHitbox.id ?? generateShortUUID(), staticHitbox.points);
+      }
     }
 
     this.events.observable.subscribe(({ value: event, type }) => {
