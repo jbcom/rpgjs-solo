@@ -13,6 +13,7 @@ type ClientIo = any;
 class BridgeWebsocket extends AbstractWebsocket {
   private room: ServerIo;
   private socket: ClientIo;
+<<<<<<< HEAD
   private rooms = {
     partyFn: async (roomId: string) => {
       this.room = new ServerIo(roomId, this.rooms);
@@ -22,6 +23,9 @@ class BridgeWebsocket extends AbstractWebsocket {
       return server
     }   
   }
+=======
+  private serverInstance: any;
+>>>>>>> 382183f8 (feat: update pnpm-lock and package configurations)
 
   constructor(protected context: Context, private server: any) {
     super(context);
@@ -30,6 +34,7 @@ class BridgeWebsocket extends AbstractWebsocket {
   }
 
   async connection(listeners?: (data: any) => void) {
+<<<<<<< HEAD
     const server = new this.server(this.room);
     await server.onStart();
     this.context.set('server', server)
@@ -39,6 +44,12 @@ class BridgeWebsocket extends AbstractWebsocket {
   private async _connection(listeners?: (data: any) => void) {
     const server = this.context.get('server')
     this.socket = new ClientIo(server, 'player-client-id');
+=======
+    this.serverInstance = new this.server(this.room);
+    await this.serverInstance.onStart();
+    this.context.set('server', this.serverInstance)
+    this.socket = new ClientIo(this.serverInstance);
+>>>>>>> 382183f8 (feat: update pnpm-lock and package configurations)
     const url = new URL('http://localhost')
     const request = new Request(url.toString(), {
       method: 'GET',
@@ -47,7 +58,7 @@ class BridgeWebsocket extends AbstractWebsocket {
       }
     })
     listeners?.(this.socket)
-    await server.onConnect(this.socket.conn as any, { request } as any);
+    await this.serverInstance.onConnect(this.socket.conn as any, { request } as any);
     this.room.clients.set(this.socket.id, this.socket);
     return this.socket
   }
@@ -113,6 +124,14 @@ class BridgeWebsocket extends AbstractWebsocket {
     await this._connection((socket) => {
       listeners?.(socket)
     })
+  }
+
+  getServer() {
+    return this.serverInstance
+  }
+
+  getSocket() {
+    return this.socket
   }
 }
 
