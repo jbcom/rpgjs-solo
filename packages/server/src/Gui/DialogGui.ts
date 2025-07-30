@@ -18,7 +18,11 @@ export interface DialogOptions {
     autoClose?: boolean,
     tranparent?: boolean,
     typewriterEffect?: boolean,
-    talkWith?: RpgPlayer
+    talkWith?: RpgPlayer,
+    face?: {
+        id: string,
+        expression: string
+    }
 }
 
 export class DialogGui extends Gui {
@@ -47,7 +51,8 @@ export class DialogGui extends Gui {
             // remove value property. It is not useful to know this on the client side.
             choices: options.choices.map(choice => ({
                 text: choice.text
-            }))
+            })),
+            face: options.face
         }
         return super.open({
             message,

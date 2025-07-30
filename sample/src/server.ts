@@ -8,8 +8,19 @@ export function Event() {
     },
     async onAction(player: RpgPlayer) {
       player.gold = 100;
-      player.showText("Hello World", {
-        talkWith: this
+      await player.showText("Hello World Hello World Hello World Hello World Hello World", {
+        talkWith: this,
+        face: {
+          id: "facesetId",
+          expression: "happy"
+        }
+      });
+      await player.showText("ok", {
+        talkWith: this,
+        face: {
+          id: "facesetId",
+          expression: "sad"
+        }
       });
     },
   };

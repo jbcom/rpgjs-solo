@@ -43,6 +43,15 @@ export default {
           },
         },
         spritesheets: [
+          Presets.FacesetPreset({
+            id: "facesetId",
+            image: "faceset.png",
+            width: 1024,
+            height: 1024,
+          }, 3, 4, {
+            happy: [0, 0],
+            sad: [1, 0],
+          }),
           Presets.LPCSpritesheetPreset({
             id: "hero",
             imageSource: "hero.png",
