@@ -22,7 +22,7 @@ export interface DialogOptions {
     face?: {
         id: string,
         expression: string
-    }
+    },
 }
 
 export class DialogGui extends Gui {

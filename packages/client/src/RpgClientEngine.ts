@@ -46,6 +46,19 @@ export class RpgClientEngine<T = any> {
     this.hooks = inject<Hooks>(context, ModulesToken);
     this.globalConfig = inject(context, GlobalConfigToken)
 
+    if (!this.globalConfig) {
+      this.globalConfig = {}
+    }
+    if (!this.globalConfig.box) {
+      this.globalConfig.box = {
+        styles: {
+          backgroundColor: "#1a1a2e",
+          backgroundOpacity: 0.9
+        },
+        sounds: {}
+      }
+    }
+
     this.addComponentAnimation({
       id: "animation",
       component: PrebuiltComponentAnimations.Animation

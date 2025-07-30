@@ -42,6 +42,16 @@ export default {
             // The GUI will auto-display when dependencies are resolved
           },
         },
+        sounds: [
+          {
+            id: "typewriter",
+            src: "typewriter.wav",
+          },
+          {
+            id: "cursor",
+            src: "cursor.wav",
+          }
+        ],
         spritesheets: [
           Presets.FacesetPreset({
             id: "facesetId",

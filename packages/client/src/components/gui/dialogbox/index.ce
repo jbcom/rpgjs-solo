@@ -3,27 +3,19 @@
     ref="dialogbox"
     scale={{ x: scaleX }}
     anchor={[0.5, 0.5]}
-    width={700}
+    width={widthBox}
     height
     controls
-    positionType="absolute"
-    bottom={10}
+    ...positionBox()
   >
-  <Rect width={700} height={250} color="#1a1a2e" />
-    <Rect
-      x={0}
-      y={0}
-      width={700}
-      height
-      color="#1a1a2e"
-      alpha={0.9}
-      borderRadius={10}
-      border
-      shadow
-    />
+  <Rect 
+    width={widthBox} 
+    height 
+    color={@dialogboxStyles.@backgroundColor} 
+    alpha={@dialogboxStyles.@backgroundOpacity} />
       <Container
         flexDirection="row"
-        width={700}
+        width={widthBox}
         height
         alpha={contentOpacity}
       >
@@ -33,7 +25,7 @@
               text
               color="#fff"
               fontSize={18}
-              margin={40}
+              margin
               typewriter
               style={textStyle}
             />
@@ -71,18 +63,30 @@
     choices: _choices,
     onFinish,
     onInteraction,
-    face
+    face,
+    position,
+    typewriterEffect,
+    autoClose
   } = defineProps();
   
   const client = inject(RpgClientEngine);
   const keyboardControls = client.globalConfig.keyboardControls;
+
+  const dialogboxStyles = client.globalConfig.box.styles ?? {
+    backgroundColor: "#1a1a2e",
+    backgroundOpacity: 0.9,
+  }
+  const dialogBoxTypewriterSound = client.globalConfig?.box?.sounds?.typewriter
+
   const spritesheets = client.spritesheets;
+  const sounds = client.sounds;
 
   client.stopProcessingInput = true;
   let isDestroyed = false;
 
   const texts = [message()]
-  const height = signal(250);
+  const height = signal(256);
+  const margin = signal(40);
   const isTextCompleted = signal(false);
 
   const drawSpeaker = (g) => {
@@ -106,6 +110,20 @@
 
   const scaleX = animatedSignal(0, {
     duration: 500,
+  });
+
+  const positionBox = computed(() => {
+    if (position() === 'bottom') {
+      return { positionType: 'absolute', bottom: 10 };
+    }
+    else if (position() === 'top') {
+      return { positionType: 'absolute', top: 10 };
+    }
+    return {};
+  });
+
+  const widthBox = computed(() => {
+    return 700;
   });
 
   scaleX.set(1);
@@ -137,17 +155,25 @@
 
   const triggerSkip = trigger();
 
-  const typewriter = {
+  const typewriter = typewriterEffect() ? {
     speed: 0.3,
     skip: triggerSkip,
+    sound: {
+      src: sounds.get(dialogBoxTypewriterSound)?.src
+    },
     onComplete: () => {
       isTextCompleted.set(true);
+      if (autoClose()) {
+        setTimeout(() => {
+          onFinish();
+        }, 1000);
+      }
     }
-  }
+  } : null;
 
   const textStyle = {
     wordWrap: true,
-    wordWrapWidth: 700 - 256 - 80
+    wordWrapWidth: widthBox() - margin() * 2 - (face ? 256 : 0)
   }
 
   mount((element) => {

@@ -1,4 +1,4 @@
-import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, effect } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition } from "@rpgjs/server";
 
 export function Event() {
   return {
@@ -8,18 +8,17 @@ export function Event() {
     },
     async onAction(player: RpgPlayer) {
       player.gold = 100;
-      await player.showText("Hello World Hello World Hello World Hello World Hello World", {
+      await player.showChoices("Hello World Hello World Hello World Hello World Hello World", [{
+        text: "yes",
+        value: "yes"
+      }, {
+        text: "no",
+        value: "no"
+      }], {
         talkWith: this,
         face: {
           id: "facesetId",
           expression: "happy"
-        }
-      });
-      await player.showText("ok", {
-        talkWith: this,
-        face: {
-          id: "facesetId",
-          expression: "sad"
         }
       });
     },

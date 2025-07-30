@@ -5,7 +5,7 @@
 </Container>
 
 <script>
-  import { signal, computed, mount } from "canvasengine";
+  import { signal, computed, mount, Howl } from "canvasengine";
   import ItemMenu from "./itemMenu.ce";
   import { RpgClientEngine } from "../../../RpgClientEngine";
   import { inject } from "../../../core/inject";
@@ -19,6 +19,18 @@
 
   const client = inject(RpgClientEngine);
   const keyboardControls = client.globalConfig.keyboardControls;
+  const sounds = client.sounds;
+  const dialogBoxCursorSound = client.globalConfig?.box?.sounds?.cursorMove
+  const dialogBoxCursorSelectSound = client.globalConfig?.box?.sounds?.cursorSelect
+
+
+  const playDialogBoxSound = (soundId) => {
+    if (!soundId) return;
+    const sound = new Howl.Howl({
+      src: [sounds.get(soundId)?.src]
+    })
+    sound.play()
+  }
 
   const selected = (index) => {
     return computed(() => {
@@ -36,6 +48,7 @@
     down: {
       bind: keyboardControls.down,
       keyDown() {
+        playDialogBoxSound(dialogBoxCursorSound);
         selectedIndex.update((currentIndex) => {
           if (wrapAround) {
             return (currentIndex + 1) % items().length;
@@ -48,6 +61,7 @@
     up: {
       bind: keyboardControls.up,
       keyDown() {
+        playDialogBoxSound(dialogBoxCursorSound);
         selectedIndex.update((currentIndex) => {
           if (wrapAround) {
             return (currentIndex - 1 + items().length) % items().length;
@@ -61,6 +75,7 @@
       bind: keyboardControls.action,
       keyDown() {
         onSelect?.(selectedIndex());
+        playDialogBoxSound(dialogBoxCursorSelectSound);
       },
     },
   });

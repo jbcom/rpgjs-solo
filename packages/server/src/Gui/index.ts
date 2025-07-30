@@ -11,3 +11,5 @@ export {
     ShopGui,
     NotificationGui
 }
+
+export { DialogPosition } from './DialogGui'
