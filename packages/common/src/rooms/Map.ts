@@ -4,18 +4,6 @@ import { Direction, RpgCommonPlayer } from "../Player";
 import { RpgCommonPhysic } from "../Physic";
 import { Observable, share, Subject } from "rxjs";
 import { Knockback, LinearMove, MovementManager } from "../movement";
-import { WorldMapsManager, WorldMapInfo } from "./WorldMaps";
-
-type Hitboxes = {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-} | {
-  id: string;
-  points: number[][];
-}
 
 export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   abstract players: Signal<Record<string, T>>;
