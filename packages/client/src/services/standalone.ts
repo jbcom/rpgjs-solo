@@ -12,18 +12,32 @@ type ClientIo = any;
 class BridgeWebsocket extends AbstractWebsocket {
   private room: ServerIo;
   private socket: ClientIo;
+  private rooms = {
+    partyFn: async (roomId: string) => {
+      this.room = new ServerIo(roomId, this.rooms);
+      const server = new this.server(this.room)
+      await server.onStart();
+      this.context.set('server', server)
+      return server
+    }   
+  }
 
   constructor(protected context: Context, private server: any) {
     super(context);
     // fake room
-    this.room = new ServerIo("lobby-1");
+    this.room = new ServerIo("lobby-1", this.rooms);
   }
 
   async connection(listeners?: (data: any) => void) {
     const server = new this.server(this.room);
     await server.onStart();
     this.context.set('server', server)
-    this.socket = new ClientIo(server);
+    return this._connection(listeners)
+  }
+
+  private async _connection(listeners?: (data: any) => void) {
+    const server = this.context.get('server')
+    this.socket = new ClientIo(server, 'player-client-id');
     const url = new URL('http://localhost')
     const request = new Request(url.toString(), {
       method: 'GET',
@@ -57,12 +71,45 @@ class BridgeWebsocket extends AbstractWebsocket {
     });
   }
 
+  /**
+   * Update underlying connection properties before a reconnect
+   *
+   * Design
+   * - Dynamically register a factory for the requested room to ensure a fresh server instance
+   * - Swap the internal ServerIo to target the new room
+   *
+   * @param params - Properties to update
+   * @param params.room - The target room id (e.g. `map-simplemap2`)
+   *
+   * @example
+   * ```ts
+   * websocket.updateProperties({ room: 'map-simplemap2' })
+   * await websocket.reconnect()
+   * ```
+   */
   updateProperties({ room }: { room: any }) {
-    this.room = new ServerIo(room);
+    // empty
   }
 
+  /**
+   * Reconnect the client to the current Party room
+   *
+   * Design
+   * - Must be called after `updateProperties()` when switching rooms
+   * - Rebuilds the client <-> server bridge and re-triggers connection listeners
+   *
+   * @param listeners - Optional callback to re-bind event handlers on the new socket
+   *
+   * @example
+   * ```ts
+   * websocket.updateProperties({ room: 'map-dungeon' })
+   * await websocket.reconnect((socket) => {
+   *   // re-bind events here
+   * })
+   * ```
+   */
   async reconnect(listeners?: (data: any) => void) {
-    await this.connection((socket) => {
+    await this._connection((socket) => {
       listeners?.(socket)
     })
   }
@@ -71,10 +118,25 @@ class BridgeWebsocket extends AbstractWebsocket {
 class UpdateMapStandaloneService extends UpdateMapService {
   private server: any;
 
-  async update(mapId: string, map: any) {
+  /**
+   * Update the current room map data on the server side
+   *
+   * Design
+   * - Uses the in-memory server instance stored in context (standalone mode)
+   * - Builds a local HTTP-like request to the current Party room endpoint
+   *
+   * @param map - The map payload to apply on the server
+   *
+   * @example
+   * ```ts
+   * await updateMapService.update({ width: 1024, height: 768, events: [] })
+   * ```
+   */
+  async update(map: any) {
     this.server = this.context.get('server')
+    const roomId = this.server?.room?.id ?? 'lobby-1'
     const req = {
-      url: `http://localhost/parties/main/${mapId}/map/update`,
+      url: `http://localhost/parties/main/${roomId}/map/update`,
       method: 'POST',
       headers: new Headers({}),
       json: async () => {

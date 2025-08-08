@@ -47,7 +47,7 @@ export class LoadMapService {
 
   async load(mapId: string) {
     const map = await this.options(mapId.replace('map-', ''))
-    await this.updateMapService.update(mapId, map);
+    await this.updateMapService.update(map);
     return map;
   }
 }

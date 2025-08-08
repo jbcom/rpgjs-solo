@@ -144,7 +144,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     if (map.id) {
      const mapFound = this.maps.find(m => m.id === map.id)
-     if (mapFound.events) {
+     if (mapFound?.events) {
       map.events = [
         ...mapFound.events,
         ...map.events

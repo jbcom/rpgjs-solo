@@ -160,9 +160,11 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     mapId: string,
     positions?: { x: number; y: number; z?: number } | string
   ): Promise<any | null | boolean> {
+    const realMapId = 'map-' + mapId;
     const room = this.getCurrentMap();
+    await room?.$sessionTransfer(this.conn, realMapId);
     this.emit("changeMap", {
-      mapId: 'map-' + mapId,
+      mapId: realMapId,
       positions,
     });
     return true;

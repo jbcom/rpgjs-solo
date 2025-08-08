@@ -16,17 +16,17 @@
   "license": "MIT",
   "description": "",
   "dependencies": {
-    "@dimforge/rapier2d": "^0.17.3",
-    "@signe/di": "^2.3.1",
-    "@signe/reactive": "^2.3.1",
-    "@signe/sync": "^2.3.1",
+    "@dimforge/rapier2d": "^0.18.0",
+    "@signe/di": "^2.4.5",
+    "@signe/reactive": "^2.4.5",
+    "@signe/sync": "^2.4.5",
     "matter-js": "^0.20.0",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "vite": "^6.2.5",
-    "vite-plugin-dts": "^4.5.3",
-    "vitest": "^3.1.1"
+    "vite": "^7.1.1",
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^3.2.4"
   },
   "type": "module"
 }

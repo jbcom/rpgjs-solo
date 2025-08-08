@@ -18,6 +18,7 @@ import { provideVueGui } from "@rpgjs/vue";
 export default {
   providers: [
     provideLoadMap((id: string) => {
+      console.log(id)
        return {
           id,
           component: Map,
