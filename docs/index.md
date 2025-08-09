@@ -13,6 +13,9 @@ hero:
       text: Get Started
       link: /guide/get-started
     - theme: alt
+      text: World Maps API
+      link: /guide/world-maps
+    - theme: alt
       text: View on GitHub
       link: https://github.com/RSamaium/RPG-JS
 

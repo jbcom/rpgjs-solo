@@ -253,3 +253,10 @@ export class WorldMapsManager {
     };
   }
 }
+
+/**
+ * Public alias for the world maps manager
+ * 
+ * This alias is provided for API readability in map methods.
+ */
+export type RpgWorldMaps = WorldMapsManager;

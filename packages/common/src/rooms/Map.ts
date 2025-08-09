@@ -4,7 +4,7 @@ import { Direction, RpgCommonPlayer } from "../Player";
 import { RpgCommonPhysic } from "../Physic";
 import { Observable, share, Subject } from "rxjs";
 import { Knockback, LinearMove, MovementManager } from "../movement";
-import { WorldMapsManager } from "./WorldMaps";
+import { WorldMapsManager, type RpgWorldMaps } from "./WorldMaps";
 import type { ZoneOptions } from "../Physic";
 
 export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
@@ -205,6 +205,66 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    */
   getWorldMapsManager(): WorldMapsManager | null {
     return this.worldMapsManager ?? null;
+  }
+
+  /**
+   * Get attached World
+   * 
+   * Recover the world attached to this map (undefined if no world attached)
+   * 
+   * @since 3.0.0-beta.8
+   * @returns {RpgWorldMaps | undefined} The world maps manager instance if attached, otherwise undefined
+   * 
+   * @example
+   * ```ts
+   * const world = map.getInWorldMaps();
+   * if (world) {
+   *   console.log(world.getAllMaps());
+   * }
+   * ```
+   */
+  getInWorldMaps(): RpgWorldMaps | undefined {
+    return this.worldMapsManager ?? undefined;
+  }
+
+  /**
+   * Remove this map from the world
+   * 
+   * Remove this map from the world
+   * 
+   * @since 3.0.0-beta.8
+   * @returns {boolean | undefined} True if removed, false if not found, undefined if no world attached
+   * 
+   * @example
+   * ```ts
+   * const removed = map.removeFromWorldMaps();
+   * ```
+   */
+  removeFromWorldMaps(): boolean | undefined {
+    if (!this.worldMapsManager) return undefined;
+    const id = (this as any).id as string | undefined;
+    if (!id) return false;
+    return this.worldMapsManager.removeMap(id);
+  }
+
+  /**
+   * Assign the map to a world
+   * 
+   * Assign the map to a world
+   * 
+   * @since 3.0.0-beta.8
+   * @param {RpgWorldMaps} worldMap world maps
+   * @returns {void}
+   * 
+   * @example
+   * ```ts
+   * const world = new WorldMapsManager();
+   * world.configure([{ id: 'm1', worldX: 0, worldY: 0, width: 1024, height: 1024 }]);
+   * map.setInWorldMaps(world);
+   * ```
+   */
+  setInWorldMaps(worldMap: RpgWorldMaps): void {
+    this.worldMapsManager = worldMap;
   }
 
   /**
