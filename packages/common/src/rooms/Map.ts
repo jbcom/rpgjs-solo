@@ -4,6 +4,8 @@ import { Direction, RpgCommonPlayer } from "../Player";
 import { RpgCommonPhysic } from "../Physic";
 import { Observable, share, Subject } from "rxjs";
 import { Knockback, LinearMove, MovementManager } from "../movement";
+import { WorldMapsManager } from "./WorldMaps";
+import type { ZoneOptions } from "../Physic";
 
 export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   abstract players: Signal<Record<string, T>>;
@@ -14,8 +16,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   moveManager = new MovementManager();
   
   // World Maps properties
-  worldX?: number;
-  worldY?: number;
   tileWidth?: number;
   tileHeight?: number;
   worldMapsManager?: WorldMapsManager;
@@ -50,7 +50,10 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   );
 
   loadPhysic() {
-    const hitboxes: Hitboxes[] = this.data().hitboxes ?? [];
+    const hitboxes: Array<
+      | { id?: string; x: number; y: number; width: number; height: number }
+      | { id?: string; points: number[][] }
+    > = this.data()?.hitboxes ?? [];
 
     const gap = 100;
     this.physic.addStaticHitbox('map-width-left', -gap, 0, gap, this.data().height);
@@ -113,9 +116,16 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         break;
     }
 
+    // Ensure player's facing/intended direction is updated before auto-change evaluation
+    if (typeof (player as any).setIntendedDirection === 'function') {
+      (player as any).setIntendedDirection(direction);
+    } else if (typeof (player as any).changeDirection === 'function') {
+      (player as any).changeDirection(direction);
+    }
+
     // Check for automatic map change if the method exists
     if (typeof (player as any).autoChangeMap === 'function') {
-      const mapChanged = await (player as any).autoChangeMap({ x: nextX, y: nextY });
+      const mapChanged = await (player as any).autoChangeMap({ x: nextX, y: nextY }, direction);
       if (mapChanged) {
         return; // Don't continue movement if map changed
       }

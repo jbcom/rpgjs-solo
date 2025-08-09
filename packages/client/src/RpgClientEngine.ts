@@ -106,6 +106,7 @@ export class RpgClientEngine<T = any> {
     });
 
     this.webSocket.on("changeMap", (data) => {
+      this.sceneMap.reset()
       this.loadScene(data.mapId);
     });
 

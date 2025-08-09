@@ -18,14 +18,13 @@ import { provideVueGui } from "@rpgjs/vue";
 export default {
   providers: [
     provideLoadMap((id: string) => {
-      console.log(id)
        return {
           id,
           component: Map,
           width: 2048,
           height: 1536,
           data: {
-            
+            color: id === "simplemap" ? "red" : "blue"
           },
           hitboxes: []
        }

@@ -35,6 +35,19 @@ export function provideServerModules(modules: any[]): FactoryProvider {
           }
         };
       }
+      if (module.worldMaps && Array.isArray(module.worldMaps)) {
+        const worldMaps = [...module.worldMaps];
+        module = {
+          ...module,
+          worldMaps: {
+            load: (engine: RpgMap) => {
+              worldMaps.forEach((worldMap) => {
+                engine.createDynamicWorldMaps(worldMap)
+              });
+            },
+          }
+        };
+      }
       return module;
     })
     return modules

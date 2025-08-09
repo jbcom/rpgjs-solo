@@ -5,6 +5,7 @@ import {
   RpgCommonPlayer,
   ShowAnimationParams,
   Constructor,
+  Direction,
 } from "@rpgjs/common";
 import { IComponentManager, WithComponentManager } from "./ComponentManager";
 import { RpgMap } from "../rooms/map";
@@ -162,6 +163,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   ): Promise<any | null | boolean> {
     const realMapId = 'map-' + mapId;
     const room = this.getCurrentMap();
+    if (positions && typeof positions === 'object') {
+      this.teleport(positions)
+    }
     await room?.$sessionTransfer(this.conn, realMapId);
     this.emit("changeMap", {
       mapId: realMapId,
@@ -188,15 +192,15 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * }
    * ```
    */
-  async autoChangeMap(nextPosition: { x: number; y: number }): Promise<boolean> {
-    const map = this.getCurrentMap() as any; // Cast to access extended properties
+  async autoChangeMap(nextPosition: { x: number; y: number }, forcedDirection?: any): Promise<boolean> {
+    const map = this.getCurrentMap() as RpgMap; // Cast to access extended properties
     if (!map) return false;
 
     const worldMaps = map.getWorldMapsManager?.();
     let ret: boolean = false;
 
     if (worldMaps && map) {
-      const direction = this.getDirection();
+      const direction = forcedDirection ?? this.getDirection();
       const marginLeftRight = (map.tileWidth ?? 32) / 2;
       const marginTopDown = (map.tileHeight ?? 32) / 2;
 
@@ -233,9 +237,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
         return !!success;
       };
-
-      // Check left border
-      if (nextPosition.x < marginLeftRight && direction === "left") {
+  // Check left border
+      if (nextPosition.x < marginLeftRight && direction === Direction.Left) {
         ret = await changeMap({
           x: (map.worldX ?? 0) - 1,
           y: worldPositionY
@@ -245,9 +248,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
         }));
       }
       // Check right border
-      else if (nextPosition.x > (map.widthPx ?? map.width ?? 0) - this.hitbox().w - marginLeftRight && direction === "right") {
+      else if (nextPosition.x > map.widthPx - this.hitbox().w - marginLeftRight && direction === Direction.Right) {
         ret = await changeMap({
-          x: (map.worldX ?? 0) + (map.widthPx ?? map.width ?? 0) + 1,
+          x: (map.worldX ?? 0) + map.widthPx + 1,
           y: worldPositionY
         }, nextMapInfo => ({
           x: marginLeftRight,
@@ -255,7 +258,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
         }));
       }
       // Check top border
-      else if (nextPosition.y < marginTopDown && direction === "up") {
+      else if (nextPosition.y < marginTopDown && direction === Direction.Up) {
         ret = await changeMap({
           x: worldPositionX,
           y: (map.worldY ?? 0) - 1
@@ -265,10 +268,10 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
         }));
       }
       // Check bottom border
-      else if (nextPosition.y > (map.heightPx ?? map.height ?? 0) - this.hitbox().h - marginTopDown && direction === "down") {
+      else if (nextPosition.y > map.heightPx - this.hitbox().h - marginTopDown && direction === Direction.Down) {
         ret = await changeMap({
           x: worldPositionX,
-          y: (map.worldY ?? 0) + (map.heightPx ?? map.height ?? 0) + 1
+          y: (map.worldY ?? 0) + map.heightPx + 1
         }, nextMapInfo => ({
           x: (map.worldX ?? 0) - (nextMapInfo.x ?? 0) + nextPosition.x,
           y: marginTopDown

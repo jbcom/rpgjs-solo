@@ -39,10 +39,7 @@ export default createServer({
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             console.log(player.name())
-            player.teleport({
-              x: 1000,
-              y: 400,
-            });
+
             player.setGraphic("hero");
           },
           async onInput(player: RpgPlayer, input: any) {
@@ -50,8 +47,11 @@ export default createServer({
             //  player.wood.update(wood => wood + 1)
             //  player.showComponentAnimation('wood')
               // player.name.set('test')
-              player.name.set('test')
-              await player.changeMap("simplemap2");
+    
+              await player.changeMap("simplemap2", {
+                x: 1000,
+                y: 500,
+              });
               
             }
             // if (input.action) {
@@ -69,6 +69,27 @@ export default createServer({
             events: [{x: 1000, y: 600, event: Event()}],
           },
         ],
+        worldMaps: [
+          {
+            id: 'world',
+            maps: [
+              {
+                id: 'simplemap',
+                worldX: 2048,
+                worldY: 0,
+                width: 2048,
+                height: 2048,
+              },
+              {
+                id: 'simplemap2',
+                worldX: 0,
+                worldY: 0,
+                width: 2048,
+                height: 2048,
+              }
+            ]
+          }
+        ]
       },
     ])
   ],

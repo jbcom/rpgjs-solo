@@ -1,5 +1,6 @@
 import { Action, MockConnection, Request, Room, RoomOnJoin } from "@signe/room";
-import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, ZoneData } from "@rpgjs/common";
+import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, ZoneData, Direction } from "@rpgjs/common";
+import { WorldMapsManager, type WorldMapConfig } from "@rpgjs/common";
 import { RpgPlayer, RpgEvent } from "../Player/Player";
 import { generateShortUUID, sync, type, users } from "@signe/sync";
 import { signal } from "@signe/reactive";
@@ -66,6 +67,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   globalConfig: any = {}
   damageFormulas: any = {}
 
+  // @ts-expect-error: signature differs from RoomOnJoin for backward compat with engine
   onJoin(player: RpgPlayer, conn: MockConnection) {
     player.map = this;
     player.context = context;
@@ -92,6 +94,27 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   get hooks() {
     return inject<Hooks>(context, ModulesToken);
+  }
+
+  get widthPx(): number {
+    return this.data()?.width ?? 0
+  }
+
+  get heightPx(): number {
+    return this.data()?.height ?? 0
+  }
+
+  get id(): string {
+    return this.data()?.id ?? ''
+  }
+
+  get worldX(): number {
+    const worldMaps = this.getWorldMapsManager?.();
+    return worldMaps?.getMapInfo(this.id)?.worldX ?? 0
+  }
+  get worldY(): number {
+    const worldMaps = this.getWorldMapsManager?.();
+    return worldMaps?.getMapInfo(this.id)?.worldY ?? 0
   }
 
   @Action('gui.interaction')
@@ -139,6 +162,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         ...this.damageFormulas
     }
     await lastValueFrom(this.hooks.callHooks("server-maps-load", this))
+    await lastValueFrom(this.hooks.callHooks("server-worldMaps-load", this))
 
     map.events = map.events ?? []
 
@@ -162,6 +186,94 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     this.dataIsReady$.complete()
     // TODO: Update map
+  }
+
+  /**
+   * Update (or create) a world configuration and propagate to all maps in that world
+   * 
+   * Body must contain the world config as defined by Tiled world import or an array of maps.
+   * If the world does not exist yet for this scene, it is created (auto-create).
+   * 
+   * Expected payload examples:
+   * - { id: string, maps: WorldMapConfig[] }
+   * - WorldMapConfig[]
+   */
+  @Request({
+    path: "/world/:id/update",
+    method: "POST",
+  })
+  async updateWorld(request: Request) {
+    // Extract world id from URL: /world/:id/update
+    let worldId = '';
+    try {
+      const reqUrl = (request as any).url as string;
+      const urlObj = new URL(reqUrl, 'http://localhost');
+      const parts = urlObj.pathname.split('/');
+      // ['', 'world', ':id', 'update'] → index 2
+      worldId = parts[2] ?? '';
+    } catch {}
+    const payload = await request.json();
+
+    // Normalize input to array of WorldMapConfig
+    const mapsConfig: WorldMapConfig[] = Array.isArray(payload)
+      ? payload
+      : payload?.maps ?? [];
+
+    // Ensure map sizes are present; fallback to current map data when ID matches
+    const normalized: WorldMapConfig[] = mapsConfig.map((m: any) => {
+      return {
+        id: m.id,
+        worldX: m.worldX ?? m.x ?? 0,
+        worldY: m.worldY ?? m.y ?? 0,
+        width: m.width ?? m.widthPx ?? this.data()?.width ?? 0,
+        height: m.height ?? m.heightPx ?? this.data()?.height ?? 0,
+        tileWidth: m.tileWidth ?? this.tileWidth ?? 32,
+        tileHeight: m.tileHeight ?? this.tileHeight ?? 32,
+      } as WorldMapConfig;
+    });
+
+    await this.updateWorldMaps(worldId, normalized);
+    return { ok: true } as any;
+  }
+
+  /**
+   * Get a world manager by id (if multiple supported in future)
+   */
+  getWorldMaps(id: string): WorldMapsManager | null {
+    if (!this.worldMapsManager) return null;
+    return this.worldMapsManager;
+  }
+
+  /**
+   * Delete a world manager by id
+   */
+  deleteWorldMaps(id: string): boolean {
+    if (!this.worldMapsManager) return false;
+    // For now, clear the single manager
+    this.worldMapsManager = undefined;
+    return true;
+  }
+
+  /**
+   * Create a world manager dynamically
+   */
+  createDynamicWorldMaps(world: { id?: string; maps: WorldMapConfig[] }): WorldMapsManager {
+    const manager = new WorldMapsManager();
+    manager.configure(world.maps);
+    this.worldMapsManager = manager;
+    return manager;
+  }
+
+  /**
+   * Update world maps by id. Auto-create when missing.
+   */
+  async updateWorldMaps(id: string, maps: WorldMapConfig[]) {
+    let world = this.getWorldMaps(id);
+    if (!world) {
+      world = this.createDynamicWorldMaps({ id, maps });
+    } else {
+      world.configure(maps);
+    }
   }
 
   addInDatabase(id: string, data: any) {
@@ -386,12 +498,22 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * Set the sync schema for the map
    * @param schema - The schema to set
    */
-  setSync(schema: any) {
+  /**
+   * Configure runtime synchronized properties on the map
+   *
+   * Design
+   * - Reads a schema object shaped like module props
+   * - Creates typed sync signals with @signe/sync
+   */
+  setSync(schema: Record<string, any>) {
     for (let key in schema) {
-      this[key] = type(signal(null), key, {
-        syncWithClient: schema[key]?.$syncWithClient,
+      const initial = typeof schema[key]?.$initial !== 'undefined' ? schema[key].$initial : null;
+      // Use type() directly with a plain object holder to avoid signal type mismatch
+      const holder: any = {};
+      this[key] = type(signal(initial) as any, key, {
+        syncToClient: schema[key]?.$syncWithClient,
         persist: schema[key]?.$permanent,
-      }, this)
+      }, holder);
     }
   }
 }

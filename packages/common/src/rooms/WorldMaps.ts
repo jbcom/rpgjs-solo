@@ -76,23 +76,115 @@ export class WorldMapsManager {
   }
 
   /**
-   * Find adjacent maps at given coordinates
+   * Remove a map from the world by its id
    * 
-   * @param map - Reference map
-   * @param coordinates - World coordinates
-   * @returns Array of adjacent maps (usually 1)
+   * Deletes the map from the internal registry and spatial index.
+   * 
+   * @param mapId - Map identifier
+   * @returns True if a map was removed, false otherwise
    * 
    * @example
    * ```ts
-   * const adjacent = worldMaps.getAdjacentMaps(currentMap, { x: 1024, y: 0 });
+   * const removed = world.removeMap("forest");
    * ```
    */
-  getAdjacentMaps(map: WorldMapInfo, coordinates: {x: number, y: number}): WorldMapInfo[] {
-    const mapId = this.spatialIndex.get(`${coordinates.x},${coordinates.y}`);
-    if (!mapId) return [];
+  removeMap(mapId: string): boolean {
+    const map = this.maps.get(mapId);
+    if (!map) return false;
+    this.maps.delete(mapId);
+    this.spatialIndex.delete(`${map.worldX},${map.worldY}`);
+    return true;
+  }
 
-    const adjacentMap = this.maps.get(mapId);
-    return adjacentMap ? [adjacentMap] : [];
+  /**
+   * Find adjacent maps based on various search strategies
+   * 
+   * Supports three search modes:
+   * - PositionBox: collect maps intersecting the given box
+   * - Direction: collect maps adjacent in the given direction
+   * - Point: collect the map containing the given world point
+   * 
+   * The given `map` can be any object exposing `worldX`, `worldY`, `width`, `height` properties
+   * (e.g. your `RpgMap` instance or a `WorldMapInfo`).
+   * 
+   * @param map - The source map
+   * @param search - Search strategy (box, direction or point)
+   * @returns Array of matching adjacent map infos
+   * 
+   * @example
+   * ```ts
+   * // Point
+   * world.getAdjacentMaps(currentMap, { x: 1024, y: 0 });
+   * 
+   * // Direction
+   * world.getAdjacentMaps(currentMap, Direction.Up);
+   * 
+   * // Box
+   * world.getAdjacentMaps(currentMap, { minX: 0, minY: 0, maxX: 2048, maxY: 1024 });
+   * ```
+   */
+  getAdjacentMaps(
+    map: { worldX: number; worldY: number; width: number; height: number },
+    search:
+      | { minX: number; minY: number; maxX: number; maxY: number }
+      | { x: number; y: number }
+      | number
+  ): WorldMapInfo[] {
+    const maps = Array.from(this.maps.values());
+
+    // Direction lookup (number) --------------------------------------------
+    if (typeof search === 'number') {
+      const Direction = require('../Player').Direction as any;
+      const src = map;
+      return maps.filter(m => {
+        const horizontallyOverlaps =
+          Math.max(src.worldX, m.worldX) < Math.min(src.worldX + src.width, m.worldX + m.width);
+        const verticallyOverlaps =
+          Math.max(src.worldY, m.worldY) < Math.min(src.worldY + src.height, m.worldY + m.height);
+  
+        switch (search) {
+          case Direction.Up:
+            return verticallyOverlaps && m.worldY + m.height === src.worldY;
+          case Direction.Down:
+            return verticallyOverlaps && m.worldY === src.worldY + src.height;
+          case Direction.Left:
+            return horizontallyOverlaps && m.worldX + m.width === src.worldX;
+          case Direction.Right:
+            return horizontallyOverlaps && m.worldX === src.worldX + src.width;
+          default:
+            return false;
+        }
+      });
+    }
+
+    // Point lookup ----------------------------------------------------------
+    if ('x' in search && 'y' in search) {
+      const found = maps.find(m =>
+        search.x >= m.worldX && search.x < m.worldX + m.width &&
+        search.y >= m.worldY && search.y < m.worldY + m.height
+      );
+      return found ? [found] : [];
+    }
+
+    // Box lookup ------------------------------------------------------------
+    if ('minX' in search) {
+      const { minX, minY, maxX, maxY } = search;
+      return maps.filter(m => {
+        const aLeft = m.worldX;
+        const aRight = m.worldX + m.width;
+        const aTop = m.worldY;
+        const aBottom = m.worldY + m.height;
+        const bLeft = minX;
+        const bRight = maxX;
+        const bTop = minY;
+        const bBottom = maxY;
+        const overlapX = aLeft < bRight && aRight > bLeft;
+        const overlapY = aTop < bBottom && aBottom > bTop;
+        return overlapX && overlapY;
+      });
+    }
+
+    return [];
   }
 
   /**

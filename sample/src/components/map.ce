@@ -1,8 +1,12 @@
 <Container>
-    <Sprite image="background.jpg" />
+    <Rect width={100} height={100} color />
     <EventLayerComponent></EventLayerComponent>
 </Container>
 
 <script>
 import { EventLayerComponent } from "@rpgjs/client"
+
+const { data } = defineProps()
+
+const color = computed(() => data().color)
 </script>

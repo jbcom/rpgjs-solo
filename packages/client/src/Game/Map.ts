@@ -15,4 +15,9 @@ export class RpgClientMap extends RpgCommonMap<RpgClientPlayer> {
   getCurrentPlayer() {
     return this.currentPlayer()
   }
+
+  reset() {
+    this.players.set({})
+    this.events.set({})
+  }
 }
