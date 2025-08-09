@@ -1,6 +1,6 @@
 {
   "name": "@rpgjs/vue",
-  "version": "5.0.0-alpha.12",
+  "version": "5.0.0-alpha.13",
   "description": "Vue.js integration for RPGJS - Allows rendering Vue components over the game canvas",
   "main": "dist/index.js",
   "types": "./dist/index.d.ts",
