@@ -163,6 +163,12 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   ): Promise<any | null | boolean> {
     const realMapId = 'map-' + mapId;
     const room = this.getCurrentMap();
+    
+    const canChange: boolean[] = await lastValueFrom(this.hooks.callHooks("server-player-canChangeMap", this, {
+      id: mapId,
+    }));
+    if (canChange.some(v => v === false)) return false;
+    
     if (positions && typeof positions === 'object') {
       this.teleport(positions)
     }
@@ -392,7 +398,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     const { events } = map;
     const arrayEvents: any[] = [
       ...Object.values(this.events()),
-      ...Object.values(events()),
+      ...Object.values(events?.() ?? {}),
     ];
     for (let event of arrayEvents) {
       if (event.onChanges) event.onChanges(this);
