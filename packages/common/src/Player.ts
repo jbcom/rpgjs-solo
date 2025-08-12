@@ -1,5 +1,5 @@
 import { signal } from "@signe/reactive";
-import { id, sync, users } from "@signe/sync";
+import { connected, id, sync, users } from "@signe/sync";
 import * as Matter from "matter-js";
 import { MovementManager } from "./movement";
 import { Item } from "./database";
@@ -85,6 +85,7 @@ export abstract class RpgCommonPlayer {
   @sync() _throughOtherPlayer = signal(true);
   @sync() _throughEvent = signal(false);
   @sync() _frequency = signal(0);
+  @connected() isConnected = signal(false)
 
   // Store intended movement direction (not synced, only used locally)
   private _intendedDirection: Direction | null = null;

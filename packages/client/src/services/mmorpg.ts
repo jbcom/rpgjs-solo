@@ -10,10 +10,14 @@ interface MmorpgOptions {
 }
 
 class BridgeWebsocket extends AbstractWebsocket {
-    private socket: any;
+  private socket: any;
+  private privateId: string;
 
   constructor(protected context: Context, private options: MmorpgOptions = {}) {
     super(context);
+    const id = localStorage.getItem("rpgjs-user-id") || crypto.randomUUID()
+    localStorage.setItem("rpgjs-user-id", id)
+    this.privateId = id
   }
 
   async connection(listeners?: (data: any) => void) {
@@ -25,6 +29,7 @@ class BridgeWebsocket extends AbstractWebsocket {
     this.socket = await connectionRoom({
         host: this.options.host || window.location.host,
         room: "lobby-1",
+        id: this.privateId
     }, instance)
 
     listeners?.(this.socket)
@@ -45,6 +50,7 @@ class BridgeWebsocket extends AbstractWebsocket {
   updateProperties({ room }: { room: any }) {
     this.socket.conn.updateProperties({
       room: room,
+      id: this.privateId,
       host: this.options.host
     })
   }

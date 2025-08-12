@@ -17,14 +17,15 @@
   "dependencies": {
     "@rpgjs/common": "workspace:*",
     "@rpgjs/database": "^4.3.0",
-    "@signe/di": "^2.4.5",
-    "@signe/reactive": "^2.4.5",
-    "@signe/room": "^2.4.5",
-    "@signe/sync": "^2.4.5",
-    "rxjs": "^7.8.2"
+    "@signe/di": "^2.4.6",
+    "@signe/reactive": "^2.4.6",
+    "@signe/room": "^2.4.6",
+    "@signe/sync": "^2.4.6",
+    "rxjs": "^7.8.2",
+    "zod": "^4.0.17"
   },
   "devDependencies": {
-    "vite": "^7.1.1",
+    "vite": "^7.1.2",
     "vite-plugin-dts": "^4.5.4"
   },
   "type": "module"

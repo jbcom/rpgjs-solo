@@ -1,4 +1,4 @@
-<Container x y zIndex={y} viewportFollow={isMe} controls onBeforeDestroy>
+<Container x y zIndex={y} viewportFollow={isMe} controls onBeforeDestroy visible={isConnected}>
   @for (component of componentsBehind) {
     <Container>
       <component object />
@@ -48,7 +48,8 @@
     emitParticleTrigger, 
     particleName, 
     graphics, 
-    hitbox 
+    hitbox,
+    isConnected
   } = object;
 
   const particleSettings = client.particleSettings;

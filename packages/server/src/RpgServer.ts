@@ -753,4 +753,8 @@ export interface RpgServer {
             doChangeServer(store: IStoreState, matchMaker: RpgMatchMaker, player: RpgPlayer): Promise<boolean> | boolean
         }
     }
+
+    throttleSync?: number
+    throttleStorage?: number
+    sessionExpiryTime?: number
 }

@@ -192,7 +192,9 @@ class Room {
         this.storageData.delete(key);
       },
       list: async () => {
-        return Array.from(this.storageData.keys());
+        // Return entries to match expected PartyKit/Server semantics
+        // Consumers often iterate as: for (const [key, value] of await storage.list())
+        return Array.from(this.storageData.entries());
       },
     };
   }
@@ -260,6 +262,121 @@ export function serverPlugin(
   let wsServer: WSServer | null = null;
   let rooms: Map<string, Room> = new Map();
   let servers: Map<string, RpgServerEngine> = new Map();
+
+  // Ensure a room and its server instance exist for a given roomId
+  async function ensureRoomAndServer(roomId: string) {
+    let room = rooms.get(roomId);
+    if (!room) {
+      room = new Room(roomId);
+      rooms.set(roomId, room);
+      console.log(`Created new room: ${roomId}`);
+    }
+    let rpgServer = servers.get(roomId);
+    if (!rpgServer) {
+      rpgServer = new serverModule(room);
+      servers.set(roomId, rpgServer);
+      console.log(`Created new server instance for room: ${roomId}`);
+      if (typeof rpgServer.onStart === "function") {
+        try {
+          await rpgServer.onStart();
+          console.log(`Server started for room: ${roomId}`);
+        } catch (error) {
+          console.error(`Error starting server for room ${roomId}:`, error);
+        }
+      }
+
+        // After creating the server instance, immediately initialize the map data
+        // by calling the server onRequest handler with a POST /map/update.
+        try {
+          const mapId = roomId.startsWith('map-') ? roomId.slice(4) : roomId;
+          const defaultMapPayload = {
+            id: mapId,
+            width: 1000,
+            height: 1000,
+            events: [] as any[],
+          };
+
+          const req = {
+            url: `http://localhost/parties/main/${roomId}/map/update`,
+            method: 'POST',
+            headers: new Headers({}),
+            json: async () => defaultMapPayload,
+            text: async () => JSON.stringify(defaultMapPayload)
+          } as any;
+
+          await (rpgServer as any).onRequest(req);
+          console.log(`Initialized map for room ${roomId} via POST /map/update`);
+        } catch (error) {
+          console.warn(`Failed initializing map for room ${roomId}:`, error);
+        }
+    }
+    // Make sure parties context is available on the room
+    room.context.parties = buildPartiesContext();
+    return { room, rpgServer };
+  }
+
+  // Build a parties context compatible with "room.context.parties"
+  function buildPartiesContext() {
+    return {
+      main: {
+        get: async (targetRoomId: string) => {
+          const { rpgServer } = await ensureRoomAndServer(targetRoomId);
+          return {
+            fetch: async (path: string, init?: { method?: string; body?: any; headers?: Record<string, string> }) => {
+              try {
+                const url = `http://localhost/parties/main/${targetRoomId}${path}`;
+                const method = (init?.method || 'GET').toUpperCase();
+                const headers = new Headers(init?.headers || {});
+                const bodyRaw = init?.body;
+
+                const req = {
+                  url,
+                  method,
+                  headers,
+                  json: async () => {
+                    if (!bodyRaw) return undefined as any;
+                    return typeof bodyRaw === 'string' ? JSON.parse(bodyRaw) : bodyRaw;
+                  },
+                  text: async () => {
+                    if (typeof bodyRaw === 'string') return bodyRaw;
+                    if (typeof bodyRaw === 'undefined') return '';
+                    return JSON.stringify(bodyRaw);
+                  }
+                } as any;
+
+                const result = await (rpgServer as any).onRequest(req);
+                const ok = !!result && (result.ok === true || typeof result !== 'undefined');
+                const response = {
+                  ok,
+                  status: ok ? 200 : 404,
+                  async json() {
+                    if (result && typeof result.json === 'function') return result.json();
+                    return result ?? {};
+                  },
+                  async text() {
+                    if (typeof result === 'string') return result;
+                    try { return JSON.stringify(result ?? {}); } catch { return ''; }
+                  }
+                } as any;
+                return response;
+              } catch (error) {
+                return {
+                  ok: false,
+                  status: 500,
+                  async json() {
+                    return { error: (error as Error)?.message || 'Internal error' };
+                  },
+                  async text() {
+                    return (error as Error)?.message || 'Internal error';
+                  }
+                } as any;
+              }
+            }
+          };
+        }
+      }
+    } as any;
+  }
 
   return {
     name: "server-plugin",
@@ -340,36 +457,17 @@ export function serverPlugin(
                       queryParams
                     );
 
-                    // Get or create the room
-                    let room = rooms.get(roomName);
-                    if (!room) {
-                      room = new Room(roomName);
-                      rooms.set(roomName, room);
-                      console.log(`Created new room: ${roomName}`);
-                    }
-
-                    // Get or create the server for this room
-                    let rpgServer = servers.get(roomName);
-                    if (!rpgServer) {
-                      rpgServer = new serverModule(room);
-                      servers.set(roomName, rpgServer);
-                      console.log(`Created new server instance for room: ${roomName}`);
-                      
-                      // Call onStart on the new server instance
-                      if (typeof rpgServer.onStart === "function") {
-                        try {
-                          await rpgServer.onStart();
-                          console.log(`Server started for room: ${roomName}`);
-                        } catch (error) {
-                          console.error(`Error starting server for room ${roomName}:`, error);
-                        }
-                      }
-                    }
+                    // Get or create the room and its server
+                    const ensured = await ensureRoomAndServer(roomName);
+                    const room = ensured.room;
+                    const rpgServer = ensured.rpgServer;
+                    // Inject a compatible parties context for cross-room calls
+                    room.context.parties = buildPartiesContext();
 
                     // Create a connection instance
                     const connection = new PartyConnection(
                       ws,
-                      undefined,
+                      queryParams._pk,
                       request.url
                     );
 
@@ -444,7 +542,7 @@ export function serverPlugin(
                             keys: () => headers.keys(),
                             values: () => headers.values(),
                           },
-                          url: request.url,
+                           url: url.toString(),
                           method: request.method,
                         },
                         url: url,

@@ -34,13 +34,15 @@ export default createServer({
             wood: Number
           },
           async onConnected(player: RpgPlayer) {
+            player.name.set('plop')
              await player.changeMap("simplemap");
             // console.log(player.conn?.state)
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
-            console.log(player.name())
-
             player.setGraphic("hero");
+          },
+          onLeaveMap: (player: RpgPlayer, map: RpgMap) => {
+           
           },
           async onInput(player: RpgPlayer, input: any) {
             if (input.action) {
@@ -61,13 +63,6 @@ export default createServer({
             if (input.action) {
               //player.gui("RpgComponentExample").open()
             }
-          },
-          canChangeMap: async (player: RpgPlayer, nextMap) => {
-            if (nextMap.id == 'simplemap2' && player.level < 10) {
-                await player.showText('You can\'t go in that direction yet. You must have level 10 minimum!')
-                return false
-            }
-            return true
           }
         },
         maps: [

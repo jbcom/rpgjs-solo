@@ -10,6 +10,26 @@ import { finalize, lastValueFrom } from "rxjs";
 import { Subject } from "rxjs";
 import { BehaviorSubject } from "rxjs";
 import { COEFFICIENT_ELEMENTS, DAMAGE_CRITICAL, DAMAGE_PHYSIC, DAMAGE_SKILL } from "../presets";
+import { z } from "zod";
+
+/**
+ * Zod schema for validating map update request body
+ * 
+ * This schema ensures that the required fields are present and properly typed
+ * when updating a map configuration.
+ */
+const MapUpdateSchema = z.object({
+  /** Configuration object for the map (optional) */
+  config: z.any().optional(),
+  /** Damage formulas configuration (optional) */
+  damageFormulas: z.any().optional(),
+  /** Unique identifier for the map (required) */
+  id: z.string(),
+  /** Width of the map in pixels (required) */
+  width: z.number(),
+  /** Height of the map in pixels (required) */
+  height: z.number(),
+});
 
 /**
  * Interface representing hook methods available for map events
@@ -55,8 +75,7 @@ export type EventPosOption = {
 }
 
 @Room({
-  path: "map-{id}",
-  throttleSync: 0
+  path: "map-{id}"
 })
 export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   @users(RpgPlayer) players = signal({});
@@ -67,7 +86,17 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   globalConfig: any = {}
   damageFormulas: any = {}
 
-  // @ts-expect-error: signature differs from RoomOnJoin for backward compat with engine
+  constructor() {
+    super();
+    this.hooks.callHooks("server-map-onStart", this).subscribe();
+    this.throttleSync = this.isStandalone ? 0 : 100;
+    this.throttleStorage = this.isStandalone ? 0 : 1000;
+  }
+
+  get isStandalone() {
+    return typeof window !== 'undefined'
+  }
+
   onJoin(player: RpgPlayer, conn: MockConnection) {
     player.map = this;
     player.context = context;
@@ -90,6 +119,13 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
           .subscribe();
       })
     ).subscribe();
+  }
+
+  onLeave(player: RpgPlayer, conn: MockConnection) {
+    this.physic.removeHitbox(player.id)
+    this.hooks
+      .callHooks("server-player-onLeaveMap", player, this)
+      .subscribe();
   }
 
   get hooks() {
@@ -147,8 +183,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   @Request({
     path: "/map/update",
-    method: "POST",
-  })
+    method: "POST"
+  }, MapUpdateSchema as any)
   async updateMap(request: Request) {
     const map = await request.json()
     this.data.set(map)

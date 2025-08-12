@@ -1,3 +1,5 @@
+import { Direction } from "../Player";
+
 /**
  * Interface for world map information
  */
@@ -134,7 +136,6 @@ export class WorldMapsManager {
 
     // Direction lookup (number) --------------------------------------------
     if (typeof search === 'number') {
-      const Direction = require('../Player').Direction as any;
       const src = map;
       return maps.filter(m => {
         const horizontallyOverlaps =
@@ -143,13 +144,13 @@ export class WorldMapsManager {
           Math.max(src.worldY, m.worldY) < Math.min(src.worldY + src.height, m.worldY + m.height);
   
         switch (search) {
-          case Direction.Up:
+          case 0:
             return verticallyOverlaps && m.worldY + m.height === src.worldY;
-          case Direction.Down:
+          case 1:
             return verticallyOverlaps && m.worldY === src.worldY + src.height;
-          case Direction.Left:
+          case 2:
             return horizontallyOverlaps && m.worldX + m.width === src.worldX;
-          case Direction.Right:
+          case 3:
             return horizontallyOverlaps && m.worldX === src.worldX + src.width;
           default:
             return false;
