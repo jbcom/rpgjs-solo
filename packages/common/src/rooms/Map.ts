@@ -73,8 +73,28 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
     }
 
-    this.events.observable.subscribe(({ value: event, type }) => {
+    this.players.observable.subscribe(({ value: player, type, key }) => { 
       if (type == 'add') {
+        player.id = key
+        this.physic.addMovableHitbox(player, player.x(), player.y(), player.hitbox().w, player.hitbox().h, {}, {
+          enabled: true,
+          friction: 0.8,
+          minVelocity: 0.5
+        });
+        this.physic.registerMovementEvents(player.id, () => {
+          player.animationName.set('walk')
+        }, () => {
+          player.animationName.set('stand')
+        })
+      }
+      else if (type == 'remove') {
+        this.physic.removeHitbox(player.id)
+      }
+    })
+
+    this.events.observable.subscribe(({ value: event, type, key }) => {
+      if (type == 'add') {
+        event.id = key
         this.physic.addMovableHitbox(event, event.x(), event.y(), event.hitbox().w, event.hitbox().h, {
           isSensor: true
         });
@@ -100,7 +120,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const currentX = player.x();
     const currentY = player.y();
     const speed = player.speed();
-    
+
     let nextX = currentX;
     let nextY = currentY;
     
@@ -133,7 +153,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         return; // Don't continue movement if map changed
       }
     }
-
     // Perform normal movement
     this.physic.moveBody(player, direction);
   }

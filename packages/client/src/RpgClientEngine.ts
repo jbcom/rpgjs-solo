@@ -148,7 +148,7 @@ export class RpgClientEngine<T = any> {
     const res = await this.loadMapService.load(mapId)
     this.sceneMap.data.set(res)
     this.hooks.callHooks("client-sceneMap-onAfterLoading", this.sceneMap).subscribe();
-    //this.sceneMap.loadPhysic()
+    this.sceneMap.loadPhysic()
   }
 
   addSpriteSheet<T = any>(spritesheetClass: any, id?: string): any {
@@ -267,9 +267,10 @@ export class RpgClientEngine<T = any> {
     return componentAnimation.instance
   }
 
-  processInput({ input }: { input: number }) {
+  async processInput({ input }: { input: string }) {
     this.hooks.callHooks("client-engine-onInput", this, { input, playerId: this.playerId }).subscribe();
     this.webSocket.emit('move', { input })
+    await this.sceneMap.movePlayer(this.sceneMap.getCurrentPlayer(), input)
   }
 
   processAction({ action }: { action: number }) {

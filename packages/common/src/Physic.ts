@@ -852,6 +852,7 @@ export class RpgCommonPhysic {
    */
   moveBody(player: RpgCommonPlayer, direction: Direction): boolean {
     const hitbox = this.hitboxes.get(player.id);
+
     if (!hitbox) return false;
     
     const body = hitbox.body;

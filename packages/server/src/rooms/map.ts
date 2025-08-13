@@ -97,16 +97,6 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     player.map = this;
     player.context = context;
     player.conn = conn;
-    this.physic.addMovableHitbox(player, player.x(), player.y(), player.hitbox().w, player.hitbox().h, {}, {
-      enabled: true,
-      friction: 0.8,
-      minVelocity: 0.5
-    });
-    this.physic.registerMovementEvents(player.id, () => {
-      player.animationName.set('walk')
-    }, () => {
-      player.animationName.set('stand')
-    })
     player._onInit()
     this.dataIsReady$.pipe(
       finalize(() => {
@@ -118,7 +108,6 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 
   onLeave(player: RpgPlayer, conn: MockConnection) {
-    this.physic.removeHitbox(player.id)
     this.hooks
       .callHooks("server-player-onLeaveMap", player, this)
       .subscribe();

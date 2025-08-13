@@ -107,17 +107,16 @@
   });
 
   const smoothX = animatedSignal(x(), {
-    duration: 100
+    duration: isMe() ? 0 : 100
   });
 
   const smoothY = animatedSignal(y(), {
-    duration: 100,
+    duration: isMe() ? 0 : 100,
   });
 
   const realAnimationName = signal(animationName());
 
   const xSubscription = x.observable.subscribe((value) => {
-    console.log(value, id())
     smoothX.set(value);
   });
 
