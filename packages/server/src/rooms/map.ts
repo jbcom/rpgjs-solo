@@ -93,10 +93,6 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this.throttleStorage = this.isStandalone ? 0 : 1000;
   }
 
-  get isStandalone() {
-    return typeof window !== 'undefined'
-  }
-
   onJoin(player: RpgPlayer, conn: MockConnection) {
     player.map = this;
     player.context = context;

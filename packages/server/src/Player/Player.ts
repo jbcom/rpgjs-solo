@@ -293,8 +293,13 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
   async teleport(positions: { x: number; y: number }) {
     if (!this.map) return false;
-    // For movable objects like players, the position represents the center
-    this.map.physic.updateHitbox(this.id, positions.x, positions.y);
+    if (this.map.physic) {
+      this.map.physic.updateHitbox(this.id, positions.x, positions.y);
+    }
+    else {
+      this.x.set(positions.x)
+      this.y.set(positions.y)
+    }
   }
 
   getCurrentMap<T extends RpgMap = RpgMap>(): T | null {

@@ -20,6 +20,9 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   tileHeight?: number;
   worldMapsManager?: WorldMapsManager;
 
+  get isStandalone() {
+    return typeof window !== 'undefined'
+  }
 
   /**
    * Observable representing the game loop tick

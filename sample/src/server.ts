@@ -35,7 +35,10 @@ export default createServer({
           },
           async onConnected(player: RpgPlayer) {
             player.name.set('plop')
-             await player.changeMap("simplemap");
+             await player.changeMap("simplemap", {
+              x: 100,
+              y: 100,
+             });
             // console.log(player.conn?.state)
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
@@ -64,7 +67,7 @@ export default createServer({
         maps: [
           {
             id: "simplemap",
-            events: [{x: 1000, y: 600, event: Event()}],
+            events: [{x: 200, y: 200, event: Event()}],
           },
         ],
         worldMaps: [
