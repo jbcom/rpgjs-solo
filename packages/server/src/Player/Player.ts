@@ -98,6 +98,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   context?: Context;
   conn: MockConnection | null = null;
   touchSide: boolean = false; // Protection against map change loops
+  /** Last processed client input timestamp for reconciliation */
+  lastProcessedInputTs: number = 0;
 
   @sync(RpgPlayer) events = signal<RpgEvent[]>([]);
 

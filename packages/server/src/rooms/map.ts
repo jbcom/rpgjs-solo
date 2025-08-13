@@ -93,6 +93,25 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this.throttleStorage = this.isStandalone ? 0 : 1000;
   }
 
+  // autoload by @signe/room
+  interceptorPacket(player: RpgPlayer, packet: any, conn: MockConnection) {
+    console.log(packet)
+    
+    // Add timestamp to sync packets for client-side prediction reconciliation
+    if (packet && typeof packet === 'object') {
+      packet.timestamp = Date.now();
+      
+      // Advertise last processed input timestamp for the recipient player
+      if (player && typeof player.lastProcessedInputTs === 'number') {
+        packet.lastProcessedInputTs = player.lastProcessedInputTs;
+      }
+      
+    
+    }
+    
+    return packet;
+  }
+
   onJoin(player: RpgPlayer, conn: MockConnection) {
     player.map = this;
     player.context = context;
@@ -163,7 +182,11 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   @Action('move')
   async onInput(player: RpgPlayer, input: any) {
-   await this.movePlayer(player, input.input)
+    // Record last processed client input timestamp if provided
+    if (typeof input?.timestamp === 'number') {
+      player.lastProcessedInputTs = input.timestamp;
+    }
+    await this.movePlayer(player, input.input)
   }
 
   @Request({

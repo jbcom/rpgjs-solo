@@ -3,7 +3,7 @@ import { Context, inject } from "@signe/di";
 import { signal, bootstrapCanvas } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
-import { Hooks, ModulesToken } from "@rpgjs/common";
+import { Hooks, ModulesToken, Direction } from "@rpgjs/common";
 import { load } from "@signe/sync";
 import { RpgClientMap } from "./Game/Map"
 import { RpgGui } from "./Gui/Gui";
@@ -38,6 +38,20 @@ export class RpgClientEngine<T = any> {
   playerIdSignal = signal<string | null>(null);
   spriteComponentsBehind = signal<any[]>([]);
   spriteComponentsInFront = signal<any[]>([]);
+  
+  // Client-side prediction properties
+  private clientPredictionStates: Map<string, {
+    x: number;
+    y: number;
+    direction: Direction;
+    animationName: string;
+    timestamp: number;
+  }> = new Map();
+  private lastServerTimestamp: number = 0;
+  // Keep a history of client inputs to support reconciliation and replay
+  private inputHistory: Array<{ input: Direction; timestamp: number }> = [];
+  // Queue of inputs to replay after applying a server snapshot
+  private pendingReplayInputs: Direction[] = [];
 
   constructor(public context: Context) {
     this.webSocket = inject(context, WebSocketToken);
@@ -47,10 +61,10 @@ export class RpgClientEngine<T = any> {
     this.globalConfig = inject(context, GlobalConfigToken)
 
     if (!this.globalConfig) {
-      this.globalConfig = {}
+      this.globalConfig = {} as T
     }
-    if (!this.globalConfig.box) {
-      this.globalConfig.box = {
+    if (!(this.globalConfig as any).box) {
+      (this.globalConfig as any).box = {
         styles: {
           backgroundColor: "#1a1a2e",
           backgroundOpacity: 0.9
@@ -90,6 +104,11 @@ export class RpgClientEngine<T = any> {
 
     this.tick.subscribe((tick) => {
       this.hooks.callHooks("client-engine-onStep", this, tick).subscribe();
+      
+      // Clean up old prediction states every 60 ticks (approximately every second at 60fps)
+      if (tick % 60 === 0) {
+        this.cleanupOldPredictionStates();
+      }
     })
 
     await this.webSocket.connection(() => {
@@ -101,8 +120,29 @@ export class RpgClientEngine<T = any> {
   private initListeners() {
     this.webSocket.on("sync", (data) => {
       if (data.pId) this.playerIdSignal.set(data.pId)
-      this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: data }).subscribe();
-      load(this.sceneMap, data, true);
+      
+      // Apply client-side prediction filtering and server reconciliation
+      const filteredData = this.applyClientSidePredictionFilter(data);
+      
+      // Remove x,y from filteredData before loading to sceneMap
+      const dataWithoutPositions = this.removePositionsFromData(filteredData);
+      
+      this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: dataWithoutPositions }).subscribe();
+      load(this.sceneMap, dataWithoutPositions, true);
+
+      // Update physics hitboxes after sceneMap has been updated
+      this.updatePhysicsFromSync(filteredData);
+
+      // After applying server snapshot, replay pending inputs if any
+      if (this.pendingReplayInputs.length > 0) {
+        const currentPlayerObj = this.sceneMap.getCurrentPlayer();
+        if (currentPlayerObj) {
+          for (const dir of this.pendingReplayInputs) {
+            this.sceneMap.movePlayer(currentPlayerObj, dir);
+          }
+        }
+        this.pendingReplayInputs = [];
+      }
     });
 
     this.webSocket.on("changeMap", (data) => {
@@ -140,6 +180,10 @@ export class RpgClientEngine<T = any> {
   
   private async loadScene(mapId: string) {
     this.hooks.callHooks("client-sceneMap-onBeforeLoading", this.sceneMap).subscribe();
+    
+    // Clear client prediction states when changing maps
+    this.clearClientPredictionStates();
+    
     this.webSocket.updateProperties({ room: mapId })
     await this.webSocket.reconnect(() => {
       this.initListeners()
@@ -267,10 +311,162 @@ export class RpgClientEngine<T = any> {
     return componentAnimation.instance
   }
 
-  async processInput({ input }: { input: string }) {
+  /**
+   * Apply client-side prediction filtering and server reconciliation
+   * 
+   * This method filters incoming synchronization data to prevent visual glitches
+   * caused by client-side prediction. It implements two main strategies:
+   * 1. Filtering: Don't apply position/direction/animation data except for non-movement animations
+   * 2. Server reconciliation: Give server authority when timestamp indicates server state is newer
+   * 
+   * @param data - Raw synchronization data from server
+   * @returns Filtered data to apply to client state
+   * 
+   * @example
+   * ```ts
+   * // This method is called automatically in the sync event handler
+   * const filteredData = engine.applyClientSidePredictionFilter(serverData);
+   * load(this.sceneMap, filteredData, true);
+   * ```
+   */
+  private applyClientSidePredictionFilter(data: any): any {
+    if (!data.players) return data;
+    
+    const filteredData = { ...data };
+    const currentPlayerId = this.playerIdSignal();
+    
+    // Extract server timestamp if available
+    const serverTimestamp = data.timestamp || Date.now();
+    const serverLastProcessedInputTs: number | undefined = data.lastProcessedInputTs;
+    
+    filteredData.players = { ...data.players };
+    
+    for (const [playerId, playerData] of Object.entries(data.players as Record<string, any>)) {
+      const isCurrentPlayer = playerId === currentPlayerId;
+      
+      if (!isCurrentPlayer) {
+        // For other players, apply all data normally
+        continue;
+      }
+      
+      // For current player, apply client-side prediction filtering
+      const currentPlayer = this.sceneMap.getCurrentPlayer();
+      if (!currentPlayer) {
+        continue;
+      }
+      
+      const filteredPlayerData = { ...playerData };
+      const playerLastProcessedTs: number | undefined = (playerData as any).lastProcessedInputTs ?? serverLastProcessedInputTs;
+      
+      // Decide reconciliation based on acked inputs (authoritative approach)
+      const latestInputTs = this.inputHistory.length > 0 ? this.inputHistory[this.inputHistory.length - 1].timestamp : undefined;
+      const hasUnackedInputs = typeof latestInputTs === 'number' && typeof playerLastProcessedTs === 'number' && latestInputTs > playerLastProcessedTs;
+      const currentPlayerObj = this.sceneMap.getCurrentPlayer();
+      const currentX = currentPlayerObj?.x();
+      const currentY = currentPlayerObj?.y();
+      const currentDir = currentPlayerObj?.direction();
+
+      if (!hasUnackedInputs) {
+        // All inputs acked (or none): ignore server movement state to avoid snaps
+        delete filteredPlayerData.x;
+        delete filteredPlayerData.y;
+        delete filteredPlayerData.direction;
+      }
+      else {
+        // There are unacked inputs: if server state equals our current predicted state, ignore; else apply server then replay
+        const sameAsPredicted =
+          (playerData.x === currentX) &&
+          (playerData.y === currentY) &&
+          (playerData.direction === currentDir);
+
+        if (sameAsPredicted) {
+          delete filteredPlayerData.x;
+          delete filteredPlayerData.y;
+          delete filteredPlayerData.direction;
+        }
+        else {
+          // Apply server snapshot and schedule replay of remaining inputs after load()
+          const remaining = this.inputHistory.filter(e => typeof playerLastProcessedTs === 'number' ? e.timestamp > playerLastProcessedTs : true);
+          this.pendingReplayInputs = remaining.map(e => e.input);
+          // Also drop acked inputs from the history now
+          if (typeof playerLastProcessedTs === 'number') {
+            this.inputHistory = this.inputHistory.filter(e => e.timestamp > playerLastProcessedTs);
+          }
+        }
+      }
+      
+      // Update last server timestamp
+      if (serverTimestamp > this.lastServerTimestamp) {
+        this.lastServerTimestamp = serverTimestamp;
+      }
+      
+      // Animation filtering: apply only non-movement animations unless different
+      if (playerData.animationName !== undefined) {
+        const isMovementAnimation = playerData.animationName === 'stand' || playerData.animationName === 'walk';
+        if (isMovementAnimation) {
+          delete filteredPlayerData.animationName;
+        }
+      }
+      
+      filteredData.players[playerId] = filteredPlayerData;
+      
+      // If server acknowledged inputs up to playerLastProcessedTs, drop them from history and replay the rest
+      if (typeof playerLastProcessedTs === 'number') {
+        // Remove acknowledged inputs
+        this.inputHistory = this.inputHistory.filter(e => e.timestamp > playerLastProcessedTs);
+        
+        // If we applied server position (i.e., we did NOT filter out x/y), we need to replay remaining inputs
+        const appliedServerPosition = filteredPlayerData.x !== undefined || filteredPlayerData.y !== undefined;
+        if (appliedServerPosition && this.inputHistory.length > 0) {
+          const currentPlayerObj = this.sceneMap.getCurrentPlayer();
+          if (currentPlayerObj) {
+            for (const entry of this.inputHistory) {
+              // Re-apply predicted moves locally without emitting to server
+              this.sceneMap.movePlayer(currentPlayerObj, entry.input);
+            }
+          }
+        }
+      }
+    }
+    
+    return filteredData;
+  }
+
+  async processInput({ input }: { input: Direction }) {
+    const timestamp = Date.now();
     this.hooks.callHooks("client-engine-onInput", this, { input, playerId: this.playerId }).subscribe();
-    this.webSocket.emit('move', { input })
-    await this.sceneMap.movePlayer(this.sceneMap.getCurrentPlayer(), input)
+    
+    // Send movement input with timestamp to server
+    this.webSocket.emit('move', { 
+      input, 
+      timestamp 
+    });
+    
+    // Push into input history for future reconciliation
+    this.inputHistory.push({ input, timestamp });
+    
+    const currentPlayer = this.sceneMap.getCurrentPlayer();
+    if (currentPlayer) {
+      // Store client prediction state before movement
+      this.clientPredictionStates.set(this.playerId!, {
+        x: currentPlayer.x(),
+        y: currentPlayer.y(),
+        direction: currentPlayer.direction(),
+        animationName: currentPlayer.animationName(),
+        timestamp
+      });
+      
+      await this.sceneMap.movePlayer(currentPlayer, input);
+      
+      // Update client prediction state after movement with same timestamp
+      this.clientPredictionStates.set(this.playerId!, {
+        x: currentPlayer.x(),
+        y: currentPlayer.y(),
+        direction: currentPlayer.direction(),
+        animationName: currentPlayer.animationName(),
+        timestamp
+      });
+    }
   }
 
   processAction({ action }: { action: number }) {
@@ -297,5 +493,130 @@ export class RpgClientEngine<T = any> {
 
   getCurrentPlayer() {
     return this.sceneMap.getCurrentPlayer()
+  }
+
+  /**
+   * Clear client prediction states for cleanup
+   * 
+   * Removes old prediction states to prevent memory leaks.
+   * Should be called when changing maps or disconnecting.
+   * 
+   * @example
+   * ```ts
+   * // Clear prediction states when changing maps
+   * engine.clearClientPredictionStates();
+   * ```
+   */
+  clearClientPredictionStates() {
+    this.clientPredictionStates.clear();
+    this.lastServerTimestamp = 0;
+  }
+
+  /**
+   * Clean up old prediction states
+   * 
+   * Removes prediction states older than the specified threshold
+   * to prevent memory leaks in long-running sessions.
+   * 
+   * @param maxAge - Maximum age in milliseconds (default: 5000ms)
+   * 
+   * @example
+   * ```ts
+   * // Clean up states older than 5 seconds
+   * engine.cleanupOldPredictionStates();
+   * ```
+   */
+  cleanupOldPredictionStates(maxAge: number = 5000) {
+    const now = Date.now();
+    for (const [playerId, state] of this.clientPredictionStates.entries()) {
+      if (now - state.timestamp > maxAge) {
+        this.clientPredictionStates.delete(playerId);
+      }
+    }
+  }
+
+  /**
+   * Remove x,y positions from synchronization data
+   * 
+   * Creates a copy of the data with x,y positions removed to avoid
+   * double application when loading to sceneMap.
+   * 
+   * @param data - Synchronization data containing players and events
+   * @returns Copy of data with x,y positions removed
+   * 
+   * @example
+   * ```ts
+   * // Remove positions before loading to sceneMap
+   * const dataWithoutPositions = this.removePositionsFromData(filteredData);
+   * ```
+   */
+  private removePositionsFromData(data: any): any {
+    // Create a deep copy of the data to avoid mutating the original
+    const dataCopy = JSON.parse(JSON.stringify(data));
+
+    // Remove x,y from players
+    if (dataCopy.players) {
+      for (const [playerId, playerData] of Object.entries(dataCopy.players as Record<string, any>)) {
+        delete (dataCopy.players as any)[playerId].x;
+        delete (dataCopy.players as any)[playerId].y;
+      }
+    }
+
+    // Remove x,y from events
+    if (dataCopy.events) {
+      for (const [eventId, eventData] of Object.entries(dataCopy.events as Record<string, any>)) {
+        delete (dataCopy.events as any)[eventId].x;
+        delete (dataCopy.events as any)[eventId].y;
+      }
+    }
+
+    return dataCopy;
+  }
+
+  /**
+   * Update physics hitboxes from synchronization data
+   * 
+   * This method iterates through synchronization data and updates hitboxes
+   * directly in the physics system. Called after sceneMap has been updated
+   * to ensure physics bodies are synchronized with the latest positions.
+   * 
+   * @param data - Synchronization data containing players and events with positions
+   * 
+   * @example
+   * ```ts
+   * // Called after sceneMap has been updated
+   * this.updatePhysicsFromSync(filteredData);
+   * ```
+   */
+  private updatePhysicsFromSync(data: any): void {
+    // Helper function to update entity physics hitbox
+    const updateEntityPhysics = (entityId: string, entityData: any, entityType: 'player' | 'event') => {
+      if (entityData.x !== undefined && entityData.y !== undefined) {
+        const existingEntity = this.sceneMap.getObjectById(entityId);
+        if (existingEntity) {
+          this.sceneMap.physic.updateHitbox(
+            entityId,
+            entityData.x,
+            entityData.y,
+            existingEntity.hitbox().w,
+            existingEntity.hitbox().h
+          );
+        }
+      }
+    };
+
+    // Update player positions in physics system
+    if (data.players) {
+      for (const [playerId, playerData] of Object.entries(data.players as Record<string, any>)) {
+        updateEntityPhysics(playerId, playerData, 'player');
+      }
+    }
+
+    // Update event positions in physics system
+    if (data.events) {
+      for (const [eventId, eventData] of Object.entries(data.events as Record<string, any>)) {
+        updateEntityPhysics(eventId, eventData, 'event');
+      }
+    }
   }
 }

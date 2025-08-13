@@ -19,6 +19,10 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   tileWidth?: number;
   tileHeight?: number;
   worldMapsManager?: WorldMapsManager;
+  
+  // Synchronization throttling properties
+  throttleSync?: number;
+  throttleStorage?: number;
 
   get isStandalone() {
     return typeof window !== 'undefined'
@@ -73,7 +77,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
     }
 
-    this.players.observable.subscribe(({ value: player, type, key }) => { 
+    (this.players as any).observable.subscribe(({ value: player, type, key }: any) => { 
       if (type == 'add') {
         player.id = key
         this.physic.addMovableHitbox(player, player.x(), player.y(), player.hitbox().w, player.hitbox().h, {}, {
