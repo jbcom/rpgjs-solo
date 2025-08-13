@@ -49,11 +49,7 @@ export default createServer({
             //  player.wood.update(wood => wood + 1)
             //  player.showComponentAnimation('wood')
               // player.name.set('test')
-    
-              await player.changeMap("simplemap2", {
-                x: 1000,
-                y: 500,
-              });
+                  player.setAnimation('attack', 1)
               
             }
             // if (input.action) {

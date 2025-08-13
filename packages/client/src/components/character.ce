@@ -1,4 +1,4 @@
-<Container x y zIndex={y} viewportFollow={isMe} controls onBeforeDestroy visible={isConnected}>
+<Container x={smoothX} y={smoothY} zIndex={y} viewportFollow={isMe} controls onBeforeDestroy visible={isConnected}>
   @for (component of componentsBehind) {
     <Container>
       <component object />
@@ -18,8 +18,8 @@
 </Container>
 
 <script>
-  import { signal, effect, mount, computed, tick } from "canvasengine";
-  import { lastValueFrom } from "rxjs";
+  import { signal, effect, mount, computed, tick, animatedSignal } from "canvasengine";
+  import { lastValueFrom, combineLatest, pairwise, filter, map, startWith } from "rxjs";
   import { Particle } from "@canvasengine/presets";
   import { GameEngineToken, ModulesToken } from "@rpgjs/common";
   import { RpgClientEngine } from "../RpgClientEngine";
@@ -99,10 +99,28 @@
     },
   });
 
+  const smoothX = animatedSignal(x(), {
+    duration: 100
+  });
+
+  const smoothY = animatedSignal(y(), {
+    duration: 100,
+  });
+
+  const realAnimationName = signal(animationName());
+
+  const xSubscription = x.observable.subscribe((value) => {
+    smoothX.set(value);
+  });
+
+  const ySubscription = y.observable.subscribe((value) => {
+    smoothY.set(value);
+  });
+  
   const sheet = (graphicId) => {
     return {
       definition: spritesheets.get(graphicId),
-      playing: animationName,
+      playing: realAnimationName,
       params: {
         direction
       },
@@ -112,27 +130,62 @@
     };
   }
 
-  // Track animation changes to reset animation state when needed
-  let previousAnimationName = animationName();
-  effect(() => {
-    const currentAnimationName = animationName();
-    
-    // If animation changed externally (not through setAnimation), reset the state
-    if (currentAnimationName !== previousAnimationName && object.animationIsPlaying && object.animationIsPlaying()) {
-      // Check if this is a movement animation (walk, stand) that should interrupt custom animations
-      const movementAnimations = ['walk', 'stand'];
-      if (movementAnimations.includes(currentAnimationName)) {
+  // Combine animation change detection with movement state from smoothX/smoothY
+  const movementAnimations = ['walk', 'stand'];
+  const epsilon = 0; // movement threshold to consider the easing still running
+
+  const stateX$ = smoothX.animatedState.observable;
+  const stateY$ = smoothY.animatedState.observable;
+  const animationName$ = animationName.observable;
+
+  const moving$ = combineLatest([stateX$, stateY$]).pipe(
+    map(([sx, sy]) => {
+      const xFinished = Math.abs(sx.value.current - sx.value.end) <= epsilon;
+      const yFinished = Math.abs(sy.value.current - sy.value.end) <= epsilon;
+      return !xFinished || !yFinished; // moving if X or Y is not finished
+    }),
+    startWith(false)
+  );
+
+  const animationChange$ = animationName$.pipe(
+    startWith(animationName()),
+    pairwise(),
+    filter(([prev, curr]) => prev !== curr)
+  );
+
+  const animationMovementSubscription = combineLatest([animationChange$, moving$]).subscribe(([[prev, curr], isMoving]) => {
+    if (curr == 'stand' && !isMoving) {
+      realAnimationName.set(curr);
+    }
+    else if (curr == 'walk' && isMoving) {
+      realAnimationName.set(curr);
+    }
+    else if (!movementAnimations.includes(curr)) {
+      realAnimationName.set(curr);
+    }
+    if (!isMoving && object.animationIsPlaying && object.animationIsPlaying()) {
+      if (movementAnimations.includes(curr)) {
         if (typeof object.resetAnimationState === 'function') {
           object.resetAnimationState();
         }
       }
     }
-    
-    previousAnimationName = currentAnimationName;
-    
   });
 
+  /**
+   * Cleanup subscriptions and call hooks before sprite destruction.
+   *
+   * # Design
+   * - Prevent memory leaks by unsubscribing from all local subscriptions created in this component.
+   * - Execute destruction hooks to notify modules and scene map of sprite removal.
+   *
+   * @example
+   * await onBeforeDestroy();
+   */
   const onBeforeDestroy = async () => {
+    animationMovementSubscription.unsubscribe();
+    xSubscription.unsubscribe();
+    ySubscription.unsubscribe();
     await lastValueFrom(hooks.callHooks("client-sprite-onDestroy", object)) 
     await lastValueFrom(hooks.callHooks("client-sceneMap-onRemoveSprite", client.sceneMap, object))
   }
