@@ -139,4 +139,23 @@ export class MovementManager {
       }
     }
   }
+
+  /**
+   * Clear all movement strategies for all entities
+   * 
+   * This method removes all active movement strategies from all entities,
+   * effectively stopping all ongoing movements in the game world.
+   * 
+   * Use this method when you need to completely reset the movement system,
+   * such as when changing maps or restarting a level.
+   * 
+   * @example
+   * ```ts
+   * // Clear all movements when changing maps
+   * movementManager.clearAll();
+   * ```
+   */
+  clearAll(): void {
+    this.strategies.clear();
+  }
 } 

@@ -48,10 +48,21 @@ export class RpgClientEngine<T = any> {
     timestamp: number;
   }> = new Map();
   private lastServerTimestamp: number = 0;
-  // Keep a history of client inputs to support reconciliation and replay
-  private inputHistory: Array<{ input: Direction; timestamp: number }> = [];
-  // Queue of inputs to replay after applying a server snapshot
-  private pendingReplayInputs: Direction[] = [];
+  // Keep a history of client inputs with resulting positions to support reconciliation and replay
+  private inputHistory: Array<{ 
+    input: Direction; 
+    timestamp: number;
+    frame: number;
+    resultingX: number;
+    resultingY: number;
+    resultingDirection: Direction;
+  }> = [];
+  // Maximum time window for input history (in milliseconds)
+  private readonly INPUT_HISTORY_MAX_AGE = 2000; // 2 seconds
+  // Monotonic frame counter for inputs
+  private inputFrameCounter: number = 0;
+  // Last acknowledged frame by server
+  private lastAckFrame: number = 0;
 
   constructor(public context: Context) {
     this.webSocket = inject(context, WebSocketToken);
@@ -105,9 +116,10 @@ export class RpgClientEngine<T = any> {
     this.tick.subscribe((tick) => {
       this.hooks.callHooks("client-engine-onStep", this, tick).subscribe();
       
-      // Clean up old prediction states every 60 ticks (approximately every second at 60fps)
+      // Clean up old prediction states and input history every 60 ticks (approximately every second at 60fps)
       if (tick % 60 === 0) {
         this.cleanupOldPredictionStates();
+        this.cleanupInputHistory();
       }
     })
 
@@ -120,7 +132,7 @@ export class RpgClientEngine<T = any> {
   private initListeners() {
     this.webSocket.on("sync", (data) => {
       if (data.pId) this.playerIdSignal.set(data.pId)
-      
+ 
       // Apply client-side prediction filtering and server reconciliation
       const filteredData = this.applyClientSidePredictionFilter(data);
       
@@ -133,16 +145,7 @@ export class RpgClientEngine<T = any> {
       // Update physics hitboxes after sceneMap has been updated
       this.updatePhysicsFromSync(filteredData);
 
-      // After applying server snapshot, replay pending inputs if any
-      if (this.pendingReplayInputs.length > 0) {
-        const currentPlayerObj = this.sceneMap.getCurrentPlayer();
-        if (currentPlayerObj) {
-          for (const dir of this.pendingReplayInputs) {
-            this.sceneMap.movePlayer(currentPlayerObj, dir);
-          }
-        }
-        this.pendingReplayInputs = [];
-      }
+      if (data.ack) this.applyServerAck(data.ack);
     });
 
     this.webSocket.on("changeMap", (data) => {
@@ -340,7 +343,7 @@ export class RpgClientEngine<T = any> {
     const serverLastProcessedInputTs: number | undefined = data.lastProcessedInputTs;
     
     filteredData.players = { ...data.players };
-    
+ 
     for (const [playerId, playerData] of Object.entries(data.players as Record<string, any>)) {
       const isCurrentPlayer = playerId === currentPlayerId;
       
@@ -356,44 +359,10 @@ export class RpgClientEngine<T = any> {
       }
       
       const filteredPlayerData = { ...playerData };
-      const playerLastProcessedTs: number | undefined = (playerData as any).lastProcessedInputTs ?? serverLastProcessedInputTs;
-      
-      // Decide reconciliation based on acked inputs (authoritative approach)
-      const latestInputTs = this.inputHistory.length > 0 ? this.inputHistory[this.inputHistory.length - 1].timestamp : undefined;
-      const hasUnackedInputs = typeof latestInputTs === 'number' && typeof playerLastProcessedTs === 'number' && latestInputTs > playerLastProcessedTs;
-      const currentPlayerObj = this.sceneMap.getCurrentPlayer();
-      const currentX = currentPlayerObj?.x();
-      const currentY = currentPlayerObj?.y();
-      const currentDir = currentPlayerObj?.direction();
-
-      if (!hasUnackedInputs) {
-        // All inputs acked (or none): ignore server movement state to avoid snaps
-        delete filteredPlayerData.x;
-        delete filteredPlayerData.y;
-        delete filteredPlayerData.direction;
-      }
-      else {
-        // There are unacked inputs: if server state equals our current predicted state, ignore; else apply server then replay
-        const sameAsPredicted =
-          (playerData.x === currentX) &&
-          (playerData.y === currentY) &&
-          (playerData.direction === currentDir);
-
-        if (sameAsPredicted) {
-          delete filteredPlayerData.x;
-          delete filteredPlayerData.y;
-          delete filteredPlayerData.direction;
-        }
-        else {
-          // Apply server snapshot and schedule replay of remaining inputs after load()
-          const remaining = this.inputHistory.filter(e => typeof playerLastProcessedTs === 'number' ? e.timestamp > playerLastProcessedTs : true);
-          this.pendingReplayInputs = remaining.map(e => e.input);
-          // Also drop acked inputs from the history now
-          if (typeof playerLastProcessedTs === 'number') {
-            this.inputHistory = this.inputHistory.filter(e => e.timestamp > playerLastProcessedTs);
-          }
-        }
-      }
+      // Always ignore server movement for current player here; we'll reconcile via ack separately
+      delete filteredPlayerData.x;
+      delete filteredPlayerData.y;
+      delete filteredPlayerData.direction;
       
       // Update last server timestamp
       if (serverTimestamp > this.lastServerTimestamp) {
@@ -410,23 +379,7 @@ export class RpgClientEngine<T = any> {
       
       filteredData.players[playerId] = filteredPlayerData;
       
-      // If server acknowledged inputs up to playerLastProcessedTs, drop them from history and replay the rest
-      if (typeof playerLastProcessedTs === 'number') {
-        // Remove acknowledged inputs
-        this.inputHistory = this.inputHistory.filter(e => e.timestamp > playerLastProcessedTs);
-        
-        // If we applied server position (i.e., we did NOT filter out x/y), we need to replay remaining inputs
-        const appliedServerPosition = filteredPlayerData.x !== undefined || filteredPlayerData.y !== undefined;
-        if (appliedServerPosition && this.inputHistory.length > 0) {
-          const currentPlayerObj = this.sceneMap.getCurrentPlayer();
-          if (currentPlayerObj) {
-            for (const entry of this.inputHistory) {
-              // Re-apply predicted moves locally without emitting to server
-              this.sceneMap.movePlayer(currentPlayerObj, entry.input);
-            }
-          }
-        }
-      }
+      // No replay here; reconciliation handled after load() using ack
     }
     
     return filteredData;
@@ -434,35 +387,49 @@ export class RpgClientEngine<T = any> {
 
   async processInput({ input }: { input: Direction }) {
     const timestamp = Date.now();
+    const frame = ++this.inputFrameCounter;
     this.hooks.callHooks("client-engine-onInput", this, { input, playerId: this.playerId }).subscribe();
     
     // Send movement input with timestamp to server
     this.webSocket.emit('move', { 
       input, 
-      timestamp 
+      timestamp,
+      frame
     });
-    
-    // Push into input history for future reconciliation
-    this.inputHistory.push({ input, timestamp });
     
     const currentPlayer = this.sceneMap.getCurrentPlayer();
     if (currentPlayer) {
-      // Store client prediction state before movement
-      this.clientPredictionStates.set(this.playerId!, {
-        x: currentPlayer.x(),
-        y: currentPlayer.y(),
-        direction: currentPlayer.direction(),
-        animationName: currentPlayer.animationName(),
-        timestamp
-      });
+      // Store positions before movement
+      const beforeX = currentPlayer.x();
+      const beforeY = currentPlayer.y();
+      const beforeDirection = currentPlayer.direction();
       
+      // Apply movement prediction locally
       await this.sceneMap.movePlayer(currentPlayer, input);
       
-      // Update client prediction state after movement with same timestamp
+      // Store positions after movement
+      const afterX = currentPlayer.x();
+      const afterY = currentPlayer.y();
+      const afterDirection = currentPlayer.direction();
+      
+      // Add to input history with resulting positions
+      this.inputHistory.push({ 
+        input, 
+        timestamp,
+        frame,
+        resultingX: afterX,
+        resultingY: afterY,
+        resultingDirection: afterDirection
+      });
+      
+      // Clean up old input history entries
+      this.cleanupInputHistory();
+      
+      // Update client prediction state after movement
       this.clientPredictionStates.set(this.playerId!, {
-        x: currentPlayer.x(),
-        y: currentPlayer.y(),
-        direction: currentPlayer.direction(),
+        x: afterX,
+        y: afterY,
+        direction: afterDirection,
         animationName: currentPlayer.animationName(),
         timestamp
       });
@@ -498,7 +465,7 @@ export class RpgClientEngine<T = any> {
   /**
    * Clear client prediction states for cleanup
    * 
-   * Removes old prediction states to prevent memory leaks.
+   * Removes old prediction states and input history to prevent memory leaks.
    * Should be called when changing maps or disconnecting.
    * 
    * @example
@@ -509,6 +476,7 @@ export class RpgClientEngine<T = any> {
    */
   clearClientPredictionStates() {
     this.clientPredictionStates.clear();
+    this.inputHistory = [];
     this.lastServerTimestamp = 0;
   }
 
@@ -533,6 +501,102 @@ export class RpgClientEngine<T = any> {
         this.clientPredictionStates.delete(playerId);
       }
     }
+  }
+
+  /**
+   * Clean up old input history entries
+   * 
+   * Removes input history entries older than INPUT_HISTORY_MAX_AGE
+   * to prevent memory leaks and keep the history manageable.
+   * 
+   * @example
+   * ```ts
+   * // Clean up old input history entries
+   * this.cleanupInputHistory();
+   * ```
+   */
+  private cleanupInputHistory() {
+    const now = Date.now();
+    this.inputHistory = this.inputHistory.filter(entry => 
+      now - entry.timestamp <= this.INPUT_HISTORY_MAX_AGE
+    );
+  }
+
+  /**
+   * Apply server acknowledgement to reconcile client prediction
+   * 
+   * Compares the server's ack frame with the client's input history.
+   * If the positions match, do nothing. If they differ, apply server authority.
+   * 
+   * @param ack - Server acknowledgement with frame and authoritative position
+   * 
+   * @example
+   * ```ts
+   * // Called automatically when receiving server ack
+   * this.applyServerAck({ frame: 123, x: 100, y: 200, direction: Direction.Up });
+   * ```
+   */
+  private applyServerAck(ack: { frame: number; x?: number; y?: number; direction?: Direction }) {
+    if (typeof ack.frame !== 'number') return;
+    if (ack.frame <= this.lastAckFrame) return;
+    this.lastAckFrame = ack.frame;
+
+    const currentPlayer = this.sceneMap.getCurrentPlayer();
+    const myId = this.playerIdSignal();
+    if (!currentPlayer || !myId) return;
+
+    // Find the input entry with the matching frame in our history
+    const matchingEntry = this.inputHistory.find(entry => entry.frame === ack.frame);
+    
+    if (!matchingEntry) {
+      // Frame not found in history (too old or never existed)
+      // Apply server authority unconditionally
+      console.log(`Frame ${ack.frame} not found in history, applying server authority`);
+      if (typeof ack.x === 'number' && typeof ack.y === 'number') {
+        this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, currentPlayer.hitbox().w, currentPlayer.hitbox().h);
+      }
+      if (typeof ack.direction !== 'undefined') {
+        currentPlayer.changeDirection(ack.direction);
+      }
+    } else {
+      // Compare server position with our predicted position for that frame
+      const POSITION_TOLERANCE = 1; // Allow 1 pixel difference for floating point errors
+      let positionsMatch = true;
+      
+      if (typeof ack.x === 'number' && typeof ack.y === 'number') {
+        const xDiff = Math.abs(ack.x - matchingEntry.resultingX);
+        const yDiff = Math.abs(ack.y - matchingEntry.resultingY);
+        positionsMatch = xDiff <= POSITION_TOLERANCE && yDiff <= POSITION_TOLERANCE;
+        
+        if (!positionsMatch) {
+          console.log(`Frame ${ack.frame}: server(${ack.x}, ${ack.y}) vs client(${matchingEntry.resultingX}, ${matchingEntry.resultingY}), diff(${xDiff}, ${yDiff}) - applying server authority`);
+        } else {
+          console.log(`Frame ${ack.frame}: positions match, no correction needed`);
+        }
+      }
+      
+      // Check direction match
+      if (typeof ack.direction !== 'undefined') {
+        const directionMatch = ack.direction === matchingEntry.resultingDirection;
+        if (!directionMatch) {
+          console.log(`Frame ${ack.frame}: direction mismatch, server(${ack.direction}) vs client(${matchingEntry.resultingDirection}) - applying server authority`);
+          positionsMatch = false;
+        }
+      }
+      
+      // Apply server authority only if positions/direction differ
+      if (!positionsMatch) {
+        if (typeof ack.x === 'number' && typeof ack.y === 'number') {
+          this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, currentPlayer.hitbox().w, currentPlayer.hitbox().h);
+        }
+        if (typeof ack.direction !== 'undefined') {
+          currentPlayer.changeDirection(ack.direction);
+        }
+      }
+    }
+
+    // Clean up input history: remove entries up to and including the acked frame
+    this.inputHistory = this.inputHistory.filter(entry => entry.frame > ack.frame);
   }
 
   /**

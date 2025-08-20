@@ -2,7 +2,7 @@ import { generateShortUUID, users } from "@signe/sync";
 import { effect, Signal, signal } from "@signe/reactive";
 import { Direction, RpgCommonPlayer } from "../Player";
 import { RpgCommonPhysic } from "../Physic";
-import { Observable, share, Subject } from "rxjs";
+import { Observable, share, Subject, Subscription } from "rxjs";
 import { Knockback, LinearMove, MovementManager } from "../movement";
 import { WorldMapsManager, type RpgWorldMaps } from "./WorldMaps";
 import type { ZoneOptions } from "../Physic";
@@ -23,6 +23,10 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   // Synchronization throttling properties
   throttleSync?: number;
   throttleStorage?: number;
+
+  tickSubscription?: Subscription | null;
+  playersSubscription?: Subscription | null;
+  eventsSubscription?: Subscription | null;
 
   get isStandalone() {
     return typeof window !== 'undefined'
@@ -56,7 +60,56 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     share()
   );
 
+  /**
+   * Clear all physics content and reset to initial state
+   * 
+   * This method completely clears the physics system by:
+   * - Removing all hitboxes (static and movable)
+   * - Removing all zones
+   * - Clearing all collision data and events
+   * - Clearing all movement events and sliding data
+   * - Unsubscribing from the tick subscription
+   * - Resetting the physics engine to a clean state
+   * 
+   * Use this method when you need to completely reset the map's physics
+   * system, such as when changing maps or restarting a level.
+   * 
+   * @example
+   * ```ts
+   * // Clear all physics when changing maps
+   * map.clearPhysic();
+   * 
+   * // Then reload physics for the new map
+   * map.loadPhysic();
+   * ```
+   */
+  clearPhysic() {
+    // Unsubscribe from tick to stop physics updates
+    if (this.tickSubscription) {
+      this.tickSubscription.unsubscribe();
+      this.tickSubscription = null;
+    }
+
+    if (this.playersSubscription) {
+      this.playersSubscription.unsubscribe();
+      this.playersSubscription = null;
+    }
+
+    if (this.eventsSubscription) {
+      this.eventsSubscription.unsubscribe();
+      this.eventsSubscription = null;
+    }
+
+    // Clear all hitboxes and zones from physics system
+    this.physic.clearAll();
+    
+    // Reset movement manager
+    this.moveManager.clearAll();
+  }
+
   loadPhysic() {
+    this.clearPhysic();
+
     const hitboxes: Array<
       | { id?: string; x: number; y: number; width: number; height: number }
       | { id?: string; points: number[][] }
@@ -76,8 +129,9 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         this.physic.addStaticHitbox(staticHitbox.id ?? generateShortUUID(), staticHitbox.points);
       }
     }
+    
 
-    (this.players as any).observable.subscribe(({ value: player, type, key }: any) => { 
+    this.playersSubscription = (this.players as any).observable.subscribe(({ value: player, type, key }: any) => { 
       if (type == 'add') {
         player.id = key
         this.physic.addMovableHitbox(player, player.x(), player.y(), player.hitbox().w, player.hitbox().h, {}, {
@@ -94,9 +148,17 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       else if (type == 'remove') {
         this.physic.removeHitbox(player.id)
       }
+      else if (type == 'update') {
+        this.physic.removeHitbox(player.id)
+        this.physic.addMovableHitbox(player, player.x(), player.y(), player.hitbox().w, player.hitbox().h, {}, {
+          enabled: true,
+          friction: 0.8,
+          minVelocity: 0.5
+        });
+      }
     })
 
-    this.events.observable.subscribe(({ value: event, type, key }) => {
+    this.eventsSubscription = this.events.observable.subscribe(({ value: event, type, key }) => {
       if (type == 'add') {
         event.id = key
         this.physic.addMovableHitbox(event, event.x(), event.y(), event.hitbox().w, event.hitbox().h, {
@@ -113,7 +175,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
     });
 
-    this.tick$.subscribe(({ delta }) => {
+    this.tickSubscription = this.tick$.subscribe(({ delta }) => {
       this.physic.update(delta);
       this.moveManager.update(delta, this.physic);
     });

@@ -431,7 +431,7 @@ export class RpgCommonPhysic {
     // Initialize player position to top-left corner (consistent with visual system)
     player.x.set(x);
     player.y.set(y);
-    
+
     // Initialize movement tracking for sliding
     if (slidingOptions?.enabled) {
       this.intendedMovements.set(player.id, { x: 0, y: 0 });
@@ -525,6 +525,7 @@ export class RpgCommonPhysic {
    */
   removeHitbox(id: string): boolean {
     const hitbox = this.hitboxes.get(id);
+
     if (!hitbox) return false;
     
     Matter.Composite.remove(this.world, hitbox.body);
@@ -1775,5 +1776,52 @@ export class RpgCommonPhysic {
     // Dot product to check if movement is in the same direction as the vector to the other body
     const dotProduct = movement.x * directionToB.x + movement.y * directionToB.y;
     return dotProduct > 0;
+  }
+
+  /**
+   * Clear all physics content and reset to initial state
+   * 
+   * This method completely clears the physics system by:
+   * - Removing all hitboxes (static and movable) from the world
+   * - Removing all zones from the world
+   * - Clearing all collision data and events
+   * - Clearing all movement events and sliding data
+   * - Resetting all internal maps and collections
+   * 
+   * Use this method when you need to completely reset the physics
+   * system, such as when changing maps or restarting a level.
+   * 
+   * @example
+   * ```ts
+   * // Clear all physics when changing maps
+   * physic.clearAll();
+   * 
+   * // Then add new hitboxes for the new map
+   * physic.addStaticHitbox('wall1', 100, 100, 50, 50);
+   * ```
+   */
+  clearAll(): void {
+    // Remove all hitboxes from the world
+    for (const [id, hitboxData] of this.hitboxes.entries()) {
+      Matter.Composite.remove(this.world, hitboxData.body);
+    }
+    
+    // Remove all zones from the world
+    for (const [id, zoneData] of this.zones.entries()) {
+      Matter.Composite.remove(this.world, zoneData.body);
+    }
+    
+    // Clear all internal maps and collections
+    this.hitboxes.clear();
+    this.collisions.clear();
+    this.collisionEvents.clear();
+    this.movementEvents.clear();
+    this.zones.clear();
+    this.zoneCollisions.clear();
+    this.zoneEvents.clear();
+    this.collisionNormals.clear();
+    this.lastVelocities.clear();
+    this.intendedMovements.clear();
+    this.collisionData.clear();
   }
 }

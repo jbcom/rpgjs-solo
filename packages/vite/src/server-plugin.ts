@@ -26,6 +26,7 @@ interface WSServer {
  *
  * This class implements the Connection interface expected by RPG-JS server,
  * providing WebSocket communication capabilities and connection state management.
+ * Includes optional packet loss simulation for testing network conditions.
  *
  * @example
  * ```typescript
@@ -38,6 +39,9 @@ class PartyConnection {
   public id: string;
   public uri: string;
   private _state: any = {};
+  public static packetLossRate: number = parseFloat(process.env.RPGJS_PACKET_LOSS_RATE || '0.1');
+  public static packetLossEnabled: boolean = process.env.RPGJS_ENABLE_PACKET_LOSS === 'true';
+  public static packetLossFilter: string = process.env.RPGJS_PACKET_LOSS_FILTER || '';
 
   constructor(private ws: WSConnection, id?: string, uri?: string) {
     this.id = id || this.generateId();
@@ -92,6 +96,47 @@ class PartyConnection {
    */
   get state(): any {
     return this._state;
+  }
+
+  /**
+   * Configures packet loss simulation settings
+   * 
+   * @param {boolean} enabled - Whether to enable packet loss simulation
+   * @param {number} rate - Packet loss rate (0.0 to 1.0, e.g., 0.1 = 10% loss)
+   * @param {string} filter - Optional filter string to only simulate loss for messages containing this string
+   * 
+   * @example
+   * ```typescript
+   * PartyConnection.configurePacketLoss(true, 0.15); // 15% packet loss
+   * PartyConnection.configurePacketLoss(true, 0.2, 'sync'); // 20% loss only for sync messages
+   * ```
+   */
+  static configurePacketLoss(enabled: boolean, rate: number, filter?: string): void {
+    PartyConnection.packetLossEnabled = enabled;
+    PartyConnection.packetLossRate = Math.max(0, Math.min(1, rate)); // Clamp between 0 and 1
+    PartyConnection.packetLossFilter = filter || '';
+    
+    if (enabled && rate > 0) {
+      const filterInfo = filter ? ` (filtered: "${filter}")` : '';
+      console.log(`\x1b[35m[PACKET LOSS SIMULATION]\x1b[0m Enabled with ${(rate * 100).toFixed(1)}% loss rate${filterInfo}`);
+    } else if (enabled) {
+      console.log(`\x1b[35m[PACKET LOSS SIMULATION]\x1b[0m Enabled but rate is 0% (no messages will be dropped)`);
+    } else {
+      console.log(`\x1b[35m[PACKET LOSS SIMULATION]\x1b[0m Disabled`);
+    }
+  }
+
+  /**
+   * Gets current packet loss simulation status
+   * 
+   * @returns {Object} Current configuration
+   */
+  static getPacketLossStatus(): { enabled: boolean; rate: number; filter: string } {
+    return {
+      enabled: PartyConnection.packetLossEnabled,
+      rate: PartyConnection.packetLossRate,
+      filter: PartyConnection.packetLossFilter
+    };
   }
 }
 
@@ -228,6 +273,31 @@ async function importWebSocketServer(): Promise<any> {
   }
 }
 
+async function updateMap(roomId: string, rpgServer: RpgServerEngine) {
+  try {
+    const mapId = roomId.startsWith('map-') ? roomId.slice(4) : roomId;
+    const defaultMapPayload = {
+      id: mapId,
+      width: 1000,
+      height: 1000,
+      events: [] as any[],
+    };
+
+    const req = {
+      url: `http://localhost/parties/main/${roomId}/map/update`,
+      method: 'POST',
+      headers: new Headers({}),
+      json: async () => defaultMapPayload,
+      text: async () => JSON.stringify(defaultMapPayload)
+    } as any;
+
+    await (rpgServer as any).onRequest(req);
+    console.log(`Initialized map for room ${roomId} via POST /map/update`);
+  } catch (error) {
+    console.warn(`Failed initializing map for room ${roomId}:`, error);
+  }
+}
+
 /**
  * Creates a Vite plugin for integrating RPG-JS server functionality
  *
@@ -285,31 +355,9 @@ export function serverPlugin(
         }
       }
 
-        // After creating the server instance, immediately initialize the map data
-        // by calling the server onRequest handler with a POST /map/update.
-        try {
-          const mapId = roomId.startsWith('map-') ? roomId.slice(4) : roomId;
-          const defaultMapPayload = {
-            id: mapId,
-            width: 1000,
-            height: 1000,
-            events: [] as any[],
-          };
-
-          const req = {
-            url: `http://localhost/parties/main/${roomId}/map/update`,
-            method: 'POST',
-            headers: new Headers({}),
-            json: async () => defaultMapPayload,
-            text: async () => JSON.stringify(defaultMapPayload)
-          } as any;
-
-          await (rpgServer as any).onRequest(req);
-          console.log(`Initialized map for room ${roomId} via POST /map/update`);
-        } catch (error) {
-          console.warn(`Failed initializing map for room ${roomId}:`, error);
-        }
+      await updateMap(roomId, rpgServer);
     }
+    
     // Make sure parties context is available on the room
     room.context.parties = buildPartiesContext();
     return { room, rpgServer };
@@ -399,6 +447,15 @@ export function serverPlugin(
       }
 
       console.log('RPG-JS server plugin initialized');
+      
+      // Display packet loss simulation status
+      const packetLossStatus = PartyConnection.getPacketLossStatus();
+      if (packetLossStatus.enabled) {
+        const filterInfo = packetLossStatus.filter ? ` (filter: "${packetLossStatus.filter}")` : '';
+        console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Packet loss simulation: ${(packetLossStatus.rate * 100).toFixed(1)}% loss rate${filterInfo}`);
+      } else {
+        console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Packet loss simulation: disabled`);
+      }
 
       // HTTP request interception for /parties/* routes
       server.middlewares.use("/parties", async (req, res, next) => {
@@ -463,7 +520,7 @@ export function serverPlugin(
                     const rpgServer = ensured.rpgServer;
                     // Inject a compatible parties context for cross-room calls
                     room.context.parties = buildPartiesContext();
-
+                    
                     // Create a connection instance
                     const connection = new PartyConnection(
                       ws,
@@ -482,6 +539,31 @@ export function serverPlugin(
                     ws.on("message", async (data: Buffer) => {
                       try {
                         const message = data.toString();
+                        
+                        // Check if packet loss simulation is enabled for incoming messages
+                        if (PartyConnection.packetLossEnabled && PartyConnection.packetLossRate > 0) {
+                          // Apply filter if specified (only simulate loss for messages containing the filter string)
+                          if (PartyConnection.packetLossFilter && !message.includes(PartyConnection.packetLossFilter)) {
+                            // Message doesn't match filter, process normally
+                            if (typeof rpgServer.onMessage === "function") {
+                              await rpgServer.onMessage(message, connection as any);
+                            }
+                            return;
+                          }
+                          
+                          const random = Math.random();
+                          
+                          if (random < PartyConnection.packetLossRate) {
+                            // Simulate packet loss (server won't process this message)
+                            console.log(`\x1b[31m[PACKET LOSS]\x1b[0m Connection ${connection.id}: Server won't receive this message (${(PartyConnection.packetLossRate * 100).toFixed(1)}% loss rate)`);
+                            console.log(`\x1b[33m[PACKET DATA]\x1b[0m ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`);
+                            return; // Don't process the message
+                          } else {
+                            // Message will be processed by server
+                            console.log(`\x1b[32m[PACKET RECEIVED]\x1b[0m Connection ${connection.id}: Server will process this message`);
+                          }
+                        }
+                        
                         // Call onMessage on the RPG-JS server
                         if (typeof rpgServer.onMessage === "function") {
                           await rpgServer.onMessage(message, connection as any);

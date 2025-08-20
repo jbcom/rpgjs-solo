@@ -36,8 +36,8 @@ export default createServer({
           async onConnected(player: RpgPlayer) {
             player.name.set('plop')
              await player.changeMap("simplemap", {
-              x: 100,
-              y: 100,
+              x: Math.floor(100),
+              y: Math.floor(100),
              });
             // console.log(player.conn?.state)
           },
@@ -52,6 +52,8 @@ export default createServer({
             //  player.wood.update(wood => wood + 1)
             //  player.showComponentAnimation('wood')
               // player.name.set('test')
+              
+              console.log(player.x(), player.y(), player.name())
                   player.setAnimation('attack', 1)
               
             }

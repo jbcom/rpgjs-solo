@@ -100,6 +100,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   touchSide: boolean = false; // Protection against map change loops
   /** Last processed client input timestamp for reconciliation */
   lastProcessedInputTs: number = 0;
+  /** Last processed client input frame for reconciliation */
+  lastProcessedFrame: number = 0;
 
   @sync(RpgPlayer) events = signal<RpgEvent[]>([]);
 

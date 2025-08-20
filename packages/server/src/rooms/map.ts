@@ -95,21 +95,33 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   // autoload by @signe/room
   interceptorPacket(player: RpgPlayer, packet: any, conn: MockConnection) {
-    console.log(packet)
-    
+    let obj: any = {}
+
+    if (!player) {
+      return null
+    }
+
     // Add timestamp to sync packets for client-side prediction reconciliation
     if (packet && typeof packet === 'object') {
-      packet.timestamp = Date.now();
-      
-      // Advertise last processed input timestamp for the recipient player
-      if (player && typeof player.lastProcessedInputTs === 'number') {
-        packet.lastProcessedInputTs = player.lastProcessedInputTs;
+      obj.timestamp = Date.now();
+
+      // Add ack info: last processed frame and authoritative position
+      if (player) {
+        obj.ack = {
+          frame: player.lastProcessedFrame,
+          x: player.x(),
+          y: player.y(),
+          direction: player.direction(),
+        };
       }
-      
-    
     }
-    
-    return packet;
+    return {
+      ...packet,
+      value: {
+        ...packet.value,
+        ...obj
+      }
+    };
   }
 
   onJoin(player: RpgPlayer, conn: MockConnection) {
@@ -130,6 +142,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this.hooks
       .callHooks("server-player-onLeaveMap", player, this)
       .subscribe();
+    player.lastProcessedFrame = 0;
   }
 
   get hooks() {
@@ -182,9 +195,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   @Action('move')
   async onInput(player: RpgPlayer, input: any) {
-    // Record last processed client input timestamp if provided
-    if (typeof input?.timestamp === 'number') {
-      player.lastProcessedInputTs = input.timestamp;
+    if (typeof input?.frame === 'number') {
+      player.lastProcessedFrame = input.frame;
     }
     await this.movePlayer(player, input.input)
   }
