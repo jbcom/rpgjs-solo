@@ -42,6 +42,10 @@ class PartyConnection {
   public static packetLossRate: number = parseFloat(process.env.RPGJS_PACKET_LOSS_RATE || '0.1');
   public static packetLossEnabled: boolean = process.env.RPGJS_ENABLE_PACKET_LOSS === 'true';
   public static packetLossFilter: string = process.env.RPGJS_PACKET_LOSS_FILTER || '';
+  public static latencyEnabled: boolean = process.env.RPGJS_ENABLE_LATENCY === 'true';
+  public static latencyMinMs: number = parseInt(process.env.RPGJS_LATENCY_MIN_MS || '50');
+  public static latencyMaxMs: number = parseInt(process.env.RPGJS_LATENCY_MAX_MS || '200');
+  public static latencyFilter: string = process.env.RPGJS_LATENCY_FILTER || 'sync';
 
   constructor(private ws: WSConnection, id?: string, uri?: string) {
     this.id = id || this.generateId();
@@ -58,14 +62,34 @@ class PartyConnection {
   }
 
   /**
-   * Sends data to the client via WebSocket
+   * Sends data to the client via WebSocket with optional latency simulation
    *
    * @param {any} data - Data to send (automatically serialized to JSON if not string)
    */
-  send(data: any): void {
+  async send(data: any): Promise<void> {
     if (this.ws.readyState === 1) {
       // WebSocket.OPEN
       const message = typeof data === "string" ? data : JSON.stringify(data);
+      
+      // Check if latency simulation is enabled
+      if (PartyConnection.latencyEnabled && PartyConnection.latencyMaxMs > 0) {
+        // Apply filter if specified (only simulate latency for messages containing the filter string)
+        if (PartyConnection.latencyFilter && !message.includes(PartyConnection.latencyFilter)) {
+          // Message doesn't match filter, send immediately
+          this.ws.send(message);
+          return;
+        }
+        
+        // Calculate random latency between min and max
+        const latencyMs = Math.random() * (PartyConnection.latencyMaxMs - PartyConnection.latencyMinMs) + PartyConnection.latencyMinMs;
+        
+        console.log(`\x1b[34m[LATENCY SIMULATION]\x1b[0m Connection ${this.id}: Delaying message by ${latencyMs.toFixed(1)}ms`);
+        console.log(`\x1b[33m[MESSAGE DATA]\x1b[0m ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`);
+        
+        // Delay the message
+        await new Promise(resolve => setTimeout(resolve, latencyMs));
+      }
+      
       this.ws.send(message);
     }
   }
@@ -138,6 +162,50 @@ class PartyConnection {
       filter: PartyConnection.packetLossFilter
     };
   }
+
+  /**
+   * Configures latency simulation settings
+   * 
+   * @param {boolean} enabled - Whether to enable latency simulation
+   * @param {number} minMs - Minimum latency in milliseconds
+   * @param {number} maxMs - Maximum latency in milliseconds
+   * @param {string} filter - Optional filter string to only simulate latency for messages containing this string
+   * 
+   * @example
+   * ```typescript
+   * PartyConnection.configureLatency(true, 100, 300); // 100-300ms latency
+   * PartyConnection.configureLatency(true, 50, 150, 'sync'); // 50-150ms latency only for sync messages
+   * ```
+   */
+  static configureLatency(enabled: boolean, minMs: number, maxMs: number, filter?: string): void {
+    PartyConnection.latencyEnabled = enabled;
+    PartyConnection.latencyMinMs = Math.max(0, minMs);
+    PartyConnection.latencyMaxMs = Math.max(PartyConnection.latencyMinMs, maxMs);
+    PartyConnection.latencyFilter = filter || '';
+    
+    if (enabled && maxMs > 0) {
+      const filterInfo = filter ? ` (filtered: "${filter}")` : '';
+      console.log(`\x1b[35m[LATENCY SIMULATION]\x1b[0m Enabled with ${minMs}-${maxMs}ms latency range${filterInfo}`);
+    } else if (enabled) {
+      console.log(`\x1b[35m[LATENCY SIMULATION]\x1b[0m Enabled but max latency is 0ms (no delay will be applied)`);
+    } else {
+      console.log(`\x1b[35m[LATENCY SIMULATION]\x1b[0m Disabled`);
+    }
+  }
+
+  /**
+   * Gets current latency simulation status
+   * 
+   * @returns {Object} Current configuration
+   */
+  static getLatencyStatus(): { enabled: boolean; minMs: number; maxMs: number; filter: string } {
+    return {
+      enabled: PartyConnection.latencyEnabled,
+      minMs: PartyConnection.latencyMinMs,
+      maxMs: PartyConnection.latencyMaxMs,
+      filter: PartyConnection.latencyFilter
+    };
+  }
 }
 
 /**
@@ -167,20 +235,25 @@ class Room {
   }
 
   /**
-   * Broadcasts a message to all connected clients
+   * Broadcasts a message to all connected clients with optional latency simulation
    *
    * @param {any} message - Message to broadcast
    * @param {string[]} except - Array of connection IDs to exclude from broadcast
    */
-  broadcast(message: any, except: string[] = []): void {
+  async broadcast(message: any, except: string[] = []): Promise<void> {
     const data =
       typeof message === "string" ? message : JSON.stringify(message);
 
+    const sendPromises: Promise<void>[] = [];
+    
     for (const [connectionId, connection] of this.connections) {
       if (!except.includes(connectionId)) {
-        connection.send(data);
+        sendPromises.push(connection.send(data));
       }
     }
+    
+    // Wait for all messages to be sent (with potential latency delays)
+    await Promise.all(sendPromises);
   }
 
   /**
@@ -448,13 +521,22 @@ export function serverPlugin(
 
       console.log('RPG-JS server plugin initialized');
       
-      // Display packet loss simulation status
+      // Display network simulation status
       const packetLossStatus = PartyConnection.getPacketLossStatus();
+      const latencyStatus = PartyConnection.getLatencyStatus();
+      
       if (packetLossStatus.enabled) {
         const filterInfo = packetLossStatus.filter ? ` (filter: "${packetLossStatus.filter}")` : '';
         console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Packet loss simulation: ${(packetLossStatus.rate * 100).toFixed(1)}% loss rate${filterInfo}`);
       } else {
         console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Packet loss simulation: disabled`);
+      }
+      
+      if (latencyStatus.enabled) {
+        const filterInfo = latencyStatus.filter ? ` (filter: "${latencyStatus.filter}")` : '';
+        console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Latency simulation: ${latencyStatus.minMs}-${latencyStatus.maxMs}ms range${filterInfo}`);
+      } else {
+        console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Latency simulation: disabled`);
       }
 
       // HTTP request interception for /parties/* routes
