@@ -63,6 +63,8 @@ export class RpgClientEngine<T = any> {
   private inputFrameCounter: number = 0;
   // Last acknowledged frame by server
   private lastAckFrame: number = 0;
+  // Frame offset to synchronize with server
+  private frameOffset: number = 0;
 
   constructor(public context: Context) {
     this.webSocket = inject(context, WebSocketToken);
@@ -132,7 +134,7 @@ export class RpgClientEngine<T = any> {
   private initListeners() {
     this.webSocket.on("sync", (data) => {
       if (data.pId) this.playerIdSignal.set(data.pId)
- 
+
       // Apply client-side prediction filtering and server reconciliation
       const filteredData = this.applyClientSidePredictionFilter(data);
       
@@ -398,18 +400,23 @@ export class RpgClientEngine<T = any> {
     });
     
     const currentPlayer = this.sceneMap.getCurrentPlayer();
-    if (currentPlayer) {
-      // Store positions before movement
-      const beforeX = currentPlayer.x();
-      const beforeY = currentPlayer.y();
-      const beforeDirection = currentPlayer.direction();
-      
+    if (currentPlayer) {   
       // Apply movement prediction locally
       await this.sceneMap.movePlayer(currentPlayer, input);
       
-      // Store positions after movement
-      const afterX = currentPlayer.x();
-      const afterY = currentPlayer.y();
+      // Store positions after movement using authoritative physics body (top-left)
+      const myId = this.playerIdSignal();
+      let afterX = currentPlayer.x();
+      let afterY = currentPlayer.y();
+      if (myId) {
+        const body = this.sceneMap.physic.getBody(myId);
+        if (body) {
+          const width = body.bounds.max.x - body.bounds.min.x;
+          const height = body.bounds.max.y - body.bounds.min.y;
+          afterX = body.position.x - width / 2;
+          afterY = body.position.y - height / 2;
+        }
+      }
       const afterDirection = currentPlayer.direction();
       
       // Add to input history with resulting positions
@@ -478,6 +485,9 @@ export class RpgClientEngine<T = any> {
     this.clientPredictionStates.clear();
     this.inputHistory = [];
     this.lastServerTimestamp = 0;
+    this.frameOffset = 0; // Reset frame offset when changing maps
+    this.inputFrameCounter = 0;
+    this.lastAckFrame = 0;
   }
 
   /**
@@ -520,6 +530,11 @@ export class RpgClientEngine<T = any> {
     this.inputHistory = this.inputHistory.filter(entry => 
       now - entry.timestamp <= this.INPUT_HISTORY_MAX_AGE
     );
+    
+    // Also limit the number of entries to prevent memory issues
+    if (this.inputHistory.length > 100) {
+      this.inputHistory = this.inputHistory.slice(-50); // Keep only the last 50 entries
+    }
   }
 
   /**
@@ -539,28 +554,54 @@ export class RpgClientEngine<T = any> {
   private applyServerAck(ack: { frame: number; x?: number; y?: number; direction?: Direction }) {
     if (typeof ack.frame !== 'number') return;
     if (ack.frame <= this.lastAckFrame) return;
-    this.lastAckFrame = ack.frame;
 
     const currentPlayer = this.sceneMap.getCurrentPlayer();
     const myId = this.playerIdSignal();
     if (!currentPlayer || !myId) return;
 
+    // If ack is too far behind current predicted frame, ignore to avoid false corrections
+    const framesBehind = this.inputFrameCounter - ack.frame;
+    if (framesBehind >= 3) {
+      // Still advance lastAckFrame so we don't process this ack again
+      this.lastAckFrame = ack.frame;
+      return;
+    }
+
+    // Accept this ack for processing
+    this.lastAckFrame = ack.frame;
+
+    // Calculate frame offset if this is one of the first few acks
+    if (this.frameOffset === 0 && this.inputHistory.length > 0) {
+      const expectedFrame = this.inputHistory[0].frame;
+      this.frameOffset = ack.frame - expectedFrame;
+      console.log(`Calculated frame offset: ${this.frameOffset}`);
+    }
+
     // Find the input entry with the matching frame in our history
     const matchingEntry = this.inputHistory.find(entry => entry.frame === ack.frame);
     
+    let correctionApplied = false;
+
     if (!matchingEntry) {
-      // Frame not found in history (too old or never existed)
-      // Apply server authority unconditionally
-      console.log(`Frame ${ack.frame} not found in history, applying server authority`);
-      if (typeof ack.x === 'number' && typeof ack.y === 'number') {
-        this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, currentPlayer.hitbox().w, currentPlayer.hitbox().h);
-      }
-      if (typeof ack.direction !== 'undefined') {
-        currentPlayer.changeDirection(ack.direction);
+      // If the frame is not in history, only apply authority when the ack frame is almost current
+      const frameDiff = ack.frame - this.inputFrameCounter; // negative if ack is behind
+      if (Math.abs(frameDiff) <= 1) {
+        console.log(`Frame ${ack.frame} not found in history but close to current (diff ${frameDiff}), applying server authority`);
+        if (typeof ack.x === 'number' && typeof ack.y === 'number') {
+          this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, currentPlayer.hitbox().w, currentPlayer.hitbox().h);
+          correctionApplied = true;
+        }
+        if (typeof ack.direction !== 'undefined') {
+          currentPlayer.changeDirection(ack.direction);
+          correctionApplied = true;
+        }
+      } else {
+        // Too old or too far in future: ignore to avoid false corrections
+        console.log(`Frame ${ack.frame} not present (diff ${frameDiff}), ignoring ack to avoid false correction`);
       }
     } else {
       // Compare server position with our predicted position for that frame
-      const POSITION_TOLERANCE = 1; // Allow 1 pixel difference for floating point errors
+      const POSITION_TOLERANCE = Math.max(3, (currentPlayer as any).speed?.() ?? 4); // tolerate at least one tile-speed step
       let positionsMatch = true;
       
       if (typeof ack.x === 'number' && typeof ack.y === 'number') {
@@ -584,19 +625,55 @@ export class RpgClientEngine<T = any> {
         }
       }
       
-      // Apply server authority only if positions/direction differ
+      // Apply server authority only if positions/direction differ significantly
       if (!positionsMatch) {
         if (typeof ack.x === 'number' && typeof ack.y === 'number') {
           this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, currentPlayer.hitbox().w, currentPlayer.hitbox().h);
+          correctionApplied = true;
         }
         if (typeof ack.direction !== 'undefined') {
           currentPlayer.changeDirection(ack.direction);
+          correctionApplied = true;
         }
       }
     }
 
     // Clean up input history: remove entries up to and including the acked frame
-    this.inputHistory = this.inputHistory.filter(entry => entry.frame > ack.frame);
+    const pendingToReplay = this.inputHistory.filter(entry => entry.frame > ack.frame).sort((a, b) => a.frame - b.frame);
+    this.inputHistory = pendingToReplay;
+
+    // If we applied a correction, replay remaining inputs locally to realign prediction
+    if (correctionApplied && pendingToReplay.length > 0) {
+      this.replayUnackedInputsFromFrame(ack.frame);
+    }
+  }
+
+  /**
+   * Replay unacknowledged inputs from a given frame to resimulate client prediction
+   * after applying server authority at a certain frame.
+   * 
+   * @param startFrame - The last server-acknowledged frame
+   * 
+   * @example
+   * ```ts
+   * // After applying a server correction at frame N
+   * this.replayUnackedInputsFromFrame(N);
+   * ```
+   */
+  private async replayUnackedInputsFromFrame(startFrame: number): Promise<void> {
+    const currentPlayer = this.sceneMap.getCurrentPlayer();
+    const myId = this.playerIdSignal();
+    if (!currentPlayer || !myId) return;
+
+    // Re-simulate in chronological order
+    for (const entry of this.inputHistory) {
+      if (entry.frame <= startFrame) continue;
+      await this.sceneMap.movePlayer(currentPlayer, entry.input);
+      // Update stored resulting positions after replay
+      entry.resultingX = currentPlayer.x();
+      entry.resultingY = currentPlayer.y();
+      entry.resultingDirection = currentPlayer.direction();
+    }
   }
 
   /**

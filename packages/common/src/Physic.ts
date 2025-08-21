@@ -410,7 +410,7 @@ export class RpgCommonPhysic {
       inertia: Infinity, // No rotation
       inverseInertia: 0,
       friction: 0,
-      frictionAir: 0.1,
+      frictionAir: 0, // keep deterministic movement with prediction
       restitution: 0,
       isStatic: false,
       ...options,

@@ -90,6 +90,8 @@ export abstract class RpgCommonPlayer {
   // Store intended movement direction (not synced, only used locally)
   private _intendedDirection: Direction | null = null;
 
+  pendingInputs: any[] = [];
+
   /**
    * Change the player's facing direction
    *

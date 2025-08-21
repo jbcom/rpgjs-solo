@@ -1,5 +1,5 @@
 import { Action, MockConnection, Request, Room, RoomOnJoin } from "@signe/room";
-import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, ZoneData, Direction } from "@rpgjs/common";
+import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, ZoneData, Direction, RpgCommonPlayer } from "@rpgjs/common";
 import { WorldMapsManager, type WorldMapConfig } from "@rpgjs/common";
 import { RpgPlayer, RpgEvent } from "../Player/Player";
 import { generateShortUUID, sync, type, users } from "@signe/sync";
@@ -11,6 +11,22 @@ import { Subject } from "rxjs";
 import { BehaviorSubject } from "rxjs";
 import { COEFFICIENT_ELEMENTS, DAMAGE_CRITICAL, DAMAGE_PHYSIC, DAMAGE_SKILL } from "../presets";
 import { z } from "zod";
+
+/**
+ * Interface for input controls configuration
+ * 
+ * Defines the structure for input validation and anti-cheat controls
+ */
+export interface Controls {
+  /** Maximum allowed time delta between inputs in milliseconds */
+  maxTimeDelta?: number;
+  /** Maximum allowed frame delta between inputs */
+  maxFrameDelta?: number;
+  /** Minimum time between inputs in milliseconds */
+  minTimeBetweenInputs?: number;
+  /** Whether to enable anti-cheat validation */
+  enableAntiCheat?: boolean;
+}
 
 /**
  * Zod schema for validating map update request body
@@ -89,8 +105,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   constructor() {
     super();
     this.hooks.callHooks("server-map-onStart", this).subscribe();
-    this.throttleSync = this.isStandalone ? 0 : 100;
+    this.throttleSync = this.isStandalone ? 0 : 50; // Reduced from 100ms to 50ms for better responsiveness
     this.throttleStorage = this.isStandalone ? 0 : 1000;
+    this.loop();
   }
 
   // autoload by @signe/room
@@ -107,11 +124,12 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
       // Add ack info: last processed frame and authoritative position
       if (player) {
+        const lastFramePositions = player._lastFramePositions;
         obj.ack = {
-          frame: player.lastProcessedFrame,
-          x: player.x(),
-          y: player.y(),
-          direction: player.direction(),
+          frame: lastFramePositions?.frame ?? player.pendingInputs.length,
+          x: lastFramePositions?.position?.x ?? player.x(),
+          y: lastFramePositions?.position?.y ?? player.y(),
+          direction: lastFramePositions?.position?.direction ?? player.direction(),
         };
       }
     }
@@ -142,7 +160,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this.hooks
       .callHooks("server-player-onLeaveMap", player, this)
       .subscribe();
-    player.lastProcessedFrame = 0;
+    player.pendingInputs = [];
   }
 
   get hooks() {
@@ -196,9 +214,26 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   @Action('move')
   async onInput(player: RpgPlayer, input: any) {
     if (typeof input?.frame === 'number') {
-      player.lastProcessedFrame = input.frame;
+      // Check if we already have this frame to avoid duplicates
+      const existingInput = player.pendingInputs.find(pending => pending.frame === input.frame);
+      if (existingInput) {
+        return; // Skip duplicate frame
+      }
+      
+      player.pendingInputs.push({
+        input: input.input,
+        frame: input.frame,
+        timestamp: input.timestamp || Date.now(),
+      });
+
+      // Process immediately to keep server in lockstep with client prediction
+      if (!(player as any)._isProcessingInputs) {
+        (player as any)._isProcessingInputs = true;
+        this.processInput(player.id).finally(() => {
+          (player as any)._isProcessingInputs = false;
+        });
+      }
     }
-    await this.movePlayer(player, input.input)
   }
 
   @Request({
@@ -290,6 +325,151 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     await this.updateWorldMaps(worldId, normalized);
     return { ok: true } as any;
+  }
+
+  /**
+   * Process pending inputs for a player with anti-cheat validation
+   * 
+   * This method processes all pending inputs for a player while performing
+   * anti-cheat validation to prevent time manipulation and frame skipping.
+   * It validates the time deltas between inputs and ensures they are within
+   * acceptable ranges. After processing, it saves the last frame position
+   * for use in packet interception.
+   * 
+   * @param playerId - The ID of the player to process inputs for
+   * @param controls - Optional anti-cheat configuration
+   * @returns Promise containing the player and processed input strings
+   * 
+   * @example
+   * ```ts
+   * // Process inputs with default anti-cheat settings
+   * const result = await map.processInput('player1');
+   * console.log('Processed inputs:', result.inputs);
+   * 
+   * // Process inputs with custom anti-cheat configuration
+   * const result = await map.processInput('player1', {
+   *   maxTimeDelta: 100,
+   *   maxFrameDelta: 5,
+   *   minTimeBetweenInputs: 16,
+   *   enableAntiCheat: true
+   * });
+   * ```
+   */
+  async processInput(playerId: string, controls?: Controls): Promise<{
+    player: RpgPlayer,
+    inputs: string[]
+  }> {
+    const player = this.getPlayer(playerId);
+    if (!player) {
+      throw new Error(`Player ${playerId} not found`);
+    }
+
+    const processedInputs: string[] = [];
+    const defaultControls: Required<Controls> = {
+      maxTimeDelta: 1000, // 1 second max between inputs
+      maxFrameDelta: 10,  // Max 10 frames skipped
+      minTimeBetweenInputs: 16, // ~60fps minimum
+      enableAntiCheat: false
+    };
+
+    const config = { ...defaultControls, ...controls };
+    let lastProcessedTime = 0;
+    let lastProcessedFrame = 0;
+
+    // Sort inputs by frame number to ensure proper order
+    player.pendingInputs.sort((a, b) => (a.frame || 0) - (b.frame || 0));
+
+    // Process all pending inputs
+    while (player.pendingInputs.length > 0) {
+      const input = player.pendingInputs.shift();
+      
+      if (!input || typeof input.frame !== 'number') {
+        continue;
+      }
+
+      // Anti-cheat validation
+      if (config.enableAntiCheat) {
+        // Check frame delta
+        if (input.frame > lastProcessedFrame + config.maxFrameDelta) {
+          // Reset to last valid frame
+          input.frame = lastProcessedFrame + 1;
+        }
+
+        // Check time delta if timestamp is available
+        if (input.timestamp && lastProcessedTime > 0) {
+          const timeDelta = input.timestamp - lastProcessedTime;
+          if (timeDelta > config.maxTimeDelta) {
+            input.timestamp = lastProcessedTime + config.minTimeBetweenInputs;
+          }
+        }
+
+        // Check minimum time between inputs
+        if (input.timestamp && lastProcessedTime > 0) {
+          const timeDelta = input.timestamp - lastProcessedTime;
+          if (timeDelta < config.minTimeBetweenInputs) {
+            continue;
+          }
+        }
+      }
+
+      // Skip if frame is too old (more than 10 frames behind)
+      if (input.frame < lastProcessedFrame - 10) {
+        continue;
+      }
+
+      // Process the input
+      if (input.input) {
+        await this.movePlayer(player, input.input);
+        processedInputs.push(input.input);
+      }
+
+      // Update tracking variables
+      lastProcessedTime = input.timestamp || Date.now();
+      lastProcessedFrame = input.frame;
+      
+    }
+
+    // Save last frame position for packet interception
+    // IMPORTANT: read from physics body (authoritative), not from signals that are updated on next tick
+    const lastFrame = lastProcessedFrame || 0;
+    const body = this.physic.getBody(player.id);
+    let posX = player.x();
+    let posY = player.y();
+    if (body) {
+      const width = body.bounds.max.x - body.bounds.min.x;
+      const height = body.bounds.max.y - body.bounds.min.y;
+      posX = body.position.x - width / 2;
+      posY = body.position.y - height / 2;
+    }
+    player._lastFramePositions = {
+      frame: lastFrame,
+      position: { 
+        x: posX, 
+        y: posY,
+        direction: player.direction()
+      }
+    };
+
+    return {
+      player,
+      inputs: processedInputs
+    };
+  }
+
+  private loop() {
+    setInterval(async () => {
+      for (const player of this.getPlayers()) {
+        if (player.pendingInputs.length > 0) {
+          const anyPlayer = player as any;
+          if (!anyPlayer._isProcessingInputs) {
+            anyPlayer._isProcessingInputs = true;
+            await this.processInput(player.id).finally(() => {
+              anyPlayer._isProcessingInputs = false;
+            });
+          }
+        }
+      }
+    }, 50); // Increased frequency from 100ms to 50ms for better responsiveness
   }
 
   /**
@@ -452,6 +632,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   getPlayer(playerId: string): RpgPlayer | undefined {
     return this.players()[playerId]
+  }
+
+  getPlayers(): RpgPlayer[] {
+    return Object.values(this.players())
   }
 
   getEvents(): RpgEvent[] {

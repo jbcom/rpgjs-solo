@@ -101,7 +101,14 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   /** Last processed client input timestamp for reconciliation */
   lastProcessedInputTs: number = 0;
   /** Last processed client input frame for reconciliation */
-  lastProcessedFrame: number = 0;
+  _lastFramePositions: {
+    frame: number;
+    position: {
+      x: number;
+      y: number;
+      direction: Direction;
+    };
+  } | null = null;
 
   @sync(RpgPlayer) events = signal<RpgEvent[]>([]);
 
