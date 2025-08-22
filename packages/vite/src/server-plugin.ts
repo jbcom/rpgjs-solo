@@ -39,6 +39,9 @@ class PartyConnection {
   public id: string;
   public uri: string;
   private _state: any = {};
+  private messageQueue: Array<{ message: string; timestamp: number; sequence: number }> = [];
+  private isProcessingQueue: boolean = false;
+  private sequenceCounter: number = 0;
   public static packetLossRate: number = parseFloat(process.env.RPGJS_PACKET_LOSS_RATE || '0.1');
   public static packetLossEnabled: boolean = process.env.RPGJS_ENABLE_PACKET_LOSS === 'true';
   public static packetLossFilter: string = process.env.RPGJS_PACKET_LOSS_FILTER || '';
@@ -62,36 +65,72 @@ class PartyConnection {
   }
 
   /**
-   * Sends data to the client via WebSocket with optional latency simulation
+   * Sends data to the client via WebSocket with ordered latency simulation
+   *
+   * Messages are queued and sent in the order they were called, even with random latency delays.
+   * This ensures that if send(A) is called before send(B), A will always be sent before B.
    *
    * @param {any} data - Data to send (automatically serialized to JSON if not string)
    */
   async send(data: any): Promise<void> {
-    if (this.ws.readyState === 1) {
-      // WebSocket.OPEN
-      const message = typeof data === "string" ? data : JSON.stringify(data);
+    if (this.ws.readyState !== 1) {
+      // WebSocket not open
+      return;
+    }
+
+    const message = typeof data === "string" ? data : JSON.stringify(data);
+    const timestamp = Date.now();
+    const sequence = ++this.sequenceCounter;
+
+    // Add message to queue
+    this.messageQueue.push({ message, timestamp, sequence });
+
+    // Start processing queue if not already processing
+    if (!this.isProcessingQueue) {
+      this.processMessageQueue();
+    }
+  }
+
+  /**
+   * Processes the message queue in order with latency simulation
+   * 
+   * This method ensures messages are sent in the exact order they were queued,
+   * while still applying random latency delays to each message.
+   */
+  private async processMessageQueue(): Promise<void> {
+    if (this.isProcessingQueue || this.messageQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+
+    while (this.messageQueue.length > 0) {
+      const queueItem = this.messageQueue.shift()!;
       
       // Check if latency simulation is enabled
       if (PartyConnection.latencyEnabled && PartyConnection.latencyMaxMs > 0) {
         // Apply filter if specified (only simulate latency for messages containing the filter string)
-        if (PartyConnection.latencyFilter && !message.includes(PartyConnection.latencyFilter)) {
+        if (PartyConnection.latencyFilter && !queueItem.message.includes(PartyConnection.latencyFilter)) {
           // Message doesn't match filter, send immediately
-          this.ws.send(message);
-          return;
+          this.ws.send(queueItem.message);
+          continue;
         }
         
         // Calculate random latency between min and max
         const latencyMs = Math.random() * (PartyConnection.latencyMaxMs - PartyConnection.latencyMinMs) + PartyConnection.latencyMinMs;
         
-        console.log(`\x1b[34m[LATENCY SIMULATION]\x1b[0m Connection ${this.id}: Delaying message by ${latencyMs.toFixed(1)}ms`);
-        console.log(`\x1b[33m[MESSAGE DATA]\x1b[0m ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`);
+        console.log(`\x1b[34m[LATENCY SIMULATION]\x1b[0m Connection ${this.id}: Delaying message #${queueItem.sequence} by ${latencyMs.toFixed(1)}ms`);
+        console.log(`\x1b[33m[MESSAGE DATA]\x1b[0m ${queueItem.message.substring(0, 100)}${queueItem.message.length > 100 ? '...' : ''}`);
         
         // Delay the message
         await new Promise(resolve => setTimeout(resolve, latencyMs));
       }
       
-      this.ws.send(message);
+      // Send the message
+      this.ws.send(queueItem.message);
     }
+
+    this.isProcessingQueue = false;
   }
 
   /**
@@ -235,7 +274,11 @@ class Room {
   }
 
   /**
-   * Broadcasts a message to all connected clients with optional latency simulation
+   * Broadcasts a message to all connected clients with ordered latency simulation
+   *
+   * Messages are sent to each connection in parallel, but each connection maintains
+   * its own ordered queue of messages. This ensures that broadcast messages are
+   * queued in the correct order for each individual connection.
    *
    * @param {any} message - Message to broadcast
    * @param {string[]} except - Array of connection IDs to exclude from broadcast
@@ -248,11 +291,12 @@ class Room {
     
     for (const [connectionId, connection] of this.connections) {
       if (!except.includes(connectionId)) {
+        // Each connection will handle its own queue ordering
         sendPromises.push(connection.send(data));
       }
     }
     
-    // Wait for all messages to be sent (with potential latency delays)
+    // Wait for all messages to be queued (actual sending happens asynchronously in each connection's queue)
     await Promise.all(sendPromises);
   }
 

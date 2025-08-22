@@ -107,6 +107,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this.hooks.callHooks("server-map-onStart", this).subscribe();
     this.throttleSync = this.isStandalone ? 0 : 50; // Reduced from 100ms to 50ms for better responsiveness
     this.throttleStorage = this.isStandalone ? 0 : 1000;
+    this.sessionExpiryTime = 1000 * 60 * 5; //5 minutes
     this.loop();
   }
 
@@ -362,6 +363,14 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     const player = this.getPlayer(playerId);
     if (!player) {
       throw new Error(`Player ${playerId} not found`);
+    }
+
+    if (!player.isConnected()) {
+      player.pendingInputs = [];
+      return {
+        player,
+        inputs: []
+      }
     }
 
     const processedInputs: string[] = [];

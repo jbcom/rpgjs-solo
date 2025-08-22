@@ -23,6 +23,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   // Synchronization throttling properties
   throttleSync?: number;
   throttleStorage?: number;
+  sessionExpiryTime?: number;
 
   tickSubscription?: Subscription | null;
   playersSubscription?: Subscription | null;

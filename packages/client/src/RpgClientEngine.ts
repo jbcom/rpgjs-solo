@@ -65,6 +65,8 @@ export class RpgClientEngine<T = any> {
   private lastAckFrame: number = 0;
   // Frame offset to synchronize with server
   private frameOffset: number = 0;
+  // Track last server timestamp processed per remote player to drop stale updates
+  private lastRemoteServerTs: Map<string, number> = new Map();
 
   constructor(public context: Context) {
     this.webSocket = inject(context, WebSocketToken);
@@ -123,6 +125,8 @@ export class RpgClientEngine<T = any> {
         this.cleanupOldPredictionStates();
         this.cleanupInputHistory();
       }
+
+      // No custom interpolation – rely on existing engine interpolation
     })
 
     await this.webSocket.connection(() => {
@@ -137,6 +141,7 @@ export class RpgClientEngine<T = any> {
 
       // Apply client-side prediction filtering and server reconciliation
       const filteredData = this.applyClientSidePredictionFilter(data);
+      const serverTimestamp = data.timestamp || Date.now();
       
       // Remove x,y from filteredData before loading to sceneMap
       const dataWithoutPositions = this.removePositionsFromData(filteredData);
@@ -144,7 +149,7 @@ export class RpgClientEngine<T = any> {
       this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: dataWithoutPositions }).subscribe();
       load(this.sceneMap, dataWithoutPositions, true);
 
-      // Update physics hitboxes after sceneMap has been updated
+      // Update physics after sceneMap has been updated
       this.updatePhysicsFromSync(filteredData);
 
       if (data.ack) this.applyServerAck(data.ack);
@@ -695,11 +700,13 @@ export class RpgClientEngine<T = any> {
     // Create a deep copy of the data to avoid mutating the original
     const dataCopy = JSON.parse(JSON.stringify(data));
 
-    // Remove x,y from players
+    // Remove x,y from players only for current player; keep for others
     if (dataCopy.players) {
       for (const [playerId, playerData] of Object.entries(dataCopy.players as Record<string, any>)) {
-        delete (dataCopy.players as any)[playerId].x;
-        delete (dataCopy.players as any)[playerId].y;
+        if (playerId === this.playerIdSignal()) {
+          delete (dataCopy.players as any)[playerId].x;
+          delete (dataCopy.players as any)[playerId].y;
+        }
       }
     }
 
@@ -730,9 +737,18 @@ export class RpgClientEngine<T = any> {
    * ```
    */
   private updatePhysicsFromSync(data: any): void {
+    const serverTs = (data && typeof data.timestamp === 'number') ? data.timestamp : Date.now();
     // Helper function to update entity physics hitbox
     const updateEntityPhysics = (entityId: string, entityData: any, entityType: 'player' | 'event') => {
       if (entityData.x !== undefined && entityData.y !== undefined) {
+        // Drop stale updates for players to avoid back-and-forth under lag
+        if (entityType === 'player') {
+          const lastTs = this.lastRemoteServerTs.get(entityId) || 0;
+          if (serverTs < lastTs) {
+            return;
+          }
+          this.lastRemoteServerTs.set(entityId, serverTs);
+        }
         const existingEntity = this.sceneMap.getObjectById(entityId);
         if (existingEntity) {
           this.sceneMap.physic.updateHitbox(
