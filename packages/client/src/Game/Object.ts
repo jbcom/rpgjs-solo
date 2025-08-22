@@ -12,14 +12,34 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   animationCurrentIndex = signal(0)
   animationIsPlaying = signal(false)
   _param = signal({})
+  frames = []
 
   constructor() {
     super()
     this.hooks.callHooks("client-sprite-onInit", this).subscribe();
+    this._frames.observable.subscribe(({ items }) => {
+      if (!this.id) return;
+      if (this.id == this.engine.playerIdSignal()!) return;
+       for (const item of items) {
+        const existingEntity = this.engine.scene.getObjectById(this.id);
+        console.log(item)
+        if (existingEntity) {
+          this.engine.scene.physic.updateHitbox(
+            this.id,
+            item.x,
+            item.y
+          );
+        }
+      }
+    })
   }
 
   get hooks() {
     return inject<Hooks>(ModulesToken);
+  }
+
+  get engine() {
+    return inject(RpgClientEngine)
   }
   
   private animationSubscription?: Subscription

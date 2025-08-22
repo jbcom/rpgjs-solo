@@ -892,6 +892,8 @@ export class RpgCommonPhysic {
     
     // Apply movement (this will be potentially modified by sliding in the next frame)
     Matter.Body.translate(body, { x: dx, y: dy });
+
+    player.applyPhysic(body);
     
     return true;
   }

@@ -101,7 +101,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   dataIsReady$ = new BehaviorSubject<void>(undefined);
   globalConfig: any = {}
   damageFormulas: any = {}
-
+  
   constructor() {
     super();
     this.hooks.callHooks("server-map-onStart", this).subscribe();
@@ -226,14 +226,6 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         frame: input.frame,
         timestamp: input.timestamp || Date.now(),
       });
-
-      // Process immediately to keep server in lockstep with client prediction
-      if (!(player as any)._isProcessingInputs) {
-        (player as any)._isProcessingInputs = true;
-        this.processInput(player.id).finally(() => {
-          (player as any)._isProcessingInputs = false;
-        });
-      }
     }
   }
 
@@ -435,8 +427,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       // Update tracking variables
       lastProcessedTime = input.timestamp || Date.now();
       lastProcessedFrame = input.frame;
-      
     }
+
+    player._frames.set(player?.frames ?? [])
+    player.frames = []
 
     // Save last frame position for packet interception
     // IMPORTANT: read from physics body (authoritative), not from signals that are updated on next tick
@@ -469,10 +463,12 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     setInterval(async () => {
       for (const player of this.getPlayers()) {
         if (player.pendingInputs.length > 0) {
-          const anyPlayer = player as any;
+          const anyPlayer = player as RpgPlayer;
           if (!anyPlayer._isProcessingInputs) {
             anyPlayer._isProcessingInputs = true;
-            await this.processInput(player.id).finally(() => {
+            await this.processInput(player.id).then(() => {
+         
+            }).finally(() => {
               anyPlayer._isProcessingInputs = false;
             });
           }

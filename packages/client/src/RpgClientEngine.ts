@@ -736,7 +736,7 @@ export class RpgClientEngine<T = any> {
    * this.updatePhysicsFromSync(filteredData);
    * ```
    */
-  private updatePhysicsFromSync(data: any): void {
+  updatePhysicsFromSync(data: any): void {
     const serverTs = (data && typeof data.timestamp === 'number') ? data.timestamp : Date.now();
     // Helper function to update entity physics hitbox
     const updateEntityPhysics = (entityId: string, entityData: any, entityType: 'player' | 'event') => {

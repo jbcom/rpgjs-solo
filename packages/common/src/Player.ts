@@ -1,5 +1,5 @@
 import { signal } from "@signe/reactive";
-import { connected, id, sync, users } from "@signe/sync";
+import { connected, id, persist, sync, users } from "@signe/sync";
 import * as Matter from "matter-js";
 import { MovementManager } from "./movement";
 import { Item } from "./database";
@@ -57,8 +57,8 @@ export abstract class RpgCommonPlayer {
   @id() id: string;
   @sync() name = signal("");
   @sync() type = signal("");
-  @sync() x = signal(0);
-  @sync() y = signal(0);
+  @persist() x = signal(0);
+  @persist() y = signal(0);
   @sync() z = signal(0);
   @sync() tint = signal("white");
   @sync() direction = signal(Direction.Down);
@@ -70,7 +70,7 @@ export abstract class RpgCommonPlayer {
     h: 32,
   });
   @sync() _gold = signal(0);
-  @sync() animationName = signal("stand");
+  animationName = signal("stand");
   @sync() hpSignal = signal(0);
   @sync() spSignal = signal(0);
   @sync() _exp = signal(0);
@@ -85,6 +85,7 @@ export abstract class RpgCommonPlayer {
   @sync() _throughOtherPlayer = signal(true);
   @sync() _throughEvent = signal(false);
   @sync() _frequency = signal(0);
+  @sync() _frames = signal<{ x: number; y: number; ts: number }[]>([]);
   @connected() isConnected = signal(false)
 
   // Store intended movement direction (not synced, only used locally)
@@ -201,8 +202,8 @@ export abstract class RpgCommonPlayer {
     if (posChanged) {
       // Only update position, do not change direction based on physics movement
       // Direction should be controlled by intended movement via setIntendedDirection()
-      this.x.set(topLeftX);
-      this.y.set(topLeftY);
+      if(Math.round(this.x()) !== Math.round(topLeftX)) this.x.set(Math.round(topLeftX));
+      if(Math.round(this.y()) !== Math.round(topLeftY)) this.y.set(Math.round(topLeftY));
     }
   }
 

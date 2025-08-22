@@ -42,13 +42,19 @@ class PartyConnection {
   private messageQueue: Array<{ message: string; timestamp: number; sequence: number }> = [];
   private isProcessingQueue: boolean = false;
   private sequenceCounter: number = 0;
+  private lastSendTime: number = 0;
+  private outgoingFlushTimeout: any = null;
+  private incomingQueue: string[] = [];
+  private incomingFlushTimeout: any = null;
   public static packetLossRate: number = parseFloat(process.env.RPGJS_PACKET_LOSS_RATE || '0.1');
   public static packetLossEnabled: boolean = process.env.RPGJS_ENABLE_PACKET_LOSS === 'true';
   public static packetLossFilter: string = process.env.RPGJS_PACKET_LOSS_FILTER || '';
+  public static bandwidthEnabled: boolean = process.env.RPGJS_ENABLE_BANDWIDTH === 'true';
+  public static bandwidthKbps: number = parseInt(process.env.RPGJS_BANDWIDTH_KBPS || '100'); // Kilobits per second
+  public static bandwidthFilter: string = process.env.RPGJS_BANDWIDTH_FILTER || '';
   public static latencyEnabled: boolean = process.env.RPGJS_ENABLE_LATENCY === 'true';
-  public static latencyMinMs: number = parseInt(process.env.RPGJS_LATENCY_MIN_MS || '50');
-  public static latencyMaxMs: number = parseInt(process.env.RPGJS_LATENCY_MAX_MS || '200');
-  public static latencyFilter: string = process.env.RPGJS_LATENCY_FILTER || 'sync';
+  public static latencyMs: number = parseInt(process.env.RPGJS_LATENCY_MS || '50'); // Fixed latency in milliseconds
+  public static latencyFilter: string = process.env.RPGJS_LATENCY_FILTER || '';
 
   constructor(private ws: WSConnection, id?: string, uri?: string) {
     this.id = id || this.generateId();
@@ -65,10 +71,12 @@ class PartyConnection {
   }
 
   /**
-   * Sends data to the client via WebSocket with ordered latency simulation
+   * Sends data to the client via WebSocket with bandwidth and latency simulation
    *
-   * Messages are queued and sent in the order they were called, even with random latency delays.
-   * This ensures that if send(A) is called before send(B), A will always be sent before B.
+   * Messages are queued and sent in the order they were called, with bandwidth limitations
+   * and network latency that simulate a slow, distant network connection. This ensures that 
+   * if send(A) is called before send(B), A will always be sent before B, but both will be 
+   * slowed down by bandwidth constraints and network latency.
    *
    * @param {any} data - Data to send (automatically serialized to JSON if not string)
    */
@@ -92,41 +100,50 @@ class PartyConnection {
   }
 
   /**
-   * Processes the message queue in order with latency simulation
+   * Processes the outgoing queue with TCP-like batching.
    * 
-   * This method ensures messages are sent in the exact order they were queued,
-   * while still applying random latency delays to each message.
+   * - If latency is enabled, schedule a single flush after latencyMs to batch messages.
+   * - At flush, send all queued messages in order, applying bandwidth delays per message.
    */
   private async processMessageQueue(): Promise<void> {
-    if (this.isProcessingQueue || this.messageQueue.length === 0) {
+    if (this.messageQueue.length === 0) return;
+
+    const shouldBatchWithLatency = PartyConnection.latencyEnabled && PartyConnection.latencyMs > 0;
+
+    if (shouldBatchWithLatency) {
+      if (this.outgoingFlushTimeout) return; // Already scheduled
+      this.outgoingFlushTimeout = setTimeout(async () => {
+        this.outgoingFlushTimeout = null;
+        await this.flushSendQueue();
+      }, PartyConnection.latencyMs);
       return;
     }
 
+    await this.flushSendQueue();
+  }
+
+  /**
+   * Flushes the send queue sequentially, respecting bandwidth constraints.
+   */
+  private async flushSendQueue(): Promise<void> {
+    if (this.isProcessingQueue) return;
     this.isProcessingQueue = true;
 
     while (this.messageQueue.length > 0) {
       const queueItem = this.messageQueue.shift()!;
-      
-      // Check if latency simulation is enabled
-      if (PartyConnection.latencyEnabled && PartyConnection.latencyMaxMs > 0) {
-        // Apply filter if specified (only simulate latency for messages containing the filter string)
-        if (PartyConnection.latencyFilter && !queueItem.message.includes(PartyConnection.latencyFilter)) {
-          // Message doesn't match filter, send immediately
-          this.ws.send(queueItem.message);
-          continue;
+
+      // Bandwidth simulation per message
+      if (PartyConnection.bandwidthEnabled && PartyConnection.bandwidthKbps > 0) {
+        if (!PartyConnection.bandwidthFilter || queueItem.message.includes(PartyConnection.bandwidthFilter)) {
+          const messageSizeBits = queueItem.message.length * 8;
+          const transmissionTimeMs = (messageSizeBits / (PartyConnection.bandwidthKbps * 1000)) * 1000;
+          const minDelayMs = 10;
+          const bandwidthDelayMs = Math.max(transmissionTimeMs, minDelayMs);
+          console.log(`\x1b[34m[BANDWIDTH SIMULATION]\x1b[0m Connection ${this.id}: Message #${queueItem.sequence} transmission time: ${bandwidthDelayMs.toFixed(1)}ms`);
+          await new Promise(resolve => setTimeout(resolve, bandwidthDelayMs));
         }
-        
-        // Calculate random latency between min and max
-        const latencyMs = Math.random() * (PartyConnection.latencyMaxMs - PartyConnection.latencyMinMs) + PartyConnection.latencyMinMs;
-        
-        console.log(`\x1b[34m[LATENCY SIMULATION]\x1b[0m Connection ${this.id}: Delaying message #${queueItem.sequence} by ${latencyMs.toFixed(1)}ms`);
-        console.log(`\x1b[33m[MESSAGE DATA]\x1b[0m ${queueItem.message.substring(0, 100)}${queueItem.message.length > 100 ? '...' : ''}`);
-        
-        // Delay the message
-        await new Promise(resolve => setTimeout(resolve, latencyMs));
       }
-      
-      // Send the message
+
       this.ws.send(queueItem.message);
     }
 
@@ -159,6 +176,36 @@ class PartyConnection {
    */
   get state(): any {
     return this._state;
+  }
+
+  /**
+   * Buffers incoming messages to simulate TCP latency on reception.
+   * 
+   * All messages that arrive within the latency window are flushed together,
+   * preserving order. The provided processor is called with the ordered batch.
+   *
+   * @param {string} message - Raw incoming message
+   * @param {(messages: string[]) => Promise<void>} processor - Async batch processor
+   * 
+   * @example
+   * await connection.bufferIncoming(raw, async (batch) => {
+   *   for (const msg of batch) await handle(msg)
+   * })
+   */
+  bufferIncoming(message: string, processor: (messages: string[]) => Promise<void>): void {
+    this.incomingQueue.push(message);
+    const latencyMs = PartyConnection.latencyEnabled && PartyConnection.latencyMs > 0 ? PartyConnection.latencyMs : 0;
+    if (this.incomingFlushTimeout) return;
+    this.incomingFlushTimeout = setTimeout(async () => {
+      const batch = this.incomingQueue;
+      this.incomingQueue = [];
+      this.incomingFlushTimeout = null;
+      try {
+        await processor(batch);
+      } catch (err) {
+        console.error('Error processing incoming batch:', err);
+      }
+    }, latencyMs);
   }
 
   /**
@@ -203,30 +250,73 @@ class PartyConnection {
   }
 
   /**
+   * Configures bandwidth simulation settings
+   * 
+   * @param {boolean} enabled - Whether to enable bandwidth simulation
+   * @param {number} kbps - Bandwidth in kilobits per second (e.g., 100 = 100 kbps)
+   * @param {string} filter - Optional filter string to only simulate bandwidth for messages containing this string
+   * 
+   * @example
+   * ```typescript
+   * PartyConnection.configureBandwidth(true, 50); // 50 kbps (very slow connection)
+   * PartyConnection.configureBandwidth(true, 1000, 'sync'); // 1 Mbps only for sync messages
+   * ```
+   */
+  static configureBandwidth(enabled: boolean, kbps: number, filter?: string): void {
+    PartyConnection.bandwidthEnabled = enabled;
+    PartyConnection.bandwidthKbps = Math.max(1, kbps); // Minimum 1 kbps
+    PartyConnection.bandwidthFilter = filter || '';
+    
+    if (enabled && kbps > 0) {
+      const filterInfo = filter ? ` (filtered: "${filter}")` : '';
+      console.log(`\x1b[35m[BANDWIDTH SIMULATION]\x1b[0m Enabled with ${kbps} kbps bandwidth${filterInfo}`);
+    } else if (enabled) {
+      console.log(`\x1b[35m[BANDWIDTH SIMULATION]\x1b[0m Enabled but bandwidth is 0 kbps (no delay will be applied)`);
+    } else {
+      console.log(`\x1b[35m[BANDWIDTH SIMULATION]\x1b[0m Disabled`);
+    }
+  }
+
+  /**
+   * Gets current bandwidth simulation status
+   * 
+   * @returns {Object} Current configuration
+   */
+  static getBandwidthStatus(): { enabled: boolean; kbps: number; filter: string } {
+    return {
+      enabled: PartyConnection.bandwidthEnabled,
+      kbps: PartyConnection.bandwidthKbps,
+      filter: PartyConnection.bandwidthFilter
+    };
+  }
+
+  /**
    * Configures latency simulation settings
    * 
+   * Latency simulates the ping time to a distant server. Each message gets the same fixed delay,
+   * regardless of when it was sent. This means if you send 3 messages rapidly, they will all
+   * have the same latency delay applied to them.
+   * 
    * @param {boolean} enabled - Whether to enable latency simulation
-   * @param {number} minMs - Minimum latency in milliseconds
-   * @param {number} maxMs - Maximum latency in milliseconds
+   * @param {number} ms - Fixed latency in milliseconds (simulates ping to distant server)
    * @param {string} filter - Optional filter string to only simulate latency for messages containing this string
    * 
    * @example
    * ```typescript
-   * PartyConnection.configureLatency(true, 100, 300); // 100-300ms latency
-   * PartyConnection.configureLatency(true, 50, 150, 'sync'); // 50-150ms latency only for sync messages
+   * PartyConnection.configureLatency(true, 100); // 100ms latency (distant server)
+   * PartyConnection.configureLatency(true, 200, 'sync'); // 200ms latency only for sync messages
    * ```
    */
-  static configureLatency(enabled: boolean, minMs: number, maxMs: number, filter?: string): void {
+  static configureLatency(enabled: boolean, ms: number, filter?: string): void {
     PartyConnection.latencyEnabled = enabled;
-    PartyConnection.latencyMinMs = Math.max(0, minMs);
-    PartyConnection.latencyMaxMs = Math.max(PartyConnection.latencyMinMs, maxMs);
+    PartyConnection.latencyMs = Math.max(0, ms);
     PartyConnection.latencyFilter = filter || '';
     
-    if (enabled && maxMs > 0) {
+    if (enabled && ms > 0) {
       const filterInfo = filter ? ` (filtered: "${filter}")` : '';
-      console.log(`\x1b[35m[LATENCY SIMULATION]\x1b[0m Enabled with ${minMs}-${maxMs}ms latency range${filterInfo}`);
+      console.log(`\x1b[35m[LATENCY SIMULATION]\x1b[0m Enabled with ${ms}ms fixed latency${filterInfo}`);
     } else if (enabled) {
-      console.log(`\x1b[35m[LATENCY SIMULATION]\x1b[0m Enabled but max latency is 0ms (no delay will be applied)`);
+      console.log(`\x1b[35m[LATENCY SIMULATION]\x1b[0m Enabled but latency is 0ms (no delay will be applied)`);
     } else {
       console.log(`\x1b[35m[LATENCY SIMULATION]\x1b[0m Disabled`);
     }
@@ -237,11 +327,10 @@ class PartyConnection {
    * 
    * @returns {Object} Current configuration
    */
-  static getLatencyStatus(): { enabled: boolean; minMs: number; maxMs: number; filter: string } {
+  static getLatencyStatus(): { enabled: boolean; ms: number; filter: string } {
     return {
       enabled: PartyConnection.latencyEnabled,
-      minMs: PartyConnection.latencyMinMs,
-      maxMs: PartyConnection.latencyMaxMs,
+      ms: PartyConnection.latencyMs,
       filter: PartyConnection.latencyFilter
     };
   }
@@ -274,11 +363,12 @@ class Room {
   }
 
   /**
-   * Broadcasts a message to all connected clients with ordered latency simulation
+   * Broadcasts a message to all connected clients with bandwidth simulation
    *
    * Messages are sent to each connection in parallel, but each connection maintains
-   * its own ordered queue of messages. This ensures that broadcast messages are
-   * queued in the correct order for each individual connection.
+   * its own ordered queue of messages with bandwidth limitations. This ensures that 
+   * broadcast messages are queued in the correct order for each individual connection,
+   * while being slowed down by simulated bandwidth constraints.
    *
    * @param {any} message - Message to broadcast
    * @param {string[]} except - Array of connection IDs to exclude from broadcast
@@ -567,6 +657,7 @@ export function serverPlugin(
       
       // Display network simulation status
       const packetLossStatus = PartyConnection.getPacketLossStatus();
+      const bandwidthStatus = PartyConnection.getBandwidthStatus();
       const latencyStatus = PartyConnection.getLatencyStatus();
       
       if (packetLossStatus.enabled) {
@@ -576,9 +667,16 @@ export function serverPlugin(
         console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Packet loss simulation: disabled`);
       }
       
+      if (bandwidthStatus.enabled) {
+        const filterInfo = bandwidthStatus.filter ? ` (filter: "${bandwidthStatus.filter}")` : '';
+        console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Bandwidth simulation: ${bandwidthStatus.kbps} kbps${filterInfo}`);
+      } else {
+        console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Bandwidth simulation: disabled`);
+      }
+      
       if (latencyStatus.enabled) {
         const filterInfo = latencyStatus.filter ? ` (filter: "${latencyStatus.filter}")` : '';
-        console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Latency simulation: ${latencyStatus.minMs}-${latencyStatus.maxMs}ms range${filterInfo}`);
+        console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Latency simulation: ${latencyStatus.ms}ms ping${filterInfo}`);
       } else {
         console.log(`\x1b[36m[NETWORK SIMULATION]\x1b[0m Latency simulation: disabled`);
       }
@@ -664,36 +762,29 @@ export function serverPlugin(
                     // Set up WebSocket event handlers
                     ws.on("message", async (data: Buffer) => {
                       try {
-                        const message = data.toString();
-                        
-                        // Check if packet loss simulation is enabled for incoming messages
+                        const rawMessage = data.toString();
+
+                        // Packet loss simulation (pre-buffer)
                         if (PartyConnection.packetLossEnabled && PartyConnection.packetLossRate > 0) {
-                          // Apply filter if specified (only simulate loss for messages containing the filter string)
-                          if (PartyConnection.packetLossFilter && !message.includes(PartyConnection.packetLossFilter)) {
-                            // Message doesn't match filter, process normally
-                            if (typeof rpgServer.onMessage === "function") {
-                              await rpgServer.onMessage(message, connection as any);
+                          if (!PartyConnection.packetLossFilter || rawMessage.includes(PartyConnection.packetLossFilter)) {
+                            const random = Math.random();
+                            if (random < PartyConnection.packetLossRate) {
+                              console.log(`\x1b[31m[PACKET LOSS]\x1b[0m Connection ${connection.id}: Server dropped an incoming packet (${(PartyConnection.packetLossRate * 100).toFixed(1)}% loss rate)`);
+                              console.log(`\x1b[33m[PACKET DATA]\x1b[0m ${rawMessage.substring(0, 100)}${rawMessage.length > 100 ? '...' : ''}`);
+                              return;
                             }
-                            return;
-                          }
-                          
-                          const random = Math.random();
-                          
-                          if (random < PartyConnection.packetLossRate) {
-                            // Simulate packet loss (server won't process this message)
-                            console.log(`\x1b[31m[PACKET LOSS]\x1b[0m Connection ${connection.id}: Server won't receive this message (${(PartyConnection.packetLossRate * 100).toFixed(1)}% loss rate)`);
-                            console.log(`\x1b[33m[PACKET DATA]\x1b[0m ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`);
-                            return; // Don't process the message
-                          } else {
-                            // Message will be processed by server
-                            console.log(`\x1b[32m[PACKET RECEIVED]\x1b[0m Connection ${connection.id}: Server will process this message`);
                           }
                         }
-                        
-                        // Call onMessage on the RPG-JS server
-                        if (typeof rpgServer.onMessage === "function") {
-                          await rpgServer.onMessage(message, connection as any);
-                        }
+
+                        // Buffer incoming messages to simulate TCP latency on reception
+                        connection.bufferIncoming(rawMessage, async (batch: string[]) => {
+                          // Process in order
+                          for (const msg of batch) {
+                            if (typeof rpgServer.onMessage === "function") {
+                              await rpgServer.onMessage(msg, connection as any);
+                            }
+                          }
+                        });
                       } catch (error) {
                         console.error(
                           "Error processing WebSocket message:",

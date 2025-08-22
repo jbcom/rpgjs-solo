@@ -23,7 +23,7 @@ import {
 } from "./ParameterManager";
 import { WithItemFixture } from "./ItemFixture";
 import { IItemManager, WithItemManager } from "./ItemManager";
-import { lastValueFrom } from "rxjs";
+import { combineLatest, lastValueFrom } from "rxjs";
 import { IEffectManager, WithEffectManager } from "./EffectManager";
 import { AGI, AGI_CURVE, DEX, DEX_CURVE, INT, INT_CURVE, MAXHP, MAXHP_CURVE, MAXSP, MAXSP_CURVE, STR, STR_CURVE } from "../presets";
 import { IElementManager, WithElementManager } from "./ElementManager";
@@ -110,6 +110,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     };
   } | null = null;
 
+  frames: { x: number; y: number; ts: number }[] = [];
+
   @sync(RpgPlayer) events = signal<RpgEvent[]>([]);
 
   constructor() {
@@ -133,6 +135,13 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   
   _onInit() {
     this.hooks.callHooks("server-playerProps-load", this).subscribe();
+    combineLatest([this.x.observable, this.y.observable]).subscribe(([x, y]) => {
+      this.frames = [...this.frames, {
+        x: x,
+        y: y,
+        ts: Date.now(),
+      }]
+    })
   }
 
   get hooks() {
