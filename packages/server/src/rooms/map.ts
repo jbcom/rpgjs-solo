@@ -150,6 +150,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     player._onInit()
     this.dataIsReady$.pipe(
       finalize(() => {
+        player.applyFrames()
         this.hooks
           .callHooks("server-player-onJoinMap", player, this)
           .subscribe();
@@ -429,8 +430,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       lastProcessedFrame = input.frame;
     }
 
-    player._frames.set(player?.frames ?? [])
-    player.frames = []
+    player.applyFrames()
 
     // Save last frame position for packet interception
     // IMPORTANT: read from physics body (authoritative), not from signals that are updated on next tick
@@ -466,9 +466,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
           const anyPlayer = player as RpgPlayer;
           if (!anyPlayer._isProcessingInputs) {
             anyPlayer._isProcessingInputs = true;
-            await this.processInput(player.id).then(() => {
-         
-            }).finally(() => {
+            await this.processInput(player.id).finally(() => {
               anyPlayer._isProcessingInputs = false;
             });
           }
@@ -624,6 +622,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     eventInstance.x.set(x);
     eventInstance.y.set(y);
+    eventInstance.applyFrames()
     if (event.name) eventInstance.name.set(event.name);
   
     this.events()[id] = eventInstance;

@@ -1,7 +1,7 @@
 import { Hooks, ModulesToken, RpgCommonPlayer } from "@rpgjs/common";
 import { sync } from "@signe/sync";
 import { trigger, signal } from "canvasengine";
-import { Subscription } from "rxjs";
+import { debounceTime, Subscription, throttleTime } from "rxjs";
 import { inject } from "../core/inject";
 import { RpgClientEngine } from "../RpgClientEngine";
 
@@ -12,25 +12,27 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   animationCurrentIndex = signal(0)
   animationIsPlaying = signal(false)
   _param = signal({})
-  frames = []
+  frames: { x: number; y: number; ts: number }[] = []
 
   constructor() {
     super()
     this.hooks.callHooks("client-sprite-onInit", this).subscribe();
+
     this._frames.observable.subscribe(({ items }) => {
       if (!this.id) return;
       if (this.id == this.engine.playerIdSignal()!) return;
-       for (const item of items) {
-        const existingEntity = this.engine.scene.getObjectById(this.id);
-        console.log(item)
-        if (existingEntity) {
-          this.engine.scene.physic.updateHitbox(
-            this.id,
-            item.x,
-            item.y
-          );
-        }
-      }
+      this.frames = [...this.frames, ...items]
+    })
+
+    this.engine.tick
+    .pipe(
+      throttleTime(10)
+    )
+    .subscribe(() => {
+       const frame = this.frames.shift()
+       if (frame) {
+        this.engine.scene.physic.updateHitbox(this.id, frame.x, frame.y, frame.ts)
+       }
     })
   }
 

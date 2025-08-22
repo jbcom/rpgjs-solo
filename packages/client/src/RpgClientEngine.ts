@@ -138,16 +138,11 @@ export class RpgClientEngine<T = any> {
   private initListeners() {
     this.webSocket.on("sync", (data) => {
       if (data.pId) this.playerIdSignal.set(data.pId)
-
       // Apply client-side prediction filtering and server reconciliation
       const filteredData = this.applyClientSidePredictionFilter(data);
-      const serverTimestamp = data.timestamp || Date.now();
-      
-      // Remove x,y from filteredData before loading to sceneMap
-      const dataWithoutPositions = this.removePositionsFromData(filteredData);
-      
-      this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: dataWithoutPositions }).subscribe();
-      load(this.sceneMap, dataWithoutPositions, true);
+
+      this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: filteredData }).subscribe();
+      load(this.sceneMap, filteredData, true);
 
       // Update physics after sceneMap has been updated
       this.updatePhysicsFromSync(filteredData);
@@ -681,45 +676,6 @@ export class RpgClientEngine<T = any> {
     }
   }
 
-  /**
-   * Remove x,y positions from synchronization data
-   * 
-   * Creates a copy of the data with x,y positions removed to avoid
-   * double application when loading to sceneMap.
-   * 
-   * @param data - Synchronization data containing players and events
-   * @returns Copy of data with x,y positions removed
-   * 
-   * @example
-   * ```ts
-   * // Remove positions before loading to sceneMap
-   * const dataWithoutPositions = this.removePositionsFromData(filteredData);
-   * ```
-   */
-  private removePositionsFromData(data: any): any {
-    // Create a deep copy of the data to avoid mutating the original
-    const dataCopy = JSON.parse(JSON.stringify(data));
-
-    // Remove x,y from players only for current player; keep for others
-    if (dataCopy.players) {
-      for (const [playerId, playerData] of Object.entries(dataCopy.players as Record<string, any>)) {
-        if (playerId === this.playerIdSignal()) {
-          delete (dataCopy.players as any)[playerId].x;
-          delete (dataCopy.players as any)[playerId].y;
-        }
-      }
-    }
-
-    // Remove x,y from events
-    if (dataCopy.events) {
-      for (const [eventId, eventData] of Object.entries(dataCopy.events as Record<string, any>)) {
-        delete (dataCopy.events as any)[eventId].x;
-        delete (dataCopy.events as any)[eventId].y;
-      }
-    }
-
-    return dataCopy;
-  }
 
   /**
    * Update physics hitboxes from synchronization data

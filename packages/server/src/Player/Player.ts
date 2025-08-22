@@ -131,10 +131,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     (this as any).addParameter(DEX, DEX_CURVE);
     (this as any).addParameter(AGI, AGI_CURVE);
     (this as any).allRecovery();
-  }
-  
-  _onInit() {
-    this.hooks.callHooks("server-playerProps-load", this).subscribe();
+
     combineLatest([this.x.observable, this.y.observable]).subscribe(([x, y]) => {
       this.frames = [...this.frames, {
         x: x,
@@ -143,9 +140,18 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       }]
     })
   }
+  
+  _onInit() {
+    this.hooks.callHooks("server-playerProps-load", this).subscribe();
+  }
 
   get hooks() {
     return inject<Hooks>(this.context as any, ModulesToken);
+  }
+
+  applyFrames() {
+    this._frames.set(this.frames)
+    this.frames = []
   }
 
   async execMethod(method: string, methodData: any[] = [], target?: any) {
@@ -320,6 +326,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       this.x.set(positions.x)
       this.y.set(positions.y)
     }
+    this._frames.set(this.frames)
   }
 
   getCurrentMap<T extends RpgMap = RpgMap>(): T | null {

@@ -107,11 +107,11 @@
   });
 
   const smoothX = animatedSignal(x(), {
-    duration: isMe() ? 0 : 100
+    duration: isMe() ? 0 : 0
   });
 
   const smoothY = animatedSignal(y(), {
-    duration: isMe() ? 0 : 100,
+    duration: isMe() ? 0 : 0,
   });
 
   const realAnimationName = signal(animationName());
