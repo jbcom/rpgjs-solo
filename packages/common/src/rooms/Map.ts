@@ -131,7 +131,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
     }
     
-
     this.playersSubscription = (this.players as any).observable.subscribe(({ value: player, type, key }: any) => { 
       if (type == 'add') {
         player.id = key
@@ -162,13 +161,19 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     this.eventsSubscription = this.events.observable.subscribe(({ value: event, type, key }) => {
       if (type == 'add') {
         event.id = key
+        // Events are static by default (cannot be pushed) unless they are moving
+        // This prevents the player from pushing events during collisions
         this.physic.addMovableHitbox(event, event.x(), event.y(), event.hitbox().w, event.hitbox().h, {
-          isSensor: true
+          isStatic: true
         });
         this.physic.registerMovementEvents(event.id, () => {
           event.animationName.set('walk')
+          // When event starts moving, make it dynamic
+          this.physic.setBodyStatic(event.id, false);
         }, () => {
           event.animationName.set('stand')
+          // When event stops moving, make it static again
+          this.physic.setBodyStatic(event.id, true);
         })
       }
       else if (type == 'remove') {

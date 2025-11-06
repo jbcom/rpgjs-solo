@@ -31,7 +31,8 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     .subscribe(() => {
        const frame = this.frames.shift()
        if (frame) {
-        this.engine.scene.physic.updateHitbox(this.id, frame.x, frame.y, frame.ts)
+        // Skip collision check for remote objects (server is authoritative)
+        this.engine.scene.physic.updateHitbox(this.id, frame.x, frame.y, undefined, undefined, true)
        }
     })
   }

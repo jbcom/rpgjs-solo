@@ -673,8 +673,14 @@ export class RpgClientEngine<T = any> {
       const frameDiff = ack.frame - this.inputFrameCounter; // negative if ack is behind
       if (Math.abs(frameDiff) <= 1) {
         if (typeof ack.x === 'number' && typeof ack.y === 'number') {
-          this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, currentPlayer.hitbox().w, currentPlayer.hitbox().h);
-          correctionApplied = true;
+          // Check if position is valid before applying (respects collisions)
+          const hitbox = currentPlayer.hitbox();
+          if (this.sceneMap.physic.isPositionValid(ack.x, ack.y, hitbox.w, hitbox.h, myId)) {
+            const success = this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, hitbox.w, hitbox.h);
+            if (success) {
+              correctionApplied = true;
+            }
+          }
         }
         if (typeof ack.direction !== 'undefined') {
           currentPlayer.changeDirection(ack.direction);
@@ -704,8 +710,14 @@ export class RpgClientEngine<T = any> {
       // Apply server authority only if positions/direction differ significantly
       if (!positionsMatch) {
         if (typeof ack.x === 'number' && typeof ack.y === 'number') {
-          this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, currentPlayer.hitbox().w, currentPlayer.hitbox().h);
-          correctionApplied = true;
+          // Check if position is valid before applying (respects collisions)
+          const hitbox = currentPlayer.hitbox();
+          if (this.sceneMap.physic.isPositionValid(ack.x, ack.y, hitbox.w, hitbox.h, myId)) {
+            const success = this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, hitbox.w, hitbox.h);
+            if (success) {
+              correctionApplied = true;
+            }
+          }
         }
         if (typeof ack.direction !== 'undefined') {
           currentPlayer.changeDirection(ack.direction);
@@ -770,6 +782,8 @@ export class RpgClientEngine<T = any> {
    */
   updatePhysicsFromSync(data: any): void {
     const serverTs = (data && typeof data.timestamp === 'number') ? data.timestamp : Date.now();
+    const currentPlayerId = this.playerIdSignal();
+    
     // Helper function to update entity physics hitbox
     const updateEntityPhysics = (entityId: string, entityData: any, entityType: 'player' | 'event') => {
       if (entityData.x !== undefined && entityData.y !== undefined) {
@@ -783,12 +797,16 @@ export class RpgClientEngine<T = any> {
         }
         const existingEntity = this.sceneMap.getObjectById(entityId);
         if (existingEntity) {
+          // For remote players, use skipCollisionCheck=true because server is authoritative
+          // For current player, collisions are already handled in applyServerAck
+          const isCurrentPlayer = entityId === currentPlayerId;
           this.sceneMap.physic.updateHitbox(
             entityId,
             entityData.x,
             entityData.y,
             existingEntity.hitbox().w,
-            existingEntity.hitbox().h
+            existingEntity.hitbox().h,
+            !isCurrentPlayer // Skip collision check for remote players (server authoritative)
           );
         }
       }

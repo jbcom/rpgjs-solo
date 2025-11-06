@@ -109,7 +109,11 @@ export class RpgCommonPhysic {
    */
   constructor() {
     this.engine = Matter.Engine.create({
-      gravity: { x: 0, y: 0 }
+      gravity: { x: 0, y: 0 },
+      positionIterations: 6, // Keep collision resolution active
+      velocityIterations: 4,  // Keep velocity resolution active
+      constraintIterations: 2,
+      enableSleeping: false
     });
     this.world = this.engine.world;
 
@@ -330,8 +334,12 @@ export class RpgCommonPhysic {
       
       // Try to create the polygon body
       try {
-        body = Matter.Bodies.fromVertices(0, 0, [vertices], {
+      body = Matter.Bodies.fromVertices(0, 0, [vertices], {
           isStatic: true,
+          restitution: 0,
+          friction: 0,
+          frictionStatic: 0,
+          slop: 0,
           label: id
         });
         
@@ -363,6 +371,10 @@ export class RpgCommonPhysic {
       const centerY = y + height/2;
       body = Matter.Bodies.rectangle(centerX, centerY, width, height, {
         isStatic: true,
+        restitution: 0,
+        friction: 0,
+        frictionStatic: 0,
+        slop: 0,
         label: id
       });
     }
@@ -412,6 +424,9 @@ export class RpgCommonPhysic {
       friction: 0,
       frictionAir: 0, // keep deterministic movement with prediction
       restitution: 0,
+      frictionStatic: 0,
+      slop: 0, // No penetration tolerance
+      density: 1000, // Very high density to prevent being pushed
       isStatic: false,
       ...options,
       label: player // Store reference to the player object
@@ -441,6 +456,82 @@ export class RpgCommonPhysic {
   }
 
   /**
+   * Check if a position would cause a collision with static hitboxes
+   * 
+   * Tests if placing a body at the given position and size would collide
+   * with any static hitboxes in the world. Used to validate positions
+   * before applying them, especially for server authority corrections.
+   * 
+   * @param x - X position (top-left corner)
+   * @param y - Y position (top-left corner)
+   * @param width - Width of the body
+   * @param height - Height of the body
+   * @param excludeId - Optional ID to exclude from collision check (e.g., the moving entity itself)
+   * @returns True if position is valid (no collision with static hitboxes), false otherwise
+   * 
+   * @example
+   * ```ts
+   * // Check if a position is valid before applying server correction
+   * if (physic.isPositionValid(newX, newY, playerWidth, playerHeight, playerId)) {
+   *   physic.updateHitbox(playerId, newX, newY);
+   * }
+   * ```
+   */
+  isPositionValid(x: number, y: number, width: number, height: number, excludeId?: string): boolean {
+    // Create a temporary body at the test position
+    const centerX = x + width / 2;
+    const centerY = y + height / 2;
+    const testBody = Matter.Bodies.rectangle(centerX, centerY, width, height, {
+      isStatic: false,
+      isSensor: true // Use sensor to detect collisions without affecting physics
+    });
+
+    // Get all bodies that should block movement:
+    // - Hitboxes of type 'static' (walls, obstacles)
+    // - Bodies that are Matter.js static (events when not moving)
+    const blockingBodies = Array.from(this.hitboxes.values())
+      .filter((h) => h.id !== excludeId && (h.type === 'static' || h.body.isStatic))
+      .map((h) => h.body);
+
+    // Check for collisions with blocking bodies
+    for (const blockingBody of blockingBodies) {
+      const collision = Matter.Collision.collides(testBody, blockingBody);
+      if (collision) {
+        return false; // Collision detected
+      }
+    }
+
+    return true; // No collision
+  }
+
+  /**
+   * Set whether a body is static or dynamic
+   * 
+   * Allows changing a body's static property at runtime. Static bodies
+   * cannot be moved by collisions, while dynamic bodies can.
+   * 
+   * @param id - ID of the hitbox
+   * @param isStatic - True to make the body static (immovable), false for dynamic
+   * @returns Boolean indicating success
+   * 
+   * @example
+   * ```ts
+   * // Make an event static (cannot be pushed)
+   * physic.setBodyStatic('event1', true);
+   * 
+   * // Make an event dynamic (can move and be pushed)
+   * physic.setBodyStatic('event1', false);
+   * ```
+   */
+  setBodyStatic(id: string, isStatic: boolean): boolean {
+    const hitbox = this.hitboxes.get(id);
+    if (!hitbox) return false;
+
+    Matter.Body.setStatic(hitbox.body, isStatic);
+    return true;
+  }
+
+  /**
    * Update a hitbox's position and size
    * 
    * @param id - ID of the hitbox to update
@@ -448,6 +539,7 @@ export class RpgCommonPhysic {
    * @param y - New Y position
    * @param width - New width (optional)
    * @param height - New height (optional)
+   * @param skipCollisionCheck - If true, skip collision validation (default: false)
    * @returns Boolean indicating success
    * 
    * @example
@@ -457,15 +549,29 @@ export class RpgCommonPhysic {
    * 
    * // Update both position and size
    * physic.updateHitbox('player1', newX, newY, newWidth, newHeight);
+   * 
+   * // Force update without collision check (use with caution)
+   * physic.updateHitbox('player1', newX, newY, undefined, undefined, true);
    * ```
    */
-  updateHitbox(id: string, x: number, y: number, width?: number, height?: number): boolean {
+  updateHitbox(id: string, x: number, y: number, width?: number, height?: number, skipCollisionCheck: boolean = false): boolean {
     const hitbox = this.hitboxes.get(id);
 
     if (!hitbox) return false;
 
     const body = hitbox.body;
     const player = body.label;
+
+    // For movable hitboxes, check if the new position would cause a collision with static hitboxes
+    if (!skipCollisionCheck && hitbox.type === 'movable') {
+      const bodyWidth = width !== undefined ? width : (body.bounds.max.x - body.bounds.min.x);
+      const bodyHeight = height !== undefined ? height : (body.bounds.max.y - body.bounds.min.y);
+      
+      if (!this.isPositionValid(x, y, bodyWidth, bodyHeight, id)) {
+        // Position would cause collision, reject the update
+        return false;
+      }
+    }
 
     if (width !== undefined && height !== undefined) {
       // Need to recreate the body if size changes
@@ -883,6 +989,19 @@ export class RpgCommonPhysic {
       case Direction.Up: // up
         dy = -speedValue;
         break;
+    }
+    
+    // Check if the new position would cause a collision
+    const width = body.bounds.max.x - body.bounds.min.x;
+    const height = body.bounds.max.y - body.bounds.min.y;
+    const currentTopLeftX = body.position.x - width / 2;
+    const currentTopLeftY = body.position.y - height / 2;
+    const newTopLeftX = currentTopLeftX + dx;
+    const newTopLeftY = currentTopLeftY + dy;
+    
+    // If the new position would cause a collision, don't move
+    if (!this.isPositionValid(newTopLeftX, newTopLeftY, width, height, player.id)) {
+      return false; // Movement blocked by collision
     }
     
     // Store intended movement for sliding calculations

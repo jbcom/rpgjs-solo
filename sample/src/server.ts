@@ -8,19 +8,20 @@ export function Event() {
     },
     async onAction(player: RpgPlayer) {
       player.gold = 100;
-      await player.showChoices("Hello World Hello World Hello World Hello World Hello World", [{
-        text: "yes",
-        value: "yes"
-      }, {
-        text: "no",
-        value: "no"
-      }], {
-        talkWith: this,
-        face: {
-          id: "facesetId",
-          expression: "happy"
-        }
-      });
+      // await player.showChoices("Hello World Hello World Hello World Hello World Hello World", [{
+      //   text: "yes",
+      //   value: "yes"
+      // }, {
+      //   text: "no",
+      //   value: "no"
+      // }], {
+      //   talkWith: this,
+      //   face: {
+      //     id: "facesetId",
+      //     expression: "happy"
+      //   }
+      // });
+      player.showText("Hello World")
     },
   };
 }
@@ -52,9 +53,8 @@ export default createServer({
             //  player.wood.update(wood => wood + 1)
             //  player.showComponentAnimation('wood')
               // player.name.set('test')
-              
-              console.log(player.x(), player.y(), player.name())
-                  player.setAnimation('attack', 1)
+            //   const event = player.getCurrentMap()?.getEvents()[0]
+            //  event?.moveTo(player)
               
             }
             // if (input.action) {

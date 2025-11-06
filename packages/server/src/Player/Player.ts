@@ -320,7 +320,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   async teleport(positions: { x: number; y: number }) {
     if (!this.map) return false;
     if (this.map.physic) {
-      this.map.physic.updateHitbox(this.id, positions.x, positions.y);
+      // Skip collision check for teleportation (allow teleporting through walls)
+      this.map.physic.updateHitbox(this.id, positions.x, positions.y, undefined, undefined, true);
     }
     else {
       this.x.set(positions.x)
