@@ -469,7 +469,7 @@ export class RpgClientEngine<T = any> {
       
       // No replay here; reconciliation handled after load() using ack
     }
-    
+
     return filteredData;
   }
 
@@ -638,8 +638,9 @@ export class RpgClientEngine<T = any> {
    * ```
    */
   private applyServerAck(ack: { frame: number; x?: number; y?: number; direction?: Direction }) {
+
     if (typeof ack.frame !== 'number') return;
-    if (ack.frame <= this.lastAckFrame) return;
+    if (ack.frame < this.lastAckFrame) return;
 
     const currentPlayer = this.sceneMap.getCurrentPlayer();
     const myId = this.playerIdSignal();
@@ -660,7 +661,6 @@ export class RpgClientEngine<T = any> {
     if (this.frameOffset === 0 && this.inputHistory.length > 0) {
       const expectedFrame = this.inputHistory[0].frame;
       this.frameOffset = ack.frame - expectedFrame;
-      console.log(`Calculated frame offset: ${this.frameOffset}`);
     }
 
     // Find the input entry with the matching frame in our history
@@ -672,7 +672,6 @@ export class RpgClientEngine<T = any> {
       // If the frame is not in history, only apply authority when the ack frame is almost current
       const frameDiff = ack.frame - this.inputFrameCounter; // negative if ack is behind
       if (Math.abs(frameDiff) <= 1) {
-        console.log(`Frame ${ack.frame} not found in history but close to current (diff ${frameDiff}), applying server authority`);
         if (typeof ack.x === 'number' && typeof ack.y === 'number') {
           this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, currentPlayer.hitbox().w, currentPlayer.hitbox().h);
           correctionApplied = true;
@@ -681,10 +680,7 @@ export class RpgClientEngine<T = any> {
           currentPlayer.changeDirection(ack.direction);
           correctionApplied = true;
         }
-      } else {
-        // Too old or too far in future: ignore to avoid false corrections
-        console.log(`Frame ${ack.frame} not present (diff ${frameDiff}), ignoring ack to avoid false correction`);
-      }
+      } 
     } else {
       // Compare server position with our predicted position for that frame
       const POSITION_TOLERANCE = Math.max(3, (currentPlayer as any).speed?.() ?? 4); // tolerate at least one tile-speed step
@@ -695,18 +691,12 @@ export class RpgClientEngine<T = any> {
         const yDiff = Math.abs(ack.y - matchingEntry.resultingY);
         positionsMatch = xDiff <= POSITION_TOLERANCE && yDiff <= POSITION_TOLERANCE;
         
-        if (!positionsMatch) {
-          console.log(`Frame ${ack.frame}: server(${ack.x}, ${ack.y}) vs client(${matchingEntry.resultingX}, ${matchingEntry.resultingY}), diff(${xDiff}, ${yDiff}) - applying server authority`);
-        } else {
-          console.log(`Frame ${ack.frame}: positions match, no correction needed`);
-        }
       }
       
       // Check direction match
       if (typeof ack.direction !== 'undefined') {
         const directionMatch = ack.direction === matchingEntry.resultingDirection;
         if (!directionMatch) {
-          console.log(`Frame ${ack.frame}: direction mismatch, server(${ack.direction}) vs client(${matchingEntry.resultingDirection}) - applying server authority`);
           positionsMatch = false;
         }
       }
