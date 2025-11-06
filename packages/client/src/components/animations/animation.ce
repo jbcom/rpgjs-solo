@@ -7,10 +7,9 @@
   const { x, y, animationName, graphic, onFinish } = defineProps();
 
   const client = inject(RpgClientEngine);
-  const spritesheets = client.spritesheets;
 
   const sheet = {
-    definition: spritesheets.get(graphic()),
+    definition: client.getSpriteSheet(graphic()),
     playing: animationName() ?? 'default',
     onFinish
   };

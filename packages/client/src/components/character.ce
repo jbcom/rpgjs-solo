@@ -126,7 +126,7 @@
   
   const sheet = (graphicId) => {
     return {
-      definition: spritesheets.get(graphicId),
+      definition: client.getSpriteSheet(graphicId),
       playing: realAnimationName,
       params: {
         direction

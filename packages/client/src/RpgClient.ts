@@ -306,6 +306,46 @@ export interface RpgClient {
     spritesheets?: any[],
 
     /** 
+     * Resolver function for dynamically creating spritesheets
+     * 
+     * This function is called when a spritesheet is requested but not found in the cache.
+     * It can be synchronous (returns directly) or asynchronous (returns a Promise).
+     * The resolved spritesheet is automatically cached for future use.
+     * 
+     * ```ts
+     * import { defineModule, RpgClient } from '@rpgjs/client'
+     * 
+     * defineModule<RpgClient>({
+     *      spritesheetResolver: (id: string) => {
+     *          // Synchronous resolver
+     *          if (id === 'dynamic-sprite') {
+     *              return {
+     *                  id: 'dynamic-sprite',
+     *                  image: 'path/to/image.png',
+     *                  framesWidth: 32,
+     *                  framesHeight: 32
+     *              };
+     *          }
+     *          return undefined;
+     *      }
+     * })
+     * 
+     * // Or asynchronous resolver
+     * defineModule<RpgClient>({
+     *      spritesheetResolver: async (id: string) => {
+     *          const response = await fetch(`/api/spritesheets/${id}`);
+     *          const data = await response.json();
+     *          return data;
+     *      }
+     * })
+     * ```
+     * 
+     * @prop {(id: string) => any | Promise<any>} [spritesheetResolver]
+     * @memberof RpgClient
+     * */
+    spritesheetResolver?: (id: string) => any | Promise<any>,
+
+    /** 
      * Array containing the list of GUI components
      * 
      * ```ts

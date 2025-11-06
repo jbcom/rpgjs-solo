@@ -78,7 +78,6 @@
   }
   const dialogBoxTypewriterSound = client.globalConfig?.box?.sounds?.typewriter
 
-  const spritesheets = client.spritesheets;
   const sounds = client.sounds;
 
   client.stopProcessingInput = true;
@@ -140,7 +139,7 @@
 
   const faceSheet = (graphicId, animationName) => {
     return {
-      definition: spritesheets.get(graphicId),
+      definition: client.getSpriteSheet(graphicId),
       playing: animationName,
     };
   }

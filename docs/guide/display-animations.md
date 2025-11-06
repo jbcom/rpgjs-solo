@@ -7,6 +7,8 @@ This guide explains how to display animations in RPG-JS. There are two main type
 
 ## Spritesheet Animations
 
+> **See also:** [Spritesheets Guide](/guide/spritesheets) for comprehensive information about spritesheets, including dynamic spritesheet resolution.
+
 ### 1. Creating the Animation Spritesheet
 
 First, you need to create an animation spritesheet and add it to your module's spritesheets configuration.
@@ -151,7 +153,6 @@ Create a Canvas Engine component file (e.g., `ExplosionComponent.ce`):
   });
 
   const client = inject(RpgClientEngine);
-  const spritesheets = client.spritesheets;
 
   // Animation properties
   const scale = animatedSignal(0.1, { duration: duration() });
@@ -159,7 +160,7 @@ Create a Canvas Engine component file (e.g., `ExplosionComponent.ce`):
 
   // Setup spritesheet
   const sheet = {
-    definition: spritesheets.get('explosion'),
+    definition: client.getSpriteSheet('explosion'),
     playing: 'default'
   };
 

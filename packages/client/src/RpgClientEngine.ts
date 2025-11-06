@@ -28,6 +28,7 @@ export class RpgClientEngine<T = any> {
   spritesheets: Map<string, any> = new Map();
   sounds: Map<string, any> = new Map();
   componentAnimations: any[] = [];
+  private spritesheetResolver?: (id: string) => any | Promise<any>;
   particleSettings: {
     emitters: any[]
   } = {
@@ -104,6 +105,7 @@ export class RpgClientEngine<T = any> {
 
 
     this.hooks.callHooks("client-spritesheets-load", this).subscribe();
+    this.hooks.callHooks("client-spritesheetResolver-load", this).subscribe();
     this.hooks.callHooks("client-sounds-load", this).subscribe();
     this.hooks.callHooks("client-gui-load", this).subscribe();
     this.hooks.callHooks("client-particles-load", this).subscribe();
@@ -203,6 +205,90 @@ export class RpgClientEngine<T = any> {
   addSpriteSheet<T = any>(spritesheetClass: any, id?: string): any {
     this.spritesheets.set(id || spritesheetClass.id, spritesheetClass);
     return spritesheetClass as any;
+  }
+
+  /**
+   * Set a resolver function for spritesheets
+   * 
+   * The resolver is called when a spritesheet is requested but not found in the cache.
+   * It can be synchronous (returns directly) or asynchronous (returns a Promise).
+   * The resolved spritesheet is automatically cached for future use.
+   * 
+   * @param resolver - Function that takes a spritesheet ID and returns a spritesheet or Promise of spritesheet
+   * 
+   * @example
+   * ```ts
+   * // Synchronous resolver
+   * engine.setSpritesheetResolver((id) => {
+   *   if (id === 'dynamic-sprite') {
+   *     return { id: 'dynamic-sprite', image: 'path/to/image.png', framesWidth: 32, framesHeight: 32 };
+   *   }
+   *   return undefined;
+   * });
+   * 
+   * // Asynchronous resolver (loading from API)
+   * engine.setSpritesheetResolver(async (id) => {
+   *   const response = await fetch(`/api/spritesheets/${id}`);
+   *   const data = await response.json();
+   *   return data;
+   * });
+   * ```
+   */
+  setSpritesheetResolver(resolver: (id: string) => any | Promise<any>): void {
+    this.spritesheetResolver = resolver;
+  }
+
+  /**
+   * Get a spritesheet by ID, using resolver if not found in cache
+   * 
+   * This method first checks if the spritesheet exists in the cache.
+   * If not found and a resolver is set, it calls the resolver to create the spritesheet.
+   * The resolved spritesheet is automatically cached for future use.
+   * 
+   * @param id - The spritesheet ID to retrieve
+   * @returns The spritesheet if found or created, or undefined if not found and no resolver
+   * @returns Promise<any> if the resolver is asynchronous
+   * 
+   * @example
+   * ```ts
+   * // Synchronous usage
+   * const spritesheet = engine.getSpriteSheet('my-sprite');
+   * 
+   * // Asynchronous usage (when resolver returns Promise)
+   * const spritesheet = await engine.getSpriteSheet('dynamic-sprite');
+   * ```
+   */
+  getSpriteSheet(id: string): any | Promise<any> {
+    // Check cache first
+    if (this.spritesheets.has(id)) {
+      return this.spritesheets.get(id);
+    }
+
+    // If not in cache and resolver exists, use it
+    if (this.spritesheetResolver) {
+      const result = this.spritesheetResolver(id);
+      
+      // Check if result is a Promise
+      if (result instanceof Promise) {
+        return result.then((spritesheet) => {
+          if (spritesheet) {
+            // Cache the resolved spritesheet
+            this.spritesheets.set(id, spritesheet);
+          }
+          return spritesheet;
+        });
+      } else {
+        // Synchronous result
+        if (result) {
+          // Cache the resolved spritesheet
+          this.spritesheets.set(id, result);
+        }
+        return result;
+      }
+    }
+
+    // No resolver and not in cache
+    return undefined;
   }
 
   addSound(sound: any, id?: string) {

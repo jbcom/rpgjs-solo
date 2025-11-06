@@ -33,6 +33,18 @@ export default {
     provideClientGlobalConfig(),
     provideClientModules([
       {
+        spritesheetResolver: (id: string) => {
+          if (id === "hero") {
+            return Presets.LPCSpritesheetPreset({
+              id: "hero",
+              imageSource: "hero.png",
+              width: 1728,
+              height: 5568,
+              ratio: 1.5,
+            })
+          }
+          return undefined;
+        },
         sprite: {
           componentsBehind: [Shadow],
           onInit: (sprite) => {
@@ -65,13 +77,7 @@ export default {
             happy: [0, 0],
             sad: [1, 0],
           }),
-          Presets.LPCSpritesheetPreset({
-            id: "hero",
-            imageSource: "hero.png",
-            width: 1728,
-            height: 5568,
-            ratio: 1.5,
-          }),
+        
           Presets.LPCSpritesheetPreset({
             id: "monster",
             imageSource: "monster.png",

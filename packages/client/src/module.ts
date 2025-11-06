@@ -22,6 +22,14 @@ export function provideClientModules(modules: RpgClient[]) {
           },
         };
       }
+      if (module.spritesheetResolver) {
+        const resolver = module.spritesheetResolver;
+        module.spritesheetResolver = {
+          load: (engine: RpgClientEngine) => {
+            engine.setSpritesheetResolver(resolver);
+          },
+        };
+      }
       if (module.sounds) {
         const sounds = [...module.sounds];
         module.sounds = {
