@@ -139,6 +139,7 @@ export class RpgClientEngine<T = any> {
 
   private initListeners() {
     this.webSocket.on("sync", (data) => {
+
       if (data.pId) this.playerIdSignal.set(data.pId)
       // Apply client-side prediction filtering and server reconciliation
       const filteredData = this.applyClientSidePredictionFilter(data);

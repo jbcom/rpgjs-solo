@@ -134,12 +134,13 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         };
       }
     }
+
     return {
       ...packet,
-      value: {
-        ...packet.value,
-        ...obj
-      }
+      value: (typeof packet.value === 'object' ? {
+          ...(packet.value),
+          ...obj
+        } : packet.value)
     };
   }
 

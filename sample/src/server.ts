@@ -8,20 +8,19 @@ export function Event() {
     },
     async onAction(player: RpgPlayer) {
       player.gold = 100;
-      // await player.showChoices("Hello World Hello World Hello World Hello World Hello World", [{
-      //   text: "yes",
-      //   value: "yes"
-      // }, {
-      //   text: "no",
-      //   value: "no"
-      // }], {
-      //   talkWith: this,
-      //   face: {
-      //     id: "facesetId",
-      //     expression: "happy"
-      //   }
-      // });
-      player.showText("Hello World")
+      await player.showChoices("Hello World Hello World Hello World Hello World Hello World", [{
+        text: "yes",
+        value: "yes"
+      }, {
+        text: "no",
+        value: "no"
+      }], {
+        talkWith: this,
+        face: {
+          id: "facesetId",
+          expression: "happy"
+        }
+      });
     },
   };
 }
