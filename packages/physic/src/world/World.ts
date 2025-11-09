@@ -115,6 +115,15 @@ export class World {
   }
 
   /**
+   * Returns the fixed simulation time step.
+   *
+   * @returns Time step in seconds
+   */
+  public getTimeStep(): number {
+    return this.timeStep;
+  }
+
+  /**
    * Adds an entity to the world
    * 
    * @param entity - Entity to add

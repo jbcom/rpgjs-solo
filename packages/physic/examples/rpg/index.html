@@ -14,49 +14,141 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      overflow: hidden;
+      min-height: 100vh;
+      box-sizing: border-box;
     }
     h1 {
-      margin: 0 0 10px 0;
+      margin: 0 0 18px 0;
       color: #4ecdc4;
+      font-size: 26px;
+      letter-spacing: 0.04em;
+    }
+    .layout {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+      width: 100%;
+      max-width: 1450px;
+    }
+    .scene {
+      flex: 1;
+      display: flex;
+      justify-content: center;
     }
     #canvas {
       border: 3px solid #333;
       background: #2d5016;
-      cursor: none;
       box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      max-width: 100%;
+      height: auto;
+      border-radius: 12px;
     }
-    .controls {
-      margin-top: 15px;
+    .debug-panel {
+      width: 350px;
+      background: #202020;
+      border: 1px solid #2f2f2f;
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.35);
       display: flex;
-      gap: 15px;
-      align-items: center;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 26px;
+      height: 700px;
+      overflow: auto;
+    }
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .panel-info {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
     .info {
-      margin-top: 10px;
-      font-size: 14px;
-      color: #aaa;
-      text-align: center;
+      margin: 0;
+      font-size: 13px;
+      color: #8f8f8f;
+      text-align: left;
     }
-    .instructions {
+    .panel-status {
+      margin: 0;
+      font-size: 13px;
+      color: #d1d1d1;
+      line-height: 1.4;
+    }
+    .panel-status strong {
+      color: #4ecdc4;
+      font-weight: 600;
+    }
+    .panel-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .debug-card {
       background: #2a2a2a;
-      padding: 15px;
-      border-radius: 8px;
-      margin-top: 15px;
-      max-width: 800px;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
     }
-    .instructions h2 {
-      margin-top: 0;
+    .debug-card__badge {
+      align-self: flex-start;
+      background: rgba(78, 205, 196, 0.18);
+      color: #4ecdc4;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 999px;
+    }
+    .debug-card h3 {
+      margin: 0;
+      font-size: 17px;
+      color: #ffffff;
+    }
+    .debug-card p {
+      margin: 0;
+      font-size: 13px;
+      color: #c7c7c7;
+      line-height: 1.45;
+    }
+    .debug-card__button {
+      align-self: flex-start;
+      background: #4ecdc4;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      color: #1a1a1a;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s ease, background 0.2s ease;
+    }
+    .debug-card__button:hover {
+      transform: translateY(-2px);
+      background: #5fe3da;
+    }
+    .panel-section h2 {
+      margin: 0;
       color: #4ecdc4;
       font-size: 18px;
+      letter-spacing: 0.04em;
     }
-    .instructions ul {
-      margin: 10px 0;
-      padding-left: 20px;
-    }
-    .instructions li {
-      margin: 5px 0;
+    .panel-section ul {
+      margin: 0;
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13px;
+      color: #d5d5d5;
+      line-height: 1.45;
     }
     .key {
       background: #444;
@@ -65,21 +157,49 @@
       font-family: monospace;
       font-weight: bold;
     }
+    @media (max-width: 1200px) {
+      .layout {
+        flex-direction: column;
+      }
+      .debug-panel {
+        width: 100%;
+      }
+      .scene {
+        width: 100%;
+        justify-content: center;
+      }
+      #canvas {
+        max-width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
   <h1>🗡️ RPG Physic - Jeu RPG</h1>
-  <canvas id="canvas" width="1024" height="768"></canvas>
-  <div class="info" id="info">Position: (0, 0) | NPCs: 5 | FPS: 60</div>
-  
-  <div class="instructions">
-    <h2>Contrôles</h2>
-    <ul>
-      <li>Déplacement : <span class="key">WASD</span> ou <span class="key">Flèches</span></li>
-      <li>Le héros (bleu) se déplace et peut pousser les NPCs (vert)</li>
-      <li>Les murs et obstacles (gris) sont statiques</li>
-      <li>Les arbres (marron) sont décoratifs</li>
-    </ul>
+  <div class="layout">
+    <div class="scene">
+      <canvas id="canvas" width="1024" height="768"></canvas>
+    </div>
+    <aside class="debug-panel" id="debug-panel">
+      <section class="panel-section">
+        <div class="panel-info">
+          <span class="info" id="info">Position: (0, 0) | NPCs: 5 | FPS: 60</span>
+          <p class="panel-status" id="debug-status">Sélectionnez un mouvement pour l’appliquer sur les NPCs.</p>
+          <p class="panel-status" id="npc-focus">Dernier NPC ciblé : -</p>
+        </div>
+        <div class="panel-grid" id="debug-controls" aria-label="Contrôles debug pour tester les stratégies de mouvement"></div>
+      </section>
+      <section class="panel-section">
+        <h2>Contrôles</h2>
+        <ul>
+          <li>Déplacement : <span class="key">WASD</span> ou <span class="key">Flèches</span></li>
+          <li>Le héros (bleu) se déplace et peut pousser les NPCs (vert)</li>
+          <li>Les murs et obstacles (gris) sont statiques</li>
+          <li>Les arbres (marron) sont décoratifs</li>
+          <li>Utilisez le panneau de droite pour déclencher des stratégies de déplacement sur les NPCs</li>
+        </ul>
+      </section>
+    </aside>
   </div>
 
   <script type="module" src="./main.ts"></script>

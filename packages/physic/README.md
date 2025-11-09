@@ -60,6 +60,10 @@ function gameLoop() {
 gameLoop();
 ```
 
+## Integration with @rpgjs/common
+
+`@rpgjs/common` now delegates all simulation to this package. The legacy Matter.js wrapper has been replaced by a façade that internally creates `PhysicsEngine` entities. Game logic keeps using `RpgCommonPhysic`, but every hitbox, zone and movement strategy is now backed by the deterministic core exposed here. This ensures that the same movement and collision logic runs on both client and server without depending on third-party physics engines.
+
 ## Examples
 
 - [Canvas Example](./examples/canvas/) - Interactive HTML5 Canvas demo (run with `npm run example`)
@@ -132,6 +136,42 @@ entity.freeze(); // Make static
 entity.sleep(); // Put to sleep
 entity.wakeUp(); // Wake up
 ```
+
+### Movement System
+
+The movement module provides reusable strategies and a manager that plugs into the physics engine.
+
+```typescript
+import {
+  PhysicsEngine,
+  MovementManager,
+  Dash,
+  LinearMove,
+} from '@rpgjs/physic';
+
+const engine = new PhysicsEngine({ timeStep: 1 / 60 });
+const player = engine.createEntity({
+  position: { x: 0, y: 0 },
+  radius: 10,
+  mass: 1,
+});
+
+const movement = engine.getMovementManager();
+
+movement.add(player, new Dash(8, { x: 1, y: 0 }, 0.2));
+movement.add(player, new LinearMove({ x: 0, y: 3 }, 1.5));
+
+function loop() {
+  engine.stepWithMovements();
+  requestAnimationFrame(loop);
+}
+
+loop();
+```
+
+- `MovementManager` accepts entities directly or can be instantiated with a resolver (`MovementManager.forEngine(engine)` is used internally by `PhysicsEngine`).
+- Strategies consume the generic `MovementBody` interface so you can wrap custom bodies; `@rpgjs/common` exposes an adapter for Matter.js hitboxes.
+- Call `movement.update(dt)` manually when you need custom timing, or use `engine.stepWithMovements(dt)` to update movements and advance the simulation in one call.
 
 ### Static Obstacles
 

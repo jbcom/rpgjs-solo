@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RpgCommonPhysic } from '../src/Physic';
 import { Direction } from '../src/Player';
 import { signal } from '@signe/reactive';
-import * as Matter from 'matter-js';
+import type { PhysicsBodySnapshot } from '../src/Physic';
 
 /**
  * Helper to build a mock RpgCommonPlayer compliant with the Physic class
@@ -18,9 +18,9 @@ const createMockPlayer = (id: string, x = 100, y = 100) => {
     y: sigY,
     speed: sigSpeed,
     direction: sigDirection,
-    applyPhysic: vi.fn((body: Matter.Body) => {
-      sigX.set(body.position.x);
-      sigY.set(body.position.y);
+    applyPhysic: vi.fn((snapshot: PhysicsBodySnapshot) => {
+      sigX.set(snapshot.topLeft.x);
+      sigY.set(snapshot.topLeft.y);
     }),
   } as any;
 };

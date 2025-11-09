@@ -8,6 +8,7 @@ import type { SpatialPartition } from '../world/SpatialPartition';
 import { assignPolygonCollider, PolygonConfig } from '../collision/PolygonCollider';
 import { raycast as raycastUtil, RaycastHit } from '../collision/raycast';
 import { sweepEntities as sweepUtil, SweepResult } from '../collision/sweep';
+import { MovementManager } from '../movement/MovementManager';
 
 /**
  * Physics engine configuration
@@ -41,6 +42,7 @@ export class PhysicsEngine {
   private world: World;
   private regionManager: RegionManager | null = null;
   private useRegions: boolean;
+  private movementManager: MovementManager | null = null;
 
   /**
    * Creates a new physics engine
@@ -63,6 +65,41 @@ export class PhysicsEngine {
     } else {
       this.world = new World(config);
     }
+  }
+
+  /**
+   * Gets the movement manager bound to this engine.
+   *
+   * The manager is lazily created and reused.
+   *
+   * @returns Movement manager instance
+   */
+  public getMovementManager(): MovementManager {
+    if (!this.movementManager) {
+      this.movementManager = MovementManager.forEngine(this);
+    }
+    return this.movementManager;
+  }
+
+  /**
+   * Updates all registered movement strategies.
+   *
+   * @param dt - Time delta in seconds (defaults to the world's time step)
+   */
+  public updateMovements(dt?: number): void {
+    const manager = this.getMovementManager();
+    const delta = dt ?? this.world.getTimeStep();
+    manager.update(delta);
+  }
+
+  /**
+   * Updates movements and then steps the simulation.
+   *
+   * @param dt - Time delta in seconds (defaults to the world's time step)
+   */
+  public stepWithMovements(dt?: number): void {
+    this.updateMovements(dt);
+    this.step();
   }
 
   /**

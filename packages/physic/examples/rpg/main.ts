@@ -9,12 +9,28 @@
  * - Collision detection and response
  */
 
-import { PhysicsEngine, Vector2, Entity, CollisionInfo, testCollision, AABB } from '../../src/index.js';
+import {
+  PhysicsEngine,
+  Vector2,
+  Entity,
+  CollisionInfo,
+  Dash,
+  LinearMove,
+  Knockback,
+  PathFollow,
+  Oscillate,
+  CompositeMovement,
+  SeekAvoid,
+} from '../../src/index.js';
+import type { MovementStrategy } from '../../src/index.js';
 
 // Get canvas and context
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 const infoEl = document.getElementById('info') as HTMLSpanElement;
+const debugControls = document.getElementById('debug-controls') as HTMLDivElement | null;
+const debugStatusEl = document.getElementById('debug-status') as HTMLParagraphElement | null;
+const npcFocusEl = document.getElementById('npc-focus') as HTMLParagraphElement | null;
 
 // World dimensions
 const WORLD_WIDTH = 2000;
@@ -30,10 +46,15 @@ const engine = new PhysicsEngine({
   spatialGridWidth: Math.ceil(WORLD_WIDTH / CELL_SIZE),  // 10 cells
   spatialGridHeight: Math.ceil(WORLD_HEIGHT / CELL_SIZE), // 8 cells
 });
+const movement = engine.getMovementManager();
 
 // Track collisions with static obstacles for hero blocking
 const heroCollisionNormals: Vector2[] = [];
 const activeHeroCollisions: Map<string, CollisionInfo> = new Map();
+
+// Track collisions with static obstacles for NPCs blocking
+const npcCollisionNormals: Map<string, Vector2[]> = new Map();
+const activeNpcCollisions: Map<string, CollisionInfo> = new Map();
 
 // Game state
 interface GameEntity {
@@ -41,6 +62,7 @@ interface GameEntity {
   type: 'hero' | 'npc' | 'wall' | 'obstacle' | 'tree';
   color: string;
   name?: string;
+  debugPulse?: number;
 }
 
 const gameEntities: GameEntity[] = [];
@@ -49,6 +71,41 @@ let hero: GameEntity | null = null;
 // Keyboard state
 const keys: { [key: string]: boolean } = {};
 const moveSpeed = 200; // pixels per second
+const DEBUG_PULSE_DURATION = 1.5;
+let npcCursor = 0;
+let lastNpcTriggered: GameEntity | null = null;
+
+type DebugAction = {
+  id: string;
+  label: string;
+  description: string;
+  scope: 'single' | 'all';
+  run?: (npc: GameEntity) => void;
+  runAll?: (npcs: GameEntity[]) => void;
+};
+
+function formatNpcName(entity: GameEntity): string {
+  return entity.name ?? `NPC ${entity.entity.uuid.slice(0, 4).toUpperCase()}`;
+}
+
+function setDebugStatus(message: string): void {
+  if (debugStatusEl) {
+    debugStatusEl.textContent = message;
+  }
+}
+
+function setNpcFocus(customMessage?: string): void {
+  if (!npcFocusEl) return;
+  if (customMessage) {
+    npcFocusEl.textContent = customMessage;
+    return;
+  }
+  if (lastNpcTriggered) {
+    npcFocusEl.textContent = `Dernier NPC ciblé : ${formatNpcName(lastNpcTriggered)}`;
+  } else {
+    npcFocusEl.textContent = 'Dernier NPC ciblé : -';
+  }
+}
 
 // Camera
 const camera = {
@@ -160,8 +217,9 @@ function createNPCs(): void {
     const entity = engine.createEntity({
       position: { x: npc.x, y: npc.y },
       radius: 20,
-      mass: Infinity, // Immovable NPCs (like walls)
-      // Alternative: use mass: 10 for heavy but pushable NPCs
+      mass: 8,
+      linearDamping: 1.2,
+      friction: 0.6,
     });
     gameEntities.push({
       entity,
@@ -190,6 +248,254 @@ function createHero(): void {
     name: 'Hero',
   };
   gameEntities.push(hero);
+}
+
+function getNPCs(): GameEntity[] {
+  return gameEntities.filter((entity) => entity.type === 'npc');
+}
+
+function nextNPC(): GameEntity | null {
+  const npcs = getNPCs();
+  if (npcs.length === 0) {
+    console.warn('[debug] No NPC available to apply a movement strategy.');
+    setDebugStatus('Aucun NPC disponible pour appliquer un mouvement.');
+    return null;
+  }
+  const npc = npcs[npcCursor % npcs.length];
+  npcCursor = (npcCursor + 1) % npcs.length;
+  return npc;
+}
+
+function highlightEntity(entity: GameEntity): void {
+  entity.debugPulse = DEBUG_PULSE_DURATION;
+  lastNpcTriggered = entity;
+  setNpcFocus();
+}
+
+function decayDebugPulses(deltaTime: number): void {
+  gameEntities.forEach((gameEntity) => {
+    if (gameEntity.debugPulse && gameEntity.debugPulse > 0) {
+      gameEntity.debugPulse = Math.max(0, gameEntity.debugPulse - deltaTime);
+    }
+  });
+}
+
+function scheduleStrategy(target: GameEntity, strategy: MovementStrategy, label: string): void {
+  movement.clear(target.entity);
+  movement.add(target.entity, strategy);
+  target.entity.setVelocity({ x: 0, y: 0 });
+  highlightEntity(target);
+  setDebugStatus(`${label} → ${formatNpcName(target)}`);
+}
+
+function createDebugButtons(): void {
+  if (!debugControls) {
+    return;
+  }
+
+  const actions: DebugAction[] = [
+    {
+      id: 'dash',
+      label: 'Dash impulsion',
+      description: 'Applique un dash rapide dans une direction aléatoire sur le prochain NPC.',
+      scope: 'single',
+      run: (npc) => {
+        const angle = Math.random() * Math.PI * 2;
+        const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+        scheduleStrategy(npc, new Dash(220, direction, 0.25), 'Dash impulsion');
+      },
+    },
+    {
+      id: 'linear-east',
+      label: 'Push linéaire Est',
+      description: 'Déplace le prochain NPC vers l’Est avec une vitesse constante.',
+      scope: 'single',
+      run: (npc) => {
+        scheduleStrategy(npc, new LinearMove({ x: 160, y: 0 }, 1.5), 'Push linéaire');
+      },
+    },
+    {
+      id: 'oscillate',
+      label: 'Oscillation verticale',
+      description: 'Fait osciller le prochain NPC de haut en bas pendant quelques secondes.',
+      scope: 'single',
+      run: (npc) => {
+        scheduleStrategy(npc, new Oscillate({ x: 0, y: 1 }, 100, 2, 'sine', 6), 'Oscillation verticale');
+      },
+    },
+    {
+      id: 'patrol',
+      label: 'Patrouille carrée',
+      description: 'Tous les NPCs patrouillent en boucle sur un carré autour de leur position.',
+      scope: 'all',
+      runAll: (npcs) => {
+        npcs.forEach((npc) => {
+          const { x, y } = npc.entity.position;
+          const size = 180;
+          const waypoints = [
+            { x: x + size, y },
+            { x: x + size, y: y + size },
+            { x, y: y + size },
+            { x, y },
+          ];
+          scheduleStrategy(npc, new PathFollow(waypoints, 140, true, 0.5), 'Patrouille carrée');
+        });
+        lastNpcTriggered = null;
+        setNpcFocus('Dernier NPC ciblé : tous les NPCs');
+        setDebugStatus(`Patrouille carrée appliquée sur ${npcs.length} NPCs.`);
+      },
+    },
+    {
+      id: 'knockback',
+      label: 'Knockback radial',
+      description: 'Repousse tous les NPCs à partir du héros (ou du centre) comme une explosion.',
+      scope: 'all',
+      runAll: (npcs) => {
+        const origin = hero?.entity.position.clone() ?? new Vector2(0, 0);
+
+        npcs.forEach((npc) => {
+          // Direction from origin to NPC (outward)
+          const direction = new Vector2(
+            npc.entity.position.x - origin.x,
+            npc.entity.position.y - origin.y,
+          );
+          if (direction.length() === 0) {
+            direction.set(1, 0);
+          } else {
+            direction.normalizeInPlace();
+          }
+          scheduleStrategy(
+            npc,
+            new Knockback({ x: direction.x, y: direction.y }, 300, 0.5, 0.3),
+            'Knockback radial',
+          );
+        });
+        lastNpcTriggered = null;
+        setNpcFocus('Dernier NPC ciblé : tous les NPCs');
+        setDebugStatus(`Knockback radial appliqué sur ${npcs.length} NPCs.`);
+      },
+    },
+    {
+      id: 'seek-avoid-hero',
+      label: 'Seek & Avoid (Hero)',
+      description: 'Applique SeekAvoid sur le prochain NPC pour poursuite du héros avec évitement.',
+      scope: 'single',
+      run: (npc) => {
+        if (!hero) {
+          setDebugStatus('SeekAvoid non disponible : le héros est introuvable.');
+          return;
+        }
+        const strategy = new SeekAvoid(engine, () => hero!.entity, 180, 140, 80, 48);
+        scheduleStrategy(npc, strategy, 'Seek & Avoid (Hero)');
+      },
+    },
+    {
+      id: 'combo',
+      label: 'Combo dash + wave',
+      description: 'Dash suivi d’une oscillation latérale pour le prochain NPC.',
+      scope: 'single',
+      run: (npc) => {
+        const angle = Math.random() * Math.PI * 2;
+        const dashDirection = { x: Math.cos(angle), y: Math.sin(angle) };
+        const perpendicular = { x: -dashDirection.y, y: dashDirection.x };
+        const combo = new CompositeMovement('sequence', [
+          new Dash(200, dashDirection, 0.2),
+          new Oscillate(perpendicular, 80, 1.5, 'sine', 3),
+        ]);
+        scheduleStrategy(npc, combo, 'Combo dash + wave');
+      },
+    },
+    {
+      id: 'random-drift',
+      label: 'Drift diagonal',
+      description: 'Applique un mouvement linéaire diagonal au prochain NPC.',
+      scope: 'single',
+      run: (npc) => {
+        const direction = Math.random() > 0.5 ? { x: 100, y: 120 } : { x: -120, y: 100 };
+        scheduleStrategy(npc, new LinearMove(direction, 2), 'Drift diagonal');
+      },
+    },
+    {
+      id: 'stop-single',
+      label: 'Stop NPC',
+      description: 'Annule les mouvements du prochain NPC et le fige sur place.',
+      scope: 'single',
+      run: (npc) => {
+        movement.clear(npc.entity);
+        npc.entity.setVelocity({ x: 0, y: 0 });
+        highlightEntity(npc);
+        setDebugStatus(`Mouvements arrêtés pour ${formatNpcName(npc)}.`);
+      },
+    },
+    {
+      id: 'stop-all',
+      label: 'Stop tous les NPCs',
+      description: 'Réinitialise toutes les stratégies et stoppe instantanément chaque NPC.',
+      scope: 'all',
+      runAll: (npcs) => {
+        movement.clearAll();
+        npcs.forEach((npc) => {
+          npc.entity.setVelocity({ x: 0, y: 0 });
+          npc.debugPulse = DEBUG_PULSE_DURATION * 0.5;
+        });
+        lastNpcTriggered = null;
+        setNpcFocus('Dernier NPC ciblé : tous les NPCs');
+        setDebugStatus('Tous les mouvements ont été arrêtés.');
+      },
+    },
+  ];
+
+  debugControls.innerHTML = '';
+
+  actions.forEach((action) => {
+    const card = document.createElement('article');
+    card.className = 'debug-card';
+
+    const badge = document.createElement('span');
+    badge.className = 'debug-card__badge';
+    badge.textContent = action.scope === 'all' ? 'Tous les NPCs' : 'NPC ciblé';
+
+    const title = document.createElement('h3');
+    title.textContent = action.label;
+
+    const description = document.createElement('p');
+    description.textContent = action.description;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'debug-card__button';
+    button.textContent = action.scope === 'all'
+      ? 'Appliquer à tous'
+      : 'Appliquer au prochain NPC';
+
+    button.addEventListener('click', () => {
+      const npcs = getNPCs();
+      if (npcs.length === 0) {
+        setDebugStatus('Aucun NPC disponible pour appliquer un mouvement.');
+        return;
+      }
+
+      if (action.scope === 'all' && action.runAll) {
+        action.runAll(npcs);
+        return;
+      }
+
+      if (action.scope === 'single' && action.run) {
+        const npc = nextNPC();
+        if (!npc) return;
+        action.run(npc);
+      }
+    });
+
+    card.appendChild(badge);
+    card.appendChild(title);
+    card.appendChild(description);
+    card.appendChild(button);
+    debugControls.appendChild(card);
+  });
+
+  setDebugStatus('Sélectionnez un mouvement pour l’appliquer sur les NPCs.');
+  setNpcFocus();
 }
 
 // Keyboard event handlers
@@ -280,6 +586,44 @@ function updateHeroCollisionNormals(): void {
   }
 }
 
+// Update collision normals for NPCs from active collisions
+function updateNpcCollisionNormals(): void {
+  // Clear previous collision normals
+  npcCollisionNormals.clear();
+
+  // Get normals from active collisions
+  for (const [key, collision] of activeNpcCollisions.entries()) {
+    const npcId = key.split('-')[0];
+    if (!npcCollisionNormals.has(npcId)) {
+      npcCollisionNormals.set(npcId, []);
+    }
+    npcCollisionNormals.get(npcId)!.push(collision.normal.clone());
+  }
+}
+
+// Block NPC velocity if colliding with static obstacles
+function blockNpcVelocityOnCollision(): void {
+  const npcs = gameEntities.filter((e) => e.type === 'npc');
+  
+  for (const npc of npcs) {
+    const normals = npcCollisionNormals.get(npc.entity.uuid);
+    if (!normals || normals.length === 0) continue;
+
+    let velocity = npc.entity.velocity;
+    
+    // For each collision normal, remove velocity component pointing towards obstacle
+    for (const normal of normals) {
+      const velocityAlongNormal = velocity.dot(normal);
+      if (velocityAlongNormal > 0) {
+        // Moving towards obstacle, cancel that component
+        velocity = velocity.sub(normal.mul(velocityAlongNormal));
+      }
+    }
+    
+    npc.entity.setVelocity(velocity);
+  }
+}
+
 // Update NPCs (simple AI: random wandering)
 // Note: Disabled because NPCs are now static (mass: Infinity)
 // If you want NPCs to move, set mass: 1 or higher and uncomment this function
@@ -356,6 +700,15 @@ function render(): void {
       ctx.strokeStyle = type === 'hero' ? '#fff' : '#1e8449';
       ctx.lineWidth = type === 'hero' ? 3 : 2;
       ctx.stroke();
+
+      const pulse = gameEntity.debugPulse ?? 0;
+      if (pulse > 0) {
+        ctx.strokeStyle = `rgba(241, 196, 15, ${Math.min(pulse, 1)})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, 0, entity.radius + 8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
 
       // Draw direction indicator for hero
       if (type === 'hero' && entity.velocity.length() > 1) {
@@ -444,14 +797,17 @@ function gameLoop(): void {
   for (let i = 0; i < steps; i++) {
     // Update collision normals from active collisions (set by events)
     updateHeroCollisionNormals();
+    updateNpcCollisionNormals();
     
     // Before step: update hero movement based on input and collision blocking
     updateHeroMovement(fixedDeltaTime);
     
-    engine.step();
+    engine.stepWithMovements(fixedDeltaTime);
     
-    // After physics step, block hero velocity if still colliding with static obstacles
+    // After physics step, block velocity if still colliding with static obstacles
     blockHeroVelocityOnCollision();
+    blockNpcVelocityOnCollision();
+    decayDebugPulses(fixedDeltaTime);
   }
 
   // Update camera
@@ -463,52 +819,89 @@ function gameLoop(): void {
   requestAnimationFrame(gameLoop);
 }
 
-// Setup collision event handlers for hero blocking
+// Setup collision event handlers for hero and NPC blocking
 function setupCollisionHandlers(): void {
   const events = engine.getEvents();
   
-  // Listen for collisions involving the hero
+  // Listen for collisions involving the hero or NPCs
   events.onCollisionEnter((collision: CollisionInfo) => {
-    if (!hero) return;
-
-    // Check if hero is involved in this collision
-    const isHeroA = collision.entityA.uuid === hero.entity.uuid;
-    const isHeroB = collision.entityB.uuid === hero.entity.uuid;
-    
-    if (isHeroA || isHeroB) {
-      const otherEntity = isHeroA ? collision.entityB : collision.entityA;
-      const normal = isHeroA ? collision.normal : collision.normal.mul(-1);
+    // Handle hero collisions
+    if (hero) {
+      const isHeroA = collision.entityA.uuid === hero.entity.uuid;
+      const isHeroB = collision.entityB.uuid === hero.entity.uuid;
       
-      // Check if other entity is a static obstacle
-      const gameEntity = gameEntities.find((e) => e.entity.uuid === otherEntity.uuid);
-      if (gameEntity && 
-          (gameEntity.type === 'wall' || gameEntity.type === 'obstacle' || gameEntity.type === 'tree' || gameEntity.type === 'npc') &&
-          otherEntity.isStatic()) {
-        // Store collision info with corrected normal (from hero to obstacle)
-        const collisionKey = `${hero.entity.uuid}-${otherEntity.uuid}`;
-        activeHeroCollisions.set(collisionKey, {
-          entityA: isHeroA ? collision.entityA : collision.entityB,
-          entityB: isHeroA ? collision.entityB : collision.entityA,
-          contacts: collision.contacts,
-          normal: normal.clone(),
-          depth: collision.depth,
-        });
+      if (isHeroA || isHeroB) {
+        const otherEntity = isHeroA ? collision.entityB : collision.entityA;
+        const normal = isHeroA ? collision.normal : collision.normal.mul(-1);
+        
+        // Check if other entity is a static obstacle
+        const gameEntity = gameEntities.find((e) => e.entity.uuid === otherEntity.uuid);
+        if (gameEntity && 
+            (gameEntity.type === 'wall' || gameEntity.type === 'obstacle' || gameEntity.type === 'tree' || gameEntity.type === 'npc') &&
+            otherEntity.isStatic()) {
+          // Store collision info with corrected normal (from hero to obstacle)
+          const collisionKey = `${hero.entity.uuid}-${otherEntity.uuid}`;
+          activeHeroCollisions.set(collisionKey, {
+            entityA: isHeroA ? collision.entityA : collision.entityB,
+            entityB: isHeroA ? collision.entityB : collision.entityA,
+            contacts: collision.contacts,
+            normal: normal.clone(),
+            depth: collision.depth,
+          });
+        }
       }
+    }
+
+    // Handle NPC collisions with static obstacles
+    const entityAGame = gameEntities.find((e) => e.entity.uuid === collision.entityA.uuid);
+    const entityBGame = gameEntities.find((e) => e.entity.uuid === collision.entityB.uuid);
+    
+    // Check if one is an NPC and the other is a static obstacle
+    if (entityAGame && entityAGame.type === 'npc' && collision.entityB.isStatic()) {
+      const collisionKey = `${collision.entityA.uuid}-${collision.entityB.uuid}`;
+      activeNpcCollisions.set(collisionKey, {
+        entityA: collision.entityA,
+        entityB: collision.entityB,
+        contacts: collision.contacts,
+        normal: collision.normal.clone(),
+        depth: collision.depth,
+      });
+    } else if (entityBGame && entityBGame.type === 'npc' && collision.entityA.isStatic()) {
+      const collisionKey = `${collision.entityB.uuid}-${collision.entityA.uuid}`;
+      activeNpcCollisions.set(collisionKey, {
+        entityA: collision.entityB,
+        entityB: collision.entityA,
+        contacts: collision.contacts,
+        normal: collision.normal.mul(-1),
+        depth: collision.depth,
+      });
     }
   });
   
   events.onCollisionExit((collision: CollisionInfo) => {
-    if (!hero) return;
+    // Handle hero collision exit
+    if (hero) {
+      const isHeroA = collision.entityA.uuid === hero.entity.uuid;
+      const isHeroB = collision.entityB.uuid === hero.entity.uuid;
+      
+      if (isHeroA || isHeroB) {
+        const otherEntity = isHeroA ? collision.entityB : collision.entityA;
+        const collisionKey = `${hero.entity.uuid}-${otherEntity.uuid}`;
+        activeHeroCollisions.delete(collisionKey);
+      }
+    }
 
-    console.log('collision exit', collision);
+    // Handle NPC collision exit
+    const entityAGame = gameEntities.find((e) => e.entity.uuid === collision.entityA.uuid);
+    const entityBGame = gameEntities.find((e) => e.entity.uuid === collision.entityB.uuid);
     
-    const isHeroA = collision.entityA.uuid === hero.entity.uuid;
-    const isHeroB = collision.entityB.uuid === hero.entity.uuid;
-    
-    if (isHeroA || isHeroB) {
-      const otherEntity = isHeroA ? collision.entityB : collision.entityA;
-      const collisionKey = `${hero.entity.uuid}-${otherEntity.uuid}`;
-      activeHeroCollisions.delete(collisionKey);
+    if (entityAGame && entityAGame.type === 'npc') {
+      const collisionKey = `${collision.entityA.uuid}-${collision.entityB.uuid}`;
+      activeNpcCollisions.delete(collisionKey);
+    }
+    if (entityBGame && entityBGame.type === 'npc') {
+      const collisionKey = `${collision.entityB.uuid}-${collision.entityA.uuid}`;
+      activeNpcCollisions.delete(collisionKey);
     }
   });
 }
@@ -520,6 +913,7 @@ createTrees();
 createNPCs();
 createHero();
 setupCollisionHandlers();
+createDebugButtons();
 
 // Start game loop
 gameLoop();

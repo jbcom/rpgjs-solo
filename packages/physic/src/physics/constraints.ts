@@ -60,7 +60,7 @@ export class SpringConstraint implements Constraint {
   /**
    * @inheritdoc
    */
-  public update(deltaTime: number): void {
+  public update(_deltaTime: number): void {
     const direction = this.entityB.position.sub(this.entityA.position);
     const distance = direction.length();
 
@@ -138,7 +138,7 @@ export class DistanceConstraint implements Constraint {
   /**
    * @inheritdoc
    */
-  public update(deltaTime: number): void {
+  public update(_deltaTime: number): void {
     const direction = this.entityB.position.sub(this.entityA.position);
     const distance = direction.length();
 
@@ -212,7 +212,7 @@ export class AnchorConstraint implements Constraint {
   /**
    * @inheritdoc
    */
-  public update(deltaTime: number): void {
+  public update(_deltaTime: number): void {
     if (this.entity.isStatic()) {
       return;
     }

@@ -1,10 +1,10 @@
 import { signal } from "@signe/reactive";
 import { connected, id, persist, sync, users } from "@signe/sync";
-import * as Matter from "matter-js";
 import { MovementManager } from "./movement";
 import { Item } from "./database";
 import { Observable } from "rxjs";
 import { Constructor } from "./Utils";
+import type { PhysicsBodySnapshot } from "./Physic";
 
 export enum Direction {
   Up = "up",
@@ -176,34 +176,27 @@ export abstract class RpgCommonPlayer {
   /**
    * Apply physics body position to player coordinates
    *
-   * Synchronizes the player's position with their physics body after
-   * physics calculations. This method no longer automatically changes
-   * the player's direction based on position changes, as direction
-   * should be controlled by intended movement instead.
+   * Synchronizes the player's position with the physics snapshot produced by
+   * the deterministic engine. Direction changes remain driven by intended
+   * input, not by the passive physics displacement.
    *
-   * @param body - The Matter.js physics body
+   * @param snapshot - Body snapshot emitted by the physics layer
    *
    * @example
    * ```ts
-   * // Called automatically by physics system
-   * player.applyPhysic(body);
+   * // Called automatically by the physics system
+   * player.applyPhysic(snapshot);
    * ```
    */
-  applyPhysic(body: Matter.Body) {
-    // Convert body center position to top-left corner for consistency
-    const width = body.bounds.max.x - body.bounds.min.x;
-    const height = body.bounds.max.y - body.bounds.min.y;
-    const topLeftX = body.position.x - width / 2;
-    const topLeftY = body.position.y - height / 2;
+  applyPhysic(snapshot: PhysicsBodySnapshot) {
+    const roundedX = Math.round(snapshot.topLeft.x);
+    const roundedY = Math.round(snapshot.topLeft.y);
 
-    const posChanged =
-      Math.round(this.x()) !== Math.round(topLeftX) ||
-      Math.round(this.y()) !== Math.round(topLeftY);
-    if (posChanged) {
-      // Only update position, do not change direction based on physics movement
-      // Direction should be controlled by intended movement via setIntendedDirection()
-      if(Math.round(this.x()) !== Math.round(topLeftX)) this.x.set(Math.round(topLeftX));
-      if(Math.round(this.y()) !== Math.round(topLeftY)) this.y.set(Math.round(topLeftY));
+    if (Math.round(this.x()) !== roundedX) {
+      this.x.set(roundedX);
+    }
+    if (Math.round(this.y()) !== roundedY) {
+      this.y.set(roundedY);
     }
   }
 

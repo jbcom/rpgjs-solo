@@ -43,7 +43,11 @@ export * from './region/migration';
 // API Layer
 export { PhysicsEngine, type PhysicsEngineConfig } from './api/PhysicsEngine';
 
+// Movement System
+export * from './movement';
+
 // Utils
 export { ObjectPool } from './utils/pool';
 export * from './utils/uuid';
 
+export { ProjectileType } from './movement/strategies/ProjectileMovement';

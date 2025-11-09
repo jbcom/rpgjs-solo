@@ -13,7 +13,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   
   data = signal<any | null>(null);
   physic = new RpgCommonPhysic();
-  moveManager = new MovementManager();
+  moveManager = new MovementManager(() => this.physic);
   
   // World Maps properties
   tileWidth?: number;

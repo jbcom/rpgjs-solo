@@ -1,5 +1,5 @@
-import { PlayerCtor, type Constructor } from "@rpgjs/common";
-import { RpgCommonPlayer, Matter, Direction } from "@rpgjs/common";
+import { PlayerCtor, ProjectileType } from "@rpgjs/common";
+import { RpgCommonPlayer, Direction, Entity } from "@rpgjs/common";
 import { 
   MovementManager, 
   MovementStrategy,
@@ -13,7 +13,6 @@ import {
   LinearRepulsion,
   IceMovement,
   ProjectileMovement,
-  ProjectileType,
   random,
   isFunction,
   capitalize
@@ -33,8 +32,6 @@ interface PlayerWithMixins extends RpgCommonPlayer {
   moveByDirection: (direction: Direction, deltaTimeInt: number) => Promise<boolean>;
   changeDirection: (direction: Direction) => boolean;
 }
-
-
 
 
 function wait(sec: number) {
@@ -412,7 +409,7 @@ export const Move = new MoveList();
  * - **Strategy Management**: Add, remove, and query movement strategies
  * - **Predefined Movements**: Quick access to common movement patterns
  * - **Composite Movements**: Combine multiple strategies
- * - **Physics Integration**: Seamless integration with Matter.js physics
+ * - **Physics Integration**: Seamless integration with the deterministic @rpgjs/physic engine
  * 
  * ## Available Movement Strategies
  * - `LinearMove`: Constant velocity movement
@@ -481,8 +478,20 @@ export const Move = new MoveList();
  * ```
  */
 export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
-  return class extends Base {
-    
+  const baseProto = Base.prototype as any;
+  class WithMoveManagerClass extends Base {
+    setAnimation(animationName: string, nbTimes: number): void {
+      if (typeof baseProto.setAnimation === 'function') {
+        baseProto.setAnimation.call(this, animationName, nbTimes);
+      }
+    }
+
+    showComponentAnimation(id: string, params: any): void {
+      if (typeof baseProto.showComponentAnimation === 'function') {
+        baseProto.showComponentAnimation.call(this, id, params);
+      }
+    }
+
     // Properties for infinite route management
     _infiniteRoutes: Routes | null = null;
     _finishRoute: ((value: boolean) => void) | null = null;
@@ -708,27 +717,27 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap();
       if (!map) return;
 
-      let targetBody: Matter.Body | null = null;
-      
+      const engine = map.physic.getEngine();
+
       if ('id' in target) {
-        // Target is a player
-        targetBody = map.physic.getBody(target.id);
-      } else {
-        // Target is a position - create a temporary target function
-        const getTargetPos = () => Matter.Vector.create(target.x, target.y);
+        const targetProvider = () => map.physic.getBody(target.id) ?? null;
         map.moveManager.add(
-          (this as unknown as PlayerWithMixins).id, 
-          new SeekAvoid(map.physic, getTargetPos, 3, 50, 5)
+          (this as unknown as PlayerWithMixins).id,
+          new SeekAvoid(engine, targetProvider, 3, 50, 5)
         );
         return;
       }
-      
-      if (targetBody) {
-        map.moveManager.add(
-          (this as unknown as PlayerWithMixins).id, 
-          new SeekAvoid(map.physic, targetBody, 3, 50, 5)
-        );
-      }
+
+      const staticTarget = new Entity({
+        position: { x: target.x, y: target.y },
+        mass: Infinity,
+      });
+      staticTarget.freeze();
+
+      map.moveManager.add(
+        (this as unknown as PlayerWithMixins).id,
+        new SeekAvoid(engine, () => staticTarget, 3, 50, 5)
+      );
     }
 
     /**
@@ -1074,7 +1083,8 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                   case Direction.Down: vy = 1; break;
                   case Direction.Up: vy = -1; break;
                 }
-                this.addMovement(new LinearMove(vx * (player.speed?.() || 3), vy * (player.speed?.() || 3), 100));
+                const speed = player.speed?.() ?? 3;
+                this.addMovement(new LinearMove({ x: vx * speed, y: vy * speed }, 0.1));
                 setTimeout(executeNextRoute, 100);
                 return;
               }
@@ -1100,18 +1110,13 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * @param routes - Routes array that may contain nested arrays
      * @returns Flattened array of routes
      */
-    flattenRoutes(routes: any[]): any[] {
-      const result: any[] = [];
-      
-      for (const route of routes) {
-        if (Array.isArray(route)) {
-          result.push(...this.flattenRoutes(route));
-        } else {
-          result.push(route);
+    private flattenRoutes(routes: Routes): Routes {
+      return routes.reduce((acc: Routes, item) => {
+        if (Array.isArray(item)) {
+          return acc.concat(this.flattenRoutes(item));
         }
-      }
-      
-      return result;
+        return acc.concat(item);
+      }, []);
     }
 
     /**
@@ -1244,7 +1249,9 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
         this.infiniteMoveRoute(this._infiniteRoutes);
       }
     }
-  } as unknown as TBase;
+  }
+
+  return WithMoveManagerClass as unknown as PlayerCtor;
 }
 
 /**
