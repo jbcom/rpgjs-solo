@@ -707,7 +707,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
     moveTo(target: RpgCommonPlayer | { x: number, y: number }): void {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap();
       if (!map) return;
-      
+
       let targetBody: Matter.Body | null = null;
       
       if ('id' in target) {

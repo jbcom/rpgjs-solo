@@ -1,0 +1,182 @@
+import { Vector2 } from '../core/math/Vector2';
+import { Entity } from '../physics/Entity';
+import { CollisionInfo } from './Collider';
+
+/**
+ * Collision resolver configuration
+ */
+export interface ResolverConfig {
+  /** Position correction factor (0-1, higher = more correction) */
+  positionCorrectionFactor?: number;
+  /** Minimum penetration depth to resolve */
+  minPenetrationDepth?: number;
+  /** Maximum position correction per step */
+  maxPositionCorrection?: number;
+}
+
+/**
+ * Collision resolver
+ * 
+ * Resolves collisions by separating entities and applying impulses.
+ * Uses impulse-based resolution for stable, deterministic physics.
+ * 
+ * @example
+ * ```typescript
+ * const resolver = new CollisionResolver();
+ * resolver.resolve(collision);
+ * ```
+ */
+export class CollisionResolver {
+  private config: Required<ResolverConfig>;
+
+  /**
+   * Creates a new collision resolver
+   * 
+   * @param config - Resolver configuration
+   */
+  constructor(config: ResolverConfig = {}) {
+    this.config = {
+      positionCorrectionFactor: config.positionCorrectionFactor ?? 0.2,
+      minPenetrationDepth: config.minPenetrationDepth ?? 0.001,
+      maxPositionCorrection: config.maxPositionCorrection ?? 0.2,
+    };
+  }
+
+  /**
+   * Resolves a collision
+   * 
+   * Separates entities and applies collision response.
+   * 
+   * @param collision - Collision information to resolve
+   */
+  public resolve(collision: CollisionInfo): void {
+    const { entityA, entityB, normal, depth } = collision;
+
+    // Skip if penetration is too small
+    if (depth < this.config.minPenetrationDepth) {
+      return;
+    }
+
+    // Position correction (separate entities)
+    this.separateEntities(entityA, entityB, normal, depth);
+
+    // Velocity resolution (collision response)
+    this.resolveVelocities(entityA, entityB, normal);
+  }
+
+  /**
+   * Separates two entities by moving them apart
+   * 
+   * @param entityA - First entity
+   * @param entityB - Second entity
+   * @param normal - Separation normal (from A to B)
+   * @param depth - Penetration depth
+   */
+  private separateEntities(
+    entityA: Entity,
+    entityB: Entity,
+    normal: Vector2,
+    depth: number
+  ): void {
+    const totalInvMass = entityA.invMass + entityB.invMass;
+    if (totalInvMass === 0) {
+      return; // Both static
+    }
+
+    // Calculate separation amount
+    const correction = Math.min(
+      depth * this.config.positionCorrectionFactor,
+      this.config.maxPositionCorrection
+    );
+
+    // Distribute correction based on inverse mass
+    const correctionA = normal.mul(-correction * (entityA.invMass / totalInvMass));
+    const correctionB = normal.mul(correction * (entityB.invMass / totalInvMass));
+
+    // Apply corrections
+    if (!entityA.isStatic()) {
+      entityA.position.addInPlace(correctionA);
+    }
+    if (!entityB.isStatic()) {
+      entityB.position.addInPlace(correctionB);
+    }
+  }
+
+  /**
+   * Resolves velocities using impulse-based collision response
+   * 
+   * @param entityA - First entity
+   * @param entityB - Second entity
+   * @param normal - Collision normal (from A to B)
+   */
+  private resolveVelocities(
+    entityA: Entity,
+    entityB: Entity,
+    normal: Vector2
+  ): void {
+    // Relative velocity
+    const relativeVelocity = entityB.velocity.sub(entityA.velocity);
+    const velocityAlongNormal = relativeVelocity.dot(normal);
+
+    // Don't resolve if velocities are separating
+    if (velocityAlongNormal > 0) {
+      return;
+    }
+
+    // Calculate restitution (bounciness)
+    const restitution = Math.min(entityA.restitution, entityB.restitution);
+
+    // Calculate impulse scalar
+    const totalInvMass = entityA.invMass + entityB.invMass;
+    if (totalInvMass === 0) {
+      return; // Both static
+    }
+
+    // Impulse: j = -(1 + e) * v_rel · n / (1/mA + 1/mB)
+    const impulseScalar = -(1 + restitution) * velocityAlongNormal / totalInvMass;
+    const impulse = normal.mul(impulseScalar);
+
+    // Apply impulse
+    if (!entityA.isStatic()) {
+      entityA.velocity.addInPlace(impulse.mul(-entityA.invMass));
+    }
+    if (!entityB.isStatic()) {
+      entityB.velocity.addInPlace(impulse.mul(entityB.invMass));
+    }
+
+    // Friction (simplified, using velocity tangent to collision)
+    const tangent = relativeVelocity.sub(normal.mul(velocityAlongNormal));
+    const tangentLength = tangent.length();
+
+    if (tangentLength > 1e-5) {
+      const friction = Math.sqrt(entityA.friction * entityB.friction);
+      const tangentNormalized = tangent.normalize();
+      const frictionImpulse = tangentNormalized.mul(-tangentLength * friction / totalInvMass);
+
+      // Clamp friction impulse to not exceed relative velocity
+      const maxFriction = Math.abs(impulseScalar * friction);
+      if (frictionImpulse.length() > maxFriction) {
+        frictionImpulse.normalizeInPlace().mulInPlace(maxFriction);
+      }
+
+      if (!entityA.isStatic()) {
+        entityA.velocity.addInPlace(frictionImpulse.mul(-entityA.invMass));
+      }
+      if (!entityB.isStatic()) {
+        entityB.velocity.addInPlace(frictionImpulse.mul(entityB.invMass));
+      }
+    }
+  }
+
+  /**
+   * Resolves multiple collisions
+   * 
+   * @param collisions - Array of collisions to resolve
+   */
+  public resolveAll(collisions: CollisionInfo[]): void {
+    for (const collision of collisions) {
+      this.resolve(collision);
+    }
+  }
+}
+

@@ -1,0 +1,21 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "exclude": ["**/*.test.ts", "**/*.spec.ts"],
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "readme": "README.md",
+  "name": "RPG Physic",
+  "includeVersion": true,
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Core Math",
+    "Physics",
+    "Collision",
+    "World",
+    "Region",
+    "API",
+    "Utils"
+  ]
+}
+
