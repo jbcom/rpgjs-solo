@@ -1,6 +1,14 @@
 import { Vector2 } from '../core/math/Vector2';
 import { UUID, EntityState } from '../core/types';
 import { generateUUID } from '../utils/uuid';
+import { CollisionInfo } from '../collision/Collider';
+
+const MOVEMENT_EPSILON = 1e-3;
+const MOVEMENT_EPSILON_SQ = MOVEMENT_EPSILON * MOVEMENT_EPSILON;
+const POSITION_EPSILON = 1e-3;
+const DIRECTION_EPSILON_RADIANS = (5 * Math.PI) / 180;
+
+export type CardinalDirection = 'idle' | 'up' | 'down' | 'left' | 'right';
 
 /**
  * Configuration options for creating an entity
@@ -192,6 +200,16 @@ export class Entity {
    */
   public sleepThreshold: number;
 
+  private collisionEnterHandlers: Set<EntityCollisionHandler>;
+  private collisionExitHandlers: Set<EntityCollisionHandler>;
+  private movementHandlers: Set<EntityMovementHandler>;
+  private directionHandlers: Set<EntityDirectionHandler>;
+  private previousVelocity: Vector2;
+  private previousPosition: Vector2;
+  private previousDirection: Vector2;
+  private previousCardinalDirection: CardinalDirection;
+  private wasMoving: boolean;
+
   /**
    * Creates a new entity
    * 
@@ -255,6 +273,105 @@ export class Entity {
     // Sleep detection
     this.timeSinceMovement = 0;
     this.sleepThreshold = 0.5; // 0.5 seconds of inactivity
+
+    // Event handlers
+    this.collisionEnterHandlers = new Set();
+    this.collisionExitHandlers = new Set();
+    this.movementHandlers = new Set();
+    this.directionHandlers = new Set();
+
+    // Motion tracking
+    this.previousVelocity = this.velocity.clone();
+    this.previousPosition = this.position.clone();
+    this.previousDirection = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ
+      ? this.velocity.normalize()
+      : Vector2.ZERO.clone();
+    this.previousCardinalDirection = this.computeCardinalDirection(this.previousDirection);
+    this.wasMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
+  }
+
+  /**
+   * Registers a handler fired when this entity starts colliding with another one.
+   *
+   * - **Purpose:** offer per-entity collision hooks without subscribing to the global event system.
+   * - **Design:** lightweight Set-based listeners returning an unsubscribe closure to keep GC pressure low.
+   *
+   * @param handler - Collision enter listener
+   * @returns Unsubscribe closure
+   * @example
+   * ```typescript
+   * const unsubscribe = entity.onCollisionEnter(({ other }) => {
+   *   console.log('Started colliding with', other.uuid);
+   * });
+   * ```
+   */
+  public onCollisionEnter(handler: EntityCollisionHandler): () => void {
+    this.collisionEnterHandlers.add(handler);
+    return () => this.collisionEnterHandlers.delete(handler);
+  }
+
+  /**
+   * Registers a handler fired when this entity stops colliding with another one.
+   *
+   * - **Purpose:** detect collision separation at the entity level for local gameplay reactions.
+   * - **Design:** mirrors `onCollisionEnter` with identical lifecycle management semantics.
+   *
+   * @param handler - Collision exit listener
+   * @returns Unsubscribe closure
+   * @example
+   * ```typescript
+   * const unsubscribe = entity.onCollisionExit(({ other }) => {
+   *   console.log('Stopped colliding with', other.uuid);
+   * });
+   * ```
+   */
+  public onCollisionExit(handler: EntityCollisionHandler): () => void {
+    this.collisionExitHandlers.add(handler);
+    return () => this.collisionExitHandlers.delete(handler);
+  }
+
+  /**
+   * Registers a handler triggered when the entity motion changes (velocity delta, axis movement, or start/stop).
+   *
+   * - **Purpose:** answer \"is it moving?\" while reporting axis changes and displacement magnitude.
+   * - **Design:** emits only when thresholds are exceeded to avoid flooding extremely small updates.
+   *
+   * @param handler - Movement change listener
+   * @returns Unsubscribe closure
+   * @example
+   * ```typescript
+   * const unsubscribe = entity.onMovementChange(({ isMoving, axisChanged }) => {
+   *   if (isMoving && axisChanged.x) {
+   *     console.log('Entity started moving along X');
+   *   }
+   * });
+   * ```
+   */
+  public onMovementChange(handler: EntityMovementHandler): () => void {
+    this.movementHandlers.add(handler);
+    return () => this.movementHandlers.delete(handler);
+  }
+
+  /**
+   * Registers a handler triggered when the entity heading changes by at least five degrees or the cardinal direction flips.
+   *
+   * - **Purpose:** expose both the fine-grained direction vector and a simplified cardinal tag (left/right/up/down/idle).
+   * - **Design:** angle threshold avoids noise while still catching discrete motion changes for grid-like controls.
+   *
+   * @param handler - Direction change listener
+   * @returns Unsubscribe closure
+   * @example
+   * ```typescript
+   * const unsubscribe = entity.onDirectionChange(({ cardinalDirection }) => {
+   *   if (cardinalDirection === 'left') {
+   *     console.log('Entity now faces left');
+   *   }
+   * });
+   * ```
+   */
+  public onDirectionChange(handler: EntityDirectionHandler): () => void {
+    this.directionHandlers.add(handler);
+    return () => this.directionHandlers.delete(handler);
   }
 
   /**
@@ -502,6 +619,164 @@ export class Entity {
   }
 
   /**
+   * @internal
+   *
+   * Notifies the entity that a collision has started.
+   *
+   * @param collision - Collision information shared by the world
+   * @param other - The counterpart entity
+   */
+  public notifyCollisionEnter(collision: CollisionInfo, other: Entity): void {
+    if (this.collisionEnterHandlers.size === 0) {
+      return;
+    }
+
+    const payload: EntityCollisionEvent = {
+      entity: this,
+      other,
+      collision,
+    };
+
+    for (const handler of this.collisionEnterHandlers) {
+      handler(payload);
+    }
+  }
+
+  /**
+   * @internal
+   *
+   * Notifies the entity that a collision has ended.
+   *
+   * @param collision - Collision information stored before separation
+   * @param other - The counterpart entity
+   */
+  public notifyCollisionExit(collision: CollisionInfo, other: Entity): void {
+    if (this.collisionExitHandlers.size === 0) {
+      return;
+    }
+
+    const payload: EntityCollisionEvent = {
+      entity: this,
+      other,
+      collision,
+    };
+
+    for (const handler of this.collisionExitHandlers) {
+      handler(payload);
+    }
+  }
+
+  /**
+   * @internal
+   *
+   * Updates cached motion data and emits movement/direction events when thresholds are crossed.
+   *
+   * @param deltaTime - Simulation delta time
+   */
+  public updateMotionTracking(deltaTime: number): void {
+    const currentVelocity = this.velocity.clone();
+    const currentPosition = this.position.clone();
+    const deltaPosition = currentPosition.sub(this.previousPosition);
+
+    const xChanged = Math.abs(deltaPosition.x) > POSITION_EPSILON;
+    const yChanged = Math.abs(deltaPosition.y) > POSITION_EPSILON;
+    const isMoving = currentVelocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
+    const velocityDelta =
+      currentVelocity.sub(this.previousVelocity).lengthSquared() > MOVEMENT_EPSILON_SQ;
+
+    if (
+      this.movementHandlers.size > 0 &&
+      (xChanged || yChanged || velocityDelta || this.wasMoving !== isMoving)
+    ) {
+      const movementPayload: EntityMovementEvent = {
+        entity: this,
+        deltaTime,
+        velocity: currentVelocity.clone(),
+        previousVelocity: this.previousVelocity.clone(),
+        position: currentPosition.clone(),
+        previousPosition: this.previousPosition.clone(),
+        deltaPosition,
+        isMoving,
+        axisChanged: {
+          x: xChanged,
+          y: yChanged,
+        },
+      };
+
+      for (const handler of this.movementHandlers) {
+        handler(movementPayload);
+      }
+    }
+
+    let currentDirection = new Vector2(0, 0);
+    let currentCardinal: CardinalDirection = 'idle';
+    let directionChanged = false;
+
+    if (isMoving) {
+      currentDirection = currentVelocity.clone().normalizeInPlace();
+      currentCardinal = this.computeCardinalDirection(currentDirection);
+
+      if (!this.wasMoving) {
+        directionChanged = true;
+      } else {
+        const dot = Math.max(
+          -1,
+          Math.min(1, this.previousDirection.dot(currentDirection)),
+        );
+        const angle = Math.acos(dot);
+        if (angle >= DIRECTION_EPSILON_RADIANS) {
+          directionChanged = true;
+        }
+      }
+
+      if (currentCardinal !== this.previousCardinalDirection) {
+        directionChanged = true;
+      }
+    } else if (this.wasMoving || this.previousCardinalDirection !== 'idle') {
+      directionChanged = true;
+    }
+
+    if (directionChanged && this.directionHandlers.size > 0) {
+      const directionPayload: EntityDirectionEvent = {
+        entity: this,
+        direction: currentDirection.clone(),
+        previousDirection: this.previousDirection.clone(),
+        cardinalDirection: currentCardinal,
+        previousCardinalDirection: this.previousCardinalDirection,
+      };
+
+      for (const handler of this.directionHandlers) {
+        handler(directionPayload);
+      }
+    }
+
+    this.previousVelocity.copyFrom(this.velocity);
+    this.previousPosition.copyFrom(this.position);
+    if (isMoving) {
+      this.previousDirection.copyFrom(currentDirection);
+    } else {
+      this.previousDirection.set(0, 0);
+    }
+    this.previousCardinalDirection = isMoving ? currentCardinal : 'idle';
+    this.wasMoving = isMoving;
+  }
+
+  private computeCardinalDirection(direction: Vector2): CardinalDirection {
+    if (direction.lengthSquared() <= MOVEMENT_EPSILON_SQ) {
+      return 'idle';
+    }
+
+    const absX = Math.abs(direction.x);
+    const absY = Math.abs(direction.y);
+
+    if (absX >= absY) {
+      return direction.x >= 0 ? 'right' : 'left';
+    }
+
+    return direction.y >= 0 ? 'down' : 'up';
+  }
+
+  /**
    * Creates a copy of this entity
    * 
    * @returns New entity with copied properties
@@ -530,4 +805,39 @@ export class Entity {
     return entity;
   }
 }
+
+export interface EntityCollisionEvent {
+  entity: Entity;
+  other: Entity;
+  collision: CollisionInfo;
+}
+
+export type EntityCollisionHandler = (event: EntityCollisionEvent) => void;
+
+export interface EntityMovementEvent {
+  entity: Entity;
+  deltaTime: number;
+  velocity: Vector2;
+  previousVelocity: Vector2;
+  position: Vector2;
+  previousPosition: Vector2;
+  deltaPosition: Vector2;
+  isMoving: boolean;
+  axisChanged: {
+    x: boolean;
+    y: boolean;
+  };
+}
+
+export type EntityMovementHandler = (event: EntityMovementEvent) => void;
+
+export interface EntityDirectionEvent {
+  entity: Entity;
+  direction: Vector2;
+  previousDirection: Vector2;
+  cardinalDirection: CardinalDirection;
+  previousCardinalDirection: CardinalDirection;
+}
+
+export type EntityDirectionHandler = (event: EntityDirectionEvent) => void;
 

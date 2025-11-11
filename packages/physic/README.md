@@ -62,7 +62,7 @@ gameLoop();
 
 ## Integration with @rpgjs/common
 
-`@rpgjs/common` now delegates all simulation to this package. The legacy Matter.js wrapper has been replaced by a façade that internally creates `PhysicsEngine` entities. Game logic keeps using `RpgCommonPhysic`, but every hitbox, zone and movement strategy is now backed by the deterministic core exposed here. This ensures that the same movement and collision logic runs on both client and server without depending on third-party physics engines.
+`@rpgjs/common` now delegates all simulation to this package. The legacy Matter.js wrapper has been removed in favour of the shared `TopDownPhysics` manager that lives directly in `@rpgjs/physic`. Every hitbox, zone and movement strategy is backed by the deterministic core exposed here, ensuring the same behaviour on both client and server without third-party physics engines.
 
 ## Examples
 
@@ -136,6 +136,32 @@ entity.freeze(); // Make static
 entity.sleep(); // Put to sleep
 entity.wakeUp(); // Wake up
 ```
+
+#### Per-entity Hooks
+
+`Entity` exposes local hooks so you can react to collisions and motion without diving into the global event bus.
+
+- `onCollisionEnter` and `onCollisionExit` fire when the entity starts or stops colliding with another body.
+- `onMovementChange` reports movement toggles, velocity changes, and axis displacements in a single payload.
+- `onDirectionChange` emits when the heading changes by at least five degrees or when the simplified direction (`CardinalDirection`) flips between `left`, `right`, `up`, `down`, or `idle`.
+
+```typescript
+const player = engine.createEntity({ position: { x: 0, y: 0 }, radius: 12, mass: 1 });
+
+const stopWatchingCollision = player.onCollisionEnter(({ other }) => {
+  console.log(`Player collided with ${other.uuid}`);
+});
+
+player.onMovementChange(({ isMoving, velocity }) => {
+  console.log(`Moving: ${isMoving}`, velocity);
+});
+
+player.onDirectionChange(({ cardinalDirection, direction }) => {
+  console.log(`Heading: ${cardinalDirection}`, direction);
+});
+```
+
+Use the returned unsubscribe function to detach listeners when they are no longer needed.
 
 ### Movement System
 

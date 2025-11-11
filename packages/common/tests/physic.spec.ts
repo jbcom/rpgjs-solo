@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RpgCommonPhysic } from '../src/Physic';
+import { TopDownPhysics, type PhysicsBodySnapshot } from '@rpgjs/physic';
 import { Direction } from '../src/Player';
 import { signal } from '@signe/reactive';
-import type { PhysicsBodySnapshot } from '../src/Physic';
 
 /**
  * Helper to build a mock RpgCommonPlayer compliant with the Physic class
@@ -28,15 +27,15 @@ const createMockPlayer = (id: string, x = 100, y = 100) => {
 /**
  * Centralised helpers to ease repetitive tasks in tests
  */
-const tick = (physic: RpgCommonPhysic, steps = 1, delta = 16) => {
+const tick = (physic: TopDownPhysics, steps = 1, delta = 16) => {
   for (let i = 0; i < steps; i++) physic.update(delta);
 };
 
 describe('Physic', () => {
-  let physic: RpgCommonPhysic;
+  let physic: TopDownPhysics;
 
   beforeEach(() => {
-    physic = new RpgCommonPhysic();
+    physic = new TopDownPhysics();
   });
 
   describe('Hitboxes', () => {
@@ -227,14 +226,14 @@ describe('Physic', () => {
 });
 
 /**
- * Extended integration test‑suite for RpgCommonPhysic
+ * Extended integration test‑suite for TopDownPhysics
  * Covers edge‑cases and regression scenarios around collisions, zones and cleanup logic.
  */
-describe('RpgCommonPhysic – extended stability', () => {
-  let physic: RpgCommonPhysic;
+describe('TopDownPhysics – extended stability', () => {
+  let physic: TopDownPhysics;
 
   beforeEach(() => {
-    physic = new RpgCommonPhysic();
+    physic = new TopDownPhysics();
   });
 
   /* --------------------------------------------------------------------- */

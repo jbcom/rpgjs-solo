@@ -68,6 +68,37 @@ interface GameEntity {
 const gameEntities: GameEntity[] = [];
 let hero: GameEntity | null = null;
 
+type SimplifiedDirection = 'idle' | 'up' | 'down' | 'left' | 'right';
+
+type MovementChangeEvent = {
+  isMoving: boolean;
+  velocity: Vector2;
+};
+
+type DirectionChangeEvent = {
+  cardinalDirection: SimplifiedDirection;
+  direction: Vector2;
+};
+
+type CollisionEventPayload = {
+  other: Entity;
+};
+
+type EntityWithHooks = Entity & {
+  onMovementChange(handler: (event: MovementChangeEvent) => void): () => void;
+  onDirectionChange(handler: (event: DirectionChangeEvent) => void): () => void;
+  onCollisionEnter(handler: (event: CollisionEventPayload) => void): () => void;
+  onCollisionExit(handler: (event: CollisionEventPayload) => void): () => void;
+};
+
+const heroTelemetry = {
+  moving: false,
+  velocity: new Vector2(0, 0),
+  direction: 'idle' as SimplifiedDirection,
+  directionVector: new Vector2(0, 0),
+  lastCollision: '-',
+};
+
 // Keyboard state
 const keys: { [key: string]: boolean } = {};
 const moveSpeed = 200; // pixels per second
@@ -86,6 +117,20 @@ type DebugAction = {
 
 function formatNpcName(entity: GameEntity): string {
   return entity.name ?? `NPC ${entity.entity.uuid.slice(0, 4).toUpperCase()}`;
+}
+
+function resolveCollisionLabel(entity: Entity): string {
+  const gameEntity = gameEntities.find((entry) => entry.entity.uuid === entity.uuid);
+  if (!gameEntity) {
+    return entity.uuid.slice(0, 4).toUpperCase();
+  }
+  if (gameEntity.type === 'hero') {
+    return 'Hero';
+  }
+  if (gameEntity.name) {
+    return gameEntity.name;
+  }
+  return gameEntity.type;
 }
 
 function setDebugStatus(message: string): void {
@@ -248,6 +293,26 @@ function createHero(): void {
     name: 'Hero',
   };
   gameEntities.push(hero);
+
+  const heroHooks = heroEntity as EntityWithHooks;
+
+  heroHooks.onMovementChange(({ velocity, isMoving }) => {
+    heroTelemetry.moving = isMoving;
+    heroTelemetry.velocity = velocity.clone();
+  });
+
+  heroHooks.onDirectionChange(({ cardinalDirection, direction }) => {
+    heroTelemetry.direction = cardinalDirection;
+    heroTelemetry.directionVector = direction.clone();
+  });
+
+  heroHooks.onCollisionEnter(({ other }) => {
+    heroTelemetry.lastCollision = resolveCollisionLabel(other);
+  });
+
+  heroHooks.onCollisionExit(() => {
+    heroTelemetry.lastCollision = '-';
+  });
 }
 
 function getNPCs(): GameEntity[] {
@@ -777,7 +842,13 @@ function render(): void {
   // Update info
   const npcCount = gameEntities.filter((e) => e.type === 'npc').length;
   if (hero) {
-    infoEl.textContent = `Position: (${Math.round(hero.entity.position.x)}, ${Math.round(hero.entity.position.y)}) | NPCs: ${npcCount} | FPS: ${Math.round(1000 / 16.67)}`;
+    const speed = heroTelemetry.velocity.length();
+    const directionVector = heroTelemetry.directionVector;
+    const directionInfo = heroTelemetry.direction === 'idle'
+      ? 'idle'
+      : `${heroTelemetry.direction} (${directionVector.x.toFixed(2)}, ${directionVector.y.toFixed(2)})`;
+    const collisionInfo = heroTelemetry.lastCollision === '-' ? 'none' : heroTelemetry.lastCollision;
+    infoEl.textContent = `Position: (${Math.round(hero.entity.position.x)}, ${Math.round(hero.entity.position.y)}) | NPCs: ${npcCount} | Movement: ${heroTelemetry.moving ? 'moving' : 'idle'} | Speed: ${speed.toFixed(1)} | Direction: ${directionInfo} | Collision: ${collisionInfo} | FPS: ${Math.round(1000 / 16.67)}`;
   }
 }
 

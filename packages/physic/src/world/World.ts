@@ -218,6 +218,9 @@ export class World {
     // Handle collision events
     this.handleCollisionEvents(collisions);
 
+    // Update per-entity motion tracking
+    this.updateEntityMotionTracking();
+
     // Update sleep state
     if (this.enableSleep) {
       this.updateSleepState();
@@ -280,6 +283,8 @@ export class World {
       // Check if this is a new collision
       if (!this.previousCollisions.has(pairKey)) {
         this.events.emitCollisionEnter(collision);
+        collision.entityA.notifyCollisionEnter(collision, collision.entityB);
+        collision.entityB.notifyCollisionEnter(collision, collision.entityA);
       }
     }
 
@@ -287,11 +292,22 @@ export class World {
     for (const [pairKey, collision] of this.previousCollisions) {
       if (!currentCollisions.has(pairKey)) {
         this.events.emitCollisionExit(collision);
+        collision.entityA.notifyCollisionExit(collision, collision.entityB);
+        collision.entityB.notifyCollisionExit(collision, collision.entityA);
       }
     }
 
     // Update previous collisions
     this.previousCollisions = currentCollisions;
+  }
+
+  /**
+   * Updates per-entity motion tracking caches.
+   */
+  private updateEntityMotionTracking(): void {
+    for (const entity of this.entities) {
+      entity.updateMotionTracking(this.timeStep);
+    }
   }
 
   /**

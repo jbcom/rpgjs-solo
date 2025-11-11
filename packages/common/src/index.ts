@@ -6,5 +6,4 @@ export * from "./services/updateMap";
 export * from "./Utils";
 export * from "./PrebuiltGui";
 export * from "./database";
-export * from "./Physic";
 export * from "@rpgjs/physic";

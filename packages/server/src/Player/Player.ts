@@ -100,7 +100,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   touchSide: boolean = false; // Protection against map change loops
   /** Last processed client input timestamp for reconciliation */
   lastProcessedInputTs: number = 0;
-  /** Last processed client input frame for reconciliation */
+  /** Last processed client input frame for reconciliation with server tick */
   _lastFramePositions: {
     frame: number;
     position: {
@@ -108,6 +108,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       y: number;
       direction: Direction;
     };
+    serverTick?: number; // Server tick at which this position was computed
   } | null = null;
 
   frames: { x: number; y: number; ts: number }[] = [];

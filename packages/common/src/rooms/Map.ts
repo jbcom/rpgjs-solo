@@ -1,18 +1,17 @@
 import { generateShortUUID, users } from "@signe/sync";
 import { effect, Signal, signal } from "@signe/reactive";
 import { Direction, RpgCommonPlayer } from "../Player";
-import { RpgCommonPhysic } from "../Physic";
+import { TopDownPhysics, type ZoneOptions } from "@rpgjs/physic";
 import { Observable, share, Subject, Subscription } from "rxjs";
-import { Knockback, LinearMove, MovementManager } from "../movement";
+import { MovementManager } from "../movement";
 import { WorldMapsManager, type RpgWorldMaps } from "./WorldMaps";
-import type { ZoneOptions } from "../Physic";
 
 export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   abstract players: Signal<Record<string, T>>;
   abstract events: Signal<Record<string, any>>;
   
   data = signal<any | null>(null);
-  physic = new RpgCommonPhysic();
+  physic = new TopDownPhysics();
   moveManager = new MovementManager(() => this.physic);
   
   // World Maps properties
@@ -134,11 +133,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     this.playersSubscription = (this.players as any).observable.subscribe(({ value: player, type, key }: any) => { 
       if (type == 'add') {
         player.id = key
-        this.physic.addMovableHitbox(player, player.x(), player.y(), player.hitbox().w, player.hitbox().h, {}, {
-          enabled: true,
-          friction: 0.8,
-          minVelocity: 0.5
-        });
+        this.physic.addMovableHitbox(player, player.x(), player.y(), player.hitbox().w, player.hitbox().h);
         this.physic.registerMovementEvents(player.id, () => {
           player.animationName.set('walk')
         }, () => {
@@ -150,11 +145,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
       else if (type == 'update') {
         this.physic.removeHitbox(player.id)
-        this.physic.addMovableHitbox(player, player.x(), player.y(), player.hitbox().w, player.hitbox().h, {}, {
-          enabled: true,
-          friction: 0.8,
-          minVelocity: 0.5
-        });
+        this.physic.addMovableHitbox(player, player.x(), player.y(), player.hitbox().w, player.hitbox().h);
       }
     })
 
@@ -163,9 +154,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         event.id = key
         // Events are static by default (cannot be pushed) unless they are moving
         // This prevents the player from pushing events during collisions
-        this.physic.addMovableHitbox(event, event.x(), event.y(), event.hitbox().w, event.hitbox().h, {
-          isStatic: true
-        });
+        this.physic.addMovableHitbox(event, event.x(), event.y(), event.hitbox().w, event.hitbox().h);
         this.physic.registerMovementEvents(event.id, () => {
           event.animationName.set('walk')
           // When event starts moving, make it dynamic
@@ -183,7 +172,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     this.tickSubscription = this.tick$.subscribe(({ delta }) => {
       this.physic.update(delta);
-      this.moveManager.update(delta, this.physic);
     });
   }
 

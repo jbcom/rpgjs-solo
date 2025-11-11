@@ -12,7 +12,17 @@ export * from './core/math/utils';
 export * from './core/types';
 
 // Physics Layer
-export { Entity, type EntityConfig } from './physics/Entity';
+export {
+  Entity,
+  type EntityConfig,
+  type CardinalDirection,
+  type EntityCollisionEvent,
+  type EntityCollisionHandler,
+  type EntityMovementEvent,
+  type EntityMovementHandler,
+  type EntityDirectionEvent,
+  type EntityDirectionHandler,
+} from './physics/Entity';
 export { Integrator, IntegrationMethod } from './physics/integrator';
 export * from './physics/forces';
 export * from './physics/constraints';
@@ -51,3 +61,10 @@ export { ObjectPool } from './utils/pool';
 export * from './utils/uuid';
 
 export { ProjectileType } from './movement/strategies/ProjectileMovement';
+export {
+  TopDownPhysics,
+  type ZoneOptions,
+  type SlidingOptions,
+  type PhysicsBodySnapshot,
+  type DirectionValue,
+} from './topdown/TopDownPhysics';

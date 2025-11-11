@@ -1,5 +1,5 @@
 import { Action, MockConnection, Request, Room, RoomOnJoin } from "@signe/room";
-import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, ZoneData, Direction, RpgCommonPlayer } from "@rpgjs/common";
+import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, Direction, RpgCommonPlayer } from "@rpgjs/common";
 import { WorldMapsManager, type WorldMapConfig } from "@rpgjs/common";
 import { RpgPlayer, RpgEvent } from "../Player/Player";
 import { generateShortUUID, sync, type, users } from "@signe/sync";
@@ -11,6 +11,18 @@ import { Subject } from "rxjs";
 import { BehaviorSubject } from "rxjs";
 import { COEFFICIENT_ELEMENTS, DAMAGE_CRITICAL, DAMAGE_PHYSIC, DAMAGE_SKILL } from "../presets";
 import { z } from "zod";
+
+/**
+ * Zone data structure for shape detection events
+ */
+export interface ZoneData {
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  radius?: number;
+  properties?: Record<string, any>;
+}
 
 /**
  * Interface for input controls configuration
@@ -102,13 +114,17 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   globalConfig: any = {}
   damageFormulas: any = {}
   
+  // Server authoritative tick counter for deterministic simulation
+  private serverTickCount: number = 0;
+  private readonly SERVER_TICK_RATE = 60; // 60 ticks per second
+  private readonly TICK_MS = 1000 / 60; // 16.67ms per tick
+  
   constructor() {
     super();
     this.hooks.callHooks("server-map-onStart", this).subscribe();
     this.throttleSync = this.isStandalone ? 0 : 50; // Reduced from 100ms to 50ms for better responsiveness
     this.throttleStorage = this.isStandalone ? 0 : 1000;
     this.sessionExpiryTime = 1000 * 60 * 5; //5 minutes
-    this.loop();
   }
 
   // autoload by @signe/room
@@ -119,19 +135,25 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       return null
     }
 
-    // Add timestamp to sync packets for client-side prediction reconciliation
+    // Add timestamp and serverTick to sync packets for client-side prediction reconciliation
     if (packet && typeof packet === 'object') {
       obj.timestamp = Date.now();
+      obj.serverTick = this.serverTickCount; // Server authoritative tick counter
 
-      // Add ack info: last processed frame and authoritative position
+      // Add ack info: last processed frame and authoritative position at this server tick
       if (player) {
         const lastFramePositions = player._lastFramePositions;
         obj.ack = {
-          frame: lastFramePositions?.frame ?? player.pendingInputs.length,
+          frame: lastFramePositions?.frame ?? 0,
+          serverTick: this.serverTickCount, // Tick at which this state is valid
           x: lastFramePositions?.position?.x ?? player.x(),
           y: lastFramePositions?.position?.y ?? player.y(),
           direction: lastFramePositions?.position?.direction ?? player.direction(),
         };
+
+        console.debug(
+          `[ServerTick ${this.serverTickCount}] Sending snapshot to player ${player.id}: ackFrame=${obj.ack.frame} position=(${obj.ack.x?.toFixed?.(2) ?? obj.ack.x}, ${obj.ack.y?.toFixed?.(2) ?? obj.ack.y})`
+        );
       }
     }
 
@@ -231,6 +253,40 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
   }
 
+  /**
+   * Handle ping request from client for synchronization
+   * 
+   * Responds with server tick and client frame information to allow
+   * the client to calculate RTT and frame offset for accurate prediction reconciliation.
+   * 
+   * ## Design
+   * 
+   * - Receives client timestamp and frame counter
+   * - Responds immediately with current serverTickCount
+   * - Client uses this to measure RTT and calculate frame offset
+   * - Enables accurate mapping between client frames and server ticks
+   * 
+   * @param player - The player sending the ping
+   * @param data - Ping data containing clientTime and clientFrame
+   * 
+   * @example
+   * ```ts
+   * // Automatically called when client sends ping
+   * // Server responds with: { serverTick, clientFrame, clientTime }
+   * ```
+   */
+  @Action('ping')
+  async onPing(player: RpgPlayer, data: { clientTime: number; clientFrame: number }) {
+    player.conn?.send({
+      type: 'pong',
+      value: {
+        serverTick: this.serverTickCount,
+        clientFrame: data.clientFrame,
+        clientTime: data.clientTime
+      }
+    });
+  }
+
   @Request({
     path: "/map/update",
     method: "POST"
@@ -325,24 +381,31 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   /**
    * Process pending inputs for a player with anti-cheat validation
    * 
-   * This method processes all pending inputs for a player while performing
-   * anti-cheat validation to prevent time manipulation and frame skipping.
-   * It validates the time deltas between inputs and ensures they are within
-   * acceptable ranges. After processing, it saves the last frame position
-   * for use in packet interception.
+   * This method processes all pending inputs for a player during the current server tick.
+   * It performs anti-cheat validation to prevent time manipulation and frame skipping,
+   * validates time deltas between inputs, and ensures they are within acceptable ranges.
+   * After processing, it saves the last frame position for use in packet interception.
+   * 
+   * ## Design
+   * 
+   * - Executes **synchronously** within the physics tick loop for determinism
+   * - Sorts inputs by client frame number to maintain causal order
+   * - Applies anti-cheat validation if enabled (frame delta, time delta limits)
+   * - Reads authoritative position from physics body after processing
+   * - Associates processed inputs with current serverTickCount
    * 
    * @param playerId - The ID of the player to process inputs for
    * @param controls - Optional anti-cheat configuration
-   * @returns Promise containing the player and processed input strings
+   * @returns Object containing the player and processed input strings
    * 
    * @example
    * ```ts
    * // Process inputs with default anti-cheat settings
-   * const result = await map.processInput('player1');
+   * const result = map.processInputSync('player1');
    * console.log('Processed inputs:', result.inputs);
    * 
    * // Process inputs with custom anti-cheat configuration
-   * const result = await map.processInput('player1', {
+   * const result = map.processInputSync('player1', {
    *   maxTimeDelta: 100,
    *   maxFrameDelta: 5,
    *   minTimeBetweenInputs: 16,
@@ -350,15 +413,16 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * });
    * ```
    */
-  async processInput(playerId: string, controls?: Controls): Promise<{
+  processInputSync(playerId: string, controls?: Controls): {
     player: RpgPlayer,
     inputs: string[]
-  }> {
+  } {
     const player = this.getPlayer(playerId);
+    
     if (!player) {
       throw new Error(`Player ${playerId} not found`);
     }
-
+    
     if (!player.isConnected()) {
       player.pendingInputs = [];
       return {
@@ -382,13 +446,22 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     // Sort inputs by frame number to ensure proper order
     player.pendingInputs.sort((a, b) => (a.frame || 0) - (b.frame || 0));
 
-    // Process all pending inputs
+    const pendingCount = player.pendingInputs.length;
+    if (pendingCount > 0) {
+      console.debug(`[ServerTick ${this.serverTickCount}] Player ${playerId} pending inputs: ${pendingCount}`);
+    }
+
+    // Process all pending inputs for this tick
     while (player.pendingInputs.length > 0) {
       const input = player.pendingInputs.shift();
       
       if (!input || typeof input.frame !== 'number') {
         continue;
       }
+
+      console.debug(
+        `[ServerTick ${this.serverTickCount}] Processing input frame ${input.frame} for player ${playerId} (command=${input.input})`
+      );
 
       // Anti-cheat validation
       if (config.enableAntiCheat) {
@@ -420,9 +493,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         continue;
       }
 
-      // Process the input
+      // Process the input synchronously within the tick
       if (input.input) {
-        await this.movePlayer(player, input.input);
+        this.movePlayerSync(player, input.input);
         processedInputs.push(input.input);
       }
 
@@ -431,8 +504,6 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       lastProcessedFrame = input.frame;
     }
 
-    player.applyFrames()
-
     // Save last frame position for packet interception
     // IMPORTANT: read from physics body (authoritative), not from signals that are updated on next tick
     const lastFrame = lastProcessedFrame || 0;
@@ -440,8 +511,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     let posX = player.x();
     let posY = player.y();
     if (body) {
-      const width = body.bounds.max.x - body.bounds.min.x;
-      const height = body.bounds.max.y - body.bounds.min.y;
+      const width = body.width ?? player.hitbox().w;
+      const height = body.height ?? player.hitbox().h;
       posX = body.position.x - width / 2;
       posY = body.position.y - height / 2;
     }
@@ -451,8 +522,18 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         x: posX, 
         y: posY,
         direction: player.direction()
-      }
+      },
+      serverTick: this.serverTickCount // Associate with current server tick
     };
+
+    if (processedInputs.length > 0) {
+      console.debug(
+        `[ServerTick ${this.serverTickCount}] Player ${playerId} processed inputs: ${processedInputs.join(', ')}`
+      );
+      console.debug(
+        `[ServerTick ${this.serverTickCount}] Player ${playerId} authoritative position=(${posX.toFixed(2)}, ${posY.toFixed(2)}) direction=${player.direction()}`
+      );
+    }
 
     return {
       player,
@@ -460,20 +541,116 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     };
   }
 
-  private loop() {
-    setInterval(async () => {
-      for (const player of this.getPlayers()) {
-        if (player.pendingInputs.length > 0) {
-          const anyPlayer = player as RpgPlayer;
-          if (!anyPlayer._isProcessingInputs) {
-            anyPlayer._isProcessingInputs = true;
-            await this.processInput(player.id).finally(() => {
-              anyPlayer._isProcessingInputs = false;
-            });
-          }
+  /**
+   * Synchronous player movement for deterministic server tick processing
+   * 
+   * This is a synchronous version of movePlayer() designed to be called within
+   * the physics tick loop. It skips async operations like autoChangeMap to ensure
+   * deterministic, frame-perfect physics simulation.
+   * 
+   * ## Design
+   * 
+   * - Executes synchronously within the fixed-timestep physics loop
+   * - Updates player direction/facing immediately
+   * - Delegates actual movement to the physics engine
+   * - No async map changes (those should be handled separately)
+   * 
+   * @param player - The player to move
+   * @param direction - Direction of movement
+   * 
+   * @example
+   * ```ts
+   * // Called from processInputSync during tick processing
+   * this.movePlayerSync(player, Direction.Up);
+   * ```
+   */
+  private movePlayerSync(player: RpgPlayer, direction: Direction): void {
+    // Update player's intended direction
+    if (typeof player.setIntendedDirection === 'function') {
+      player.setIntendedDirection(direction);
+    } else if (typeof player.changeDirection === 'function') {
+      player.changeDirection(direction);
+    }
+    
+    // Perform physics movement
+    this.physic.moveBody(player, direction);
+  }
+
+  /**
+   * Process all players' inputs in the current server tick
+   * 
+   * This method is called once per physics tick (60 Hz) to process all accumulated
+   * player inputs in a deterministic, synchronous manner.
+   * 
+   * ## Design
+   * 
+   * - Called synchronously within the physics tick loop
+   * - Processes inputs for all connected players
+   * - Ensures deterministic simulation by processing inputs at fixed intervals
+   * - No async operations to prevent timing drift
+   * 
+   * @example
+   * ```ts
+   * // Called automatically in the physics tick loop
+   * this.tickSubscription = this.tick$.subscribe(({ delta }) => {
+   *   this.serverTickCount++;
+   *   this.processAllPlayerInputs(); // Process inputs first
+   *   this.physic.update(delta);      // Then update physics
+   * });
+   * ```
+   */
+  private processAllPlayerInputs(): void {
+    for (const player of this.getPlayers()) {
+      if (player.pendingInputs.length > 0 && player.isConnected()) {
+        try {
+          this.processInputSync(player.id);
+        } catch (error) {
+          console.error(`Error processing inputs for player ${player.id}:`, error);
         }
       }
-    }, 50); // Increased frequency from 100ms to 50ms for better responsiveness
+    }
+  }
+
+  /**
+   * Override loadPhysic to integrate deterministic tick-based input processing
+   * 
+   * This method extends the base loadPhysic() from RpgCommonMap to add server-specific
+   * tick processing that includes input handling within the physics loop.
+   * 
+   * ## Design
+   * 
+   * - Calls parent loadPhysic() to setup base physics
+   * - Overrides the tick subscription to add input processing
+   * - Ensures inputs are processed BEFORE physics update for determinism
+   * - Increments serverTickCount on every tick
+   * 
+   * @example
+   * ```ts
+   * // Called when map is initialized or updated
+   * await this.updateMap(request);
+   * // loadPhysic() is called automatically
+   * ```
+   */
+  override loadPhysic(): void {
+    // Call parent to setup physics, hitboxes, and base subscriptions
+    super.loadPhysic();
+    
+    // Unsubscribe from the base tick subscription
+    if (this.tickSubscription) {
+      this.tickSubscription.unsubscribe();
+    }
+    
+    // Create new tick subscription with input processing
+    this.tickSubscription = this.tick$.subscribe(({ delta }) => {
+      // 1. Increment server tick counter
+      this.serverTickCount++;
+      
+      // 2. Process all player inputs for this tick (BEFORE physics)
+      this.processAllPlayerInputs();
+      
+      // 3. Update physics simulation
+      this.physic.update(delta);
+    });
   }
 
   /**

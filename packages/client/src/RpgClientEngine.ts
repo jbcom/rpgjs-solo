@@ -64,10 +64,16 @@ export class RpgClientEngine<T = any> {
   private inputFrameCounter: number = 0;
   // Last acknowledged frame by server
   private lastAckFrame: number = 0;
-  // Frame offset to synchronize with server
+  // Last acknowledged server tick
+  private lastAckServerTick: number = 0;
+  // Frame offset to synchronize with server (maps client frame to server tick)
   private frameOffset: number = 0;
   // Track last server timestamp processed per remote player to drop stale updates
   private lastRemoteServerTs: Map<string, number> = new Map();
+  // Ping/Pong for RTT measurement
+  private rtt: number = 0; // Round-trip time in ms
+  private pingInterval: any = null;
+  private readonly PING_INTERVAL_MS = 5000; // Send ping every 5 seconds
 
   constructor(public context: Context) {
     this.webSocket = inject(context, WebSocketToken);
@@ -147,10 +153,25 @@ export class RpgClientEngine<T = any> {
       this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: filteredData }).subscribe();
       load(this.sceneMap, filteredData, true);
 
-      // Update physics after sceneMap has been updated
-      this.updatePhysicsFromSync(filteredData);
-
       if (data.ack) this.applyServerAck(data.ack);
+    });
+
+    // Handle pong responses for RTT measurement
+    this.webSocket.on("pong", (data: { serverTick: number; clientFrame: number; clientTime: number }) => {
+      const now = Date.now();
+      this.rtt = now - data.clientTime;
+      
+      // Calculate frame offset: how many ticks ahead the server is compared to our frame counter
+      // This helps us estimate which server tick corresponds to each client input frame
+      const estimatedTicksInFlight = Math.floor(this.rtt / 2 / (1000 / 60)); // Estimate ticks during half RTT
+      const estimatedServerTickNow = data.serverTick + estimatedTicksInFlight;
+      
+      // Update frame offset (only if we have inputs to calibrate with)
+      if (this.inputFrameCounter > 0) {
+        this.frameOffset = estimatedServerTickNow - data.clientFrame;
+      }
+      
+      console.debug(`[Ping/Pong] RTT: ${this.rtt}ms, ServerTick: ${data.serverTick}, FrameOffset: ${this.frameOffset}`);
     });
 
     this.webSocket.on("changeMap", (data) => {
@@ -175,15 +196,91 @@ export class RpgClientEngine<T = any> {
 
     this.webSocket.on('open', () => {
       this.hooks.callHooks("client-engine-onConnected", this, this.socket).subscribe();
+      // Start ping/pong for synchronization
+      this.startPingPong();
     })
 
     this.webSocket.on('close', () => {
       this.hooks.callHooks("client-engine-onDisconnected", this, this.socket).subscribe();
+      // Stop ping/pong when disconnected
+      this.stopPingPong();
     })
 
     this.webSocket.on('error', (error) => {
       this.hooks.callHooks("client-engine-onConnectError", this, error, this.socket).subscribe();
     })
+  }
+
+  /**
+   * Start periodic ping/pong for client-server synchronization
+   * 
+   * Sends ping requests to the server to measure round-trip time (RTT) and
+   * calculate the frame offset between client and server ticks.
+   * 
+   * ## Design
+   * 
+   * - Sends ping every 5 seconds
+   * - Measures RTT for latency compensation
+   * - Calculates frame offset to map client frames to server ticks
+   * - Used for accurate server reconciliation
+   * 
+   * @example
+   * ```ts
+   * // Called automatically when connection opens
+   * this.startPingPong();
+   * ```
+   */
+  private startPingPong(): void {
+    // Stop existing interval if any
+    this.stopPingPong();
+    
+    // Send initial ping immediately
+    this.sendPing();
+    
+    // Set up periodic pings
+    this.pingInterval = setInterval(() => {
+      this.sendPing();
+    }, this.PING_INTERVAL_MS);
+  }
+
+  /**
+   * Stop periodic ping/pong
+   * 
+   * Stops the ping interval when disconnecting or changing maps.
+   * 
+   * @example
+   * ```ts
+   * // Called automatically when connection closes
+   * this.stopPingPong();
+   * ```
+   */
+  private stopPingPong(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  /**
+   * Send a ping request to the server
+   * 
+   * Sends current client time and frame counter to the server,
+   * which will respond with its server tick for synchronization.
+   * 
+   * @example
+   * ```ts
+   * // Send a ping to measure RTT
+   * this.sendPing();
+   * ```
+   */
+  private sendPing(): void {
+    const clientTime = Date.now();
+    const clientFrame = this.inputFrameCounter;
+    
+    this.webSocket.emit('ping', { 
+      clientTime, 
+      clientFrame 
+    });
   }
   
   private async loadScene(mapId: string) {
@@ -485,6 +582,9 @@ export class RpgClientEngine<T = any> {
       timestamp,
       frame
     });
+    console.debug(
+      `[Client] Sent input frame=${frame} direction=${input} timestamp=${timestamp} frameOffset=${this.frameOffset} rtt=${this.rtt}`
+    );
     
     const currentPlayer = this.sceneMap.getCurrentPlayer();
     if (currentPlayer) {   
@@ -495,11 +595,12 @@ export class RpgClientEngine<T = any> {
       const myId = this.playerIdSignal();
       let afterX = currentPlayer.x();
       let afterY = currentPlayer.y();
+
       if (myId) {
         const body = this.sceneMap.physic.getBody(myId);
         if (body) {
-          const width = body.bounds.max.x - body.bounds.min.x;
-          const height = body.bounds.max.y - body.bounds.min.y;
+          const width = body.width ?? currentPlayer.hitbox().w;
+          const height = body.height ?? currentPlayer.hitbox().h;
           afterX = body.position.x - width / 2;
           afterY = body.position.y - height / 2;
         }
@@ -627,21 +728,89 @@ export class RpgClientEngine<T = any> {
   /**
    * Apply server acknowledgement to reconcile client prediction
    * 
-   * Compares the server's ack frame with the client's input history.
-   * If the positions match, do nothing. If they differ, apply server authority.
+   * Compares the server's ack frame and server tick with the client's input history.
+   * Uses serverTick as the authoritative timestamp for more accurate reconciliation.
+   * If positions match, do nothing. If they differ, apply server authority.
    * 
-   * @param ack - Server acknowledgement with frame and authoritative position
+   * ## Design
+   * 
+   * - Uses serverTick as primary reference for reconciliation
+   * - Falls back to frame-based reconciliation if serverTick not available
+   * - Implements position tolerance to avoid jitter from rounding errors
+   * - Respects collision detection when applying corrections
+   * - Tracks last acknowledged server tick to prevent old updates
+   * 
+   * @param ack - Server acknowledgement with frame, serverTick, and authoritative position
    * 
    * @example
    * ```ts
    * // Called automatically when receiving server ack
-   * this.applyServerAck({ frame: 123, x: 100, y: 200, direction: Direction.Up });
+   * this.applyServerAck({ 
+   *   frame: 123, 
+   *   serverTick: 7890,
+   *   x: 100, 
+   *   y: 200, 
+   *   direction: Direction.Up 
+   * });
    * ```
    */
-  private applyServerAck(ack: { frame: number; x?: number; y?: number; direction?: Direction }) {
+  private applyServerAck(ack: { 
+    frame: number; 
+    serverTick?: number;
+    x?: number; 
+    y?: number; 
+    direction?: Direction 
+  }) {
 
     if (typeof ack.frame !== 'number') return;
-    if (ack.frame < this.lastAckFrame) return;
+    
+    // Prefer serverTick for ordering if available
+    if (typeof ack.serverTick === 'number') {
+      if (ack.serverTick < this.lastAckServerTick) {
+        console.debug(
+          `[Client] Ignoring ack frame=${ack.frame} serverTick=${ack.serverTick} (< last ${this.lastAckServerTick})`
+        );
+        return; // Ignore old acks based on server tick
+      }
+      console.debug(
+        `[Client] Received ack frame=${ack.frame} serverTick=${ack.serverTick} x=${ack.x} y=${ack.y} direction=${ack.direction}`
+      );
+    } else if (ack.frame < this.lastAckFrame) {
+      console.debug(
+        `[Client] Ignoring ack (no serverTick) frame=${ack.frame} (< last ${this.lastAckFrame})`
+      );
+      return;
+    } else {
+      console.debug(
+        `[Client] Received ack (no serverTick) frame=${ack.frame} x=${ack.x} y=${ack.y} direction=${ack.direction}`
+      );
+    }
+
+    const firstPendingFrame = this.inputHistory.length > 0 ? this.inputHistory[0].frame : undefined;
+
+    if (firstPendingFrame !== undefined && ack.frame < firstPendingFrame) {
+      console.debug(
+        `[Client] Skipping ack frame ${ack.frame}; first pending frame=${firstPendingFrame}`
+      );
+      this.lastAckServerTick = typeof ack.serverTick === 'number' ? ack.serverTick : this.lastAckServerTick;
+      this.lastAckFrame = Math.max(this.lastAckFrame, ack.frame);
+      return;
+    }
+
+    if (firstPendingFrame === undefined && ack.frame < this.lastAckFrame) {
+      console.debug(
+        `[Client] Ignoring duplicate ack frame ${ack.frame} with empty history`
+      );
+      this.lastAckServerTick = typeof ack.serverTick === 'number' ? ack.serverTick : this.lastAckServerTick;
+      this.lastAckFrame = Math.max(this.lastAckFrame, ack.frame);
+      return;
+    }
+
+    if (typeof ack.serverTick === 'number') {
+      this.lastAckServerTick = ack.serverTick;
+    }
+    
+    this.lastAckFrame = ack.frame;
 
     const currentPlayer = this.sceneMap.getCurrentPlayer();
     const myId = this.playerIdSignal();
@@ -672,6 +841,9 @@ export class RpgClientEngine<T = any> {
     if (!matchingEntry) {
       // If the frame is not in history, only apply authority when the ack frame is almost current
       const frameDiff = ack.frame - this.inputFrameCounter; // negative if ack is behind
+      console.debug(
+        `[Client] Ack frame ${ack.frame} not found in history (diff=${frameDiff}). inputCounter=${this.inputFrameCounter}`
+      );
       if (Math.abs(frameDiff) <= 1) {
         if (typeof ack.x === 'number' && typeof ack.y === 'number') {
           // Check if position is valid before applying (respects collisions)
@@ -680,12 +852,16 @@ export class RpgClientEngine<T = any> {
             const success = this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, hitbox.w, hitbox.h);
             if (success) {
               correctionApplied = true;
+              console.debug(
+                `[Client] Applied correction without history entry: position=(${ack.x}, ${ack.y}) direction=${ack.direction}`
+              );
             }
           }
         }
         if (typeof ack.direction !== 'undefined') {
           currentPlayer.changeDirection(ack.direction);
           correctionApplied = true;
+          console.debug(`[Client] Updated direction without history entry: ${ack.direction}`);
         }
       } 
     } else {
@@ -710,6 +886,9 @@ export class RpgClientEngine<T = any> {
       
       // Apply server authority only if positions/direction differ significantly
       if (!positionsMatch) {
+        console.debug(
+          `[Client] Prediction mismatch for frame ${ack.frame}. Server: (${ack.x}, ${ack.y}) vs predicted: (${matchingEntry.resultingX}, ${matchingEntry.resultingY})`
+        );
         if (typeof ack.x === 'number' && typeof ack.y === 'number') {
           // Check if position is valid before applying (respects collisions)
           const hitbox = currentPlayer.hitbox();
@@ -717,12 +896,16 @@ export class RpgClientEngine<T = any> {
             const success = this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, hitbox.w, hitbox.h);
             if (success) {
               correctionApplied = true;
+              console.debug(
+                `[Client] Applied correction for frame ${ack.frame}: position=(${ack.x}, ${ack.y}) direction=${ack.direction}`
+              );
             }
           }
         }
         if (typeof ack.direction !== 'undefined') {
           currentPlayer.changeDirection(ack.direction);
           correctionApplied = true;
+          console.debug(`[Client] Updated direction for frame ${ack.frame}: ${ack.direction}`);
         }
       }
     }
@@ -733,7 +916,14 @@ export class RpgClientEngine<T = any> {
 
     // If we applied a correction, replay remaining inputs locally to realign prediction
     if (correctionApplied && pendingToReplay.length > 0) {
+      console.debug(
+        `[Client] Replaying ${pendingToReplay.length} inputs after correction from frame ${ack.frame}`
+      );
       this.replayUnackedInputsFromFrame(ack.frame);
+    } else if (!correctionApplied) {
+      console.debug(
+        `[Client] Ack frame ${ack.frame} confirmed prediction. Remaining history=${this.inputHistory.length}`
+      );
     }
   }
 
@@ -762,69 +952,6 @@ export class RpgClientEngine<T = any> {
       entry.resultingX = currentPlayer.x();
       entry.resultingY = currentPlayer.y();
       entry.resultingDirection = currentPlayer.direction();
-    }
-  }
-
-
-  /**
-   * Update physics hitboxes from synchronization data
-   * 
-   * This method iterates through synchronization data and updates hitboxes
-   * directly in the physics system. Called after sceneMap has been updated
-   * to ensure physics bodies are synchronized with the latest positions.
-   * 
-   * @param data - Synchronization data containing players and events with positions
-   * 
-   * @example
-   * ```ts
-   * // Called after sceneMap has been updated
-   * this.updatePhysicsFromSync(filteredData);
-   * ```
-   */
-  updatePhysicsFromSync(data: any): void {
-    const serverTs = (data && typeof data.timestamp === 'number') ? data.timestamp : Date.now();
-    const currentPlayerId = this.playerIdSignal();
-    
-    // Helper function to update entity physics hitbox
-    const updateEntityPhysics = (entityId: string, entityData: any, entityType: 'player' | 'event') => {
-      if (entityData.x !== undefined && entityData.y !== undefined) {
-        // Drop stale updates for players to avoid back-and-forth under lag
-        if (entityType === 'player') {
-          const lastTs = this.lastRemoteServerTs.get(entityId) || 0;
-          if (serverTs < lastTs) {
-            return;
-          }
-          this.lastRemoteServerTs.set(entityId, serverTs);
-        }
-        const existingEntity = this.sceneMap.getObjectById(entityId);
-        if (existingEntity) {
-          // For remote players, use skipCollisionCheck=true because server is authoritative
-          // For current player, collisions are already handled in applyServerAck
-          const isCurrentPlayer = entityId === currentPlayerId;
-          this.sceneMap.physic.updateHitbox(
-            entityId,
-            entityData.x,
-            entityData.y,
-            existingEntity.hitbox().w,
-            existingEntity.hitbox().h,
-            !isCurrentPlayer // Skip collision check for remote players (server authoritative)
-          );
-        }
-      }
-    };
-
-    // Update player positions in physics system
-    if (data.players) {
-      for (const [playerId, playerData] of Object.entries(data.players as Record<string, any>)) {
-        updateEntityPhysics(playerId, playerData, 'player');
-      }
-    }
-
-    // Update event positions in physics system
-    if (data.events) {
-      for (const [eventId, eventData] of Object.entries(data.events as Record<string, any>)) {
-        updateEntityPhysics(eventId, eventData, 'event');
-      }
     }
   }
 }

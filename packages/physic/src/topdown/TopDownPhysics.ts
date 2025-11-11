@@ -4,70 +4,37 @@ import {
   EntityState,
   PhysicsEngine,
   Vector2,
-} from "@rpgjs/physic";
-import type { CollisionInfo } from "@rpgjs/physic";
-import { Direction, RpgCommonPlayer } from "./Player";
+  MovementManager,
+} from "../index";
+import type { CollisionInfo } from "../index";
 
-/**
- * ## Zone configuration
- *
- * Describes the options accepted when creating an analytical detection zone.
- * Zones can either be defined by world coordinates or linked to an existing hitbox.
- */
+export type DirectionValue = "up" | "down" | "left" | "right";
+
 export interface ZoneOptions {
-  /** World x-coordinate (ignored when `linkedTo` is provided) */
   x?: number;
-  /** World y-coordinate (ignored when `linkedTo` is provided) */
   y?: number;
-  /** Circle radius (px) */
   radius: number;
-  /** Vision aperture in degrees. 360 = full circle, <360 = cone */
   angle?: number;
-  /** Facing direction used when angle < 360 */
-  direction?: Direction;
-  /** If supplied, zone tracks this hitbox id */
+  direction?: DirectionValue;
   linkedTo?: string;
-  /** If true, walls (static hitboxes) stop vision */
   limitedByWalls?: boolean;
-  /** Optional semantic hint for UI integrations */
   positioning?: "center" | "top" | "bottom" | "left" | "right";
-  /** Friendly name for debugging */
   name?: string;
-  /** Arbitrary metadata forwarded with events */
   properties?: object;
 }
 
-/**
- * ## Sliding hint
- *
- * Preserves the legacy shape of sliding options even though the new physics
- * backend does not implement per-entity sliding yet. Keeping the interface
- * allows feature parity with existing userland code.
- */
 export interface SlidingOptions {
-  /** Enable collision sliding */
   enabled?: boolean;
-  /** Sliding friction factor (0-1, where 0 = no sliding, 1 = perfect sliding) */
   friction?: number;
-  /** Minimum velocity threshold for sliding to occur */
   minVelocity?: number;
 }
 
-/**
- * Snapshot describing a physics body at a given frame for game-logic consumers.
- */
 export interface PhysicsBodySnapshot {
-  /** Logical identifier of the entity */
   id: string;
-  /** Geometric center in world coordinates */
   center: { x: number; y: number };
-  /** Top-left corner in world coordinates */
   topLeft: { x: number; y: number };
-  /** Linear velocity vector */
   velocity: { x: number; y: number };
-  /** Current width of the collider */
   width: number;
-  /** Current height of the collider */
   height: number;
 }
 
@@ -100,7 +67,7 @@ interface ZoneBody {
   position: Vector2;
   radius: number;
   angle: number;
-  direction: Direction;
+  direction: DirectionValue;
 }
 
 interface ZoneRecord {
@@ -126,15 +93,15 @@ interface RectBounds {
   maxY: number;
 }
 
-function directionToAngle(dir: Direction): number {
+function directionToAngle(dir: DirectionValue): number {
   switch (dir) {
-    case Direction.Up:
+    case "up":
       return -Math.PI / 2;
-    case Direction.Down:
+    case "down":
       return Math.PI / 2;
-    case Direction.Left:
+    case "left":
       return Math.PI;
-    case Direction.Right:
+    case "right":
     default:
       return 0;
   }
@@ -147,25 +114,7 @@ function normalizeAngle(angle: number): number {
   return a;
 }
 
-/**
- * ## Overview
- *
- * Bridges the gameplay layer with the deterministic engine provided by `@rpgjs/physic`.
- * The class keeps the legacy API that the Matter.js wrapper exposed, while internally
- * delegating all simulation to the new engine.
- *
- * - Entities are registered as `@rpgjs/physic` AABB or polygon bodies.
- * - Collision lifecycle is forwarded via lightweight callback registries.
- * - Zones are analytical checks evaluated once per physics frame.
- *
- * @example
- * ```ts
- * const physic = new RpgCommonPhysic();
- * const id = physic.addMovableHitbox(player, 100, 100, 32, 32);
- * physic.update(16);
- * ```
- */
-export class RpgCommonPhysic {
+export class TopDownPhysics {
   private readonly engine: PhysicsEngine;
   private readonly fixedStepMs: number;
   private accumulator = 0;
@@ -180,21 +129,6 @@ export class RpgCommonPhysic {
   private readonly unsubscribeCollisionEnter: () => void;
   private readonly unsubscribeCollisionExit: () => void;
 
-  /**
-   * ## Purpose
-   *
-   * Instantiate the deterministic engine and prepare collision observers.
-   *
-   * ## Design Notes
-   *
-   * The engine runs with a fixed `1/60` step, zero gravity, and sleeping disabled
-   * to mimic the previous top-down configuration.
-   *
-   * @example
-   * ```ts
-   * const physic = new RpgCommonPhysic();
-   * ```
-   */
   constructor() {
     this.engine = new PhysicsEngine({
       timeStep: 1 / 60,
@@ -211,23 +145,9 @@ export class RpgCommonPhysic {
     });
   }
 
-  /**
-   * ## Purpose
-   *
-   * Reset the physics world to a pristine state.
-   *
-  * ## Design
-   *
-   * Delegates entity removal to the engine and clears every local registry
-   * (collisions, zones, movement state, sliding hints).
-   *
-   * @example
-   * ```ts
-   * physic.clearAll();
-   * ```
-   */
   clearAll(): void {
     this.engine.clear();
+    this.engine.getMovementManager().clearAll();
     this.hitboxes.clear();
     this.collisions.clear();
     this.collisionCallbacks.clear();
@@ -237,21 +157,12 @@ export class RpgCommonPhysic {
     this.accumulator = 0;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Register an immovable obstacle in the physics world.
-   *
-   * ## Design
-   *
-   * Supports both rectangular hitboxes and polygonal shapes.
-   * When polygons are provided, their points are converted to local-space vertices.
-   *
-   * @example
-   * ```ts
-   * physic.addStaticHitbox("wall", 50, 50, 32, 128);
-   * ```
-   */
+  dispose(): void {
+    this.unsubscribeCollisionEnter();
+    this.unsubscribeCollisionExit();
+    this.clearAll();
+  }
+
   addStaticHitbox(
     id: string,
     x: number,
@@ -260,16 +171,6 @@ export class RpgCommonPhysic {
     height: number,
   ): string;
 
-  /**
-   * @example
-   * ```ts
-   * physic.addStaticHitbox("triangle", [
-   *   [0, 0],
-   *   [64, 0],
-   *   [32, 48],
-   * ]);
-   * ```
-   */
   addStaticHitbox(id: string, points: number[][]): string;
 
   addStaticHitbox(
@@ -332,9 +233,10 @@ export class RpgCommonPhysic {
       });
       entity.freeze();
 
-      const localVertices = points.map(
-        ([px, py]) => new Vector2(px - centerX, py - centerY),
-      );
+      const localVertices = points.map((point) => {
+        const [px, py] = point as [number, number];
+        return new Vector2(px - centerX, py - centerY);
+      });
       assignPolygonCollider(entity, { vertices: localVertices });
     } else {
       if (
@@ -378,23 +280,8 @@ export class RpgCommonPhysic {
     return id;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Register a movable hitbox and bind it to a gameplay object.
-   *
-   * ## Design
-   *
-   * Coordinates are expressed in top-left space to preserve compatibility with the legacy API.
-   * The underlying entity stores its position at the collider center.
-   *
-   * @example
-   * ```ts
-   * physic.addMovableHitbox(player, 100, 100, 32, 32);
-   * ```
-   */
   addMovableHitbox(
-    owner: RpgCommonPlayer | any,
+    owner: any,
     x: number,
     y: number,
     width: number,
@@ -412,14 +299,13 @@ export class RpgCommonPhysic {
     const isStatic = !!options.isStatic;
 
     const entity = this.engine.createEntity({
-      uuid: id,
       position: { x: centerX, y: centerY },
-      width,
-      height,
-      mass: isStatic ? Infinity : 1,
-      friction: options.friction ?? 0.3,
-      restitution: 0,
-      state: isStatic ? EntityState.Static : EntityState.Dynamic,
+      uuid: id,
+      radius: 25,
+      mass: 1,
+      friction: 0.4,
+      linearDamping: 0.2,
+      maxLinearVelocity: 200,
     });
 
     if (isStatic) {
@@ -452,21 +338,6 @@ export class RpgCommonPhysic {
     return id;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Update the position and optionally the size of an existing hitbox.
-   *
-   * ## Design
-   *
-   * The method re-computes the center from the provided top-left coordinates
-   * to maintain compatibility with previous callers.
-   *
-   * @example
-   * ```ts
-   * physic.updateHitbox("player1", 200, 180, 48, 48);
-   * ```
-   */
   updateHitbox(
     id: string,
     x: number,
@@ -496,20 +367,6 @@ export class RpgCommonPhysic {
     return true;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Remove a hitbox and all associated state from the physics world.
-   *
-   * ## Design
-   *
-   * Cleans collision sets, movement observers and zone caches referencing the id.
-   *
-   * @example
-   * ```ts
-   * physic.removeHitbox("wall");
-   * ```
-   */
   removeHitbox(id: string): boolean {
     const record = this.hitboxes.get(id);
     if (!record) {
@@ -529,145 +386,79 @@ export class RpgCommonPhysic {
     for (const zone of this.zones.values()) {
       zone.inside.delete(id);
       if (zone.linkedTo === id) {
-        zone.linkedTo = undefined;
+        delete zone.linkedTo;
       }
     }
 
     return true;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Subscribe to collision enter/exit events for a given hitbox.
-   *
-   * ## Design
-   *
-   * Collisions are emitted as simple arrays of ids to mirror the legacy behaviour.
-   *
-   * @example
-   * ```ts
-   * physic.registerCollisionEvents("player1", ids => console.log(ids));
-   * ```
-   */
   registerCollisionEvents(
     id: string,
     onCollisionEnter?: (collidedWith: string[]) => void,
     onCollisionExit?: (collidedWith: string[]) => void,
   ): void {
-    this.collisionCallbacks.set(id, { onCollisionEnter, onCollisionExit });
+    const callbacks: CollisionCallbackSet = {};
+    if (onCollisionEnter) callbacks.onCollisionEnter = onCollisionEnter;
+    if (onCollisionExit) callbacks.onCollisionExit = onCollisionExit;
+    this.collisionCallbacks.set(id, callbacks);
   }
 
-  /**
-   * ## Purpose
-   *
-   * Retrieve the ids of all entities currently colliding with the provided id.
-   *
-   * @example
-   * ```ts
-   * const ids = physic.getCollisions("player1");
-   * ```
-   */
   getCollisions(id: string): string[] {
     const set = this.collisions.get(id);
     return set ? Array.from(set) : [];
   }
 
-  /**
-   * ## Purpose
-   *
-   * Check whether two hitboxes are colliding.
-   *
-   * @example
-   * ```ts
-   * if (physic.areColliding("player1", "door")) {
-   *   // open the door
-   * }
-   * ```
-   */
   areColliding(id1: string, id2: string): boolean {
     const set = this.collisions.get(id1);
     return set ? set.has(id2) : false;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Move a body according to the owner speed and the intended direction.
-   *
-   * ## Design
-   *
-   * Sets the linear velocity directly. Collision resolution is handled by the engine.
-   *
-   * @example
-   * ```ts
-   * physic.moveBody(player, Direction.Right);
-   * ```
-   */
-  moveBody(player: RpgCommonPlayer, direction: Direction): boolean {
+  moveBody(player: any, direction: DirectionValue): boolean {
     const record = this.hitboxes.get(player.id);
+
     if (!record) return false;
 
     const speedValue = typeof player.speed === "function" ? player.speed() : 0;
-    if (typeof (player as any).setIntendedDirection === "function") {
-      (player as any).setIntendedDirection(direction);
+    if (typeof player.setIntendedDirection === "function") {
+      player.setIntendedDirection(direction);
     }
 
     let vx = 0;
     let vy = 0;
 
     switch (direction) {
-      case Direction.Left:
+      case "left":
         vx = -speedValue;
         break;
-      case Direction.Right:
+      case "right":
         vx = speedValue;
         break;
-      case Direction.Up:
+      case "up":
         vy = -speedValue;
         break;
-      case Direction.Down:
+      case "down":
         vy = speedValue;
         break;
     }
 
-    record.entity.setVelocity({ x: vx, y: vy });
+    record.entity.setVelocity({ x: vx * 50, y: vy * 50 });
     record.entity.wakeUp();
     return true;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Stop any movement for the provided player id.
-   *
-   * @example
-   * ```ts
-   * physic.stopMovement(player);
-   * ```
-   */
-  stopMovement(player: RpgCommonPlayer): boolean {
+  stopMovement(player: any): boolean {
     const record = this.hitboxes.get(player.id);
     if (!record) return false;
 
-    if (typeof (player as any).setIntendedDirection === "function") {
-      (player as any).setIntendedDirection(null);
+    if (typeof player.setIntendedDirection === "function") {
+      player.setIntendedDirection(null);
     }
 
     record.entity.setVelocity({ x: 0, y: 0 });
     return true;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Synchronise the physics body to match the owner's current coordinates.
-   *
-   * @example
-   * ```ts
-   * physic.syncPlayerToBody(player.id);
-   * ```
-   */
   syncPlayerToBody(playerId: string): boolean {
     const record = this.hitboxes.get(playerId);
     if (!record) return false;
@@ -690,30 +481,10 @@ export class RpgCommonPhysic {
     return true;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Retrieve the underlying physics entity for integrations such as the movement manager.
-   *
-   * @example
-   * ```ts
-   * const entity = physic.getBody("player1");
-   * ```
-   */
   getBody(id: string): Entity | undefined {
     return this.hitboxes.get(id)?.entity;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Apply a translation (delta) to a body.
-   *
-   * @example
-   * ```ts
-   * physic.applyTranslation("player1", 10, 0);
-   * ```
-   */
   applyTranslation(id: string, dx: number, dy: number): boolean {
     const record = this.hitboxes.get(id);
     if (!record) return false;
@@ -723,16 +494,6 @@ export class RpgCommonPhysic {
     return true;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Override the velocity of a body.
-   *
-   * @example
-   * ```ts
-   * physic.setVelocity("player1", 5, 0);
-   * ```
-   */
   setVelocity(id: string, vx: number, vy: number): boolean {
     const record = this.hitboxes.get(id);
     if (!record) return false;
@@ -741,16 +502,6 @@ export class RpgCommonPhysic {
     return true;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Declare whether a body should behave as static.
-   *
-   * @example
-   * ```ts
-   * physic.setBodyStatic("event1", true);
-   * ```
-   */
   setBodyStatic(id: string, isStatic: boolean): boolean {
     const record = this.hitboxes.get(id);
     if (!record) return false;
@@ -768,16 +519,6 @@ export class RpgCommonPhysic {
     return true;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Register movement start/stop observers.
-   *
-   * @example
-   * ```ts
-   * physic.registerMovementEvents("npc", () => console.log("start"), () => console.log("stop"));
-   * ```
-   */
   registerMovementEvents(
     id: string,
     onStartMoving?: () => void,
@@ -795,38 +536,18 @@ export class RpgCommonPhysic {
       this.movementStates.set(id, state);
     }
 
-    state.onStartMoving = onStartMoving;
-    state.onStopMoving = onStopMoving;
+    if (onStartMoving) state.onStartMoving = onStartMoving;
+    else delete state.onStartMoving;
+    if (onStopMoving) state.onStopMoving = onStopMoving;
+    else delete state.onStopMoving;
     return true;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Determine whether an entity is considered moving.
-   *
-   * @example
-   * ```ts
-   * if (physic.isMoving("player1")) {
-   *   player.animationName.set("walk");
-   * }
-   * ```
-   */
   isMoving(id: string): boolean {
     const state = this.movementStates.get(id);
     return state ? state.isMoving : false;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Create an analytical zone used to detect nearby entities.
-   *
-   * @example
-   * ```ts
-   * physic.addZone("vision", { linkedTo: "guard", radius: 80, angle: 120 });
-   * ```
-   */
   addZone(id: string, options: ZoneOptions): string {
     if (this.zones.has(id) || this.hitboxes.has(id)) {
       throw new Error(`Zone with id ${id} already exists`);
@@ -838,7 +559,7 @@ export class RpgCommonPhysic {
     }
 
     const angle = options.angle ?? 360;
-    const direction = options.direction ?? Direction.Down;
+    const direction = options.direction ?? "down";
 
     let position: Vector2;
     let type: "static" | "linked" = "static";
@@ -869,53 +590,25 @@ export class RpgCommonPhysic {
         angle,
         direction,
       },
-      linkedTo,
       limitedByWalls: !!options.limitedByWalls,
       inside: new Set(),
     };
+    if (linkedTo !== undefined) {
+      record.linkedTo = linkedTo;
+    }
 
     this.zones.set(id, record);
     return id;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Remove a zone and all its observers.
-   *
-   * @example
-   * ```ts
-   * physic.removeZone("vision");
-   * ```
-   */
   removeZone(id: string): boolean {
     return this.zones.delete(id);
   }
 
-  /**
-   * ## Purpose
-   *
-   * Retrieve the zone descriptor for inspection.
-   *
-   * @example
-   * ```ts
-   * const zone = physic.getZone("vision");
-   * ```
-   */
   getZone(id: string): ZoneRecord | undefined {
     return this.zones.get(id);
   }
 
-  /**
-   * ## Purpose
-   *
-   * Subscribe to zone enter/exit events.
-   *
-   * @example
-   * ```ts
-   * physic.registerZoneEvents("vision", enter => console.log(enter));
-   * ```
-   */
   registerZoneEvents(
     id: string,
     onEnter?: (hitIds: string[]) => void,
@@ -923,46 +616,24 @@ export class RpgCommonPhysic {
   ): boolean {
     const zone = this.zones.get(id);
     if (!zone) return false;
-    zone.onEnter = onEnter;
-    zone.onExit = onExit;
+    if (onEnter) zone.onEnter = onEnter;
+    else delete zone.onEnter;
+    if (onExit) zone.onExit = onExit;
+    else delete zone.onExit;
     return true;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Return the identifiers of entities currently inside the zone.
-   *
-   * @example
-   * ```ts
-   * const inside = physic.getEntitiesInZone("vision");
-   * ```
-   */
   getEntitiesInZone(id: string): string[] {
     const zone = this.zones.get(id);
     if (!zone) return [];
     return Array.from(zone.inside);
   }
 
-  /**
-   * ## Purpose
-   *
-   * Integrate the physics simulation by the given delta in milliseconds.
-   *
-   * ## Design
-   *
-   * Accumulates fractional steps to honour the fixed time step, then
-   * synchronises world entities, movement states and zones.
-   *
-   * @example
-   * ```ts
-   * physic.update(16);
-   * ```
-   */
   update(deltaMs: number): void {
     this.accumulator += deltaMs;
 
     while (this.accumulator >= this.fixedStepMs) {
+      this.engine.updateMovements(this.fixedStepMs / 1000);
       this.engine.step();
       this.accumulator -= this.fixedStepMs;
     }
@@ -972,70 +643,61 @@ export class RpgCommonPhysic {
     this.updateZones();
   }
 
-  /**
-   * ## Purpose
-   *
-   * Expose the underlying world for advanced integrations.
-   *
-   * @example
-   * ```ts
-   * const world = physic.getWorld();
-   * ```
-   */
   getWorld() {
     return this.engine.getWorld();
   }
 
-  /**
-   * ## Purpose
-   *
-   * Retrieve the engine instance.
-   *
-   * @example
-   * ```ts
-   * const engine = physic.getEngine();
-   * ```
-   */
   getEngine(): PhysicsEngine {
     return this.engine;
   }
 
-  /**
-   * ## Purpose
-   *
-   * Preserve the legacy sliding API by storing options for later use.
-   * The current backend does not yet implement custom sliding, but
-   * keeping the data ensures forward compatibility.
-   *
-   * @example
-   * ```ts
-   * physic.setSliding("player1", true, { friction: 0.2 });
-   * ```
-   */
+  getMovementManager(): MovementManager {
+    return this.engine.getMovementManager();
+  }
+
   setSliding(id: string, enabled: boolean, options?: SlidingOptions): boolean {
     if (!this.hitboxes.has(id)) return false;
-    this.slidingStates.set(id, { enabled, options });
+    const state: SlidingState = { enabled };
+    if (options) state.options = options;
+    else delete state.options;
+    this.slidingStates.set(id, state);
     return true;
   }
 
-  /**
-   * @example
-   * ```ts
-   * const enabled = physic.isSlidingEnabled("player1");
-   * ```
-   */
   isSlidingEnabled(id: string): boolean {
     return this.slidingStates.get(id)?.enabled ?? false;
   }
 
-  /**
-   * @example
-   * ```ts
-   * const options = physic.getSlidingOptions("player1");
-   * ```
-   */
   getSlidingOptions(id: string): SlidingOptions | undefined {
     return this.slidingStates.get(id)?.options;
+  }
+
+  isPositionValid(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    ignoreId?: string,
+  ): boolean {
+    const proposed: RectBounds = {
+      minX: x,
+      maxX: x + width,
+      minY: y,
+      maxY: y + height,
+    };
+
+    for (const [id, record] of this.hitboxes.entries()) {
+      if (ignoreId && id === ignoreId) {
+        continue;
+      }
+
+      const bounds = this.getBounds(record);
+      if (this.rectanglesOverlap(proposed, bounds)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private createSnapshot(record: HitboxRecord): PhysicsBodySnapshot {
@@ -1068,6 +730,7 @@ export class RpgCommonPhysic {
         const next = Math.round(snapshot.topLeft.x);
         if (current !== next) {
           owner.x.set(next);
+          owner.applyFrames?.();
         }
       }
 
@@ -1076,11 +739,8 @@ export class RpgCommonPhysic {
         const next = Math.round(snapshot.topLeft.y);
         if (current !== next) {
           owner.y.set(next);
+          owner.applyFrames?.();
         }
-      }
-
-      if (typeof owner.applyPhysic === "function") {
-        owner.applyPhysic(snapshot);
       }
     }
   }
@@ -1121,8 +781,8 @@ export class RpgCommonPhysic {
               typeof owner.direction === "function"
                 ? owner.direction()
                 : owner.direction ?? zone.body.direction;
-            if (dir !== undefined) {
-              zone.body.direction = dir;
+            if (typeof dir === "string") {
+              zone.body.direction = dir as DirectionValue;
             }
           }
         }
@@ -1253,7 +913,9 @@ export class RpgCommonPhysic {
     ];
 
     for (const [a, b] of edges) {
-      if (this.segmentsIntersect(start, end, corners[a], corners[b])) {
+      const cornerA = corners[a]!;
+      const cornerB = corners[b]!;
+      if (this.segmentsIntersect(start, end, cornerA, cornerB)) {
         return true;
       }
     }
@@ -1296,6 +958,15 @@ export class RpgCommonPhysic {
       b.x >= Math.min(a.x, c.x) &&
       b.y <= Math.max(a.y, c.y) &&
       b.y >= Math.min(a.y, c.y)
+    );
+  }
+
+  private rectanglesOverlap(a: RectBounds, b: RectBounds): boolean {
+    return !(
+      a.maxX <= b.minX ||
+      a.minX >= b.maxX ||
+      a.maxY <= b.minY ||
+      a.minY >= b.maxY
     );
   }
 

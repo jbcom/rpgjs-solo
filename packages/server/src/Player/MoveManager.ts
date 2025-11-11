@@ -1,7 +1,6 @@
 import { PlayerCtor, ProjectileType } from "@rpgjs/common";
 import { RpgCommonPlayer, Direction, Entity } from "@rpgjs/common";
 import { 
-  MovementManager, 
   MovementStrategy,
   LinearMove,
   Dash,
@@ -594,7 +593,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     addMovement(strategy: MovementStrategy): void {
-      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
       
       map.moveManager.add((this as unknown as PlayerWithMixins).id, strategy);
@@ -617,7 +616,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     removeMovement(strategy: MovementStrategy): boolean {
-      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return false;
       
       return map.moveManager.remove((this as unknown as PlayerWithMixins).id, strategy);
@@ -639,7 +638,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     clearMovements(): void {
-      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
       
       map.moveManager.clear((this as unknown as PlayerWithMixins).id);
@@ -664,7 +663,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     hasActiveMovements(): boolean {
-      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return false;
       
       return map.moveManager.hasActiveStrategies((this as unknown as PlayerWithMixins).id);
@@ -686,7 +685,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     getActiveMovements(): MovementStrategy[] {
-      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return [];
       
       return map.moveManager.getStrategies((this as unknown as PlayerWithMixins).id);
@@ -714,7 +713,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     moveTo(target: RpgCommonPlayer | { x: number, y: number }): void {
-      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
 
       const engine = map.physic.getEngine();
@@ -757,7 +756,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     stopMoveTo(): void {
-      const map = (this as unknown as PlayerWithMixins).getCurrentMap();
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
       
       const strategies = this.getActiveMovements();
@@ -986,7 +985,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
         // Process function routes first
         const processedRoutes = routes.map((route: any) => {
           if (typeof route === 'function') {
-            const map = player.getCurrentMap();
+            const map = player.getCurrentMap() as any;
             if (!map) {
               return undefined;
             }
