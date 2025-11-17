@@ -36,9 +36,9 @@ export class CollisionResolver {
    */
   constructor(config: ResolverConfig = {}) {
     this.config = {
-      positionCorrectionFactor: config.positionCorrectionFactor ?? 0.2,
-      minPenetrationDepth: config.minPenetrationDepth ?? 0.001,
-      maxPositionCorrection: config.maxPositionCorrection ?? 0.2,
+      positionCorrectionFactor: config.positionCorrectionFactor ?? 0.8,
+      minPenetrationDepth: config.minPenetrationDepth ?? 0.0001,
+      maxPositionCorrection: config.maxPositionCorrection ?? 5,
     };
   }
 

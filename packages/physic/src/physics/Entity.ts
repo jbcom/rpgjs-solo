@@ -202,12 +202,9 @@ export class Entity {
 
   private collisionEnterHandlers: Set<EntityCollisionHandler>;
   private collisionExitHandlers: Set<EntityCollisionHandler>;
-  private movementHandlers: Set<EntityMovementHandler>;
-  private directionHandlers: Set<EntityDirectionHandler>;
-  private previousVelocity: Vector2;
-  private previousPosition: Vector2;
-  private previousDirection: Vector2;
-  private previousCardinalDirection: CardinalDirection;
+  private positionSyncHandlers: Set<EntityPositionSyncHandler>;
+  private directionSyncHandlers: Set<EntityDirectionSyncHandler>;
+  private movementChangeHandlers: Set<EntityMovementChangeHandler>;
   private wasMoving: boolean;
 
   /**
@@ -277,16 +274,11 @@ export class Entity {
     // Event handlers
     this.collisionEnterHandlers = new Set();
     this.collisionExitHandlers = new Set();
-    this.movementHandlers = new Set();
-    this.directionHandlers = new Set();
-
-    // Motion tracking
-    this.previousVelocity = this.velocity.clone();
-    this.previousPosition = this.position.clone();
-    this.previousDirection = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ
-      ? this.velocity.normalize()
-      : Vector2.ZERO.clone();
-    this.previousCardinalDirection = this.computeCardinalDirection(this.previousDirection);
+    this.positionSyncHandlers = new Set();
+    this.directionSyncHandlers = new Set();
+    this.movementChangeHandlers = new Set();
+    
+    // Initialize movement state
     this.wasMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
   }
 
@@ -331,47 +323,168 @@ export class Entity {
   }
 
   /**
-   * Registers a handler triggered when the entity motion changes (velocity delta, axis movement, or start/stop).
+   * Registers a handler fired when the entity position changes (x, y).
    *
-   * - **Purpose:** answer \"is it moving?\" while reporting axis changes and displacement magnitude.
-   * - **Design:** emits only when thresholds are exceeded to avoid flooding extremely small updates.
+   * - **Purpose:** synchronize position changes for logging, rendering, network sync, etc.
+   * - **Design:** lightweight Set-based listeners returning an unsubscribe closure to keep GC pressure low.
    *
-   * @param handler - Movement change listener
+   * @param handler - Position change listener
    * @returns Unsubscribe closure
    * @example
    * ```typescript
-   * const unsubscribe = entity.onMovementChange(({ isMoving, axisChanged }) => {
-   *   if (isMoving && axisChanged.x) {
-   *     console.log('Entity started moving along X');
-   *   }
+   * const unsubscribe = entity.onPositionChange(({ x, y }) => {
+   *   console.log('Position changed to', x, y);
+   *   // Update rendering, sync network, etc.
    * });
    * ```
    */
-  public onMovementChange(handler: EntityMovementHandler): () => void {
-    this.movementHandlers.add(handler);
-    return () => this.movementHandlers.delete(handler);
+  public onPositionChange(handler: EntityPositionSyncHandler): () => void {
+    this.positionSyncHandlers.add(handler);
+    return () => this.positionSyncHandlers.delete(handler);
   }
 
   /**
-   * Registers a handler triggered when the entity heading changes by at least five degrees or the cardinal direction flips.
+   * Registers a handler fired when the entity direction changes.
    *
-   * - **Purpose:** expose both the fine-grained direction vector and a simplified cardinal tag (left/right/up/down/idle).
-   * - **Design:** angle threshold avoids noise while still catching discrete motion changes for grid-like controls.
+   * - **Purpose:** synchronize direction changes for logging, rendering, network sync, etc.
+   * - **Design:** lightweight Set-based listeners returning an unsubscribe closure to keep GC pressure low.
    *
    * @param handler - Direction change listener
    * @returns Unsubscribe closure
    * @example
    * ```typescript
-   * const unsubscribe = entity.onDirectionChange(({ cardinalDirection }) => {
-   *   if (cardinalDirection === 'left') {
-   *     console.log('Entity now faces left');
-   *   }
+   * const unsubscribe = entity.onDirectionChange(({ direction, cardinalDirection }) => {
+   *   console.log('Direction changed to', cardinalDirection);
+   *   // Update rendering, sync network, etc.
    * });
    * ```
    */
-  public onDirectionChange(handler: EntityDirectionHandler): () => void {
-    this.directionHandlers.add(handler);
-    return () => this.directionHandlers.delete(handler);
+  public onDirectionChange(handler: EntityDirectionSyncHandler): () => void {
+    this.directionSyncHandlers.add(handler);
+    return () => this.directionSyncHandlers.delete(handler);
+  }
+
+  /**
+   * Manually notifies that the position has changed.
+   *
+   * - **Purpose:** allow external code to trigger position sync hooks when position is modified directly.
+   * - **Design:** can be called after direct position modifications (e.g., `entity.position.set()`).
+   *
+   * @example
+   * ```typescript
+   * entity.position.set(100, 200);
+   * entity.notifyPositionChange(); // Trigger sync hooks
+   * ```
+   */
+  public notifyPositionChange(): void {
+    if (this.positionSyncHandlers.size === 0) {
+      return;
+    }
+
+    const payload: EntityPositionSyncEvent = {
+      entity: this,
+      x: this.position.x,
+      y: this.position.y,
+    };
+
+    for (const handler of this.positionSyncHandlers) {
+      handler(payload);
+    }
+  }
+
+  /**
+   * Manually notifies that the direction has changed.
+   *
+   * - **Purpose:** allow external code to trigger direction sync hooks when direction is modified directly.
+   * - **Design:** computes direction from velocity and cardinal direction.
+   *
+   * @example
+   * ```typescript
+   * entity.velocity.set(5, 0);
+   * entity.notifyDirectionChange(); // Trigger sync hooks
+   * ```
+   */
+  public notifyDirectionChange(): void {
+    if (this.directionSyncHandlers.size === 0) {
+      return;
+    }
+
+    const direction = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ
+      ? this.velocity.clone().normalize()
+      : new Vector2(0, 0);
+    const cardinalDirection = this.computeCardinalDirection(direction);
+
+    const payload: EntityDirectionSyncEvent = {
+      entity: this,
+      direction,
+      cardinalDirection,
+    };
+
+    for (const handler of this.directionSyncHandlers) {
+      handler(payload);
+    }
+  }
+
+  /**
+   * Registers a handler fired when the entity movement state changes (moving/stopped).
+   *
+   * - **Purpose:** detect when an entity starts or stops moving for gameplay reactions, animations, or network sync.
+   * - **Design:** lightweight Set-based listeners returning an unsubscribe closure to keep GC pressure low.
+   * - **Movement detection:** uses `MOVEMENT_EPSILON` threshold to determine if entity is moving.
+   *
+   * @param handler - Movement state change listener
+   * @returns Unsubscribe closure
+   * @example
+   * ```typescript
+   * const unsubscribe = entity.onMovementChange(({ isMoving }) => {
+   *   console.log('Entity is', isMoving ? 'moving' : 'stopped');
+   *   // Update animations, sync network, etc.
+   * });
+   * ```
+   */
+  public onMovementChange(handler: EntityMovementChangeHandler): () => void {
+    this.movementChangeHandlers.add(handler);
+    return () => this.movementChangeHandlers.delete(handler);
+  }
+
+  /**
+   * Manually notifies that the movement state has changed.
+   *
+   * - **Purpose:** allow external code to trigger movement state sync hooks when velocity is modified directly.
+   * - **Design:** checks if movement state (moving/stopped) has changed and notifies handlers.
+   *
+   * @example
+   * ```typescript
+   * entity.velocity.set(5, 0);
+   * entity.notifyMovementChange(); // Trigger sync hooks if state changed
+   * ```
+   */
+  public notifyMovementChange(): void {
+    if (this.movementChangeHandlers.size === 0) {
+      // Still update wasMoving even if no handlers to track state correctly
+      const isMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
+      this.wasMoving = isMoving;
+      return;
+    }
+
+    const isMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
+    
+    // Only notify if state actually changed
+    if (isMoving !== this.wasMoving) {
+      this.wasMoving = isMoving;
+      
+      const payload: EntityMovementChangeEvent = {
+        entity: this,
+        isMoving,
+      };
+
+      for (const handler of this.movementChangeHandlers) {
+        handler(payload);
+      }
+    } else {
+      // Update wasMoving even if state didn't change to keep it in sync
+      this.wasMoving = isMoving;
+    }
   }
 
   /**
@@ -431,6 +544,7 @@ export class Entity {
       return this;
     }
     this.velocity.addInPlace(impulse.mul(this.invMass));
+    this.notifyMovementChange();
     return this;
   }
 
@@ -465,6 +579,7 @@ export class Entity {
       this.position.set(position.x, position.y);
     }
     this.wakeUp();
+    this.notifyPositionChange();
     return this;
   }
 
@@ -475,12 +590,32 @@ export class Entity {
    * @returns This entity for chaining
    */
   public setVelocity(velocity: Vector2 | { x: number; y: number }): Entity {
+    const oldVelocity = this.velocity.clone();
     if (velocity instanceof Vector2) {
       this.velocity.copyFrom(velocity);
     } else {
       this.velocity.set(velocity.x, velocity.y);
     }
     this.wakeUp();
+    
+    // Check if direction changed
+    const oldDirection = oldVelocity.lengthSquared() > MOVEMENT_EPSILON_SQ
+      ? oldVelocity.clone().normalize()
+      : new Vector2(0, 0);
+    const newDirection = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ
+      ? this.velocity.clone().normalize()
+      : new Vector2(0, 0);
+    
+    const oldCardinal = this.computeCardinalDirection(oldDirection);
+    const newCardinal = this.computeCardinalDirection(newDirection);
+    
+    if (oldCardinal !== newCardinal || Math.abs(oldDirection.dot(newDirection) - 1) > 0.01) {
+      this.notifyDirectionChange();
+    }
+    
+    // Check if movement state changed
+    this.notifyMovementChange();
+    
     return this;
   }
 
@@ -495,6 +630,7 @@ export class Entity {
     this.angularVelocity = 0;
     this.force.set(0, 0);
     this.torque = 0;
+    this.notifyMovementChange();
     return this;
   }
 
@@ -522,6 +658,7 @@ export class Entity {
       this.angularVelocity = 0;
       this.force.set(0, 0);
       this.torque = 0;
+      this.notifyMovementChange();
     }
     return this;
   }
@@ -666,100 +803,6 @@ export class Entity {
     }
   }
 
-  /**
-   * @internal
-   *
-   * Updates cached motion data and emits movement/direction events when thresholds are crossed.
-   *
-   * @param deltaTime - Simulation delta time
-   */
-  public updateMotionTracking(deltaTime: number): void {
-    const currentVelocity = this.velocity.clone();
-    const currentPosition = this.position.clone();
-    const deltaPosition = currentPosition.sub(this.previousPosition);
-
-    const xChanged = Math.abs(deltaPosition.x) > POSITION_EPSILON;
-    const yChanged = Math.abs(deltaPosition.y) > POSITION_EPSILON;
-    const isMoving = currentVelocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
-    const velocityDelta =
-      currentVelocity.sub(this.previousVelocity).lengthSquared() > MOVEMENT_EPSILON_SQ;
-
-    if (
-      this.movementHandlers.size > 0 &&
-      (xChanged || yChanged || velocityDelta || this.wasMoving !== isMoving)
-    ) {
-      const movementPayload: EntityMovementEvent = {
-        entity: this,
-        deltaTime,
-        velocity: currentVelocity.clone(),
-        previousVelocity: this.previousVelocity.clone(),
-        position: currentPosition.clone(),
-        previousPosition: this.previousPosition.clone(),
-        deltaPosition,
-        isMoving,
-        axisChanged: {
-          x: xChanged,
-          y: yChanged,
-        },
-      };
-
-      for (const handler of this.movementHandlers) {
-        handler(movementPayload);
-      }
-    }
-
-    let currentDirection = new Vector2(0, 0);
-    let currentCardinal: CardinalDirection = 'idle';
-    let directionChanged = false;
-
-    if (isMoving) {
-      currentDirection = currentVelocity.clone().normalizeInPlace();
-      currentCardinal = this.computeCardinalDirection(currentDirection);
-
-      if (!this.wasMoving) {
-        directionChanged = true;
-      } else {
-        const dot = Math.max(
-          -1,
-          Math.min(1, this.previousDirection.dot(currentDirection)),
-        );
-        const angle = Math.acos(dot);
-        if (angle >= DIRECTION_EPSILON_RADIANS) {
-          directionChanged = true;
-        }
-      }
-
-      if (currentCardinal !== this.previousCardinalDirection) {
-        directionChanged = true;
-      }
-    } else if (this.wasMoving || this.previousCardinalDirection !== 'idle') {
-      directionChanged = true;
-    }
-
-    if (directionChanged && this.directionHandlers.size > 0) {
-      const directionPayload: EntityDirectionEvent = {
-        entity: this,
-        direction: currentDirection.clone(),
-        previousDirection: this.previousDirection.clone(),
-        cardinalDirection: currentCardinal,
-        previousCardinalDirection: this.previousCardinalDirection,
-      };
-
-      for (const handler of this.directionHandlers) {
-        handler(directionPayload);
-      }
-    }
-
-    this.previousVelocity.copyFrom(this.velocity);
-    this.previousPosition.copyFrom(this.position);
-    if (isMoving) {
-      this.previousDirection.copyFrom(currentDirection);
-    } else {
-      this.previousDirection.set(0, 0);
-    }
-    this.previousCardinalDirection = isMoving ? currentCardinal : 'idle';
-    this.wasMoving = isMoving;
-  }
 
   private computeCardinalDirection(direction: Vector2): CardinalDirection {
     if (direction.lengthSquared() <= MOVEMENT_EPSILON_SQ) {
@@ -814,30 +857,27 @@ export interface EntityCollisionEvent {
 
 export type EntityCollisionHandler = (event: EntityCollisionEvent) => void;
 
-export interface EntityMovementEvent {
+
+export interface EntityPositionSyncEvent {
   entity: Entity;
-  deltaTime: number;
-  velocity: Vector2;
-  previousVelocity: Vector2;
-  position: Vector2;
-  previousPosition: Vector2;
-  deltaPosition: Vector2;
-  isMoving: boolean;
-  axisChanged: {
-    x: boolean;
-    y: boolean;
-  };
+  x: number;
+  y: number;
 }
 
-export type EntityMovementHandler = (event: EntityMovementEvent) => void;
+export type EntityPositionSyncHandler = (event: EntityPositionSyncEvent) => void;
 
-export interface EntityDirectionEvent {
+export interface EntityDirectionSyncEvent {
   entity: Entity;
   direction: Vector2;
-  previousDirection: Vector2;
   cardinalDirection: CardinalDirection;
-  previousCardinalDirection: CardinalDirection;
 }
 
-export type EntityDirectionHandler = (event: EntityDirectionEvent) => void;
+export type EntityDirectionSyncHandler = (event: EntityDirectionSyncEvent) => void;
+
+export interface EntityMovementChangeEvent {
+  entity: Entity;
+  isMoving: boolean;
+}
+
+export type EntityMovementChangeHandler = (event: EntityMovementChangeEvent) => void;
 

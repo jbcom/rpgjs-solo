@@ -1,11 +1,6 @@
 import { signal } from "@signe/reactive";
 import { connected, id, persist, sync, users } from "@signe/sync";
-import { MovementManager } from "./movement";
 import { Item } from "./database";
-import { Observable } from "rxjs";
-import { Constructor } from "./Utils";
-import type { PhysicsBodySnapshot } from "@rpgjs/physic";
-
 export enum Direction {
   Up = "up",
   Down = "down",

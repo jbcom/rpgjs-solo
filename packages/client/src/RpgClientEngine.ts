@@ -4,6 +4,8 @@ import { signal, bootstrapCanvas } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { Hooks, ModulesToken, Direction } from "@rpgjs/common";
+
+type DirectionValue = "up" | "down" | "left" | "right";
 import { load } from "@signe/sync";
 import { RpgClientMap } from "./Game/Map"
 import { RpgGui } from "./Gui/Gui";
@@ -12,6 +14,10 @@ import { lastValueFrom, Observable } from "rxjs";
 import { GlobalConfigToken } from "./module";
 import * as PIXI from "pixi.js";
 import { PrebuiltComponentAnimations } from "./components/animations";
+import {
+  PredictionController,
+  type PredictionState,
+} from "@rpgjs/common";
 
 export class RpgClientEngine<T = any> {
   private guiService: RpgGui;
@@ -40,36 +46,11 @@ export class RpgClientEngine<T = any> {
   spriteComponentsBehind = signal<any[]>([]);
   spriteComponentsInFront = signal<any[]>([]);
   
-  // Client-side prediction properties
-  private clientPredictionStates: Map<string, {
-    x: number;
-    y: number;
-    direction: Direction;
-    animationName: string;
-    timestamp: number;
-  }> = new Map();
-  private lastServerTimestamp: number = 0;
-  // Keep a history of client inputs with resulting positions to support reconciliation and replay
-  private inputHistory: Array<{ 
-    input: Direction; 
-    timestamp: number;
-    frame: number;
-    resultingX: number;
-    resultingY: number;
-    resultingDirection: Direction;
-  }> = [];
-  // Maximum time window for input history (in milliseconds)
-  private readonly INPUT_HISTORY_MAX_AGE = 2000; // 2 seconds
-  // Monotonic frame counter for inputs
-  private inputFrameCounter: number = 0;
-  // Last acknowledged frame by server
-  private lastAckFrame: number = 0;
-  // Last acknowledged server tick
-  private lastAckServerTick: number = 0;
-  // Frame offset to synchronize with server (maps client frame to server tick)
-  private frameOffset: number = 0;
-  // Track last server timestamp processed per remote player to drop stale updates
-  private lastRemoteServerTs: Map<string, number> = new Map();
+  private predictionEnabled = false;
+  private prediction?: PredictionController<Direction>;
+  private readonly SERVER_CORRECTION_THRESHOLD = 30;
+  private inputFrameCounter = 0;
+  private frameOffset = 0;
   // Ping/Pong for RTT measurement
   private rtt: number = 0; // Round-trip time in ms
   private pingInterval: any = null;
@@ -99,6 +80,9 @@ export class RpgClientEngine<T = any> {
       id: "animation",
       component: PrebuiltComponentAnimations.Animation
     })
+
+    this.predictionEnabled = (this.globalConfig as any)?.prediction?.enabled !== false;
+    this.initializePredictionController();
   }
 
   async start() {
@@ -130,11 +114,10 @@ export class RpgClientEngine<T = any> {
       
       // Clean up old prediction states and input history every 60 ticks (approximately every second at 60fps)
       if (tick % 60 === 0) {
-        this.cleanupOldPredictionStates();
-        this.cleanupInputHistory();
+        const now = Date.now();
+        this.prediction?.cleanup(now);
+        this.prediction?.tryApplyPendingSnapshot();
       }
-
-      // No custom interpolation – rely on existing engine interpolation
     })
 
     await this.webSocket.connection(() => {
@@ -148,12 +131,10 @@ export class RpgClientEngine<T = any> {
 
       if (data.pId) this.playerIdSignal.set(data.pId)
       // Apply client-side prediction filtering and server reconciliation
-      const filteredData = this.applyClientSidePredictionFilter(data);
 
-      this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: filteredData }).subscribe();
-      load(this.sceneMap, filteredData, true);
+      this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: data }).subscribe();
 
-      if (data.ack) this.applyServerAck(data.ack);
+      load(this.sceneMap, data, true);
     });
 
     // Handle pong responses for RTT measurement
@@ -197,7 +178,6 @@ export class RpgClientEngine<T = any> {
     this.webSocket.on('open', () => {
       this.hooks.callHooks("client-engine-onConnected", this, this.socket).subscribe();
       // Start ping/pong for synchronization
-      this.startPingPong();
     })
 
     this.webSocket.on('close', () => {
@@ -275,7 +255,7 @@ export class RpgClientEngine<T = any> {
    */
   private sendPing(): void {
     const clientTime = Date.now();
-    const clientFrame = this.inputFrameCounter;
+    const clientFrame = this.getPhysicsTick();
     
     this.webSocket.emit('ping', { 
       clientTime, 
@@ -500,135 +480,30 @@ export class RpgClientEngine<T = any> {
     return componentAnimation.instance
   }
 
-  /**
-   * Apply client-side prediction filtering and server reconciliation
-   * 
-   * This method filters incoming synchronization data to prevent visual glitches
-   * caused by client-side prediction. It implements two main strategies:
-   * 1. Filtering: Don't apply position/direction/animation data except for non-movement animations
-   * 2. Server reconciliation: Give server authority when timestamp indicates server state is newer
-   * 
-   * @param data - Raw synchronization data from server
-   * @returns Filtered data to apply to client state
-   * 
-   * @example
-   * ```ts
-   * // This method is called automatically in the sync event handler
-   * const filteredData = engine.applyClientSidePredictionFilter(serverData);
-   * load(this.sceneMap, filteredData, true);
-   * ```
-   */
-  private applyClientSidePredictionFilter(data: any): any {
-    if (!data.players) return data;
-    
-    const filteredData = { ...data };
-    const currentPlayerId = this.playerIdSignal();
-    
-    // Extract server timestamp if available
-    const serverTimestamp = data.timestamp || Date.now();
-    const serverLastProcessedInputTs: number | undefined = data.lastProcessedInputTs;
-    
-    filteredData.players = { ...data.players };
- 
-    for (const [playerId, playerData] of Object.entries(data.players as Record<string, any>)) {
-      const isCurrentPlayer = playerId === currentPlayerId;
-      
-      if (!isCurrentPlayer) {
-        // For other players, apply all data normally
-        continue;
-      }
-      
-      // For current player, apply client-side prediction filtering
-      const currentPlayer = this.sceneMap.getCurrentPlayer();
-      if (!currentPlayer) {
-        continue;
-      }
-      
-      const filteredPlayerData = { ...playerData };
-      // Always ignore server movement for current player here; we'll reconcile via ack separately
-      delete filteredPlayerData.x;
-      delete filteredPlayerData.y;
-      delete filteredPlayerData.direction;
-      
-      // Update last server timestamp
-      if (serverTimestamp > this.lastServerTimestamp) {
-        this.lastServerTimestamp = serverTimestamp;
-      }
-      
-      // Animation filtering: apply only non-movement animations unless different
-      if (playerData.animationName !== undefined) {
-        const isMovementAnimation = playerData.animationName === 'stand' || playerData.animationName === 'walk';
-        if (isMovementAnimation) {
-          delete filteredPlayerData.animationName;
-        }
-      }
-      
-      filteredData.players[playerId] = filteredPlayerData;
-      
-      // No replay here; reconciliation handled after load() using ack
-    }
-
-    return filteredData;
-  }
-
   async processInput({ input }: { input: Direction }) {
     const timestamp = Date.now();
-    const frame = ++this.inputFrameCounter;
+    let frame: number;
+    let tick: number;
+    if (this.predictionEnabled && this.prediction) {
+      const meta = this.prediction.recordInput(input, timestamp);
+      frame = meta.frame;
+      tick = meta.tick;
+    } else {
+      frame = ++this.inputFrameCounter;
+      tick = this.getPhysicsTick();
+    }
     this.hooks.callHooks("client-engine-onInput", this, { input, playerId: this.playerId }).subscribe();
     
-    // Send movement input with timestamp to server
     this.webSocket.emit('move', { 
       input, 
       timestamp,
-      frame
+      frame,
+      tick,
     });
-    console.debug(
-      `[Client] Sent input frame=${frame} direction=${input} timestamp=${timestamp} frameOffset=${this.frameOffset} rtt=${this.rtt}`
-    );
     
     const currentPlayer = this.sceneMap.getCurrentPlayer();
-    if (currentPlayer) {   
-      // Apply movement prediction locally
-      await this.sceneMap.movePlayer(currentPlayer, input);
-      
-      // Store positions after movement using authoritative physics body (top-left)
-      const myId = this.playerIdSignal();
-      let afterX = currentPlayer.x();
-      let afterY = currentPlayer.y();
+    const myId = this.playerIdSignal();
 
-      if (myId) {
-        const body = this.sceneMap.physic.getBody(myId);
-        if (body) {
-          const width = body.width ?? currentPlayer.hitbox().w;
-          const height = body.height ?? currentPlayer.hitbox().h;
-          afterX = body.position.x - width / 2;
-          afterY = body.position.y - height / 2;
-        }
-      }
-      const afterDirection = currentPlayer.direction();
-      
-      // Add to input history with resulting positions
-      this.inputHistory.push({ 
-        input, 
-        timestamp,
-        frame,
-        resultingX: afterX,
-        resultingY: afterY,
-        resultingDirection: afterDirection
-      });
-      
-      // Clean up old input history entries
-      this.cleanupInputHistory();
-      
-      // Update client prediction state after movement
-      this.clientPredictionStates.set(this.playerId!, {
-        x: afterX,
-        y: afterY,
-        direction: afterDirection,
-        animationName: currentPlayer.animationName(),
-        timestamp
-      });
-    }
   }
 
   processAction({ action }: { action: number }) {
@@ -653,6 +528,53 @@ export class RpgClientEngine<T = any> {
     return this.sceneMap
   }
 
+  private getPhysicsTick(): number {
+    return this.sceneMap?.getTick?.() ?? 0;
+  }
+
+  private getLocalPlayerState(): PredictionState<Direction> {
+    const currentPlayer = this.sceneMap?.getCurrentPlayer();
+    if (!currentPlayer) {
+      return { x: 0, y: 0, direction: Direction.Down };
+    }
+    const topLeft = this.sceneMap.getBodyPosition(currentPlayer.id, "top-left");
+    const x = topLeft?.x ?? currentPlayer.x();
+    const y = topLeft?.y ?? currentPlayer.y();
+    const direction = currentPlayer.direction();
+    return { x, y, direction };
+  }
+
+  private applyAuthoritativeState(state: PredictionState<Direction>): void {
+    const player = this.sceneMap?.getCurrentPlayer();
+    if (!player) return;
+    const hitbox = typeof player.hitbox === "function" ? player.hitbox() : player.hitbox;
+    const width = hitbox?.w ?? 0;
+    const height = hitbox?.h ?? 0;
+    const updated = this.sceneMap.updateHitbox(player.id, state.x, state.y, width, height);
+    if (!updated) {
+      this.sceneMap.setBodyPosition(player.id, state.x, state.y, "top-left");
+    }
+    player.x.set(Math.round(state.x));
+    player.y.set(Math.round(state.y));
+    if (state.direction) {
+      player.changeDirection(state.direction);
+    }
+  }
+
+  private initializePredictionController(): void {
+    if (!this.predictionEnabled) {
+      this.prediction = undefined;
+      return;
+    }
+    this.prediction = new PredictionController<Direction>({
+      correctionThreshold: (this.globalConfig as any)?.prediction?.correctionThreshold ?? this.SERVER_CORRECTION_THRESHOLD,
+      historyTtlMs: (this.globalConfig as any)?.prediction?.historyTtlMs ?? 2000,
+      getPhysicsTick: () => this.getPhysicsTick(),
+      getCurrentState: () => this.getLocalPlayerState(),
+      setAuthoritativeState: (state) => this.applyAuthoritativeState(state),
+    });
+  }
+
   getCurrentPlayer() {
     return this.sceneMap.getCurrentPlayer()
   }
@@ -670,260 +592,43 @@ export class RpgClientEngine<T = any> {
    * ```
    */
   clearClientPredictionStates() {
-    this.clientPredictionStates.clear();
-    this.inputHistory = [];
-    this.lastServerTimestamp = 0;
-    this.frameOffset = 0; // Reset frame offset when changing maps
+    this.initializePredictionController();
+    this.frameOffset = 0;
     this.inputFrameCounter = 0;
-    this.lastAckFrame = 0;
   }
 
-  /**
-   * Clean up old prediction states
-   * 
-   * Removes prediction states older than the specified threshold
-   * to prevent memory leaks in long-running sessions.
-   * 
-   * @param maxAge - Maximum age in milliseconds (default: 5000ms)
-   * 
-   * @example
-   * ```ts
-   * // Clean up states older than 5 seconds
-   * engine.cleanupOldPredictionStates();
-   * ```
-   */
-  cleanupOldPredictionStates(maxAge: number = 5000) {
-    const now = Date.now();
-    for (const [playerId, state] of this.clientPredictionStates.entries()) {
-      if (now - state.timestamp > maxAge) {
-        this.clientPredictionStates.delete(playerId);
-      }
-    }
-  }
-
-  /**
-   * Clean up old input history entries
-   * 
-   * Removes input history entries older than INPUT_HISTORY_MAX_AGE
-   * to prevent memory leaks and keep the history manageable.
-   * 
-   * @example
-   * ```ts
-   * // Clean up old input history entries
-   * this.cleanupInputHistory();
-   * ```
-   */
-  private cleanupInputHistory() {
-    const now = Date.now();
-    this.inputHistory = this.inputHistory.filter(entry => 
-      now - entry.timestamp <= this.INPUT_HISTORY_MAX_AGE
-    );
-    
-    // Also limit the number of entries to prevent memory issues
-    if (this.inputHistory.length > 100) {
-      this.inputHistory = this.inputHistory.slice(-50); // Keep only the last 50 entries
-    }
-  }
-
-  /**
-   * Apply server acknowledgement to reconcile client prediction
-   * 
-   * Compares the server's ack frame and server tick with the client's input history.
-   * Uses serverTick as the authoritative timestamp for more accurate reconciliation.
-   * If positions match, do nothing. If they differ, apply server authority.
-   * 
-   * ## Design
-   * 
-   * - Uses serverTick as primary reference for reconciliation
-   * - Falls back to frame-based reconciliation if serverTick not available
-   * - Implements position tolerance to avoid jitter from rounding errors
-   * - Respects collision detection when applying corrections
-   * - Tracks last acknowledged server tick to prevent old updates
-   * 
-   * @param ack - Server acknowledgement with frame, serverTick, and authoritative position
-   * 
-   * @example
-   * ```ts
-   * // Called automatically when receiving server ack
-   * this.applyServerAck({ 
-   *   frame: 123, 
-   *   serverTick: 7890,
-   *   x: 100, 
-   *   y: 200, 
-   *   direction: Direction.Up 
-   * });
-   * ```
-   */
-  private applyServerAck(ack: { 
-    frame: number; 
-    serverTick?: number;
-    x?: number; 
-    y?: number; 
-    direction?: Direction 
-  }) {
-
-    if (typeof ack.frame !== 'number') return;
-    
-    // Prefer serverTick for ordering if available
-    if (typeof ack.serverTick === 'number') {
-      if (ack.serverTick < this.lastAckServerTick) {
-        console.debug(
-          `[Client] Ignoring ack frame=${ack.frame} serverTick=${ack.serverTick} (< last ${this.lastAckServerTick})`
-        );
-        return; // Ignore old acks based on server tick
-      }
-      console.debug(
-        `[Client] Received ack frame=${ack.frame} serverTick=${ack.serverTick} x=${ack.x} y=${ack.y} direction=${ack.direction}`
-      );
-    } else if (ack.frame < this.lastAckFrame) {
-      console.debug(
-        `[Client] Ignoring ack (no serverTick) frame=${ack.frame} (< last ${this.lastAckFrame})`
-      );
-      return;
-    } else {
-      console.debug(
-        `[Client] Received ack (no serverTick) frame=${ack.frame} x=${ack.x} y=${ack.y} direction=${ack.direction}`
-      );
-    }
-
-    const firstPendingFrame = this.inputHistory.length > 0 ? this.inputHistory[0].frame : undefined;
-
-    if (firstPendingFrame !== undefined && ack.frame < firstPendingFrame) {
-      console.debug(
-        `[Client] Skipping ack frame ${ack.frame}; first pending frame=${firstPendingFrame}`
-      );
-      this.lastAckServerTick = typeof ack.serverTick === 'number' ? ack.serverTick : this.lastAckServerTick;
-      this.lastAckFrame = Math.max(this.lastAckFrame, ack.frame);
+  private applyServerAck(ack: { frame: number; serverTick?: number; x?: number; y?: number; direction?: Direction }) {
+    if (this.predictionEnabled && this.prediction) {
+      this.prediction.applyServerAck({
+        frame: ack.frame,
+        serverTick: ack.serverTick,
+        state:
+          typeof ack.x === "number" && typeof ack.y === "number"
+            ? { x: ack.x, y: ack.y, direction: ack.direction }
+            : undefined,
+      });
       return;
     }
 
-    if (firstPendingFrame === undefined && ack.frame < this.lastAckFrame) {
-      console.debug(
-        `[Client] Ignoring duplicate ack frame ${ack.frame} with empty history`
-      );
-      this.lastAckServerTick = typeof ack.serverTick === 'number' ? ack.serverTick : this.lastAckServerTick;
-      this.lastAckFrame = Math.max(this.lastAckFrame, ack.frame);
+    if (typeof ack.x !== "number" || typeof ack.y !== "number") {
       return;
     }
-
-    if (typeof ack.serverTick === 'number') {
-      this.lastAckServerTick = ack.serverTick;
-    }
-    
-    this.lastAckFrame = ack.frame;
-
-    const currentPlayer = this.sceneMap.getCurrentPlayer();
+    const player = this.getCurrentPlayer();
     const myId = this.playerIdSignal();
-    if (!currentPlayer || !myId) return;
-
-    // If ack is too far behind current predicted frame, ignore to avoid false corrections
-    const framesBehind = this.inputFrameCounter - ack.frame;
-    if (framesBehind >= 3) {
-      // Still advance lastAckFrame so we don't process this ack again
-      this.lastAckFrame = ack.frame;
+    if (!player || !myId) {
       return;
     }
-
-    // Accept this ack for processing
-    this.lastAckFrame = ack.frame;
-
-    // Calculate frame offset if this is one of the first few acks
-    if (this.frameOffset === 0 && this.inputHistory.length > 0) {
-      const expectedFrame = this.inputHistory[0].frame;
-      this.frameOffset = ack.frame - expectedFrame;
+    const hitbox = typeof player.hitbox === "function" ? player.hitbox() : player.hitbox;
+    const width = hitbox?.w ?? 0;
+    const height = hitbox?.h ?? 0;
+    const updated = this.sceneMap.updateHitbox(myId, ack.x, ack.y, width, height);
+    if (!updated) {
+      this.sceneMap.setBodyPosition(myId, ack.x, ack.y, "top-left");
     }
-
-    // Find the input entry with the matching frame in our history
-    const matchingEntry = this.inputHistory.find(entry => entry.frame === ack.frame);
-    
-    let correctionApplied = false;
-
-    if (!matchingEntry) {
-      // If the frame is not in history, only apply authority when the ack frame is almost current
-      const frameDiff = ack.frame - this.inputFrameCounter; // negative if ack is behind
-      console.debug(
-        `[Client] Ack frame ${ack.frame} not found in history (diff=${frameDiff}). inputCounter=${this.inputFrameCounter}`
-      );
-      if (Math.abs(frameDiff) <= 1) {
-        if (typeof ack.x === 'number' && typeof ack.y === 'number') {
-          // Check if position is valid before applying (respects collisions)
-          const hitbox = currentPlayer.hitbox();
-          if (this.sceneMap.physic.isPositionValid(ack.x, ack.y, hitbox.w, hitbox.h, myId)) {
-            const success = this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, hitbox.w, hitbox.h);
-            if (success) {
-              correctionApplied = true;
-              console.debug(
-                `[Client] Applied correction without history entry: position=(${ack.x}, ${ack.y}) direction=${ack.direction}`
-              );
-            }
-          }
-        }
-        if (typeof ack.direction !== 'undefined') {
-          currentPlayer.changeDirection(ack.direction);
-          correctionApplied = true;
-          console.debug(`[Client] Updated direction without history entry: ${ack.direction}`);
-        }
-      } 
-    } else {
-      // Compare server position with our predicted position for that frame
-      const POSITION_TOLERANCE = Math.max(3, (currentPlayer as any).speed?.() ?? 4); // tolerate at least one tile-speed step
-      let positionsMatch = true;
-      
-      if (typeof ack.x === 'number' && typeof ack.y === 'number') {
-        const xDiff = Math.abs(ack.x - matchingEntry.resultingX);
-        const yDiff = Math.abs(ack.y - matchingEntry.resultingY);
-        positionsMatch = xDiff <= POSITION_TOLERANCE && yDiff <= POSITION_TOLERANCE;
-        
-      }
-      
-      // Check direction match
-      if (typeof ack.direction !== 'undefined') {
-        const directionMatch = ack.direction === matchingEntry.resultingDirection;
-        if (!directionMatch) {
-          positionsMatch = false;
-        }
-      }
-      
-      // Apply server authority only if positions/direction differ significantly
-      if (!positionsMatch) {
-        console.debug(
-          `[Client] Prediction mismatch for frame ${ack.frame}. Server: (${ack.x}, ${ack.y}) vs predicted: (${matchingEntry.resultingX}, ${matchingEntry.resultingY})`
-        );
-        if (typeof ack.x === 'number' && typeof ack.y === 'number') {
-          // Check if position is valid before applying (respects collisions)
-          const hitbox = currentPlayer.hitbox();
-          if (this.sceneMap.physic.isPositionValid(ack.x, ack.y, hitbox.w, hitbox.h, myId)) {
-            const success = this.sceneMap.physic.updateHitbox(myId, ack.x, ack.y, hitbox.w, hitbox.h);
-            if (success) {
-              correctionApplied = true;
-              console.debug(
-                `[Client] Applied correction for frame ${ack.frame}: position=(${ack.x}, ${ack.y}) direction=${ack.direction}`
-              );
-            }
-          }
-        }
-        if (typeof ack.direction !== 'undefined') {
-          currentPlayer.changeDirection(ack.direction);
-          correctionApplied = true;
-          console.debug(`[Client] Updated direction for frame ${ack.frame}: ${ack.direction}`);
-        }
-      }
-    }
-
-    // Clean up input history: remove entries up to and including the acked frame
-    const pendingToReplay = this.inputHistory.filter(entry => entry.frame > ack.frame).sort((a, b) => a.frame - b.frame);
-    this.inputHistory = pendingToReplay;
-
-    // If we applied a correction, replay remaining inputs locally to realign prediction
-    if (correctionApplied && pendingToReplay.length > 0) {
-      console.debug(
-        `[Client] Replaying ${pendingToReplay.length} inputs after correction from frame ${ack.frame}`
-      );
-      this.replayUnackedInputsFromFrame(ack.frame);
-    } else if (!correctionApplied) {
-      console.debug(
-        `[Client] Ack frame ${ack.frame} confirmed prediction. Remaining history=${this.inputHistory.length}`
-      );
+    player.x.set(Math.round(ack.x));
+    player.y.set(Math.round(ack.y));
+    if (ack.direction) {
+      player.changeDirection(ack.direction);
     }
   }
 
@@ -939,19 +644,7 @@ export class RpgClientEngine<T = any> {
    * this.replayUnackedInputsFromFrame(N);
    * ```
    */
-  private async replayUnackedInputsFromFrame(startFrame: number): Promise<void> {
-    const currentPlayer = this.sceneMap.getCurrentPlayer();
-    const myId = this.playerIdSignal();
-    if (!currentPlayer || !myId) return;
-
-    // Re-simulate in chronological order
-    for (const entry of this.inputHistory) {
-      if (entry.frame <= startFrame) continue;
-      await this.sceneMap.movePlayer(currentPlayer, entry.input);
-      // Update stored resulting positions after replay
-      entry.resultingX = currentPlayer.x();
-      entry.resultingY = currentPlayer.y();
-      entry.resultingDirection = currentPlayer.direction();
-    }
+  private async replayUnackedInputsFromFrame(_startFrame: number): Promise<void> {
+    // Prediction controller handles replay internally. Kept for backwards compatibility.
   }
 }

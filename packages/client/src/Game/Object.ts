@@ -20,19 +20,18 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
 
     this._frames.observable.subscribe(({ items }) => {
       if (!this.id) return;
-      if (this.id == this.engine.playerIdSignal()!) return;
+      //if (this.id == this.engine.playerIdSignal()!) return;
       this.frames = [...this.frames, ...items]
     })
 
     this.engine.tick
     .pipe(
-      throttleTime(10)
+      //throttleTime(10)
     )
     .subscribe(() => {
        const frame = this.frames.shift()
        if (frame) {
-        // Skip collision check for remote objects (server is authoritative)
-        this.engine.scene.physic.updateHitbox(this.id, frame.x, frame.y, undefined, undefined, true)
+         const entity = this.engine.scene.setBodyPosition(this.id, frame.x, frame.y)
        }
     })
   }

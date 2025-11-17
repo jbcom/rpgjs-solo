@@ -99,8 +99,18 @@ export class Integrator {
     // Clamp velocity
     entity.clampVelocities();
 
+    // Check if movement state changed (after damping/clamping)
+    entity.notifyMovementChange();
+
     // Update position: x = x + v * dt
+    const oldPosition = entity.position.clone();
     entity.position.addInPlace(entity.velocity.mul(dt));
+    
+    // Notify position change if position actually changed
+    const delta = entity.position.sub(oldPosition);
+    if (delta.lengthSquared() > 1e-6) {
+      entity.notifyPositionChange();
+    }
 
     // Update angular velocity: ω = ω + α * dt
     // α = τ / I (simplified: I = m * r²)
@@ -171,11 +181,21 @@ export class Integrator {
     newVelocity.mulInPlace(linearDampingFactor);
 
     // Update entity
+    const oldPosition = entity.position.clone();
     entity.position = newPosition;
     entity.velocity = newVelocity;
-
+    
     // Clamp velocity
     entity.clampVelocities();
+
+    // Check if movement state changed (after damping/clamping)
+    entity.notifyMovementChange();
+    
+    // Notify position change if position actually changed
+    const delta = entity.position.sub(oldPosition);
+    if (delta.lengthSquared() > 1e-6) {
+      entity.notifyPositionChange();
+    }
 
     // Angular motion (simplified, using Euler for angular)
     const momentOfInertia = entity.mass * entity.radius * entity.radius;

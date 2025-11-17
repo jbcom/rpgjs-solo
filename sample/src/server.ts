@@ -53,8 +53,9 @@ export default createServer({
             //  player.showComponentAnimation('wood')
               // player.name.set('test')
               const event = player.getCurrentMap()?.getEvents()[0]
-              console.log(event)
-             event?.moveTo(player)
+              if (event) {
+                event.moveTo(player)
+              }
               
             }
             // if (input.action) {

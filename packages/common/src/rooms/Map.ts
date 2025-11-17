@@ -1,18 +1,43 @@
 import { generateShortUUID, users } from "@signe/sync";
 import { effect, Signal, signal } from "@signe/reactive";
 import { Direction, RpgCommonPlayer } from "../Player";
-import { TopDownPhysics, type ZoneOptions } from "@rpgjs/physic";
+import {
+  PhysicsEngine,
+  Vector2,
+  Entity,
+  EntityState,
+  assignPolygonCollider,
+  AABB,
+} from "@rpgjs/physic";
 import { Observable, share, Subject, Subscription } from "rxjs";
 import { MovementManager } from "../movement";
 import { WorldMapsManager, type RpgWorldMaps } from "./WorldMaps";
+
+type CharacterKind = "hero" | "npc" | "generic";
+
+interface ZoneOptions {
+  x?: number;
+  y?: number;
+  radius: number;
+  angle?: number;
+  direction?: "up" | "down" | "left" | "right";
+  linkedTo?: string;
+  limitedByWalls?: boolean;
+}
 
 export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   abstract players: Signal<Record<string, T>>;
   abstract events: Signal<Record<string, any>>;
   
   data = signal<any | null>(null);
-  physic = new TopDownPhysics();
+  physic = new PhysicsEngine({
+    timeStep: 1 / 60,
+    gravity: new Vector2(0, 0),
+    enableSleep: false,
+  });
   moveManager = new MovementManager(() => this.physic);
+  
+  private speedScalar = 50; // Default speed scalar for movement
   
   // World Maps properties
   tileWidth?: number;
@@ -27,6 +52,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   tickSubscription?: Subscription | null;
   playersSubscription?: Subscription | null;
   eventsSubscription?: Subscription | null;
+  private physicsAccumulatorMs = 0;
+  private physicsSyncDepth = 0;
 
   get isStandalone() {
     return typeof window !== 'undefined'
@@ -101,10 +128,28 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     }
 
     // Clear all hitboxes and zones from physics system
-    this.physic.clearAll();
+    this.clearAll();
     
     // Reset movement manager
     this.moveManager.clearAll();
+
+    this.physicsAccumulatorMs = 0;
+  }
+
+  /**
+   * Clear all physics entities and internal state
+   * @private
+   */
+  private clearAll(): void {
+    // Remove all entities from physics engine
+    const entities = this.physic.getEntities();
+    for (const entity of entities) {
+      this.physic.removeEntity(entity);
+    }
+    
+    // Clear movement manager and zone manager
+    this.physic.getMovementManager().clearAll();
+    this.physic.getZoneManager().clear();
   }
 
   loadPhysic() {
@@ -116,62 +161,57 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     > = this.data()?.hitboxes ?? [];
 
     const gap = 100;
-    this.physic.addStaticHitbox('map-width-left', -gap, 0, gap, this.data().height);
-    this.physic.addStaticHitbox('map-width-right', this.data().width, 0, gap, this.data().height);
-    this.physic.addStaticHitbox('map-height-top', 0, -gap, this.data().width, gap);
-    this.physic.addStaticHitbox('map-height-bottom', 0, this.data().height, this.data().width, gap);
+    this.addStaticHitbox('map-width-left', -gap, 0, gap, this.data().height);
+    this.addStaticHitbox('map-width-right', this.data().width, 0, gap, this.data().height);
+    this.addStaticHitbox('map-height-top', 0, -gap, this.data().width, gap);
+    this.addStaticHitbox('map-height-bottom', 0, this.data().height, this.data().width, gap);
 
     for (let staticHitbox of hitboxes) {
       if ('x' in staticHitbox) {
-        this.physic.addStaticHitbox(staticHitbox.id ?? generateShortUUID(), staticHitbox.x, staticHitbox.y, staticHitbox.width, staticHitbox.height);
+        this.addStaticHitbox(staticHitbox.id ?? generateShortUUID(), staticHitbox.x, staticHitbox.y, staticHitbox.width, staticHitbox.height);
       }
       else if ('points' in staticHitbox) {
-        this.physic.addStaticHitbox(staticHitbox.id ?? generateShortUUID(), staticHitbox.points);
+        this.addStaticHitbox(staticHitbox.id ?? generateShortUUID(), staticHitbox.points);
       }
     }
-    
-    this.playersSubscription = (this.players as any).observable.subscribe(({ value: player, type, key }: any) => { 
-      if (type == 'add') {
-        player.id = key
-        this.physic.addMovableHitbox(player, player.x(), player.y(), player.hitbox().w, player.hitbox().h);
-        this.physic.registerMovementEvents(player.id, () => {
-          player.animationName.set('walk')
-        }, () => {
-          player.animationName.set('stand')
-        })
-      }
-      else if (type == 'remove') {
-        this.physic.removeHitbox(player.id)
-      }
-      else if (type == 'update') {
-        this.physic.removeHitbox(player.id)
-        this.physic.addMovableHitbox(player, player.x(), player.y(), player.hitbox().w, player.hitbox().h);
-      }
-    })
+
+    this.playersSubscription = (this.players as any).observable.subscribe(
+      ({ value: player, type, key }: any) => {
+        if (!player) return;
+        if (type === "add") {
+          player.id = key;
+          this.createCharacterHitbox(player, "hero");
+        } else if (type === "remove") {
+          this.removeHitbox(key);
+        } else if (type === "update") {
+          if (this.isPhysicsSyncingSignals) {
+            return;
+          }
+          this.updateCharacterHitbox(player);
+        }
+      },
+    );
 
     this.eventsSubscription = this.events.observable.subscribe(({ value: event, type, key }) => {
-      if (type == 'add') {
-        event.id = key
-        // Events are static by default (cannot be pushed) unless they are moving
-        // This prevents the player from pushing events during collisions
-        this.physic.addMovableHitbox(event, event.x(), event.y(), event.hitbox().w, event.hitbox().h);
-        this.physic.registerMovementEvents(event.id, () => {
-          event.animationName.set('walk')
-          // When event starts moving, make it dynamic
-          this.physic.setBodyStatic(event.id, false);
-        }, () => {
-          event.animationName.set('stand')
-          // When event stops moving, make it static again
-          this.physic.setBodyStatic(event.id, true);
-        })
-      }
-      else if (type == 'remove') {
-        this.physic.removeHitbox(event.id);
+      if (type === "add") {
+        event.id = key;
+        this.createCharacterHitbox(event, "npc", {
+          mass: 100,
+        });
+      } else if (type === "remove") {
+        // Clean up movement event subscriptions
+        const eventObj = this.getObjectById(key);
+        if (eventObj && typeof (eventObj as any)._movementUnsubscribe === 'function') {
+          (eventObj as any)._movementUnsubscribe();
+        }
+        this.removeHitbox(key);
+      } else if (type === "update") {
+        this.updateCharacterHitbox(event);
       }
     });
 
     this.tickSubscription = this.tick$.subscribe(({ delta }) => {
-      this.physic.update(delta);
+      this.runFixedTicks(delta);
     });
   }
 
@@ -214,40 +254,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
     }
     // Perform normal movement
-    this.physic.moveBody(player, direction);
-  }
-
-  /**
-   * Register movement events for a player or event
-   * 
-   * Attaches event listeners to detect when an entity starts or stops moving
-   * 
-   * @param id - ID of the entity (player or event)
-   * @param onStartMoving - Callback when entity starts moving
-   * @param onStopMoving - Callback when entity stops moving
-   * @returns Boolean indicating success
-   * 
-   * @example
-   * ```ts
-   * // Register movement events for the player
-   * map.registerMovementEvents('player1', 
-   *   () => console.log('Player started moving'),
-   *   () => console.log('Player stopped moving')
-   * );
-   * ```
-   */
-  registerMovementEvents(
-    id: string,
-    onStartMoving?: () => void,
-    onStopMoving?: () => void
-  ): boolean {
-    // Check if the object with this ID exists
-    const object = this.getObjectById(id);
-    if (!object) return false;
-    
-    // Register with physics system
-    this.physic.registerMovementEvents(id, onStartMoving, onStopMoving);
-    return true;
+    this.moveBody(player, direction);
   }
 
   /**
@@ -265,11 +272,136 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    * ```
    */
   isMoving(id: string): boolean {
-    return this.physic.isMoving(id);
+    return this.isEntityMoving(id);
   }
 
   getObjectById(id: string) {
     return this.players()[id] ?? this.events()[id];
+  }
+
+  protected runFixedTicks(
+    deltaMs: number,
+    hooks?: {
+      beforeStep?: () => void;
+      afterStep?: (tick: number) => void;
+    },
+  ): number {
+    if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
+      return 0;
+    }
+
+    const fixedStepMs = this.physic.getWorld().getTimeStep() * 1000;
+    this.physicsAccumulatorMs += deltaMs;
+    let executed = 0;
+
+    while (this.physicsAccumulatorMs >= fixedStepMs) {
+      this.physicsAccumulatorMs -= fixedStepMs;
+      hooks?.beforeStep?.();
+      const tick = this.physic.stepOneTick();
+      executed += 1;
+      hooks?.afterStep?.(tick);
+    }
+
+    return executed;
+  }
+
+  protected forceSingleTick(hooks?: { beforeStep?: () => void; afterStep?: (tick: number) => void }): number {
+      hooks?.beforeStep?.();
+      this.physic.updateMovements();
+      const tick = this.physic.stepOneTick();
+      this.runPostTickUpdates();
+      hooks?.afterStep?.(tick);
+    const fixedMs = this.physic.getWorld().getTimeStep() * 1000;
+    this.physicsAccumulatorMs = Math.max(0, this.physicsAccumulatorMs - fixedMs);
+    return tick;
+  }
+
+  private createCharacterHitbox(
+    owner: any,
+    kind: CharacterKind,
+    options?: { isStatic?: boolean; mass?: number },
+  ): void {
+    if (!owner?.id) {
+      return;
+    }
+
+    const hitbox = typeof owner.hitbox === "function" ? owner.hitbox() : owner.hitbox;
+    const width = hitbox?.w ?? 32;
+    const height = hitbox?.h ?? 32;
+    const topLeftX = this.resolveNumeric(owner.x);
+    const topLeftY = this.resolveNumeric(owner.y);
+    const centerX = topLeftX + width / 2;
+    const centerY = topLeftY + height / 2;
+    const radius = Math.max(width, height) / 2;
+    const speedValue =
+      typeof owner.speed === "function"
+        ? owner.speed()
+        : typeof owner.speed === "number"
+        ? owner.speed
+        : undefined;
+    this.addCharacter({
+      owner,
+      x: centerX,
+      y: centerY,
+      radius,
+      kind,
+      maxSpeed: speedValue,
+      collidesWithCharacters: !this.shouldDisableCharacterCollisions(owner),
+      isStatic: options?.isStatic,
+      mass: options?.mass,
+    });
+  }
+
+  private updateCharacterHitbox(owner: any): void {
+    if (!owner?.id) return;
+    const hitbox = typeof owner.hitbox === "function" ? owner.hitbox() : owner.hitbox;
+    const width = hitbox?.w ?? 32;
+    const height = hitbox?.h ?? 32;
+    const topLeftX = this.resolveNumeric(owner.x);
+    const topLeftY = this.resolveNumeric(owner.y);
+    this.updateHitbox(owner.id, topLeftX, topLeftY, width, height);
+    this.setCharacterCollisionEnabled(owner.id, !this.shouldDisableCharacterCollisions(owner));
+  }
+
+  private resolveNumeric(source: any, fallback = 0): number {
+    if (typeof source === "function") {
+      try {
+        return Number(source()) ?? fallback;
+      } catch {
+        return fallback;
+      }
+    }
+    if (typeof source === "number") {
+      return source;
+    }
+    return fallback;
+  }
+
+  private shouldDisableCharacterCollisions(owner: any): boolean {
+    if (typeof owner._through === "function") {
+      try {
+        return !!owner._through();
+      } catch {
+        return false;
+      }
+    }
+    if (typeof owner.through === "boolean") {
+      return owner.through;
+    }
+    return false;
+  }
+
+  protected withPhysicsSync<T>(run: () => T): T {
+    this.physicsSyncDepth += 1;
+    try {
+      return run();
+    } finally {
+      this.physicsSyncDepth -= 1;
+    }
+  }
+
+  protected get isPhysicsSyncingSignals(): boolean {
+    return this.physicsSyncDepth > 0;
   }
 
   /**
@@ -401,14 +533,14 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       const firstHitbox = hitboxes[0];
       const radius = Math.max(firstHitbox.width, firstHitbox.height) / 2;
       
-      this.physic.addZone(zoneId, {
+      this.addZone(zoneId, {
         x: firstHitbox.x + firstHitbox.width / 2,
         y: firstHitbox.y + firstHitbox.height / 2,
         radius: radius
       });
 
       // Register zone events to detect hits
-      this.physic.registerZoneEvents(
+      this.registerZoneEvents(
         zoneId,
         (hitIds: string[]) => {
           // Convert hit IDs to actual objects and emit
@@ -436,7 +568,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
           // Check if we've reached the end
           if (currentIndex >= hitboxes.length) {
             // Clean up and complete
-            this.physic.removeZone(zoneId);
+            this.removeZone(zoneId);
             tickSubscription.unsubscribe();
             observer.complete();
             return;
@@ -444,21 +576,21 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
           
           // Move zone to next position
           const nextHitbox = hitboxes[currentIndex];
-          const zone = this.physic.getZone(zoneId);
+          const zone = this.getZone(zoneId);
           
           if (zone) {
             // Remove current zone and create new one at next position
-            this.physic.removeZone(zoneId);
+            this.removeZone(zoneId);
             
             const newRadius = Math.max(nextHitbox.width, nextHitbox.height) / 2;
-            this.physic.addZone(zoneId, {
+            this.addZone(zoneId, {
               x: nextHitbox.x + nextHitbox.width / 2,
               y: nextHitbox.y + nextHitbox.height / 2,
               radius: newRadius
             });
             
             // Re-register zone events for the new zone
-            this.physic.registerZoneEvents(
+            this.registerZoneEvents(
               zoneId,
               (hitIds: string[]) => {
                 const hitObjects = hitIds
@@ -478,8 +610,546 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       // Cleanup function
       return () => {
         tickSubscription.unsubscribe();
-        this.physic.removeZone(zoneId);
+        this.removeZone(zoneId);
       };
     });
+  }
+
+  /**
+   * Add a static hitbox to the physics world
+   * @private
+   */
+  private addStaticHitbox(
+    id: string,
+    xOrPoints: number | number[][],
+    y?: number,
+    width?: number,
+    height?: number,
+  ): string {
+    // Check if entity already exists
+    if (this.physic.getEntityByUUID(id)) {
+      throw new Error(`Hitbox with id ${id} already exists`);
+    }
+
+    let entity: Entity;
+    let boxWidth: number;
+    let boxHeight: number;
+
+    if (Array.isArray(xOrPoints)) {
+      const points = xOrPoints;
+      if (points.length < 3) {
+        throw new Error(`Polygon must have at least 3 points, got ${points.length}`);
+      }
+
+      let minX = Number.POSITIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let maxY = Number.NEGATIVE_INFINITY;
+
+      for (const point of points) {
+        if (!Array.isArray(point) || point.length !== 2 || typeof point[0] !== "number" || typeof point[1] !== "number") {
+          throw new Error(`Invalid point ${JSON.stringify(point)}. Expected [x, y].`);
+        }
+        minX = Math.min(minX, point[0]);
+        maxX = Math.max(maxX, point[0]);
+        minY = Math.min(minY, point[1]);
+        maxY = Math.max(maxY, point[1]);
+      }
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      boxWidth = Math.max(maxX - minX, 1);
+      boxHeight = Math.max(maxY - minY, 1);
+
+      entity = this.physic.createEntity({
+        uuid: id,
+        position: { x: centerX, y: centerY },
+        width: boxWidth,
+        height: boxHeight,
+        mass: Infinity,
+        state: EntityState.Static,
+      });
+      entity.freeze();
+
+      const localVertices = points.map((point) => {
+        const [px, py] = point as [number, number];
+        return new Vector2(px - centerX, py - centerY);
+      });
+      assignPolygonCollider(entity, { vertices: localVertices });
+    } else {
+      if (typeof y !== "number" || typeof width !== "number" || typeof height !== "number") {
+        throw new Error("Rectangle hitbox requires x, y, width and height parameters");
+      }
+
+      const centerX = xOrPoints + width / 2;
+      const centerY = y + height / 2;
+      boxWidth = Math.max(width, 1);
+      boxHeight = Math.max(height, 1);
+
+      entity = this.physic.createEntity({
+        uuid: id,
+        position: { x: centerX, y: centerY },
+        width: boxWidth,
+        height: boxHeight,
+        mass: Infinity,
+        state: EntityState.Static,
+      });
+      entity.freeze();
+    }
+
+    return id;
+  }
+
+  /**
+   * Add a character to the physics world
+   * @private
+   */
+  private addCharacter(options: {
+    owner: any;
+    x: number;
+    y: number;
+    radius?: number;
+    kind?: CharacterKind;
+    collidesWithCharacters?: boolean;
+    maxSpeed?: number;
+    isStatic?: boolean;
+    friction?: number;
+    mass?: number;
+  }): string {
+    if (!options || typeof options.owner?.id !== "string") {
+      throw new Error("Character requires an owner object with a string id");
+    }
+
+    const id = options.owner.id;
+    const radius = options.radius ?? 25;
+    const diameter = radius * 2;
+    const topLeftX = options.x - radius;
+    const topLeftY = options.y - radius;
+
+    const centerX = topLeftX + diameter / 2;
+    const centerY = topLeftY + diameter / 2;
+    const isStatic = !!options.isStatic;
+
+    const entity = this.physic.createEntity({
+      uuid: id,
+      position: { x: centerX, y: centerY },
+      radius: Math.max(radius, 1),
+      mass: options.mass ?? (isStatic ? Infinity : 1),
+      friction: options.friction ?? 0.4,
+      linearDamping: isStatic ? 1 : 0.2,
+      maxLinearVelocity: options.maxSpeed ? options.maxSpeed * this.speedScalar : 200,
+    });
+
+    if (isStatic) {
+      entity.freeze();
+    } else {
+      entity.unfreeze();
+    }
+
+    // Store owner reference directly on entity for syncing positions
+    (entity as any).owner = options.owner;
+
+    entity.onDirectionChange(({ cardinalDirection }) => {
+      const owner = (entity as any).owner;
+      if (!owner) return;
+      owner.changeDirection(cardinalDirection as Direction);
+    });
+
+    entity.onMovementChange(({ isMoving }) => {
+      const owner = (entity as any).owner;
+      if (!owner) return;
+      if (isMoving) {
+        owner.animationName.set("walk");
+      } else {
+        owner.animationName.set("stand");
+      }
+    });
+
+    // Register position sync handler to update owner.x and owner.y
+    entity.onPositionChange(({ x, y }) => {
+      const owner = (entity as any).owner;
+      if (!owner) return;
+
+      // Calculate top-left from center
+      const width = entity.width || (entity.radius ? entity.radius * 2 : 32);
+      const height = entity.height || (entity.radius ? entity.radius * 2 : 32);
+      const topLeftX = x - width / 2;
+      const topLeftY = y - height / 2;
+
+      if (typeof owner.x === "function" && typeof owner.x.set === "function") {
+        owner.x.set(Math.round(topLeftX));
+        owner.applyFrames?.();
+      }
+      if (typeof owner.y === "function" && typeof owner.y.set === "function") {
+        owner.y.set(Math.round(topLeftY));
+        owner.applyFrames?.();
+      }
+    });
+
+    return id;
+  }
+
+  /**
+   * Update hitbox position and size
+   * 
+   * @param id - Entity ID
+   * @param x - Top-left X coordinate
+   * @param y - Top-left Y coordinate
+   * @param width - Optional width
+   * @param height - Optional height
+   * @returns True if hitbox was updated successfully
+   */
+  updateHitbox(id: string, x: number, y: number, width?: number, height?: number): boolean {
+    const entity = this.physic.getEntityByUUID(id);
+    if (!entity) return false;
+
+    if (typeof width === "number" && typeof height === "number") {
+      entity.width = Math.max(width, 1);
+      entity.height = Math.max(height, 1);
+    }
+
+    // Calculate center from top-left
+    const entityWidth = entity.width || entity.radius * 2 || 32;
+    const entityHeight = entity.height || entity.radius * 2 || 32;
+    const centerX = x + entityWidth / 2;
+    const centerY = y + entityHeight / 2;
+    entity.position.set(centerX, centerY);
+
+    return true;
+  }
+
+  /**
+   * Remove a hitbox from the physics world
+   * @private
+   */
+  private removeHitbox(id: string): boolean {
+    const entity = this.physic.getEntityByUUID(id);
+    if (!entity) {
+      return false;
+    }
+
+    this.physic.removeEntity(entity);
+    return true;
+  }
+
+  /**
+   * Check if an entity is moving
+   * @private
+   */
+  private isEntityMoving(id: string): boolean {
+    const entity = this.physic.getEntityByUUID(id);
+    if (!entity) return false;
+    // Check if entity has velocity
+    return entity.velocity.length() > 0.1;
+  }
+
+  /**
+   * Move a body in a direction
+   * @private
+   */
+  private moveBody(player: any, direction: Direction): boolean {
+    const entity = this.physic.getEntityByUUID(player.id);
+    if (!entity) return false;
+
+    const speedValue = typeof player.speed === "function" ? Number(player.speed()) : 0;
+    if (typeof player.setIntendedDirection === "function") {
+      player.setIntendedDirection(direction);
+    }
+
+    let vx = 0, vy = 0;
+    switch (direction) {
+      case Direction.Left:
+        vx = -speedValue * this.speedScalar;
+        break;
+      case Direction.Right:
+        vx = speedValue * this.speedScalar;
+        break;
+      case Direction.Up:
+        vy = -speedValue * this.speedScalar;
+        break;
+      case Direction.Down:
+        vy = speedValue * this.speedScalar;
+        break;
+    }
+
+    entity.setVelocity({ x: vx, y: vy });
+    entity.wakeUp();
+    return true;
+  }
+
+  /**
+   * Stop movement for a player
+   * @protected
+   */
+  protected stopMovement(player: any): boolean {
+    const entity = this.physic.getEntityByUUID(player.id);
+    if (!entity) return false;
+
+    if (typeof player.setIntendedDirection === "function") {
+      player.setIntendedDirection(null);
+    }
+
+    entity.setVelocity({ x: 0, y: 0 });
+    return true;
+  }
+
+  /**
+   * Set character collision enabled
+   * @private
+   */
+  private setCharacterCollisionEnabled(id: string, collides: boolean): boolean {
+    const entity = this.physic.getEntityByUUID(id);
+    if (!entity) {
+      return false;
+    }
+    // Collision filtering is handled by PhysicsEngine's collision system
+    // This method is kept for API compatibility but doesn't need to do anything
+    // as PhysicsEngine handles collisions automatically
+    return true;
+  }
+
+  /**
+   * Get collisions for an entity
+   * @protected
+   */
+  protected getCollisions(id: string): string[] {
+    const entity = this.physic.getEntityByUUID(id);
+    if (!entity) return [];
+    
+    // Query nearby entities using AABB
+    const radius = entity.radius || Math.max(entity.width || 0, entity.height || 0) / 2;
+    const aabb = new AABB(
+      entity.position.x - radius,
+      entity.position.y - radius,
+      entity.position.x + radius,
+      entity.position.y + radius
+    );
+    
+    const nearby = this.physic.queryAABB(aabb);
+    const collisions: string[] = [];
+    
+    // Check actual collisions (simplified - PhysicsEngine handles this internally)
+    // For now, return nearby entities. Full collision detection is handled by PhysicsEngine
+    for (const other of nearby) {
+      if (other.uuid !== id) {
+        collisions.push(other.uuid);
+      }
+    }
+    
+    return collisions;
+  }
+
+  /**
+   * Get physics body (entity) for an id
+   * @protected
+   */
+  protected getBody(id: string): Entity | undefined {
+    return this.physic.getEntityByUUID(id);
+  }
+
+  /**
+   * Get the current physics tick
+   * @returns Current tick number
+   */
+  getTick(): number {
+    return this.physic.getTick();
+  }
+
+  /**
+   * Get body position in different modes
+   * 
+   * @param id - Entity ID
+   * @param mode - Position mode: "center" or "top-left"
+   * @returns Position coordinates or undefined if entity not found
+   */
+  getBodyPosition(
+    id: string,
+    mode: "center" | "top-left" = "center",
+  ): { x: number; y: number } | undefined {
+    const entity = this.physic.getEntityByUUID(id);
+    if (!entity) return undefined;
+    
+    const centerX = entity.position.x;
+    const centerY = entity.position.y;
+    if (mode === "center") {
+      return { x: centerX, y: centerY };
+    }
+    
+    // Calculate top-left from center
+    const width = entity.width || (entity.radius ? entity.radius * 2 : 32);
+    const height = entity.height || (entity.radius ? entity.radius * 2 : 32);
+    return {
+      x: centerX - width / 2,
+      y: centerY - height / 2,
+    };
+  }
+
+  /**
+   * Set body position
+   * 
+   * @param id - Entity ID
+   * @param x - X coordinate
+   * @param y - Y coordinate
+   * @param mode - Position mode: "center" or "top-left"
+   * @returns True if position was set successfully
+   */
+  setBodyPosition(
+    id: string,
+    x: number,
+    y: number,
+    mode: "center" | "top-left" = "center",
+  ): Entity | undefined {
+    const entity = this.physic.getEntityByUUID(id);
+    if (!entity) return;
+
+    let centerX = x;
+    let centerY = y;
+    if (mode === "top-left") {
+      const width = entity.width || (entity.radius ? entity.radius * 2 : 32);
+      const height = entity.height || (entity.radius ? entity.radius * 2 : 32);
+      centerX = x + width / 2;
+      centerY = y + height / 2;
+    }
+    entity.position.set(centerX, centerY);
+    entity.notifyPositionChange();
+    return entity;
+  }
+
+  /**
+   * Handle collision enter
+   * @private
+   */
+  // Collision handling is now done directly via entity hooks in addCharacter
+  // These methods are no longer needed as PhysicsEngine handles collisions internally
+
+  /**
+   * Add a zone
+   * @private
+   */
+  private addZone(id: string, options: ZoneOptions): string {
+    // Check if zone or entity already exists
+    const zoneManager = this.physic.getZoneManager();
+    if (this.physic.getEntityByUUID(id)) {
+      throw new Error(`Zone with id ${id} already exists as entity`);
+    }
+
+    const radius = options.radius;
+    if (typeof radius !== "number" || radius <= 0) {
+      throw new Error("Zone radius must be a positive number");
+    }
+
+    // If linkedTo is specified, get the entity
+    let attachedEntity: Entity | undefined;
+    if (options.linkedTo) {
+      attachedEntity = this.physic.getEntityByUUID(options.linkedTo);
+      if (!attachedEntity) {
+        throw new Error(`Cannot link zone to unknown entity ${options.linkedTo}`);
+      }
+    }
+
+    const callbacks: { onEnter?: (entities: Entity[]) => void; onExit?: (entities: Entity[]) => void } = {};
+    
+    // Store callbacks for later updates
+    (callbacks as any)._onEnterString = undefined;
+    (callbacks as any)._onExitString = undefined;
+
+    const zoneId = attachedEntity
+      ? zoneManager.createAttachedZone(attachedEntity, {
+          radius,
+          angle: options.angle ?? 360,
+          direction: options.direction ?? 'down',
+          limitedByWalls: options.limitedByWalls ?? false,
+        }, callbacks)
+      : zoneManager.createZone({
+          position: { x: options.x ?? 0, y: options.y ?? 0 },
+          radius,
+          angle: options.angle ?? 360,
+          direction: options.direction ?? 'down',
+          limitedByWalls: options.limitedByWalls ?? false,
+        }, callbacks);
+
+    // Store zone ID mapping
+    (this as any)._zoneIdMap = (this as any)._zoneIdMap || new Map();
+    (this as any)._zoneIdMap.set(id, zoneId);
+
+    return id;
+  }
+
+  /**
+   * Remove a zone
+   * @private
+   */
+  private removeZone(id: string): boolean {
+    const zoneIdMap = (this as any)._zoneIdMap;
+    if (!zoneIdMap) return false;
+    
+    const zoneId = zoneIdMap.get(id);
+    if (!zoneId) return false;
+
+    const zoneManager = this.physic.getZoneManager();
+    zoneManager.removeZone(zoneId);
+    zoneIdMap.delete(id);
+    return true;
+  }
+
+  /**
+   * Get a zone
+   * @private
+   */
+  private getZone(id: string): any {
+    const zoneIdMap = (this as any)._zoneIdMap;
+    if (!zoneIdMap) return undefined;
+    
+    const zoneId = zoneIdMap.get(id);
+    if (!zoneId) return undefined;
+
+    const zoneManager = this.physic.getZoneManager();
+    return zoneManager.getZone(zoneId);
+  }
+
+  /**
+   * Register zone events
+   * @private
+   */
+  private registerZoneEvents(
+    id: string,
+    onEnter?: (hitIds: string[]) => void,
+    onExit?: (hitIds: string[]) => void,
+  ): boolean {
+    const zoneIdMap = (this as any)._zoneIdMap;
+    if (!zoneIdMap) return false;
+    
+    const zoneId = zoneIdMap.get(id);
+    if (!zoneId) return false;
+
+    const zoneManager = this.physic.getZoneManager();
+    
+    // Use registerCallbacks to update callbacks
+    const callbacks: { onEnter?: (entities: Entity[]) => void; onExit?: (entities: Entity[]) => void } = {};
+    if (onEnter) {
+      callbacks.onEnter = (entities: Entity[]) => {
+        onEnter(entities.map(e => e.uuid));
+      };
+    }
+    if (onExit) {
+      callbacks.onExit = (entities: Entity[]) => {
+        onExit(entities.map(e => e.uuid));
+      };
+    }
+    
+    return zoneManager.registerCallbacks(zoneId, callbacks);
+  }
+
+  /**
+   * Run post-tick updates (update zones)
+   * @private
+   */
+  private runPostTickUpdates(): void {
+    // Position sync is now handled automatically by entity.onPositionChange hooks
+    // Movement callbacks are also handled in the onPositionChange handler
+
+    // Update zones
+    const zoneManager = this.physic.getZoneManager();
+    zoneManager.update();
   }
 }

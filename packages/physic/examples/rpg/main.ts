@@ -13,7 +13,7 @@ import {
   PhysicsEngine,
   Vector2,
   Entity,
-  CollisionInfo,
+  EntityState,
   Dash,
   LinearMove,
   Knockback,
@@ -21,6 +21,7 @@ import {
   Oscillate,
   CompositeMovement,
   SeekAvoid,
+  ZoneManager,
 } from '../../src/index.js';
 import type { MovementStrategy } from '../../src/index.js';
 
@@ -35,26 +36,17 @@ const npcFocusEl = document.getElementById('npc-focus') as HTMLParagraphElement 
 // World dimensions
 const WORLD_WIDTH = 2000;
 const WORLD_HEIGHT = 1500;
-const CELL_SIZE = 200;
 
-// Create physics engine
+// Create physics engine (deterministic, tick-based)
 const engine = new PhysicsEngine({
   timeStep: 1 / 60,
-  gravity: new Vector2(0, 0), // Top-down, no gravity
-  spatialCellSize: CELL_SIZE,
-  // Grid dimensions = world size / cell size (number of cells)
-  spatialGridWidth: Math.ceil(WORLD_WIDTH / CELL_SIZE),  // 10 cells
-  spatialGridHeight: Math.ceil(WORLD_HEIGHT / CELL_SIZE), // 8 cells
+  gravity: new Vector2(0, 0),
+  enableSleep: false,
 });
 const movement = engine.getMovementManager();
-
-// Track collisions with static obstacles for hero blocking
-const heroCollisionNormals: Vector2[] = [];
-const activeHeroCollisions: Map<string, CollisionInfo> = new Map();
-
-// Track collisions with static obstacles for NPCs blocking
-const npcCollisionNormals: Map<string, Vector2[]> = new Map();
-const activeNpcCollisions: Map<string, CollisionInfo> = new Map();
+const zones = engine.getZoneManager();
+const fixedDeltaMs = engine.getWorld().getTimeStep() * 1000;
+const fixedDeltaSeconds = engine.getWorld().getTimeStep();
 
 // Game state
 interface GameEntity {
@@ -63,6 +55,8 @@ interface GameEntity {
   color: string;
   name?: string;
   debugPulse?: number;
+  hitboxId?: string;
+  treeSize?: number;
 }
 
 const gameEntities: GameEntity[] = [];
@@ -70,9 +64,9 @@ let hero: GameEntity | null = null;
 
 type SimplifiedDirection = 'idle' | 'up' | 'down' | 'left' | 'right';
 
-type MovementChangeEvent = {
-  isMoving: boolean;
-  velocity: Vector2;
+type PositionChangeEvent = {
+  x: number;
+  y: number;
 };
 
 type DirectionChangeEvent = {
@@ -84,8 +78,32 @@ type CollisionEventPayload = {
   other: Entity;
 };
 
+function registerStaticRectangle(
+  id: string,
+  opts: { x: number; y: number; width: number; height: number; type: GameEntity['type']; color: string; extra?: Partial<GameEntity>; },
+): void {
+  const centerX = opts.x + opts.width / 2;
+  const centerY = opts.y + opts.height / 2;
+  const entity = engine.createEntity({
+    uuid: id,
+    position: { x: centerX, y: centerY },
+    width: opts.width,
+    height: opts.height,
+    mass: Infinity,
+    state: EntityState.Static,
+  });
+  entity.freeze();
+  gameEntities.push({
+    entity,
+    type: opts.type,
+    color: opts.color,
+    hitboxId: id,
+    ...opts.extra,
+  });
+}
+
 type EntityWithHooks = Entity & {
-  onMovementChange(handler: (event: MovementChangeEvent) => void): () => void;
+  onPositionChange(handler: (event: PositionChangeEvent) => void): () => void;
   onDirectionChange(handler: (event: DirectionChangeEvent) => void): () => void;
   onCollisionEnter(handler: (event: CollisionEventPayload) => void): () => void;
   onCollisionExit(handler: (event: CollisionEventPayload) => void): () => void;
@@ -97,6 +115,8 @@ const heroTelemetry = {
   direction: 'idle' as SimplifiedDirection,
   directionVector: new Vector2(0, 0),
   lastCollision: '-',
+  entitiesInVisionZone: [] as Entity[],
+  visionZoneId: '',
 };
 
 // Keyboard state
@@ -165,41 +185,41 @@ const camera = {
 function createWalls(): void {
   const wallThickness = 30;
 
-  // Top wall
-  const topWall = engine.createEntity({
-    position: { x: WORLD_WIDTH / 2, y: wallThickness / 2 },
+  registerStaticRectangle('wall-top', {
+    x: 0,
+    y: 0,
     width: WORLD_WIDTH,
     height: wallThickness,
-    mass: Infinity, // Immovable
+    type: 'wall',
+    color: '#555',
   });
-  gameEntities.push({ entity: topWall, type: 'wall', color: '#555' });
 
-  // Bottom wall
-  const bottomWall = engine.createEntity({
-    position: { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT - wallThickness / 2 },
+  registerStaticRectangle('wall-bottom', {
+    x: 0,
+    y: WORLD_HEIGHT - wallThickness,
     width: WORLD_WIDTH,
     height: wallThickness,
-    mass: Infinity,
+    type: 'wall',
+    color: '#555',
   });
-  gameEntities.push({ entity: bottomWall, type: 'wall', color: '#555' });
 
-  // Left wall
-  const leftWall = engine.createEntity({
-    position: { x: wallThickness / 2, y: WORLD_HEIGHT / 2 },
+  registerStaticRectangle('wall-left', {
+    x: 0,
+    y: 0,
     width: wallThickness,
     height: WORLD_HEIGHT,
-    mass: Infinity,
+    type: 'wall',
+    color: '#555',
   });
-  gameEntities.push({ entity: leftWall, type: 'wall', color: '#555' });
 
-  // Right wall
-  const rightWall = engine.createEntity({
-    position: { x: WORLD_WIDTH - wallThickness / 2, y: WORLD_HEIGHT / 2 },
+  registerStaticRectangle('wall-right', {
+    x: WORLD_WIDTH - wallThickness,
+    y: 0,
     width: wallThickness,
     height: WORLD_HEIGHT,
-    mass: Infinity,
+    type: 'wall',
+    color: '#555',
   });
-  gameEntities.push({ entity: rightWall, type: 'wall', color: '#555' });
 }
 
 // Create obstacles (rocks, boxes, etc.)
@@ -214,14 +234,15 @@ function createObstacles(): void {
     { x: 1000, y: 1000, w: 100, h: 40 },
   ];
 
-  obstacles.forEach((obs) => {
-    const entity = engine.createEntity({
-      position: { x: obs.x, y: obs.y },
+  obstacles.forEach((obs, index) => {
+    registerStaticRectangle(`obstacle-${index}`, {
+      x: obs.x - obs.w / 2,
+      y: obs.y - obs.h / 2,
       width: obs.w,
       height: obs.h,
-      mass: Infinity, // Immovable
+      type: 'obstacle',
+      color: '#666',
     });
-    gameEntities.push({ entity, type: 'obstacle', color: '#666' });
   });
 }
 
@@ -238,13 +259,16 @@ function createTrees(): void {
     { x: 1400, y: 900, size: 45 },
   ];
 
-  trees.forEach((tree) => {
-    const entity = engine.createEntity({
-      position: { x: tree.x, y: tree.y },
-      radius: tree.size / 2,
-      mass: Infinity, // Immovable
+  trees.forEach((tree, index) => {
+    registerStaticRectangle(`tree-${index}`, {
+      x: tree.x - tree.size / 2,
+      y: tree.y - tree.size / 2,
+      width: tree.size,
+      height: tree.size,
+      type: 'tree',
+      color: '#8b4513',
+      extra: { treeSize: tree.size },
     });
-    gameEntities.push({ entity, type: 'tree', color: '#8b4513' });
   });
 }
 
@@ -258,26 +282,33 @@ function createNPCs(): void {
     { x: 600, y: 1000, name: 'NPC 5' },
   ];
 
-  npcs.forEach((npc) => {
+  npcs.forEach((npc, index) => {
+    const owner = { id: `npc-${index}` };
     const entity = engine.createEntity({
+      uuid: owner.id,
       position: { x: npc.x, y: npc.y },
       radius: 20,
-      mass: 8,
-      linearDamping: 1.2,
-      friction: 0.6,
+      mass: 100,
+      friction: 0.4,
+      linearDamping: 0.2,
+      maxLinearVelocity: 200,
     });
     gameEntities.push({
       entity,
       type: 'npc',
       color: '#2ecc71',
       name: npc.name,
+      hitboxId: owner.id,
     });
   });
 }
 
 // Create hero
 function createHero(): void {
+  const heroOwner = { id: 'hero-character' };
+
   const heroEntity = engine.createEntity({
+    uuid: heroOwner.id,
     position: { x: 300, y: 300 },
     radius: 25,
     mass: 1,
@@ -291,14 +322,18 @@ function createHero(): void {
     type: 'hero',
     color: '#3498db',
     name: 'Hero',
+    hitboxId: heroOwner.id,
   };
   gameEntities.push(hero);
 
   const heroHooks = heroEntity as EntityWithHooks;
 
-  heroHooks.onMovementChange(({ velocity, isMoving }) => {
+  // Track movement state by checking velocity in position change handler
+  heroHooks.onPositionChange(({ x, y }) => {
+    // Update velocity from entity
+    heroTelemetry.velocity = heroEntity.velocity.clone();
+    const isMoving = heroEntity.velocity.lengthSquared() > 0.01;
     heroTelemetry.moving = isMoving;
-    heroTelemetry.velocity = velocity.clone();
   });
 
   heroHooks.onDirectionChange(({ cardinalDirection, direction }) => {
@@ -313,6 +348,28 @@ function createHero(): void {
   heroHooks.onCollisionExit(() => {
     heroTelemetry.lastCollision = '-';
   });
+
+  // Create vision zone attached to hero
+  const visionZoneId = zones.createAttachedZone(
+    heroEntity,
+    {
+      radius: 150,
+      angle: 120, // 120-degree cone
+      direction: 'right',
+      offset: { x: 0, y: 0 },
+    },
+    {
+      onEnter: (entities) => {
+        // Entities entering the vision zone
+        console.log('Hero sees entities:', entities.map(e => e.uuid));
+      },
+      onExit: (entities) => {
+        // Entities leaving the vision zone
+        console.log('Hero lost sight of entities:', entities.map(e => e.uuid));
+      },
+    },
+  );
+  heroTelemetry.visionZoneId = visionZoneId;
 }
 
 function getNPCs(): GameEntity[] {
@@ -574,139 +631,61 @@ document.addEventListener('keyup', (e) => {
   keys[e.key] = false;
 });
 
+// Helper function to convert direction to angle
+function directionToAngle(dir: SimplifiedDirection): number {
+  switch (dir) {
+    case 'up':
+      return -Math.PI / 2;
+    case 'down':
+      return Math.PI / 2;
+    case 'left':
+      return Math.PI;
+    case 'right':
+      return 0;
+    default:
+      return 0;
+  }
+}
+
+// Helper function to convert direction to zone direction
+function directionToZoneDirection(dir: SimplifiedDirection): 'up' | 'down' | 'left' | 'right' {
+  switch (dir) {
+    case 'up':
+      return 'up';
+    case 'down':
+      return 'down';
+    case 'left':
+      return 'left';
+    case 'right':
+      return 'right';
+    default:
+      return 'right';
+  }
+}
+
 // Update hero movement
-function updateHeroMovement(deltaTime: number): void {
-  if (!hero) return;
+function updateHeroMovement(): void {
+  if (!hero || !hero.hitboxId) return;
 
   const move = new Vector2(0, 0);
 
-  // WASD or Arrow keys
-  if (keys['w'] || keys['arrowup'] || keys['z']) {
-    move.y -= 1;
-  }
-  if (keys['s'] || keys['arrowdown']) {
-    move.y += 1;
-  }
-  if (keys['a'] || keys['arrowleft'] || keys['q']) {
-    move.x -= 1;
-  }
-  if (keys['d'] || keys['arrowright']) {
-    move.x += 1;
-  }
+  if (keys['w'] || keys['arrowup'] || keys['z']) move.y -= 1;
+  if (keys['s'] || keys['arrowdown']) move.y += 1;
+  if (keys['a'] || keys['arrowleft'] || keys['q']) move.x -= 1;
+  if (keys['d'] || keys['arrowright']) move.x += 1;
 
-  // Normalize diagonal movement
   if (move.length() > 0) {
-    move.normalizeInPlace();
-    let desiredVelocity = move.mul(moveSpeed);
+    move.normalizeInPlace().mulInPlace(moveSpeed);
+    hero.entity.setVelocity({ x: move.x, y: move.y });
 
-    // Block movement in directions of collisions with static obstacles
-    // Normal points from hero to obstacle, so we block positive dot products (moving towards obstacle)
-    for (const normal of heroCollisionNormals) {
-      const velocityAlongNormal = desiredVelocity.dot(normal);
-      if (velocityAlongNormal > 0) {
-        // Moving towards the obstacle, remove that component
-        desiredVelocity = desiredVelocity.sub(normal.mul(velocityAlongNormal));
-      }
+    // Update vision zone direction based on hero movement direction
+    if (heroTelemetry.visionZoneId && heroTelemetry.direction !== 'idle') {
+      const zoneDirection = directionToZoneDirection(heroTelemetry.direction);
+      zones.updateZone(heroTelemetry.visionZoneId, { direction: zoneDirection });
     }
-
-    hero.entity.setVelocity(desiredVelocity);
   } else {
-    // Apply damping when no input
-    hero.entity.setVelocity(new Vector2(0, 0));
+    hero.entity.setVelocity({ x: 0, y: 0 });
   }
-}
-
-// Block hero velocity if colliding with static obstacles
-function blockHeroVelocityOnCollision(): void {
-  if (!hero) return;
-
-  // After collision detection, if hero is colliding, cancel velocity towards obstacles
-  if (heroCollisionNormals.length > 0) {
-    let velocity = hero.entity.velocity;
-    
-    // For each collision normal, remove velocity component pointing towards obstacle
-    // Normal points from hero to obstacle, so we block positive dot products
-    for (const normal of heroCollisionNormals) {
-      const velocityAlongNormal = velocity.dot(normal);
-      if (velocityAlongNormal > 0) {
-        // Moving towards obstacle, cancel that component
-        velocity = velocity.sub(normal.mul(velocityAlongNormal));
-      }
-    }
-    
-    hero.entity.setVelocity(velocity);
-  }
-}
-
-// Update collision normals from active collisions
-function updateHeroCollisionNormals(): void {
-  if (!hero) return;
-
-  // Clear previous collision normals
-  heroCollisionNormals.length = 0;
-
-  // Get normals from active collisions
-  for (const collision of activeHeroCollisions.values()) {
-    heroCollisionNormals.push(collision.normal.clone());
-  }
-}
-
-// Update collision normals for NPCs from active collisions
-function updateNpcCollisionNormals(): void {
-  // Clear previous collision normals
-  npcCollisionNormals.clear();
-
-  // Get normals from active collisions
-  for (const [key, collision] of activeNpcCollisions.entries()) {
-    const npcId = key.split('-')[0];
-    if (!npcCollisionNormals.has(npcId)) {
-      npcCollisionNormals.set(npcId, []);
-    }
-    npcCollisionNormals.get(npcId)!.push(collision.normal.clone());
-  }
-}
-
-// Block NPC velocity if colliding with static obstacles
-function blockNpcVelocityOnCollision(): void {
-  const npcs = gameEntities.filter((e) => e.type === 'npc');
-  
-  for (const npc of npcs) {
-    const normals = npcCollisionNormals.get(npc.entity.uuid);
-    if (!normals || normals.length === 0) continue;
-
-    let velocity = npc.entity.velocity;
-    
-    // For each collision normal, remove velocity component pointing towards obstacle
-    for (const normal of normals) {
-      const velocityAlongNormal = velocity.dot(normal);
-      if (velocityAlongNormal > 0) {
-        // Moving towards obstacle, cancel that component
-        velocity = velocity.sub(normal.mul(velocityAlongNormal));
-      }
-    }
-    
-    npc.entity.setVelocity(velocity);
-  }
-}
-
-// Update NPCs (simple AI: random wandering)
-// Note: Disabled because NPCs are now static (mass: Infinity)
-// If you want NPCs to move, set mass: 1 or higher and uncomment this function
-function updateNPCs(deltaTime: number): void {
-  // const npcs = gameEntities.filter((e) => e.type === 'npc');
-  
-  // npcs.forEach((npc) => {
-  //   // Random chance to change direction
-  //   if (Math.random() < 0.01) {
-  //     const angle = Math.random() * Math.PI * 2;
-  //     const speed = 50 + Math.random() * 50;
-  //     const velocity = new Vector2(
-  //       Math.cos(angle) * speed,
-  //       Math.sin(angle) * speed
-  //     );
-  //     npc.entity.setVelocity(velocity);
-  //   }
-  // });
 }
 
 // Update camera to follow hero
@@ -731,6 +710,43 @@ function render(): void {
   ctx.save();
   ctx.translate(-camera.x, -camera.y);
 
+  // Render vision zone
+  if (hero && heroTelemetry.visionZoneId) {
+    const zone = zones.getZone(heroTelemetry.visionZoneId);
+    if (zone) {
+      ctx.save();
+      ctx.translate(zone.position.x, zone.position.y);
+
+      // Draw zone circle/cone
+      ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
+      ctx.fillStyle = 'rgba(255, 255, 0, 0.1)';
+      ctx.lineWidth = 2;
+
+      if (zone.angle >= 360) {
+        // Full circle
+        ctx.beginPath();
+        ctx.arc(0, 0, zone.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // Cone
+        const facing = directionToAngle(zone.direction);
+        const halfAngle = (zone.angle * Math.PI) / 360;
+        const startAngle = facing - halfAngle;
+        const endAngle = facing + halfAngle;
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, zone.radius, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+  }
+
   // Render all entities
   gameEntities.forEach((gameEntity) => {
     const { entity, type, color } = gameEntity;
@@ -741,7 +757,8 @@ function render(): void {
 
     if (type === 'tree') {
       // Draw tree (circle with brown trunk and green top)
-      const radius = entity.radius;
+      const treeSize = gameEntity.treeSize ?? Math.max(entity.width ?? 0, entity.height ?? 0, 40);
+      const radius = treeSize / 2;
       
       // Trunk
       ctx.fillStyle = '#654321';
@@ -848,133 +865,38 @@ function render(): void {
       ? 'idle'
       : `${heroTelemetry.direction} (${directionVector.x.toFixed(2)}, ${directionVector.y.toFixed(2)})`;
     const collisionInfo = heroTelemetry.lastCollision === '-' ? 'none' : heroTelemetry.lastCollision;
-    infoEl.textContent = `Position: (${Math.round(hero.entity.position.x)}, ${Math.round(hero.entity.position.y)}) | NPCs: ${npcCount} | Movement: ${heroTelemetry.moving ? 'moving' : 'idle'} | Speed: ${speed.toFixed(1)} | Direction: ${directionInfo} | Collision: ${collisionInfo} | FPS: ${Math.round(1000 / 16.67)}`;
+    const visionCount = heroTelemetry.entitiesInVisionZone.length;
+    const visionInfo = visionCount > 0
+      ? `${visionCount} entity${visionCount > 1 ? 'ies' : ''} in vision`
+      : 'no entities in vision';
+    infoEl.textContent = `Position: (${Math.round(hero.entity.position.x)}, ${Math.round(hero.entity.position.y)}) | NPCs: ${npcCount} | Movement: ${heroTelemetry.moving ? 'moving' : 'idle'} | Speed: ${speed.toFixed(1)} | Direction: ${directionInfo} | Collision: ${collisionInfo} | Vision: ${visionInfo} | FPS: ${Math.round(1000 / 16.67)}`;
   }
 }
 
 // Game loop
 let lastTime = performance.now();
+let accumulatorMs = 0;
 function gameLoop(): void {
   const currentTime = performance.now();
-  const deltaTime = (currentTime - lastTime) / 1000; // Convert to seconds
+  const deltaMs = currentTime - lastTime;
   lastTime = currentTime;
+  accumulatorMs += deltaMs;
 
-  // Update NPCs
-  updateNPCs(deltaTime);
-
-  // Step physics (fixed timestep)
-  const fixedDeltaTime = 1 / 60;
-  const steps = Math.max(1, Math.floor(deltaTime / fixedDeltaTime));
-  for (let i = 0; i < steps; i++) {
-    // Update collision normals from active collisions (set by events)
-    updateHeroCollisionNormals();
-    updateNpcCollisionNormals();
-    
-    // Before step: update hero movement based on input and collision blocking
-    updateHeroMovement(fixedDeltaTime);
-    
-    engine.stepWithMovements(fixedDeltaTime);
-    
-    // After physics step, block velocity if still colliding with static obstacles
-    blockHeroVelocityOnCollision();
-    blockNpcVelocityOnCollision();
-    decayDebugPulses(fixedDeltaTime);
+  while (accumulatorMs >= fixedDeltaMs) {
+    updateHeroMovement();
+    engine.stepWithMovements();
+    zones.update(); // Update zones after physics step
+    // Update hero telemetry with current entities in vision zone
+    if (hero && heroTelemetry.visionZoneId) {
+      heroTelemetry.entitiesInVisionZone = zones.getEntitiesInZone(heroTelemetry.visionZoneId);
+    }
+    decayDebugPulses(fixedDeltaSeconds);
+    accumulatorMs -= fixedDeltaMs;
   }
 
-  // Update camera
   updateCamera();
-
-  // Render
   render();
-
   requestAnimationFrame(gameLoop);
-}
-
-// Setup collision event handlers for hero and NPC blocking
-function setupCollisionHandlers(): void {
-  const events = engine.getEvents();
-  
-  // Listen for collisions involving the hero or NPCs
-  events.onCollisionEnter((collision: CollisionInfo) => {
-    // Handle hero collisions
-    if (hero) {
-      const isHeroA = collision.entityA.uuid === hero.entity.uuid;
-      const isHeroB = collision.entityB.uuid === hero.entity.uuid;
-      
-      if (isHeroA || isHeroB) {
-        const otherEntity = isHeroA ? collision.entityB : collision.entityA;
-        const normal = isHeroA ? collision.normal : collision.normal.mul(-1);
-        
-        // Check if other entity is a static obstacle
-        const gameEntity = gameEntities.find((e) => e.entity.uuid === otherEntity.uuid);
-        if (gameEntity && 
-            (gameEntity.type === 'wall' || gameEntity.type === 'obstacle' || gameEntity.type === 'tree' || gameEntity.type === 'npc') &&
-            otherEntity.isStatic()) {
-          // Store collision info with corrected normal (from hero to obstacle)
-          const collisionKey = `${hero.entity.uuid}-${otherEntity.uuid}`;
-          activeHeroCollisions.set(collisionKey, {
-            entityA: isHeroA ? collision.entityA : collision.entityB,
-            entityB: isHeroA ? collision.entityB : collision.entityA,
-            contacts: collision.contacts,
-            normal: normal.clone(),
-            depth: collision.depth,
-          });
-        }
-      }
-    }
-
-    // Handle NPC collisions with static obstacles
-    const entityAGame = gameEntities.find((e) => e.entity.uuid === collision.entityA.uuid);
-    const entityBGame = gameEntities.find((e) => e.entity.uuid === collision.entityB.uuid);
-    
-    // Check if one is an NPC and the other is a static obstacle
-    if (entityAGame && entityAGame.type === 'npc' && collision.entityB.isStatic()) {
-      const collisionKey = `${collision.entityA.uuid}-${collision.entityB.uuid}`;
-      activeNpcCollisions.set(collisionKey, {
-        entityA: collision.entityA,
-        entityB: collision.entityB,
-        contacts: collision.contacts,
-        normal: collision.normal.clone(),
-        depth: collision.depth,
-      });
-    } else if (entityBGame && entityBGame.type === 'npc' && collision.entityA.isStatic()) {
-      const collisionKey = `${collision.entityB.uuid}-${collision.entityA.uuid}`;
-      activeNpcCollisions.set(collisionKey, {
-        entityA: collision.entityB,
-        entityB: collision.entityA,
-        contacts: collision.contacts,
-        normal: collision.normal.mul(-1),
-        depth: collision.depth,
-      });
-    }
-  });
-  
-  events.onCollisionExit((collision: CollisionInfo) => {
-    // Handle hero collision exit
-    if (hero) {
-      const isHeroA = collision.entityA.uuid === hero.entity.uuid;
-      const isHeroB = collision.entityB.uuid === hero.entity.uuid;
-      
-      if (isHeroA || isHeroB) {
-        const otherEntity = isHeroA ? collision.entityB : collision.entityA;
-        const collisionKey = `${hero.entity.uuid}-${otherEntity.uuid}`;
-        activeHeroCollisions.delete(collisionKey);
-      }
-    }
-
-    // Handle NPC collision exit
-    const entityAGame = gameEntities.find((e) => e.entity.uuid === collision.entityA.uuid);
-    const entityBGame = gameEntities.find((e) => e.entity.uuid === collision.entityB.uuid);
-    
-    if (entityAGame && entityAGame.type === 'npc') {
-      const collisionKey = `${collision.entityA.uuid}-${collision.entityB.uuid}`;
-      activeNpcCollisions.delete(collisionKey);
-    }
-    if (entityBGame && entityBGame.type === 'npc') {
-      const collisionKey = `${collision.entityB.uuid}-${collision.entityA.uuid}`;
-      activeNpcCollisions.delete(collisionKey);
-    }
-  });
 }
 
 // Initialize game
@@ -983,7 +905,6 @@ createObstacles();
 createTrees();
 createNPCs();
 createHero();
-setupCollisionHandlers();
 createDebugButtons();
 
 // Start game loop

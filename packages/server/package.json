@@ -16,6 +16,7 @@
   "description": "",
   "dependencies": {
     "@rpgjs/common": "workspace:*",
+    "@rpgjs/physic": "workspace:*",
     "@rpgjs/database": "^4.3.0",
     "@signe/di": "^2.4.6",
     "@signe/reactive": "^2.4.6",

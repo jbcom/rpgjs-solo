@@ -33,6 +33,27 @@ export interface WorldConfig {
   sleepVelocityThreshold?: number;
   /** Custom spatial partition (optional) */
   spatialPartition?: SpatialPartition;
+  /**
+   * Optional quantization step (world units) applied to positions after every tick.
+   * Set to a positive number (e.g. 1/16) to reduce floating point drift for networking.
+   */
+  positionQuantizationStep?: number;
+  /**
+   * Optional quantization step (world units / second) applied to velocities after every tick.
+   * Set to a positive number (e.g. 1/256) to enforce deterministic clamps.
+   */
+  velocityQuantizationStep?: number;
+  /**
+   * Number of collision-resolution iterations per tick (default: 3).
+   * Higher values further reduce interpenetration in crowded scenes.
+   */
+  resolverIterations?: number;
+  /** Custom collision resolver factor controlling how aggressively overlaps are corrected. */
+  positionCorrectionFactor?: number;
+  /** Maximum positional correction applied per iteration (world units). */
+  maxPositionCorrection?: number;
+  /** Minimum penetration depth before a collision is resolved. */
+  minPenetrationDepth?: number;
 }
 
 /**
@@ -61,6 +82,9 @@ export class World {
   private sleepThreshold: number;
   private sleepVelocityThreshold: number;
   private previousCollisions: Map<string, CollisionInfo> = new Map();
+  private readonly positionQuantizationStep: number | null;
+  private readonly velocityQuantizationStep: number | null;
+  private readonly resolverIterations: number;
 
   /**
    * Creates a new physics world
@@ -72,6 +96,14 @@ export class World {
     this.enableSleep = config.enableSleep ?? true;
     this.sleepThreshold = config.sleepThreshold ?? 0.5;
     this.sleepVelocityThreshold = config.sleepVelocityThreshold ?? 0.01;
+    this.positionQuantizationStep =
+      typeof config.positionQuantizationStep === 'number' && config.positionQuantizationStep > 0
+        ? config.positionQuantizationStep
+        : null;
+    this.velocityQuantizationStep =
+      typeof config.velocityQuantizationStep === 'number' && config.velocityQuantizationStep > 0
+        ? config.velocityQuantizationStep
+        : null;
 
     // Create integrator
     const integratorConfig: {
@@ -88,7 +120,12 @@ export class World {
     this.integrator = new Integrator(integratorConfig);
 
     // Create collision resolver
-    this.resolver = new CollisionResolver();
+    this.resolverIterations = Math.max(1, Math.floor(config.resolverIterations ?? 3));
+    this.resolver = new CollisionResolver({
+      positionCorrectionFactor: config.positionCorrectionFactor,
+      maxPositionCorrection: config.maxPositionCorrection,
+      minPenetrationDepth: config.minPenetrationDepth,
+    });
 
     // Create spatial partition
     if (config.spatialPartition) {
@@ -196,10 +233,8 @@ export class World {
    * Updates all entities, detects and resolves collisions.
    */
   public step(): void {
-    // Update spatial partition
-    for (const entity of this.dynamicEntities) {
-      this.spatialPartition.update(entity);
-    }
+    // Update spatial partition with the latest positions
+    this.refreshDynamicEntitiesInPartition();
 
     // Clear forces and integrate
     for (const entity of this.dynamicEntities) {
@@ -209,19 +244,28 @@ export class World {
       }
     }
 
-    // Detect collisions
-    const collisions = this.detectCollisions();
+    let firstPassCollisions: CollisionInfo[] = [];
+    for (let iteration = 0; iteration < this.resolverIterations; iteration++) {
+      const collisions = this.detectCollisions();
+      if (iteration === 0) {
+        firstPassCollisions = collisions;
+      }
+      if (collisions.length === 0) {
+        break;
+      }
+      this.sortCollisionsForDeterminism(collisions);
+      this.resolver.resolveAll(collisions);
+      if (iteration + 1 < this.resolverIterations) {
+        this.refreshDynamicEntitiesInPartition();
+      }
+    }
 
-    // Resolve collisions
-    this.resolver.resolveAll(collisions);
+    if (this.positionQuantizationStep !== null || this.velocityQuantizationStep !== null) {
+      this.quantizeEntities();
+    }
 
-    // Handle collision events
-    this.handleCollisionEvents(collisions);
+    this.handleCollisionEvents(firstPassCollisions);
 
-    // Update per-entity motion tracking
-    this.updateEntityMotionTracking();
-
-    // Update sleep state
     if (this.enableSleep) {
       this.updateSleepState();
     }
@@ -264,6 +308,20 @@ export class World {
     return collisions;
   }
 
+  private sortCollisionsForDeterminism(collisions: CollisionInfo[]): void {
+    collisions.sort((a, b) => {
+      const keyA = this.getCollisionKey(a);
+      const keyB = this.getCollisionKey(b);
+      return keyA.localeCompare(keyB);
+    });
+  }
+
+  private getCollisionKey(collision: CollisionInfo): string {
+    const idA = collision.entityA.uuid;
+    const idB = collision.entityB.uuid;
+    return idA < idB ? `${idA}-${idB}` : `${idB}-${idA}`;
+  }
+
   /**
    * Handles collision enter/exit events
    * 
@@ -301,14 +359,6 @@ export class World {
     this.previousCollisions = currentCollisions;
   }
 
-  /**
-   * Updates per-entity motion tracking caches.
-   */
-  private updateEntityMotionTracking(): void {
-    for (const entity of this.entities) {
-      entity.updateMotionTracking(this.timeStep);
-    }
-  }
 
   /**
    * Updates sleep state for entities
@@ -349,6 +399,29 @@ export class World {
     this.entities.clear();
     this.spatialPartition.clear();
     this.previousCollisions.clear();
+  }
+
+  private quantizeEntities(): void {
+    for (const entity of this.dynamicEntities) {
+      if (this.positionQuantizationStep !== null) {
+        entity.position.x = this.quantizeValue(entity.position.x, this.positionQuantizationStep);
+        entity.position.y = this.quantizeValue(entity.position.y, this.positionQuantizationStep);
+      }
+      if (this.velocityQuantizationStep !== null) {
+        entity.velocity.x = this.quantizeValue(entity.velocity.x, this.velocityQuantizationStep);
+        entity.velocity.y = this.quantizeValue(entity.velocity.y, this.velocityQuantizationStep);
+      }
+    }
+  }
+
+  private quantizeValue(value: number, step: number): number {
+    return Math.round(value / step) * step;
+  }
+
+  private refreshDynamicEntitiesInPartition(): void {
+    for (const entity of this.dynamicEntities) {
+      this.spatialPartition.update(entity);
+    }
   }
 
   /**

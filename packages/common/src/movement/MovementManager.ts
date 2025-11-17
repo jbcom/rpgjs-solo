@@ -1,20 +1,20 @@
 import {
   MovementManager as PhysicMovementManager,
   MovementStrategy,
-  TopDownPhysics,
+  PhysicsEngine,
 } from '@rpgjs/physic';
 
 /**
  * Thin proxy around the physics movement manager.
  *
- * Delegates every operation to the deterministic engine provided by `TopDownPhysics`
+ * Delegates every operation to the deterministic engine provided by `PhysicsEngine`
  * so strategies operate on the exact same entities as the physics simulation.
  */
 export class MovementManager {
-  constructor(private readonly physicProvider: () => TopDownPhysics) {}
+  constructor(private readonly physicProvider: () => PhysicsEngine) {}
 
   private get core(): PhysicMovementManager {
-    return this.physicProvider().getEngine().getMovementManager();
+    return this.physicProvider().getMovementManager();
   }
 
   add(id: string, strategy: MovementStrategy): void {

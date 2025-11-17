@@ -6,7 +6,7 @@ import { RpgClientEvent } from "./Event";
 import { RpgClientEngine } from "../RpgClientEngine";
 import { inject } from "../core/inject";
 
-export class RpgClientMap extends RpgCommonMap<RpgClientPlayer> {
+export class RpgClientMap extends RpgCommonMap<any> {
   engine: RpgClientEngine = inject(RpgClientEngine)
   @users(RpgClientPlayer) players = signal<Record<string, RpgClientPlayer>>({});
   @sync(RpgClientEvent) events = signal<Record<string, RpgClientEvent>>({});
@@ -19,5 +19,9 @@ export class RpgClientMap extends RpgCommonMap<RpgClientPlayer> {
   reset() {
     this.players.set({})
     this.events.set({})
+  }
+
+  stepPredictionTick(): void {
+    this.forceSingleTick();
   }
 }

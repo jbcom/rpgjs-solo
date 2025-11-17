@@ -716,13 +716,13 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
 
-      const engine = map.physic.getEngine();
+      const engine = map.physic;
 
       if ('id' in target) {
-        const targetProvider = () => map.physic.getBody(target.id) ?? null;
+        const targetProvider = () => (map as any).getBody(target.id) ?? null;
         map.moveManager.add(
           (this as unknown as PlayerWithMixins).id,
-          new SeekAvoid(engine, targetProvider, 3, 50, 5)
+          new SeekAvoid(engine, targetProvider, 180, 140, 80, 48)
         );
         return;
       }

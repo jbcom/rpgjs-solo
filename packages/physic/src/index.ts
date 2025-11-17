@@ -18,10 +18,10 @@ export {
   type CardinalDirection,
   type EntityCollisionEvent,
   type EntityCollisionHandler,
-  type EntityMovementEvent,
-  type EntityMovementHandler,
-  type EntityDirectionEvent,
-  type EntityDirectionHandler,
+  type EntityPositionSyncEvent,
+  type EntityPositionSyncHandler,
+  type EntityDirectionSyncEvent,
+  type EntityDirectionSyncHandler,
 } from './physics/Entity';
 export { Integrator, IntegrationMethod } from './physics/integrator';
 export * from './physics/forces';
@@ -51,7 +51,20 @@ export { RegionManager, type RegionManagerConfig } from './region/RegionManager'
 export * from './region/migration';
 
 // API Layer
-export { PhysicsEngine, type PhysicsEngineConfig } from './api/PhysicsEngine';
+export {
+  PhysicsEngine,
+  type PhysicsEngineConfig,
+  type PhysicsSnapshot,
+} from './api/PhysicsEngine';
+export {
+  ZoneManager,
+  type ZoneConfig,
+  type StaticZoneConfig,
+  type AttachedZoneConfig,
+  type ZoneDirection,
+  type ZoneCallbacks,
+  type ZoneInfo,
+} from './api/ZoneManager';
 
 // Movement System
 export * from './movement';
@@ -61,10 +74,14 @@ export { ObjectPool } from './utils/pool';
 export * from './utils/uuid';
 
 export { ProjectileType } from './movement/strategies/ProjectileMovement';
+
+
 export {
-  TopDownPhysics,
-  type ZoneOptions,
-  type SlidingOptions,
-  type PhysicsBodySnapshot,
-  type DirectionValue,
-} from './topdown/TopDownPhysics';
+  PredictionController,
+  type PredictionControllerConfig,
+  type PredictionState,
+} from './network/PredictionController';
+export {
+  DeterministicInputBuffer,
+  type QueuedInput,
+} from './network/DeterministicInputBuffer';

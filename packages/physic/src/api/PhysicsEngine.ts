@@ -9,6 +9,7 @@ import { assignPolygonCollider, PolygonConfig } from '../collision/PolygonCollid
 import { raycast as raycastUtil, RaycastHit } from '../collision/raycast';
 import { sweepEntities as sweepUtil, SweepResult } from '../collision/sweep';
 import { MovementManager } from '../movement/MovementManager';
+import { ZoneManager } from './ZoneManager';
 
 /**
  * Physics engine configuration
@@ -43,6 +44,8 @@ export class PhysicsEngine {
   private regionManager: RegionManager | null = null;
   private useRegions: boolean;
   private movementManager: MovementManager | null = null;
+  private zoneManager: ZoneManager | null = null;
+  private tick: number = 0;
 
   /**
    * Creates a new physics engine
@@ -82,6 +85,45 @@ export class PhysicsEngine {
   }
 
   /**
+   * Gets the zone manager bound to this engine.
+   *
+   * The manager is lazily created and reused. Zones allow detecting entities
+   * within circular or cone-shaped areas without physical collisions (useful
+   * for vision, skill ranges, explosions, etc.).
+   *
+   * **Important:** Call `zoneManager.update()` after each physics step to
+   * keep zones synchronized:
+   *
+   * ```typescript
+   * engine.step();
+   * engine.getZoneManager().update();
+   * ```
+   *
+   * @returns Zone manager instance
+   *
+   * @example
+   * ```typescript
+   * const zones = engine.getZoneManager();
+   * const visionZone = zones.createAttachedZone(player, {
+   *   radius: 100,
+   *   angle: 90,
+   *   direction: 'right',
+   * }, {
+   *   onEnter: (entities) => console.log('Player sees:', entities),
+   * });
+   *
+   * engine.step();
+   * zones.update();
+   * ```
+   */
+  public getZoneManager(): ZoneManager {
+    if (!this.zoneManager) {
+      this.zoneManager = new ZoneManager(this);
+    }
+    return this.zoneManager;
+  }
+
+  /**
    * Updates all registered movement strategies.
    *
    * @param dt - Time delta in seconds (defaults to the world's time step)
@@ -100,6 +142,36 @@ export class PhysicsEngine {
   public stepWithMovements(dt?: number): void {
     this.updateMovements(dt);
     this.step();
+  }
+
+  /**
+   * Advances the simulation by exactly one fixed tick.
+   *
+   * This helper is equivalent to {@link step} but returns the tick index after the step,
+   * making it convenient for client-side prediction loops.
+   *
+   * @returns Current tick index after stepping
+   */
+  public stepOneTick(): number {
+    this.step();
+    return this.tick;
+  }
+
+  /**
+   * Advances the simulation by a fixed number of ticks.
+   *
+   * @param ticks - Number of ticks to simulate (>= 1)
+   * @returns Current tick index after stepping
+   */
+  public stepTicks(ticks: number): number {
+    if (!Number.isFinite(ticks) || ticks <= 0) {
+      return this.tick;
+    }
+    const total = Math.floor(ticks);
+    for (let i = 0; i < total; i += 1) {
+      this.step();
+    }
+    return this.tick;
   }
 
   /**
@@ -204,6 +276,7 @@ export class PhysicsEngine {
     } else {
       this.world.step();
     }
+    this.tick += 1;
   }
 
   /**
@@ -307,6 +380,7 @@ export class PhysicsEngine {
     } else {
       this.world.clear();
     }
+    this.tick = 0;
   }
 
   /**
@@ -406,6 +480,66 @@ export class PhysicsEngine {
   }
 
   /**
+   * Gets the current simulation tick.
+   *
+   * @returns Tick counter (starts at 0 and increments after each {@link step})
+   */
+  public getTick(): number {
+    return this.tick;
+  }
+
+  /**
+   * Captures a lightweight snapshot of the current world state.
+   *
+   * The snapshot only stores the minimum data required for client-side prediction:
+   * position, velocity, rotation, angular velocity and sleeping flag per entity.
+   *
+   * @returns Snapshot object
+   */
+  public takeSnapshot(): PhysicsSnapshot {
+    return {
+      tick: this.tick,
+      entities: this.getEntities().map((entity) => ({
+        uuid: entity.uuid,
+        position: { x: entity.position.x, y: entity.position.y },
+        velocity: { x: entity.velocity.x, y: entity.velocity.y },
+        rotation: entity.rotation,
+        angularVelocity: entity.angularVelocity,
+        sleeping: entity.isSleeping(),
+      })),
+    };
+  }
+
+  /**
+   * Restores a snapshot previously produced by {@link takeSnapshot}.
+   *
+   * Entities that cannot be found in the current engine are skipped silently.
+   *
+   * @param snapshot - Snapshot to restore
+   */
+  public restoreSnapshot(snapshot: PhysicsSnapshot): void {
+    const entities = new Map(this.getEntities().map((entity) => [entity.uuid, entity]));
+
+    for (const state of snapshot.entities) {
+      const entity = entities.get(state.uuid);
+      if (!entity) continue;
+
+      entity.position.set(state.position.x, state.position.y);
+      entity.velocity.set(state.velocity.x, state.velocity.y);
+      entity.rotation = state.rotation;
+      entity.angularVelocity = state.angularVelocity;
+
+      if (state.sleeping) {
+        entity.sleep();
+      } else {
+        entity.wakeUp();
+      }
+    }
+
+    this.tick = snapshot.tick;
+  }
+
+  /**
    * Gets the region manager (if regions are enabled)
    * 
    * @returns Region manager or null
@@ -413,5 +547,17 @@ export class PhysicsEngine {
   public getRegionManager(): RegionManager | null {
     return this.regionManager;
   }
+}
+
+export interface PhysicsSnapshot {
+  tick: number;
+  entities: Array<{
+    uuid: string;
+    position: { x: number; y: number };
+    velocity: { x: number; y: number };
+    rotation: number;
+    angularVelocity: number;
+    sleeping: boolean;
+  }>;
 }
 
