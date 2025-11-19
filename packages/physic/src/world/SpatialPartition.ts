@@ -32,9 +32,10 @@ export interface SpatialPartition {
    * Queries entities near a given entity
    * 
    * @param entity - Entity to query around
+   * @param results - Optional Set to store results in (avoids allocation)
    * @returns Set of nearby entities
    */
-  query(entity: Entity): Set<Entity>;
+  query(entity: Entity, results?: Set<Entity>): Set<Entity>;
 
   /**
    * Queries entities in an AABB region

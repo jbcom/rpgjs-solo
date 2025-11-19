@@ -30,6 +30,13 @@ export interface EntityConfig {
   width?: number;
   /** Height for AABB collider */
   height?: number;
+  /** Capsule collider configuration (if used) */
+  capsule?: {
+    radius: number;
+    height: number;
+  };
+  /** Enable continuous collision detection (CCD) */
+  continuous?: boolean;
   /** Entity state flags */
   state?: EntityState;
   /** Restitution (bounciness) coefficient (0-1) */
@@ -134,6 +141,19 @@ export class Entity {
    * Height for AABB collider (if used)
    */
   public height: number;
+
+  /**
+   * Capsule collider configuration (if used)
+   */
+  public capsule?: {
+    radius: number;
+    height: number;
+  };
+
+  /**
+   * Enable continuous collision detection (CCD)
+   */
+  public continuous: boolean;
 
   /**
    * Entity state flags
@@ -245,6 +265,8 @@ export class Entity {
     this.radius = config.radius ?? 0;
     this.width = config.width ?? 0;
     this.height = config.height ?? 0;
+    this.capsule = config.capsule || undefined;
+    this.continuous = config.continuous ?? false;
 
     // State
     this.state = config.state ?? EntityState.Dynamic;
@@ -277,7 +299,7 @@ export class Entity {
     this.positionSyncHandlers = new Set();
     this.directionSyncHandlers = new Set();
     this.movementChangeHandlers = new Set();
-    
+
     // Initialize movement state
     this.wasMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
   }
@@ -468,11 +490,11 @@ export class Entity {
     }
 
     const isMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
-    
+
     // Only notify if state actually changed
     if (isMoving !== this.wasMoving) {
       this.wasMoving = isMoving;
-      
+
       const payload: EntityMovementChangeEvent = {
         entity: this,
         isMoving,
@@ -520,11 +542,11 @@ export class Entity {
       return this;
     }
     this.force.addInPlace(force);
-    
+
     // Calculate torque: r × F
     const r = point.sub(this.position);
     this.torque += r.cross(force);
-    
+
     return this;
   }
 
@@ -597,7 +619,7 @@ export class Entity {
       this.velocity.set(velocity.x, velocity.y);
     }
     this.wakeUp();
-    
+
     // Check if direction changed
     const oldDirection = oldVelocity.lengthSquared() > MOVEMENT_EPSILON_SQ
       ? oldVelocity.clone().normalize()
@@ -605,17 +627,17 @@ export class Entity {
     const newDirection = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ
       ? this.velocity.clone().normalize()
       : new Vector2(0, 0);
-    
+
     const oldCardinal = this.computeCardinalDirection(oldDirection);
     const newCardinal = this.computeCardinalDirection(newDirection);
-    
+
     if (oldCardinal !== newCardinal || Math.abs(oldDirection.dot(newDirection) - 1) > 0.01) {
       this.notifyDirectionChange();
     }
-    
+
     // Check if movement state changed
     this.notifyMovementChange();
-    
+
     return this;
   }
 
@@ -733,7 +755,7 @@ export class Entity {
     if (speed > this.maxLinearVelocity) {
       this.velocity.normalizeInPlace().mulInPlace(this.maxLinearVelocity);
     }
-    
+
     if (Math.abs(this.angularVelocity) > this.maxAngularVelocity) {
       this.angularVelocity = Math.sign(this.angularVelocity) * this.maxAngularVelocity;
     }

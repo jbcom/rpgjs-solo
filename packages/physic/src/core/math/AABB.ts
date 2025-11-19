@@ -336,5 +336,17 @@ export class AABB {
   public toString(): string {
     return `AABB(${this.minX}, ${this.minY}, ${this.maxX}, ${this.maxY})`;
   }
+  /**
+   * Clamps a point to be inside the AABB
+   * 
+   * @param point - Point to clamp
+   * @returns Clamped point
+   */
+  public clamp(point: Vector2): Vector2 {
+    return new Vector2(
+      Math.max(this.minX, Math.min(this.maxX, point.x)),
+      Math.max(this.minY, Math.min(this.maxY, point.y))
+    );
+  }
 }
 

@@ -31,6 +31,7 @@ export * from './physics/constraints';
 export type { Collider, CollisionInfo, ContactPoint } from './collision/Collider';
 export { CircleCollider } from './collision/CircleCollider';
 export { AABBCollider } from './collision/AABBCollider';
+export { CapsuleCollider } from './collision/CapsuleCollider';
 export { SpatialHash } from './collision/spatial-hash';
 export { Quadtree } from './collision/quadtree';
 export { BVH } from './collision/bvh';

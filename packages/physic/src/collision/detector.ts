@@ -3,6 +3,7 @@ import { Collider, CollisionInfo } from './Collider';
 import { CircleCollider } from './CircleCollider';
 import { AABBCollider } from './AABBCollider';
 import { PolygonCollider, entityToPolygonConfig } from './PolygonCollider';
+import { CapsuleCollider } from './CapsuleCollider';
 
 // Collider cache to avoid repeated allocations
 const colliderCache: WeakMap<Entity, Collider> = new WeakMap();
@@ -29,6 +30,8 @@ export function createCollider(entity: Entity): Collider | null {
   // 1) Explicit polygon assignment has priority
   if (entityToPolygonConfig.has(entity)) {
     collider = new PolygonCollider(entity);
+  } else if (entity.capsule) {
+    collider = new CapsuleCollider(entity);
   } else if (entity.radius > 0) {
     collider = new CircleCollider(entity);
   } else if (entity.width > 0 && entity.height > 0) {
@@ -80,11 +83,11 @@ export function findCollisions(entities: Entity[]): CollisionInfo[] {
   for (let i = 0; i < entities.length; i++) {
     const entityA = entities[i];
     if (!entityA) continue;
-    
+
     for (let j = i + 1; j < entities.length; j++) {
       const entityB = entities[j];
       if (!entityB) continue;
-      
+
       const collision = testCollision(entityA, entityB);
       if (collision) {
         collisions.push(collision);

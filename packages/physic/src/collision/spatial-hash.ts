@@ -6,7 +6,8 @@ import { createCollider } from './detector';
  * Spatial hash cell containing entities
  */
 class SpatialHashCell {
-  public entities: Set<Entity> = new Set();
+  // Array is generally faster for iteration than Set for small numbers of items
+  public entities: Entity[] = [];
 
   /**
    * Adds an entity to this cell
@@ -14,7 +15,9 @@ class SpatialHashCell {
    * @param entity - Entity to add
    */
   public add(entity: Entity): void {
-    this.entities.add(entity);
+    if (this.entities.indexOf(entity) === -1) {
+      this.entities.push(entity);
+    }
   }
 
   /**
@@ -23,14 +26,22 @@ class SpatialHashCell {
    * @param entity - Entity to remove
    */
   public remove(entity: Entity): void {
-    this.entities.delete(entity);
+    const index = this.entities.indexOf(entity);
+    if (index !== -1) {
+      // Fast remove: swap with last and pop
+      const last = this.entities[this.entities.length - 1];
+      if (last) {
+        this.entities[index] = last;
+      }
+      this.entities.pop();
+    }
   }
 
   /**
    * Clears all entities from this cell
    */
   public clear(): void {
-    this.entities.clear();
+    this.entities.length = 0;
   }
 }
 
@@ -51,8 +62,13 @@ export class SpatialHash {
   private cellSize: number;
   private gridWidth: number;
   private gridHeight: number;
-  private cells: Map<string, SpatialHashCell>;
-  private entityCells: Map<Entity, Set<string>>;
+  // Use number keys instead of strings to reduce GC pressure
+  // Key = (x << 16) | y
+  private cells: Map<number, SpatialHashCell>;
+
+  // Cache entity cells to avoid recalculating bounds every frame if not needed
+  // Stores the list of cell keys the entity is currently in
+  private entityCells: WeakMap<Entity, number[]>;
 
   /**
    * Creates a new spatial hash
@@ -66,7 +82,7 @@ export class SpatialHash {
     this.gridWidth = gridWidth;
     this.gridHeight = gridHeight ?? gridWidth;
     this.cells = new Map();
-    this.entityCells = new Map();
+    this.entityCells = new WeakMap();
   }
 
   /**
@@ -88,21 +104,23 @@ export class SpatialHash {
    * 
    * @param gridX - Grid X coordinate
    * @param gridY - Grid Y coordinate
-   * @returns Cell key string
+   * @returns Numeric cell key
    */
-  private getCellKey(gridX: number, gridY: number): string {
-    return `${gridX},${gridY}`;
+  private getKey(gridX: number, gridY: number): number {
+    // Simple packing: x in high 16 bits, y in low 16 bits
+    // Adjust for negative coordinates by adding offset if needed, 
+    // but here we assume positive grid or handle wrapping.
+    // For wrapping grid:
+    return (gridX & 0xFFFF) << 16 | (gridY & 0xFFFF);
   }
 
   /**
    * Gets or creates a cell at grid coordinates
    * 
-   * @param gridX - Grid X coordinate
-   * @param gridY - Grid Y coordinate
+   * @param key - Cell key
    * @returns Cell instance
    */
-  private getCell(gridX: number, gridY: number): SpatialHashCell {
-    const key = this.getCellKey(gridX, gridY);
+  private getCell(key: number): SpatialHashCell {
     let cell = this.cells.get(key);
     if (!cell) {
       cell = new SpatialHashCell();
@@ -112,31 +130,35 @@ export class SpatialHash {
   }
 
   /**
-   * Gets all cells that an entity's AABB overlaps
+   * Gets all cell keys that an entity's AABB overlaps
    * 
    * @param entity - Entity to get cells for
-   * @returns Set of cell keys
+   * @param outKeys - Array to store keys in (to avoid allocation)
+   * @returns Number of keys added
    */
-  private getEntityCells(entity: Entity): Set<string> {
+  private getEntityKeys(entity: Entity, outKeys: number[]): number {
     const collider = createCollider(entity);
     if (!collider) {
-      return new Set();
+      return 0;
     }
 
     const bounds = collider.getBounds();
     const minGrid = this.worldToGrid(bounds.minX, bounds.minY);
     const maxGrid = this.worldToGrid(bounds.maxX, bounds.maxY);
 
-    const cellKeys = new Set<string>();
+    let count = 0;
+    outKeys.length = 0;
+
     for (let x = minGrid.x; x <= maxGrid.x; x++) {
       for (let y = minGrid.y; y <= maxGrid.y; y++) {
         // Wrap coordinates for infinite grid
         const wrappedX = ((x % this.gridWidth) + this.gridWidth) % this.gridWidth;
         const wrappedY = ((y % this.gridHeight) + this.gridHeight) % this.gridHeight;
-        cellKeys.add(this.getCellKey(wrappedX, wrappedY));
+        outKeys.push(this.getKey(wrappedX, wrappedY));
+        count++;
       }
     }
-    return cellKeys;
+    return count;
   }
 
   /**
@@ -145,21 +167,17 @@ export class SpatialHash {
    * @param entity - Entity to insert
    */
   public insert(entity: Entity): void {
-    // Remove from old cells if already inserted
-    this.remove(entity);
+    // Calculate new keys
+    const newKeys: number[] = [];
+    this.getEntityKeys(entity, newKeys);
 
-    const cellKeys = this.getEntityCells(entity);
-    this.entityCells.set(entity, cellKeys);
+    // Store for next time
+    this.entityCells.set(entity, newKeys);
 
-    for (const key of cellKeys) {
-      const cell = this.cells.get(key);
-      if (cell) {
-        cell.add(entity);
-      } else {
-        const gridCoords = key.split(',').map(Number);
-        const newCell = this.getCell(gridCoords[0]!, gridCoords[1]!);
-        newCell.add(entity);
-      }
+    // Add to cells
+    for (const key of newKeys) {
+      const cell = this.getCell(key);
+      cell.add(entity);
     }
   }
 
@@ -169,12 +187,12 @@ export class SpatialHash {
    * @param entity - Entity to remove
    */
   public remove(entity: Entity): void {
-    const cellKeys = this.entityCells.get(entity);
-    if (!cellKeys) {
+    const keys = this.entityCells.get(entity);
+    if (!keys) {
       return;
     }
 
-    for (const key of cellKeys) {
+    for (const key of keys) {
       const cell = this.cells.get(key);
       if (cell) {
         cell.remove(entity);
@@ -192,42 +210,73 @@ export class SpatialHash {
    * @param entity - Entity to update
    */
   public update(entity: Entity): void {
-    const oldCellKeys = this.entityCells.get(entity);
-    const newCellKeys = this.getEntityCells(entity);
+    const oldKeys = this.entityCells.get(entity);
 
-    // Check if cells changed
-    if (oldCellKeys && oldCellKeys.size === newCellKeys.size) {
-      let changed = false;
-      for (const key of newCellKeys) {
-        if (!oldCellKeys.has(key)) {
-          changed = true;
+    // We need to check if the entity has actually moved enough to change cells
+    // Optimization: Check if AABB grid bounds changed?
+    // For now, let's just recalculate keys and compare.
+    // To avoid allocation, we could use a static/shared array for temp keys?
+    // But we need to store the new keys anyway.
+
+    const newKeys: number[] = [];
+    this.getEntityKeys(entity, newKeys);
+
+    // Check if keys match
+    if (oldKeys && oldKeys.length === newKeys.length) {
+      let match = true;
+      // Since keys are deterministic and we iterate same way, order should match
+      for (let i = 0; i < oldKeys.length; i++) {
+        if (oldKeys[i] !== newKeys[i]) {
+          match = false;
           break;
         }
       }
-      if (!changed) {
-        return; // No change, skip update
+      if (match) return;
+    }
+
+    // Remove from old cells
+    if (oldKeys) {
+      for (const key of oldKeys) {
+        const cell = this.cells.get(key);
+        if (cell) {
+          cell.remove(entity);
+        }
       }
     }
 
-    // Re-insert
-    this.insert(entity);
+    // Add to new cells
+    this.entityCells.set(entity, newKeys);
+    for (const key of newKeys) {
+      const cell = this.getCell(key);
+      cell.add(entity);
+    }
   }
 
   /**
    * Queries entities near a given entity
    * 
    * @param entity - Entity to query around
+   * @param results - Optional Set to store results in (avoids allocation)
    * @returns Set of nearby entities (excluding the query entity)
    */
-  public query(entity: Entity): Set<Entity> {
-    const cellKeys = this.getEntityCells(entity);
-    const results = new Set<Entity>();
+  public query(entity: Entity, results: Set<Entity> = new Set()): Set<Entity> {
+    // Use cached keys if available, otherwise calculate
+    let keys = this.entityCells.get(entity);
+    if (!keys) {
+      keys = [];
+      this.getEntityKeys(entity, keys);
+    }
 
-    for (const key of cellKeys) {
+    results.clear();
+
+    for (const key of keys) {
       const cell = this.cells.get(key);
       if (cell) {
-        for (const other of cell.entities) {
-          if (other !== entity) {
+        const entities = cell.entities;
+        // Array iteration is fast
+        for (let i = 0; i < entities.length; i++) {
+          const other = entities[i];
+          if (other && other !== entity) {
             results.add(other);
           }
         }
@@ -252,7 +301,7 @@ export class SpatialHash {
       for (let y = minGrid.y; y <= maxGrid.y; y++) {
         const wrappedX = ((x % this.gridWidth) + this.gridWidth) % this.gridWidth;
         const wrappedY = ((y % this.gridHeight) + this.gridHeight) % this.gridHeight;
-        const key = this.getCellKey(wrappedX, wrappedY);
+        const key = this.getKey(wrappedX, wrappedY);
         const cell = this.cells.get(key);
         if (cell) {
           for (const entity of cell.entities) {
@@ -270,7 +319,9 @@ export class SpatialHash {
    */
   public clear(): void {
     this.cells.clear();
-    this.entityCells.clear();
+    // We can't easily clear the WeakMap, but that's fine, it's weak.
+    // If we wanted to clear the values in the WeakMap for existing entities,
+    // we would need to track them. But usually clear() is used when resetting the world.
   }
 
   /**
@@ -286,7 +337,7 @@ export class SpatialHash {
   } {
     let totalEntities = 0;
     for (const cell of this.cells.values()) {
-      totalEntities += cell.entities.size;
+      totalEntities += cell.entities.length;
     }
 
     return {

@@ -2,12 +2,13 @@ import { Entity } from '../physics/Entity';
 import { Integrator, IntegrationMethod } from '../physics/integrator';
 import { CollisionResolver } from '../collision/resolver';
 import { SpatialHash } from '../collision/spatial-hash';
-import { testCollision } from '../collision/detector';
+import { testCollision, createCollider } from '../collision/detector';
 import { CollisionInfo } from '../collision/Collider';
 import { EventSystem } from './events';
 import { SpatialPartition } from './SpatialPartition';
 import { Vector2 } from '../core/math/Vector2';
 import type { EntityConfig } from '../physics/Entity';
+import { sweepEntities } from '../collision/sweep';
 
 /**
  * World configuration
@@ -82,6 +83,8 @@ export class World {
   private sleepThreshold: number;
   private sleepVelocityThreshold: number;
   private previousCollisions: Map<string, CollisionInfo> = new Map();
+  // Reused set for spatial queries to avoid allocation
+  private queryResults: Set<Entity> = new Set();
   private readonly positionQuantizationStep: number | null;
   private readonly velocityQuantizationStep: number | null;
   private readonly resolverIterations: number;
@@ -121,11 +124,12 @@ export class World {
 
     // Create collision resolver
     this.resolverIterations = Math.max(1, Math.floor(config.resolverIterations ?? 3));
-    this.resolver = new CollisionResolver({
-      positionCorrectionFactor: config.positionCorrectionFactor,
-      maxPositionCorrection: config.maxPositionCorrection,
-      minPenetrationDepth: config.minPenetrationDepth,
-    });
+    const resolverConfig: any = {};
+    if (config.positionCorrectionFactor !== undefined) resolverConfig.positionCorrectionFactor = config.positionCorrectionFactor;
+    if (config.maxPositionCorrection !== undefined) resolverConfig.maxPositionCorrection = config.maxPositionCorrection;
+    if (config.minPenetrationDepth !== undefined) resolverConfig.minPenetrationDepth = config.minPenetrationDepth;
+
+    this.resolver = new CollisionResolver(resolverConfig);
 
     // Create spatial partition
     if (config.spatialPartition) {
@@ -241,6 +245,11 @@ export class World {
       if (!entity.isSleeping()) {
         entity.clearForces();
         this.integrator.integrate(entity);
+
+        // CCD: Check for tunneling if enabled
+        if (entity.continuous) {
+          this.performCCD(entity);
+        }
       }
     }
 
@@ -276,26 +285,26 @@ export class World {
    * 
    * @returns Array of collision infos
    */
+  /**
+   * Detects collisions using spatial partition
+   * 
+   * @returns Array of collision infos
+   */
   private detectCollisions(): CollisionInfo[] {
-    const collisions: CollisionInfo[] = new Array();
-    const checkedPairs = new Set<string>();
+    const collisions: CollisionInfo[] = [];
 
     // Only dynamic entities initiate collision checks
     for (const entity of this.dynamicEntities) {
-
-      // Query nearby entities
-      const nearby = this.spatialPartition.query(entity);
+      // Query nearby entities using reused set
+      const nearby = this.spatialPartition.query(entity, this.queryResults);
 
       for (const other of nearby) {
-        // Create unique pair key
-        const pairKey = entity.uuid < other.uuid
-          ? `${entity.uuid}-${other.uuid}`
-          : `${other.uuid}-${entity.uuid}`;
-
-        if (checkedPairs.has(pairKey)) {
+        // Avoid duplicate checks for dynamic-dynamic pairs
+        // For dynamic-dynamic: only check if entity.uuid < other.uuid
+        // For dynamic-static: always check (since static won't initiate)
+        if (other.isDynamic() && entity.uuid > other.uuid) {
           continue;
         }
-        checkedPairs.add(pairKey);
 
         // Test collision
         const collision = testCollision(entity, other);
@@ -456,6 +465,95 @@ export class World {
       staticEntities: static_,
       sleepingEntities: sleeping,
     };
+  }
+
+  /**
+   * Performs Continuous Collision Detection (CCD) for an entity
+   * 
+   * @param entity - Entity to check
+   */
+  private performCCD(entity: Entity): void {
+    // Simple CCD: Sweep against nearby static entities
+    // We use the velocity * dt as the sweep vector
+    // Note: This happens AFTER integration, so we are checking if the movement
+    // that JUST happened caused tunneling.
+    // Ideally CCD should happen BEFORE position update, or we re-integrate?
+    // Standard approach:
+    // 1. Integrate velocity
+    // 2. Sweep from oldPos to newPos
+    // 3. If hit, clamp position
+
+    // Since we already integrated, we can reconstruct the motion:
+    // delta = velocity * dt
+    // But position is already updated.
+    // Let's assume we want to prevent tunneling through static objects.
+
+    // We need the previous position? Entity doesn't store it by default.
+    // But we know velocity.
+    // Let's approximate: sweep backwards? Or just check along the path.
+
+    // Better: Check against potential colliders in the path.
+    const dt = this.timeStep;
+    const delta = entity.velocity.mul(dt);
+    const dist = delta.length();
+
+    if (dist < entity.radius) {
+      // Moving slowly enough that discrete collision should catch it
+      return;
+    }
+
+    // Calculate swept AABB
+    const collider = createCollider(entity);
+    if (!collider) return;
+
+    const currentBounds = collider.getBounds();
+    const originalBounds = currentBounds.translate(-delta.x, -delta.y);
+    const sweptBounds = currentBounds.union(originalBounds);
+
+    const nearby = this.spatialPartition.queryAABB(sweptBounds);
+    let minTime = 1.0;
+    let collision = null;
+
+    for (const other of nearby) {
+      if (other === entity || !other.isStatic()) continue;
+      if (!entity.canCollideWith(other)) continue;
+
+      // Sweep entity against other
+      // We need to sweep from (pos - delta) to pos
+      // Or equivalent: sweep other (static) against entity moving by -delta?
+      // Let's use sweepEntities helper
+
+      // We want to check if entity moving by 'delta' hits 'other'.
+      // But entity is ALREADY at 'pos'.
+      // So effectively we are checking if it hit something on the way.
+
+      // Let's temporarily move entity back
+      const originalPos = entity.position.clone();
+      entity.position.subInPlace(delta);
+
+      const hit = sweepEntities(entity, other, delta);
+
+      // Restore position
+      entity.position.copyFrom(originalPos);
+
+      if (hit && hit.time < minTime) {
+        minTime = hit.time;
+        collision = hit;
+      }
+    }
+
+    if (collision && minTime < 1.0) {
+      // Clamp position to impact point
+      // Move to impact point + small epsilon offset
+      const correction = collision.normal.mul(0.001); // Epsilon
+      entity.position.subInPlace(delta.mul(1 - minTime)).addInPlace(correction);
+
+      // Kill velocity in normal direction
+      const vn = entity.velocity.dot(collision.normal);
+      if (vn < 0) {
+        entity.velocity.subInPlace(collision.normal.mul(vn));
+      }
+    }
   }
 }
 
