@@ -121,5 +121,8 @@ export abstract class RpgCommonPlayer {
    * }
    * ```
    */
+  getDirection() {
+    return this.direction();
+  }
 
 }

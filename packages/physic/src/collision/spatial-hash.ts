@@ -1,6 +1,7 @@
 import { Entity } from '../physics/Entity';
 import { AABB } from '../core/math/AABB';
 import { createCollider } from './detector';
+import { Ray, RaycastHit } from './Ray';
 
 /**
  * Spatial hash cell containing entities
@@ -346,6 +347,168 @@ export class SpatialHash {
       totalEntities,
       averageEntitiesPerCell: this.cells.size > 0 ? totalEntities / this.cells.size : 0,
     };
+  }
+
+  /**
+   * Casts a ray against entities in the spatial hash
+   * 
+   * @param ray - Ray to cast
+   * @param mask - Optional collision mask (layer)
+   * @param filter - Optional filter function (return true to include entity)
+   * @returns Raycast hit info if hit, null otherwise
+   */
+  public raycast(ray: Ray, mask?: number, filter?: (entity: Entity) => boolean): RaycastHit | null {
+    // DDA Algorithm for grid traversal
+    const start = ray.origin;
+    const end = ray.getPoint(Math.min(ray.length, 10000)); // Cap length to avoid infinite loops
+
+    // console.log('Raycast start:', start, 'end:', end, 'dir:', ray.direction);
+
+    let x0 = start.x;
+    let y0 = start.y;
+    const x1 = end.x;
+    const y1 = end.y;
+
+    // Grid coordinates
+    let gx0 = Math.floor(x0 / this.cellSize);
+    let gy0 = Math.floor(y0 / this.cellSize);
+    const gx1 = Math.floor(x1 / this.cellSize);
+    const gy1 = Math.floor(y1 / this.cellSize);
+
+    // const dx = Math.abs(x1 - x0);
+    // const dy = Math.abs(y1 - y0);
+
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+
+    const visitedEntities = new Set<Entity>();
+    let closestHit: RaycastHit | null = null;
+
+    // Helper to check cell
+    const checkCell = (gx: number, gy: number) => {
+      // Wrap coordinates
+      const wrappedX = ((gx % this.gridWidth) + this.gridWidth) % this.gridWidth;
+      const wrappedY = ((gy % this.gridHeight) + this.gridHeight) % this.gridHeight;
+      const key = this.getKey(wrappedX, wrappedY);
+      const cell = this.cells.get(key);
+
+      if (cell) {
+        // console.log('Checking cell:', gx, gy, 'Entities:', cell.entities.length);
+        for (const entity of cell.entities) {
+          if (visitedEntities.has(entity)) continue;
+          visitedEntities.add(entity);
+
+          // Check mask if provided
+          if (mask !== undefined && (entity.collisionCategory & mask) === 0) continue;
+
+          // Check filter if provided
+          if (filter && !filter(entity)) {
+            continue;
+          }
+
+          const collider = createCollider(entity);
+          if (collider) {
+            const hit = collider.raycast(ray);
+            if (hit) {
+              if (!closestHit || hit.distance < closestHit.distance) {
+                closestHit = hit;
+              }
+            }
+          }
+        }
+      } else {
+      }
+    };
+
+    // Bresenham's line algorithm for grid traversal (simplified DDA)
+    // Note: Bresenham is for lines, but here we want to visit all cells touched by the ray.
+    // A proper DDA (Amanatides & Woo) is better for ray casting.
+
+    // Let's use Amanatides & Woo DDA
+    let x = gx0;
+    let y = gy0;
+
+    const stepX = sx;
+    const stepY = sy;
+
+    const tDeltaX = this.cellSize / Math.abs(ray.direction.x);
+    const tDeltaY = this.cellSize / Math.abs(ray.direction.y);
+
+    let tMaxX = (ray.direction.x > 0)
+      ? ((x + 1) * this.cellSize - start.x) / ray.direction.x
+      : (start.x - x * this.cellSize) / -ray.direction.x; // Handle negative direction carefully
+
+    // Fix for negative direction:
+    // If dir.x < 0, we want distance to left edge of cell.
+    // Left edge is x * cellSize.
+    // Distance is (start.x - x * cellSize) / -dir.x
+    // Wait, if x is grid index, left edge is x * cellSize.
+    // If we are at x, and moving left, the next boundary is x * cellSize.
+    if (ray.direction.x < 0) {
+      tMaxX = (start.x - x * this.cellSize) / -ray.direction.x;
+    } else {
+      tMaxX = ((x + 1) * this.cellSize - start.x) / ray.direction.x;
+    }
+
+    let tMaxY = (ray.direction.y > 0)
+      ? ((y + 1) * this.cellSize - start.y) / ray.direction.y
+      : (start.y - y * this.cellSize) / -ray.direction.y;
+
+    if (ray.direction.y < 0) {
+      tMaxY = (start.y - y * this.cellSize) / -ray.direction.y;
+    } else {
+      tMaxY = ((y + 1) * this.cellSize - start.y) / ray.direction.y;
+    }
+
+    // Handle division by zero (axis aligned rays)
+    if (Math.abs(ray.direction.x) < 1e-9) {
+      tMaxX = Infinity;
+    }
+    if (Math.abs(ray.direction.y) < 1e-9) {
+      tMaxY = Infinity;
+    }
+
+    // Max steps to prevent infinite loop
+    let steps = 0;
+    const maxSteps = Math.abs(gx1 - gx0) + Math.abs(gy1 - gy0) + 10;
+
+    while (steps < maxSteps) {
+      checkCell(x, y);
+
+      // If we found a hit that is closer than the distance to the next cell, we can potentially stop.
+      // However, an entity in the current cell might have a hit point further away than the next cell boundary 
+      // (e.g. a large entity overlapping multiple cells).
+      // But if closestHit.distance < tMaxX and closestHit.distance < tMaxY, then the hit is within the current cell (roughly).
+      // To be safe, we should probably continue a bit or just check all cells.
+      // Optimization: if closestHit.distance < min(tMaxX, tMaxY), we can stop?
+      // tMaxX is distance to next X boundary.
+      // If hit is before that, it's in this cell (or previous).
+
+      if (closestHit && closestHit.distance < Math.min(tMaxX, tMaxY)) {
+        // We found a hit in this cell (or previous) that is closer than the next cell boundary.
+        // We can stop.
+        return closestHit;
+      }
+
+      if (tMaxX < tMaxY) {
+        tMaxX += tDeltaX;
+        x += stepX;
+      } else {
+        tMaxY += tDeltaY;
+        y += stepY;
+      }
+      steps++;
+
+      // Check if we passed the end point
+      // Simple check: if we passed the target grid coordinates
+      // But with wrapping, this is tricky.
+      // Just rely on maxSteps or distance check.
+      if (closestHit && closestHit.distance < ray.length) {
+        // If we have a hit, and we've gone far enough...
+      }
+    }
+
+    return closestHit;
   }
 }
 

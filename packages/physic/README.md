@@ -535,6 +535,95 @@ zones.removeZone(visionZoneId);
 
 The `ZoneManager` exposed by `PhysicsEngine` is a generic system that works with any `Entity` and can be used independently for vision, skills, explosions, and other gameplay mechanics on both client and server. This is the recommended approach for all zone-based detection in RPG games.
 
+## Tile Grid System
+
+The engine includes a built-in tile grid system for grid-based logic, such as tile-based movement, triggers, or blocking specific areas (e.g., water, lava).
+
+### Configuration
+
+Configure the tile size in the `PhysicsEngine` constructor:
+
+```typescript
+const engine = new PhysicsEngine({
+  timeStep: 1 / 60,
+  tileWidth: 32,  // Default: 32
+  tileHeight: 32, // Default: 32
+});
+```
+
+### Tile Hooks
+
+Entities have hooks to react to tile changes:
+
+```typescript
+// Triggered when entering a new tile
+entity.onEnterTile(({ x, y }) => {
+  console.log(`Entered tile [${x}, ${y}]`);
+});
+
+// Triggered when leaving a tile
+entity.onLeaveTile(({ x, y }) => {
+  console.log(`Left tile [${x}, ${y}]`);
+});
+
+// Check if entity can enter a tile (return false to block movement)
+entity.canEnterTile(({ x, y }) => {
+  if (isWater(x, y)) {
+    return false; // Block movement
+  }
+  return true;
+});
+```
+
+The `currentTile` property on the entity stores the current tile coordinates:
+
+```typescript
+console.log(entity.currentTile); // Vector2(10, 5)
+```
+
+## Vision Blocking (Raycasting)
+
+The engine supports raycasting for vision blocking and line-of-sight checks.
+
+### Raycasting API
+
+You can perform raycasts directly via the `PhysicsEngine` or `World`:
+
+```typescript
+import { Ray } from '@rpgjs/physic';
+
+const hit = engine.raycast(
+  startPosition,
+  direction,
+  maxDistance,
+  collisionMask, // Optional mask
+  (entity) => entity !== self // Optional filter
+);
+
+if (hit) {
+  console.log('Hit entity:', hit.entity.uuid);
+  console.log('Hit point:', hit.point);
+  console.log('Hit normal:', hit.normal);
+  console.log('Distance:', hit.distance);
+}
+```
+
+### Vision Zones with Line of Sight
+
+Zones can be configured to respect walls using `limitedByWalls: true`. This uses raycasting internally to check if entities are visible.
+
+```typescript
+const visionZone = zones.createAttachedZone(hero, {
+  radius: 150,
+  angle: 120,
+  limitedByWalls: true, // Enable line-of-sight checks
+}, {
+  onEnter: (entities) => console.log('Seen:', entities),
+});
+```
+
+Static entities (mass = 0 or Infinity) act as blockers for line-of-sight.
+
 ## Examples
 
 - [Canvas Example](./examples/canvas/) - Interactive HTML5 Canvas demo (run with `npm run example`)

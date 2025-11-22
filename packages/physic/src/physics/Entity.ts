@@ -5,6 +5,8 @@ import { CollisionInfo } from '../collision/Collider';
 
 const MOVEMENT_EPSILON = 1e-3;
 const MOVEMENT_EPSILON_SQ = MOVEMENT_EPSILON * MOVEMENT_EPSILON;
+const DIRECTION_CHANGE_THRESHOLD = 0.1;
+const DIRECTION_CHANGE_THRESHOLD_SQ = DIRECTION_CHANGE_THRESHOLD * DIRECTION_CHANGE_THRESHOLD;
 const POSITION_EPSILON = 1e-3;
 const DIRECTION_EPSILON_RADIANS = (5 * Math.PI) / 180;
 
@@ -220,12 +222,21 @@ export class Entity {
    */
   public sleepThreshold: number;
 
+  /**
+   * Current tile coordinates (x, y)
+   */
+  public currentTile: Vector2;
+
   private collisionEnterHandlers: Set<EntityCollisionHandler>;
   private collisionExitHandlers: Set<EntityCollisionHandler>;
   private positionSyncHandlers: Set<EntityPositionSyncHandler>;
   private directionSyncHandlers: Set<EntityDirectionSyncHandler>;
   private movementChangeHandlers: Set<EntityMovementChangeHandler>;
+  private enterTileHandlers: Set<EntityTileHandler>;
+  private leaveTileHandlers: Set<EntityTileHandler>;
+  private canEnterTileHandlers: Set<EntityCanEnterTileHandler>;
   private wasMoving: boolean;
+  private lastCardinalDirection: CardinalDirection = 'idle';
 
   /**
    * Creates a new entity
@@ -244,6 +255,8 @@ export class Entity {
     } else {
       this.position = new Vector2(0, 0);
     }
+
+    this.currentTile = new Vector2(0, 0); // Will be updated by World
 
     if (config.velocity instanceof Vector2) {
       this.velocity = config.velocity.clone();
@@ -265,7 +278,7 @@ export class Entity {
     this.radius = config.radius ?? 0;
     this.width = config.width ?? 0;
     this.height = config.height ?? 0;
-    this.capsule = config.capsule || undefined;
+    this.capsule = config.capsule;
     this.continuous = config.continuous ?? false;
 
     // State
@@ -298,7 +311,12 @@ export class Entity {
     this.collisionExitHandlers = new Set();
     this.positionSyncHandlers = new Set();
     this.directionSyncHandlers = new Set();
+    this.positionSyncHandlers = new Set();
+    this.directionSyncHandlers = new Set();
     this.movementChangeHandlers = new Set();
+    this.enterTileHandlers = new Set();
+    this.leaveTileHandlers = new Set();
+    this.canEnterTileHandlers = new Set();
 
     // Initialize movement state
     this.wasMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
@@ -427,14 +445,18 @@ export class Entity {
    * ```
    */
   public notifyDirectionChange(): void {
+    const isMoving = this.velocity.lengthSquared() > DIRECTION_CHANGE_THRESHOLD_SQ;
+    const direction = isMoving ? this.velocity.clone().normalize() : new Vector2(0, 0);
+    const cardinalDirection = this.computeCardinalDirection(direction);
+
+    // Update state to support hysteresis
+    if (cardinalDirection !== 'idle') {
+      this.lastCardinalDirection = cardinalDirection;
+    }
+
     if (this.directionSyncHandlers.size === 0) {
       return;
     }
-
-    const direction = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ
-      ? this.velocity.clone().normalize()
-      : new Vector2(0, 0);
-    const cardinalDirection = this.computeCardinalDirection(direction);
 
     const payload: EntityDirectionSyncEvent = {
       entity: this,
@@ -445,6 +467,26 @@ export class Entity {
     for (const handler of this.directionSyncHandlers) {
       handler(payload);
     }
+  }
+
+  /**
+   * Gets the current cardinal direction.
+   * 
+   * This value is updated whenever `notifyDirectionChange()` is called (e.g. by `setVelocity`).
+   * It includes hysteresis logic to prevent rapid direction flipping during collisions.
+   * 
+   * @returns The current cardinal direction ('up', 'down', 'left', 'right', 'idle')
+   * 
+   * @example
+   * ```typescript
+   * const dir = entity.cardinalDirection;
+   * if (dir === 'left') {
+   *   // Render left-facing sprite
+   * }
+   * ```
+   */
+  public get cardinalDirection(): CardinalDirection {
+    return this.lastCardinalDirection;
   }
 
   /**
@@ -510,6 +552,79 @@ export class Entity {
   }
 
   /**
+   * Registers a handler fired when the entity enters a new tile.
+   * 
+   * @param handler - Tile enter listener
+   * @returns Unsubscribe closure
+   */
+  public onEnterTile(handler: EntityTileHandler): () => void {
+    this.enterTileHandlers.add(handler);
+    return () => this.enterTileHandlers.delete(handler);
+  }
+
+  /**
+   * Registers a handler fired when the entity leaves a tile.
+   * 
+   * @param handler - Tile leave listener
+   * @returns Unsubscribe closure
+   */
+  public onLeaveTile(handler: EntityTileHandler): () => void {
+    this.leaveTileHandlers.add(handler);
+    return () => this.leaveTileHandlers.delete(handler);
+  }
+
+  /**
+   * Registers a handler to check if the entity can enter a tile.
+   * If any handler returns false, the entity cannot enter.
+   * 
+   * @param handler - Can enter tile listener
+   * @returns Unsubscribe closure
+   */
+  public canEnterTile(handler: EntityCanEnterTileHandler): () => void {
+    this.canEnterTileHandlers.add(handler);
+    return () => this.canEnterTileHandlers.delete(handler);
+  }
+
+  /**
+   * @internal
+   * Notifies that the entity has entered a tile.
+   */
+  public notifyEnterTile(x: number, y: number): void {
+    if (this.enterTileHandlers.size === 0) return;
+    const event: EntityTileEvent = { entity: this, x, y };
+    for (const handler of this.enterTileHandlers) {
+      handler(event);
+    }
+  }
+
+  /**
+   * @internal
+   * Notifies that the entity has left a tile.
+   */
+  public notifyLeaveTile(x: number, y: number): void {
+    if (this.leaveTileHandlers.size === 0) return;
+    const event: EntityTileEvent = { entity: this, x, y };
+    for (const handler of this.leaveTileHandlers) {
+      handler(event);
+    }
+  }
+
+  /**
+   * @internal
+   * Checks if the entity can enter a tile.
+   */
+  public checkCanEnterTile(x: number, y: number): boolean {
+    if (this.canEnterTileHandlers.size === 0) return true;
+    const event: EntityTileEvent = { entity: this, x, y };
+    for (const handler of this.canEnterTileHandlers) {
+      if (handler(event) === false) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * Applies a force to the entity
    * 
    * Force is accumulated and applied during integration.
@@ -567,6 +682,7 @@ export class Entity {
     }
     this.velocity.addInPlace(impulse.mul(this.invMass));
     this.notifyMovementChange();
+    this.notifyDirectionChange();
     return this;
   }
 
@@ -833,6 +949,25 @@ export class Entity {
 
     const absX = Math.abs(direction.x);
     const absY = Math.abs(direction.y);
+    const bias = 2.0; // Strong bias to keep current direction (avoids jitter on collision)
+
+    // Hysteresis: favor current axis if we have a valid last direction
+    if (this.lastCardinalDirection !== 'idle') {
+      // console.log('Hysteresis check:', this.lastCardinalDirection, absX, absY, bias);
+      if (['left', 'right'].includes(this.lastCardinalDirection)) {
+        // Currently horizontal: stick to it unless vertical is significantly stronger
+        if (absX * bias >= absY) {
+          // console.log('Keeping horizontal');
+          return direction.x >= 0 ? 'right' : 'left';
+        }
+      } else {
+        // Currently vertical: stick to it unless horizontal is significantly stronger
+        if (absY * bias >= absX) {
+          // console.log('Keeping vertical');
+          return direction.y >= 0 ? 'down' : 'up';
+        }
+      }
+    }
 
     if (absX >= absY) {
       return direction.x >= 0 ? 'right' : 'left';
@@ -902,4 +1037,14 @@ export interface EntityMovementChangeEvent {
 }
 
 export type EntityMovementChangeHandler = (event: EntityMovementChangeEvent) => void;
+
+export interface EntityTileEvent {
+  entity: Entity;
+  x: number;
+  y: number;
+}
+
+export type EntityTileHandler = (event: EntityTileEvent) => void;
+export type EntityCanEnterTileHandler = (event: EntityTileEvent) => boolean;
+
 

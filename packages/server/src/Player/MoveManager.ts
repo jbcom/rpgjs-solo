@@ -1,6 +1,6 @@
 import { PlayerCtor, ProjectileType } from "@rpgjs/common";
 import { RpgCommonPlayer, Direction, Entity } from "@rpgjs/common";
-import { 
+import {
   MovementStrategy,
   LinearMove,
   Dash,
@@ -35,7 +35,7 @@ interface PlayerWithMixins extends RpgCommonPlayer {
 
 function wait(sec: number) {
   return new Promise((resolve) => {
-      setTimeout(resolve, sec * 1000)
+    setTimeout(resolve, sec * 1000)
   })
 }
 
@@ -93,297 +93,297 @@ export enum Speed {
 class MoveList {
 
   repeatMove(direction: Direction, repeat: number): Direction[] {
-      // Safety check for valid repeat value
-      if (!Number.isFinite(repeat) || repeat < 0 || repeat > 10000) {
-          console.warn('Invalid repeat value:', repeat, 'using default value 1');
-          repeat = 1;
-      }
-      
-      // Ensure repeat is an integer
-      repeat = Math.floor(repeat);
-      
-      // Additional safety check - ensure repeat is a safe integer
-      if (repeat < 0 || repeat > Number.MAX_SAFE_INTEGER || !Number.isSafeInteger(repeat)) {
-          console.warn('Unsafe repeat value:', repeat, 'using default value 1');
-          repeat = 1;
-      }
-      
-      try {
-          return new Array(repeat).fill(direction);
-      } catch (error) {
-          console.error('Error creating array with repeat:', repeat, error);
-          return [direction]; // Return single direction as fallback
-      }
+    // Safety check for valid repeat value
+    if (!Number.isFinite(repeat) || repeat < 0 || repeat > 10000) {
+      console.warn('Invalid repeat value:', repeat, 'using default value 1');
+      repeat = 1;
+    }
+
+    // Ensure repeat is an integer
+    repeat = Math.floor(repeat);
+
+    // Additional safety check - ensure repeat is a safe integer
+    if (repeat < 0 || repeat > Number.MAX_SAFE_INTEGER || !Number.isSafeInteger(repeat)) {
+      console.warn('Unsafe repeat value:', repeat, 'using default value 1');
+      repeat = 1;
+    }
+
+    try {
+      return new Array(repeat).fill(direction);
+    } catch (error) {
+      console.error('Error creating array with repeat:', repeat, error);
+      return [direction]; // Return single direction as fallback
+    }
   }
 
   private repeatTileMove(direction: string, repeat: number, propMap: string): CallbackTileMove {
-      return (player: RpgPlayer, map): Direction[] => {
-          const playerSpeed = typeof player.speed === 'function' ? player.speed() : player.speed;
-          
-          // Safety checks
-          if (!playerSpeed || playerSpeed <= 0) {
-              console.warn('Invalid player speed:', playerSpeed, 'using default speed 3');
-              return this[direction](repeat);
-          }
-          
-          const repeatTile = Math.floor((map[propMap] || 32) / playerSpeed) * repeat;
-          
-          // Additional safety check for the calculated repeat value
-          if (!Number.isFinite(repeatTile) || repeatTile < 0 || repeatTile > 10000) {
-              console.warn('Calculated repeatTile is invalid:', repeatTile, 'using original repeat:', repeat);
-              return this[direction](repeat);
-          }
-          
-          // Final safety check before calling the method
-          if (!Number.isSafeInteger(repeatTile)) {
-              console.warn('repeatTile is not a safe integer:', repeatTile, 'using original repeat:', repeat);
-              return this[direction](repeat);
-          }
-          
-          try {
-              return this[direction](repeatTile);
-          } catch (error) {
-              console.error('Error calling direction method with repeatTile:', repeatTile, error);
-              return this[direction](repeat); // Fallback to original repeat
-          }
+    return (player: RpgPlayer, map): Direction[] => {
+      const playerSpeed = typeof player.speed === 'function' ? player.speed() : player.speed;
+
+      // Safety checks
+      if (!playerSpeed || playerSpeed <= 0) {
+        console.warn('Invalid player speed:', playerSpeed, 'using default speed 3');
+        return this[direction](repeat);
       }
+
+      const repeatTile = Math.floor((map[propMap] || 32) / playerSpeed) * repeat;
+
+      // Additional safety check for the calculated repeat value
+      if (!Number.isFinite(repeatTile) || repeatTile < 0 || repeatTile > 10000) {
+        console.warn('Calculated repeatTile is invalid:', repeatTile, 'using original repeat:', repeat);
+        return this[direction](repeat);
+      }
+
+      // Final safety check before calling the method
+      if (!Number.isSafeInteger(repeatTile)) {
+        console.warn('repeatTile is not a safe integer:', repeatTile, 'using original repeat:', repeat);
+        return this[direction](repeat);
+      }
+
+      try {
+        return this[direction](repeatTile);
+      } catch (error) {
+        console.error('Error calling direction method with repeatTile:', repeatTile, error);
+        return this[direction](repeat); // Fallback to original repeat
+      }
+    }
   }
 
   right(repeat: number = 1): Direction[] {
-      return this.repeatMove(Direction.Right, repeat)
+    return this.repeatMove(Direction.Right, repeat)
   }
 
   left(repeat: number = 1): Direction[] {
-      return this.repeatMove(Direction.Left, repeat)
+    return this.repeatMove(Direction.Left, repeat)
   }
 
   up(repeat: number = 1): Direction[] {
-      return this.repeatMove(Direction.Up, repeat)
+    return this.repeatMove(Direction.Up, repeat)
   }
 
   down(repeat: number = 1): Direction[] {
-      return this.repeatMove(Direction.Down, repeat)
+    return this.repeatMove(Direction.Down, repeat)
   }
 
   wait(sec: number): Promise<unknown> {
-      return wait(sec)
+    return wait(sec)
   }
 
   random(repeat: number = 1): Direction[] {
-      // Safety check for valid repeat value
-      if (!Number.isFinite(repeat) || repeat < 0 || repeat > 10000) {
-          console.warn('Invalid repeat value in random:', repeat, 'using default value 1');
-          repeat = 1;
-      }
-      
-      // Ensure repeat is an integer
-      repeat = Math.floor(repeat);
-      
-      // Additional safety check - ensure repeat is a safe integer
-      if (repeat < 0 || repeat > Number.MAX_SAFE_INTEGER || !Number.isSafeInteger(repeat)) {
-          console.warn('Unsafe repeat value in random:', repeat, 'using default value 1');
-          repeat = 1;
-      }
-      
-      try {
-          return new Array(repeat).fill(null).map(() => [
-              Direction.Right,
-              Direction.Left,
-              Direction.Up,
-              Direction.Down
-          ][random(0, 3)]);
-      } catch (error) {
-          console.error('Error creating random array with repeat:', repeat, error);
-          return [Direction.Down]; // Return single direction as fallback
-      }
+    // Safety check for valid repeat value
+    if (!Number.isFinite(repeat) || repeat < 0 || repeat > 10000) {
+      console.warn('Invalid repeat value in random:', repeat, 'using default value 1');
+      repeat = 1;
+    }
+
+    // Ensure repeat is an integer
+    repeat = Math.floor(repeat);
+
+    // Additional safety check - ensure repeat is a safe integer
+    if (repeat < 0 || repeat > Number.MAX_SAFE_INTEGER || !Number.isSafeInteger(repeat)) {
+      console.warn('Unsafe repeat value in random:', repeat, 'using default value 1');
+      repeat = 1;
+    }
+
+    try {
+      return new Array(repeat).fill(null).map(() => [
+        Direction.Right,
+        Direction.Left,
+        Direction.Up,
+        Direction.Down
+      ][random(0, 3)]);
+    } catch (error) {
+      console.error('Error creating random array with repeat:', repeat, error);
+      return [Direction.Down]; // Return single direction as fallback
+    }
   }
 
   tileRight(repeat: number = 1): CallbackTileMove {
-      return this.repeatTileMove('right', repeat, 'tileWidth')
+    return this.repeatTileMove('right', repeat, 'tileWidth')
   }
 
   tileLeft(repeat: number = 1): CallbackTileMove {
-      return this.repeatTileMove('left', repeat, 'tileWidth')
+    return this.repeatTileMove('left', repeat, 'tileWidth')
   }
 
   tileUp(repeat: number = 1): CallbackTileMove {
-      return this.repeatTileMove('up', repeat, 'tileHeight')
+    return this.repeatTileMove('up', repeat, 'tileHeight')
   }
 
   tileDown(repeat: number = 1): CallbackTileMove {
-      return this.repeatTileMove('down', repeat, 'tileHeight')
+    return this.repeatTileMove('down', repeat, 'tileHeight')
   }
 
   tileRandom(repeat: number = 1): CallbackTileMove {
-      return (player: RpgPlayer, map): Direction[] => {
-          // Safety check for valid repeat value
-          if (!Number.isFinite(repeat) || repeat < 0 || repeat > 1000) {
-              console.warn('Invalid repeat value in tileRandom:', repeat, 'using default value 1');
-              repeat = 1;
-          }
-          
-          // Ensure repeat is an integer
-          repeat = Math.floor(repeat);
-          
-          let directions: Direction[] = []
-          for (let i = 0; i < repeat; i++) {
-              const randFn: CallbackTileMove = [
-                  this.tileRight(),
-                  this.tileLeft(),
-                  this.tileUp(),
-                  this.tileDown()
-              ][random(0, 3)]
-              
-              try {
-                  const newDirections = randFn(player, map);
-                  if (Array.isArray(newDirections)) {
-                      directions = [...directions, ...newDirections];
-                  }
-              } catch (error) {
-                  console.warn('Error in tileRandom iteration:', error);
-                  // Continue with next iteration instead of breaking
-              }
-              
-              // Safety check to prevent excessive array growth
-              if (directions.length > 10000) {
-                  console.warn('tileRandom generated too many directions, truncating');
-                  break;
-              }
-          }
-          return directions
+    return (player: RpgPlayer, map): Direction[] => {
+      // Safety check for valid repeat value
+      if (!Number.isFinite(repeat) || repeat < 0 || repeat > 1000) {
+        console.warn('Invalid repeat value in tileRandom:', repeat, 'using default value 1');
+        repeat = 1;
       }
+
+      // Ensure repeat is an integer
+      repeat = Math.floor(repeat);
+
+      let directions: Direction[] = []
+      for (let i = 0; i < repeat; i++) {
+        const randFn: CallbackTileMove = [
+          this.tileRight(),
+          this.tileLeft(),
+          this.tileUp(),
+          this.tileDown()
+        ][random(0, 3)]
+
+        try {
+          const newDirections = randFn(player, map);
+          if (Array.isArray(newDirections)) {
+            directions = [...directions, ...newDirections];
+          }
+        } catch (error) {
+          console.warn('Error in tileRandom iteration:', error);
+          // Continue with next iteration instead of breaking
+        }
+
+        // Safety check to prevent excessive array growth
+        if (directions.length > 10000) {
+          console.warn('tileRandom generated too many directions, truncating');
+          break;
+        }
+      }
+      return directions
+    }
   }
 
   private _awayFromPlayerDirection(player: RpgPlayer, otherPlayer: RpgPlayer): Direction {
-      const directionOtherPlayer = otherPlayer.getDirection()
-      let newDirection: Direction = Direction.Down
+    const directionOtherPlayer = otherPlayer.getDirection()
+    let newDirection: Direction = Direction.Down
 
-      switch (directionOtherPlayer) {
-          case Direction.Left:
-          case Direction.Right:
-              if (otherPlayer.x() > player.x()) {
-                  newDirection = Direction.Left
-              }
-              else {
-                  newDirection = Direction.Right
-              }
-              break
-          case Direction.Up:
-          case Direction.Down:
-              if (otherPlayer.y() > player.y()) {
-                  newDirection = Direction.Up
-              }
-              else {
-                  newDirection = Direction.Down
-              }
-              break
-      }
-      return newDirection
+    switch (directionOtherPlayer) {
+      case Direction.Left:
+      case Direction.Right:
+        if (otherPlayer.x() > player.x()) {
+          newDirection = Direction.Left
+        }
+        else {
+          newDirection = Direction.Right
+        }
+        break
+      case Direction.Up:
+      case Direction.Down:
+        if (otherPlayer.y() > player.y()) {
+          newDirection = Direction.Up
+        }
+        else {
+          newDirection = Direction.Down
+        }
+        break
+    }
+    return newDirection
   }
 
   private _towardPlayerDirection(player: RpgPlayer, otherPlayer: RpgPlayer): Direction {
-      const directionOtherPlayer = otherPlayer.getDirection()
-      let newDirection: Direction = Direction.Down
- 
-      switch (directionOtherPlayer) {
-          case Direction.Left:
-          case Direction.Right:
-              if (otherPlayer.x() > player.x()) {
-                  newDirection = Direction.Right
-              }
-              else {
-                  newDirection = Direction.Left
-              }
-              break
-          case Direction.Up:
-          case Direction.Down:
-              if (otherPlayer.y() > player.y()) {
-                  newDirection = Direction.Down
-              }
-              else {
-                  newDirection = Direction.Up
-              }
-              break
-      }
-      return newDirection
+    const directionOtherPlayer = otherPlayer.getDirection()
+    let newDirection: Direction = Direction.Down
+
+    switch (directionOtherPlayer) {
+      case Direction.Left:
+      case Direction.Right:
+        if (otherPlayer.x() > player.x()) {
+          newDirection = Direction.Right
+        }
+        else {
+          newDirection = Direction.Left
+        }
+        break
+      case Direction.Up:
+      case Direction.Down:
+        if (otherPlayer.y() > player.y()) {
+          newDirection = Direction.Down
+        }
+        else {
+          newDirection = Direction.Up
+        }
+        break
+    }
+    return newDirection
   }
 
   private _awayFromPlayer({ isTile, typeMov }: { isTile: boolean, typeMov: string }, otherPlayer: RpgPlayer, repeat: number = 1) {
-      const method = (dir: Direction) => {
-          const direction: string = DirectionNames[dir as any] || 'down'
-          return this[isTile ? 'tile' + capitalize(direction) : direction](repeat)
+    const method = (dir: Direction) => {
+      const direction: string = DirectionNames[dir as any] || 'down'
+      return this[isTile ? 'tile' + capitalize(direction) : direction](repeat)
+    }
+    return (player: RpgPlayer, map) => {
+      let newDirection: Direction = Direction.Down
+      switch (typeMov) {
+        case 'away':
+          newDirection = this._awayFromPlayerDirection(player, otherPlayer)
+          break;
+        case 'toward':
+          newDirection = this._towardPlayerDirection(player, otherPlayer)
+          break
       }
-      return (player: RpgPlayer, map) => {
-          let newDirection: Direction = Direction.Down
-          switch (typeMov) {
-              case 'away':
-                  newDirection = this._awayFromPlayerDirection(player, otherPlayer)
-                  break;
-              case 'toward':
-                  newDirection = this._towardPlayerDirection(player, otherPlayer)
-                  break
-          }
-          let direction: any = method(newDirection)
-          if (isFunction(direction)) {
-              direction = direction(player, map)
-          }
-          return direction
+      let direction: any = method(newDirection)
+      if (isFunction(direction)) {
+        direction = direction(player, map)
       }
+      return direction
+    }
   }
 
   towardPlayer(player: RpgPlayer, repeat: number = 1) {
-      return this._awayFromPlayer({ isTile: false, typeMov: 'toward' }, player, repeat)
+    return this._awayFromPlayer({ isTile: false, typeMov: 'toward' }, player, repeat)
   }
 
   tileTowardPlayer(player: RpgPlayer, repeat: number = 1) {
-      return this._awayFromPlayer({ isTile: true, typeMov: 'toward' }, player, repeat)
+    return this._awayFromPlayer({ isTile: true, typeMov: 'toward' }, player, repeat)
   }
 
   awayFromPlayer(player: RpgPlayer, repeat: number = 1): CallbackTileMove {
-      return this._awayFromPlayer({ isTile: false, typeMov: 'away' }, player, repeat)
+    return this._awayFromPlayer({ isTile: false, typeMov: 'away' }, player, repeat)
   }
 
   tileAwayFromPlayer(player: RpgPlayer, repeat: number = 1): CallbackTileMove {
-      return this._awayFromPlayer({ isTile: true, typeMov: 'away' }, player, repeat)
+    return this._awayFromPlayer({ isTile: true, typeMov: 'away' }, player, repeat)
   }
 
   turnLeft(): string {
-      return 'turn-' + Direction.Left
+    return 'turn-' + Direction.Left
   }
 
   turnRight(): string {
-      return 'turn-' + Direction.Right
+    return 'turn-' + Direction.Right
   }
 
   turnUp(): string {
-      return 'turn-' + Direction.Up
+    return 'turn-' + Direction.Up
   }
 
   turnDown(): string {
-      return 'turn-' + Direction.Down
+    return 'turn-' + Direction.Down
   }
 
   turnRandom(): string {
-      return [
-          this.turnRight(),
-          this.turnLeft(),
-          this.turnUp(),
-          this.turnDown()
-      ][random(0, 3)]
+    return [
+      this.turnRight(),
+      this.turnLeft(),
+      this.turnUp(),
+      this.turnDown()
+    ][random(0, 3)]
   }
 
   turnAwayFromPlayer(otherPlayer: RpgPlayer): CallbackTurnMove {
-      return (player: RpgPlayer) => {
-          const direction = this._awayFromPlayerDirection(player, otherPlayer)
-          return 'turn-' + direction
-      }
+    return (player: RpgPlayer) => {
+      const direction = this._awayFromPlayerDirection(player, otherPlayer)
+      return 'turn-' + direction
+    }
   }
 
   turnTowardPlayer(otherPlayer: RpgPlayer): CallbackTurnMove {
-      return (player: RpgPlayer) => {
-          const direction = this._towardPlayerDirection(player, otherPlayer)
-          return 'turn-' + direction
-      }
+    return (player: RpgPlayer) => {
+      const direction = this._towardPlayerDirection(player, otherPlayer)
+      return 'turn-' + direction
+    }
   }
 }
 
@@ -531,7 +531,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
     set through(value: boolean) {
       this._through.set(value);
     }
-    
+
     get through(): boolean {
       return this._through();
     }
@@ -572,7 +572,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
     get frequency(): number {
       return this._frequency();
     }
-    
+
     /**
      * Add a custom movement strategy to this entity
      * 
@@ -595,7 +595,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
     addMovement(strategy: MovementStrategy): void {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
-      
+
       map.moveManager.add((this as unknown as PlayerWithMixins).id, strategy);
     }
 
@@ -618,7 +618,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
     removeMovement(strategy: MovementStrategy): boolean {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return false;
-      
+
       return map.moveManager.remove((this as unknown as PlayerWithMixins).id, strategy);
     }
 
@@ -640,7 +640,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
     clearMovements(): void {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
-      
+
       map.moveManager.clear((this as unknown as PlayerWithMixins).id);
     }
 
@@ -665,7 +665,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
     hasActiveMovements(): boolean {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return false;
-      
+
       return map.moveManager.hasActiveStrategies((this as unknown as PlayerWithMixins).id);
     }
 
@@ -687,7 +687,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
     getActiveMovements(): MovementStrategy[] {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return [];
-      
+
       return map.moveManager.getStrategies((this as unknown as PlayerWithMixins).id);
     }
 
@@ -758,7 +758,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
     stopMoveTo(): void {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
-      
+
       const strategies = this.getActiveMovements();
       strategies.forEach(strategy => {
         if (strategy instanceof SeekAvoid || strategy instanceof LinearRepulsion) {
@@ -923,7 +923,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
         maxBounces: type === ProjectileType.Bounce ? 3 : undefined,
         bounciness: type === ProjectileType.Bounce ? 0.6 : undefined
       };
-      
+
       this.addMovement(new ProjectileMovement(type, config));
     }
 
@@ -974,14 +974,14 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       let count = 0;
       let frequence = 0;
       const player = this as unknown as PlayerWithMixins;
-      
+
       // Break any existing route movement
       this.clearMovements();
-      
+
       return new Promise(async (resolve) => {
         // Store the resolve function for potential breaking
         this._finishRoute = resolve;
-        
+
         // Process function routes first
         const processedRoutes = routes.map((route: any) => {
           if (typeof route === 'function') {
@@ -993,11 +993,11 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
           }
           return route;
         });
-        
+
         // Flatten nested arrays
         const flatRoutes = this.flattenRoutes(processedRoutes);
         let routeIndex = 0;
-        
+
         const executeNextRoute = async (): Promise<void> => {
           // Check if player still exists and is on a map
           if (!player || !player.getCurrentMap()) {
@@ -1005,7 +1005,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             resolve(false);
             return;
           }
-          
+
           // Handle frequency timing
           if (count >= (player.nbPixelInTile || 32)) {
             if (frequence < (player.frequency || 0)) {
@@ -1014,25 +1014,25 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               return;
             }
           }
-          
+
           frequence = 0;
           count++;
-          
+
           // Check if we've completed all routes
           if (routeIndex >= flatRoutes.length) {
             this._finishRoute = null;
             resolve(true);
             return;
           }
-          
+
           const currentRoute = flatRoutes[routeIndex];
           routeIndex++;
-          
+
           if (currentRoute === undefined) {
             executeNextRoute();
             return;
           }
-          
+
           try {
             // Handle different route types
             if (typeof currentRoute === 'object' && 'then' in currentRoute) {
@@ -1043,7 +1043,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               // Handle turn commands
               const directionStr = currentRoute.replace('turn-', '');
               let direction: Direction = Direction.Down;
-              
+
               // Convert string direction to Direction enum
               switch (directionStr) {
                 case 'up':
@@ -1063,7 +1063,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                   direction = Direction.Right;
                   break;
               }
-              
+
               if (player.changeDirection) {
                 player.changeDirection(direction);
               }
@@ -1097,11 +1097,11 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             executeNextRoute();
           }
         };
-        
+
         executeNextRoute();
       });
     }
-    
+
     /**
      * Utility method to flatten nested route arrays
      * 
@@ -1161,7 +1161,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
       const executeInfiniteRoute = (isBreaking: boolean = false) => {
         if (isBreaking || !this._isInfiniteRouteActive) return;
-        
+
         this.moveRoutes(routes).then((completed) => {
           // Only continue if the route completed successfully and we're still active
           if (completed && this._isInfiniteRouteActive) {
@@ -1204,12 +1204,12 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      */
     breakRoutes(force: boolean = false): void {
       this._isInfiniteRouteActive = false;
-      
+
       if (force) {
         // Force stop by clearing all movements immediately
         this.clearMovements();
       }
-      
+
       // If there's an active route promise, resolve it
       if (this._finishRoute) {
         this._finishRoute(force);

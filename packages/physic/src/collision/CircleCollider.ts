@@ -3,6 +3,7 @@ import { AABB } from '../core/math/AABB';
 import { Entity } from '../physics/Entity';
 import { Collider, CollisionInfo, ContactPoint } from './Collider';
 import { AABBCollider } from './AABBCollider';
+import { Ray, RaycastHit } from './Ray';
 
 /**
  * Circle collider implementation
@@ -195,6 +196,43 @@ export class CircleCollider implements Collider {
    */
   public getEntity(): Entity {
     return this.entity;
+  }
+
+  /**
+   * @inheritdoc
+   */
+  public raycast(ray: Ray): RaycastHit | null {
+    const center = this.getCenter();
+    const radius = this.getRadius();
+    const m = ray.origin.sub(center);
+    const b = m.dot(ray.direction);
+    const c = m.dot(m) - radius * radius;
+
+    // Exit if ray's origin is outside circle (c > 0) and ray is pointing away from circle (b > 0)
+    if (c > 0 && b > 0) return null;
+
+    const discr = b * b - c;
+
+    // A negative discriminant corresponds to ray missing circle
+    if (discr < 0) return null;
+
+    // Ray now found to intersect circle, compute smallest t value of intersection
+    let t = -b - Math.sqrt(discr);
+
+    // If t is negative, ray started inside circle so clamp t to 0
+    if (t < 0) t = 0;
+
+    if (t > ray.length) return null;
+
+    const point = ray.getPoint(t);
+    const normal = point.sub(center).normalize();
+
+    return {
+      entity: this.entity,
+      point,
+      normal,
+      distance: t,
+    };
   }
 }
 

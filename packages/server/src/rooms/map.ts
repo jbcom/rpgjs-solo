@@ -101,7 +101,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   dataIsReady$ = new BehaviorSubject<void>(undefined);
   globalConfig: any = {}
   damageFormulas: any = {}
-  
+
   constructor() {
     super();
     this.hooks.callHooks("server-map-onStart", this).subscribe();
@@ -134,6 +134,11 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         };
       }
     }
+
+    if (typeof packet.value == 'string') {
+      return packet
+    }
+
     return {
       ...packet,
       value: {
@@ -223,7 +228,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       if (existingInput) {
         return; // Skip duplicate frame
       }
-      
+
       player.pendingInputs.push({
         input: input.input,
         frame: input.frame,
@@ -242,11 +247,11 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this.globalConfig = map.config
     this.damageFormulas = map.damageFormulas || {};
     this.damageFormulas = {
-        damageSkill: DAMAGE_SKILL,
-        damagePhysic: DAMAGE_PHYSIC,
-        damageCritical: DAMAGE_CRITICAL,
-        coefficientElements: COEFFICIENT_ELEMENTS,
-        ...this.damageFormulas
+      damageSkill: DAMAGE_SKILL,
+      damagePhysic: DAMAGE_PHYSIC,
+      damageCritical: DAMAGE_CRITICAL,
+      coefficientElements: COEFFICIENT_ELEMENTS,
+      ...this.damageFormulas
     }
     await lastValueFrom(this.hooks.callHooks("server-maps-load", this))
     await lastValueFrom(this.hooks.callHooks("server-worldMaps-load", this))
@@ -254,13 +259,13 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     map.events = map.events ?? []
 
     if (map.id) {
-     const mapFound = this.maps.find(m => m.id === map.id)
-     if (mapFound?.events) {
-      map.events = [
-        ...mapFound.events,
-        ...map.events
-       ] 
-     }
+      const mapFound = this.maps.find(m => m.id === map.id)
+      if (mapFound?.events) {
+        map.events = [
+          ...mapFound.events,
+          ...map.events
+        ]
+      }
     }
 
     await lastValueFrom(this.hooks.callHooks("server-map-onBeforeUpdate", map, this))
@@ -298,7 +303,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       const parts = urlObj.pathname.split('/');
       // ['', 'world', ':id', 'update'] → index 2
       worldId = parts[2] ?? '';
-    } catch {}
+    } catch { }
     const payload = await request.json();
 
     // Normalize input to array of WorldMapConfig
@@ -388,7 +393,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     // Process all pending inputs
     while (player.pendingInputs.length > 0) {
       const input = player.pendingInputs.shift();
-      
+
       if (!input || typeof input.frame !== 'number') {
         continue;
       }
@@ -564,7 +569,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     if (!eventObj.event) {
       // @ts-ignore
       eventObj = {
-        event: eventObj 
+        event: eventObj
       }
     }
 
@@ -586,7 +591,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     // Check if event is a constructor function (class)
     if (typeof event === 'function') {
       eventInstance = new event();
-    } 
+    }
     // Handle event as an object with hooks
     else {
       // Create a new instance extending RpgPlayer with the hooks from the event object
@@ -602,7 +607,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
         constructor() {
           super();
-          
+
           // Copy hooks from the event object
           const hookObj = event as EventHooks;
           if (hookObj.onInit) this.onInit = hookObj.onInit.bind(this);
@@ -626,7 +631,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     eventInstance.y.set(y);
     eventInstance.applyFrames()
     if (event.name) eventInstance.name.set(event.name);
-  
+
     this.events()[id] = eventInstance;
 
     await eventInstance.execMethod('onInit')
@@ -765,7 +770,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 }
 
 export interface RpgMap {
-  $send: (conn: MockConnection, data: any) => void; 
+  $send: (conn: MockConnection, data: any) => void;
   $broadcast: (data: any) => void;
   $sessionTransfer: (userOrPublicId: any | string, targetRoomId: string) => void;
 }

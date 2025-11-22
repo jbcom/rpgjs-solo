@@ -79,16 +79,16 @@ export interface ZoneInfo {
   angle: number;
   direction: ZoneDirection;
   limitedByWalls: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, any> | undefined;
 }
 
 /**
  * Internal zone record
  */
 interface ZoneRecord extends ZoneInfo {
-  attachedEntity?: Entity;
-  offset?: Vector2;
-  callbacks?: ZoneCallbacks;
+  attachedEntity?: Entity | undefined;
+  offset?: Vector2 | undefined;
+  callbacks?: ZoneCallbacks | undefined;
   inside: Set<string>; // Set of entity UUIDs currently inside
 }
 
@@ -527,164 +527,27 @@ export class ZoneManager {
     end: Vector2,
     ignoreEntityId?: string,
   ): boolean {
-    const entities = this.engine.getEntities();
-    for (const entity of entities) {
-      // Only check static entities
-      if (!entity.isStatic()) continue;
-      if (ignoreEntityId && entity.uuid === ignoreEntityId) continue;
+    const direction = end.sub(start);
+    const distance = direction.length();
 
-      // Check if line intersects with entity bounds
-      const bounds = this.getEntityBounds(entity);
-      if (this.lineIntersectsRect(start, end, bounds)) {
-        return false;
-      }
-    }
-    return true;
-  }
+    if (distance < 1e-5) return true;
 
-  /**
-   * Gets entity bounds as AABB
-   *
-   * @param entity - Entity
-   * @returns AABB bounds
-   */
-  private getEntityBounds(entity: Entity): AABB {
-    const centerX = entity.position.x;
-    const centerY = entity.position.y;
+    direction.normalizeInPlace();
 
-    if (entity.radius > 0) {
-      // Circle
-      return new AABB(
-        centerX - entity.radius,
-        centerY - entity.radius,
-        centerX + entity.radius,
-        centerY + entity.radius,
-      );
-    } else {
-      // AABB
-      const halfW = entity.width / 2;
-      const halfH = entity.height / 2;
-      return new AABB(
-        centerX - halfW,
-        centerY - halfH,
-        centerX + halfW,
-        centerY + halfH,
-      );
-    }
-  }
+    // Use raycast for efficient line-of-sight check
+    // We want to find if there is ANY static entity between start and end
+    const hit = this.engine.raycast(start, direction, distance, undefined, (entity) => {
+      // Ignore dynamic entities (unless we want them to block vision?)
+      // For now, only static entities block vision as per original logic
+      if (!entity.isStatic()) return false;
 
-  /**
-   * Checks if a line segment intersects a rectangle
-   *
-   * @param start - Line start
-   * @param end - Line end
-   * @param rect - Rectangle bounds
-   * @returns True if line intersects rectangle
-   */
-  private lineIntersectsRect(start: Vector2, end: Vector2, rect: AABB): boolean {
-    // Check if both points are inside the rectangle
-    const insideStart =
-      start.x >= rect.minX &&
-      start.x <= rect.maxX &&
-      start.y >= rect.minY &&
-      start.y <= rect.maxY;
-    const insideEnd =
-      end.x >= rect.minX &&
-      end.x <= rect.maxX &&
-      end.y >= rect.minY &&
-      end.y <= rect.maxY;
+      // Ignore specific entity (e.g. the target itself)
+      if (ignoreEntityId && entity.uuid === ignoreEntityId) return false;
 
-    if (insideStart && insideEnd) {
-      return false; // Line is completely inside, no intersection with edges
-    }
-
-    // Check intersection with rectangle edges
-    const corners = [
-      new Vector2(rect.minX, rect.minY),
-      new Vector2(rect.maxX, rect.minY),
-      new Vector2(rect.maxX, rect.maxY),
-      new Vector2(rect.minX, rect.maxY),
-    ];
-
-    const edges: Array<[number, number]> = [
-      [0, 1],
-      [1, 2],
-      [2, 3],
-      [3, 0],
-    ];
-
-    for (const [a, b] of edges) {
-      const cornerA = corners[a]!;
-      const cornerB = corners[b]!;
-      if (this.segmentsIntersect(start, end, cornerA, cornerB)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * Checks if two line segments intersect
-   *
-   * @param p1 - First segment start
-   * @param p2 - First segment end
-   * @param p3 - Second segment start
-   * @param p4 - Second segment end
-   * @returns True if segments intersect
-   */
-  private segmentsIntersect(
-    p1: Vector2,
-    p2: Vector2,
-    p3: Vector2,
-    p4: Vector2,
-  ): boolean {
-    const o1 = this.orientation(p1, p2, p3);
-    const o2 = this.orientation(p1, p2, p4);
-    const o3 = this.orientation(p3, p4, p1);
-    const o4 = this.orientation(p3, p4, p2);
-
-    if (o1 !== o2 && o3 !== o4) {
       return true;
-    }
+    });
 
-    if (o1 === 0 && this.onSegment(p1, p3, p2)) return true;
-    if (o2 === 0 && this.onSegment(p1, p4, p2)) return true;
-    if (o3 === 0 && this.onSegment(p3, p1, p4)) return true;
-    if (o4 === 0 && this.onSegment(p3, p2, p4)) return true;
-
-    return false;
-  }
-
-  /**
-   * Computes orientation of three points
-   *
-   * @param a - First point
-   * @param b - Second point
-   * @param c - Third point
-   * @returns 0 if collinear, 1 if clockwise, 2 if counterclockwise
-   */
-  private orientation(a: Vector2, b: Vector2, c: Vector2): number {
-    const value = (b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y);
-    if (value === 0) return 0;
-    return value > 0 ? 1 : 2;
-  }
-
-  /**
-   * Checks if point b lies on segment ac
-   *
-   * @param a - Segment start
-   * @param b - Point to check
-   * @param c - Segment end
-   * @returns True if b is on segment ac
-   */
-  private onSegment(a: Vector2, b: Vector2, c: Vector2): boolean {
-    return (
-      b.x <= Math.max(a.x, c.x) &&
-      b.x >= Math.min(a.x, c.x) &&
-      b.y <= Math.max(a.y, c.y) &&
-      b.y >= Math.min(a.y, c.y)
-    );
+    return hit === null;
   }
 
   /**

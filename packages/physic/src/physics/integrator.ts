@@ -102,10 +102,13 @@ export class Integrator {
     // Check if movement state changed (after damping/clamping)
     entity.notifyMovementChange();
 
+    // Check if direction changed
+    entity.notifyDirectionChange();
+
     // Update position: x = x + v * dt
     const oldPosition = entity.position.clone();
     entity.position.addInPlace(entity.velocity.mul(dt));
-    
+
     // Notify position change if position actually changed
     const delta = entity.position.sub(oldPosition);
     if (delta.lengthSquared() > 1e-6) {
@@ -184,13 +187,16 @@ export class Integrator {
     const oldPosition = entity.position.clone();
     entity.position = newPosition;
     entity.velocity = newVelocity;
-    
+
     // Clamp velocity
     entity.clampVelocities();
 
     // Check if movement state changed (after damping/clamping)
     entity.notifyMovementChange();
-    
+
+    // Check if direction changed
+    entity.notifyDirectionChange();
+
     // Notify position change if position actually changed
     const delta = entity.position.sub(oldPosition);
     if (delta.lengthSquared() > 1e-6) {

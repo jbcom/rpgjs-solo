@@ -28,7 +28,7 @@ interface ZoneOptions {
 export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   abstract players: Signal<Record<string, T>>;
   abstract events: Signal<Record<string, any>>;
-  
+
   data = signal<any | null>(null);
   physic = new PhysicsEngine({
     timeStep: 1 / 60,
@@ -36,14 +36,14 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     enableSleep: false,
   });
   moveManager = new MovementManager(() => this.physic);
-  
+
   private speedScalar = 50; // Default speed scalar for movement
-  
+
   // World Maps properties
   tileWidth?: number;
   tileHeight?: number;
   worldMapsManager?: WorldMapsManager;
-  
+
   // Synchronization throttling properties
   throttleSync?: number;
   throttleStorage?: number;
@@ -129,7 +129,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     // Clear all hitboxes and zones from physics system
     this.clearAll();
-    
+
     // Reset movement manager
     this.moveManager.clearAll();
 
@@ -146,7 +146,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     for (const entity of entities) {
       this.physic.removeEntity(entity);
     }
-    
+
     // Clear movement manager and zone manager
     this.physic.getMovementManager().clearAll();
     this.physic.getZoneManager().clear();
@@ -223,7 +223,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     let nextX = currentX;
     let nextY = currentY;
-    
+
     switch (direction) {
       case Direction.Left:
         nextX = currentX - speed;
@@ -306,11 +306,11 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   }
 
   protected forceSingleTick(hooks?: { beforeStep?: () => void; afterStep?: (tick: number) => void }): number {
-      hooks?.beforeStep?.();
-      this.physic.updateMovements();
-      const tick = this.physic.stepOneTick();
-      this.runPostTickUpdates();
-      hooks?.afterStep?.(tick);
+    hooks?.beforeStep?.();
+    this.physic.updateMovements();
+    const tick = this.physic.stepOneTick();
+    this.runPostTickUpdates();
+    hooks?.afterStep?.(tick);
     const fixedMs = this.physic.getWorld().getTimeStep() * 1000;
     this.physicsAccumulatorMs = Math.max(0, this.physicsAccumulatorMs - fixedMs);
     return tick;
@@ -337,8 +337,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       typeof owner.speed === "function"
         ? owner.speed()
         : typeof owner.speed === "number"
-        ? owner.speed
-        : undefined;
+          ? owner.speed
+          : undefined;
     this.addCharacter({
       owner,
       x: centerX,
@@ -518,7 +518,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   ): Observable<(T | any)[]> {
     const { speed = 1 } = options;
     const zoneId = `moving_hitbox_${generateShortUUID()}`;
-    
+
     return new Observable(observer => {
       if (hitboxes.length === 0) {
         observer.complete();
@@ -532,7 +532,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       // Create initial zone at first hitbox position
       const firstHitbox = hitboxes[0];
       const radius = Math.max(firstHitbox.width, firstHitbox.height) / 2;
-      
+
       this.addZone(zoneId, {
         x: firstHitbox.x + firstHitbox.width / 2,
         y: firstHitbox.y + firstHitbox.height / 2,
@@ -547,7 +547,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
           const hitObjects = hitIds
             .map(id => this.getObjectById(id))
             .filter(obj => obj !== undefined);
-          
+
           if (hitObjects.length > 0) {
             // Track hit entities to avoid duplicates
             hitIds.forEach(id => hitEntities.add(id));
@@ -559,12 +559,12 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       // Subscribe to tick to handle movement
       const tickSubscription = this.tick$.subscribe(() => {
         frameCounter++;
-        
+
         // Move to next position based on speed
         if (frameCounter >= speed) {
           frameCounter = 0;
           currentIndex++;
-          
+
           // Check if we've reached the end
           if (currentIndex >= hitboxes.length) {
             // Clean up and complete
@@ -573,22 +573,22 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
             observer.complete();
             return;
           }
-          
+
           // Move zone to next position
           const nextHitbox = hitboxes[currentIndex];
           const zone = this.getZone(zoneId);
-          
+
           if (zone) {
             // Remove current zone and create new one at next position
             this.removeZone(zoneId);
-            
+
             const newRadius = Math.max(nextHitbox.width, nextHitbox.height) / 2;
             this.addZone(zoneId, {
               x: nextHitbox.x + nextHitbox.width / 2,
               y: nextHitbox.y + nextHitbox.height / 2,
               radius: newRadius
             });
-            
+
             // Re-register zone events for the new zone
             this.registerZoneEvents(
               zoneId,
@@ -596,7 +596,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
                 const hitObjects = hitIds
                   .map(id => this.getObjectById(id))
                   .filter(obj => obj !== undefined);
-                
+
                 if (hitObjects.length > 0) {
                   hitIds.forEach(id => hitEntities.add(id));
                   observer.next(hitObjects);
@@ -668,6 +668,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         height: boxHeight,
         mass: Infinity,
         state: EntityState.Static,
+        restitution: 0
       });
       entity.freeze();
 
@@ -693,6 +694,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         height: boxHeight,
         mass: Infinity,
         state: EntityState.Static,
+        restitution: 0
       });
       entity.freeze();
     }
@@ -738,6 +740,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       friction: options.friction ?? 0.4,
       linearDamping: isStatic ? 1 : 0.2,
       maxLinearVelocity: options.maxSpeed ? options.maxSpeed * this.speedScalar : 200,
+      restitution: 0
     });
 
     if (isStatic) {
@@ -750,8 +753,10 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     (entity as any).owner = options.owner;
 
     entity.onDirectionChange(({ cardinalDirection }) => {
+      if (!('$send' in this)) return;
       const owner = (entity as any).owner;
       if (!owner) return;
+      if (cardinalDirection === 'idle') return;
       owner.changeDirection(cardinalDirection as Direction);
     });
 
@@ -915,7 +920,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   protected getCollisions(id: string): string[] {
     const entity = this.physic.getEntityByUUID(id);
     if (!entity) return [];
-    
+
     // Query nearby entities using AABB
     const radius = entity.radius || Math.max(entity.width || 0, entity.height || 0) / 2;
     const aabb = new AABB(
@@ -924,10 +929,10 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       entity.position.x + radius,
       entity.position.y + radius
     );
-    
+
     const nearby = this.physic.queryAABB(aabb);
     const collisions: string[] = [];
-    
+
     // Check actual collisions (simplified - PhysicsEngine handles this internally)
     // For now, return nearby entities. Full collision detection is handled by PhysicsEngine
     for (const other of nearby) {
@@ -935,7 +940,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         collisions.push(other.uuid);
       }
     }
-    
+
     return collisions;
   }
 
@@ -943,7 +948,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    * Get physics body (entity) for an id
    * @protected
    */
-  protected getBody(id: string): Entity | undefined {
+  public getBody(id: string): Entity | undefined {
     return this.physic.getEntityByUUID(id);
   }
 
@@ -968,13 +973,13 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   ): { x: number; y: number } | undefined {
     const entity = this.physic.getEntityByUUID(id);
     if (!entity) return undefined;
-    
+
     const centerX = entity.position.x;
     const centerY = entity.position.y;
     if (mode === "center") {
       return { x: centerX, y: centerY };
     }
-    
+
     // Calculate top-left from center
     const width = entity.width || (entity.radius ? entity.radius * 2 : 32);
     const height = entity.height || (entity.radius ? entity.radius * 2 : 32);
@@ -1048,25 +1053,25 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     }
 
     const callbacks: { onEnter?: (entities: Entity[]) => void; onExit?: (entities: Entity[]) => void } = {};
-    
+
     // Store callbacks for later updates
     (callbacks as any)._onEnterString = undefined;
     (callbacks as any)._onExitString = undefined;
 
     const zoneId = attachedEntity
       ? zoneManager.createAttachedZone(attachedEntity, {
-          radius,
-          angle: options.angle ?? 360,
-          direction: options.direction ?? 'down',
-          limitedByWalls: options.limitedByWalls ?? false,
-        }, callbacks)
+        radius,
+        angle: options.angle ?? 360,
+        direction: options.direction ?? 'down',
+        limitedByWalls: options.limitedByWalls ?? false,
+      }, callbacks)
       : zoneManager.createZone({
-          position: { x: options.x ?? 0, y: options.y ?? 0 },
-          radius,
-          angle: options.angle ?? 360,
-          direction: options.direction ?? 'down',
-          limitedByWalls: options.limitedByWalls ?? false,
-        }, callbacks);
+        position: { x: options.x ?? 0, y: options.y ?? 0 },
+        radius,
+        angle: options.angle ?? 360,
+        direction: options.direction ?? 'down',
+        limitedByWalls: options.limitedByWalls ?? false,
+      }, callbacks);
 
     // Store zone ID mapping
     (this as any)._zoneIdMap = (this as any)._zoneIdMap || new Map();
@@ -1082,7 +1087,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   private removeZone(id: string): boolean {
     const zoneIdMap = (this as any)._zoneIdMap;
     if (!zoneIdMap) return false;
-    
+
     const zoneId = zoneIdMap.get(id);
     if (!zoneId) return false;
 
@@ -1099,7 +1104,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   private getZone(id: string): any {
     const zoneIdMap = (this as any)._zoneIdMap;
     if (!zoneIdMap) return undefined;
-    
+
     const zoneId = zoneIdMap.get(id);
     if (!zoneId) return undefined;
 
@@ -1118,12 +1123,12 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   ): boolean {
     const zoneIdMap = (this as any)._zoneIdMap;
     if (!zoneIdMap) return false;
-    
+
     const zoneId = zoneIdMap.get(id);
     if (!zoneId) return false;
 
     const zoneManager = this.physic.getZoneManager();
-    
+
     // Use registerCallbacks to update callbacks
     const callbacks: { onEnter?: (entities: Entity[]) => void; onExit?: (entities: Entity[]) => void } = {};
     if (onEnter) {
@@ -1136,7 +1141,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         onExit(entities.map(e => e.uuid));
       };
     }
-    
+
     return zoneManager.registerCallbacks(zoneId, callbacks);
   }
 

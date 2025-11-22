@@ -35,28 +35,28 @@ export default createServer({
           },
           async onConnected(player: RpgPlayer) {
             player.name.set('plop')
-             await player.changeMap("simplemap", {
+            await player.changeMap("simplemap", {
               x: Math.floor(100),
               y: Math.floor(100),
-             });
+            });
             // console.log(player.conn?.state)
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             player.setGraphic("hero");
           },
           onLeaveMap: (player: RpgPlayer, map: RpgMap) => {
-           
+
           },
           async onInput(player: RpgPlayer, input: any) {
             if (input.action) {
-            //  player.wood.update(wood => wood + 1)
-            //  player.showComponentAnimation('wood')
+              //  player.wood.update(wood => wood + 1)
+              //  player.showComponentAnimation('wood')
               // player.name.set('test')
               const event = player.getCurrentMap()?.getEvents()[0]
               if (event) {
                 event.moveTo(player)
               }
-              
+
             }
             // if (input.action) {
             //  player.wood.update(wood => wood + 1)
@@ -70,7 +70,7 @@ export default createServer({
         maps: [
           {
             id: "simplemap",
-            events: [{x: 200, y: 200, event: Event()}],
+            events: [{ x: 200, y: 200, event: Event() }],
           },
         ],
         worldMaps: [

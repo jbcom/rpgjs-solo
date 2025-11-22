@@ -407,17 +407,19 @@ export class PhysicsEngine {
    * @param origin - Ray origin
    * @param direction - Ray direction (any length)
    * @param maxDistance - Maximum cast length
+   * @param mask - Optional collision mask (layer)
+   * @param filter - Optional filter function (return true to include entity)
    * @returns Raycast hit or null
    * @example
    * ```typescript
    * const hit = engine.raycast(new Vector2(0,0), new Vector2(1,0), 1000);
    * ```
    */
-  public raycast(origin: Vector2, direction: Vector2, maxDistance: number): RaycastHit | null {
+  public raycast(origin: Vector2, direction: Vector2, maxDistance: number, mask?: number, filter?: (entity: Entity) => boolean): RaycastHit | null {
     const world = this.world as any;
     const partition: SpatialPartition | undefined = world.spatialPartition;
     if (!partition) return null;
-    return raycastUtil(partition, origin, direction, maxDistance);
+    return raycastUtil(partition, origin, direction, maxDistance, mask, filter);
   }
 
   /**

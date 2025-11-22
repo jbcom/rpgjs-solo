@@ -91,6 +91,7 @@ function registerStaticRectangle(
     height: opts.height,
     mass: Infinity,
     state: EntityState.Static,
+    restitution: 0, // No bounce
   });
   entity.freeze();
   gameEntities.push({
@@ -292,6 +293,7 @@ function createNPCs(): void {
       friction: 0.4,
       linearDamping: 0.2,
       maxLinearVelocity: 200,
+      restitution: 0, // No bounce
     });
     gameEntities.push({
       entity,
@@ -315,6 +317,7 @@ function createHero(): void {
     friction: 0.4,
     linearDamping: 0.2,
     maxLinearVelocity: moveSpeed,
+    restitution: 0, // No bounce
   });
 
   hero = {
@@ -349,6 +352,20 @@ function createHero(): void {
     heroTelemetry.lastCollision = '-';
   });
 
+  // Tile interactions
+  heroHooks.onEnterTile(({ x, y }) => {
+    console.log(`Hero entered tile [${x}, ${y}]`);
+  });
+
+  // Prevent hero from entering "water" tiles (e.g., x < 5)
+  heroHooks.canEnterTile(({ x, y }) => {
+    if (x < 5) {
+      console.log('Blocked by water!');
+      return false;
+    }
+    return true;
+  });
+
   // Create vision zone attached to hero
   const visionZoneId = zones.createAttachedZone(
     heroEntity,
@@ -357,6 +374,7 @@ function createHero(): void {
       angle: 120, // 120-degree cone
       direction: 'right',
       offset: { x: 0, y: 0 },
+      limitedByWalls: true, // Uses Raycasting system to block vision through walls
     },
     {
       onEnter: (entities) => {
@@ -759,13 +777,13 @@ function render(): void {
       // Draw tree (circle with brown trunk and green top)
       const treeSize = gameEntity.treeSize ?? Math.max(entity.width ?? 0, entity.height ?? 0, 40);
       const radius = treeSize / 2;
-      
+
       // Trunk
       ctx.fillStyle = '#654321';
       ctx.beginPath();
       ctx.arc(0, radius * 0.3, radius * 0.3, 0, Math.PI * 2);
       ctx.fill();
-      
+
       // Leaves
       ctx.fillStyle = color;
       ctx.beginPath();
@@ -777,7 +795,7 @@ function render(): void {
       ctx.beginPath();
       ctx.arc(0, 0, entity.radius, 0, Math.PI * 2);
       ctx.fill();
-      
+
       // Border
       ctx.strokeStyle = type === 'hero' ? '#fff' : '#1e8449';
       ctx.lineWidth = type === 'hero' ? 3 : 2;
@@ -792,14 +810,31 @@ function render(): void {
         ctx.stroke();
       }
 
-      // Draw direction indicator for hero
-      if (type === 'hero' && entity.velocity.length() > 1) {
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 3;
+      // Draw velocity vector
+      if (entity.velocity.length() > 1) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(0, 0);
         const dir = entity.velocity.normalize();
-        ctx.lineTo(dir.x * entity.radius * 1.5, dir.y * entity.radius * 1.5);
+        ctx.lineTo(dir.x * entity.radius * 1.2, dir.y * entity.radius * 1.2);
+        ctx.stroke();
+      }
+
+      // Draw Cardinal Direction
+      const cardinal = (entity as any).cardinalDirection;
+      if (cardinal && cardinal !== 'idle') {
+        ctx.strokeStyle = '#00ffff'; // Cyan
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        const cDir = { x: 0, y: 0 };
+        if (cardinal === 'up') cDir.y = -1;
+        if (cardinal === 'down') cDir.y = 1;
+        if (cardinal === 'left') cDir.x = -1;
+        if (cardinal === 'right') cDir.x = 1;
+
+        ctx.lineTo(cDir.x * entity.radius * 1.5, cDir.y * entity.radius * 1.5);
         ctx.stroke();
       }
     } else {
@@ -811,7 +846,7 @@ function render(): void {
         entity.width,
         entity.height
       );
-      
+
       // Border
       ctx.strokeStyle = '#333';
       ctx.lineWidth = 2;

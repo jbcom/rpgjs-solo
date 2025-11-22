@@ -139,9 +139,13 @@ export class CollisionResolver {
     // Apply impulse
     if (!entityA.isStatic()) {
       entityA.velocity.addInPlace(impulse.mul(-entityA.invMass));
+      entityA.notifyMovementChange();
+      entityA.notifyDirectionChange();
     }
     if (!entityB.isStatic()) {
       entityB.velocity.addInPlace(impulse.mul(entityB.invMass));
+      entityB.notifyMovementChange();
+      entityB.notifyDirectionChange();
     }
 
     // Friction (simplified, using velocity tangent to collision)
@@ -161,9 +165,13 @@ export class CollisionResolver {
 
       if (!entityA.isStatic()) {
         entityA.velocity.addInPlace(frictionImpulse.mul(-entityA.invMass));
+        entityA.notifyMovementChange();
+        entityA.notifyDirectionChange();
       }
       if (!entityB.isStatic()) {
         entityB.velocity.addInPlace(frictionImpulse.mul(entityB.invMass));
+        entityB.notifyMovementChange();
+        entityB.notifyDirectionChange();
       }
     }
   }

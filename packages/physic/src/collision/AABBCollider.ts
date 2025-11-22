@@ -3,6 +3,7 @@ import { Vector2 } from '../core/math/Vector2';
 import { Entity } from '../physics/Entity';
 import { Collider, CollisionInfo, ContactPoint } from './Collider';
 import { CircleCollider } from './CircleCollider';
+import { Ray, RaycastHit } from './Ray';
 
 /**
  * AABB (Axis-Aligned Bounding Box) collider implementation
@@ -150,6 +151,52 @@ export class AABBCollider implements Collider {
    */
   public getEntity(): Entity {
     return this.entity;
+  }
+
+  /**
+   * @inheritdoc
+   */
+  public raycast(ray: Ray): RaycastHit | null {
+    const bounds = this.getBounds();
+    const tMin = (bounds.minX - ray.origin.x) / ray.direction.x;
+    const tMax = (bounds.maxX - ray.origin.x) / ray.direction.x;
+    const tymin = (bounds.minY - ray.origin.y) / ray.direction.y;
+    const tymax = (bounds.maxY - ray.origin.y) / ray.direction.y;
+
+    const t1 = Math.min(tMin, tMax);
+    const t2 = Math.max(tMin, tMax);
+    const t3 = Math.min(tymin, tymax);
+    const t4 = Math.max(tymin, tymax);
+
+    const tNear = Math.max(t1, t3);
+    const tFar = Math.min(t2, t4);
+
+    if (tNear > tFar || tFar < 0) {
+      return null;
+    }
+
+    if (tNear > ray.length) {
+      return null;
+    }
+
+    const t = tNear < 0 ? tFar : tNear;
+    if (t < 0) return null; // Should be covered by tFar < 0 check but safe
+
+    const point = ray.getPoint(t);
+
+    // Calculate normal
+    let normal = new Vector2(0, 0);
+    if (Math.abs(point.x - bounds.minX) < 1e-5) normal.set(-1, 0);
+    else if (Math.abs(point.x - bounds.maxX) < 1e-5) normal.set(1, 0);
+    else if (Math.abs(point.y - bounds.minY) < 1e-5) normal.set(0, -1);
+    else if (Math.abs(point.y - bounds.maxY) < 1e-5) normal.set(0, 1);
+
+    return {
+      entity: this.entity,
+      point,
+      normal,
+      distance: t,
+    };
   }
 }
 

@@ -1,5 +1,6 @@
 import { Entity } from '../physics/Entity';
 import { AABB } from '../core/math/AABB';
+import { Ray, RaycastHit } from '../collision/Ray';
 
 /**
  * Interface for spatial partitioning systems
@@ -49,5 +50,15 @@ export interface SpatialPartition {
    * Clears all entities from the partition
    */
   clear(): void;
+
+  /**
+   * Casts a ray against entities in the partition
+   * 
+   * @param ray - Ray to cast
+   * @param mask - Optional collision mask (layer)
+   * @param filter - Optional filter function (return true to include entity)
+   * @returns Raycast hit info if hit, null otherwise
+   */
+  raycast(ray: Ray, mask?: number, filter?: (entity: Entity) => boolean): RaycastHit | null;
 }
 

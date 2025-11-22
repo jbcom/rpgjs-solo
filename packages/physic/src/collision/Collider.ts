@@ -1,6 +1,7 @@
 import { Vector2 } from '../core/math/Vector2';
 import { AABB } from '../core/math/AABB';
 import { Entity } from '../physics/Entity';
+import { Ray, RaycastHit } from './Ray';
 
 /**
  * Contact point information
@@ -75,5 +76,13 @@ export interface Collider {
    * @returns Entity reference
    */
   getEntity(): Entity;
+
+  /**
+   * Casts a ray against this collider
+   * 
+   * @param ray - Ray to cast
+   * @returns Raycast hit info if hit, null otherwise
+   */
+  raycast(ray: Ray): RaycastHit | null;
 }
 

@@ -4,6 +4,7 @@ import { Entity } from '../physics/Entity';
 import { Collider, CollisionInfo, ContactPoint } from './Collider';
 import { AABBCollider } from './AABBCollider';
 import { CircleCollider } from './CircleCollider';
+import { Ray, RaycastHit } from './Ray';
 
 /**
  * Configuration for polygon colliders
@@ -257,6 +258,91 @@ export class PolygonCollider implements Collider {
       normal,
       depth,
     };
+  }
+
+  /**
+   * @inheritdoc
+   */
+  public raycast(ray: Ray): RaycastHit | null {
+    // 1. Broad phase: check AABB
+    const bounds = this.getBounds();
+    // Simple AABB check (can reuse AABB logic or just check if ray intersects AABB)
+    // We can create a temp AABB collider or just do the math.
+    // Let's do a quick check.
+    const tMin = (bounds.minX - ray.origin.x) / ray.direction.x;
+    const tMax = (bounds.maxX - ray.origin.x) / ray.direction.x;
+    const tymin = (bounds.minY - ray.origin.y) / ray.direction.y;
+    const tymax = (bounds.maxY - ray.origin.y) / ray.direction.y;
+
+    const t1 = Math.min(tMin, tMax);
+    const t2 = Math.max(tMin, tMax);
+    const t3 = Math.min(tymin, tymax);
+    const t4 = Math.max(tymin, tymax);
+
+    const tNear = Math.max(t1, t3);
+    const tFar = Math.min(t2, t4);
+
+    if (tNear > tFar || tFar < 0) return null;
+    if (tNear > ray.length) return null;
+
+    let closestHit: RaycastHit | null = null;
+
+    // 2. Check all convex parts
+    const parts = this.getWorldParts();
+    for (const part of parts) {
+      for (let i = 0; i < part.length; i++) {
+        const p1 = part[i];
+        const p2 = part[(i + 1) % part.length];
+
+        if (!p1 || !p2) continue;
+
+        const hit = this.rayCastSegment(ray, p1, p2);
+        if (hit) {
+          if (!closestHit || hit.distance < closestHit.distance) {
+            closestHit = hit;
+          }
+        }
+      }
+    }
+
+    return closestHit;
+  }
+
+  private rayCastSegment(ray: Ray, p1: Vector2, p2: Vector2): RaycastHit | null {
+    const v1 = ray.origin;
+    const v2 = ray.origin.add(ray.direction);
+    const v3 = p1;
+    const v4 = p2;
+
+    const den = (v1.x - v2.x) * (v3.y - v4.y) - (v1.y - v2.y) * (v3.x - v4.x);
+    if (den === 0) return null;
+
+    const t = ((v1.x - v3.x) * (v3.y - v4.y) - (v1.y - v3.y) * (v3.x - v4.x)) / den;
+    const u = -((v1.x - v2.x) * (v1.y - v3.y) - (v1.y - v2.y) * (v1.x - v3.x)) / den;
+
+    if (t >= 0 && t <= ray.length && u >= 0 && u <= 1) {
+      const point = new Vector2(
+        v1.x + t * (v2.x - v1.x),
+        v1.y + t * (v2.y - v1.y)
+      );
+
+      // Normal is perpendicular to the segment
+      const segmentDir = p2.sub(p1).normalize();
+      let normal = new Vector2(-segmentDir.y, segmentDir.x);
+
+      // Ensure normal points against the ray
+      if (normal.dot(ray.direction) > 0) {
+        normal = normal.mul(-1);
+      }
+
+      return {
+        entity: this.entity,
+        point,
+        normal,
+        distance: t,
+      };
+    }
+    return null;
   }
 
   private getWorldParts(): Vector2[][] {

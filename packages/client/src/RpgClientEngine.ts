@@ -38,14 +38,14 @@ export class RpgClientEngine<T = any> {
   particleSettings: {
     emitters: any[]
   } = {
-    emitters: []
-  }
+      emitters: []
+    }
   renderer: PIXI.Renderer;
   tick: Observable<number>;
   playerIdSignal = signal<string | null>(null);
   spriteComponentsBehind = signal<any[]>([]);
   spriteComponentsInFront = signal<any[]>([]);
-  
+
   private predictionEnabled = false;
   private prediction?: PredictionController<Direction>;
   private readonly SERVER_CORRECTION_THRESHOLD = 30;
@@ -55,6 +55,7 @@ export class RpgClientEngine<T = any> {
   private rtt: number = 0; // Round-trip time in ms
   private pingInterval: any = null;
   private readonly PING_INTERVAL_MS = 5000; // Send ping every 5 seconds
+  private lastInputTime = 0;
 
   constructor(public context: Context) {
     this.webSocket = inject(context, WebSocketToken);
@@ -93,6 +94,14 @@ export class RpgClientEngine<T = any> {
     this.renderer = app.renderer as PIXI.Renderer;
     this.tick = canvasElement?.propObservables?.context['tick'].observable
 
+    this.tick.subscribe(() => {
+      if (Date.now() - this.lastInputTime > 100) {
+        const player = this.getCurrentPlayer();
+        if (!player) return;
+        (this.sceneMap as any).stopMovement(player);
+      }
+    })
+
 
     this.hooks.callHooks("client-spritesheets-load", this).subscribe();
     this.hooks.callHooks("client-spritesheetResolver-load", this).subscribe();
@@ -111,7 +120,7 @@ export class RpgClientEngine<T = any> {
 
     this.tick.subscribe((tick) => {
       this.hooks.callHooks("client-engine-onStep", this, tick).subscribe();
-      
+
       // Clean up old prediction states and input history every 60 ticks (approximately every second at 60fps)
       if (tick % 60 === 0) {
         const now = Date.now();
@@ -141,17 +150,17 @@ export class RpgClientEngine<T = any> {
     this.webSocket.on("pong", (data: { serverTick: number; clientFrame: number; clientTime: number }) => {
       const now = Date.now();
       this.rtt = now - data.clientTime;
-      
+
       // Calculate frame offset: how many ticks ahead the server is compared to our frame counter
       // This helps us estimate which server tick corresponds to each client input frame
       const estimatedTicksInFlight = Math.floor(this.rtt / 2 / (1000 / 60)); // Estimate ticks during half RTT
       const estimatedServerTickNow = data.serverTick + estimatedTicksInFlight;
-      
+
       // Update frame offset (only if we have inputs to calibrate with)
       if (this.inputFrameCounter > 0) {
         this.frameOffset = estimatedServerTickNow - data.clientFrame;
       }
-      
+
       console.debug(`[Ping/Pong] RTT: ${this.rtt}ms, ServerTick: ${data.serverTick}, FrameOffset: ${this.frameOffset}`);
     });
 
@@ -213,10 +222,10 @@ export class RpgClientEngine<T = any> {
   private startPingPong(): void {
     // Stop existing interval if any
     this.stopPingPong();
-    
+
     // Send initial ping immediately
     this.sendPing();
-    
+
     // Set up periodic pings
     this.pingInterval = setInterval(() => {
       this.sendPing();
@@ -256,19 +265,19 @@ export class RpgClientEngine<T = any> {
   private sendPing(): void {
     const clientTime = Date.now();
     const clientFrame = this.getPhysicsTick();
-    
-    this.webSocket.emit('ping', { 
-      clientTime, 
-      clientFrame 
+
+    this.webSocket.emit('ping', {
+      clientTime,
+      clientFrame
     });
   }
-  
+
   private async loadScene(mapId: string) {
     this.hooks.callHooks("client-sceneMap-onBeforeLoading", this.sceneMap).subscribe();
-    
+
     // Clear client prediction states when changing maps
     this.clearClientPredictionStates();
-    
+
     this.webSocket.updateProperties({ room: mapId })
     await this.webSocket.reconnect(() => {
       this.initListeners()
@@ -345,7 +354,7 @@ export class RpgClientEngine<T = any> {
     // If not in cache and resolver exists, use it
     if (this.spritesheetResolver) {
       const result = this.spritesheetResolver(id);
-      
+
       // Check if result is a Promise
       if (result instanceof Promise) {
         return result.then((spritesheet) => {
@@ -493,15 +502,19 @@ export class RpgClientEngine<T = any> {
       tick = this.getPhysicsTick();
     }
     this.hooks.callHooks("client-engine-onInput", this, { input, playerId: this.playerId }).subscribe();
-    
-    this.webSocket.emit('move', { 
-      input, 
+
+    this.webSocket.emit('move', {
+      input,
       timestamp,
       frame,
       tick,
     });
-    
+
     const currentPlayer = this.sceneMap.getCurrentPlayer();
+    if (currentPlayer) {
+      (this.sceneMap as any).moveBody(currentPlayer, input);
+    }
+    this.lastInputTime = Date.now();
     const myId = this.playerIdSignal();
 
   }
@@ -519,7 +532,7 @@ export class RpgClientEngine<T = any> {
   get socket() {
     return this.webSocket
   }
-  
+
   get playerId() {
     return this.playerIdSignal()
   }

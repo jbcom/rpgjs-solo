@@ -7,6 +7,7 @@ import { CollisionInfo } from '../collision/Collider';
 import { EventSystem } from './events';
 import { SpatialPartition } from './SpatialPartition';
 import { Vector2 } from '../core/math/Vector2';
+import { Ray, RaycastHit } from '../collision/Ray';
 import type { EntityConfig } from '../physics/Entity';
 import { sweepEntities } from '../collision/sweep';
 
@@ -26,8 +27,12 @@ export interface WorldConfig {
   spatialGridWidth?: number;
   /** Spatial partition grid height (default: 100) */
   spatialGridHeight?: number;
-  /** Enable sleep detection (default: true) */
+  /** Enable sleep for inactive entities (default: true) */
   enableSleep?: boolean;
+  /** Tile width for grid-based logic (default: 32) */
+  tileWidth?: number;
+  /** Tile height for grid-based logic (default: 32) */
+  tileHeight?: number;
   /** Sleep threshold in seconds (default: 0.5) */
   sleepThreshold?: number;
   /** Velocity threshold for sleep detection (default: 0.01) */
@@ -80,6 +85,8 @@ export class World {
   private events: EventSystem;
   private timeStep: number;
   private enableSleep: boolean;
+  private tileWidth: number;
+  private tileHeight: number;
   private sleepThreshold: number;
   private sleepVelocityThreshold: number;
   private previousCollisions: Map<string, CollisionInfo> = new Map();
@@ -97,6 +104,8 @@ export class World {
   constructor(config: WorldConfig = {}) {
     this.timeStep = config.timeStep ?? 1 / 60;
     this.enableSleep = config.enableSleep ?? true;
+    this.tileWidth = config.tileWidth ?? 32;
+    this.tileHeight = config.tileHeight ?? 32;
     this.sleepThreshold = config.sleepThreshold ?? 0.5;
     this.sleepVelocityThreshold = config.sleepVelocityThreshold ?? 0.01;
     this.positionQuantizationStep =
@@ -183,6 +192,21 @@ export class World {
   }
 
   /**
+   * Performs a raycast against all entities in the world.
+   * 
+   * @param origin - Starting point of the ray
+   * @param direction - Direction of the ray (normalized)
+   * @param length - Maximum length (default: Infinity)
+   * @param mask - Optional collision mask (layer)
+   * @param filter - Optional filter function (return true to include entity)
+   * @returns Raycast hit info if hit, null otherwise
+   */
+  public raycast(origin: Vector2, direction: Vector2, length: number = Infinity, mask?: number, filter?: (entity: Entity) => boolean): RaycastHit | null {
+    const ray = new Ray(origin, direction, length);
+    return this.spatialPartition.raycast(ray, mask, filter);
+  }
+
+  /**
    * Creates and adds a new entity
    * 
    * @param config - Entity configuration
@@ -243,8 +267,11 @@ export class World {
     // Clear forces and integrate
     for (const entity of this.dynamicEntities) {
       if (!entity.isSleeping()) {
-        entity.clearForces();
+        const startPos = entity.position.clone();
         this.integrator.integrate(entity);
+
+        // Check for tile change
+        this.updateEntityTile(entity, startPos);
 
         // CCD: Check for tunneling if enabled
         if (entity.continuous) {
@@ -472,6 +499,42 @@ export class World {
    * 
    * @param entity - Entity to check
    */
+  /**
+   * Updates entity tile position and triggers hooks
+   * 
+   * @param entity - Entity to update
+   * @param previousPosition - Position before integration
+   */
+  private updateEntityTile(entity: Entity, previousPosition: Vector2): void {
+    const oldTileX = Math.floor(previousPosition.x / this.tileWidth);
+    const oldTileY = Math.floor(previousPosition.y / this.tileHeight);
+
+    const newTileX = Math.floor(entity.position.x / this.tileWidth);
+    const newTileY = Math.floor(entity.position.y / this.tileHeight);
+
+    // Initialize currentTile if it's the first update (or if it was 0,0 by default)
+    // We assume the entity starts in a valid tile or we sync it now
+    if (entity.currentTile.x === 0 && entity.currentTile.y === 0 && (oldTileX !== 0 || oldTileY !== 0)) {
+      entity.currentTile.set(oldTileX, oldTileY);
+    }
+
+    if (newTileX !== oldTileX || newTileY !== oldTileY) {
+      // Check if can enter new tile
+      if (!entity.checkCanEnterTile(newTileX, newTileY)) {
+        // Prevent movement: revert to previous position
+        // We also zero out velocity to stop momentum into the blocked tile
+        entity.position.copyFrom(previousPosition);
+        entity.velocity.set(0, 0);
+        return;
+      }
+
+      // Trigger hooks
+      entity.notifyLeaveTile(oldTileX, oldTileY);
+      entity.currentTile.set(newTileX, newTileY);
+      entity.notifyEnterTile(newTileX, newTileY);
+    }
+  }
+
   private performCCD(entity: Entity): void {
     // Simple CCD: Sweep against nearby static entities
     // We use the velocity * dt as the sweep vector

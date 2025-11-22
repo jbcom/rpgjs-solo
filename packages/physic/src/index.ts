@@ -39,6 +39,7 @@ export { CollisionResolver } from './collision/resolver';
 export * from './collision/detector';
 export { PolygonCollider, assignPolygonCollider, type PolygonConfig } from './collision/PolygonCollider';
 export { raycast, type RaycastHit } from './collision/raycast';
+export { Ray } from './collision/Ray';
 export { sweepEntities, type SweepResult } from './collision/sweep';
 
 // World Layer

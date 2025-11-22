@@ -25,15 +25,26 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     })
 
     this.engine.tick
-    .pipe(
+      .pipe(
       //throttleTime(10)
     )
-    .subscribe(() => {
-       const frame = this.frames.shift()
-       if (frame) {
-         const entity = this.engine.scene.setBodyPosition(this.id, frame.x, frame.y)
-       }
-    })
+      .subscribe(() => {
+        const frame = this.frames.shift()
+        if (frame) {
+          const entity = this.engine.scene.getBody(this.id)
+          const isLocalPlayer = this.id === this.engine.playerIdSignal()
+          if (entity && !isLocalPlayer) {
+            const { x: oldX, y: oldY } = entity.position
+            const dt = 1 / 60 // Assume 60 FPS for now
+            const velocity = {
+              x: (frame.x - oldX) / dt,
+              y: (frame.y - oldY) / dt
+            }
+            entity.setVelocity(velocity)
+          }
+          this.engine.scene.setBodyPosition(this.id, frame.x, frame.y)
+        }
+      })
   }
 
   get hooks() {
@@ -43,7 +54,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   get engine() {
     return inject(RpgClientEngine)
   }
-  
+
   private animationSubscription?: Subscription
 
   flash(color: string, duration: number = 100) {
@@ -102,12 +113,12 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     this.animationIsPlaying.set(true);
     const previousAnimationName = this.animationName();
     this.animationCurrentIndex.set(0);
-    
+
     // Clean up any existing subscription
     if (this.animationSubscription) {
       this.animationSubscription.unsubscribe();
     }
-    
+
     this.animationSubscription = this.animationCurrentIndex.observable.subscribe(index => {
       if (index >= nbTimes) {
         this.animationCurrentIndex.set(0);

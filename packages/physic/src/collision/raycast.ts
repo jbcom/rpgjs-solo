@@ -1,11 +1,12 @@
 import { Vector2 } from '../core/math/Vector2';
 import { AABB } from '../core/math/AABB';
 import { SpatialPartition } from '../world/SpatialPartition';
-import { Collider } from './Collider';
+import { Ray } from './Ray';
 import { AABBCollider } from './AABBCollider';
 import { CircleCollider } from './CircleCollider';
 import { PolygonCollider } from './PolygonCollider';
 import { createCollider } from './detector';
+import { Collider } from './Collider';
 
 export interface RaycastHit {
   entity: ReturnType<Collider['getEntity']>;
@@ -22,6 +23,8 @@ export interface RaycastHit {
  * @param origin - Ray origin
  * @param direction - Ray direction (any length)
  * @param maxDistance - Maximum distance
+ * @param mask - Optional collision mask (layer)
+ * @param filter - Optional filter function (return true to include entity)
  * @returns Nearest hit or null
  *
  * @example
@@ -32,9 +35,14 @@ export interface RaycastHit {
  * }
  * ```
  */
-export function raycast(partition: SpatialPartition, origin: Vector2, direction: Vector2, maxDistance: number): RaycastHit | null {
+export function raycast(partition: SpatialPartition, origin: Vector2, direction: Vector2, maxDistance: number, mask?: number, filter?: (entity: any) => boolean): RaycastHit | null {
   const dir = direction.length() > 0 ? direction.normalize() : new Vector2(1, 0);
   const end = origin.add(dir.mul(maxDistance));
+  const candidates = partition.raycast(new Ray(origin, dir, maxDistance), mask, filter);
+  if (candidates) return candidates;
+
+  // Fallback if partition doesn't implement raycast (shouldn't happen with SpatialHash)
+  // But for generic SpatialPartition, we might need the old AABB query method
   const bounds = new AABB(
     Math.min(origin.x, end.x),
     Math.min(origin.y, end.y),
@@ -42,10 +50,12 @@ export function raycast(partition: SpatialPartition, origin: Vector2, direction:
     Math.max(origin.y, end.y)
   );
 
-  const candidates = partition.queryAABB(bounds);
+  const entities = partition.queryAABB(bounds);
   let best: RaycastHit | null = null;
 
-  for (const e of candidates) {
+  for (const e of entities) {
+    if (mask !== undefined && (e.collisionCategory & mask) === 0) continue;
+    if (filter && !filter(e)) continue;
     const collider = createCollider(e);
     if (!collider) continue;
     const hit = raycastCollider(collider, origin, dir, maxDistance);
