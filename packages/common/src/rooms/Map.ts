@@ -8,6 +8,7 @@ import {
   EntityState,
   assignPolygonCollider,
   AABB,
+  createCollider,
 } from "@rpgjs/physic";
 import { Observable, share, Subject, Subscription } from "rxjs";
 import { MovementManager } from "../movement";
@@ -921,28 +922,51 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
   /**
    * Get collisions for an entity
-   * @protected
+   * 
+   * Returns all entities that are colliding with the specified entity.
+   * Uses the entity's actual AABB bounds to detect collisions in all directions.
+   * 
+   * @param id - Entity UUID to check collisions for
+   * @returns Array of entity UUIDs that are colliding with the specified entity
+   * 
+   * @example
+   * ```ts
+   * // Get all entities colliding with player
+   * const collisions = map.getCollisions('player1');
+   * collisions.forEach(id => {
+   *   console.log(`Entity ${id} is colliding with player`);
+   * });
+   * ```
    */
   protected getCollisions(id: string): string[] {
     const entity = this.physic.getEntityByUUID(id);
     if (!entity) return [];
 
-    // Query nearby entities using AABB
-    const radius = 4;
-    const aabb = new AABB(
-      entity.position.x - radius,
-      entity.position.y - radius,
-      entity.position.x + radius,
-      entity.position.y + radius
-    );
+    // Get the entity's actual collider and AABB bounds
+    const collider = createCollider(entity);
+    if (!collider) return [];
 
-    const nearby = this.physic.queryAABB(aabb);
+    const entityAABB = collider.getBounds();
+    
+    // Expand AABB slightly to ensure we catch nearby entities
+    // This helps with edge cases where entities are just touching
+    const expandedAABB = entityAABB.expand(1);
+
+    // Query nearby entities using the expanded AABB
+    const nearby = this.physic.queryAABB(expandedAABB);
     const collisions: string[] = [];
 
-    // Check actual collisions (simplified - PhysicsEngine handles this internally)
-    // For now, return nearby entities. Full collision detection is handled by PhysicsEngine
+    // Check actual AABB intersections for each nearby entity
     for (const other of nearby) {
-      if (other.uuid !== id) {
+      if (other.uuid === id) continue;
+
+      const otherCollider = createCollider(other);
+      if (!otherCollider) continue;
+
+      const otherAABB = otherCollider.getBounds();
+      
+      // Check if AABBs actually intersect
+      if (entityAABB.intersects(otherAABB)) {
         collisions.push(other.uuid);
       }
     }
