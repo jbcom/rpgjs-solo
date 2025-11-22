@@ -2,6 +2,8 @@ import { AABB } from '../core/math/AABB';
 import { Entity } from '../physics/Entity';
 import { SpatialPartition } from '../world/SpatialPartition';
 import { createCollider } from './detector';
+import { Ray, RaycastHit } from './Ray';
+import { raycastCollider } from './raycast';
 
 interface QuadItem {
   entity: Entity;
@@ -100,6 +102,41 @@ export class Quadtree implements SpatialPartition {
     const results = new Set<Entity>();
     this.queryBounds(this.root, bounds, results);
     return results;
+  }
+
+  public raycast(ray: Ray, mask?: number, filter?: (entity: Entity) => boolean): RaycastHit | null {
+    // Query AABB that encompasses the ray
+    const origin = ray.origin;
+    const end = ray.getPoint(ray.length);
+    const bounds = new AABB(
+      Math.min(origin.x, end.x),
+      Math.min(origin.y, end.y),
+      Math.max(origin.x, end.x),
+      Math.max(origin.y, end.y),
+    );
+
+    const candidates = this.queryAABB(bounds);
+    let closestHit: RaycastHit | null = null;
+
+    for (const entity of candidates) {
+      // Check mask if provided
+      if (mask !== undefined && (entity.collisionCategory & mask) === 0) continue;
+
+      // Check filter if provided
+      if (filter && !filter(entity)) continue;
+
+      const collider = createCollider(entity);
+      if (collider) {
+        const hit = raycastCollider(collider, ray.origin, ray.direction, ray.length);
+        if (hit) {
+          if (!closestHit || hit.distance < closestHit.distance) {
+            closestHit = hit;
+          }
+        }
+      }
+    }
+
+    return closestHit;
   }
 
   private insertItem(node: QuadNode, item: QuadItem, depth: number): void {

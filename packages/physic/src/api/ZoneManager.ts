@@ -392,7 +392,7 @@ export class ZoneManager {
    *
    * This should be called after each physics step to keep zones synchronized.
    *
-   * @param deltaTime - Optional delta time (not used currently, but kept for future use)
+   * @param _deltaTime - Optional delta time (not used currently, but kept for future use)
    *
    * @example
    * ```typescript
@@ -400,7 +400,7 @@ export class ZoneManager {
    * zones.update();
    * ```
    */
-  update(deltaTime?: number): void {
+  update(_deltaTime?: number): void {
     for (const zone of this.zones.values()) {
       // Update position for attached zones
       if (zone.type === 'attached' && zone.attachedEntity) {

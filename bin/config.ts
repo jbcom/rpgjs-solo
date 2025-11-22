@@ -63,13 +63,13 @@ export const packages = (type: "build" | "dev") => {
       buildScript
     },
     {
+      name: "physic",
+      buildScript,
+    },
+    {
       name: "common",
       buildScript,
       dependencies: createDependencies(packagesPath, ['physic']),
-    },
-    {
-      name: "physic",
-      buildScript,
     },
     // Packages depending on core packages
     {

@@ -484,10 +484,12 @@ export class SpatialHash {
       // tMaxX is distance to next X boundary.
       // If hit is before that, it's in this cell (or previous).
 
-      if (closestHit && closestHit.distance < Math.min(tMaxX, tMaxY)) {
-        // We found a hit in this cell (or previous) that is closer than the next cell boundary.
-        // We can stop.
-        return closestHit;
+      if (closestHit) {
+        if ((closestHit as RaycastHit).distance < Math.min(tMaxX, tMaxY)) {
+          // We found a hit in this cell (or previous) that is closer than the next cell boundary.
+          // We can stop.
+          return closestHit;
+        }
       }
 
       if (tMaxX < tMaxY) {
@@ -503,7 +505,7 @@ export class SpatialHash {
       // Simple check: if we passed the target grid coordinates
       // But with wrapping, this is tricky.
       // Just rely on maxSteps or distance check.
-      if (closestHit && closestHit.distance < ray.length) {
+      if (closestHit && (closestHit as RaycastHit).distance < ray.length) {
         // If we have a hit, and we've gone far enough...
       }
     }

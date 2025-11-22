@@ -2,6 +2,8 @@ import { AABB } from '../core/math/AABB';
 import { Entity } from '../physics/Entity';
 import { SpatialPartition } from '../world/SpatialPartition';
 import { createCollider } from './detector';
+import { Ray, RaycastHit } from './Ray';
+import { raycastCollider } from './raycast';
 
 interface BVHLeaf {
   entity: Entity;
@@ -71,6 +73,41 @@ export class BVH implements SpatialPartition {
     const out = new Set<Entity>();
     this.queryAABBInternal(bounds, out);
     return out;
+  }
+
+  public raycast(ray: Ray, mask?: number, filter?: (entity: Entity) => boolean): RaycastHit | null {
+    // Query AABB that encompasses the ray
+    const origin = ray.origin;
+    const end = ray.getPoint(ray.length);
+    const bounds = new AABB(
+      Math.min(origin.x, end.x),
+      Math.min(origin.y, end.y),
+      Math.max(origin.x, end.x),
+      Math.max(origin.y, end.y),
+    );
+
+    const candidates = this.queryAABB(bounds);
+    let closestHit: RaycastHit | null = null;
+
+    for (const entity of candidates) {
+      // Check mask if provided
+      if (mask !== undefined && (entity.collisionCategory & mask) === 0) continue;
+
+      // Check filter if provided
+      if (filter && !filter(entity)) continue;
+
+      const collider = createCollider(entity);
+      if (collider) {
+        const hit = raycastCollider(collider, ray.origin, ray.direction, ray.length);
+        if (hit) {
+          if (!closestHit || hit.distance < closestHit.distance) {
+            closestHit = hit;
+          }
+        }
+      }
+    }
+
+    return closestHit;
   }
 
   private queryAABBInternal(bounds: AABB, out: Set<Entity>): void {
