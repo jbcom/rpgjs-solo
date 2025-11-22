@@ -1,4 +1,5 @@
 import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition } from "@rpgjs/server";
+import { provideTiledMap } from "@rpgjs/tiledmap/server";
 
 export function Event() {
   return {
@@ -27,6 +28,7 @@ export function Event() {
 
 export default createServer({
   providers: [
+    provideTiledMap(),
     provideServerModules([
       {
         player: {
@@ -35,7 +37,7 @@ export default createServer({
           },
           async onConnected(player: RpgPlayer) {
             player.name.set('plop')
-            await player.changeMap("simplemap", {
+            await player.changeMap("map", {
               x: Math.floor(100),
               y: Math.floor(100),
             });
@@ -81,14 +83,14 @@ export default createServer({
             id: 'world',
             maps: [
               {
-                id: 'simplemap',
+                id: 'map',
                 worldX: 2048,
                 worldY: 0,
                 width: 2048,
                 height: 2048,
               },
               {
-                id: 'simplemap2',
+                id: 'simplemap',
                 worldX: 0,
                 worldY: 0,
                 width: 2048,

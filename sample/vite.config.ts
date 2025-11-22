@@ -6,6 +6,11 @@ import vue from '@vitejs/plugin-vue';
 export default defineConfig({
   plugins: [
     vue(),
+    tiledMapFolderPlugin({
+      sourceFolder: './src/tiled',      // Folder containing your TMX files
+      publicPath: '/map',               // Public URL path for maps
+      buildOutputPath: 'assets/data'    // Build output directory
+    }),
     ...rpgjs({
       server: startServer
     })

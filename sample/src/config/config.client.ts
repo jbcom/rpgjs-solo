@@ -14,20 +14,25 @@ import WoodUiComponent from "../components/wood-ui.ce";
 import VueComponent from "../vue-component-with-injections.vue";
 import { signal, effect } from 'canvasengine'
 import { provideVueGui } from "@rpgjs/vue";
+import { provideTiledMap } from "@rpgjs/tiledmap/client";
+
 
 export default {
   providers: [
-    provideLoadMap((id: string) => {
-       return {
-          id,
-          component: Map,
-          width: 2048,
-          height: 1536,
-          data: {
-            color: id === "simplemap" ? "red" : "blue"
-          },
-          hitboxes: []
-       }
+    // provideLoadMap((id: string) => {
+    //    return {
+    //       id,
+    //       component: Map,
+    //       width: 2048,
+    //       height: 1536,
+    //       data: {
+    //         color: id === "simplemap" ? "red" : "blue"
+    //       },
+    //       hitboxes: []
+    //    }
+    // }),
+    provideTiledMap({
+      basePath: "map"
     }),
     provideVueGui(),
     provideClientGlobalConfig(),

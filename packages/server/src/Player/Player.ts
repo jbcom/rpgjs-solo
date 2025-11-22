@@ -322,7 +322,10 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     if (!this.map) return false;
     if (this.map.physic) {
       // Skip collision check for teleportation (allow teleporting through walls)
-      this.map.physic.updateHitbox(this.id, positions.x, positions.y, undefined, undefined, true);
+      const entity = this.map.physic.getEntityByUUID(this.id);
+      if (entity) {
+        this.map.physic.teleport(entity, { x: positions.x, y: positions.y });
+      }
     }
     else {
       this.x.set(positions.x)
