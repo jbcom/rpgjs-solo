@@ -5,7 +5,7 @@ import { CollisionInfo } from '../collision/Collider';
 
 const MOVEMENT_EPSILON = 1e-3;
 const MOVEMENT_EPSILON_SQ = MOVEMENT_EPSILON * MOVEMENT_EPSILON;
-const DIRECTION_CHANGE_THRESHOLD = 0.1;
+const DIRECTION_CHANGE_THRESHOLD = 1.0;
 const DIRECTION_CHANGE_THRESHOLD_SQ = DIRECTION_CHANGE_THRESHOLD * DIRECTION_CHANGE_THRESHOLD;
 const POSITION_EPSILON = 1e-3;
 const DIRECTION_EPSILON_RADIANS = (5 * Math.PI) / 180;
@@ -278,7 +278,9 @@ export class Entity {
     this.radius = config.radius ?? 0;
     this.width = config.width ?? 0;
     this.height = config.height ?? 0;
-    this.capsule = config.capsule;
+    if (config.capsule !== undefined) {
+      this.capsule = config.capsule;
+    }
     this.continuous = config.continuous ?? false;
 
     // State
@@ -495,14 +497,20 @@ export class Entity {
    * - **Purpose:** detect when an entity starts or stops moving for gameplay reactions, animations, or network sync.
    * - **Design:** lightweight Set-based listeners returning an unsubscribe closure to keep GC pressure low.
    * - **Movement detection:** uses `MOVEMENT_EPSILON` threshold to determine if entity is moving.
+   * - **Intensity:** provides the movement speed magnitude to allow fine-grained animation control (e.g., walk vs run).
    *
    * @param handler - Movement state change listener
    * @returns Unsubscribe closure
    * @example
    * ```typescript
-   * const unsubscribe = entity.onMovementChange(({ isMoving }) => {
-   *   console.log('Entity is', isMoving ? 'moving' : 'stopped');
-   *   // Update animations, sync network, etc.
+   * const unsubscribe = entity.onMovementChange(({ isMoving, intensity }) => {
+   *   console.log('Entity is', isMoving ? 'moving' : 'stopped', 'at speed', intensity);
+   *   // Update animations based on intensity
+   *   if (isMoving && intensity > 100) {
+   *     // Fast movement - use run animation
+   *   } else if (isMoving) {
+   *     // Slow movement - use walk animation
+   *   }
    * });
    * ```
    */
@@ -515,7 +523,8 @@ export class Entity {
    * Manually notifies that the movement state has changed.
    *
    * - **Purpose:** allow external code to trigger movement state sync hooks when velocity is modified directly.
-   * - **Design:** checks if movement state (moving/stopped) has changed and notifies handlers.
+   * - **Design:** checks if movement state (moving/stopped) has changed and notifies handlers with movement intensity.
+   * - **Intensity:** calculated as the magnitude of the velocity vector (speed in pixels per second).
    *
    * @example
    * ```typescript
@@ -524,14 +533,14 @@ export class Entity {
    * ```
    */
   public notifyMovementChange(): void {
+    const isMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
+    const intensity = this.velocity.length(); // Movement speed magnitude
+
     if (this.movementChangeHandlers.size === 0) {
       // Still update wasMoving even if no handlers to track state correctly
-      const isMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
       this.wasMoving = isMoving;
       return;
     }
-
-    const isMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
 
     // Only notify if state actually changed
     if (isMoving !== this.wasMoving) {
@@ -540,6 +549,7 @@ export class Entity {
       const payload: EntityMovementChangeEvent = {
         entity: this,
         isMoving,
+        intensity,
       };
 
       for (const handler of this.movementChangeHandlers) {
@@ -947,33 +957,67 @@ export class Entity {
       return 'idle';
     }
 
+    // If we were idle, just return the strongest direction without bias
+    if (this.lastCardinalDirection === 'idle') {
+      const absX = Math.abs(direction.x);
+      const absY = Math.abs(direction.y);
+      if (absX >= absY) {
+        return direction.x >= 0 ? 'right' : 'left';
+      }
+      return direction.y >= 0 ? 'down' : 'up';
+    }
+
+    // Check for 180-degree flips (Bounce protection)
+    // If the new direction is strictly opposite to the last one, we require a higher velocity
+    // to accept the change. This filters out collision rebounds.
+    const isOpposite =
+      (this.lastCardinalDirection === 'left' && direction.x > 0.5) ||
+      (this.lastCardinalDirection === 'right' && direction.x < -0.5) ||
+      (this.lastCardinalDirection === 'up' && direction.y > 0.5) ||
+      (this.lastCardinalDirection === 'down' && direction.y < -0.5);
+
+    const speedSq = this.velocity.lengthSquared();
+
+    // Threshold to accept a 180-degree turn (avoid jitter on bounce)
+    // We expect a "real" turn to have some acceleration or accumulated velocity
+    if (isOpposite && speedSq < 100.0) { // Speed < 10
+      return this.lastCardinalDirection;
+    }
+
     const absX = Math.abs(direction.x);
     const absY = Math.abs(direction.y);
-    const bias = 2.0; // Strong bias to keep current direction (avoids jitter on collision)
+    const bias = 2.0; // Strong bias to keep current direction
 
     // Hysteresis: favor current axis if we have a valid last direction
-    if (this.lastCardinalDirection !== 'idle') {
-      // console.log('Hysteresis check:', this.lastCardinalDirection, absX, absY, bias);
-      if (['left', 'right'].includes(this.lastCardinalDirection)) {
-        // Currently horizontal: stick to it unless vertical is significantly stronger
-        if (absX * bias >= absY) {
-          // console.log('Keeping horizontal');
-          return direction.x >= 0 ? 'right' : 'left';
-        }
-      } else {
-        // Currently vertical: stick to it unless horizontal is significantly stronger
-        if (absY * bias >= absX) {
-          // console.log('Keeping vertical');
-          return direction.y >= 0 ? 'down' : 'up';
-        }
+    if (['left', 'right'].includes(this.lastCardinalDirection)) {
+      // Currently horizontal: stick to it unless vertical is significantly stronger
+      // AND vertical component has meaningful speed (prevents slide when blocked)
+      if (absY > absX * bias) {
+         // Check if the "new" vertical movement is actually significant
+         // e.g. if we are blocked Horizontally (x=0), absY will win even if it's 0.0001 without this check
+         if (Math.abs(this.velocity.y) > 5.0) {
+             return direction.y >= 0 ? 'down' : 'up';
+         }
       }
+      // Default: keep horizontal orientation, just update sign if needed (and not filtered by opposite check)
+      // If we are here, it means we didn't switch axis, and we didn't trigger the "Opposite" guard above.
+      // However, if we are "blocked" (velocity very low), we should probably not even flip sign.
+      if (speedSq > 1.0) {
+        return direction.x >= 0 ? 'right' : 'left';
+      }
+      return this.lastCardinalDirection;
+    } else {
+      // Currently vertical: stick to it unless horizontal is significantly stronger
+      if (absX > absY * bias) {
+         if (Math.abs(this.velocity.x) > 5.0) {
+            return direction.x >= 0 ? 'right' : 'left';
+         }
+      }
+      if (speedSq > 1.0) {
+        return direction.y >= 0 ? 'down' : 'up';
+      }
+      return this.lastCardinalDirection;
     }
-
-    if (absX >= absY) {
-      return direction.x >= 0 ? 'right' : 'left';
-    }
-
-    return direction.y >= 0 ? 'down' : 'up';
   }
 
   /**
@@ -1034,6 +1078,8 @@ export type EntityDirectionSyncHandler = (event: EntityDirectionSyncEvent) => vo
 export interface EntityMovementChangeEvent {
   entity: Entity;
   isMoving: boolean;
+  /** Movement intensity (speed magnitude) */
+  intensity: number;
 }
 
 export type EntityMovementChangeHandler = (event: EntityMovementChangeEvent) => void;

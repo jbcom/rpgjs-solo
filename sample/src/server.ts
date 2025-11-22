@@ -54,7 +54,10 @@ export default createServer({
               // player.name.set('test')
               const event = player.getCurrentMap()?.getEvents()[0]
               if (event) {
-                event.moveTo(player)
+                // event.moveTo({
+                //   x: 100,
+                //   y: 300
+                // })
               }
 
             }

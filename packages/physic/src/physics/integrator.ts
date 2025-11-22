@@ -102,8 +102,9 @@ export class Integrator {
     // Check if movement state changed (after damping/clamping)
     entity.notifyMovementChange();
 
-    // Check if direction changed
-    entity.notifyDirectionChange();
+    // Note: We don't call notifyDirectionChange() here because direction changes
+    // should only be triggered by intentional velocity changes (setVelocity, applyImpulse),
+    // not by physics integration steps which include collision corrections.
 
     // Update position: x = x + v * dt
     const oldPosition = entity.position.clone();
@@ -194,8 +195,9 @@ export class Integrator {
     // Check if movement state changed (after damping/clamping)
     entity.notifyMovementChange();
 
-    // Check if direction changed
-    entity.notifyDirectionChange();
+    // Note: We don't call notifyDirectionChange() here because direction changes
+    // should only be triggered by intentional velocity changes (setVelocity, applyImpulse),
+    // not by physics integration steps which include collision corrections.
 
     // Notify position change if position actually changed
     const delta = entity.position.sub(oldPosition);

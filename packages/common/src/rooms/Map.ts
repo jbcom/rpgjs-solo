@@ -753,6 +753,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     (entity as any).owner = options.owner;
 
     entity.onDirectionChange(({ cardinalDirection }) => {
+      // hack to prevent direction in client side
       if (!('$send' in this)) return;
       const owner = (entity as any).owner;
       if (!owner) return;
@@ -760,14 +761,19 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       owner.changeDirection(cardinalDirection as Direction);
     });
 
-    entity.onMovementChange(({ isMoving }) => {
+    entity.onMovementChange(({ isMoving, intensity }) => {
       const owner = (entity as any).owner;
       if (!owner) return;
-      if (isMoving) {
+      // Only change animation if intensity is low (avoid animation flicker on micro-movements)
+      // Intensity threshold: 10 pixels/second (adjust based on your game's needs)
+      const LOW_INTENSITY_THRESHOLD = 10;
+      
+      if (isMoving && intensity > LOW_INTENSITY_THRESHOLD) {
         owner.animationName.set("walk");
-      } else {
+      } else if (!isMoving) {
         owner.animationName.set("stand");
       }
+      // If moving with high intensity, keep current animation (e.g., already running)
     });
 
     // Register position sync handler to update owner.x and owner.y
@@ -922,7 +928,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     if (!entity) return [];
 
     // Query nearby entities using AABB
-    const radius = entity.radius || Math.max(entity.width || 0, entity.height || 0) / 2;
+    const radius = 4;
     const aabb = new AABB(
       entity.position.x - radius,
       entity.position.y - radius,

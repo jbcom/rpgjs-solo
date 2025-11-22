@@ -140,12 +140,16 @@ export class CollisionResolver {
     if (!entityA.isStatic()) {
       entityA.velocity.addInPlace(impulse.mul(-entityA.invMass));
       entityA.notifyMovementChange();
-      entityA.notifyDirectionChange();
+      // Note: We don't call notifyDirectionChange() here because collision response
+      // should not change the entity's intended direction (visual orientation).
+      // Direction changes should only come from intentional movement (player input, AI).
     }
     if (!entityB.isStatic()) {
       entityB.velocity.addInPlace(impulse.mul(entityB.invMass));
       entityB.notifyMovementChange();
-      entityB.notifyDirectionChange();
+      // Note: We don't call notifyDirectionChange() here because collision response
+      // should not change the entity's intended direction (visual orientation).
+      // Direction changes should only come from intentional movement (player input, AI).
     }
 
     // Friction (simplified, using velocity tangent to collision)
@@ -166,12 +170,14 @@ export class CollisionResolver {
       if (!entityA.isStatic()) {
         entityA.velocity.addInPlace(frictionImpulse.mul(-entityA.invMass));
         entityA.notifyMovementChange();
-        entityA.notifyDirectionChange();
+        // Note: We don't call notifyDirectionChange() here because friction adjustments
+        // should not change the entity's intended direction (visual orientation).
       }
       if (!entityB.isStatic()) {
         entityB.velocity.addInPlace(frictionImpulse.mul(entityB.invMass));
         entityB.notifyMovementChange();
-        entityB.notifyDirectionChange();
+        // Note: We don't call notifyDirectionChange() here because friction adjustments
+        // should not change the entity's intended direction (visual orientation).
       }
     }
   }

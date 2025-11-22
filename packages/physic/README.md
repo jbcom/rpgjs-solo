@@ -704,7 +704,7 @@ entity.wakeUp(); // Wake up
 - `onCollisionEnter` and `onCollisionExit` fire when the entity starts or stops colliding with another body.
 - `onPositionChange` fires whenever the entity's position (x, y) changes. Useful for synchronizing rendering, network updates, or logging.
 - `onDirectionChange` fires when the entity's direction changes, providing both the normalized direction vector and a simplified cardinal direction (`CardinalDirection`: `'left'`, `'right'`, `'up'`, `'down'`, or `'idle'`).
-- `onMovementChange` fires when the entity starts or stops moving (based on velocity threshold). Useful for animations, gameplay reactions, or network sync.
+- `onMovementChange` fires when the entity starts or stops moving (based on velocity threshold). Provides `isMoving` boolean and `intensity` (speed magnitude in pixels/second) for fine-grained animation control. Useful for animations, gameplay reactions, or network sync.
 
 You can also manually trigger these hooks using `notifyPositionChange()`, `notifyDirectionChange()`, and `notifyMovementChange()` when modifying position or velocity directly.
 
@@ -727,9 +727,21 @@ player.onDirectionChange(({ cardinalDirection, direction }) => {
 });
 
 // Detect when player starts or stops moving
-player.onMovementChange(({ isMoving }) => {
-  console.log(`Player is ${isMoving ? 'moving' : 'stopped'}`);
-  // Update animations, sync network, etc.
+player.onMovementChange(({ isMoving, intensity }) => {
+  console.log(`Player is ${isMoving ? 'moving' : 'stopped'} at speed ${intensity.toFixed(1)} px/s`);
+  
+  // Update animations based on intensity
+  if (isMoving && intensity > 100) {
+    // Fast movement - use run animation
+    playerAnimation = 'run';
+  } else if (isMoving && intensity < 10) {
+    // Slow movement - use walk animation (avoid flicker on micro-movements)
+    playerAnimation = 'walk';
+  } else if (!isMoving) {
+    // Stopped - use idle animation
+    playerAnimation = 'idle';
+  }
+  // Sync network, etc.
 });
 
 // Manually trigger position sync after direct modification
