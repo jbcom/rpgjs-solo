@@ -50,6 +50,7 @@ export default createServer({
 
           },
           async onInput(player: RpgPlayer, input: any) {
+            console.log(player.x(), player.y())
             if (input.action) {
               //  player.wood.update(wood => wood + 1)
               //  player.showComponentAnimation('wood')
@@ -84,8 +85,8 @@ export default createServer({
             maps: [
               {
                 id: 'map',
-                worldX: 2048,
-                worldY: 0,
+                worldX: 0,
+                worldY: 640,
                 width: 2048,
                 height: 2048,
               },
@@ -93,8 +94,8 @@ export default createServer({
                 id: 'simplemap',
                 worldX: 0,
                 worldY: 0,
-                width: 2048,
-                height: 2048,
+                width: 800,
+                height: 640,
               }
             ]
           }

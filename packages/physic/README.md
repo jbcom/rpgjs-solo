@@ -695,6 +695,7 @@ entity.applyImpulse(new Vector2(5, 0));
 entity.freeze(); // Make static
 entity.sleep(); // Put to sleep
 entity.wakeUp(); // Wake up
+entity.stopMovement(); // Stop all movement immediately (keeps entity dynamic)
 ```
 
 #### Per-entity Hooks
@@ -790,6 +791,7 @@ loop();
 - `MovementManager` accepts entities directly or can be instantiated with a resolver (`MovementManager.forEngine(engine)` is used internally by `PhysicsEngine`).
 - Strategies consume the generic `MovementBody` interface so you can wrap custom bodies; `@rpgjs/common` exposes an adapter for Matter.js hitboxes.
 - Call `movement.update(dt)` manually when you need custom timing, or use `engine.stepWithMovements(dt)` to update movements and advance the simulation in one call.
+- Use `movement.stopMovement(entity)` to completely stop an entity's movement, clearing all strategies and stopping velocity (useful when changing maps or teleporting).
 
 ### Static Obstacles
 

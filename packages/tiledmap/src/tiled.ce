@@ -5,10 +5,14 @@
 <script>
     import { EventLayerComponent } from "@rpgjs/client";
     import { TiledMap } from "@canvasengine/presets";
-    import { signal } from "canvasengine";
+    import { signal, effect } from "canvasengine";
 
     const { data, params } = defineProps()
 
     const map = signal(data())
     const basePath = signal(params().basePath)
+
+    effect(() => {
+        map.set(data())
+    })
 </script>

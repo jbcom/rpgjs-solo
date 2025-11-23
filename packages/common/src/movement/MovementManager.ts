@@ -29,6 +29,10 @@ export class MovementManager {
     this.core.clear(id);
   }
 
+  stopMovement(id: string): void {
+    this.core.stopMovement(id);
+  }
+
   hasActiveStrategies(id: string): boolean {
     return this.core.hasActiveStrategies(id);
   }

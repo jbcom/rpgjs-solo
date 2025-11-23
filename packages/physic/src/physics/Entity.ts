@@ -872,6 +872,49 @@ export class Entity {
   }
 
   /**
+   * Stops all movement immediately
+   * 
+   * Completely stops the entity's movement by:
+   * - Setting velocity to zero
+   * - Setting angular velocity to zero
+   * - Clearing accumulated forces and torques
+   * - Waking up the entity if it was sleeping
+   * - Notifying movement state change
+   * 
+   * Unlike `freeze()`, this method keeps the entity dynamic and does not
+   * change its state. It's useful for stopping movement when changing maps,
+   * teleporting, or when you need to halt an entity without making it static.
+   * 
+   * @returns This entity for chaining
+   * 
+   * @example
+   * ```ts
+   * // Stop movement when changing maps
+   * if (mapChanged) {
+   *   entity.stopMovement();
+   * }
+   * 
+   * // Stop movement after teleporting
+   * entity.position.set(100, 200);
+   * entity.stopMovement();
+   * 
+   * // Stop movement when player dies
+   * if (player.isDead()) {
+   *   playerEntity.stopMovement();
+   * }
+   * ```
+   */
+  public stopMovement(): Entity {
+    this.velocity.set(0, 0);
+    this.angularVelocity = 0;
+    this.clearForces();
+    this.wakeUp();
+    this.notifyMovementChange();
+    this.notifyDirectionChange();
+    return this;
+  }
+
+  /**
    * Clamps velocities to maximum values
    */
   public clampVelocities(): void {

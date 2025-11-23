@@ -251,10 +251,10 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     if (typeof (player as any).autoChangeMap === 'function') {
       const mapChanged = await (player as any).autoChangeMap({ x: nextX, y: nextY }, direction);
       if (mapChanged) {
-        return; // Don't continue movement if map changed
+       this.stopMovement(player);
+       return
       }
     }
-    // Perform normal movement
     this.moveBody(player, direction);
   }
 
@@ -723,11 +723,13 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       throw new Error("Character requires an owner object with a string id");
     }
 
-    const id = options.owner.id;
-    const radius = options.radius ?? 25;
+    const owner = options.owner;
+
+    const id = owner.id;
+    const radius = owner.hitbox?.w ?? options.radius ?? 25;
     const diameter = radius * 2;
-    const topLeftX = options.x - radius;
-    const topLeftY = options.y - radius;
+    const topLeftX = owner.x() - radius;
+    const topLeftY = owner.y() - radius;
 
     const centerX = topLeftX + diameter / 2;
     const centerY = topLeftY + diameter / 2;
@@ -751,7 +753,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     }
 
     // Store owner reference directly on entity for syncing positions
-    (entity as any).owner = options.owner;
+    (entity as any).owner = owner;
 
     entity.onDirectionChange(({ cardinalDirection }) => {
       // hack to prevent direction in client side
@@ -763,8 +765,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     });
 
     entity.onMovementChange(({ isMoving, intensity }) => {
-      const owner = (entity as any).owner;
-      if (!owner) return;
       // Only change animation if intensity is low (avoid animation flicker on micro-movements)
       // Intensity threshold: 10 pixels/second (adjust based on your game's needs)
       const LOW_INTENSITY_THRESHOLD = 10;
@@ -779,9 +779,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     // Register position sync handler to update owner.x and owner.y
     entity.onPositionChange(({ x, y }) => {
-      const owner = (entity as any).owner;
-      if (!owner) return;
-
       // Calculate top-left from center
       const width = entity.width || (entity.radius ? entity.radius * 2 : 32);
       const height = entity.height || (entity.radius ? entity.radius * 2 : 32);
@@ -891,17 +888,46 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
   /**
    * Stop movement for a player
+   * 
+   * Completely stops all movement for a player, including:
+   * - Clearing all active movement strategies (dash, linear moves, etc.)
+   * - Setting velocity to zero
+   * - Resetting intended direction
+   * 
+   * This method is particularly useful when changing maps to ensure
+   * the player doesn't carry over movement from the previous map.
+   * 
+   * @param player - The player to stop
+   * @returns True if the player was found and movement was stopped
+   * 
+   * @example
+   * ```ts
+   * // Stop player movement when changing maps
+   * if (mapChanged) {
+   *   map.stopMovement(player);
+   * }
+   * 
+   * // Stop movement when player dies
+   * if (player.isDead()) {
+   *   map.stopMovement(player);
+   * }
+   * ```
    * @protected
    */
   protected stopMovement(player: any): boolean {
     const entity = this.physic.getEntityByUUID(player.id);
     if (!entity) return false;
 
+    // Stop all movement using the MovementManager (clears strategies and stops entity movement)
+    this.moveManager.stopMovement(player.id);
+
+    // Reset intended direction
     if (typeof player.setIntendedDirection === "function") {
       player.setIntendedDirection(null);
     }
 
-    entity.setVelocity({ x: 0, y: 0 });
+    player.pendingInputs = [];
+    
     return true;
   }
 

@@ -113,6 +113,52 @@ export class MovementManager {
   }
 
   /**
+   * Stops all movement for an entity immediately
+   * 
+   * This method completely stops an entity's movement by:
+   * - Removing all active movement strategies (dash, linear moves, etc.)
+   * - Stopping the entity's velocity and angular velocity
+   * - Clearing accumulated forces
+   * - Waking up the entity if it was sleeping
+   * 
+   * This is useful when changing maps, teleporting, or when you need
+   * to halt an entity's movement completely without making it static.
+   * 
+   * @param target - Entity, MovementBody, or identifier
+   * 
+   * @example
+   * ```ts
+   * // Stop movement when changing maps
+   * if (mapChanged) {
+   *   movement.stopMovement(playerEntity);
+   * }
+   * 
+   * // Stop movement after teleporting
+   * entity.position.set(100, 200);
+   * movement.stopMovement(entity);
+   * 
+   * // Stop movement when player dies
+   * if (player.isDead()) {
+   *   movement.stopMovement(playerEntity);
+   * }
+   * ```
+   */
+  stopMovement(target: Entity | MovementBody | string): void {
+    const body = this.resolveTarget(target);
+    
+    // Remove all movement strategies
+    this.clear(target);
+    
+    // If the body wraps an Entity, stop its movement directly
+    if ('getEntity' in body && typeof (body as any).getEntity === 'function') {
+      const entity = (body as any).getEntity();
+      if (entity && typeof entity.stopMovement === 'function') {
+        entity.stopMovement();
+      }
+    }
+  }
+
+  /**
    * Checks if an entity has active strategies.
    *
   * @param target - Entity or identifier
