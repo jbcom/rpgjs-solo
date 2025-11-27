@@ -332,8 +332,16 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * This method processes all pending inputs for a player while performing
    * anti-cheat validation to prevent time manipulation and frame skipping.
    * It validates the time deltas between inputs and ensures they are within
-   * acceptable ranges. After processing, it saves the last frame position
-   * for use in packet interception.
+   * acceptable ranges.
+   * 
+   * ## Architecture
+   * 
+   * **Important**: This method only updates entity velocities - it does NOT step
+   * the physics engine. Physics simulation is handled centrally by the game loop
+   * (`tick$` -> `runFixedTicks`). This ensures:
+   * - Consistent physics timing (60fps fixed timestep)
+   * - No double-stepping when multiple inputs are processed
+   * - Deterministic physics regardless of input frequency
    * 
    * @param playerId - The ID of the player to process inputs for
    * @param controls - Optional anti-cheat configuration
@@ -438,13 +446,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       lastProcessedFrame = input.frame;
     }
 
-    // Step physics once after processing all inputs for deterministic physics processing
-    // This matches the pattern used in the physic example where stepOneTick() 
-    // is called in the game loop, not after each individual input. We process all inputs
-    // first to determine the final velocity, then step once.
-    // By processing all inputs before stepping, we avoid multiple steps that cause sliding
+    // Physics is now handled by the main game loop (tick$ -> runFixedTicks)
+    // We only update timestamps and handle idle timeout here
+    // The physics step will be executed in the next tick cycle
     if (hasProcessedInputs) {
-      this.forceSingleTick();
       player.lastProcessedInputTs = lastProcessedTime;
     } else {
       const idleTimeout = Math.max(config.minTimeBetweenInputs * 4, 50);
@@ -454,9 +459,6 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         player.lastProcessedInputTs = 0;
       }
     }
-
-    // Apply frames after all physics steps have been processed
-    player.applyFrames()
 
     return {
       player,

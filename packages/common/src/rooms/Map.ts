@@ -67,12 +67,33 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    * It's shared using the share() operator, meaning that all subscribers will receive
    * events from a single interval rather than creating multiple intervals.
    * 
+   * ## Physics Loop Architecture
+   * 
+   * The physics simulation is centralized in this game loop:
+   * 
+   * 1. **Input Processing** (`processInput`): Only updates entity velocities, does NOT step physics
+   * 2. **Game Loop** (`tick$` -> `runFixedTicks`): Executes physics simulation with fixed timestep
+   * 3. **Fixed Timestep Pattern**: Accumulator-based approach ensures deterministic physics
+   * 
+   * ```
+   * Input Events ─────────────────────────────────────────────────────────────►
+   *     │                                                                       
+   *     ▼ (update velocity only)                                               
+   * ┌─────────────────────────────────────────────────────────────────────────┐
+   * │                        Game Loop (tick$)                                │
+   * │  ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐       │
+   * │  │ updateMovements │ → │  stepOneTick    │ → │ postTickUpdates │       │
+   * │  │ (apply velocity)│   │ (physics step)  │   │ (zones, sync)   │       │
+   * │  └─────────────────┘   └─────────────────┘   └─────────────────┘       │
+   * └─────────────────────────────────────────────────────────────────────────┘
+   * ```
+   * 
    * @example
    * ```ts
-   * // Subscribe to the game tick to update entity positions
-   * map.tick$.subscribe(timestamp => {
-   *   // Update game entities based on elapsed time
-   *   this.updateEntities(timestamp);
+   * // Subscribe to the game tick for custom updates
+   * map.tick$.subscribe(({ delta, timestamp }) => {
+   *   // Custom game logic runs alongside physics
+   *   this.updateCustomEntities(delta);
    * });
    * ```
    */
@@ -280,6 +301,43 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     return this.players()[id] ?? this.events()[id];
   }
 
+  /**
+   * Execute physics simulation with fixed timestep
+   * 
+   * This method runs the physics engine using a fixed timestep accumulator pattern.
+   * It ensures deterministic physics regardless of frame rate by:
+   * 1. Accumulating delta time
+   * 2. Running fixed-size physics steps until the accumulator is depleted
+   * 3. Calling `updateMovements()` before each step to apply velocity changes
+   * 4. Running post-tick updates (zones, callbacks) after each step
+   * 
+   * ## Architecture
+   * 
+   * The physics loop is centralized here and called from `tick$` subscription.
+   * Input processing (`processInput`) only updates entity velocities - it does NOT
+   * step the physics. This ensures:
+   * - Consistent physics timing (60fps fixed timestep)
+   * - No double-stepping when inputs are processed
+   * - Proper accumulator-based interpolation support
+   * 
+   * @param deltaMs - Time elapsed since last call in milliseconds
+   * @param hooks - Optional callbacks for before/after each physics step
+   * @returns Number of physics ticks executed
+   * 
+   * @example
+   * ```ts
+   * // Called automatically by tick$ subscription
+   * this.tickSubscription = this.tick$.subscribe(({ delta }) => {
+   *   this.runFixedTicks(delta);
+   * });
+   * 
+   * // Or manually with hooks for debugging
+   * this.runFixedTicks(16, {
+   *   beforeStep: () => console.log('Before physics step'),
+   *   afterStep: (tick) => console.log(`Physics tick ${tick} completed`)
+   * });
+   * ```
+   */
   protected runFixedTicks(
     deltaMs: number,
     hooks?: {
@@ -298,14 +356,54 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     while (this.physicsAccumulatorMs >= fixedStepMs) {
       this.physicsAccumulatorMs -= fixedStepMs;
       hooks?.beforeStep?.();
+      
+      // Update movements before physics step (applies velocity changes from inputs)
+      this.physic.updateMovements();
+      
       const tick = this.physic.stepOneTick();
       executed += 1;
+      
+      // Run post-tick updates (zones, position sync callbacks)
+      this.runPostTickUpdates();
+      
       hooks?.afterStep?.(tick);
     }
 
     return executed;
   }
 
+  /**
+   * Force a single physics tick outside of the normal game loop
+   * 
+   * This method is primarily used for **client-side prediction** where the client
+   * needs to immediately simulate physics in response to local input, rather than
+   * waiting for the next game loop tick.
+   * 
+   * ## Use Cases
+   * 
+   * - **Client-side prediction**: Immediately simulate player movement for responsive feel
+   * - **Testing**: Force a physics step in unit tests
+   * - **Special effects**: Immediate physics response for specific game events
+   * 
+   * ## Important
+   * 
+   * This method should NOT be used on the server for normal input processing.
+   * Server-side physics is handled by `runFixedTicks` in the main game loop to ensure
+   * deterministic simulation.
+   * 
+   * @param hooks - Optional callbacks for before/after the physics step
+   * @returns The physics tick number
+   * 
+   * @example
+   * ```ts
+   * // Client-side: immediately simulate predicted movement
+   * class RpgClientMap extends RpgCommonMap {
+   *   stepPredictionTick(): void {
+   *     this.forceSingleTick();
+   *   }
+   * }
+   * ```
+   */
   protected forceSingleTick(hooks?: { beforeStep?: () => void; afterStep?: (tick: number) => void }): number {
     hooks?.beforeStep?.();
     this.physic.updateMovements();

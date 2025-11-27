@@ -735,7 +735,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
       map.moveManager.add(
         (this as unknown as PlayerWithMixins).id,
-        new SeekAvoid(engine, () => staticTarget, 3, 50, 5)
+        new SeekAvoid(engine, () => staticTarget, 80, 140, 80, 48)
       );
     }
 
