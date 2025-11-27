@@ -67,6 +67,11 @@ export class CollisionResolver {
   /**
    * Separates two entities by moving them apart
    * 
+   * This method applies position corrections to resolve penetration between
+   * colliding entities. After applying corrections, it notifies position change
+   * handlers to ensure proper synchronization with game logic (e.g., updating
+   * owner.x/y signals for network sync).
+   * 
    * @param entityA - First entity
    * @param entityB - Second entity
    * @param normal - Separation normal (from A to B)
@@ -93,12 +98,15 @@ export class CollisionResolver {
     const correctionA = normal.mul(-correction * (entityA.invMass / totalInvMass));
     const correctionB = normal.mul(correction * (entityB.invMass / totalInvMass));
 
-    // Apply corrections
+    // Apply corrections and notify position change handlers
+    // This ensures that owner.x/y signals are updated after collision resolution
     if (!entityA.isStatic()) {
       entityA.position.addInPlace(correctionA);
+      entityA.notifyPositionChange();
     }
     if (!entityB.isStatic()) {
       entityB.position.addInPlace(correctionB);
+      entityB.notifyPositionChange();
     }
   }
 

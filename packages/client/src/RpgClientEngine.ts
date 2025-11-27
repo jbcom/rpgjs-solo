@@ -140,7 +140,6 @@ export class RpgClientEngine<T = any> {
 
       if (data.pId) this.playerIdSignal.set(data.pId)
       // Apply client-side prediction filtering and server reconciliation
-
       this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: data }).subscribe();
 
       load(this.sceneMap, data, true);

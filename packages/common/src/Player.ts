@@ -52,8 +52,11 @@ export abstract class RpgCommonPlayer {
   @id() id: string;
   @sync() name = signal("");
   @sync() type = signal("");
-  @persist() x = signal(0);
-  @persist() y = signal(0);
+  // x and y must be @sync() to ensure initial positions are sent to client
+  // The positions represent TOP-LEFT coordinates of the character's hitbox
+  // @persist() only persists server-side but doesn't sync to client
+  @sync() x = signal(0);
+  @sync() y = signal(0);
   @sync() z = signal(0);
   @sync() tint = signal("white");
   @sync() direction = signal(Direction.Down);

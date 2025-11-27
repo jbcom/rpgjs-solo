@@ -155,7 +155,6 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     player._onInit()
     this.dataIsReady$.pipe(
       finalize(() => {
-        player.applyFrames()
         this.hooks
           .callHooks("server-player-onJoinMap", player, this)
           .subscribe();
@@ -628,7 +627,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     eventInstance.x.set(x);
     eventInstance.y.set(y);
-    eventInstance.applyFrames()
+    //eventInstance.applyFrames()
     if (event.name) eventInstance.name.set(event.name);
 
     this.events()[id] = eventInstance;

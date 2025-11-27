@@ -28,7 +28,7 @@ export function Event() {
 
 export default createServer({
   providers: [
-    provideTiledMap(),
+  //  provideTiledMap(),
     provideServerModules([
       {
         player: {
@@ -37,14 +37,12 @@ export default createServer({
           },
           async onConnected(player: RpgPlayer) {
             player.name.set('plop')
-            await player.changeMap("map", {
-              x: Math.floor(100),
-              y: Math.floor(100),
-            });
+            await player.changeMap("map");
             // console.log(player.conn?.state)
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             player.setGraphic("hero");
+            player.teleport({ x: 100, y: 100 })
           },
           onLeaveMap: (player: RpgPlayer, map: RpgMap) => {
 
@@ -57,10 +55,7 @@ export default createServer({
               // player.name.set('test')
               const event = player.getCurrentMap()?.getEvents()[0]
               if (event) {
-                // event.moveTo({
-                //   x: 100,
-                //   y: 300
-                // })
+                event.moveTo(player)
               }
 
             }
@@ -75,7 +70,7 @@ export default createServer({
         },
         maps: [
           {
-            id: "simplemap",
+            id: "map",
             events: [{ x: 200, y: 200, event: Event() }],
           },
         ],

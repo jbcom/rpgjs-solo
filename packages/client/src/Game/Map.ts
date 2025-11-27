@@ -19,6 +19,7 @@ export class RpgClientMap extends RpgCommonMap<any> {
   reset() {
     this.players.set({})
     this.events.set({})
+    this.physic.clear()
   }
 
   stepPredictionTick(): void {

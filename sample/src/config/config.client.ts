@@ -19,21 +19,21 @@ import { provideTiledMap } from "@rpgjs/tiledmap/client";
 
 export default {
   providers: [
-    // provideLoadMap((id: string) => {
-    //    return {
-    //       id,
-    //       component: Map,
-    //       width: 2048,
-    //       height: 1536,
-    //       data: {
-    //         color: id === "simplemap" ? "red" : "blue"
-    //       },
-    //       hitboxes: []
-    //    }
-    // }),
-    provideTiledMap({
-      basePath: "map"
+    provideLoadMap((id: string) => {
+       return {
+          id,
+          component: Map,
+          width: 2048,
+          height: 1536,
+          data: {
+            color: id === "simplemap" ? "red" : "blue"
+          },
+          hitboxes: []
+       }
     }),
+    // provideTiledMap({
+    //   basePath: "map"
+    // }),
     provideVueGui(),
     provideClientGlobalConfig(),
     provideClientModules([

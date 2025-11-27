@@ -7,44 +7,58 @@ import { RpgClientEngine } from "../RpgClientEngine";
 
 export abstract class RpgClientObject extends RpgCommonPlayer {
   abstract type: string;
-  emitParticleTrigger = trigger()
-  particleName = signal('')
-  animationCurrentIndex = signal(0)
-  animationIsPlaying = signal(false)
-  _param = signal({})
-  frames: { x: number; y: number; ts: number }[] = []
+  emitParticleTrigger = trigger();
+  particleName = signal("");
+  animationCurrentIndex = signal(0);
+  animationIsPlaying = signal(false);
+  _param = signal({});
+  frames: { x: number; y: number; ts: number }[] = [];
 
   constructor() {
-    super()
+    super();
     this.hooks.callHooks("client-sprite-onInit", this).subscribe();
 
     this._frames.observable.subscribe(({ items }) => {
       if (!this.id) return;
       //if (this.id == this.engine.playerIdSignal()!) return;
-      this.frames = [...this.frames, ...items]
-    })
+      this.frames = [...this.frames, ...items];
+    });
 
     this.engine.tick
-      .pipe(
+      .pipe
       //throttleTime(10)
-    )
+      ()
       .subscribe(() => {
-        const frame = this.frames.shift()
+        const frame = this.frames.shift();
         if (frame) {
-          const entity = this.engine.scene.getBody(this.id)
-          const isLocalPlayer = this.id === this.engine.playerIdSignal()
+          const entity = this.engine.scene.getBody(this.id);
+          const isLocalPlayer = this.id === this.engine.playerIdSignal();
           if (entity && !isLocalPlayer) {
-            const { x: oldX, y: oldY } = entity.position
-            const dt = 1 / 60 // Assume 60 FPS for now
-            const velocity = {
-              x: (frame.x - oldX) / dt,
-              y: (frame.y - oldY) / dt
+            // Get old position in top-left mode to match frame coordinates
+            const oldPos = this.engine.scene.getBodyPosition(
+              this.id,
+              "top-left"
+            );
+            if (oldPos) {
+              const dt = 1 / 60; // Assume 60 FPS for now
+              const velocity = {
+                x: (frame.x - oldPos.x) / dt,
+                y: (frame.y - oldPos.y) / dt,
+              };
+              entity.setVelocity(velocity);
             }
-            entity.setVelocity(velocity)
           }
-          this.engine.scene.setBodyPosition(this.id, frame.x, frame.y)
+          
+          // Use "top-left" mode because frame coordinates are in top-left format
+          // (server sends top-left positions via x/y signals)
+          this.engine.scene.setBodyPosition(
+            this.id,
+            frame.x,
+            frame.y,
+            "top-left"
+          );
         }
-      })
+      });
   }
 
   get hooks() {
@@ -52,28 +66,28 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   }
 
   get engine() {
-    return inject(RpgClientEngine)
+    return inject(RpgClientEngine);
   }
 
-  private animationSubscription?: Subscription
+  private animationSubscription?: Subscription;
 
   flash(color: string, duration: number = 100) {
     return new Promise((resolve) => {
-      const lastTint = this.tint()
+      const lastTint = this.tint();
       this.tint.set(color);
       setTimeout(() => {
-        this.tint.set(lastTint)
-        resolve(true)
-      }, duration)
-    })
+        this.tint.set(lastTint);
+        resolve(true);
+      }, duration);
+    });
   }
 
   /**
    * Reset animation state when animation changes externally
-   * 
+   *
    * This method should be called when the animation changes due to movement
    * or other external factors to ensure the animation system doesn't get stuck
-   * 
+   *
    * @example
    * ```ts
    * // Reset when player starts moving
@@ -91,19 +105,19 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
 
   /**
    * Set a custom animation for a specific number of times
-   * 
+   *
    * Plays a custom animation for the specified number of repetitions.
    * The animation system prevents overlapping animations and automatically
    * returns to the previous animation when complete.
-   * 
+   *
    * @param animationName - Name of the animation to play
    * @param nbTimes - Number of times to repeat the animation (default: Infinity for continuous)
-   * 
+   *
    * @example
    * ```ts
    * // Play attack animation 3 times
    * player.setAnimation('attack', 3);
-   * 
+   *
    * // Play continuous spell animation
    * player.setAnimation('spell');
    * ```
@@ -119,22 +133,23 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
       this.animationSubscription.unsubscribe();
     }
 
-    this.animationSubscription = this.animationCurrentIndex.observable.subscribe(index => {
-      if (index >= nbTimes) {
-        this.animationCurrentIndex.set(0);
-        this.animationName.set(previousAnimationName);
-        this.animationIsPlaying.set(false);
-        if (this.animationSubscription) {
-          this.animationSubscription.unsubscribe();
-          this.animationSubscription = undefined;
+    this.animationSubscription =
+      this.animationCurrentIndex.observable.subscribe((index) => {
+        if (index >= nbTimes) {
+          this.animationCurrentIndex.set(0);
+          this.animationName.set(previousAnimationName);
+          this.animationIsPlaying.set(false);
+          if (this.animationSubscription) {
+            this.animationSubscription.unsubscribe();
+            this.animationSubscription = undefined;
+          }
         }
-      }
-    })
+      });
     this.animationName.set(animationName);
   }
 
   showComponentAnimation(id: string, params: any) {
-    const engine = inject(RpgClientEngine)
-    engine.getComponentAnimation(id).displayEffect(params, this)
+    const engine = inject(RpgClientEngine);
+    engine.getComponentAnimation(id).displayEffect(params, this);
   }
-}   
+}

@@ -707,6 +707,36 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    * Add a character to the physics world
    * @private
    */
+  /**
+   * Add a character entity to the physics world
+   * 
+   * Creates a physics entity for a character (player or NPC) with proper position handling.
+   * The owner's x/y signals represent **top-left** coordinates, while the physics entity
+   * uses **center** coordinates internally.
+   * 
+   * ## Position System
+   * 
+   * - `owner.x()` / `owner.y()` → **top-left** corner of the character's hitbox
+   * - `entity.position` → **center** of the physics collider
+   * - Conversion: `center = topLeft + (size / 2)`
+   * 
+   * @param options - Character configuration
+   * @returns The character's unique ID
+   * 
+   * @example
+   * ```ts
+   * // Player at top-left position (100, 100) with 32x32 hitbox
+   * // Physics entity will be at center (116, 116)
+   * this.addCharacter({
+   *   owner: player,
+   *   x: 116,  // center X (ignored, uses owner.x())
+   *   y: 116,  // center Y (ignored, uses owner.y())
+   *   kind: "hero"
+   * });
+   * ```
+   * 
+   * @private
+   */
   private addCharacter(options: {
     owner: any;
     x: number;
@@ -724,21 +754,35 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     }
 
     const owner = options.owner;
-
     const id = owner.id;
-    const radius = owner.hitbox?.w ?? options.radius ?? 25;
-    const diameter = radius * 2;
-    const topLeftX = owner.x() - radius;
-    const topLeftY = owner.y() - radius;
 
-    const centerX = topLeftX + diameter / 2;
-    const centerY = topLeftY + diameter / 2;
+    // Get hitbox dimensions - hitbox.w/h are the FULL dimensions, not radius
+    const hitbox = typeof owner.hitbox === "function" ? owner.hitbox() : owner.hitbox;
+    const width = hitbox?.w ?? 32;
+    const height = hitbox?.h ?? 32;
+
+    // Calculate radius from dimensions (use the larger dimension for circular collider)
+    const radius = Math.max(width, height) / 2;
+
+    // owner.x() and owner.y() are TOP-LEFT positions
+    const topLeftX = owner.x();
+    const topLeftY = owner.y();
+
+    // Convert to CENTER for physics engine
+    const centerX = topLeftX + width / 2;
+    const centerY = topLeftY + height / 2;
+
     const isStatic = !!options.isStatic;
 
     const entity = this.physic.createEntity({
       uuid: id,
       position: { x: centerX, y: centerY },
+      // Use radius for circular collision detection
       radius: Math.max(radius, 1),
+      // Also store explicit width/height for consistent position conversions
+      // This ensures getBodyPosition/setBodyPosition use the same dimensions
+      width: width,
+      height: height,
       mass: options.mass ?? (isStatic ? Infinity : 1),
       friction: options.friction ?? 0.4,
       linearDamping: isStatic ? 1 : 0.2,
@@ -778,19 +822,27 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     });
 
     // Register position sync handler to update owner.x and owner.y
+    // Store the hitbox dimensions at creation time to ensure consistent conversion
+    const entityWidth = width;
+    const entityHeight = height;
+
     entity.onPositionChange(({ x, y }) => {
-      // Calculate top-left from center
-      const width = entity.width || (entity.radius ? entity.radius * 2 : 32);
-      const height = entity.height || (entity.radius ? entity.radius * 2 : 32);
-      const topLeftX = x - width / 2;
-      const topLeftY = y - height / 2;
+      // Calculate top-left from center using the original hitbox dimensions
+      // This ensures consistency: center = topLeft + (size / 2)
+      // Therefore: topLeft = center - (size / 2)
+      const topLeftX = x - entityWidth / 2;
+      const topLeftY = y - entityHeight / 2;
+      let changed = false;
 
       if (typeof owner.x === "function" && typeof owner.x.set === "function") {
         owner.x.set(Math.round(topLeftX));
-        owner.applyFrames?.();
+        changed = true;
       }
       if (typeof owner.y === "function" && typeof owner.y.set === "function") {
         owner.y.set(Math.round(topLeftY));
+        changed = true;
+      }
+      if (changed) {
         owner.applyFrames?.();
       }
     });
@@ -1063,16 +1115,19 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const entity = this.physic.getEntityByUUID(id);
     if (!entity) return;
 
+    const width = entity.width || (entity.radius ? entity.radius * 2 : 32);
+    const height = entity.height || (entity.radius ? entity.radius * 2 : 32);
+
     let centerX = x;
     let centerY = y;
     if (mode === "top-left") {
-      const width = entity.width || (entity.radius ? entity.radius * 2 : 32);
-      const height = entity.height || (entity.radius ? entity.radius * 2 : 32);
       centerX = x + width / 2;
       centerY = y + height / 2;
     }
+
     entity.position.set(centerX, centerY);
     entity.notifyPositionChange();
+    
     return entity;
   }
 
