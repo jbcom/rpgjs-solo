@@ -1,5 +1,5 @@
 import { Action, MockConnection, Request, Room, RoomOnJoin } from "@signe/room";
-import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, ZoneData, Direction, RpgCommonPlayer } from "@rpgjs/common";
+import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, Direction, RpgCommonPlayer, RpgShape } from "@rpgjs/common";
 import { WorldMapsManager, type WorldMapConfig } from "@rpgjs/common";
 import { RpgPlayer, RpgEvent } from "../Player/Player";
 import { generateShortUUID, sync, type, users } from "@signe/sync";
@@ -11,6 +11,7 @@ import { Subject } from "rxjs";
 import { BehaviorSubject } from "rxjs";
 import { COEFFICIENT_ELEMENTS, DAMAGE_CRITICAL, DAMAGE_PHYSIC, DAMAGE_SKILL } from "../presets";
 import { z } from "zod";
+import { EntityState } from "@rpgjs/physic";
 
 /**
  * Interface for input controls configuration
@@ -62,12 +63,12 @@ export interface EventHooks {
   /** Called when a player touches this event */
   onPlayerTouch?: (player: RpgPlayer) => void;
   /** Called when a player enters a shape */
-  onInShape?: (zone: ZoneData, player: RpgPlayer) => void;
+  onInShape?: (zone: RpgShape, player: RpgPlayer) => void;
   /** Called when a player exits a shape */
-  onOutShape?: (zone: ZoneData, player: RpgPlayer) => void;
+  onOutShape?: (zone: RpgShape, player: RpgPlayer) => void;
 
-  onDetectInShape?: (player: RpgPlayer, shape: ZoneData) => void;
-  onDetectOutShape?: (player: RpgPlayer, shape: ZoneData) => void;
+  onDetectInShape?: (player: RpgPlayer, shape: RpgShape) => void;
+  onDetectOutShape?: (player: RpgPlayer, shape: RpgShape) => void;
 }
 
 /** Type for event class constructor */
@@ -101,6 +102,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   dataIsReady$ = new BehaviorSubject<void>(undefined);
   globalConfig: any = {}
   damageFormulas: any = {}
+  /** Internal: Map of shapes by name */
+  private _shapes: Map<string, RpgShape> = new Map();
+  /** Internal: Map of shape entity UUIDs to RpgShape instances */
+  private _shapeEntities: Map<string, RpgShape> = new Map();
 
   constructor() {
     super();
@@ -113,16 +118,19 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 
   /**
-   * Setup collision detection between players and events
+   * Setup collision detection between players, events, and shapes
    * 
-   * This method listens to physics collision events and triggers the `onPlayerTouch`
-   * hook on events when a player collides with them.
+   * This method listens to physics collision events and triggers hooks:
+   * - `onPlayerTouch` on events when a player collides with them
+   * - `onInShape` on players and events when they enter a shape
+   * - `onOutShape` on players and events when they exit a shape
    * 
    * ## Architecture
    * 
    * Uses the physics engine's collision event system to detect when entities collide.
-   * When a collision is detected between a player and an event, the event's `onPlayerTouch`
-   * hook is called with the player as parameter.
+   * When a collision is detected:
+   * - Between a player and an event: triggers `onPlayerTouch` on the event
+   * - Between a player/event and a shape: triggers `onInShape`/`onOutShape` hooks
    * 
    * @example
    * ```ts
@@ -136,11 +144,22 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    *     }
    *   }
    * });
+   * 
+   * // Player with onInShape hook
+   * const player: RpgPlayerHooks = {
+   *   onInShape(player: RpgPlayer, shape: RpgShape) {
+   *     console.log('in', player.name, shape.name);
+   *   },
+   *   onOutShape(player: RpgPlayer, shape: RpgShape) {
+   *     console.log('out', player.name, shape.name);
+   *   }
+   * };
    * ```
    */
   private setupCollisionDetection(): void {
-    // Track collisions to avoid calling onPlayerTouch multiple times for the same collision
+    // Track collisions to avoid calling hooks multiple times for the same collision
     const activeCollisions = new Set<string>();
+    const activeShapeCollisions = new Set<string>();
 
     // Listen to collision enter events
     this.physic.getEvents().onCollisionEnter((collision) => {
@@ -154,6 +173,37 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
       // Skip if we've already processed this collision
       if (activeCollisions.has(collisionKey)) {
+        return;
+      }
+
+      // Check for shape collisions first
+      const shapeA = this._shapeEntities.get(entityA.uuid);
+      const shapeB = this._shapeEntities.get(entityB.uuid);
+
+      if (shapeA || shapeB) {
+        // One of the entities is a shape
+        const shape = shapeA || shapeB;
+        const otherEntity = shapeA ? entityB : entityA;
+        
+        if (shape) {
+          const shapeKey = `${otherEntity.uuid}-${shape.name}`;
+          if (!activeShapeCollisions.has(shapeKey)) {
+            activeShapeCollisions.add(shapeKey);
+
+            // Check if the other entity is a player or event
+            const player = this.getPlayer(otherEntity.uuid);
+            const event = this.getEvent(otherEntity.uuid);
+
+            if (player) {
+              // Trigger onInShape hook on player
+              player.execMethod('onInShape', [player, shape]);
+            }
+            if (event) {
+              // Trigger onInShape hook on event
+              event.execMethod('onInShape', [shape, player || event]);
+            }
+          }
+        }
         return;
       }
 
@@ -184,6 +234,37 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       const collisionKey = entityA.uuid < entityB.uuid
         ? `${entityA.uuid}-${entityB.uuid}`
         : `${entityB.uuid}-${entityA.uuid}`;
+
+      // Check for shape collisions
+      const shapeA = this._shapeEntities.get(entityA.uuid);
+      const shapeB = this._shapeEntities.get(entityB.uuid);
+
+      if (shapeA || shapeB) {
+        // One of the entities is a shape
+        const shape = shapeA || shapeB;
+        const otherEntity = shapeA ? entityB : entityA;
+        
+        if (shape) {
+          const shapeKey = `${otherEntity.uuid}-${shape.name}`;
+          if (activeShapeCollisions.has(shapeKey)) {
+            activeShapeCollisions.delete(shapeKey);
+
+            // Check if the other entity is a player or event
+            const player = this.getPlayer(otherEntity.uuid);
+            const event = this.getEvent(otherEntity.uuid);
+
+            if (player) {
+              // Trigger onOutShape hook on player
+              player.execMethod('onOutShape', [player, shape]);
+            }
+            if (event) {
+              // Trigger onOutShape hook on event
+              event.execMethod('onOutShape', [shape, player || event]);
+            }
+          }
+        }
+        return;
+      }
 
       // Remove from active collisions so onPlayerTouch can be called again if they collide again
       activeCollisions.delete(collisionKey);
@@ -679,10 +760,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         onChanges?: (player: RpgPlayer) => void;
         onAction?: (player: RpgPlayer) => void;
         onPlayerTouch?: (player: RpgPlayer) => void;
-        onInShape?: (zone: ZoneData, player: RpgPlayer) => void;
-        onOutShape?: (zone: ZoneData, player: RpgPlayer) => void;
-        onDetectInShape?: (player: RpgPlayer, shape: ZoneData) => void;
-        onDetectOutShape?: (player: RpgPlayer, shape: ZoneData) => void;
+        onInShape?: (zone: RpgShape, player: RpgPlayer) => void;
+        onOutShape?: (zone: RpgShape, player: RpgPlayer) => void;
+        onDetectInShape?: (player: RpgPlayer, shape: RpgShape) => void;
+        onDetectOutShape?: (player: RpgPlayer, shape: RpgShape) => void;
 
         constructor() {
           super();
@@ -845,6 +926,245 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         persist: schema[key]?.$permanent,
       }, holder);
     }
+  }
+
+  /**
+   * Create a shape dynamically on the map
+   * 
+   * This method creates a static hitbox on the map that can be used for
+   * collision detection, area triggers, or visual boundaries. The shape is
+   * backed by the physics engine's static entity system for accurate collision detection.
+   * 
+   * ## Architecture
+   * 
+   * Creates a static entity (hitbox) in the physics engine at the specified position and size.
+   * The shape is stored internally and can be retrieved by name. When players or events
+   * collide with this hitbox, the `onInShape` and `onOutShape` hooks are automatically
+   * triggered on both the player and the event.
+   * 
+   * @param obj - Shape configuration object
+   * @param obj.x - X position of the shape (top-left corner) (required)
+   * @param obj.y - Y position of the shape (top-left corner) (required)
+   * @param obj.width - Width of the shape in pixels (required)
+   * @param obj.height - Height of the shape in pixels (required)
+   * @param obj.name - Name of the shape (optional, auto-generated if not provided)
+   * @param obj.z - Z position/depth for rendering (optional)
+   * @param obj.color - Color in hexadecimal format, shared with client (optional)
+   * @param obj.collision - Whether the shape has collision (optional)
+   * @param obj.properties - Additional custom properties (optional)
+   * @returns The created RpgShape instance
+   * 
+   * @example
+   * ```ts
+   * // Create a simple rectangular shape
+   * const shape = map.createShape({
+   *   x: 100,
+   *   y: 200,
+   *   width: 50,
+   *   height: 50,
+   *   name: "spawn-zone"
+   * });
+   * 
+   * // Create a shape with visual properties
+   * const triggerZone = map.createShape({
+   *   x: 300,
+   *   y: 400,
+   *   width: 100,
+   *   height: 100,
+   *   name: "treasure-area",
+   *   color: "#FFD700",
+   *   z: 1,
+   *   collision: false,
+   *   properties: {
+   *     type: "treasure",
+   *     value: 100
+   *   }
+   * });
+   * 
+   * // Player hooks will be triggered automatically
+   * const player: RpgPlayerHooks = {
+   *   onInShape(player: RpgPlayer, shape: RpgShape) {
+   *     console.log('in', player.name, shape.name);
+   *   },
+   *   onOutShape(player: RpgPlayer, shape: RpgShape) {
+   *     console.log('out', player.name, shape.name);
+   *   }
+   * };
+   * ```
+   */
+  createShape(obj: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    name?: string;
+    z?: number;
+    color?: string;
+    collision?: boolean;
+    properties?: Record<string, any>;
+  }): RpgShape {
+    const { x, y, width, height } = obj;
+    
+    // Validate required parameters
+    if (typeof x !== 'number' || typeof y !== 'number') {
+      throw new Error('Shape x and y must be numbers');
+    }
+    if (typeof width !== 'number' || width <= 0) {
+      throw new Error('Shape width must be a positive number');
+    }
+    if (typeof height !== 'number' || height <= 0) {
+      throw new Error('Shape height must be a positive number');
+    }
+
+    // Generate name if not provided
+    const name = obj.name || generateShortUUID();
+
+    // Check if shape with this name already exists
+    if (this._shapes.has(name)) {
+      throw new Error(`Shape with name "${name}" already exists`);
+    }
+
+    // Calculate center position for the static hitbox
+    const centerX = x + width / 2;
+    const centerY = y + height / 2;
+
+    // Create static entity (hitbox) in physics engine
+    const entityId = `shape-${name}`;
+    const entity = this.physic.createEntity({
+      uuid: entityId,
+      position: { x: centerX, y: centerY },
+      width: width,
+      height: height,
+      mass: Infinity, // Static entity
+      state: EntityState.Static,
+      restitution: 0, // No bounce
+    });
+    entity.freeze(); // Ensure it's frozen
+
+    // Build properties object
+    const properties: Record<string, any> = {
+      ...(obj.properties || {}),
+    };
+    if (obj.z !== undefined) properties.z = obj.z;
+    if (obj.color !== undefined) properties.color = obj.color;
+    if (obj.collision !== undefined) properties.collision = obj.collision;
+
+    // Create RpgShape instance
+    // Note: We use entityId as physicZoneId for compatibility, but it's actually an entity UUID
+    const shape = new RpgShape({
+      name: name,
+      positioning: 'default',
+      width: width,
+      height: height,
+      x: centerX,
+      y: centerY,
+      properties: properties,
+      playerOwner: undefined, // Static shapes are not attached to players
+      physicZoneId: entityId, // Store entity UUID for reference
+      map: this,
+    });
+
+    // Store the shape
+    this._shapes.set(name, shape);
+    this._shapeEntities.set(entityId, shape);
+
+    return shape;
+  }
+
+  /**
+   * Delete a shape from the map
+   * 
+   * Removes a shape by its name and cleans up the associated static hitbox entity.
+   * If the shape doesn't exist, the method does nothing.
+   * 
+   * @param name - Name of the shape to remove
+   * @returns void
+   * 
+   * @example
+   * ```ts
+   * // Create and then remove a shape
+   * const shape = map.createShape({
+   *   x: 100,
+   *   y: 200,
+   *   width: 50,
+   *   height: 50,
+   *   name: "temp-zone"
+   * });
+   * 
+   * // Later, remove it
+   * map.removeShape("temp-zone");
+   * ```
+   */
+  removeShape(name: string): void {
+    const shape = this._shapes.get(name);
+    if (!shape) {
+      return;
+    }
+
+    // Remove entity from physics engine
+    const entityId = (shape as any)._physicZoneId;
+    const entity = this.physic.getEntityByUUID(entityId);
+    if (entity) {
+      this.physic.removeEntity(entity);
+    }
+
+    // Remove from internal storage
+    this._shapes.delete(name);
+    this._shapeEntities.delete(entityId);
+  }
+
+  /**
+   * Get all shapes on the map
+   * 
+   * Returns an array of all shapes that have been created on this map,
+   * regardless of whether they are static shapes or player-attached shapes.
+   * 
+   * @returns Array of RpgShape instances
+   * 
+   * @example
+   * ```ts
+   * // Create multiple shapes
+   * map.createShape({ x: 0, y: 0, width: 50, height: 50, name: "zone1" });
+   * map.createShape({ x: 100, y: 100, width: 50, height: 50, name: "zone2" });
+   * 
+   * // Get all shapes
+   * const allShapes = map.getShapes();
+   * console.log(allShapes.length); // 2
+   * ```
+   */
+  getShapes(): RpgShape[] {
+    return Array.from(this._shapes.values());
+  }
+
+  /**
+   * Get a shape by its name
+   * 
+   * Returns a shape with the specified name, or undefined if no shape
+   * with that name exists on the map.
+   * 
+   * @param name - Name of the shape to retrieve
+   * @returns The RpgShape instance, or undefined if not found
+   * 
+   * @example
+   * ```ts
+   * // Create a shape with a specific name
+   * map.createShape({
+   *   x: 100,
+   *   y: 200,
+   *   width: 50,
+   *   height: 50,
+   *   name: "spawn-point"
+   * });
+   * 
+   * // Retrieve it later
+   * const spawnZone = map.getShape("spawn-point");
+   * if (spawnZone) {
+   *   console.log(`Spawn zone at (${spawnZone.x}, ${spawnZone.y})`);
+   * }
+   * ```
+   */
+  getShape(name: string): RpgShape | undefined {
+    return this._shapes.get(name);
   }
 }
 
