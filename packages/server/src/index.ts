@@ -4,6 +4,7 @@ export * from "./RpgServer";
 export * from "./core/setup";
 export * from "./core/inject";
 export * from "./Player/Player";
+export * from "./Player/Components";
 export * from "./module";
 export * from "./rooms/map";
 export * from "./presets";

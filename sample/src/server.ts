@@ -1,4 +1,4 @@
-import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 
 export function Event() {
@@ -49,7 +49,8 @@ export default createServer({
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             player.setGraphic("hero");
-            player.teleport({ x: 100, y: 100 })
+          //  player.setComponentsTop(Components.text('{name}'))
+            player.teleport({ x: 100, y: 100 }) 
           },
           onLeaveMap: (player: RpgPlayer, map: RpgMap) => {
 

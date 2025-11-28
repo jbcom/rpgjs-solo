@@ -137,8 +137,8 @@ export class RpgClientEngine<T = any> {
 
   private initListeners() {
     this.webSocket.on("sync", (data) => {
-
       if (data.pId) this.playerIdSignal.set(data.pId)
+
       // Apply client-side prediction filtering and server reconciliation
       this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: data }).subscribe();
 

@@ -84,6 +84,11 @@ export abstract class RpgCommonPlayer {
   @sync() _throughEvent = signal(false);
   @sync() _frequency = signal(0);
   @sync() _frames = signal<{ x: number; y: number; ts: number }[]>([]);
+  @sync() componentsTop = signal<string | null>(null);
+  @sync() componentsBottom = signal<string | null>(null);
+  @sync() componentsCenter = signal<string | null>(null);
+  @sync() componentsLeft = signal<string | null>(null);
+  @sync() componentsRight = signal<string | null>(null);
   @connected() isConnected = signal(false)
 
   // Store intended movement direction (not synced, only used locally)

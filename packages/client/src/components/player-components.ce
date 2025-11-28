@@ -1,0 +1,308 @@
+<Container>
+  @for (row of componentsData.components) {
+    <Container flexDirection="row" justifyContent="center">
+      @for (comp of row) {
+        <Container>
+          @if (comp.type === 'text') {
+            <Text 
+              text={@renderText(comp.value)} 
+              color={comp.style?.fill || '#ffffff'}
+              fontSize={comp.style?.fontSize || 14}
+              fontFamily={comp.style?.fontFamily}
+              fontWeight={comp.style?.fontWeight}
+              align={comp.style?.align || 'center'}
+            />
+          }
+          @else if (comp.type === 'hpBar' || comp.type === 'spBar' || comp.type === 'bar') {
+            <Container>
+              @if (comp.text !== null && comp.text !== undefined) {
+                <Text 
+                  text={@renderBarText(comp)} 
+                  color="#ffffff"
+                  fontSize={10}
+                  align="center"
+                  marginBottom={2}
+                />
+              }
+              <Container>
+                <Rect 
+                  width={@getBarWidth(comp)} 
+                  height={comp.style?.height || 6}
+                  color={comp.style?.bgColor || '#333333'}
+                  borderRadius={comp.style?.borderRadius}
+                  alpha={comp.style?.opacity ?? 1}
+                />
+                <Rect 
+                  width={@getBarFillWidth(comp)} 
+                  height={comp.style?.height || 6}
+                  color={comp.style?.fillColor || (comp.type === 'hpBar' ? '#ff0000' : comp.type === 'spBar' ? '#00ff00' : '#0000ff')}
+                  x={@getBarFillX(comp)}
+                  borderRadius={comp.style?.borderRadius}
+                  alpha={comp.style?.opacity ?? 1}
+                />
+                @if (comp.style?.borderWidth) {
+                  <Rect 
+                    width={@getBarWidth(comp)} 
+                    height={comp.style?.height || 6}
+                    color={comp.style?.borderColor || '#000000'}
+                    alpha={0}
+                    borderRadius={comp.style?.borderRadius}
+                    lineStyle={{ width: comp.style.borderWidth, color: comp.style.borderColor || '#000000' }}
+                  />
+                }
+              </Container>
+            </Container>
+          }
+          @else if (comp.type === 'shape') {
+            @if (comp.value.type === 'rectangle' || comp.value.type === 'rounded-rectangle') {
+              <Rect 
+                width={@getShapeValue(comp.value.width) || 32}
+                height={@getShapeValue(comp.value.height) || 32}
+                color={comp.value.fill || '#ffffff'}
+                alpha={@getShapeValue(comp.value.opacity) ?? 1}
+                borderRadius={comp.value.type === 'rounded-rectangle' ? (@getShapeValue(comp.value.line?.width) || 0) : 0}
+                lineStyle={comp.value.line ? { width: comp.value.line.width || 1, color: comp.value.line.color || '#000000', alpha: comp.value.line.alpha ?? 1 } : undefined}
+              />
+            }
+            @else if (comp.value.type === 'circle' || comp.value.type === 'ellipse') {
+              <Rect 
+                width={(@getShapeValue(comp.value.radius) || (@getShapeValue(comp.value.width) || 16)) * 2}
+                height={(@getShapeValue(comp.value.radius) || (@getShapeValue(comp.value.height) || 16)) * 2}
+                color={comp.value.fill || '#ffffff'}
+                alpha={@getShapeValue(comp.value.opacity) ?? 1}
+                borderRadius={@getShapeValue(comp.value.radius) || (@getShapeValue(comp.value.width) || 16)}
+                lineStyle={comp.value.line ? { width: comp.value.line.width || 1, color: comp.value.line.color || '#000000', alpha: comp.value.line.alpha ?? 1 } : undefined}
+              />
+            }
+          }
+          @else if (comp.type === 'image') {
+            <Sprite sheet={@getImageSheet(comp.value)} />
+          }
+          @else if (comp.type === 'tile') {
+            <Sprite sheet={@getTileSheet(@getShapeValue(comp.value))} />
+          }
+        </Container>
+      }
+    </Container>
+  }
+</Container>
+
+<script>
+  import { computed } from "canvasengine";
+
+  const { componentsData, object } = defineProps();
+
+  /**
+   * Render text with template string replacement
+   * 
+   * Replaces placeholders like {name}, {hp} with actual player property values.
+   * Supports nested properties like {param.maxHp} and special bar variables
+   * like {$current}, {$max}, {$percent}.
+   * 
+   * @param text - Text template with placeholders
+   * @returns Rendered text with placeholders replaced
+   */
+  const renderText = (text) => {
+    if (!text) return '';
+    
+    return text.replace(/\{([^}]+)\}/g, (match, key) => {
+      // Handle special bar variables
+      if (key.startsWith('$')) {
+        return match; // These are handled in renderBarText
+      }
+      
+      // Handle nested properties like param.maxHp or position.x
+      const keys = key.split('.');
+      let value = object;
+      
+      for (const k of keys) {
+        if (value && typeof value === 'object') {
+          if (typeof value[k] === 'function') {
+            value = value[k]();
+          } else {
+            value = value[k];
+          }
+        } else {
+          return match;
+        }
+      }
+      
+      return value != null ? String(value) : match;
+    });
+  };
+
+  /**
+   * Render bar text with special variables
+   * 
+   * Handles special bar variables like {$current}, {$max}, {$percent}
+   * for HP, SP, and custom bars.
+   * 
+   * @param comp - Bar component definition
+   * @returns Rendered text
+   */
+  const renderBarText = (comp) => {
+    if (!comp.text) return '';
+    
+    let current = 0;
+    let max = 0;
+    
+    if (comp.type === 'hpBar') {
+      current = object.hp ?? 0;
+      max = object.param?.maxHp ?? 1;
+    } else if (comp.type === 'spBar') {
+      current = object.sp ?? 0;
+      max = object.param?.maxSp ?? 1;
+    } else if (comp.type === 'bar') {
+      // Get current value
+      const currentKeys = comp.current.split('.');
+      let currentValue = object;
+      for (const k of currentKeys) {
+        if (currentValue && typeof currentValue === 'object') {
+          if (typeof currentValue[k] === 'function') {
+            currentValue = currentValue[k]();
+          } else {
+            currentValue = currentValue[k];
+          }
+        }
+      }
+      current = currentValue ?? 0;
+      
+      // Get max value
+      const maxKeys = comp.max.split('.');
+      let maxValue = object;
+      for (const k of maxKeys) {
+        if (maxValue && typeof maxValue === 'object') {
+          if (typeof maxValue[k] === 'function') {
+            maxValue = maxValue[k]();
+          } else {
+            maxValue = maxValue[k];
+          }
+        }
+      }
+      max = maxValue ?? 1;
+    }
+    
+    const percent = max > 0 ? Math.round((current / max) * 100) : 0;
+    
+    return comp.text
+      .replace(/\{\$current\}/g, String(current))
+      .replace(/\{\$max\}/g, String(max))
+      .replace(/\{\$percent\}/g, String(percent));
+  };
+
+  /**
+   * Get shape value, handling both numbers and property paths
+   */
+  const getShapeValue = (value) => {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      // Try to parse as number first
+      const num = parseFloat(value);
+      if (!isNaN(num)) return num;
+      // Otherwise, treat as property path
+      const keys = value.split('.');
+      let val = object;
+      for (const k of keys) {
+        if (val && typeof val === 'object') {
+          if (typeof val[k] === 'function') {
+            val = val[k]();
+          } else {
+            val = val[k];
+          }
+        } else {
+          return undefined;
+        }
+      }
+      return typeof val === 'number' ? val : undefined;
+    }
+    return undefined;
+  };
+
+  /**
+   * Get image sheet definition
+   */
+  const getImageSheet = (imageId) => {
+    // This would need to be implemented based on how images are loaded
+    // For now, return a basic structure
+    return {
+      definition: null, // Would need to get from client.getSpriteSheet or similar
+      playing: null
+    };
+  };
+
+  /**
+   * Get tile sheet definition
+   */
+  const getTileSheet = (tileId) => {
+    // This would need to be implemented based on how tiles are loaded
+    return {
+      definition: null,
+      playing: null
+    };
+  };
+
+  /**
+   * Get bar width from component layout or default
+   */
+  const getBarWidth = (comp) => {
+    const layout = componentsData()?.layout || {};
+    return layout.width || 42;
+  };
+
+  /**
+   * Get bar fill width based on current/max ratio
+   */
+  const getBarFillWidth = (comp) => {
+    const totalWidth = getBarWidth(comp);
+    let current = 0;
+    let max = 1;
+    
+    if (comp.type === 'hpBar') {
+      current = object.hp ?? 0;
+      max = object.param?.maxHp ?? 1;
+    } else if (comp.type === 'spBar') {
+      current = object.sp ?? 0;
+      max = object.param?.maxSp ?? 1;
+    } else if (comp.type === 'bar') {
+      // Get current value
+      const currentKeys = comp.current.split('.');
+      let currentValue = object;
+      for (const k of currentKeys) {
+        if (currentValue && typeof currentValue === 'object') {
+          if (typeof currentValue[k] === 'function') {
+            currentValue = currentValue[k]();
+          } else {
+            currentValue = currentValue[k];
+          }
+        }
+      }
+      current = currentValue ?? 0;
+      
+      // Get max value
+      const maxKeys = comp.max.split('.');
+      let maxValue = object;
+      for (const k of maxKeys) {
+        if (maxValue && typeof maxValue === 'object') {
+          if (typeof maxValue[k] === 'function') {
+            maxValue = maxValue[k]();
+          } else {
+            maxValue = maxValue[k];
+          }
+        }
+      }
+      max = maxValue ?? 1;
+    }
+    
+    const ratio = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
+    return totalWidth * ratio;
+  };
+
+  /**
+   * Get bar fill X position (always starts at 0 for left-aligned fill)
+   */
+  const getBarFillX = (comp) => {
+    return 0;
+  };
+</script>
+

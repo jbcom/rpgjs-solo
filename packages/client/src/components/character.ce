@@ -5,11 +5,21 @@
     </Container>
   } 
   <Particle emit={@emitParticleTrigger} settings={@particleSettings} zIndex={1000} name={particleName} />
+  @if (componentsTopData) {
+    <Container y={@getComponentsTopY()} anchor={[0.5, 1]}>
+      <PlayerComponents componentsData={componentsTopData} object={object} />
+    </Container>
+  }
   <Container>
     @for (graphicId of graphics) {
       <Sprite sheet={@sheet(@graphicId)} direction tint hitbox />
     }
   </Container>
+  @if (componentsBottomData) {
+    <Container y={@getComponentsBottomY()} anchor={[0.5, 0]}>
+      <PlayerComponents componentsData={componentsBottomData} object={object} />
+    </Container>
+  }
   @for (component of componentsInFront) {
     <Container>
       <component object />
@@ -26,6 +36,7 @@
   import { inject } from "../core/inject";  
   import { Direction } from "@rpgjs/common";
   import Hit from "./effects/hit.ce";
+  import PlayerComponents from "./player-components.ce";
 
   const { object, id } = defineProps();
 
@@ -50,7 +61,58 @@
     graphics, 
     hitbox,
     isConnected,
+    componentsTop,
+    componentsBottom,
+    componentsCenter,
+    componentsLeft,
+    componentsRight,
   } = object;
+
+  const componentsTopData = computed(() => {
+    const data = componentsTop?.();
+    if (!data) return null;
+    try {
+      return typeof data === 'string' ? JSON.parse(data) : data;
+    } catch {
+      return null;
+    }
+  });
+  const componentsBottomData = computed(() => {
+    const data = componentsBottom?.();
+    if (!data) return null;
+    try {
+      return typeof data === 'string' ? JSON.parse(data) : data;
+    } catch {
+      return null;
+    }
+  });
+  const componentsCenterData = computed(() => {
+    const data = object.componentsCenter?.();
+    if (!data) return null;
+    try {
+      return typeof data === 'string' ? JSON.parse(data) : data;
+    } catch {
+      return null;
+    }
+  });
+  const componentsLeftData = computed(() => {
+    const data = object.componentsLeft?.();
+    if (!data) return null;
+    try {
+      return typeof data === 'string' ? JSON.parse(data) : data;
+    } catch {
+      return null;
+    }
+  });
+  const componentsRightData = computed(() => {
+    const data = object.componentsRight?.();
+    if (!data) return null;
+    try {
+      return typeof data === 'string' ? JSON.parse(data) : data;
+    } catch {
+      return null;
+    }
+  });
 
   const particleSettings = client.particleSettings;
 
@@ -201,6 +263,28 @@
     hooks.callHooks("client-sprite-onAdd", object).subscribe()
     hooks.callHooks("client-sceneMap-onAddSprite", client.sceneMap, object).subscribe()
   })
+
+  /**
+   * Calculate Y position for components above player
+   */
+  const getComponentsTopY = () => {
+    const layout = componentsTopData()?.layout || {};
+    const hitboxValue = typeof hitbox === 'function' ? hitbox() : hitbox;
+    const playerHeight = hitboxValue?.h || 32;
+    const marginBottom = layout.marginBottom ?? 0;
+    return -(playerHeight / 2) - marginBottom;
+  };
+
+  /**
+   * Calculate Y position for components below player
+   */
+  const getComponentsBottomY = () => {
+    const layout = componentsBottomData()?.layout || {};
+    const hitboxValue = typeof hitbox === 'function' ? hitbox() : hitbox;
+    const playerHeight = hitboxValue?.h || 32;
+    const marginTop = layout.marginTop ?? 0;
+    return (playerHeight / 2) + marginTop;
+  };
 
   tick(() => {
     hooks.callHooks("client-sprite-onUpdate").subscribe()
