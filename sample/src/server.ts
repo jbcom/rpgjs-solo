@@ -38,7 +38,10 @@ export default createServer({
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             console.log("join map");
             player.setGraphic("hero");
-          //  player.setComponentsTop(Components.text('{name}'))
+            player.setComponentsTop(
+              Components.hpBar( {
+                width: 42
+              }))
             player.teleport({ x: 100, y: 100 }) 
           },
           onLeaveMap: (player: RpgPlayer, map: RpgMap) => {

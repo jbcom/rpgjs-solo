@@ -5,21 +5,11 @@
     </Container>
   } 
   <Particle emit={@emitParticleTrigger} settings={@particleSettings} zIndex={1000} name={particleName} />
-  @if (componentsTopData) {
-    <Container y={@getComponentsTopY()} anchor={[0.5, 1]}>
-      <PlayerComponents componentsData={componentsTopData} object={object} />
-    </Container>
-  }
   <Container>
     @for (graphicObj of graphicsSignals) {
       <Sprite sheet={@sheet(@graphicObj)} direction tint hitbox />
     }
   </Container>
-  @if (componentsBottomData) {
-    <Container y={@getComponentsBottomY()} anchor={[0.5, 0]}>
-      <PlayerComponents componentsData={componentsBottomData} object={object} />
-    </Container>
-  }
   @for (component of componentsInFront) {
     <Container>
       <component object />
@@ -61,59 +51,8 @@
     graphics, 
     hitbox,
     isConnected,
-    componentsTop,
-    componentsBottom,
-    componentsCenter,
-    componentsLeft,
-    componentsRight,
     graphicsSignals
   } = object;
-
-  const componentsTopData = computed(() => {
-    const data = componentsTop?.();
-    if (!data) return null;
-    try {
-      return typeof data === 'string' ? JSON.parse(data) : data;
-    } catch {
-      return null;
-    }
-  });
-  const componentsBottomData = computed(() => {
-    const data = componentsBottom?.();
-    if (!data) return null;
-    try {
-      return typeof data === 'string' ? JSON.parse(data) : data;
-    } catch {
-      return null;
-    }
-  });
-  const componentsCenterData = computed(() => {
-    const data = object.componentsCenter?.();
-    if (!data) return null;
-    try {
-      return typeof data === 'string' ? JSON.parse(data) : data;
-    } catch {
-      return null;
-    }
-  });
-  const componentsLeftData = computed(() => {
-    const data = object.componentsLeft?.();
-    if (!data) return null;
-    try {
-      return typeof data === 'string' ? JSON.parse(data) : data;
-    } catch {
-      return null;
-    }
-  });
-  const componentsRightData = computed(() => {
-    const data = object.componentsRight?.();
-    if (!data) return null;
-    try {
-      return typeof data === 'string' ? JSON.parse(data) : data;
-    } catch {
-      return null;
-    }
-  });
 
   const particleSettings = client.particleSettings;
 
