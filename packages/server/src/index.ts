@@ -9,3 +9,4 @@ export * from "./rooms/map";
 export * from "./presets";
 export * from "@signe/reactive";
 export * from "./Gui";
+export { RpgShape } from "@rpgjs/common";

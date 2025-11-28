@@ -1,4 +1,4 @@
-import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 
 export function Event() {
@@ -6,6 +6,10 @@ export function Event() {
     name: "EV-1",
     onInit() {
       this.setGraphic("hero");
+      this.attachShape({
+          height: 100,
+          width: 100
+      })
     },
     onPlayerTouch(player: RpgPlayer) {
      console.log("touch");

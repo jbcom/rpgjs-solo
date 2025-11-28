@@ -6,7 +6,11 @@ import {
   ShowAnimationParams,
   Constructor,
   Direction,
+  AttachShapeOptions,
+  RpgShape,
+  ShapePositioning,
 } from "@rpgjs/common";
+import { Entity, Vector2 } from "@rpgjs/physic";
 import { IComponentManager, WithComponentManager } from "./ComponentManager";
 import { RpgMap } from "../rooms/map";
 import { Context, inject } from "@signe/di";
@@ -31,17 +35,6 @@ import { ISkillManager, WithSkillManager } from "./SkillManager";
 import { IBattleManager, WithBattleManager } from "./BattleManager";
 import { IClassManager, WithClassManager } from "./ClassManager";
 import { IStateManager, WithStateManager } from "./StateManager";
-
-// Local interface for ZoneOptions to avoid import issues
-interface ZoneOptions {
-  x?: number;
-  y?: number;
-  radius: number;
-  angle?: number;
-  direction?: any;
-  linkedTo?: string;
-  limitedByWalls?: boolean;
-}
 
 /**
  * Combines multiple RpgCommonPlayer mixins into one
@@ -98,6 +91,12 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   context?: Context;
   conn: MockConnection | null = null;
   touchSide: boolean = false; // Protection against map change loops
+  
+  /** Internal: Shapes attached to this player */
+  private _attachedShapes: Map<string, RpgShape> = new Map();
+  
+  /** Internal: Shapes where this player is currently located */
+  private _inShapes: Set<RpgShape> = new Set();
   /** Last processed client input timestamp for reconciliation */
   lastProcessedInputTs: number = 0;
   /** Last processed client input frame for reconciliation with server tick */
@@ -442,42 +441,272 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     }
   }
 
-  attachShape(id: string, options: ZoneOptions) {
+  /**
+   * Attach a zone shape to this player using the physic zone system
+   * 
+   * This method creates a zone attached to the player's entity in the physics engine.
+   * The zone can be circular or cone-shaped and will detect other entities (players/events)
+   * entering or exiting the zone.
+   * 
+   * @param id - Optional zone identifier. If not provided, a unique ID will be generated
+   * @param options - Zone configuration options
+   * 
+   * @example
+   * ```ts
+   * // Create a circular detection zone
+   * player.attachShape("vision", {
+   *   radius: 150,
+   *   angle: 360,
+   * });
+   * 
+   * // Create a cone-shaped vision zone
+   * player.attachShape("vision", {
+   *   radius: 200,
+   *   angle: 120,
+   *   direction: Direction.Right,
+   *   limitedByWalls: true,
+   * });
+   * 
+   * // Create a zone with width/height (radius calculated automatically)
+   * player.attachShape({
+   *   width: 100,
+   *   height: 100,
+   *   positioning: "center",
+   * });
+   * ```
+   */
+  attachShape(idOrOptions: string | AttachShapeOptions, options?: AttachShapeOptions): RpgShape | undefined {
     const map = this.getCurrentMap();
-    if (!map) return;
+    if (!map) return undefined;
 
-    const physic = map.physic;
+    // Handle overloaded signature: attachShape(options) or attachShape(id, options)
+    let zoneId: string;
+    let shapeOptions: AttachShapeOptions;
+    
+    if (typeof idOrOptions === 'string') {
+      zoneId = idOrOptions;
+      if (!options) {
+        console.warn('attachShape: options must be provided when id is specified');
+        return undefined;
+      }
+      shapeOptions = options;
+    } else {
+      zoneId = `zone-${this.id}-${Date.now()}`;
+      shapeOptions = idOrOptions;
+    }
 
-    const zoneId = physic.addZone(id, {
-      linkedTo: this.id,
-      ...options,
-    });
+    // Get player entity from physic engine
+    const playerEntity = map.physic.getEntityByUUID(this.id);
+    if (!playerEntity) {
+      console.warn(`Player entity not found in physic engine for player ${this.id}`);
+      return undefined;
+    }
 
-    physic.registerZoneEvents(
-      id,
-      (hitIds) => {
-        hitIds.forEach((id) => {
-          const event = map.getEvent<RpgEvent>(id);
-          const player = map.getPlayer(id);
-          const zone = physic.getZone(zoneId);
-          if (event) {
-            event.execMethod("onInShape", [zone, this]);
-          }
-          if (player) this.execMethod("onDetectInShape", [player, zone]);
-        });
+    // Calculate radius from width/height if not provided
+    let radius: number;
+    if (shapeOptions.radius !== undefined) {
+      radius = shapeOptions.radius;
+    } else if (shapeOptions.width && shapeOptions.height) {
+      // Use the larger dimension as radius, or calculate from area
+      radius = Math.max(shapeOptions.width, shapeOptions.height) / 2;
+    } else {
+      console.warn('attachShape: radius or width/height must be provided');
+      return undefined;
+    }
+
+    // Calculate offset based on positioning
+    let offset: Vector2 = new Vector2(0, 0);
+    const positioning: ShapePositioning = shapeOptions.positioning || "default";
+    if (shapeOptions.positioning) {
+      const playerWidth = playerEntity.width || playerEntity.radius * 2 || 32;
+      const playerHeight = playerEntity.height || playerEntity.radius * 2 || 32;
+      
+      switch (shapeOptions.positioning) {
+        case 'top':
+          offset = new Vector2(0, -playerHeight / 2);
+          break;
+        case 'bottom':
+          offset = new Vector2(0, playerHeight / 2);
+          break;
+        case 'left':
+          offset = new Vector2(-playerWidth / 2, 0);
+          break;
+        case 'right':
+          offset = new Vector2(playerWidth / 2, 0);
+          break;
+        case 'center':
+        default:
+          offset = new Vector2(0, 0);
+          break;
+      }
+    }
+
+    // Get zone manager and create attached zone
+    const zoneManager = map.physic.getZoneManager();
+    
+    // Convert direction from Direction enum to string if needed
+    // Direction enum values are already strings ("up", "down", "left", "right")
+    let direction: 'up' | 'down' | 'left' | 'right' = 'down';
+    if (shapeOptions.direction !== undefined) {
+      if (typeof shapeOptions.direction === 'string') {
+        direction = shapeOptions.direction as 'up' | 'down' | 'left' | 'right';
+      } else {
+        // Direction enum value is already a string, just cast it
+        direction = String(shapeOptions.direction) as 'up' | 'down' | 'left' | 'right';
+      }
+    }
+
+    // Create zone with metadata for name and properties
+    const metadata: Record<string, any> = {};
+    if (shapeOptions.name) {
+      metadata.name = shapeOptions.name;
+    }
+    if (shapeOptions.properties) {
+      metadata.properties = shapeOptions.properties;
+    }
+
+    // Get initial position
+    const initialX = playerEntity.position.x + offset.x;
+    const initialY = playerEntity.position.y + offset.y;
+
+    const physicZoneId = zoneManager.createAttachedZone(
+      playerEntity,
+      {
+        radius,
+        angle: shapeOptions.angle ?? 360,
+        direction,
+        limitedByWalls: shapeOptions.limitedByWalls ?? false,
+        offset,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       },
-      (hitIds) => {
-        hitIds.forEach((id) => {
-          const event = map.getEvent<RpgEvent>(id);
-          const zone = physic.getZone(zoneId);
-          const player = map.getPlayer(id);
-          if (event) {
-            event.execMethod("onOutShape", [zone, this]);
-          }
-          if (player) this.execMethod("onDetectOutShape", [player, zone]);
-        });
+      {
+        onEnter: (entities: Entity[]) => {
+          entities.forEach((entity) => {
+            const event = map.getEvent<RpgEvent>(entity.uuid);
+            const player = map.getPlayer(entity.uuid);
+            
+            if (event) {
+              event.execMethod("onInShape", [shape, this]);
+              // Track that this event is in the shape
+              if ((event as any)._inShapes) {
+                (event as any)._inShapes.add(shape);
+              }
+            }
+            if (player) {
+              this.execMethod("onDetectInShape", [player, shape]);
+              // Track that this player is in the shape
+              if (player._inShapes) {
+                player._inShapes.add(shape);
+              }
+            }
+          });
+        },
+        onExit: (entities: Entity[]) => {
+          entities.forEach((entity) => {
+            const event = map.getEvent<RpgEvent>(entity.uuid);
+            const player = map.getPlayer(entity.uuid);
+            
+            if (event) {
+              event.execMethod("onOutShape", [shape, this]);
+              // Remove from tracking
+              if ((event as any)._inShapes) {
+                (event as any)._inShapes.delete(shape);
+              }
+            }
+            if (player) {
+              this.execMethod("onDetectOutShape", [player, shape]);
+              // Remove from tracking
+              if (player._inShapes) {
+                player._inShapes.delete(shape);
+              }
+            }
+          });
+        },
       }
     );
+
+    // Create RpgShape instance
+    const shape = new RpgShape({
+      name: shapeOptions.name || zoneId,
+      positioning,
+      width: shapeOptions.width || radius * 2,
+      height: shapeOptions.height || radius * 2,
+      x: initialX,
+      y: initialY,
+      properties: shapeOptions.properties || {},
+      playerOwner: this,
+      physicZoneId: physicZoneId,
+      map: map,
+    });
+
+    // Store mapping from zoneId to physicZoneId for future reference
+    (this as any)._zoneIdMap = (this as any)._zoneIdMap || new Map();
+    (this as any)._zoneIdMap.set(zoneId, physicZoneId);
+    
+    // Store the shape
+    this._attachedShapes.set(zoneId, shape);
+    
+    // Update shape position when player moves
+    const updateShapePosition = () => {
+      const currentEntity = map.physic.getEntityByUUID(this.id);
+      if (currentEntity) {
+        const zoneInfo = zoneManager.getZone(physicZoneId);
+        if (zoneInfo) {
+          shape._updatePosition(zoneInfo.position.x, zoneInfo.position.y);
+        }
+      }
+    };
+    
+    // Listen to position changes to update shape position
+    playerEntity.onPositionChange(() => {
+      updateShapePosition();
+    });
+
+    return shape;
+  }
+  
+  /**
+   * Get all shapes attached to this player
+   * 
+   * Returns all shapes that were created using `attachShape()` on this player.
+   * 
+   * @returns Array of RpgShape instances attached to this player
+   * 
+   * @example
+   * ```ts
+   * player.attachShape("vision", { radius: 150 });
+   * player.attachShape("detection", { radius: 100 });
+   * 
+   * const shapes = player.getShapes();
+   * console.log(shapes.length); // 2
+   * ```
+   */
+  getShapes(): RpgShape[] {
+    return Array.from(this._attachedShapes.values());
+  }
+  
+  /**
+   * Get all shapes where this player is currently located
+   * 
+   * Returns all shapes (from any player/event) where this player is currently inside.
+   * This is updated automatically when the player enters or exits shapes.
+   * 
+   * @returns Array of RpgShape instances where this player is located
+   * 
+   * @example
+   * ```ts
+   * // Another player has a detection zone
+   * otherPlayer.attachShape("detection", { radius: 200 });
+   * 
+   * // Check if this player is in any shape
+   * const inShapes = player.getInShapes();
+   * if (inShapes.length > 0) {
+   *   console.log("Player is being detected!");
+   * }
+   * ```
+   */
+  getInShapes(): RpgShape[] {
+    return Array.from(this._inShapes);
   }
 
   /**
