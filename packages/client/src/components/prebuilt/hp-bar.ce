@@ -1,0 +1,255 @@
+<!-- 
+  HP Bar Component
+  
+  A beautiful, animated health bar component for displaying player HP above sprites.
+  Features a gradient color based on HP level, smooth animations, and modern styling.
+  
+  ## Design
+  
+  The bar changes color dynamically based on HP percentage:
+  - Green (#4ade80) when HP > 60% - Healthy state
+  - Yellow (#facc15) when HP 30-60% - Caution state  
+  - Orange (#fb923c) when HP 15-30% - Danger state
+  - Red (#ef4444) when HP < 15% - Critical state
+  
+  @example
+  ```ts
+  import HpBar from './hp-bar.ce';
+  
+  // In module configuration
+  export default defineModule<RpgClient>({
+    sprite: {
+      componentsInFront: [HpBar]
+    }
+  })
+  ```
+-->
+
+<Container x={position.@x} y={position.@y}>
+  <!-- Background shadow for depth effect -->
+  <Graphics draw={drawShadow} x={1} y={1} />
+  
+  <!-- Main background -->
+  <Graphics draw={drawBackground} />
+  
+  <!-- HP fill bar -->
+  <Graphics draw={drawFill} />
+  
+  <!-- Highlight overlay for 3D effect -->
+  <Graphics draw={drawHighlight} />
+  
+  <!-- Border frame -->
+  <Graphics draw={drawBorder} />
+</Container>
+
+<script>
+import { computed, animatedSignal, effect } from "canvasengine";
+
+const { object } = defineProps();
+
+// ====================
+// Configuration
+// ====================
+
+/** Total width of the HP bar in pixels */
+const barWidth = 50;
+
+/** Total height of the HP bar in pixels */
+const barHeight = 8;
+
+/** Border radius for rounded corners */
+const borderRadius = 4;
+
+/** Inner border radius for the fill bar */
+const innerRadius = 3;
+
+/** Padding between background and fill */
+const padding = 1;
+
+/** Background color (dark theme) */
+const bgColor = 0x16213e;
+
+/** Shadow color */
+const shadowColor = 0x000000;
+
+/** Border color */
+const borderColor = 0x4a5568;
+
+// ====================
+// Calculated dimensions
+// ====================
+
+/** Maximum fill width */
+const maxFillWidth = barWidth - (padding * 2);
+
+/** Fill height */
+const fillHeight = barHeight - (padding * 2);
+
+/** Highlight height (half of fill) */
+const highlightHeight = Math.floor(fillHeight / 2);
+
+// ====================
+// Reactive HP values
+// ====================
+
+/** Gets hitbox dimensions for positioning */
+const hitbox = object.hitbox;
+
+/**
+ * Gets the current HP value from the player object
+ * Uses hpSignal which is synchronized from the server
+ */
+const currentHp = computed(() => {
+  return object.hpSignal?.() ?? 0;
+});
+
+/**
+ * Gets the maximum HP value from player parameters
+ * Reads from _param.maxHp which contains calculated stats
+ */
+const maxHp = computed(() => {
+  const params = object._param?.() ?? {};
+  return params.maxHp ?? 100;
+});
+
+/**
+ * Calculates HP percentage (0 to 1)
+ */
+const hpPercent = computed(() => {
+  const max = maxHp();
+  if (max <= 0) return 0;
+  const percent = currentHp() / max;
+  return Math.max(0, Math.min(1, percent));
+});
+
+// ====================
+// Animated values
+// ====================
+
+/**
+ * Animated percentage for smooth bar transitions
+ */
+const animatedPercent = animatedSignal(hpPercent(), {
+  duration: 300,
+  easing: 'easeOutCubic'
+});
+
+// Update animated value when HP changes
+effect(() => {
+  const newPercent = hpPercent();
+  animatedPercent.set(newPercent);
+});
+
+// ====================
+// Visual calculations
+// ====================
+
+/**
+ * Position of the bar relative to the sprite
+ */
+const position = computed(() => ({
+  x: (hitbox().w / 2) - (barWidth / 2),
+  y: -barHeight - 8
+}));
+
+/**
+ * Current width of the HP fill based on animated percentage
+ */
+const fillWidth = computed(() => {
+  const percent = animatedPercent();
+  const width = maxFillWidth * percent;
+  // Ensure minimum visible width when HP > 0
+  if (percent > 0 && width < innerRadius * 2) {
+    return innerRadius * 2;
+  }
+  return Math.max(0, width);
+});
+
+/**
+ * Determines HP bar color based on current HP percentage
+ * Returns hex color number for PixiJS
+ * 
+ * ## Color Thresholds
+ * - Green (0x4ade80): HP > 60% - Healthy
+ * - Yellow (0xfacc15): HP 30-60% - Caution
+ * - Orange (0xfb923c): HP 15-30% - Danger
+ * - Red (0xef4444): HP < 15% - Critical
+ */
+const hpColorHex = computed(() => {
+  const percent = hpPercent();
+  
+  if (percent > 0.6) {
+    return 0x4ade80; // Green - healthy
+  } else if (percent > 0.3) {
+    return 0xfacc15; // Yellow - caution
+  } else if (percent > 0.15) {
+    return 0xfb923c; // Orange - danger
+  } else {
+    return 0xef4444; // Red - critical
+  }
+});
+
+// ====================
+// Drawing functions
+// ====================
+
+/**
+ * Draws the shadow behind the HP bar for depth effect
+ */
+const drawShadow = (g) => {
+  g.roundRect(0, 0, barWidth, barHeight, borderRadius);
+  g.fill({ color: shadowColor, alpha: 0.3 });
+};
+
+/**
+ * Draws the main background of the HP bar
+ */
+const drawBackground = (g) => {
+  g.roundRect(0, 0, barWidth, barHeight, borderRadius);
+  g.fill({ color: bgColor, alpha: 0.9 });
+};
+
+/**
+ * Draws the HP fill bar with dynamic color
+ */
+const drawFill = (g) => {
+  const width = fillWidth();
+  if (width > 0) {
+    g.roundRect(padding, padding, width, fillHeight, innerRadius);
+    g.fill({ color: hpColorHex() });
+  }
+};
+
+/**
+ * Draws the highlight overlay for 3D effect
+ */
+const drawHighlight = (g) => {
+  const width = fillWidth();
+  if (width > 0) {
+    g.roundRect(padding, padding, width, highlightHeight, innerRadius);
+    g.fill({ color: 0xffffff, alpha: 0.25 });
+  }
+};
+
+/**
+ * Draws the border frame around the HP bar
+ * 
+ * Uses PixiJS Graphics API to create a rounded rectangle stroke
+ * that serves as a visual border for the bar.
+ * 
+ * @param g - PixiJS Graphics object
+ * 
+ * @example
+ * ```html
+ * <Graphics draw={drawBorder} />
+ * ```
+ */
+const drawBorder = (g) => {
+  g.roundRect(0, 0, barWidth, barHeight, borderRadius);
+  g.stroke({ 
+    color: borderColor, 
+    width: 1,
+    alpha: 0.7
+  });
+};
+</script>
