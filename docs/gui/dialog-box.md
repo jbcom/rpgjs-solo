@@ -201,7 +201,9 @@ export default {
 
 ### Customizing Sounds
 
-You can customize the sounds used by the dialog box. The sound IDs in `provideClientGlobalConfig()` must correspond to the sound IDs defined in `provideClientModules()`:
+You can customize the sounds used by the dialog box. The sound IDs in `provideClientGlobalConfig()` must correspond to the sound IDs defined in `provideClientModules()`.
+
+> **See also:** [Sounds Guide](/guide/sounds) for comprehensive information about sound configuration, dynamic sound resolution, and playing sounds from the server.
 
 ```typescript
 import { provideClientGlobalConfig } from "@rpgjs/client";
@@ -263,4 +265,9 @@ export default {
     ]),
   ],
 };
+```
+
+## See Also
+
+- [Sounds Guide](/guide/sounds) - Comprehensive guide on configuring and using sounds, including dynamic sound resolution
 ```

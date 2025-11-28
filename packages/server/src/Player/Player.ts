@@ -754,6 +754,47 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   }
 
   /**
+   * Play a sound on the client side
+   * 
+   * This method emits an event to play a sound. The sound must be defined
+   * on the client side (in the client module configuration).
+   * 
+   * @param soundId - Sound identifier, defined on the client side
+   * @param forEveryone - Indicate if the sound is heard by all players on the map (default: true)
+   * 
+   * @example
+   * ```ts
+   * // Play a sound for all players on the map (default)
+   * player.playSound("explosion");
+   * 
+   * // Play a sound only for this player
+   * player.playSound("item-pickup", false);
+   * 
+   * // Play a battle sound for everyone
+   * player.playSound("battle-start", true);
+   * ```
+   */
+  playSound(soundId: string, forEveryone: boolean = true): void {
+    const map = this.getCurrentMap();
+    if (!map) return;
+
+    const data = {
+      soundId,
+    };
+
+    if (forEveryone) {
+      // Broadcast to all players on the map
+      map.$broadcast({
+        type: "playSound",
+        value: data,
+      });
+    } else {
+      // Send only to this player
+      this.emit("playSound", data);
+    }
+  }
+
+  /**
    * Set the sync schema for the map
    * @param schema - The schema to set
    */

@@ -35,6 +35,7 @@ export class RpgClientEngine<T = any> {
   sounds: Map<string, any> = new Map();
   componentAnimations: any[] = [];
   private spritesheetResolver?: (id: string) => any | Promise<any>;
+  private soundResolver?: (id: string) => any | Promise<any>;
   particleSettings: {
     emitters: any[]
   } = {
@@ -106,6 +107,7 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-spritesheets-load", this).subscribe();
     this.hooks.callHooks("client-spritesheetResolver-load", this).subscribe();
     this.hooks.callHooks("client-sounds-load", this).subscribe();
+    this.hooks.callHooks("client-soundResolver-load", this).subscribe();
     this.hooks.callHooks("client-gui-load", this).subscribe();
     this.hooks.callHooks("client-particles-load", this).subscribe();
     this.hooks.callHooks("client-componentAnimations-load", this).subscribe();
@@ -182,6 +184,11 @@ export class RpgClientEngine<T = any> {
       const player = this.sceneMap.getObjectById(object);
       player.setAnimation(animationName, nbTimes)
     })
+
+    this.webSocket.on("playSound", (data) => {
+      const { soundId } = data;
+      this.playSound(soundId);
+    });
 
     this.webSocket.on('open', () => {
       this.hooks.callHooks("client-engine-onConnected", this, this.socket).subscribe();
@@ -380,6 +387,122 @@ export class RpgClientEngine<T = any> {
   addSound(sound: any, id?: string) {
     this.sounds.set(id || sound.id, sound);
     return sound;
+  }
+
+  /**
+   * Set a resolver function for sounds
+   * 
+   * The resolver is called when a sound is requested but not found in the cache.
+   * It can be synchronous (returns directly) or asynchronous (returns a Promise).
+   * The resolved sound is automatically cached for future use.
+   * 
+   * @param resolver - Function that takes a sound ID and returns a sound or Promise of sound
+   * 
+   * @example
+   * ```ts
+   * // Synchronous resolver
+   * engine.setSoundResolver((id) => {
+   *   if (id === 'dynamic-sound') {
+   *     return { id: 'dynamic-sound', src: 'path/to/sound.mp3' };
+   *   }
+   *   return undefined;
+   * });
+   * 
+   * // Asynchronous resolver (loading from API)
+   * engine.setSoundResolver(async (id) => {
+   *   const response = await fetch(`/api/sounds/${id}`);
+   *   const data = await response.json();
+   *   return data;
+   * });
+   * ```
+   */
+  setSoundResolver(resolver: (id: string) => any | Promise<any>): void {
+    this.soundResolver = resolver;
+  }
+
+  /**
+   * Get a sound by ID, using resolver if not found in cache
+   * 
+   * This method first checks if the sound exists in the cache.
+   * If not found and a resolver is set, it calls the resolver to create the sound.
+   * The resolved sound is automatically cached for future use.
+   * 
+   * @param id - The sound ID to retrieve
+   * @returns The sound if found or created, or undefined if not found and no resolver
+   * @returns Promise<any> if the resolver is asynchronous
+   * 
+   * @example
+   * ```ts
+   * // Synchronous usage
+   * const sound = engine.getSound('my-sound');
+   * 
+   * // Asynchronous usage (when resolver returns Promise)
+   * const sound = await engine.getSound('dynamic-sound');
+   * ```
+   */
+  getSound(id: string): any | Promise<any> {
+    // Check cache first
+    if (this.sounds.has(id)) {
+      return this.sounds.get(id);
+    }
+
+    // If not in cache and resolver exists, use it
+    if (this.soundResolver) {
+      const result = this.soundResolver(id);
+
+      // Check if result is a Promise
+      if (result instanceof Promise) {
+        return result.then((sound) => {
+          if (sound) {
+            // Cache the resolved sound
+            this.sounds.set(id, sound);
+          }
+          return sound;
+        });
+      } else {
+        // Synchronous result
+        if (result) {
+          // Cache the resolved sound
+          this.sounds.set(id, result);
+        }
+        return result;
+      }
+    }
+
+    // No resolver and not in cache
+    return undefined;
+  }
+
+  /**
+   * Play a sound by its ID
+   * 
+   * This method retrieves a sound from the cache or resolver and plays it.
+   * If the sound is not found, it will attempt to resolve it using the soundResolver.
+   * 
+   * @param soundId - The sound ID to play
+   * 
+   * @example
+   * ```ts
+   * // Play a sound synchronously
+   * engine.playSound('item-pickup');
+   * 
+   * // Play a sound asynchronously (when resolver returns Promise)
+   * await engine.playSound('dynamic-sound');
+   * ```
+   */
+  async playSound(soundId: string): Promise<void> {
+    const sound = await this.getSound(soundId);
+    if (sound && sound.play) {
+      sound.play();
+    } else if (sound && sound.src) {
+      // If sound is just a source URL, create a simple audio element
+      const audio = new Audio(sound.src);
+      audio.play().catch((error) => {
+        console.warn(`Failed to play sound ${soundId}:`, error);
+      });
+    } else {
+      console.warn(`Sound with id "${soundId}" not found or cannot be played`);
+    }
   }
 
   addParticle(particle: any) {

@@ -61,10 +61,7 @@ export default createServer({
               //  player.wood.update(wood => wood + 1)
               //  player.showComponentAnimation('wood')
               // player.name.set('test')
-              const event = player.getCurrentMap()?.getEvents()[0]
-              if (event) {
-                event.moveTo(player)
-              }
+              player.playSound("sound")
 
             }
             // if (input.action) {

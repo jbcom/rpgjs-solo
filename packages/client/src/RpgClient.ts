@@ -346,6 +346,31 @@ export interface RpgClient {
     spritesheetResolver?: (id: string) => any | Promise<any>,
 
     /** 
+     * Resolver function for dynamically loading sounds
+     * 
+     * The resolver is called when a sound is requested but not found in the cache.
+     * It can be synchronous (returns directly) or asynchronous (returns a Promise).
+     * The resolved sound is automatically cached for future use.
+     * 
+     * ```ts
+     * import { defineModule, RpgClient } from '@rpgjs/client'
+     * 
+     * defineModule<RpgClient>({
+     *     soundResolver: (id: string) => {
+     *         if (id === 'dynamic-sound') {
+     *             return { id: 'dynamic-sound', src: 'path/to/sound.mp3' };
+     *         }
+     *         return undefined;
+     *     }
+     * })
+     * ```
+     * 
+     * @prop {(id: string) => any | Promise<any>} [soundResolver]
+     * @memberof RpgClient
+     * */
+    soundResolver?: (id: string) => any | Promise<any>,
+
+    /** 
      * Array containing the list of GUI components
      * 
      * ```ts

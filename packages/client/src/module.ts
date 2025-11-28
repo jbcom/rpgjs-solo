@@ -40,6 +40,14 @@ export function provideClientModules(modules: RpgClient[]) {
           },
         };
       }
+      if (module.soundResolver) {
+        const resolver = module.soundResolver;
+        module.soundResolver = {
+          load: (engine: RpgClientEngine) => {
+            engine.setSoundResolver(resolver);
+          },
+        };
+      }
       if (module.gui) {
         const gui = [...module.gui];
         module.gui = {
