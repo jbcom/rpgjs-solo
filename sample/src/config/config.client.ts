@@ -9,6 +9,7 @@ import {
 } from "@rpgjs/client";
 import Map from "../components/map.ce";
 import Shadow from "../components/shadow.ce";
+import HpBar from "../../../packages/client/src/components/prebuilt/hp-bar.ce";
 import WoodComponent from "../components/wood.ce";
 import WoodUiComponent from "../components/wood-ui.ce";
 import VueComponent from "../vue-component-with-injections.vue";

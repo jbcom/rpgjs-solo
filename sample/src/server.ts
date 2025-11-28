@@ -1,4 +1,4 @@
-import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 
@@ -38,11 +38,12 @@ export default createServer({
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             console.log("join map");
             player.setGraphic("hero");
-            player.setComponentsTop(
-              Components.hpBar( {
-                width: 42
-              }))
-            player.teleport({ x: 100, y: 100 }) 
+            
+            // Initialize HP for testing the HP bar component
+            player.addParameter(MAXHP, { start: 100, end: 500 });
+            player.hp = 80; // Start with 80% HP to demonstrate the bar
+            
+            player.teleport({ x: 100, y: 100 }); 
           },
           onLeaveMap: (player: RpgPlayer, map: RpgMap) => {
 
@@ -50,17 +51,16 @@ export default createServer({
           async onInput(player: RpgPlayer, input: any) {
             console.log(player.x(), player.y())
             if (input.action) {
-              //  player.wood.update(wood => wood + 1)
-              //  player.showComponentAnimation('wood')
-              // player.name.set('test')
-
-            }
-            // if (input.action) {
-            //  player.wood.update(wood => wood + 1)
-            //  player.showComponentAnimation('wood')
-            // }
-            if (input.action) {
-              //player.gui("RpgComponentExample").open()
+              // Test HP bar: decrease HP by 10 on each action press
+              const newHp = Math.max(0, player.hp - 10);
+              player.hp = newHp;
+              console.log(`HP: ${player.hp}/${player.param.maxHp}`);
+              
+              // Reset HP when it reaches 0
+              if (newHp === 0) {
+                player.hp = player.param.maxHp;
+                console.log("HP restored to full!");
+              }
             }
           }
         },
