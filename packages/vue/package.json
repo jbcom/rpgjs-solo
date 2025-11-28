@@ -31,11 +31,11 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@canvasengine/compiler": "2.0.0-beta.22",
-    "vite": "^6.2.5",
-    "vite-plugin-dts": "^4.5.3",
-    "vitest": "^3.1.1",
-    "vue": "^3.5.13"
+    "@canvasengine/compiler": "2.0.0-beta.34",
+    "vite": "^7.2.4",
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^4.0.14",
+    "vue": "^3.5.25"
   },
   "type": "module"
 }
