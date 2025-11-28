@@ -27,7 +27,7 @@ import {
 } from "./ParameterManager";
 import { WithItemFixture } from "./ItemFixture";
 import { IItemManager, WithItemManager } from "./ItemManager";
-import { combineLatest, lastValueFrom } from "rxjs";
+import { bufferTime, combineLatest, debounceTime, distinctUntilChanged, filter, lastValueFrom, map, Observable, pairwise, sample, throttleTime } from "rxjs";
 import { IEffectManager, WithEffectManager } from "./EffectManager";
 import { AGI, AGI_CURVE, DEX, DEX_CURVE, INT, INT_CURVE, MAXHP, MAXHP_CURVE, MAXSP, MAXSP_CURVE, STR, STR_CURVE } from "../presets";
 import { IElementManager, WithElementManager } from "./ElementManager";
@@ -132,13 +132,36 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     (this as any).addParameter(AGI, AGI_CURVE);
     (this as any).allRecovery();
 
-    combineLatest([this.x.observable, this.y.observable]).subscribe(([x, y]) => {
-      this.frames = [...this.frames, {
-        x: x,
-        y: y,
-        ts: Date.now(),
-      }]
-    })
+    let lastEmitted: { x: number; y: number } | null = null;
+    let pendingUpdate: { x: number; y: number } | null = null;
+    let updateScheduled = false;
+
+    combineLatest([this.x.observable, this.y.observable])
+      .subscribe(([x, y]) => {
+        pendingUpdate = { x, y };
+        
+        // Schedule a synchronous update using queueMicrotask
+        // This groups multiple rapid changes (x and y in the same tick) into a single frame
+        if (!updateScheduled) {
+          updateScheduled = true;
+          queueMicrotask(() => {
+            if (pendingUpdate) {
+              const { x, y } = pendingUpdate;
+              // Only emit if the values are different from the last emitted frame
+              if (!lastEmitted || lastEmitted.x !== x || lastEmitted.y !== y) {
+                this.frames = [...this.frames, {
+                  x: x,
+                  y: y,
+                  ts: Date.now(),
+                }];
+                lastEmitted = { x, y };
+              }
+              pendingUpdate = null;
+            }
+            updateScheduled = false;
+          });
+        }
+      })
   }
   
   _onInit() {
@@ -330,7 +353,11 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       this.x.set(positions.x)
       this.y.set(positions.y)
     }
-    this._frames.set(this.frames)
+    // Wait for the frame to be added before applying frames
+    // This ensures the frame is added before applyFrames() is called
+    queueMicrotask(() => {
+      this.applyFrames()
+    })
   }
 
   getCurrentMap<T extends RpgMap = RpgMap>(): T | null {

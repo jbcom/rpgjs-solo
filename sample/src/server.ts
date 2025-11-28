@@ -6,10 +6,7 @@ export function Event() {
     name: "EV-1",
     onInit() {
       this.setGraphic("hero");
-      this.attachShape({
-          height: 100,
-          width: 100
-      })
+      this.teleport({ x: 200, y: 200 })
     },
     onPlayerTouch(player: RpgPlayer) {
      console.log("touch");
@@ -48,6 +45,7 @@ export default createServer({
             // console.log(player.conn?.state)
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
+            console.log("join map");
             player.setGraphic("hero");
           //  player.setComponentsTop(Components.text('{name}'))
             player.teleport({ x: 100, y: 100 }) 
@@ -75,7 +73,7 @@ export default createServer({
         maps: [
           {
             id: "map",
-            events: [{ x: 200, y: 200, event: Event() }],
+            events: [{ event: Event() }],
           },
         ],
         worldMaps: [

@@ -31,26 +31,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
       .subscribe(() => {
         const frame = this.frames.shift();
         if (frame) {
-          const entity = this.engine.scene.getBody(this.id);
-          const isLocalPlayer = this.id === this.engine.playerIdSignal();
-          if (entity && !isLocalPlayer) {
-            // Get old position in top-left mode to match frame coordinates
-            const oldPos = this.engine.scene.getBodyPosition(
-              this.id,
-              "top-left"
-            );
-            if (oldPos) {
-              const dt = 1 / 60; // Assume 60 FPS for now
-              const velocity = {
-                x: (frame.x - oldPos.x) / dt,
-                y: (frame.y - oldPos.y) / dt,
-              };
-              entity.setVelocity(velocity);
-            }
-          }
-          
-          // Use "top-left" mode because frame coordinates are in top-left format
-          // (server sends top-left positions via x/y signals)
+          if (!frame.x || !frame.y) return;
           this.engine.scene.setBodyPosition(
             this.id,
             frame.x,

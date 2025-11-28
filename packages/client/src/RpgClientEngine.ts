@@ -3,6 +3,7 @@ import { Context, inject } from "@signe/di";
 import { signal, bootstrapCanvas, Howler, Howl } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
+import { RpgSound } from "./Sound";
 import { Hooks, ModulesToken, Direction } from "@rpgjs/common";
 
 type DirectionValue = "up" | "down" | "left" | "right";
@@ -109,8 +110,6 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-sounds-load", this).subscribe();
     this.hooks.callHooks("client-soundResolver-load", this).subscribe();
     
-    // Initialize RpgSound with engine instance
-    const { RpgSound } = await import('./Sound');
     RpgSound.init(this);
     this.hooks.callHooks("client-gui-load", this).subscribe();
     this.hooks.callHooks("client-particles-load", this).subscribe();
