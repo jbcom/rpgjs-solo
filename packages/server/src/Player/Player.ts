@@ -754,27 +754,76 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   }
 
   /**
-   * Play a sound on the client side
+   * Play a sound on the client side for this player only
    * 
-   * This method emits an event to play a sound. The sound must be defined
-   * on the client side (in the client module configuration).
+   * This method emits an event to play a sound only for this specific player.
+   * The sound must be defined on the client side (in the client module configuration).
+   * 
+   * ## Design
+   * 
+   * The sound is sent only to this player's client connection, making it ideal
+   * for personal feedback sounds like UI interactions, notifications, or personal
+   * achievements. For map-wide sounds that all players should hear, use `map.playSound()` instead.
    * 
    * @param soundId - Sound identifier, defined on the client side
-   * @param forEveryone - Indicate if the sound is heard by all players on the map (default: true)
+   * @param options - Optional sound configuration
+   * @param options.volume - Volume level (0.0 to 1.0, default: 1.0)
+   * @param options.loop - Whether the sound should loop (default: false)
    * 
    * @example
    * ```ts
-   * // Play a sound for all players on the map (default)
-   * player.playSound("explosion");
+   * // Play a sound for this player only (default behavior)
+   * player.playSound("item-pickup");
    * 
-   * // Play a sound only for this player
-   * player.playSound("item-pickup", false);
+   * // Play a sound with volume and loop
+   * player.playSound("background-music", {
+   *   volume: 0.5,
+   *   loop: true
+   * });
    * 
-   * // Play a battle sound for everyone
-   * player.playSound("battle-start", true);
+   * // Play a notification sound at low volume
+   * player.playSound("notification", { volume: 0.3 });
    * ```
    */
-  playSound(soundId: string, forEveryone: boolean = true): void {
+  playSound(soundId: string, options?: { volume?: number; loop?: boolean }): void {
+    const map = this.getCurrentMap();
+    if (!map) return;
+
+    const data: any = {
+      soundId,
+    };
+
+    if (options) {
+      if (options.volume !== undefined) {
+        data.volume = Math.max(0, Math.min(1, options.volume));
+      }
+      if (options.loop !== undefined) {
+        data.loop = options.loop;
+      }
+    }
+
+    // Send only to this player
+    this.emit("playSound", data);
+  }
+
+  /**
+   * Stop a sound that is currently playing for this player
+   * 
+   * This method stops a sound that was previously started with `playSound()`.
+   * The sound must be defined on the client side.
+   * 
+   * @param soundId - Sound identifier to stop
+   * 
+   * @example
+   * ```ts
+   * // Start a looping background music
+   * player.playSound("background-music", { loop: true });
+   * 
+   * // Later, stop it
+   * player.stopSound("background-music");
+   * ```
+   */
+  stopSound(soundId: string): void {
     const map = this.getCurrentMap();
     if (!map) return;
 
@@ -782,16 +831,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       soundId,
     };
 
-    if (forEveryone) {
-      // Broadcast to all players on the map
-      map.$broadcast({
-        type: "playSound",
-        value: data,
-      });
-    } else {
-      // Send only to this player
-      this.emit("playSound", data);
-    }
+    // Send stop command only to this player
+    this.emit("stopSound", data);
   }
 
   /**

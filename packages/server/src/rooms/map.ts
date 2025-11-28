@@ -1166,6 +1166,72 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   getShape(name: string): RpgShape | undefined {
     return this._shapes.get(name);
   }
+
+  /**
+   * Play a sound for all players on the map
+   * 
+   * This method plays a sound for all players currently on the map by iterating
+   * over each player and calling `player.playSound()`. The sound must be defined
+   * on the client side (in the client module configuration).
+   * This is ideal for environmental sounds, battle music, or map-wide events that
+   * all players should hear simultaneously.
+   * 
+   * ## Design
+   * 
+   * Iterates over all players on the map and calls `player.playSound()` for each one.
+   * This avoids code duplication and reuses the existing player sound logic.
+   * For player-specific sounds, use `player.playSound()` directly.
+   * 
+   * @param soundId - Sound identifier, defined on the client side
+   * @param options - Optional sound configuration
+   * @param options.volume - Volume level (0.0 to 1.0, default: 1.0)
+   * @param options.loop - Whether the sound should loop (default: false)
+   * 
+   * @example
+   * ```ts
+   * // Play a sound for all players on the map
+   * map.playSound("explosion");
+   * 
+   * // Play background music for everyone with volume and loop
+   * map.playSound("battle-theme", {
+   *   volume: 0.7,
+   *   loop: true
+   * });
+   * 
+   * // Play a door opening sound at low volume
+   * map.playSound("door-open", { volume: 0.4 });
+   * ```
+   */
+  playSound(soundId: string, options?: { volume?: number; loop?: boolean }): void {
+    const players = this.getPlayers();
+    players.forEach((player) => {
+      player.playSound(soundId, options);
+    });
+  }
+
+  /**
+   * Stop a sound for all players on the map
+   * 
+   * This method stops a sound that was previously started with `map.playSound()`
+   * for all players on the map by iterating over each player and calling `player.stopSound()`.
+   * 
+   * @param soundId - Sound identifier to stop
+   * 
+   * @example
+   * ```ts
+   * // Start background music for everyone
+   * map.playSound("battle-theme", { loop: true });
+   * 
+   * // Later, stop it for everyone
+   * map.stopSound("battle-theme");
+   * ```
+   */
+  stopSound(soundId: string): void {
+    const players = this.getPlayers();
+    players.forEach((player) => {
+      player.stopSound(soundId);
+    });
+  }
 }
 
 export interface RpgMap {

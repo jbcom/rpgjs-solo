@@ -61,8 +61,7 @@ export default createServer({
               //  player.wood.update(wood => wood + 1)
               //  player.showComponentAnimation('wood')
               // player.name.set('test')
-              player.playSound("sound")
-
+              player.playSound("cursor")
             }
             // if (input.action) {
             //  player.wood.update(wood => wood + 1)

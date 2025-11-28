@@ -1,6 +1,6 @@
 import Canvas from "./components/scenes/canvas.ce";
 import { Context, inject } from "@signe/di";
-import { signal, bootstrapCanvas } from "canvasengine";
+import { signal, bootstrapCanvas, Howler, Howl } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { Hooks, ModulesToken, Direction } from "@rpgjs/common";
@@ -108,6 +108,10 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-spritesheetResolver-load", this).subscribe();
     this.hooks.callHooks("client-sounds-load", this).subscribe();
     this.hooks.callHooks("client-soundResolver-load", this).subscribe();
+    
+    // Initialize RpgSound with engine instance
+    const { RpgSound } = await import('./Sound');
+    RpgSound.init(this);
     this.hooks.callHooks("client-gui-load", this).subscribe();
     this.hooks.callHooks("client-particles-load", this).subscribe();
     this.hooks.callHooks("client-componentAnimations-load", this).subscribe();
@@ -186,8 +190,13 @@ export class RpgClientEngine<T = any> {
     })
 
     this.webSocket.on("playSound", (data) => {
+      const { soundId, volume, loop } = data;
+      this.playSound(soundId, { volume, loop });
+    });
+
+    this.webSocket.on("stopSound", (data) => {
       const { soundId } = data;
-      this.playSound(soundId);
+      this.stopSound(soundId);
     });
 
     this.webSocket.on('open', () => {
@@ -384,8 +393,58 @@ export class RpgClientEngine<T = any> {
     return undefined;
   }
 
-  addSound(sound: any, id?: string) {
-    this.sounds.set(id || sound.id, sound);
+  /**
+   * Add a sound to the engine
+   * 
+   * Adds a sound to the engine's sound cache. The sound can be:
+   * - A simple object with `id` and `src` properties
+   * - A Howler instance
+   * - An object with a `play()` method
+   * 
+   * If the sound has a `src` property, a Howler instance will be created automatically.
+   * 
+   * @param sound - The sound object or Howler instance
+   * @param id - Optional sound ID (if not provided, uses sound.id)
+   * @returns The added sound
+   * 
+   * @example
+   * ```ts
+   * // Simple sound object
+   * engine.addSound({ id: 'click', src: 'click.mp3' });
+   * 
+   * // With explicit ID
+   * engine.addSound({ src: 'music.mp3' }, 'background-music');
+   * ```
+   */
+  addSound(sound: any, id?: string): any {
+    const soundId = id || sound.id;
+    
+    if (!soundId) {
+      console.warn('Sound added without an ID. It will not be retrievable.');
+      return sound;
+    }
+
+    // If sound has a src property, create a Howler instance
+    if (sound.src && typeof sound.src === 'string') {
+      const howlOptions: any = {
+        src: [sound.src],
+        loop: sound.loop || false,
+        volume: sound.volume !== undefined ? sound.volume : 1.0,
+      };
+
+      const howl = new (Howl as any).Howl(howlOptions);
+      this.sounds.set(soundId, howl);
+      return howl;
+    }
+
+    // If sound already has a play method (Howler instance or custom), use it directly
+    if (sound && typeof sound.play === 'function') {
+      this.sounds.set(soundId, sound);
+      return sound;
+    }
+
+    // Otherwise, store as-is
+    this.sounds.set(soundId, sound);
     return sound;
   }
 
@@ -478,30 +537,96 @@ export class RpgClientEngine<T = any> {
    * 
    * This method retrieves a sound from the cache or resolver and plays it.
    * If the sound is not found, it will attempt to resolve it using the soundResolver.
+   * Uses Howler.js for audio playback instead of native Audio elements.
    * 
    * @param soundId - The sound ID to play
+   * @param options - Optional sound configuration
+   * @param options.volume - Volume level (0.0 to 1.0, overrides sound default)
+   * @param options.loop - Whether the sound should loop (overrides sound default)
    * 
    * @example
    * ```ts
    * // Play a sound synchronously
    * engine.playSound('item-pickup');
    * 
+   * // Play a sound with volume and loop
+   * engine.playSound('background-music', { volume: 0.5, loop: true });
+   * 
    * // Play a sound asynchronously (when resolver returns Promise)
-   * await engine.playSound('dynamic-sound');
+   * await engine.playSound('dynamic-sound', { volume: 0.8 });
    * ```
    */
-  async playSound(soundId: string): Promise<void> {
+  async playSound(soundId: string, options?: { volume?: number; loop?: boolean }): Promise<void> {
     const sound = await this.getSound(soundId);
     if (sound && sound.play) {
-      sound.play();
+      // Sound is already a Howler instance or has a play method
+      const howlSoundId = sound._sounds?.[0]?._id;
+      
+      // Apply volume if provided
+      if (options?.volume !== undefined) {
+        if (howlSoundId !== undefined) {
+          sound.volume(Math.max(0, Math.min(1, options.volume)), howlSoundId);
+        } else {
+          sound.volume(Math.max(0, Math.min(1, options.volume)));
+        }
+      }
+      
+      // Apply loop if provided
+      if (options?.loop !== undefined) {
+        if (howlSoundId !== undefined) {
+          sound.loop(options.loop, howlSoundId);
+        } else {
+          sound.loop(options.loop);
+        }
+      }
+      
+      if (howlSoundId !== undefined) {
+        sound.play(howlSoundId);
+      } else {
+        sound.play();
+      }
     } else if (sound && sound.src) {
-      // If sound is just a source URL, create a simple audio element
-      const audio = new Audio(sound.src);
-      audio.play().catch((error) => {
-        console.warn(`Failed to play sound ${soundId}:`, error);
-      });
+      // If sound is just a source URL, create a Howler instance and cache it
+      const howlOptions: any = {
+        src: [sound.src],
+        loop: options?.loop !== undefined ? options.loop : (sound.loop || false),
+        volume: options?.volume !== undefined ? Math.max(0, Math.min(1, options.volume)) : (sound.volume !== undefined ? sound.volume : 1.0),
+      };
+
+      const howl = new (Howl as any).Howl(howlOptions);
+      
+      // Cache the Howler instance for future use
+      this.sounds.set(soundId, howl);
+      
+      // Play the sound
+      howl.play();
     } else {
       console.warn(`Sound with id "${soundId}" not found or cannot be played`);
+    }
+  }
+
+  /**
+   * Stop a sound that is currently playing
+   * 
+   * This method stops a sound that was previously started with `playSound()`.
+   * 
+   * @param soundId - The sound ID to stop
+   * 
+   * @example
+   * ```ts
+   * // Start a looping sound
+   * engine.playSound('background-music', { loop: true });
+   * 
+   * // Later, stop it
+   * engine.stopSound('background-music');
+   * ```
+   */
+  stopSound(soundId: string): void {
+    const sound = this.sounds.get(soundId);
+    if (sound && sound.stop) {
+      sound.stop();
+    } else {
+      console.warn(`Sound with id "${soundId}" not found or cannot be stopped`);
     }
   }
 

@@ -411,22 +411,56 @@ export interface RpgClient {
 
     /** 
      * Array containing the list of sounds
-     * Each element is a simple object containing sound definitions
+     * Each element can be:
+     * - A simple object containing sound definitions
+     * - A class decorated with @Sound
      * 
      * ```ts
-     * import { defineModule, RpgClient } from '@rpgjs/client'
+     * import { defineModule, RpgClient, Sound } from '@rpgjs/client'
      * 
+     * // Using simple objects
      * defineModule<RpgClient>({
      *      sounds: [
      *          {
-     *              town: require('./assets/Town_Theme.ogg'),
-     *              battle: require('./assets/Battle_Theme.ogg')
+     *              id: 'typewriter',
+     *              src: 'typewriter.wav'
+     *          },
+     *          {
+     *              id: 'cursor',
+     *              src: 'cursor.wav'
      *          }
      *      ]
      * })
+     * 
+     * // Using @Sound decorator
+     * @Sound({
+     *     id: 'town-music',
+     *     sound: require('./sound/town.ogg'),
+     *     loop: true,
+     *     volume: 0.5
+     * })
+     * export class TownMusic {}
+     * 
+     * defineModule<RpgClient>({
+     *      sounds: [TownMusic]
+     * })
+     * 
+     * // Multiple sounds in one class
+     * @Sound({
+     *     sounds: {
+     *         hero: require('./assets/hero.ogg'),
+     *         monster: require('./assets/monster.ogg')
+     *     },
+     *     loop: true
+     * })
+     * export class CharacterSounds {}
+     * 
+     * defineModule<RpgClient>({
+     *      sounds: [CharacterSounds]
+     * })
      * ```
      * 
-     * @prop {Array<Object>} [sounds]
+     * @prop {Array<Object | Class>} [sounds]
      * @memberof RpgClient
      * */
     sounds?: any[],

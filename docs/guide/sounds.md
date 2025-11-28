@@ -54,67 +54,104 @@ If a sound object has a `play()` method, it will be used directly. Otherwise, th
 
 ### Using `player.playSound()`
 
-You can play sounds from the server side using the `playSound()` method on a player instance:
+You can play sounds from the server side using the `playSound()` method on a player instance. **This method plays the sound only for the specific player**, making it ideal for personal feedback sounds.
 
 ```typescript
 /**
- * Play a sound on the client side
+ * Play a sound on the client side for this player only
  * @param soundId - Sound identifier, defined on the client side
- * @param forEveryone - Indicate if the sound is heard by all players on the map (default: true)
+ * @param options - Optional sound configuration
+ * @param options.volume - Volume level (0.0 to 1.0, default: 1.0)
+ * @param options.loop - Whether the sound should loop (default: false)
  */
-player.playSound(soundId: string, forEveryone: boolean = true): void
+player.playSound(soundId: string, options?: { volume?: number; loop?: boolean }): void
+```
+
+### Using `map.playSound()`
+
+To play a sound for **all players on the map**, use the `playSound()` method on the map instance. This is ideal for environmental sounds, battle music, or map-wide events.
+
+```typescript
+/**
+ * Play a sound for all players on the map
+ * @param soundId - Sound identifier, defined on the client side
+ * @param options - Optional sound configuration
+ * @param options.volume - Volume level (0.0 to 1.0, default: 1.0)
+ * @param options.loop - Whether the sound should loop (default: false)
+ */
+map.playSound(soundId: string, options?: { volume?: number; loop?: boolean }): void
 ```
 
 ### Examples
-
-#### Play Sound for All Players
-
-```typescript
-// Play an explosion sound for everyone on the map
-player.playSound("explosion");
-
-// Play a battle start sound for all players
-player.playSound("battle-start", true);
-```
 
 #### Play Sound for Current Player Only
 
 ```typescript
 // Play item pickup sound only for this player
-player.playSound("item-pickup", false);
+player.playSound("item-pickup");
 
-// Play a notification sound only for this player
-player.playSound("notification", false);
+// Play a notification sound with custom volume
+player.playSound("notification", { volume: 0.5 });
+
+// Play background music for this player with loop
+player.playSound("background-music", { volume: 0.7, loop: true });
+```
+
+#### Play Sound for All Players on Map
+
+```typescript
+// Play an explosion sound for everyone on the map
+map.playSound("explosion");
+
+// Play battle music for all players with volume and loop
+map.playSound("battle-theme", { volume: 0.8, loop: true });
+
+// Play a door opening sound at low volume
+map.playSound("door-open", { volume: 0.4 });
+```
+
+### Stopping Sounds
+
+You can stop sounds using `stopSound()` on either the player or map:
+
+```typescript
+// Stop a sound for this player
+player.stopSound("background-music");
+
+// Stop a sound for all players on the map
+map.stopSound("battle-theme");
 ```
 
 ### Use Cases
 
-**For Everyone (`forEveryone = true`):**
+**Using `map.playSound()` (for all players):**
 - Environmental sounds (explosions, doors opening)
 - Battle sounds (combat start, victory fanfare)
 - Map-wide events (boss spawn, treasure chest opening)
 - Ambient effects that should be synchronized
+- Background music that everyone should hear
 
-**For Current Player Only (`forEveryone = false`):**
+**Using `player.playSound()` (for current player only):**
 - UI feedback sounds (menu navigation, button clicks)
 - Personal notifications (level up, achievement unlocked)
 - Item pickup sounds (only the player who picked it up hears it)
 - Private messages or alerts
+- Personal background music
 
 ### Complete Example
 
 ```typescript
-import { RpgPlayer, RpgPlayerHooks } from '@rpgjs/server';
+import { RpgPlayer, RpgPlayerHooks, RpgMap } from '@rpgjs/server';
 
 const player: RpgPlayerHooks = {
   async onJoin(player: RpgPlayer) {
     // Play welcome sound for this player only
-    player.playSound("welcome", false);
+    player.playSound("welcome", { volume: 0.6 });
   },
 
   async onLevelUp(player: RpgPlayer) {
     // Play level up sound for this player only
-    player.playSound("level-up", false);
+    player.playSound("level-up", { volume: 0.8 });
     
     // Show level up animation
     player.showComponentAnimation("level-up", {
@@ -125,17 +162,31 @@ const player: RpgPlayerHooks = {
 
   async onTouchEvent(player: RpgPlayer, event: RpgEvent) {
     if (event.name === "Treasure Chest") {
+      const map = player.getCurrentMap();
+      
       // Play chest opening sound for everyone on the map
-      player.playSound("chest-open", true);
+      map?.playSound("chest-open", { volume: 0.7 });
       
       // Play item pickup sound only for this player
-      player.playSound("item-pickup", false);
+      player.playSound("item-pickup", { volume: 0.5 });
     }
   },
 
   async onBattleStart(player: RpgPlayer) {
-    // Play battle music for everyone
-    player.playSound("battle-theme", true);
+    const map = player.getCurrentMap();
+    
+    // Play battle music for everyone with loop
+    map?.playSound("battle-theme", { volume: 0.8, loop: true });
+  },
+
+  async onBattleEnd(player: RpgPlayer) {
+    const map = player.getCurrentMap();
+    
+    // Stop battle music for everyone
+    map?.stopSound("battle-theme");
+    
+    // Play victory sound for this player
+    player.playSound("victory", { volume: 1.0 });
   }
 };
 ```
@@ -370,6 +421,12 @@ const engine = inject(RpgClientEngine);
 
 // Play a sound
 await engine.playSound('item-pickup');
+
+// Play a sound with volume and loop
+await engine.playSound('background-music', { volume: 0.6, loop: true });
+
+// Stop a sound
+engine.stopSound('background-music');
 
 // Get a sound (with resolver support)
 const sound = await engine.getSound('dynamic-sound');

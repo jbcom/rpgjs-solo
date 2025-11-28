@@ -3,6 +3,7 @@ import { RpgClientEngine } from "./RpgClientEngine";
 import { RpgClient } from "./RpgClient";
 import { inject } from "@signe/di";
 import { RpgGui } from "./Gui/Gui";
+import { getSoundMetadata } from "./Sound";
 
 export function provideClientModules(modules: RpgClient[]) {
   return provideModules(modules, "client", (modules, context) => {
@@ -35,7 +36,38 @@ export function provideClientModules(modules: RpgClient[]) {
         module.sounds = {
           load: (engine: RpgClientEngine) => {
             sounds.forEach((sound) => {
-              engine.addSound(sound);
+              // Check if it's a class decorated with @Sound
+              if (typeof sound === 'function' || (sound && sound.constructor && sound.constructor !== Object)) {
+                const metadata = getSoundMetadata(sound);
+                if (metadata) {
+                  // Handle single sound
+                  if (metadata.id && metadata.sound) {
+                    engine.addSound({
+                      id: metadata.id,
+                      src: metadata.sound,
+                      loop: metadata.loop,
+                      volume: metadata.volume,
+                    });
+                  }
+                  // Handle multiple sounds
+                  if (metadata.sounds) {
+                    Object.entries(metadata.sounds).forEach(([soundId, soundSrc]) => {
+                      engine.addSound({
+                        id: soundId,
+                        src: soundSrc,
+                        loop: metadata.loop,
+                        volume: metadata.volume,
+                      });
+                    });
+                  }
+                } else {
+                  // Not a decorated class, treat as regular sound object
+                  engine.addSound(sound);
+                }
+              } else {
+                // Regular sound object
+                engine.addSound(sound);
+              }
             });
           },
         };
