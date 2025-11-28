@@ -14,6 +14,7 @@ export class Item {
     constructor(data: any) {
         this.description.set(data.description);
         this.price.set(data.price);
+        this.name.set(data.name);
         this.onAdd = data.onAdd?.bind(this) ?? (() => {});
     }
 }

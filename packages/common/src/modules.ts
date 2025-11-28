@@ -4,6 +4,32 @@ import { Context, Provider, Providers } from "@signe/di";
 import { Subject, Observable, from } from "rxjs";
 import { mergeMap, toArray } from "rxjs/operators";
 
+export enum Side {
+  Server = 'server',
+  Client = 'client'
+}
+
+type ModuleSide = {
+  client?: any,
+  server?: any
+}
+
+export type ModuleType = ModuleSide | [ModuleSide, {
+  client?: any,
+  server?: any
+}]
+
+export function RpgModule<T>(options: T) {
+  return (target) => {
+      if ((options as any).hooks) {
+          target.hooks = (options as any).hooks
+      }
+      for (let key in options) {
+          target.prototype[key] = options[key]
+      }
+  }
+}
+
 export class Hooks {
   /**
    * Store of all module hooks by ID

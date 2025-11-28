@@ -682,8 +682,78 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
   }
 
-  addInDatabase(id: string, data: any) {
-    this.database()[id] = data;
+  /**
+   * Add data to the map's database
+   * 
+   * This method allows you to dynamically add items, classes, or any data to the map's database.
+   * By default, if an ID already exists, the operation is ignored to prevent overwriting existing data.
+   * 
+   * @param id - Unique identifier for the data
+   * @param data - The data to store (can be a class, object, or any value)
+   * @param options - Optional configuration
+   * @param options.force - If true, overwrites existing data even if ID already exists (default: false)
+   * @returns true if data was added, false if ignored (ID already exists)
+   * 
+   * @example
+   * ```ts
+   * // Add an item class to the database
+   * map.addInDatabase('Potion', PotionClass);
+   * 
+   * // Add an item object to the database
+   * map.addInDatabase('custom-item', {
+   *   name: 'Custom Item',
+   *   price: 100
+   * });
+   * 
+   * // Force overwrite existing data
+   * map.addInDatabase('Potion', UpdatedPotionClass, { force: true });
+   * ```
+   */
+  addInDatabase(id: string, data: any, options?: { force?: boolean }): boolean {
+    const database = this.database();
+    
+    // Check if ID already exists
+    if (database[id] !== undefined && !options?.force) {
+      // Ignore the addition if ID exists and force is not enabled
+      return false;
+    }
+    
+    // Add or overwrite the data
+    database[id] = data;
+    return true;
+  }
+
+  /**
+   * Remove data from the map's database
+   * 
+   * This method allows you to remove items or data from the map's database.
+   * 
+   * @param id - Unique identifier of the data to remove
+   * @returns true if data was removed, false if ID didn't exist
+   * 
+   * @example
+   * ```ts
+   * // Remove an item from the database
+   * map.removeInDatabase('Potion');
+   * 
+   * // Check if removal was successful
+   * const removed = map.removeInDatabase('custom-item');
+   * if (removed) {
+   *   console.log('Item removed successfully');
+   * }
+   * ```
+   */
+  removeInDatabase(id: string): boolean {
+    const database = this.database();
+    
+    // Check if ID exists
+    if (database[id] === undefined) {
+      return false;
+    }
+    
+    // Remove the data
+    delete database[id];
+    return true;
   }
 
   /**

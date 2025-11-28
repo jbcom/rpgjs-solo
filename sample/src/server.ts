@@ -1,5 +1,8 @@
 import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
+import { Item } from '@rpgjs/database'
+
+
 
 export function Event() {
   return {
@@ -59,7 +62,18 @@ export default createServer({
               //  player.wood.update(wood => wood + 1)
               //  player.showComponentAnimation('wood')
               // player.name.set('test')
-              player.playSound("cursor")
+              player.addItem({  
+                name: 'Potion',
+                description: 'Gives 100 HP',
+                price: 200,
+                hpValue: 100,
+                hitRate: 1,
+                consumable: true,
+                addStates: [],
+                removeStates: [],
+                elements: [],
+                paramsModifier: {}
+            }, 1)
             }
             // if (input.action) {
             //  player.wood.update(wood => wood + 1)
@@ -97,7 +111,7 @@ export default createServer({
             ]
           }
         ]
-      },
+      }
     ])
   ],
 });
