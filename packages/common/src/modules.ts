@@ -187,7 +187,7 @@ export function findModules(context: Context, namespace: string) {
   let modules: any[] = []
   for (let key in context['values']) {
     if (key.endsWith('Module' + namespace)) {
-      modules.push(context['values'][key])
+      modules.push(context['values'][key].values.get('__default__'))
     }
   }
   return modules
@@ -249,6 +249,7 @@ export function createModule(tokenName: string, providers:(Provider | Provider[]
     
     return results;
   }).flat(); // Flatten the array to handle multiple results per provider
+
   return results.flat();
 }
 

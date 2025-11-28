@@ -1,6 +1,7 @@
 import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
+import { provideMain } from "./modules/main";
 
 
 
@@ -24,6 +25,7 @@ export function Event() {
 export default createServer({
   providers: [
   //  provideTiledMap(),
+    provideMain(),
     provideServerModules([
       {
         player: {

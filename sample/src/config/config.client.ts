@@ -16,6 +16,7 @@ import VueComponent from "../vue-component-with-injections.vue";
 import { signal, effect } from 'canvasengine'
 import { provideVueGui } from "@rpgjs/vue";
 import { provideTiledMap } from "@rpgjs/tiledmap/client";
+import { provideMain } from "../modules/main";
 
 
 export default {
@@ -37,6 +38,7 @@ export default {
     // }),
     provideVueGui(),
     provideClientGlobalConfig(),
+    provideMain(),
     provideClientModules([
       {
         spritesheetResolver: (id: string) => {
