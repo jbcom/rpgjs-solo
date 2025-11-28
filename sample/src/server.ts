@@ -7,6 +7,9 @@ export function Event() {
     onInit() {
       this.setGraphic("hero");
     },
+    onPlayerTouch(player: RpgPlayer) {
+     console.log("touch");
+    },
     async onAction(player: RpgPlayer) {
       player.gold = 100;
       await player.showChoices("Hello World Hello World Hello World Hello World Hello World", [{

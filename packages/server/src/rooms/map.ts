@@ -108,7 +108,86 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this.throttleSync = this.isStandalone ? 0 : 50; // Reduced from 100ms to 50ms for better responsiveness
     this.throttleStorage = this.isStandalone ? 0 : 1000;
     this.sessionExpiryTime = 1000 * 60 * 5; //5 minutes
+    this.setupCollisionDetection();
     this.loop();
+  }
+
+  /**
+   * Setup collision detection between players and events
+   * 
+   * This method listens to physics collision events and triggers the `onPlayerTouch`
+   * hook on events when a player collides with them.
+   * 
+   * ## Architecture
+   * 
+   * Uses the physics engine's collision event system to detect when entities collide.
+   * When a collision is detected between a player and an event, the event's `onPlayerTouch`
+   * hook is called with the player as parameter.
+   * 
+   * @example
+   * ```ts
+   * // Event with onPlayerTouch hook
+   * map.createDynamicEvent({
+   *   x: 100,
+   *   y: 200,
+   *   event: {
+   *     onPlayerTouch(player) {
+   *       console.log(`Player ${player.id} touched this event!`);
+   *     }
+   *   }
+   * });
+   * ```
+   */
+  private setupCollisionDetection(): void {
+    // Track collisions to avoid calling onPlayerTouch multiple times for the same collision
+    const activeCollisions = new Set<string>();
+
+    // Listen to collision enter events
+    this.physic.getEvents().onCollisionEnter((collision) => {
+      const entityA = collision.entityA;
+      const entityB = collision.entityB;
+
+      // Create a unique key for this collision pair
+      const collisionKey = entityA.uuid < entityB.uuid
+        ? `${entityA.uuid}-${entityB.uuid}`
+        : `${entityB.uuid}-${entityA.uuid}`;
+
+      // Skip if we've already processed this collision
+      if (activeCollisions.has(collisionKey)) {
+        return;
+      }
+
+      // Check if one entity is a player and the other is an event
+      const player = this.getPlayer(entityA.uuid) || this.getPlayer(entityB.uuid);
+      if (!player) {
+        return;
+      }
+
+      // Determine which entity is the event
+      const eventId = player.id === entityA.uuid ? entityB.uuid : entityA.uuid;
+      const event = this.getEvent(eventId);
+
+      if (event) {
+        // Mark this collision as processed
+        activeCollisions.add(collisionKey);
+        
+        // Trigger the onPlayerTouch hook on the event
+        event.execMethod('onPlayerTouch', [player]);
+      }
+    });
+
+    // Listen to collision exit events to clean up tracking
+    this.physic.getEvents().onCollisionExit((collision) => {
+      const entityA = collision.entityA;
+      const entityB = collision.entityB;
+
+      const collisionKey = entityA.uuid < entityB.uuid
+        ? `${entityA.uuid}-${entityB.uuid}`
+        : `${entityB.uuid}-${entityA.uuid}`;
+
+      // Remove from active collisions so onPlayerTouch can be called again if they collide again
+      activeCollisions.delete(collisionKey);
+    });
   }
 
   // autoload by @signe/room
