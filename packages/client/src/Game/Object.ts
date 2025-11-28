@@ -1,7 +1,6 @@
 import { Hooks, ModulesToken, RpgCommonPlayer } from "@rpgjs/common";
-import { sync } from "@signe/sync";
 import { trigger, signal } from "canvasengine";
-import { debounceTime, Subscription, throttleTime } from "rxjs";
+import { filter, from, map, Subscription, switchMap } from "rxjs";
 import { inject } from "../core/inject";
 import { RpgClientEngine } from "../RpgClientEngine";
 
@@ -13,6 +12,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   animationIsPlaying = signal(false);
   _param = signal({});
   frames: { x: number; y: number; ts: number }[] = [];
+  graphicsSignals = signal<any[]>([]);
 
   constructor() {
     super();
@@ -22,6 +22,16 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
       if (!this.id) return;
       //if (this.id == this.engine.playerIdSignal()!) return;
       this.frames = [...this.frames, ...items];
+    });
+
+    this.graphics.observable
+    .pipe(
+      map(({ items }) => items),
+      filter(graphics => graphics.length > 0),
+      switchMap(graphics => from(Promise.all(graphics.map(graphic => this.engine.getSpriteSheet(graphic)))))
+    )
+    .subscribe((sheets) => {  
+      this.graphicsSignals.set(sheets);
     });
 
     this.engine.tick

@@ -16,19 +16,7 @@ export function Event() {
     },
     async onAction(player: RpgPlayer) {
       player.gold = 100;
-      await player.showChoices("Hello World Hello World Hello World Hello World Hello World", [{
-        text: "yes",
-        value: "yes"
-      }, {
-        text: "no",
-        value: "no"
-      }], {
-        talkWith: this,
-        face: {
-          id: "facesetId",
-          expression: "happy"
-        }
-      });
+      this.setGraphic("monster")
     },
   };
 }
@@ -62,18 +50,7 @@ export default createServer({
               //  player.wood.update(wood => wood + 1)
               //  player.showComponentAnimation('wood')
               // player.name.set('test')
-              player.addItem({  
-                name: 'Potion',
-                description: 'Gives 100 HP',
-                price: 200,
-                hpValue: 100,
-                hitRate: 1,
-                consumable: true,
-                addStates: [],
-                removeStates: [],
-                elements: [],
-                paramsModifier: {}
-            }, 1)
+
             }
             // if (input.action) {
             //  player.wood.update(wood => wood + 1)

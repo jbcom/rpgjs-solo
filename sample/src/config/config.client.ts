@@ -48,6 +48,15 @@ export default {
               ratio: 1.5,
             })
           }
+          else if (id === "monster") {
+            return Presets.LPCSpritesheetPreset({
+              id: "monster",
+              imageSource: "monster.png",
+              width: 1728,
+              height: 5568,
+              ratio: 1.5,
+            })
+          }
           return undefined;
         },
         sprite: {
