@@ -20,6 +20,7 @@ import {
   PredictionController,
   type PredictionState,
 } from "@rpgjs/common";
+import { KeyboardControls } from "./services/keyboardControls";
 
 export class RpgClientEngine<T = any> {
   private guiService: RpgGui;
@@ -87,6 +88,47 @@ export class RpgClientEngine<T = any> {
 
     this.predictionEnabled = (this.globalConfig as any)?.prediction?.enabled !== false;
     this.initializePredictionController();
+  }
+
+  /**
+   * Assigns a CanvasEngine KeyboardControls instance to the dependency injection context
+   * 
+   * This method registers a KeyboardControls instance from CanvasEngine into the DI container,
+   * making it available for injection throughout the application. The particularity is that
+   * this method is automatically called when a sprite is displayed on the map, allowing the
+   * controls to be automatically associated with the active sprite.
+   * 
+   * ## Design
+   * 
+   * - The instance is stored in the DI context under the `KeyboardControls` token
+   * - It's automatically assigned when a sprite component mounts (in `character.ce`)
+   * - The controls instance comes from the CanvasEngine component's directives
+   * - Once registered, it can be retrieved using `inject(KeyboardControls)` from anywhere
+   * 
+   * @param controlInstance - The CanvasEngine KeyboardControls instance to register
+   * 
+   * @example
+   * ```ts
+   * // The method is automatically called when a sprite is displayed:
+   * // client.setKeyboardControls(element.directives.controls)
+   * 
+   * // Later, retrieve and use the controls instance:
+   * import { Input, inject, KeyboardControls } from '@rpgjs/client'
+   * 
+   * const controls = inject(KeyboardControls)
+   * const control = controls.getControl(Input.Enter)
+   * 
+   * if (control) {
+   *   console.log(control.actionName) // 'action'
+   * }
+   * ```
+   */
+  setKeyboardControls(controlInstance: any) {
+    const currentValues = this.context.values['inject:' + KeyboardControls]
+    this.context.values['inject:' + KeyboardControls] = {
+      ...currentValues,
+      values: new Map([['__default__', controlInstance]])
+    }
   }
 
   async start() {

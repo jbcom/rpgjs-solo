@@ -5,6 +5,7 @@ import { RpgClientEngine } from "../RpgClientEngine";
 import { UpdateMapService, UpdateMapToken } from "@rpgjs/common";
 import { LoadMapToken } from "./loadMap";
 import { RpgGui } from "../Gui/Gui";
+import { provideKeyboardControls } from "./keyboardControls";
 
 type ServerIo = any;
 type ClientIo = any;
@@ -157,6 +158,7 @@ export function provideRpg(server: any) {
       provide: UpdateMapToken,
       useClass: UpdateMapStandaloneService,
     },
+    provideKeyboardControls(),
     RpgGui,
     RpgClientEngine,
   ];

@@ -4,6 +4,7 @@ import { RpgGui } from "../Gui/Gui";
 import { RpgClientEngine } from "../RpgClientEngine";
 import { AbstractWebsocket, WebSocketToken } from "./AbstractSocket";
 import { UpdateMapService, UpdateMapToken } from "@rpgjs/common";
+import { provideKeyboardControls } from "./keyboardControls";
 
 interface MmorpgOptions {
     host?: string;
@@ -80,6 +81,7 @@ export function provideMmorpg(options: MmorpgOptions) {
       provide: UpdateMapToken,
       useFactory: (context: Context) => new UpdateMapStandaloneService(context, options),
     },
+    provideKeyboardControls(),
     RpgGui,
     RpgClientEngine,
   ];

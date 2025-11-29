@@ -15,3 +15,4 @@ export * from "./components/gui";
 export * from "./Sound";
 export * from "./Resource";
 export { Context } from "@signe/di";
+export * from "./services/keyboardControls";

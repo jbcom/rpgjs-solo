@@ -1,6 +1,7 @@
 import {
   BoxComponent,
   inject,
+  KeyboardControls,
   Presets,
   provideClientGlobalConfig,
   provideClientModules,
@@ -74,7 +75,7 @@ export default {
         },
         sceneMap: {
           onAfterLoading: (scene) => {
-           
+
           },
         },
         sounds: [
@@ -85,8 +86,7 @@ export default {
           {
             id: "cursor",
             src: "cursor.wav",
-          },
-          TownMusic
+          }
         ],
         spritesheets: [
           Presets.FacesetPreset({
