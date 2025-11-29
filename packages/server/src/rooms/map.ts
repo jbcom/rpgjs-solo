@@ -821,6 +821,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     // Check if event is a constructor function (class)
     if (typeof event === 'function') {
       eventInstance = new event();
+      if (event.prototype.name) eventInstance.name.set(event.prototype.name);
     }
     // Handle event as an object with hooks
     else {
@@ -852,6 +853,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       }
 
       eventInstance = new DynamicEvent();
+      if (event.name) eventInstance.name.set(event.name);
     }
 
     eventInstance.map = this;
@@ -859,9 +861,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     eventInstance.x.set(x);
     eventInstance.y.set(y);
-    //eventInstance.applyFrames()
-    if (event.name) eventInstance.name.set(event.name);
-
+    
     this.events()[id] = eventInstance;
 
     await eventInstance.execMethod('onInit')

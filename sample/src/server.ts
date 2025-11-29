@@ -1,4 +1,4 @@
-import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, EventMode } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
@@ -8,6 +8,7 @@ import { provideMain } from "./modules/main";
 export function Event() {
   return {
     name: "EV-1",
+    mode: EventMode.Scenario,
     onInit() {
       this.setGraphic("hero");
       this.teleport({ x: 200, y: 200 })
@@ -20,6 +21,19 @@ export function Event() {
       this.setGraphic("monster")
     },
   };
+}
+
+@EventData({
+  name: 'EV-1',
+  mode: EventMode.Scenario
+})
+export class CharaEvent extends RpgEvent {
+  onInit(player: RpgPlayer) {
+    this.setGraphic("monster");
+  }
+  onAction(player: RpgPlayer) {
+     
+  }
 }
 
 export default createServer({
