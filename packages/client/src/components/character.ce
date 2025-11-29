@@ -15,6 +15,17 @@
       <component object />
     </Container>
   } 
+  @for (attachedGui of attachedGuis) {
+    @if (shouldDisplayAttachedGui) {
+      <Container>
+        <attachedGui.component ...attachedGui.data() object={object} onFinish={(data) => {
+          onAttachedGuiFinish(attachedGui, data)
+        }} onInteraction={(name, data) => {
+          onAttachedGuiInteraction(attachedGui, name, data)
+        }} />
+      </Container>
+    }
+  }
 </Container>
 
 <script>
@@ -27,17 +38,35 @@
   import { Direction } from "@rpgjs/common";
   import Hit from "./effects/hit.ce";
   import PlayerComponents from "./player-components.ce";
+  import { RpgGui } from "../Gui/Gui";
 
   const { object, id } = defineProps();
 
   const client = inject(RpgClientEngine);
   const hooks = inject(ModulesToken);
+  const guiService = inject(RpgGui);
 
   const spritesheets = client.spritesheets;
   const playerId = client.playerId;
   const componentsBehind = client.spriteComponentsBehind;
   const componentsInFront = client.spriteComponentsInFront;
   const isMe = computed(() => id() === playerId);
+
+  /**
+   * Get all attached GUI components that should be rendered on sprites
+   * These are GUIs with attachToSprite: true
+   */
+  const attachedGuis = computed(() => {
+    return guiService.getAttachedGuis();
+  });
+
+  /**
+   * Check if attached GUIs should be displayed for this sprite
+   * This is controlled by showAttachedGui/hideAttachedGui on the server
+   */
+  const shouldDisplayAttachedGui = computed(() => {
+    return guiService.shouldDisplayAttachedGui(id());
+  });
 
   const { 
     x, 
@@ -205,25 +234,24 @@
   })
 
   /**
-   * Calculate Y position for components above player
+   * Handle attached GUI finish event
+   * 
+   * @param gui - The GUI instance
+   * @param data - Data passed from the GUI component
    */
-  const getComponentsTopY = () => {
-    const layout = componentsTopData()?.layout || {};
-    const hitboxValue = typeof hitbox === 'function' ? hitbox() : hitbox;
-    const playerHeight = hitboxValue?.h || 32;
-    const marginBottom = layout.marginBottom ?? 0;
-    return -(playerHeight / 2) - marginBottom;
+  const onAttachedGuiFinish = (gui, data) => {
+    guiService.guiClose(gui.name, data);
   };
 
   /**
-   * Calculate Y position for components below player
+   * Handle attached GUI interaction event
+   * 
+   * @param gui - The GUI instance
+   * @param name - Interaction name
+   * @param data - Interaction data
    */
-  const getComponentsBottomY = () => {
-    const layout = componentsBottomData()?.layout || {};
-    const hitboxValue = typeof hitbox === 'function' ? hitbox() : hitbox;
-    const playerHeight = hitboxValue?.h || 32;
-    const marginTop = layout.marginTop ?? 0;
-    return (playerHeight / 2) + marginTop;
+  const onAttachedGuiInteraction = (gui, name, data) => {
+    guiService.guiInteraction(gui.name, name, data);
   };
 
   tick(() => {

@@ -21,6 +21,12 @@ interface GuiOptions {
    * @returns Array of Signal dependencies
    */
   dependencies?: () => Signal[];
+  /**
+   * Attach the GUI to sprites instead of displaying globally
+   * When true, the GUI will be rendered in character.ce for each sprite
+   * @default false
+   */
+  attachToSprite?: boolean;
 }
 
 interface GuiInstance {
@@ -31,6 +37,7 @@ interface GuiInstance {
   autoDisplay: boolean;
   dependencies?: () => Signal[];
   subscription?: Subscription;
+  attachToSprite?: boolean;
 }
 
 const throwError = (id: string) => {
@@ -42,6 +49,11 @@ export class RpgGui {
   gui = signal<Record<string, GuiInstance>>({});
   extraGuis: GuiInstance[] = [];
   private vueGuiInstance: any = null; // Reference to VueGui instance
+  /**
+   * Signal tracking which player IDs should display attached GUIs
+   * Key: player ID, Value: boolean (true = show, false = hide)
+   */
+  attachedGuiDisplayState = signal<Record<string, boolean>>({});
 
   constructor(private context: Context) {
     this.webSocket = inject(context, WebSocketToken);
@@ -58,6 +70,18 @@ export class RpgGui {
 
     this.webSocket.on("gui.exit", (guiId: string) => {
       this.hide(guiId);
+    });
+
+    /**
+     * Listen for tooltip display state changes from server
+     * This is triggered by showAttachedGui/hideAttachedGui on the server
+     */
+    this.webSocket.on("gui.tooltip", (data: { players: string[]; display: boolean }) => {
+      const currentState = { ...this.attachedGuiDisplayState() };
+      data.players.forEach((playerId) => {
+        currentState[playerId] = data.display;
+      });
+      this.attachedGuiDisplayState.set(currentState);
     });
   }
 
@@ -89,7 +113,7 @@ export class RpgGui {
           name: guiId,
           display,
           data,
-          attachToSprite: false // Default value, could be configurable
+          attachToSprite: extraGui.attachToSprite || false
         };
         // Trigger Vue reactivity
         this.vueGuiInstance.vm.gui = Object.assign({}, this.vueGuiInstance.vm.gui);
@@ -109,7 +133,7 @@ export class RpgGui {
           name: gui.name,
           display: gui.display(),
           data: gui.data(),
-          attachToSprite: false
+          attachToSprite: gui.attachToSprite || false
         };
       });
       
@@ -147,6 +171,7 @@ export class RpgGui {
    * @param gui.data - Initial data for the component
    * @param gui.autoDisplay - Auto display when added (default: false)
    * @param gui.dependencies - Function returning Signal dependencies
+   * @param gui.attachToSprite - Attach GUI to sprites instead of global display (default: false)
    * 
    * @example
    * ```ts
@@ -155,6 +180,13 @@ export class RpgGui {
    *   component: InventoryComponent, // Must be a .ce component
    *   autoDisplay: true,
    *   dependencies: () => [playerSignal, inventorySignal]
+   * });
+   * 
+   * // Attach to sprites
+   * gui.add({
+   *   name: 'tooltip',
+   *   component: TooltipComponent,
+   *   attachToSprite: true
    * });
    * ```
    */
@@ -171,6 +203,7 @@ export class RpgGui {
       data: signal(gui.data || {}),
       autoDisplay: gui.autoDisplay || false,
       dependencies: gui.dependencies,
+      attachToSprite: gui.attachToSprite || false,
     };
 
     // Accept both CanvasEngine components (.ce) and Vue components
@@ -192,6 +225,35 @@ export class RpgGui {
     if (guiInstance.autoDisplay && typeof gui.component === 'function') {
       this.display(guiId);
     }
+  }
+
+  /**
+   * Get all attached GUI components (attachToSprite: true)
+   * 
+   * Returns all GUI instances that are configured to be attached to sprites.
+   * These GUIs should be rendered in character.ce instead of canvas.ce.
+   * 
+   * @returns Array of GUI instances with attachToSprite: true
+   * 
+   * @example
+   * ```ts
+   * const attachedGuis = gui.getAttachedGuis();
+   * // Use in character.ce to render tooltips
+   * ```
+   */
+  getAttachedGuis(): GuiInstance[] {
+    const allGuis = this.getAll();
+    return Object.values(allGuis).filter(gui => gui.attachToSprite === true);
+  }
+
+  /**
+   * Check if a player should display attached GUIs
+   * 
+   * @param playerId - The player ID to check
+   * @returns true if attached GUIs should be displayed for this player
+   */
+  shouldDisplayAttachedGui(playerId: string): boolean {
+    return this.attachedGuiDisplayState()[playerId] === true;
   }
 
   get(id: string): GuiInstance | undefined {

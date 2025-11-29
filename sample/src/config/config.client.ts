@@ -1,4 +1,5 @@
 import {
+  BoxComponent,
   inject,
   Presets,
   provideClientGlobalConfig,
@@ -17,7 +18,7 @@ import { signal, effect } from 'canvasengine'
 import { provideVueGui } from "@rpgjs/vue";
 import { provideTiledMap } from "@rpgjs/tiledmap/client";
 import { provideMain } from "../modules/main";
-
+import TooltipComponent from "../components/tooltip.ce";
 
 export default {
   providers: [
@@ -120,7 +121,12 @@ export default {
               return [engine.scene.currentPlayer]
             }
           },
-          VueComponent
+          VueComponent,
+          {
+            id: "my-tooltip",
+            component: TooltipComponent,
+            attachToSprite: true
+          }
         ],
         componentAnimations: [
           {

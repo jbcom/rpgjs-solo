@@ -67,18 +67,11 @@ export default createServer({
           async onInput(player: RpgPlayer, input: any) {
             console.log(player.x(), player.y())
             if (input.action) {
-              // Test HP bar: decrease HP by 10 on each action press
-              const newHp = Math.max(0, player.hp - 10);
-              player.hp = newHp;
-              console.log(`HP: ${player.hp}/${player.param.maxHp}`);
-              
-              // Reset HP when it reaches 0
-              if (newHp === 0) {
-                player.hp = player.param.maxHp;
-                console.log("HP restored to full!");
-              }
+              console.log("action");
+              player.gui('my-tooltip').open()
+              player.showAttachedGui()
             }
-          }
+          } 
         },
         maps: [
           {
@@ -87,7 +80,7 @@ export default createServer({
           },
         ],
         worldMaps: [
-          {
+          { 
             id: 'world',
             maps: [
               {

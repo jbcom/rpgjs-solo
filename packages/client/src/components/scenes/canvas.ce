@@ -5,15 +5,15 @@
     }
   </Viewport>
   @for (gui of gui) {
-    <Container display="flex">
-      @if (gui.display) {
-        <gui.component ...gui.data() onFinish={(data) => {
-          onGuiFinish(gui, data)
-        }} onInteraction={(name, data) => {
-          onGuiInteraction(gui, name, data)
-        }} /> 
-      }
-    </Container>
+      <Container display="flex">
+        @if (gui.display) {
+          <gui.component ...gui.data() onFinish={(data) => {
+            onGuiFinish(gui, data)
+          }} onInteraction={(name, data) => {
+            onGuiInteraction(gui, name, data)
+          }} /> 
+        }
+      </Container>
   } 
 </Canvas>
 
@@ -27,7 +27,9 @@
   const engine = inject(RpgClientEngine);
   const guiService = inject(RpgGui);
   const sceneData = engine.sceneMap.data
-  const gui = guiService.gui
+  const gui = computed(() => {
+    return Object.values(guiService.gui()).filter((gui) => !gui.attachToSprite)
+  })
   const worldWidth = computed(() => sceneData()?.width)
   const worldHeight = computed(() => sceneData()?.height)
 

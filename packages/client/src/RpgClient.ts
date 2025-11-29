@@ -407,6 +407,48 @@ export interface RpgClient {
          * The GUI will only display when all dependencies are resolved (!= undefined)
          */
         dependencies?: () => Signal[]
+        /**
+         * Attach the GUI to sprites instead of displaying globally
+         * 
+         * When set to `true`, the GUI component will be rendered directly on each sprite
+         * in the game world, rather than being displayed as a fixed overlay on the screen.
+         * This is useful for tooltips, health bars, name tags, or any UI element that
+         * should follow a specific sprite.
+         * 
+         * The GUI will be rendered in the `character.ce` component for each sprite.
+         * You can control the display state of attached GUIs from the server side using
+         * `player.showAttachedGui()` and `player.hideAttachedGui()` methods.
+         * 
+         * @default false
+         * @example
+         * ```ts
+         * import { defineModule, RpgClient } from '@rpgjs/client'
+         * import TooltipComponent from './tooltip.ce'
+         * 
+         * defineModule<RpgClient>({
+         *     gui: [
+         *         {
+         *             id: "my-tooltip",
+         *             component: TooltipComponent,
+         *             attachToSprite: true
+         *         }
+         *     ]
+         * })
+         * ```
+         * 
+         * On the server side, control the display:
+         * ```ts
+         * // Show the tooltip for this player
+         * player.showAttachedGui()
+         * 
+         * // Hide the tooltip for this player
+         * player.hideAttachedGui()
+         * 
+         * // Show tooltip for other players
+         * player.showAttachedGui([otherPlayer1, otherPlayer2])
+         * ```
+         */
+        attachToSprite?: boolean
     } | any)[],
 
     /** 
