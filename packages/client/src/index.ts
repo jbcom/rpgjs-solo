@@ -13,4 +13,5 @@ export * from "./presets";
 export * from "./components";
 export * from "./components/gui";
 export * from "./Sound";
+export * from "./Resource";
 export { Context } from "@signe/di";

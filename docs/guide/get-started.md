@@ -7,8 +7,8 @@ RPGJS was created several years ago, with the aim of creating an RPG on the brow
 ## Technology
 
 - Typescript v5
-- ViteJS v6+ (for compilation)
-- NodeJS v22+ (for server)
+- ViteJS v7+ (for compilation)
+- NodeJS v24+ (for server)
 - CanvasEngine v2 (for rendering, based on PixiJS)
 
 ## Compatibility

@@ -7,6 +7,8 @@ import {
   provideLoadMap,
   RpgClientEngine,
   RpgGui,
+  Sound,
+  
 } from "@rpgjs/client";
 import Map from "../components/map.ce";
 import Shadow from "../components/shadow.ce";
@@ -20,6 +22,7 @@ import { provideTiledMap } from "@rpgjs/tiledmap/client";
 import { provideMain } from "../modules/main";
 import TooltipComponent from "../components/tooltip.ce";
 
+
 export default {
   providers: [
     provideLoadMap((id: string) => {
@@ -31,7 +34,7 @@ export default {
           data: {
             color: id === "simplemap" ? "red" : "blue"
           },
-          hitboxes: []
+          hitboxes: [],
        }
     }),
     // provideTiledMap({
@@ -71,8 +74,7 @@ export default {
         },
         sceneMap: {
           onAfterLoading: (scene) => {
-            // No need to manually display GUI with dependencies anymore
-            // The GUI will auto-display when dependencies are resolved
+           
           },
         },
         sounds: [
@@ -83,7 +85,8 @@ export default {
           {
             id: "cursor",
             src: "cursor.wav",
-          }
+          },
+          TownMusic
         ],
         spritesheets: [
           Presets.FacesetPreset({
