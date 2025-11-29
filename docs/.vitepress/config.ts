@@ -1,5 +1,5 @@
 const guideMenu = [{
-  text: 'Quick Start',
+  text: 'Guide',
   collapsed: false,
   items: [
     { text: "Getting Started", link: "/guide/get-started" },
@@ -8,7 +8,13 @@ const guideMenu = [{
     { text: "Display Animations", link: "/guide/display-animations" },
     { text: "Create Movement", link: "/guide/create-movement" },
     { text: "Sprite Components", link: "/guide/sprite-components" },
-    { text: "Battle AI", link: "/guide/battle-ai" }
+    { text: "Spritesheets", link: "/guide/spritesheets" },
+    { text: "World Maps", link: "/guide/world-maps" },
+    { text: "Items", link: "/guide/items" },
+    { text: "Sounds", link: "/guide/sounds" },
+    { text: "Synchronization", link: "/guide/synchronization" },
+    { text: "Battle AI", link: "/guide/battle-ai" },
+    { text: "Attach GUI", link: "/guide/gui/attach-gui" }
   ]
 }]
 
@@ -16,7 +22,9 @@ const guiMenu = [{
   text: 'GUI',
   collapsed: false,
   items: [
-    { text: "Engine Injection", link: "/gui/engine-injection" }
+    { text: "Engine Injection", link: "/gui/engine-injection" },
+    { text: "Dialog Box", link: "/gui/dialog-box" },
+    { text: "Vue Integration", link: "/gui/vue-integration" }
   ]
 }]
 
@@ -24,7 +32,9 @@ const advancedMenu = [{
   text: 'Advanced',
   collapsed: false,
   items: [
-    { text: "Provide Load Map", link: "/advanced/provide-load-map" }
+    { text: "Provide Load Map", link: "/advanced/provide-load-map" },
+    { text: "Latency Simulation", link: "/advanced/latency-simulation" },
+    { text: "Packet Loss Simulation", link: "/advanced/packet-loss-simulation" }
   ]
 }]
 
