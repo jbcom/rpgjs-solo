@@ -1254,7 +1254,145 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 }
 
 /**
- * Type helper to extract the interface from the WithMoveManager mixin
- * This provides the type without duplicating method signatures
+ * Interface for Move Manager functionality
+ * 
+ * Provides comprehensive movement management capabilities including pathfinding,
+ * physics-based movement, route following, and advanced movement strategies.
+ * This interface defines the public API of the MoveManager mixin.
  */
-export type IMoveManager = InstanceType<ReturnType<typeof WithMoveManager>>;
+export interface IMoveManager {
+  /** Whether the player passes through other players */
+  throughOtherPlayer: boolean;
+
+  /** Whether the player goes through events or other players */
+  through: boolean;
+
+  /** Frequency for movement timing (milliseconds between movements) */
+  frequency: number;
+
+  /**
+   * Add a custom movement strategy to this entity
+   * 
+   * @param strategy - The movement strategy to add
+   */
+  addMovement(strategy: MovementStrategy): void;
+
+  /**
+   * Remove a specific movement strategy from this entity
+   * 
+   * @param strategy - The strategy instance to remove
+   * @returns True if the strategy was found and removed
+   */
+  removeMovement(strategy: MovementStrategy): boolean;
+
+  /**
+   * Remove all active movement strategies from this entity
+   */
+  clearMovements(): void;
+
+  /**
+   * Check if this entity has any active movement strategies
+   * 
+   * @returns True if entity has active movements
+   */
+  hasActiveMovements(): boolean;
+
+  /**
+   * Get all active movement strategies for this entity
+   * 
+   * @returns Array of active movement strategies
+   */
+  getActiveMovements(): MovementStrategy[];
+
+  /**
+   * Move toward a target player or position using AI pathfinding
+   * 
+   * @param target - Target player or position to move toward
+   */
+  moveTo(target: RpgCommonPlayer | { x: number, y: number }): void;
+
+  /**
+   * Stop the current moveTo behavior
+   */
+  stopMoveTo(): void;
+
+  /**
+   * Perform a dash movement in the specified direction
+   * 
+   * @param direction - Normalized direction vector
+   * @param speed - Movement speed (default: 8)
+   * @param duration - Duration in milliseconds (default: 200)
+   */
+  dash(direction: { x: number, y: number }, speed?: number, duration?: number): void;
+
+  /**
+   * Apply knockback effect in the specified direction
+   * 
+   * @param direction - Normalized direction vector
+   * @param force - Initial knockback force (default: 5)
+   * @param duration - Duration in milliseconds (default: 300)
+   */
+  knockback(direction: { x: number, y: number }, force?: number, duration?: number): void;
+
+  /**
+   * Follow a sequence of waypoints
+   * 
+   * @param waypoints - Array of x,y positions to follow
+   * @param speed - Movement speed (default: 2)
+   * @param loop - Whether to loop back to start (default: false)
+   */
+  followPath(waypoints: Array<{ x: number, y: number }>, speed?: number, loop?: boolean): void;
+
+  /**
+   * Apply oscillating movement pattern
+   * 
+   * @param direction - Primary oscillation axis (normalized)
+   * @param amplitude - Maximum distance from center (default: 50)
+   * @param period - Time for complete cycle in ms (default: 2000)
+   */
+  oscillate(direction: { x: number, y: number }, amplitude?: number, period?: number): void;
+
+  /**
+   * Apply ice movement physics
+   * 
+   * @param direction - Target movement direction
+   * @param maxSpeed - Maximum speed when fully accelerated (default: 4)
+   */
+  applyIceMovement(direction: { x: number, y: number }, maxSpeed?: number): void;
+
+  /**
+   * Shoot a projectile in the specified direction
+   * 
+   * @param type - Type of projectile trajectory
+   * @param direction - Normalized direction vector
+   * @param speed - Projectile speed (default: 200)
+   */
+  shootProjectile(type: ProjectileType, direction: { x: number, y: number }, speed?: number): void;
+
+  /**
+   * Give an itinerary to follow using movement strategies
+   * 
+   * @param routes - Array of movement instructions to execute
+   * @returns Promise that resolves when all routes are completed
+   */
+  moveRoutes(routes: Routes): Promise<boolean>;
+
+  /**
+   * Give a path that repeats itself in a loop to a character
+   * 
+   * @param routes - Array of movement instructions to repeat infinitely
+   */
+  infiniteMoveRoute(routes: Routes): void;
+
+  /**
+   * Stop an infinite movement
+   * 
+   * @param force - Forces the stop of the infinite movement immediately
+   */
+  breakRoutes(force?: boolean): void;
+
+  /**
+   * Replay an infinite movement
+   */
+  replayRoutes(): void;
+}

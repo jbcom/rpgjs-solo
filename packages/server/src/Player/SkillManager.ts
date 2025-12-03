@@ -266,7 +266,48 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase) {
 }
 
 /**
- * Type helper to extract the interface from the WithSkillManager mixin
- * This provides the type without duplicating method signatures
+ * Interface for Skill Manager functionality
+ * 
+ * Provides skill management capabilities including learning, forgetting, and using skills.
+ * This interface defines the public API of the SkillManager mixin.
  */
-export type ISkillManager = InstanceType<ReturnType<typeof WithSkillManager>>;
+export interface ISkillManager {
+  /**
+   * Retrieves a learned skill. Returns null if not found
+   * 
+   * @param skillClass - Skill class or data id
+   * @returns Instance of SkillClass or null
+   */
+  getSkill(skillClass: any | string): any | null;
+
+  /**
+   * Learn a skill
+   * 
+   * @param skillId - Skill class or data id
+   * @returns Instance of SkillClass
+   * @throws SkillLog.alreadyLearned if the player already knows the skill
+   */
+  learnSkill(skillId: any | string): any;
+
+  /**
+   * Forget a skill
+   * 
+   * @param skillId - Skill class or data id
+   * @returns Instance of SkillClass
+   * @throws SkillLog.notLearned if trying to forget a skill not learned
+   */
+  forgetSkill(skillId: any | string): any;
+
+  /**
+   * Using a skill
+   * 
+   * @param skillId - Skill class or data id
+   * @param otherPlayer - Optional target player(s) to apply skill to
+   * @returns Instance of SkillClass
+   * @throws SkillLog.restriction if player has Effect.CAN_NOT_SKILL
+   * @throws SkillLog.notLearned if player tries to use an unlearned skill
+   * @throws SkillLog.notEnoughSp if player does not have enough SP
+   * @throws SkillLog.chanceToUseFailed if the chance to use the skill has failed
+   */
+  useSkill(skillId: any | string, otherPlayer?: RpgPlayer | RpgPlayer[]): any;
+}

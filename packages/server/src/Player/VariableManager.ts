@@ -201,7 +201,57 @@ export function WithVariableManager<TBase extends PlayerCtor>(Base: TBase) {
 }
 
 /**
- * Type helper to extract the interface from the WithVariableManager mixin
- * This provides the type without duplicating method signatures
+ * Interface for Variable Manager functionality
+ * 
+ * Provides variable management capabilities including storing, retrieving, and managing
+ * key-value pairs for player-specific data. This interface defines the public API
+ * of the VariableManager mixin.
  */
-export type IVariableManager = InstanceType<ReturnType<typeof WithVariableManager>>;
+export interface IVariableManager {
+  /** Map storing all player variables */
+  variables: Map<string, any>;
+
+  /**
+   * Assign a variable to the player
+   * 
+   * @param key - The variable identifier
+   * @param val - The value to store
+   */
+  setVariable(key: string, val: any): void;
+
+  /**
+   * Get a variable value
+   * 
+   * @param key - The variable identifier to retrieve
+   * @returns The stored value or undefined if not found
+   */
+  getVariable<U = any>(key: string): U | undefined;
+
+  /**
+   * Remove a variable
+   * 
+   * @param key - The variable identifier to remove
+   * @returns true if a variable existed and has been removed, false otherwise
+   */
+  removeVariable(key: string): boolean;
+
+  /**
+   * Check if a variable exists
+   * 
+   * @param key - The variable identifier to check
+   * @returns true if the variable exists, false otherwise
+   */
+  hasVariable(key: string): boolean;
+
+  /**
+   * Get all variable keys
+   * 
+   * @returns Array of all variable keys
+   */
+  getVariableKeys(): string[];
+
+  /**
+   * Clear all variables
+   */
+  clearVariables(): void;
+}

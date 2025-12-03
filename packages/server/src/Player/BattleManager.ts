@@ -2,44 +2,21 @@ import { Constructor, PlayerCtor, RpgCommonPlayer } from "@rpgjs/common";
 import { RpgPlayer } from "./Player";
 import { ATK, PDEF, SDEF } from "../presets";
 import { Effect } from "./EffectManager";
-
-interface PlayerWithMixins extends RpgCommonPlayer {
-  parameters: any[];
-  getFormulas(name: string): any;
-  hasEffect(effect: string): boolean;
-  coefficientElements(attackerPlayer: RpgPlayer): number;
-  hp: number;
-  getCurrentMap(): any;
-}
+import type { IElementManager } from "./ElementManager";
+import type { IEffectManager } from "./EffectManager";
+import type { IParameterManager } from "./ParameterManager";
 
 /**
- * Battle Manager Mixin
- * 
- * Provides battle management capabilities to any class. This mixin handles
- * damage calculation, critical hits, elemental vulnerabilities, and guard effects.
- * It implements a comprehensive battle system with customizable formulas and effects.
- * 
- * @param Base - The base class to extend with battle management
- * @returns Extended class with battle management methods
- * 
- * @example
- * ```ts
- * class MyPlayer extends WithBattleManager(BasePlayer) {
- *   constructor() {
- *     super();
- *     // Battle system is automatically initialized
- *   }
- * }
- * 
- * const player = new MyPlayer();
- * const attacker = new MyPlayer();
- * const result = player.applyDamage(attacker);
- * console.log(`Damage dealt: ${result.damage}`);
- * ```
+ * Interface combining methods from other managers needed by BattleManager
+ * Reuses existing interfaces instead of duplicating method signatures
  */
-export function WithBattleManager<TBase extends PlayerCtor>(Base: TBase) {
-  return class extends Base {
-    /**
+interface PlayerWithMixins extends IElementManager, IEffectManager, Pick<IParameterManager, 'parameters' | 'hp'> {
+  getFormulas(name: string): any;
+  getCurrentMap(): ReturnType<RpgPlayer['getCurrentMap']>;
+}
+
+export interface IBattleManager {
+   /**
      * Apply damage. Player will lose HP. the `attackerPlayer` parameter is the other player, the one who attacks.
      *
      * If you don't set the skill parameter, it will be a physical attack.
@@ -71,6 +48,17 @@ export function WithBattleManager<TBase extends PlayerCtor>(Base: TBase) {
      * }
      * ```
      */
+  applyDamage(attackerPlayer: RpgPlayer, skill?: any): {
+    damage: number;
+    critical: boolean;
+    elementVulnerable: boolean;
+    guard: boolean;
+    superGuard: boolean;
+  };
+}
+
+export function WithBattleManager<TBase extends PlayerCtor>(Base: TBase): new (...args: ConstructorParameters<TBase>) => InstanceType<TBase> & IBattleManager {
+  return class extends Base {
     applyDamage(
       attackerPlayer: RpgPlayer,
       skill?: any
@@ -81,9 +69,10 @@ export function WithBattleManager<TBase extends PlayerCtor>(Base: TBase) {
       guard: boolean;
       superGuard: boolean;
     } {
+      const self = this as unknown as PlayerWithMixins;
       const getParam = (player: RpgPlayer) => {
         const params = {};
-        (this as any).parameters.forEach((val, key) => {
+        Object.keys(self.parameters).forEach((key) => {
           params[key] = (player as any).param[key];
         });
         return {
@@ -100,26 +89,25 @@ export function WithBattleManager<TBase extends PlayerCtor>(Base: TBase) {
       let superGuard = false;
       let elementVulnerable = false;
       const paramA = getParam(attackerPlayer);
-      const paramB = getParam(<any>this);
-      console.log(paramA, paramB)
+      const paramB = getParam(self as any);
       if (skill) {
-        fn = this.getFormulas("damageSkill");
+        fn = self.getFormulas("damageSkill");
         if (!fn) {
           throw new Error("Skill Formulas not exists");
         }
         damage = fn(paramA, paramB, skill);
       } else {
-        fn = this.getFormulas("damagePhysic");
+        fn = self.getFormulas("damagePhysic");
         if (!fn) {
           throw new Error("Physic Formulas not exists");
         }
         damage = fn(paramA, paramB);
-        const coef = (this as any).coefficientElements(attackerPlayer);
+        const coef = self.coefficientElements(attackerPlayer);
         if (coef >= 2) {
           elementVulnerable = true;
         }
         damage *= coef;
-        fn = this.getFormulas("damageCritical");
+        fn = self.getFormulas("damageCritical");
         if (fn) {
           let newDamage = fn(damage, paramA, paramB);
           if (damage != newDamage) {
@@ -128,8 +116,8 @@ export function WithBattleManager<TBase extends PlayerCtor>(Base: TBase) {
           damage = newDamage;
         }
       }
-      if ((this as any).hasEffect(Effect.GUARD)) {
-        fn = this.getFormulas("damageGuard");
+      if (self.hasEffect(Effect.GUARD)) {
+        fn = self.getFormulas("damageGuard");
         if (fn) {
           let newDamage = fn(damage, paramA, paramB);
           if (damage != newDamage) {
@@ -138,11 +126,11 @@ export function WithBattleManager<TBase extends PlayerCtor>(Base: TBase) {
           damage = newDamage;
         }
       }
-      if ((this as any).hasEffect(Effect.SUPER_GUARD)) {
+      if (self.hasEffect(Effect.SUPER_GUARD)) {
         damage /= 4;
         superGuard = true;
       }
-      (this as any).hp -= damage;
+      self.hp -= damage;
       return {
         damage,
         critical,
@@ -179,14 +167,9 @@ export function WithBattleManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     getFormulas(name: string) {
-      const map = (this as any).getCurrentMap(); 
-      return map.damageFormulas[name];
+      const self = this as unknown as PlayerWithMixins;
+      const map = self.getCurrentMap(); 
+      return map?.damageFormulas[name];
     }
-  } as unknown as TBase
+  } as unknown as any;
 }
-
-/**
- * Type helper to extract the interface from the WithBattleManager mixin
- * This provides the type without duplicating method signatures
- */
-export type IBattleManager = InstanceType<ReturnType<typeof WithBattleManager>>;

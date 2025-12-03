@@ -132,7 +132,25 @@ export function WithClassManager<TBase extends PlayerCtor>(Base: TBase) {
 }
 
 /**
- * Type helper to extract the interface from the WithClassManager mixin
- * This provides the type without duplicating method signatures
+ * Interface for Class Manager functionality
+ * 
+ * Provides class and actor management capabilities including character class assignment
+ * and actor setup. This interface defines the public API of the ClassManager mixin.
  */
-export type IClassManager = InstanceType<ReturnType<typeof WithClassManager>>;
+export interface IClassManager {
+  /**
+   * Assign a class to the player
+   * 
+   * @param _class - The class constructor or class ID to assign to the player
+   * @returns The instantiated class object
+   */
+  setClass(_class: ClassClass | string): any;
+
+  /**
+   * Set up the player as a specific actor archetype
+   * 
+   * @param actorClass - The actor constructor or actor ID to assign to the player
+   * @returns The instantiated actor object
+   */
+  setActor(actorClass: ActorClass | string): any;
+}

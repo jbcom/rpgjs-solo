@@ -821,7 +821,106 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
 }
 
 /**
- * Type helper to extract the interface from the WithItemManager mixin
- * This provides the type without duplicating method signatures
+ * Interface for Item Manager functionality
+ * 
+ * Provides comprehensive item management capabilities including inventory management,
+ * item usage, equipment, buying/selling, and item effects. This interface defines
+ * the public API of the ItemManager mixin.
  */
-export type IItemManager = InstanceType<ReturnType<typeof WithItemManager>>;
+export interface IItemManager {
+  /**
+   * Retrieves the information of an object: the number and the instance
+   * 
+   * @param itemClass - Item class or string identifier
+   * @returns Item instance
+   */
+  getItem(itemClass: ItemClass | string): Item;
+
+  /**
+   * Check if the player has the item in his inventory
+   * 
+   * @param itemClass - Item class or string identifier
+   * @returns true if player has the item
+   */
+  hasItem(itemClass: ItemClass | string): boolean;
+
+  /**
+   * Add an item in the player's inventory
+   * 
+   * @param item - Item class, object, or string identifier
+   * @param nb - Number of items to add (default 1)
+   * @returns The item instance added to inventory
+   */
+  addItem(item: ItemClass | ItemObject | string, nb?: number): Item;
+
+  /**
+   * Deletes an item from inventory
+   * 
+   * @param itemClass - Item class or string identifier
+   * @param nb - Number of items to remove (default 1)
+   * @returns Item instance or undefined if removed
+   * @throws ItemLog.notInInventory if the item is not in inventory
+   */
+  removeItem(itemClass: ItemClass | string, nb?: number): Item | undefined;
+
+  /**
+   * Purchases an item and reduces the amount of gold
+   * 
+   * @param item - Item class, object, or string identifier
+   * @param nb - Number of items to buy (default 1)
+   * @returns Item instance
+   * @throws ItemLog.haveNotPrice if item has no price
+   * @throws ItemLog.notEnoughGold if player doesn't have enough gold
+   */
+  buyItem(item: ItemClass | ItemObject | string, nb?: number): Item;
+
+  /**
+   * Sell an item and the player wins the amount of the item divided by 2
+   * 
+   * @param itemClass - Item class or string identifier
+   * @param nbToSell - Number of items to sell (default 1)
+   * @returns Item instance
+   * @throws ItemLog.haveNotPrice if item has no price
+   * @throws ItemLog.notInInventory if item is not in inventory
+   * @throws ItemLog.tooManyToSell if trying to sell more than available
+   */
+  sellItem(itemClass: ItemClass | string, nbToSell?: number): Item;
+
+  /**
+   * Use an object. Applies effects and states. Removes the object from the inventory
+   * 
+   * @param itemClass - Item class or string identifier
+   * @returns Item instance
+   * @throws ItemLog.restriction if player has Effect.CAN_NOT_ITEM
+   * @throws ItemLog.notInInventory if item is not in inventory
+   * @throws ItemLog.notUseItem if item is not consumable
+   * @throws ItemLog.chanceToUseFailed if chance to use failed
+   */
+  useItem(itemClass: ItemClass | string): Item;
+
+  /**
+   * Equips a weapon or armor on a player
+   * 
+   * @param itemClass - Item class or string identifier
+   * @param equip - Equip if true, unequip if false (default true)
+   * @throws ItemLog.notInInventory if item is not in inventory
+   * @throws ItemLog.invalidToEquiped if item is not a weapon or armor
+   * @throws ItemLog.isAlreadyEquiped if item is already equipped
+   */
+  equip(itemClass: ItemClass | string, equip?: boolean): void;
+
+  /**
+   * Get the player's attack (sum of items equipped)
+   */
+  readonly atk: number;
+
+  /**
+   * Get the player's physical defense (sum of items equipped)
+   */
+  readonly pdef: number;
+
+  /**
+   * Get the player's skill defense (sum of items equipped)
+   */
+  readonly sdef: number;
+}

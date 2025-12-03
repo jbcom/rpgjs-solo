@@ -384,7 +384,67 @@ export function WithStateManager<TBase extends PlayerCtor>(Base: TBase) {
 }
 
 /**
- * Type helper to extract the interface from the WithStateManager mixin
- * This provides the type without duplicating method signatures
+ * Interface for State Manager functionality
+ * 
+ * Provides state management capabilities including state defense, efficiency modifiers,
+ * and state application/removal. This interface defines the public API of the StateManager mixin.
  */
-export type IStateManager = InstanceType<ReturnType<typeof WithStateManager>>;
+export interface IStateManager {
+  /**
+   * Gets the defensive capabilities against various states from equipped items
+   * 
+   * @returns Array of state defense objects with rate and state properties
+   */
+  statesDefense: { rate: number; state: any }[];
+
+  /**
+   * Manages the player's state efficiency modifiers
+   * 
+   * @returns Signal containing array of state efficiency objects
+   */
+  statesEfficiency: any;
+
+  /**
+   * Apply states to a player from skill or item effects
+   * 
+   * @param player - The target player to apply states to
+   * @param states - Object containing arrays of states to add or remove
+   */
+  applyStates(player: RpgPlayer, states: { addStates?: Array<{ state: any; rate: number }>; removeStates?: Array<{ state: any; rate: number }> }): void;
+
+  /**
+   * Get a state to the player. Returns null if the state is not present
+   * 
+   * @param stateClass - The state class constructor or state ID to search for
+   * @returns The state instance if found, null otherwise
+   */
+  getState(stateClass: StateClass | string): any | null;
+
+  /**
+   * Adds a state to the player
+   * 
+   * @param stateClass - The state class constructor or state ID to apply
+   * @param chance - Probability of successful application (0-1, default 1)
+   * @returns The state instance if successfully applied, null if already present
+   * @throws StateLog.addFailed if the chance roll fails
+   */
+  addState(stateClass: StateClass | string, chance?: number): object | null;
+
+  /**
+   * Remove a state to the player
+   * 
+   * @param stateClass - The state class constructor or state ID to remove
+   * @param chance - Probability of successful removal (0-1, default 1)
+   * @throws StateLog.removeFailed if the chance roll fails
+   * @throws StateLog.notApplied if the state is not currently active
+   */
+  removeState(stateClass: StateClass | string, chance?: number): void;
+
+  /**
+   * Find state efficiency modifier for a specific state class
+   * 
+   * @param stateClass - The state class to find efficiency for
+   * @returns The efficiency object if found, undefined otherwise
+   */
+  findStateEfficiency(stateClass: any): any | undefined;
+}

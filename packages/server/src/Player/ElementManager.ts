@@ -123,9 +123,10 @@ export function WithElementManager<TBase extends PlayerCtor>(Base: TBase) {
      */
     get elementsEfficiency(): { rate: number; element: any }[] {
       if (this._class()) {
+        const classData = this._class() as any;
         return <any>[
           ...this._elementsEfficiency,
-          ...(this._class()?.elementsEfficiency || []),
+          ...(classData?.elementsEfficiency || []),
         ];
       }
       return this._elementsEfficiency;
@@ -238,7 +239,76 @@ export function WithElementManager<TBase extends PlayerCtor>(Base: TBase) {
 }
 
 /**
- * Type helper to extract the interface from the WithElementManager mixin
- * This provides the type without duplicating method signatures
+ * Interface for Element Manager functionality
+ * 
+ * Provides elemental management capabilities including resistances, vulnerabilities,
+ * and attack elements. This interface defines the public API of the ElementManager mixin.
  */
-export type IElementManager = InstanceType<ReturnType<typeof WithElementManager>>;
+export interface IElementManager {
+  /**
+   * Gets the defensive capabilities against various elements from equipped items.
+   * The system automatically consolidates multiple defensive items, keeping only
+   * the highest protection rate for each element type.
+   * 
+   * @returns Array of element defense objects with rate and element properties
+   */
+  elementsDefense: { rate: number; element: any }[];
+
+  /**
+   * Manages the player's elemental efficiency modifiers, which determine how
+   * effective different elements are against this player. Values greater than 1
+   * indicate vulnerability, while values less than 1 indicate resistance.
+   * This combines both class-based efficiency and player-specific modifiers.
+   * 
+   * @returns Array of element efficiency objects with rate and element properties
+   */
+  elementsEfficiency: { rate: number; element: any }[];
+
+  /**
+   * Gets all offensive elements available to the player from equipped weapons and armor.
+   * This determines what elemental damage types the player can deal in combat.
+   * The system automatically combines elements from all equipped items and removes duplicates.
+   * 
+   * @returns Array of element objects with rate and element properties for offensive capabilities
+   */
+  elements: {
+    rate: number;
+    element: string;
+  }[];
+
+  /**
+   * Calculate elemental damage coefficient against another player
+   * 
+   * Determines the damage multiplier when this player attacks another player,
+   * taking into account the attacker's offensive elements, the defender's
+   * elemental efficiency, and elemental defense from equipment. This is used
+   * in the battle system to calculate elemental damage modifiers.
+   * 
+   * @param otherPlayer - The target player to calculate coefficient against
+   * @returns Numerical coefficient to multiply base damage by
+   * 
+   * @example
+   * ```ts
+   * // Calculate elemental damage coefficient
+   * const firePlayer = new MyPlayer();
+   * const icePlayer = new MyPlayer();
+   * 
+   * // Fire player attacks ice player (assuming ice is weak to fire)
+   * const coefficient = icePlayer.coefficientElements(firePlayer);
+   * console.log(`Damage multiplier: ${coefficient}`); // e.g., 2.0 for double damage
+   * 
+   * // Use in damage calculation
+   * const baseDamage = 100;
+   * const finalDamage = baseDamage * coefficient;
+   * console.log(`Final damage: ${finalDamage}`);
+   * 
+   * // Check for elemental advantage
+   * if (coefficient > 1) {
+   *   console.log('Attacker has elemental advantage!');
+   * } else if (coefficient < 1) {
+   *   console.log('Defender resists this element');
+   * }
+   * ```
+   */
+  coefficientElements(otherPlayer: RpgPlayer): number;
+}

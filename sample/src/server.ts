@@ -66,7 +66,7 @@ export default createServer({
           },
           async onInput(player: RpgPlayer, input: any) {
             console.log(player.x(), player.y())
-            
+            player.moveTo({ x: 100, y: 100 })
           } 
         },
         maps: [

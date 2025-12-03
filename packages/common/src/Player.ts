@@ -1,6 +1,7 @@
 import { signal } from "@signe/reactive";
 import { connected, id, persist, sync, users } from "@signe/sync";
 import { Item } from "./database";
+import { Constructor } from "./Utils";
 
 export enum Control {
   Action = 'action',
@@ -147,3 +148,5 @@ export abstract class RpgCommonPlayer {
   }
 
 }
+
+export type PlayerCtor<T extends RpgCommonPlayer = RpgCommonPlayer> = Constructor<T>

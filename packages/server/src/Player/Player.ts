@@ -172,6 +172,11 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     return inject<Hooks>(this.context as any, ModulesToken);
   }
 
+  // compatibility with v4
+  get server() {
+    return this.map
+  }
+
   applyFrames() {
     this._frames.set(this.frames)
     this.frames = []
@@ -928,6 +933,56 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
     // Send camera follow instruction only to this player
     this.emit("cameraFollow", data);
+  }
+
+
+  /**
+   * Set the hitbox of the player for collision detection
+   * 
+   * This method defines the hitbox used for collision detection in the physics engine.
+   * The hitbox can be smaller or larger than the visual representation of the player,
+   * allowing for precise collision detection.
+   * 
+   * ## Design
+   * 
+   * The hitbox is used by the physics engine to detect collisions with other entities,
+   * static obstacles, and shapes. Changing the hitbox will immediately update the
+   * collision detection without affecting the visual appearance of the player.
+   * 
+   * @param width - Width of the hitbox in pixels
+   * @param height - Height of the hitbox in pixels
+   * 
+   * @example
+   * ```ts
+   * // Set a 20x20 hitbox for precise collision detection
+   * player.setHitbox(20, 20);
+   * 
+   * // Set a larger hitbox for easier collision detection
+   * player.setHitbox(40, 40);
+   * ```
+   */
+  setHitbox(width: number, height: number): void {
+    // Validate inputs
+    if (typeof width !== 'number' || width <= 0) {
+      throw new Error('setHitbox: width must be a positive number');
+    }
+    if (typeof height !== 'number' || height <= 0) {
+      throw new Error('setHitbox: height must be a positive number');
+    }
+    
+    // Update hitbox signal
+    this.hitbox.set({
+      w: width,
+      h: height,
+    });
+    
+    // Update physics entity if map exists
+    const map = this.getCurrentMap();
+    if (map && map.physic) {
+      const topLeftX = this.x();
+      const topLeftY = this.y();
+      map.updateHitbox(this.id, topLeftX, topLeftY, width, height);
+    }
   }
 
   /**
