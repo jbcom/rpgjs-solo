@@ -29,16 +29,16 @@
     "@rpgjs/client": "workspace:*",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/server": "workspace:*",
-    "@signe/di": "^2.5.1",
-    "@signe/room": "^2.5.1",
-    "@signe/sync": "^2.5.1",
+    "@signe/di": "^2.5.2",
+    "@signe/room": "^2.5.2",
+    "@signe/sync": "^2.5.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@canvasengine/compiler": "2.0.0-beta.34",
-    "vite": "^7.2.4",
+    "@canvasengine/compiler": "2.0.0-beta.35",
+    "vite": "^7.2.6",
     "vite-plugin-dts": "^4.5.4",
-    "vitest": "^4.0.14"
+    "vitest": "^4.0.15"
   },
   "type": "module"
 }

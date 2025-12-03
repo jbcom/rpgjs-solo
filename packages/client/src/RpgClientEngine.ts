@@ -1,6 +1,6 @@
 import Canvas from "./components/scenes/canvas.ce";
 import { Context, inject } from "@signe/di";
-import { signal, bootstrapCanvas, Howler, Howl } from "canvasengine";
+import { signal, bootstrapCanvas, KeyboardControls, Howl } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { RpgSound } from "./Sound";
@@ -20,7 +20,6 @@ import {
   PredictionController,
   type PredictionState,
 } from "@rpgjs/common";
-import { KeyboardControls } from "./services/keyboardControls";
 
 export class RpgClientEngine<T = any> {
   private guiService: RpgGui;

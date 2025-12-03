@@ -135,6 +135,9 @@
         }
       },
     },
+    gamepad: {
+      enabled: true
+    }
   });
 
   const smoothX = animatedSignal(x(), {

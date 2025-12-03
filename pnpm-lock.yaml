@@ -35,7 +35,7 @@ importers:
     dependencies:
       '@canvasengine/presets':
         specifier: '*'
-        version: 2.0.0-beta.34(canvasengine@2.0.0-beta.34(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1))(pixi.js@8.12.0)
+        version: 2.0.0-beta.35(canvasengine@2.0.0-beta.35(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1))(pixi.js@8.12.0)
       '@rpgjs/client':
         specifier: workspace:*
         version: 'link:'
@@ -46,17 +46,17 @@ importers:
         specifier: workspace:*
         version: link:../server
       '@signe/di':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.2
+        version: 2.5.2
       '@signe/room':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.2
+        version: 2.5.2
       '@signe/sync':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.2
+        version: 2.5.2
       canvasengine:
         specifier: '*'
-        version: 2.0.0-beta.34(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1)
+        version: 2.0.0-beta.35(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1)
       pixi.js:
         specifier: ^8.9.2
         version: 8.12.0
@@ -65,17 +65,17 @@ importers:
         version: 7.8.2
     devDependencies:
       '@canvasengine/compiler':
-        specifier: 2.0.0-beta.34
-        version: 2.0.0-beta.34(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+        specifier: 2.0.0-beta.35
+        version: 2.0.0-beta.35(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
       vite:
-        specifier: ^7.2.4
-        version: 7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+        specifier: ^7.2.6
+        version: 7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
       vite-plugin-dts:
         specifier: ^4.5.4
-        version: 4.5.4(@types/node@24.10.1)(rollup@4.46.2)(typescript@5.9.3)(vite@7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))
+        version: 4.5.4(@types/node@24.10.1)(rollup@4.46.2)(typescript@5.9.3)(vite@7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))
       vitest:
-        specifier: ^4.0.14
-        version: 4.0.14(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+        specifier: ^4.0.15
+        version: 4.0.15(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
 
   packages/common:
     dependencies:
@@ -280,8 +280,8 @@ importers:
   sample:
     dependencies:
       '@canvasengine/presets':
-        specifier: 2.0.0-beta.34
-        version: 2.0.0-beta.34(canvasengine@2.0.0-beta.34(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1))(pixi.js@8.14.3)
+        specifier: 2.0.0-beta.35
+        version: 2.0.0-beta.35(canvasengine@2.0.0-beta.35(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1))(pixi.js@8.14.3)
       '@rpgjs/client':
         specifier: workspace:*
         version: link:../packages/client
@@ -304,11 +304,11 @@ importers:
         specifier: workspace:*
         version: link:../packages/vue
       '@signe/di':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.2
+        version: 2.5.2
       canvasengine:
-        specifier: 2.0.0-beta.34
-        version: 2.0.0-beta.34(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1)
+        specifier: 2.0.0-beta.35
+        version: 2.0.0-beta.35(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1)
       pixi.js:
         specifier: ^8.14.3
         version: 8.14.3
@@ -317,17 +317,17 @@ importers:
         version: 3.5.25(typescript@5.9.3)
     devDependencies:
       '@canvasengine/compiler':
-        specifier: 2.0.0-beta.34
-        version: 2.0.0-beta.34(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+        specifier: 2.0.0-beta.35
+        version: 2.0.0-beta.35(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
       '@vitejs/plugin-vue':
         specifier: ^6.0.2
-        version: 6.0.2(vite@7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))(vue@3.5.25(typescript@5.9.3))
+        version: 6.0.2(vite@7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))(vue@3.5.25(typescript@5.9.3))
       path-browserify:
         specifier: ^1.0.1
         version: 1.0.1
       vite:
-        specifier: ^7.2.4
-        version: 7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+        specifier: ^7.2.6
+        version: 7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
 
 packages:
 
@@ -377,14 +377,17 @@ packages:
   '@canvasengine/compiler@2.0.0-beta.34':
     resolution: {integrity: sha512-AfDycO6YvmaY1bKP2pVuDaREKgwtfNV4LT3Qjpc3WHqXJOYicNhYwU3RV1PsdWhQ5TyFPbccHjeNgon9KWT6lw==}
 
+  '@canvasengine/compiler@2.0.0-beta.35':
+    resolution: {integrity: sha512-7ZoWVSieJOCLjgDZpoTd3qJFmJZuZ9xgTj7hJ/bQ1ovWhzJcDOaAGNhjJ/8YK5+FagDUI17HfPPTUywebKPM6Q==}
+
   '@canvasengine/presets@2.0.0-beta.33':
     resolution: {integrity: sha512-JpEUpO6okNovFJ/QrWjS4d0cuFzafkyk6JIODi87uzrlkT3QEzXQ0HGd4gJNkosw9UzxB6IkxNwyfu5mTuJ+Gw==}
     peerDependencies:
       canvasengine: ^2.0.0-beta.24
       pixi.js: ^8.9.2
 
-  '@canvasengine/presets@2.0.0-beta.34':
-    resolution: {integrity: sha512-YMdE1U59x4sedA/LG4eQL5C88VmkvCwVqGsqrD6g4myEYZo4HNtmNKef3nWb1I0YRQWYHMbJ1AQMVyunQBR8Ig==}
+  '@canvasengine/presets@2.0.0-beta.35':
+    resolution: {integrity: sha512-5/gCEI+hl9B7hSrcBflEH5hEkCSGWFLar3TtxStjXsbMMy9LaOzlglVo16+gpi05puWGSgFMehkgy7gr0YfGlQ==}
     peerDependencies:
       canvasengine: ^2.0.0-beta.24
       pixi.js: ^8.9.2
@@ -394,6 +397,9 @@ packages:
 
   '@canvasengine/tiled@2.0.0-beta.34':
     resolution: {integrity: sha512-kR0vtowQ9JtfDSdLVZzEyOGyGdTF0Sxn/N2PGVHMLsNQ5aSDHxOeJPk+OQChRu8PnYi7+m68M0NOEB6Ha5pN4w==}
+
+  '@canvasengine/tiled@2.0.0-beta.35':
+    resolution: {integrity: sha512-AWSjBCKonxdgPL9eNweC9Vupt67D6sDHhnym8TPmiY7m6HnYuxA/cR7Gvryi07WMpWY8DLIvjnKepufQGsNmvg==}
 
   '@canvasengine/tilemap@5.0.1':
     resolution: {integrity: sha512-QZgTueWWYLwkdwYo+9oQ5aVxHGB15Oyac0VTiKinnOO+NDzBGJZi9GUu/s9AW7cJA4w36I0JwsqpW84J77gm7Q==}
@@ -877,14 +883,26 @@ packages:
   '@signe/di@2.5.1':
     resolution: {integrity: sha512-Lg5IQG+jBd9b+Pg1M0lYYQYNsVFzei+y5X6yivshb5+OkOK0sgZGW1iHZJgRbGcW9ovEsYud12f9kB9QCooSEQ==}
 
+  '@signe/di@2.5.2':
+    resolution: {integrity: sha512-SIwYkPwTaqw8QXLeb2XdQrthQpebdGc9ZLYq4tSvg4uWt3tJv1PGLgKhUcp/OAVRUTzdGE/GCTlZGFU3bfjsWg==}
+
   '@signe/reactive@2.5.1':
     resolution: {integrity: sha512-rIaOqGtmTZyEaGce4NPRgMP4ZT+elAG7s5Jb8OcFNImeTAg4VzUPrDULA0FzS/q1Ak/YbqHFUaclcVxkOCVrDA==}
+
+  '@signe/reactive@2.5.2':
+    resolution: {integrity: sha512-gqQDKFl6iNN7HoVLHQ7nKSx9/88RwziPUX3cyNwaBTjZJ07udYg9ZqYPoUt4qMZay5qWGwENw8OVN43Qw79hXQ==}
 
   '@signe/room@2.5.1':
     resolution: {integrity: sha512-6wsk5j69nHPtlsHmaLfFmJ+F1FFOHOE4x2FuZEM7uQk+VWSHV4/b8duScacjYhyTX4a/Lzvd/7Jclc4G+e19ww==}
 
+  '@signe/room@2.5.2':
+    resolution: {integrity: sha512-TNHsP42XlKYJ6HEMtIk9yp2FhIisukdmhoLUxffzOTXWTBgbDZ21V3U9j0UE07uaRQD8fxyKOMgRJYyCJbgG/w==}
+
   '@signe/sync@2.5.1':
     resolution: {integrity: sha512-n+5ucKBrZxpQcte453D6bw4bXDm21O6AaDzzLqRqePFXJROyPol2r5+qJvD1MdANrEuCLd6E91/X0zJLgHAgqQ==}
+
+  '@signe/sync@2.5.2':
+    resolution: {integrity: sha512-JvyFSd61EL5/NrViiThl5uZ8xRmwdz8RTLcug15txgrASGHmtuZOkB4NPGkYpz2+oq8NuJVLp2ttp5VceFbkfA==}
 
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
@@ -962,11 +980,25 @@ packages:
   '@vitest/expect@4.0.14':
     resolution: {integrity: sha512-RHk63V3zvRiYOWAV0rGEBRO820ce17hz7cI2kDmEdfQsBjT2luEKB5tCOc91u1oSQoUOZkSv3ZyzkdkSLD7lKw==}
 
+  '@vitest/expect@4.0.15':
+    resolution: {integrity: sha512-Gfyva9/GxPAWXIWjyGDli9O+waHDC0Q0jaLdFP1qPAUUfo1FEXPXUfUkp3eZA0sSq340vPycSyOlYUeM15Ft1w==}
+
   '@vitest/expect@4.0.8':
     resolution: {integrity: sha512-Rv0eabdP/xjAHQGr8cjBm+NnLHNoL268lMDK85w2aAGLFoVKLd8QGnVon5lLtkXQCoYaNL0wg04EGnyKkkKhPA==}
 
   '@vitest/mocker@4.0.14':
     resolution: {integrity: sha512-RzS5NujlCzeRPF1MK7MXLiEFpkIXeMdQ+rN3Kk3tDI9j0mtbr7Nmuq67tpkOJQpgyClbOltCXMjLZicJHsH5Cg==}
+    peerDependencies:
+      msw: ^2.4.9
+      vite: ^6.0.0 || ^7.0.0-0
+    peerDependenciesMeta:
+      msw:
+        optional: true
+      vite:
+        optional: true
+
+  '@vitest/mocker@4.0.15':
+    resolution: {integrity: sha512-CZ28GLfOEIFkvCFngN8Sfx5h+Se0zN+h4B7yOsPVCcgtiO7t5jt9xQh2E1UkFep+eb9fjyMfuC5gBypwb07fvQ==}
     peerDependencies:
       msw: ^2.4.9
       vite: ^6.0.0 || ^7.0.0-0
@@ -990,11 +1022,17 @@ packages:
   '@vitest/pretty-format@4.0.14':
     resolution: {integrity: sha512-SOYPgujB6TITcJxgd3wmsLl+wZv+fy3av2PpiPpsWPZ6J1ySUYfScfpIt2Yv56ShJXR2MOA6q2KjKHN4EpdyRQ==}
 
+  '@vitest/pretty-format@4.0.15':
+    resolution: {integrity: sha512-SWdqR8vEv83WtZcrfLNqlqeQXlQLh2iilO1Wk1gv4eiHKjEzvgHb2OVc3mIPyhZE6F+CtfYjNlDJwP5MN6Km7A==}
+
   '@vitest/pretty-format@4.0.8':
     resolution: {integrity: sha512-qRrjdRkINi9DaZHAimV+8ia9Gq6LeGz2CgIEmMLz3sBDYV53EsnLZbJMR1q84z1HZCMsf7s0orDgZn7ScXsZKg==}
 
   '@vitest/runner@4.0.14':
     resolution: {integrity: sha512-BsAIk3FAqxICqREbX8SetIteT8PiaUL/tgJjmhxJhCsigmzzH8xeadtp7LRnTpCVzvf0ib9BgAfKJHuhNllKLw==}
+
+  '@vitest/runner@4.0.15':
+    resolution: {integrity: sha512-+A+yMY8dGixUhHmNdPUxOh0la6uVzun86vAbuMT3hIDxMrAOmn5ILBHm8ajrqHE0t8R9T1dGnde1A5DTnmi3qw==}
 
   '@vitest/runner@4.0.8':
     resolution: {integrity: sha512-mdY8Sf1gsM8hKJUQfiPT3pn1n8RF4QBcJYFslgWh41JTfrK1cbqY8whpGCFzBl45LN028g0njLCYm0d7XxSaQQ==}
@@ -1002,11 +1040,17 @@ packages:
   '@vitest/snapshot@4.0.14':
     resolution: {integrity: sha512-aQVBfT1PMzDSA16Y3Fp45a0q8nKexx6N5Amw3MX55BeTeZpoC08fGqEZqVmPcqN0ueZsuUQ9rriPMhZ3Mu19Ag==}
 
+  '@vitest/snapshot@4.0.15':
+    resolution: {integrity: sha512-A7Ob8EdFZJIBjLjeO0DZF4lqR6U7Ydi5/5LIZ0xcI+23lYlsYJAfGn8PrIWTYdZQRNnSRlzhg0zyGu37mVdy5g==}
+
   '@vitest/snapshot@4.0.8':
     resolution: {integrity: sha512-Nar9OTU03KGiubrIOFhcfHg8FYaRaNT+bh5VUlNz8stFhCZPNrJvmZkhsr1jtaYvuefYFwK2Hwrq026u4uPWCw==}
 
   '@vitest/spy@4.0.14':
     resolution: {integrity: sha512-JmAZT1UtZooO0tpY3GRyiC/8W7dCs05UOq9rfsUUgEZEdq+DuHLmWhPsrTt0TiW7WYeL/hXpaE07AZ2RCk44hg==}
+
+  '@vitest/spy@4.0.15':
+    resolution: {integrity: sha512-+EIjOJmnY6mIfdXtE/bnozKEvTC4Uczg19yeZ2vtCz5Yyb0QQ31QWVQ8hswJ3Ysx/K2EqaNsVanjr//2+P3FHw==}
 
   '@vitest/spy@4.0.8':
     resolution: {integrity: sha512-nvGVqUunyCgZH7kmo+Ord4WgZ7lN0sOULYXUOYuHr55dvg9YvMz3izfB189Pgp28w0vWFbEEfNc/c3VTrqrXeA==}
@@ -1018,6 +1062,9 @@ packages:
 
   '@vitest/utils@4.0.14':
     resolution: {integrity: sha512-hLqXZKAWNg8pI+SQXyXxWCTOpA3MvsqcbVeNgSi8x/CSN2wi26dSzn1wrOhmCmFjEvN9p8/kLFRHa6PI8jHazw==}
+
+  '@vitest/utils@4.0.15':
+    resolution: {integrity: sha512-HXjPW2w5dxhTD0dLwtYHDnelK3j8sR8cWIaLxr22evTyY6q8pRCjZSmhRWVjBaOVXChQd6AwMzi9pucorXCPZA==}
 
   '@vitest/utils@4.0.8':
     resolution: {integrity: sha512-pdk2phO5NDvEFfUTxcTP8RFYjVj/kfLSPIN5ebP2Mu9kcIMeAQTbknqcFEyBcC4z2pJlJI9aS5UQjcYfhmKAow==}
@@ -1201,8 +1248,8 @@ packages:
     peerDependencies:
       pixi.js: ^8.9.2
 
-  canvasengine@2.0.0-beta.34:
-    resolution: {integrity: sha512-8LDTnuJe5BNC/j2vTVDs5AhXIIwin8/Ta//zUUCx8cRAR1n4+wke3BYbwWsZqIMote1Vyw6p6+zIQjFevSglUg==}
+  canvasengine@2.0.0-beta.35:
+    resolution: {integrity: sha512-kW48m8irIBmDdRFRthO1Bxz7pB4asXwb3ixs8gmuT8jC89WTVRM2dSZ8H7YaWGqT5bNrhRd4UmLJsrKwdH3bog==}
     peerDependencies:
       pixi.js: ^8.9.2
 
@@ -1627,6 +1674,9 @@ packages:
 
   joi@17.13.3:
     resolution: {integrity: sha512-otDA4ldcIx+ZXsKHWmp0YizCweVRZG96J10b0FevjfuncLO1oX59THoAmHkNubYJ+9gWsYsp5k8v4ib6oDv1fA==}
+
+  joypad.js@2.3.5:
+    resolution: {integrity: sha512-gT1kylAeMSryQWOo7vDql5mvUGi95hgjNUu/YeKvQu3t5bOkHVqrybskOuldct0EmDRsq2MMUU4wHRs34rZ/Kw==}
 
   js-binary-schema-parser@2.0.3:
     resolution: {integrity: sha512-xezGJmOb4lk/M1ZZLTR/jaBHQ4gG/lqQnJqdIv4721DMggsa1bDVlHXNeHYogaIEHD9vCRv0fcL4hMA+Coarkg==}
@@ -2099,6 +2149,10 @@ packages:
   tinyexec@1.0.1:
     resolution: {integrity: sha512-5uC6DDlmeqiOwCPmK9jMSdOuZTh8bU39Ys6yidB+UTt5hfZUPGAypSgFRiEp+jbi9qH40BLDvy85jIU88wKSqw==}
 
+  tinyexec@1.0.2:
+    resolution: {integrity: sha512-W/KYk+NFhkmsYpuHq5JykngiOCnxeVL8v8dFnqxSD8qEEdRfXk1SDM6JzNqcERbcGYj9tMrDQBYV9cjgnunFIg==}
+    engines: {node: '>=18'}
+
   tinyglobby@0.2.14:
     resolution: {integrity: sha512-tX5e7OM1HnYr2+a2C/4V0htOcSQcoSTH9KgJnVvNm5zm/cyEWKJ7j7YutsH9CxMdtOkkLFy2AHrMci9IM8IPZQ==}
     engines: {node: '>=12.0.0'}
@@ -2312,6 +2366,46 @@ packages:
       yaml:
         optional: true
 
+  vite@7.2.6:
+    resolution: {integrity: sha512-tI2l/nFHC5rLh7+5+o7QjKjSR04ivXDF4jcgV0f/bTQ+OJiITy5S6gaynVsEM+7RqzufMnVbIon6Sr5x1SDYaQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+    peerDependencies:
+      '@types/node': ^20.19.0 || >=22.12.0
+      jiti: '>=1.21.0'
+      less: ^4.0.0
+      lightningcss: ^1.21.0
+      sass: ^1.70.0
+      sass-embedded: ^1.70.0
+      stylus: '>=0.54.8'
+      sugarss: ^5.0.0
+      terser: ^5.16.0
+      tsx: ^4.8.1
+      yaml: ^2.4.2
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+      jiti:
+        optional: true
+      less:
+        optional: true
+      lightningcss:
+        optional: true
+      sass:
+        optional: true
+      sass-embedded:
+        optional: true
+      stylus:
+        optional: true
+      sugarss:
+        optional: true
+      terser:
+        optional: true
+      tsx:
+        optional: true
+      yaml:
+        optional: true
+
   vitest@4.0.14:
     resolution: {integrity: sha512-d9B2J9Cm9dN9+6nxMnnNJKJCtcyKfnHj15N6YNJfaFHRLua/d3sRKU9RuKmO9mB0XdFtUizlxfz/VPbd3OxGhw==}
     engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
@@ -2324,6 +2418,40 @@ packages:
       '@vitest/browser-preview': 4.0.14
       '@vitest/browser-webdriverio': 4.0.14
       '@vitest/ui': 4.0.14
+      happy-dom: '*'
+      jsdom: '*'
+    peerDependenciesMeta:
+      '@edge-runtime/vm':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+      '@types/node':
+        optional: true
+      '@vitest/browser-playwright':
+        optional: true
+      '@vitest/browser-preview':
+        optional: true
+      '@vitest/browser-webdriverio':
+        optional: true
+      '@vitest/ui':
+        optional: true
+      happy-dom:
+        optional: true
+      jsdom:
+        optional: true
+
+  vitest@4.0.15:
+    resolution: {integrity: sha512-n1RxDp8UJm6N0IbJLQo+yzLZ2sQCDyl1o0LeugbPWf8+8Fttp29GghsQBjYJVmWq3gBFfe9Hs1spR44vovn2wA==}
+    engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
+    hasBin: true
+    peerDependencies:
+      '@edge-runtime/vm': '*'
+      '@opentelemetry/api': ^1.9.0
+      '@types/node': ^20.0.0 || ^22.0.0 || >=24.0.0
+      '@vitest/browser-playwright': 4.0.15
+      '@vitest/browser-preview': 4.0.15
+      '@vitest/browser-webdriverio': 4.0.15
+      '@vitest/ui': 4.0.15
       happy-dom: '*'
       jsdom: '*'
     peerDependenciesMeta:
@@ -2504,6 +2632,25 @@ snapshots:
       - tsx
       - yaml
 
+  '@canvasengine/compiler@2.0.0-beta.35(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)':
+    dependencies:
+      acorn: 8.15.0
+      peggy: 4.2.0
+      typescript: 5.9.3
+      vite: 6.3.5(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+    transitivePeerDependencies:
+      - '@types/node'
+      - jiti
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - terser
+      - tsx
+      - yaml
+
   '@canvasengine/presets@2.0.0-beta.33(canvasengine@2.0.0-beta.33(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1))(pixi.js@8.14.3)':
     dependencies:
       '@canvasengine/tiled': 2.0.0-beta.33
@@ -2513,20 +2660,20 @@ snapshots:
       revolt-fx: 1.3.5(pixi.js@8.14.3)
       rxjs: 7.8.2
 
-  '@canvasengine/presets@2.0.0-beta.34(canvasengine@2.0.0-beta.34(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1))(pixi.js@8.12.0)':
+  '@canvasengine/presets@2.0.0-beta.35(canvasengine@2.0.0-beta.35(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1))(pixi.js@8.12.0)':
     dependencies:
-      '@canvasengine/tiled': 2.0.0-beta.34
+      '@canvasengine/tiled': 2.0.0-beta.35
       '@canvasengine/tilemap': 5.0.1(pixi.js@8.12.0)
-      canvasengine: 2.0.0-beta.34(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1)
+      canvasengine: 2.0.0-beta.35(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1)
       pixi.js: 8.12.0
       revolt-fx: 1.3.5(pixi.js@8.12.0)
       rxjs: 7.8.2
 
-  '@canvasengine/presets@2.0.0-beta.34(canvasengine@2.0.0-beta.34(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1))(pixi.js@8.14.3)':
+  '@canvasengine/presets@2.0.0-beta.35(canvasengine@2.0.0-beta.35(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1))(pixi.js@8.14.3)':
     dependencies:
-      '@canvasengine/tiled': 2.0.0-beta.34
+      '@canvasengine/tiled': 2.0.0-beta.35
       '@canvasengine/tilemap': 5.0.1(pixi.js@8.14.3)
-      canvasengine: 2.0.0-beta.34(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1)
+      canvasengine: 2.0.0-beta.35(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1)
       pixi.js: 8.14.3
       revolt-fx: 1.3.5(pixi.js@8.14.3)
       rxjs: 7.8.2
@@ -2538,6 +2685,12 @@ snapshots:
       xmlbuilder: 15.1.1
 
   '@canvasengine/tiled@2.0.0-beta.34':
+    dependencies:
+      buffer: 6.0.3
+      xml-js: 1.6.11
+      xmlbuilder: 15.1.1
+
+  '@canvasengine/tiled@2.0.0-beta.35':
     dependencies:
       buffer: 6.0.3
       xml-js: 1.6.11
@@ -3114,7 +3267,13 @@ snapshots:
 
   '@signe/di@2.5.1': {}
 
+  '@signe/di@2.5.2': {}
+
   '@signe/reactive@2.5.1':
+    dependencies:
+      rxjs: 7.8.2
+
+  '@signe/reactive@2.5.2':
     dependencies:
       rxjs: 7.8.2
 
@@ -3125,9 +3284,22 @@ snapshots:
       partysocket: 1.1.5
       zod: 3.25.76
 
+  '@signe/room@2.5.2':
+    dependencies:
+      '@signe/sync': 2.5.2
+      dset: 3.1.4
+      partysocket: 1.1.5
+      zod: 3.25.76
+
   '@signe/sync@2.5.1':
     dependencies:
       '@signe/reactive': 2.5.1
+      partysocket: 1.1.5
+      rxjs: 7.8.2
+
+  '@signe/sync@2.5.2':
+    dependencies:
+      '@signe/reactive': 2.5.2
       partysocket: 1.1.5
       rxjs: 7.8.2
 
@@ -3185,10 +3357,10 @@ snapshots:
     dependencies:
       '@types/node': 24.10.1
 
-  '@vitejs/plugin-vue@6.0.2(vite@7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))(vue@3.5.25(typescript@5.9.3))':
+  '@vitejs/plugin-vue@6.0.2(vite@7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))(vue@3.5.25(typescript@5.9.3))':
     dependencies:
       '@rolldown/pluginutils': 1.0.0-beta.50
-      vite: 7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+      vite: 7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
       vue: 3.5.25(typescript@5.9.3)
 
   '@vitest/coverage-v8@4.0.8(vitest@4.0.8)':
@@ -3217,6 +3389,15 @@ snapshots:
       chai: 6.2.1
       tinyrainbow: 3.0.3
 
+  '@vitest/expect@4.0.15':
+    dependencies:
+      '@standard-schema/spec': 1.0.0
+      '@types/chai': 5.2.2
+      '@vitest/spy': 4.0.15
+      '@vitest/utils': 4.0.15
+      chai: 6.2.1
+      tinyrainbow: 3.0.3
+
   '@vitest/expect@4.0.8':
     dependencies:
       '@standard-schema/spec': 1.0.0
@@ -3226,23 +3407,35 @@ snapshots:
       chai: 6.2.0
       tinyrainbow: 3.0.3
 
-  '@vitest/mocker@4.0.14(vite@7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))':
+  '@vitest/mocker@4.0.14(vite@7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))':
     dependencies:
       '@vitest/spy': 4.0.14
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+      vite: 7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
 
-  '@vitest/mocker@4.0.8(vite@7.2.4(@types/node@24.10.0)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))':
+  '@vitest/mocker@4.0.15(vite@7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))':
+    dependencies:
+      '@vitest/spy': 4.0.15
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+
+  '@vitest/mocker@4.0.8(vite@7.2.6(@types/node@24.10.0)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))':
     dependencies:
       '@vitest/spy': 4.0.8
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 7.2.4(@types/node@24.10.0)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+      vite: 7.2.6(@types/node@24.10.0)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
 
   '@vitest/pretty-format@4.0.14':
+    dependencies:
+      tinyrainbow: 3.0.3
+
+  '@vitest/pretty-format@4.0.15':
     dependencies:
       tinyrainbow: 3.0.3
 
@@ -3253,6 +3446,11 @@ snapshots:
   '@vitest/runner@4.0.14':
     dependencies:
       '@vitest/utils': 4.0.14
+      pathe: 2.0.3
+
+  '@vitest/runner@4.0.15':
+    dependencies:
+      '@vitest/utils': 4.0.15
       pathe: 2.0.3
 
   '@vitest/runner@4.0.8':
@@ -3266,6 +3464,12 @@ snapshots:
       magic-string: 0.30.21
       pathe: 2.0.3
 
+  '@vitest/snapshot@4.0.15':
+    dependencies:
+      '@vitest/pretty-format': 4.0.15
+      magic-string: 0.30.21
+      pathe: 2.0.3
+
   '@vitest/snapshot@4.0.8':
     dependencies:
       '@vitest/pretty-format': 4.0.8
@@ -3273,6 +3477,8 @@ snapshots:
       pathe: 2.0.3
 
   '@vitest/spy@4.0.14': {}
+
+  '@vitest/spy@4.0.15': {}
 
   '@vitest/spy@4.0.8': {}
 
@@ -3290,6 +3496,11 @@ snapshots:
   '@vitest/utils@4.0.14':
     dependencies:
       '@vitest/pretty-format': 4.0.14
+      tinyrainbow: 3.0.3
+
+  '@vitest/utils@4.0.15':
+    dependencies:
+      '@vitest/pretty-format': 4.0.15
       tinyrainbow: 3.0.3
 
   '@vitest/utils@4.0.8':
@@ -3537,12 +3748,13 @@ snapshots:
       - '@types/react'
       - react
 
-  canvasengine@2.0.0-beta.34(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1):
+  canvasengine@2.0.0-beta.35(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1):
     dependencies:
       '@barvynkoa/particle-emitter': 0.0.1(pixi.js@8.12.0)
       '@pixi/layout': 3.1.0(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1)(yoga-layout@3.2.1)
-      '@signe/reactive': 2.5.1
+      '@signe/reactive': 2.5.2
       howler: 2.2.4
+      joypad.js: 2.3.5
       pixi-filters: 6.1.4(pixi.js@8.12.0)
       pixi-viewport: 6.0.3(pixi.js@8.12.0)
       pixi.js: 8.12.0
@@ -3553,12 +3765,13 @@ snapshots:
       - '@types/react'
       - react
 
-  canvasengine@2.0.0-beta.34(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1):
+  canvasengine@2.0.0-beta.35(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1):
     dependencies:
       '@barvynkoa/particle-emitter': 0.0.1(pixi.js@8.14.3)
       '@pixi/layout': 3.1.0(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1)(yoga-layout@3.2.1)
-      '@signe/reactive': 2.5.1
+      '@signe/reactive': 2.5.2
       howler: 2.2.4
+      joypad.js: 2.3.5
       pixi-filters: 6.1.4(pixi.js@8.14.3)
       pixi-viewport: 6.0.3(pixi.js@8.14.3)
       pixi.js: 8.14.3
@@ -3972,6 +4185,8 @@ snapshots:
       '@sideway/address': 4.1.5
       '@sideway/formula': 3.0.1
       '@sideway/pinpoint': 2.0.0
+
+  joypad.js@2.3.5: {}
 
   js-binary-schema-parser@2.0.3: {}
 
@@ -4430,6 +4645,8 @@ snapshots:
 
   tinyexec@1.0.1: {}
 
+  tinyexec@1.0.2: {}
+
   tinyglobby@0.2.14:
     dependencies:
       fdir: 6.4.6(picomatch@4.0.3)
@@ -4539,6 +4756,25 @@ snapshots:
       - rollup
       - supports-color
 
+  vite-plugin-dts@4.5.4(@types/node@24.10.1)(rollup@4.46.2)(typescript@5.9.3)(vite@7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)):
+    dependencies:
+      '@microsoft/api-extractor': 7.52.10(@types/node@24.10.1)
+      '@rollup/pluginutils': 5.2.0(rollup@4.46.2)
+      '@volar/typescript': 2.4.23
+      '@vue/language-core': 2.2.0(typescript@5.9.3)
+      compare-versions: 6.1.1
+      debug: 4.4.1
+      kolorist: 1.8.0
+      local-pkg: 1.1.1
+      magic-string: 0.30.17
+      typescript: 5.9.3
+    optionalDependencies:
+      vite: 7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+    transitivePeerDependencies:
+      - '@types/node'
+      - rollup
+      - supports-color
+
   vite@6.3.5(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1):
     dependencies:
       esbuild: 0.25.8
@@ -4569,7 +4805,22 @@ snapshots:
       tsx: 4.20.6
       yaml: 2.8.1
 
-  vite@7.2.4(@types/node@24.10.0)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1):
+  vite@7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1):
+    dependencies:
+      esbuild: 0.25.8
+      fdir: 6.5.0(picomatch@4.0.3)
+      picomatch: 4.0.3
+      postcss: 8.5.6
+      rollup: 4.46.2
+      tinyglobby: 0.2.15
+    optionalDependencies:
+      '@types/node': 24.10.1
+      fsevents: 2.3.3
+      jiti: 2.5.1
+      tsx: 4.20.6
+      yaml: 2.8.1
+
+  vite@7.2.6(@types/node@24.10.0)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1):
     dependencies:
       esbuild: 0.25.8
       fdir: 6.5.0(picomatch@4.0.3)
@@ -4584,7 +4835,7 @@ snapshots:
       tsx: 4.20.6
       yaml: 2.8.1
 
-  vite@7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1):
+  vite@7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1):
     dependencies:
       esbuild: 0.25.8
       fdir: 6.5.0(picomatch@4.0.3)
@@ -4602,7 +4853,7 @@ snapshots:
   vitest@4.0.14(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1):
     dependencies:
       '@vitest/expect': 4.0.14
-      '@vitest/mocker': 4.0.14(vite@7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))
+      '@vitest/mocker': 4.0.14(vite@7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))
       '@vitest/pretty-format': 4.0.14
       '@vitest/runner': 4.0.14
       '@vitest/snapshot': 4.0.14
@@ -4619,7 +4870,44 @@ snapshots:
       tinyexec: 0.3.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.0.3
-      vite: 7.2.4(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+      vite: 7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 24.10.1
+    transitivePeerDependencies:
+      - jiti
+      - less
+      - lightningcss
+      - msw
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - terser
+      - tsx
+      - yaml
+
+  vitest@4.0.15(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1):
+    dependencies:
+      '@vitest/expect': 4.0.15
+      '@vitest/mocker': 4.0.15(vite@7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))
+      '@vitest/pretty-format': 4.0.15
+      '@vitest/runner': 4.0.15
+      '@vitest/snapshot': 4.0.15
+      '@vitest/spy': 4.0.15
+      '@vitest/utils': 4.0.15
+      es-module-lexer: 1.7.0
+      expect-type: 1.2.2
+      magic-string: 0.30.21
+      obug: 2.1.1
+      pathe: 2.0.3
+      picomatch: 4.0.3
+      std-env: 3.10.0
+      tinybench: 2.9.0
+      tinyexec: 1.0.2
+      tinyglobby: 0.2.15
+      tinyrainbow: 3.0.3
+      vite: 7.2.6(@types/node@24.10.1)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.10.1
@@ -4639,7 +4927,7 @@ snapshots:
   vitest@4.0.8(@types/node@24.10.0)(@vitest/ui@4.0.8)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1):
     dependencies:
       '@vitest/expect': 4.0.8
-      '@vitest/mocker': 4.0.8(vite@7.2.4(@types/node@24.10.0)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))
+      '@vitest/mocker': 4.0.8(vite@7.2.6(@types/node@24.10.0)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1))
       '@vitest/pretty-format': 4.0.8
       '@vitest/runner': 4.0.8
       '@vitest/snapshot': 4.0.8
@@ -4656,7 +4944,7 @@ snapshots:
       tinyexec: 0.3.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.0.3
-      vite: 7.2.4(@types/node@24.10.0)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
+      vite: 7.2.6(@types/node@24.10.0)(jiti@2.5.1)(tsx@4.20.6)(yaml@2.8.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.10.0
