@@ -61,50 +61,11 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase) {
       });
     }
 
-    /**
-     * Retrieves a learned skill. Returns null, if not found
-     * ```ts
-     * import Fire from 'your-database/skills/fire'
-     *
-     * player.getSkill(Fire)
-     *  ```
-     *
-     * @title Get Skill
-     * @method player.getSkill(skillClass)
-     * @param {SkillClass | string} skillClass or data id
-     * @returns {instance of SkillClass | null}
-     * @memberof SkillManager
-     */
     getSkill(skillClass: any | string) {
       const index = this._getSkillIndex(skillClass);
       return this.skills()[index] ?? null;
     }
 
-    /**
-         * Learn a skill. Attributes the coefficient 1 to the parameter INT (intelligence) if cd is not present on the class.
-         * 
-         * `onLearn()` method is called on the SkillClass
-         * 
-         * ```ts
-         * import Fire from 'your-database/skills/fire'
-         * 
-         * player.learnSkill(Fire)
-         *  ```
-         * 
-         * @title Learn Skill
-         * @method player.learnSkill(skillClass)
-         * @param {SkillClass | string} skillId or data id
-         * @throws {SkillLog} alreadyLearned
-         *  If the player already knows the skill
-         *  ```
-            {
-                id: SKILL_ALREADY_LEARNED,
-                msg: '...'
-            }
-            ```
-         * @returns {instance of SkillClass}
-         * @memberof SkillManager
-         */
     learnSkill(skillId: any | string) {
       if (this.getSkill(skillId)) {
         throw SkillLog.alreadyLearned(skillId);
@@ -115,36 +76,6 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase) {
       return instance;
     }
 
-    /**
-     * Forget a skill
-     *
-     * `onForget()` method is called on the SkillClass
-     *
-     * ```ts
-     * import Fire from 'your-database/skills/fire'
-     *
-     * try {
-     *      player.forgetSkill(Fire)
-     * }
-     * catch (err) {
-     *      console.log(err)
-     * }
-     *  ```
-     *
-     * @title Forget Skill
-     * @method player.learnSkill(skillClass)
-     * @param {SkillClass | string} skillId or data id
-     * @throws {SkillLog} notLearned
-     * If trying to forget a skill not learned
-     *  ```
-     * {
-     *      id: SKILL_NOT_LEARNED,
-     *      msg: '...'
-     * }
-     * ```
-     * @returns {instance of SkillClass}
-     * @memberof SkillManager
-     */
     forgetSkill(skillId: any | string) {
       if (isString(skillId)) skillId = (this as any).databaseById(skillId);
       const index = this._getSkillIndex(skillId);
@@ -157,81 +88,6 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase) {
       return instance;
     }
 
-    /**
-     * Using a skill
-     *
-     * `onUse()` method is called on the SkillClass
-     *
-     * If other players are indicated then damage will be done to these other players. The method `applyDamage()` will be executed
-     *
-     * ```ts
-     * import Fire from 'your-database/skills/fire'
-     *
-     * try {
-     *      player.useSkill(Fire)
-     * }
-     * catch (err) {
-     *      console.log(err)
-     * }
-     *  ```
-     *
-     * or
-     *
-     *
-     * * ```ts
-     * import Fire from 'your-database/skills/fire'
-     *
-     * try {
-     *      player.useSkill(Fire, otherPlayer)
-     * }
-     * catch (err) {
-     *      console.log(err)
-     * }
-     *  ```
-     *
-     * @title Use Skill
-     * @method player.useSkill(skillClass,otherPlayer)
-     * @param {SkillClass | string} skillId or data id
-     * @param {Array<RpgPlayer> | RpgPlayer} [otherPlayer]
-     * @throws {SkillLog} restriction
-     * If the player has the `Effect.CAN_NOT_SKILL` effect
-     *  ```
-     * {
-     *      id: RESTRICTION_SKILL,
-     *      msg: '...'
-     * }
-     * ```
-     * @throws {SkillLog} notLearned
-     * If the player tries to use an unlearned skill
-     *  ```
-     * {
-     *      id: SKILL_NOT_LEARNED,
-     *      msg: '...'
-     * }
-     * ```
-     * @throws {SkillLog} notEnoughSp
-     * If the player does not have enough SP to use the skill
-     *  ```
-     * {
-     *      id: NOT_ENOUGH_SP,
-     *      msg: '...'
-     * }
-     * ```
-     * @throws {SkillLog} chanceToUseFailed
-     * If the chance to use the skill has failed (defined with the `hitRate` property)
-     *  ```
-     * {
-     *      id: USE_CHANCE_SKILL_FAILED,
-     *      msg: '...'
-     * }
-     * ```
-     *
-     * `onUseFailed()` method is called on the SkillClass
-     *
-     * @returns {instance of SkillClass}
-     * @memberof SkillManager
-     * @todo
-     */
     useSkill(skillId: any | string, otherPlayer?: RpgPlayer | RpgPlayer[]) {
       const skill = this.getSkill(skillId);
       if ((this as any).hasEffect(Effect.CAN_NOT_SKILL)) {

@@ -1,8 +1,7 @@
-import { isInstanceOf, isString, Item, PlayerCtor, type Constructor } from "@rpgjs/common";
-import { RpgCommonPlayer, Matter } from "@rpgjs/common";
+import { isInstanceOf, isString, Item, type PlayerCtor} from "@rpgjs/common";
 import { ATK, PDEF, SDEF } from "../presets";
 import { ItemLog } from "../logs";
-import { ArmorInstance, ItemClass, ItemInstance, WeaponInstance } from "@rpgjs/database";
+import type { ItemClass, ItemInstance } from "@rpgjs/database";
 import { RpgPlayer } from "./Player";
 
 // Ajout des enums manquants
@@ -189,43 +188,11 @@ export type ItemObject<T extends ItemData = ItemData> = T & ItemHooks & {
 export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
   return class extends Base {
 
-    /**
-     * Retrieves the information of an object: the number and the instance
-     * @title Get Item
-     * @method player.getItem(itemClass)
-     * @param {ItemClass | string} itemClass Identifier of the object if the parameter is a string
-     * @returns {{ nb: number, item: instance of ItemClass }}
-     * @memberof ItemManager
-     * @example
-     *
-     * ```ts
-     * import Potion from 'your-database/potion'
-     *
-     * player.addItem(Potion, 5)
-     * const inventory = player.getItem(Potion)
-     * console.log(inventory) // { nb: 5, item: <instance of Potion> }
-     *  ```
-     */
     getItem(itemClass: ItemClass | string): Item {
       const index: number = this._getItemIndex(itemClass);
       return (this as any).items()[index];
     }
 
-    /**
-     * Check if the player has the item in his inventory.
-     * @title Has Item
-     * @method player.hasItem(itemClass)
-     * @param {ItemClass | string} itemClass Identifier of the object if the parameter is a string
-     * @returns {boolean}
-     * @memberof ItemManager
-     * @example
-     *
-     * ```ts
-     * import Potion from 'your-database/potion'
-     *
-     * player.hasItem(Potion) // false
-     *  ```
-     */
     hasItem(itemClass: ItemClass | string): boolean {
       return !!this.getItem(itemClass);
     }
@@ -238,62 +205,6 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
         return isInstanceOf(it, itemClass);
       });
     }
-    /**
-     * Add an item in the player's inventory. You can give more than one by specifying `nb`
-     *
-     * Supports three ways to add items:
-     * 1. **String**: Pass a string ID to retrieve the item from the database (requires item to be registered in `@RpgModule` database).
-     * 2. **Class**: Pass an item class (e.g., `Potion`). The class will be instantiated and automatically added to the map's database if not already present.
-     * 3. **Object**: Pass an item object with properties and hooks directly. The object will be automatically added to the map's database if not already present.
-     *
-     * For classes and objects, if they don't exist in the database, they are automatically added using `map.addInDatabase()`.
-     * This allows dynamic item creation without requiring pre-registration in the module database.
-     *
-     * `onAdd()` method is called on the ItemClass or ItemObject
-     *
-     * @title Add Item
-     * @method player.addItem(item,nb=1)
-     * @param {ItemClass | ItemObject | string} item - Item class, object, or string identifier
-     * @param {number} [nb] Default 1
-     * @returns {Item} The item instance added to inventory
-     * @memberof ItemManager
-     * @example
-     *
-     * ```ts
-     * import Potion from 'your-database/potion'
-     * 
-     * // Using string ID (retrieves from database - item must be in @RpgModule database)
-     * player.addItem('Potion', 5)
-     * 
-     * // Using class (creates instance, auto-adds to map database if not present)
-     * player.addItem(Potion, 5)
-     * 
-     * // Using object directly (auto-adds to map database if not present)
-     * player.addItem({
-     *   id: 'custom-potion',
-     *   name: 'Custom Potion',
-     *   description: 'A custom potion',
-     *   price: 150,
-     *   hpValue: 50,
-     *   consumable: true,
-     *   onAdd(player) {
-     *     console.log('Custom potion added!');
-     *   },
-     *   onUse(player) {
-     *     player.hp += 50;
-     *   }
-     * }, 3)
-     * 
-     * // Object without ID (auto-generates ID and adds to database)
-     * player.addItem({
-     *   name: 'Dynamic Item',
-     *   price: 100,
-     *   onUse(player) {
-     *     console.log('Dynamic item used!');
-     *   }
-     * })
-     *  ```
-     */
     addItem(item: ItemClass | ItemObject | string, nb: number = 1): Item {
       const map = (this as any).getCurrentMap();
       if (!map) {
@@ -387,38 +298,6 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       return instance;
     }
 
-    /**
-     * Deletes an item. Decreases the value `nb`. If the number falls to 0, then the item is removed from the inventory. The method then returns `undefined`
-     *
-     * `onRemove()` method is called on the ItemClass
-     *
-     * @title Remove Item
-     * @method player.removeItem(item,nb=1)
-     * @param {ItemClass | string} itemClass string is item id
-     * @param {number} [nb] Default 1
-     * @returns {{ nb: number, item: instance of ItemClass } | undefined}
-     * @throws {ItemLog} notInInventory
-     * If the object is not in the inventory, an exception is raised
-     *  ```
-     * {
-     *      id: ITEM_NOT_INVENTORY,
-     *      msg: '...'
-     * }
-     * ```
-     * @memberof ItemManager
-     * @example
-     *
-     * ```ts
-     * import Potion from 'your-database/potion'
-     *
-     * try {
-     *    player.removeItem(Potion, 5)
-     * }
-     * catch (err) {
-     *    console.log(err)
-     * }
-     * ```
-     */
     removeItem(
       itemClass: ItemClass | string,
       nb: number = 1
@@ -440,50 +319,6 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       return this.items()[itemIndex];
     }
 
-    /**
-     * Purchases an item and reduces the amount of gold
-     *
-     * `onAdd()` method is called on the ItemClass
-     *
-     * @title Buy Item
-     * @method player.buyItem(item,nb=1)
-     * @param {ItemClass | string} itemClass Identifier of the object if the parameter is a string
-     * @param {number} [nb] Default 1
-     * @returns {{ nb: number, item: instance of ItemClass }}
-     * @throws {ItemLog} haveNotPrice
-     * If you have not set a price on the item
-     *  ```
-     * {
-     *      id: NOT_PRICE,
-     *      msg: '...'
-     * }
-     * ```
-     * @throws {ItemLog} notEnoughGold
-     * If the player does not have enough money
-     *  ```
-     * {
-     *      id: NOT_ENOUGH_GOLD,
-     *      msg: '...'
-     * }
-     * ```
-     * @memberof ItemManager
-     * @example
-     *
-     * ```ts
-     * import Potion from 'your-database/potion'
-     *
-     * try {
-     *    // Using class
-     *    player.buyItem(Potion)
-     *    
-     *    // Using string ID
-     *    player.buyItem('Potion')
-     * }
-     * catch (err) {
-     *    console.log(err)
-     * }
-     * ```
-     */
     buyItem(item: ItemClass | ItemObject | string, nb = 1): Item {
       let itemId: string;
       let data: any;
@@ -516,58 +351,6 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       return this.addItem(item, nb);
     }
 
-    /**
-     * Sell an item and the player wins the amount of the item divided by 2
-     *
-     * `onRemove()` method is called on the ItemClass
-     *
-     * @title Sell Item
-     * @method player.sellItem(item,nb=1)
-     * @param {ItemClass | string} itemClass Identifier of the object if the parameter is a string
-     * @param {number} [nbToSell] Default 1
-     * @returns {{ nb: number, item: instance of ItemClass }}
-     * @throws {ItemLog} haveNotPrice
-     * If you have not set a price on the item
-     *   ```
-     * {
-     *      id: NOT_PRICE,
-     *      msg: '...'
-     * }
-     * ```
-     * @throws {ItemLog} notInInventory
-     * If the object is not in the inventory, an exception is raised
-     *  ```
-     * {
-     *      id: ITEM_NOT_INVENTORY,
-     *      msg: '...'
-     * }
-     * ```
-     * @throws {ItemLog} tooManyToSell
-     * If the number of items for sale exceeds the number of actual items in the inventory
-     *  ```
-     * {
-     *      id: TOO_MANY_ITEM_TO_SELL,
-     *      msg: '...'
-     * }
-     * ```
-     * @memberof ItemManager
-     * @example
-     *
-     * ```ts
-     * import Potion from 'your-database/potion'
-     *
-     * try {
-     *     player.addItem(Potion)
-     *     // Using class
-     *     player.sellItem(Potion)
-     *     // Using string ID
-     *     player.sellItem('Potion')
-     * }
-     * catch (err) {
-     *    console.log(err)
-     * }
-     * ```
-     */
     sellItem(itemClass: ItemClass | string, nbToSell = 1): Item {
       const itemId = isString(itemClass) ? itemClass : (itemClass as any).name;
       const data = (this as any).databaseById(itemId);
@@ -600,103 +383,18 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       return nb;
     }
 
-    /**
-     * recover the attack sum of items equipped on the player.
-     *
-     * @title Get the player's attack
-     * @prop {number} player.atk
-     * @memberof ItemManager
-     */
     get atk(): number {
       return this.getParamItem(ATK);
     }
 
-    /**
-     * recover the physic defense sum of items equipped on the player.
-     *
-     * @title Get the player's pdef
-     * @prop {number} player.pdef
-     * @memberof ItemManager
-     */
     get pdef(): number {
       return this.getParamItem(PDEF);
     }
 
-    /**
-     * recover the skill defense sum of items equipped on the player.
-     *
-     * @title Get the player's sdef
-     * @prop {number} player.sdef
-     * @memberof ItemManager
-     */
     get sdef(): number {
       return this.getParamItem(SDEF);
     }
 
-    /**
-     *  Use an object. Applies effects and states. Removes the object from the inventory then
-     *
-     * `onUse()` method is called on the ItemClass (If the use has worked)
-     * `onRemove()` method is called on the ItemClass
-     *
-     * @title Use an Item
-     * @method player.useItem(item,nb=1)
-     * @param {ItemClass | string} itemClass Identifier of the object if the parameter is a string
-     * @returns {{ nb: number, item: instance of ItemClass }}
-     * @throws {ItemLog} restriction
-     * If the player has the `Effect.CAN_NOT_ITEM` effect
-     *   ```
-     * {
-     *      id: RESTRICTION_ITEM,
-     *      msg: '...'
-     * }
-     * ```
-     * @throws {ItemLog} notInInventory
-     * If the object is not in the inventory, an exception is raised
-     *  ```
-     * {
-     *      id: ITEM_NOT_INVENTORY,
-     *      msg: '...'
-     * }
-     * ```
-     * @throws {ItemLog} notUseItem
-     * If the `consumable` property is on false
-     *  ```
-     * {
-     *      id: NOT_USE_ITEM,
-     *      msg: '...'
-     * }
-     * ```
-     * @throws {ItemLog} chanceToUseFailed
-     * Chance to use the item has failed. Chances of use is defined with `ItemClass.hitRate`
-     *  ```
-     * {
-     *      id: USE_CHANCE_ITEM_FAILED,
-     *      msg: '...'
-     * }
-     * ```
-     * > the item is still deleted from the inventory
-     *
-     * `onUseFailed()` method is called on the ItemClass
-     *
-     * @memberof ItemManager
-     * @example
-     *
-     * ```ts
-     * import Potion from 'your-database/potion'
-     *
-     * try {
-     *     player.addItem(Potion)
-     *     // Using class
-     *     player.useItem(Potion)
-     *     // Using string ID
-     *     player.useItem('Potion')
-     * }
-     * catch (err) {
-     *    console.log(err)
-     * }
-     * ```
-     */
     useItem(itemClass: ItemClass | string): Item {
       const itemId = isString(itemClass) ? itemClass : (itemClass as any).name;
       const inventory = this.getItem(itemClass);
@@ -724,58 +422,6 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       return inventory;
     }
 
-    /**
-     * Equips a weapon or armor on a player. Think first to add the item in the inventory with the `addItem()` method before equipping the item.
-     * 
-     * `onEquip()` method is called on the ItemClass
-     * 
-     * @title Equip Weapon or Armor
-     * @method player.equip(itemClass,equip=true)
-     * @param {ItemClass | string} itemClass Identifier of the object if the parameter is a string
-     * @param {number} [equip] Equip the object if true or un-equipped if false
-     * @returns {void}
-     * @throws {ItemLog} notInInventory 
-     * If the item is not in the inventory
-     *  ```
-        {
-            id: ITEM_NOT_INVENTORY,
-            msg: '...'
-        }
-        ```
-     * @throws {ItemLog} invalidToEquiped 
-        If the item is not by a weapon or armor
-        ```
-        {
-            id: INVALID_ITEM_TO_EQUIP,
-            msg: '...'
-        }
-        ```
-    * @throws {ItemLog} isAlreadyEquiped 
-        If the item Is already equipped
-        ```
-        {
-            id: ITEM_ALREADY_EQUIPED,
-            msg: '...'
-        }
-        ```
-     * @memberof ItemManager
-     * @example
-     * 
-     * ```ts
-     * import Sword from 'your-database/sword'
-     * 
-     * try {
-     *      player.addItem(Sword)
-     *      // Using class
-     *      player.equip(Sword)
-     *      // Using string ID
-     *      player.equip('Sword')
-     * }
-     * catch (err) {
-     *    console.log(err)
-     * }
-     * ```
-     */
     equip(
       itemClass: ItemClass | string,
       equip: boolean = true
@@ -831,96 +477,294 @@ export interface IItemManager {
   /**
    * Retrieves the information of an object: the number and the instance
    * 
-   * @param itemClass - Item class or string identifier
-   * @returns Item instance
+   * The returned Item instance contains the quantity information accessible via `quantity()` method.
+   * 
+   * @param itemClass - Item class or string identifier. If string, it's the item ID
+   * @returns Item instance containing quantity and item data
+   * 
+   * @example
+   * ```ts
+   * import Potion from 'your-database/potion'
+   * 
+   * player.addItem(Potion, 5)
+   * const inventory = player.getItem(Potion)
+   * console.log(inventory.quantity()) // 5
+   * console.log(inventory) // <instance of Item>
+   * ```
    */
   getItem(itemClass: ItemClass | string): Item;
 
   /**
    * Check if the player has the item in his inventory
    * 
-   * @param itemClass - Item class or string identifier
-   * @returns true if player has the item
+   * @param itemClass - Item class or string identifier. If string, it's the item ID
+   * @returns `true` if player has the item, `false` otherwise
+   * 
+   * @example
+   * ```ts
+   * import Potion from 'your-database/potion'
+   * 
+   * player.hasItem(Potion) // false
+   * player.addItem(Potion, 1)
+   * player.hasItem(Potion) // true
+   * ```
    */
   hasItem(itemClass: ItemClass | string): boolean;
 
   /**
    * Add an item in the player's inventory
    * 
+   * You can add items using:
+   * - Item class (automatically registered in database if needed)
+   * - Item object (automatically registered in database if needed)
+   * - String ID (must be pre-registered in database)
+   * 
+   * The `onAdd()` method is called on the ItemClass or ItemObject when the item is added.
+   * 
    * @param item - Item class, object, or string identifier
-   * @param nb - Number of items to add (default 1)
+   * @param nb - Number of items to add (default: 1)
    * @returns The item instance added to inventory
+   * 
+   * @example
+   * ```ts
+   * import Potion from 'your-database/potion'
+   * 
+   * // Add using class
+   * player.addItem(Potion, 5)
+   * 
+   * // Add using string ID (must be registered in database)
+   * player.addItem('Potion', 3)
+   * 
+   * // Add using object
+   * player.addItem({
+   *   id: 'custom-potion',
+   *   name: 'Custom Potion',
+   *   price: 200,
+   *   onAdd(player) {
+   *     console.log('Custom potion added!')
+   *   }
+   * }, 2)
+   * ```
    */
   addItem(item: ItemClass | ItemObject | string, nb?: number): Item;
 
   /**
    * Deletes an item from inventory
    * 
-   * @param itemClass - Item class or string identifier
-   * @param nb - Number of items to remove (default 1)
-   * @returns Item instance or undefined if removed
-   * @throws ItemLog.notInInventory if the item is not in inventory
+   * Decreases the quantity by `nb`. If the quantity falls to 0 or below, the item is removed from the inventory.
+   * The method returns `undefined` if the item is completely removed.
+   * 
+   * The `onRemove()` method is called on the ItemClass when the item is removed.
+   * 
+   * @param itemClass - Item class or string identifier. If string, it's the item ID
+   * @param nb - Number of items to remove (default: 1)
+   * @returns Item instance or `undefined` if the item was completely removed
+   * @throws {Object} ItemLog.notInInventory - If the item is not in the inventory
+   *   - `id`: `ITEM_NOT_INVENTORY`
+   *   - `msg`: Error message
+   * 
+   * @example
+   * ```ts
+   * import Potion from 'your-database/potion'
+   * 
+   * try {
+   *   player.removeItem(Potion, 5)
+   * } catch (err) {
+   *   console.log(err) // { id: 'ITEM_NOT_INVENTORY', msg: '...' }
+   * }
+   * ```
    */
   removeItem(itemClass: ItemClass | string, nb?: number): Item | undefined;
 
   /**
    * Purchases an item and reduces the amount of gold
    * 
+   * The player's gold is reduced by `nb * item.price`. The item is then added to the inventory.
+   * The `onAdd()` method is called on the ItemClass when the item is added.
+   * 
    * @param item - Item class, object, or string identifier
-   * @param nb - Number of items to buy (default 1)
-   * @returns Item instance
-   * @throws ItemLog.haveNotPrice if item has no price
-   * @throws ItemLog.notEnoughGold if player doesn't have enough gold
+   * @param nb - Number of items to buy (default: 1)
+   * @returns Item instance added to inventory
+   * @throws {Object} ItemLog.haveNotPrice - If the item has no price set
+   *   - `id`: `NOT_PRICE`
+   *   - `msg`: Error message
+   * @throws {Object} ItemLog.notEnoughGold - If the player doesn't have enough gold
+   *   - `id`: `NOT_ENOUGH_GOLD`
+   *   - `msg`: Error message
+   * 
+   * @example
+   * ```ts
+   * import Potion from 'your-database/potion'
+   * 
+   * try {
+   *   player.buyItem(Potion)
+   * } catch (err) {
+   *   if (err.id === 'NOT_ENOUGH_GOLD') {
+   *     console.log('Not enough gold!')
+   *   } else if (err.id === 'NOT_PRICE') {
+   *     console.log('Item has no price!')
+   *   }
+   * }
+   * ```
    */
   buyItem(item: ItemClass | ItemObject | string, nb?: number): Item;
 
   /**
    * Sell an item and the player wins the amount of the item divided by 2
    * 
-   * @param itemClass - Item class or string identifier
-   * @param nbToSell - Number of items to sell (default 1)
-   * @returns Item instance
-   * @throws ItemLog.haveNotPrice if item has no price
-   * @throws ItemLog.notInInventory if item is not in inventory
-   * @throws ItemLog.tooManyToSell if trying to sell more than available
+   * The player receives `(item.price / 2) * nbToSell` gold. The item is removed from the inventory.
+   * The `onRemove()` method is called on the ItemClass when the item is removed.
+   * 
+   * @param itemClass - Item class or string identifier. If string, it's the item ID
+   * @param nbToSell - Number of items to sell (default: 1)
+   * @returns Item instance that was sold
+   * @throws {Object} ItemLog.haveNotPrice - If the item has no price set
+   *   - `id`: `NOT_PRICE`
+   *   - `msg`: Error message
+   * @throws {Object} ItemLog.notInInventory - If the item is not in the inventory
+   *   - `id`: `ITEM_NOT_INVENTORY`
+   *   - `msg`: Error message
+   * @throws {Object} ItemLog.tooManyToSell - If trying to sell more items than available
+   *   - `id`: `TOO_MANY_ITEM_TO_SELL`
+   *   - `msg`: Error message
+   * 
+   * @example
+   * ```ts
+   * import Potion from 'your-database/potion'
+   * 
+   * try {
+   *   player.addItem(Potion)
+   *   player.sellItem(Potion)
+   * } catch (err) {
+   *   console.log(err)
+   * }
+   * ```
    */
   sellItem(itemClass: ItemClass | string, nbToSell?: number): Item;
 
   /**
    * Use an object. Applies effects and states. Removes the object from the inventory
    * 
-   * @param itemClass - Item class or string identifier
-   * @returns Item instance
-   * @throws ItemLog.restriction if player has Effect.CAN_NOT_ITEM
-   * @throws ItemLog.notInInventory if item is not in inventory
-   * @throws ItemLog.notUseItem if item is not consumable
-   * @throws ItemLog.chanceToUseFailed if chance to use failed
+   * When an item is used:
+   * - Effects are applied to the player (HP/MP restoration, etc.)
+   * - States are applied/removed as defined in the item
+   * - The item is removed from inventory (consumed)
+   * 
+   * If the item has a `hitRate` property (0-1), there's a chance the usage might fail.
+   * If usage fails, the item is still removed and `onUseFailed()` is called instead of `onUse()`.
+   * 
+   * The `onUse()` method is called on the ItemClass if the use was successful.
+   * The `onUseFailed()` method is called on the ItemClass if the chance roll failed.
+   * The `onRemove()` method is called on the ItemClass when the item is removed.
+   * 
+   * @param itemClass - Item class or string identifier. If string, it's the item ID
+   * @returns Item instance that was used
+   * @throws {Object} ItemLog.restriction - If the player has the `Effect.CAN_NOT_ITEM` effect
+   *   - `id`: `RESTRICTION_ITEM`
+   *   - `msg`: Error message
+   * @throws {Object} ItemLog.notInInventory - If the item is not in the inventory
+   *   - `id`: `ITEM_NOT_INVENTORY`
+   *   - `msg`: Error message
+   * @throws {Object} ItemLog.notUseItem - If the item's `consumable` property is `false`
+   *   - `id`: `NOT_USE_ITEM`
+   *   - `msg`: Error message
+   * @throws {Object} ItemLog.chanceToUseFailed - If the chance to use the item failed (hitRate roll failed)
+   *   - `id`: `USE_CHANCE_ITEM_FAILED`
+   *   - `msg`: Error message
+   *   - Note: The item is still deleted from the inventory even if usage failed
+   * 
+   * @example
+   * ```ts
+   * import Potion from 'your-database/potion'
+   * 
+   * try {
+   *   player.addItem(Potion)
+   *   player.useItem(Potion)
+   * } catch (err) {
+   *   if (err.id === 'USE_CHANCE_ITEM_FAILED') {
+   *     console.log('Item usage failed due to chance roll')
+   *   } else {
+   *     console.log(err)
+   *   }
+   * }
+   * ```
    */
   useItem(itemClass: ItemClass | string): Item;
 
   /**
    * Equips a weapon or armor on a player
    * 
-   * @param itemClass - Item class or string identifier
-   * @param equip - Equip if true, unequip if false (default true)
-   * @throws ItemLog.notInInventory if item is not in inventory
-   * @throws ItemLog.invalidToEquiped if item is not a weapon or armor
-   * @throws ItemLog.isAlreadyEquiped if item is already equipped
+   * Think first to add the item in the inventory with the `addItem()` method before equipping the item.
+   * 
+   * The `onEquip()` method is called on the ItemClass when the item is equipped or unequipped.
+   * 
+   * @param itemClass - Item class or string identifier. If string, it's the item ID
+   * @param equip - Equip the item if `true`, unequip if `false` (default: `true`)
+   * @throws {Object} ItemLog.notInInventory - If the item is not in the inventory
+   *   - `id`: `ITEM_NOT_INVENTORY`
+   *   - `msg`: Error message
+   * @throws {Object} ItemLog.invalidToEquiped - If the item is not a weapon or armor (item._type is "item")
+   *   - `id`: `INVALID_ITEM_TO_EQUIP`
+   *   - `msg`: Error message
+   * @throws {Object} ItemLog.isAlreadyEquiped - If the item is already equipped
+   *   - `id`: `ITEM_ALREADY_EQUIPED`
+   *   - `msg`: Error message
+   * 
+   * @example
+   * ```ts
+   * import Sword from 'your-database/sword'
+   * 
+   * try {
+   *   player.addItem(Sword)
+   *   player.equip(Sword)
+   *   // Later, unequip it
+   *   player.equip(Sword, false)
+   * } catch (err) {
+   *   console.log(err)
+   * }
+   * ```
    */
   equip(itemClass: ItemClass | string, equip?: boolean): void;
 
   /**
    * Get the player's attack (sum of items equipped)
+   * 
+   * Returns the total attack value from all equipped items on the player.
+   * 
+   * @returns Total attack value from equipped items
+   * 
+   * @example
+   * ```ts
+   * console.log(player.atk) // 150 (sum of all equipped weapons/armors attack)
+   * ```
    */
   readonly atk: number;
 
   /**
    * Get the player's physical defense (sum of items equipped)
+   * 
+   * Returns the total physical defense value from all equipped items on the player.
+   * 
+   * @returns Total physical defense value from equipped items
+   * 
+   * @example
+   * ```ts
+   * console.log(player.pdef) // 80 (sum of all equipped armors physical defense)
+   * ```
    */
   readonly pdef: number;
 
   /**
    * Get the player's skill defense (sum of items equipped)
+   * 
+   * Returns the total skill defense value from all equipped items on the player.
+   * 
+   * @returns Total skill defense value from equipped items
+   * 
+   * @example
+   * ```ts
+   * console.log(player.sdef) // 60 (sum of all equipped armors skill defense)
+   * ```
    */
   readonly sdef: number;
 }
