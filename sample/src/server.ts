@@ -66,11 +66,7 @@ export default createServer({
           },
           async onInput(player: RpgPlayer, input: any) {
             console.log(player.x(), player.y())
-            if (input.action) {
-              console.log("action");
-              player.gui('my-tooltip').open()
-              player.showAttachedGui()
-            }
+            
           } 
         },
         maps: [

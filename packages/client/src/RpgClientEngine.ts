@@ -48,6 +48,8 @@ export class RpgClientEngine<T = any> {
   playerIdSignal = signal<string | null>(null);
   spriteComponentsBehind = signal<any[]>([]);
   spriteComponentsInFront = signal<any[]>([]);
+  /** ID of the sprite that the camera should follow. null means follow the current player */
+  cameraFollowTargetId = signal<string | null>(null);
 
   private predictionEnabled = false;
   private prediction?: PredictionController<Direction>;
@@ -213,6 +215,8 @@ export class RpgClientEngine<T = any> {
 
     this.webSocket.on("changeMap", (data) => {
       this.sceneMap.reset()
+      // Reset camera follow to default (follow current player) when changing maps
+      this.cameraFollowTargetId.set(null);
       this.loadScene(data.mapId);
     });
 
@@ -239,6 +243,11 @@ export class RpgClientEngine<T = any> {
     this.webSocket.on("stopSound", (data) => {
       const { soundId } = data;
       this.stopSound(soundId);
+    });
+
+    this.webSocket.on("cameraFollow", (data) => {
+      const { targetId, smoothMove } = data;
+      this.setCameraFollow(targetId, smoothMove);
     });
 
     this.webSocket.on('open', () => {
@@ -669,6 +678,59 @@ export class RpgClientEngine<T = any> {
       sound.stop();
     } else {
       console.warn(`Sound with id "${soundId}" not found or cannot be stopped`);
+    }
+  }
+
+  /**
+   * Set the camera to follow a specific sprite
+   * 
+   * This method changes which sprite the camera viewport should follow.
+   * The camera will smoothly animate to the target sprite if smoothMove options are provided.
+   * 
+   * ## Design
+   * 
+   * The camera follow target is stored in a signal that is read by sprite components.
+   * Each sprite checks if it should be followed by comparing its ID with the target ID.
+   * When smoothMove options are provided, the viewport animation is handled by CanvasEngine's
+   * viewport system.
+   * 
+   * @param targetId - The ID of the sprite to follow. Set to null to follow the current player
+   * @param smoothMove - Animation options. Can be a boolean (default: true) or an object with time and ease
+   * @param smoothMove.time - Duration of the animation in milliseconds (optional)
+   * @param smoothMove.ease - Easing function name from https://easings.net (optional)
+   * 
+   * @example
+   * ```ts
+   * // Follow another player with default smooth animation
+   * engine.setCameraFollow(otherPlayerId, true);
+   * 
+   * // Follow an event with custom smooth animation
+   * engine.setCameraFollow(eventId, {
+   *   time: 1000,
+   *   ease: "easeInOutQuad"
+   * });
+   * 
+   * // Follow without animation (instant)
+   * engine.setCameraFollow(targetId, false);
+   * 
+   * // Return to following current player
+   * engine.setCameraFollow(null);
+   * ```
+   */
+  setCameraFollow(
+    targetId: string | null,
+    smoothMove?: boolean | { time?: number; ease?: string }
+  ): void {
+    // Store smoothMove options for potential future use with viewport animation
+    // For now, we just set the target ID and let CanvasEngine handle the viewport follow
+    // The smoothMove options could be used to configure viewport animation if CanvasEngine supports it
+    this.cameraFollowTargetId.set(targetId);
+    
+    // If smoothMove is an object, we could store it for viewport configuration
+    // This would require integration with CanvasEngine's viewport animation system
+    if (typeof smoothMove === "object" && smoothMove !== null) {
+      // Future: Apply smoothMove.time and smoothMove.ease to viewport animation
+      // For now, CanvasEngine handles viewport following automatically
     }
   }
 

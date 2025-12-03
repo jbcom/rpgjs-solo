@@ -1,4 +1,4 @@
-<Container x={smoothX} y={smoothY} zIndex={y} viewportFollow={isMe} controls onBeforeDestroy visible>
+<Container x={smoothX} y={smoothY} zIndex={y} viewportFollow={shouldFollowCamera} controls onBeforeDestroy visible>
   @for (component of componentsBehind) {
     <Container>
       <component object />
@@ -51,6 +51,23 @@
   const componentsBehind = client.spriteComponentsBehind;
   const componentsInFront = client.spriteComponentsInFront;
   const isMe = computed(() => id() === playerId);
+  
+  /**
+   * Determine if the camera should follow this sprite
+   * 
+   * The camera follows this sprite if:
+   * - It's explicitly set as the camera follow target, OR
+   * - It's the current player and no explicit target is set (default behavior)
+   */
+  const shouldFollowCamera = computed(() => {
+    const cameraTargetId = client.cameraFollowTargetId();
+    // If a target is explicitly set, only follow if this sprite is the target
+    if (cameraTargetId !== null) {
+      return id() === cameraTargetId;
+    }
+    // Otherwise, follow the current player (default behavior)
+    return isMe();
+  });
 
   /**
    * Get all attached GUI components that should be rendered on sprites

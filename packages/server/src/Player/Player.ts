@@ -863,6 +863,74 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   }
 
   /**
+   * Make the camera follow another player or event
+   * 
+   * This method sends an instruction to the client to fix the viewport on another sprite.
+   * The camera will follow the specified player or event, with optional smooth animation.
+   * 
+   * ## Design
+   * 
+   * The camera follow instruction is sent only to this player's client connection.
+   * This allows each player to have their own camera target, useful for cutscenes,
+   * following NPCs, or focusing on specific events.
+   * 
+   * @param otherPlayer - The player or event that the camera should follow
+   * @param options - Camera follow options
+   * @param options.smoothMove - Enable smooth animation. Can be a boolean (default: true) or an object with animation parameters
+   * @param options.smoothMove.time - Time duration for the animation in milliseconds (optional)
+   * @param options.smoothMove.ease - Easing function name. Visit https://easings.net for available functions (optional)
+   * 
+   * @example
+   * ```ts
+   * // Follow another player with default smooth animation
+   * player.cameraFollow(otherPlayer, { smoothMove: true });
+   * 
+   * // Follow an event with custom smooth animation
+   * player.cameraFollow(npcEvent, {
+   *   smoothMove: {
+   *     time: 1000,
+   *     ease: "easeInOutQuad"
+   *   }
+   * });
+   * 
+   * // Follow without animation (instant)
+   * player.cameraFollow(targetPlayer, { smoothMove: false });
+   * ```
+   */
+  cameraFollow(
+    otherPlayer: RpgPlayer | RpgEvent,
+    options?: {
+      smoothMove?: boolean | { time?: number; ease?: string };
+    }
+  ): void {
+    const map = this.getCurrentMap();
+    if (!map) return;
+
+    const data: any = {
+      targetId: otherPlayer.id,
+    };
+
+    // Handle smoothMove option
+    if (options?.smoothMove !== undefined) {
+      if (typeof options.smoothMove === "boolean") {
+        data.smoothMove = options.smoothMove;
+      } else {
+        // smoothMove is an object
+        data.smoothMove = {
+          enabled: true,
+          ...options.smoothMove,
+        };
+      }
+    } else {
+      // Default to true if not specified
+      data.smoothMove = true;
+    }
+
+    // Send camera follow instruction only to this player
+    this.emit("cameraFollow", data);
+  }
+
+  /**
    * Set the sync schema for the map
    * @param schema - The schema to set
    */
