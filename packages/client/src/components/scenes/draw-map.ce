@@ -1,4 +1,4 @@
-<Container sound={backgroundMusic} >
+<Container sound={backgroundMusic} shake={shakeConfig}>
   <Container sound={backgroundAmbientSound} />
 
   <sceneComponent() data={map.@data} params={map.@params} />
@@ -13,7 +13,7 @@
 </Container>
 
 <script>
-    import { effect, signal, computed, mount } from 'canvasengine'
+    import { effect, signal, computed, mount, on } from 'canvasengine'
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
 
@@ -35,5 +35,13 @@
    
     const clamp = {
       direction: "all"
+    }
+
+    const shakeConfig = {
+      trigger: engine.mapShakeTrigger,
+      intensity: 10,
+      duration: 500,
+      frequency: 10,
+      direction: 'both'
     }
 </script>

@@ -1,6 +1,6 @@
 import Canvas from "./components/scenes/canvas.ce";
 import { Context, inject } from "@signe/di";
-import { signal, bootstrapCanvas, KeyboardControls, Howl } from "canvasengine";
+import { signal, bootstrapCanvas, KeyboardControls, Howl, trigger } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { RpgSound } from "./Sound";
@@ -50,6 +50,8 @@ export class RpgClientEngine<T = any> {
   spriteComponentsInFront = signal<any[]>([]);
   /** ID of the sprite that the camera should follow. null means follow the current player */
   cameraFollowTargetId = signal<string | null>(null);
+  /** Trigger for map shake animation */
+  mapShakeTrigger = trigger();
 
   private predictionEnabled = false;
   private prediction?: PredictionController<Direction>;
@@ -256,6 +258,16 @@ export class RpgClientEngine<T = any> {
       if (sprite && typeof sprite.flash === 'function') {
         sprite.flash({ type, duration, cycles, alpha, tint });
       }
+    });
+
+    this.webSocket.on("shakeMap", (data) => {
+      const { intensity, duration, frequency, direction } = data || {};
+      this.mapShakeTrigger.start({
+        intensity,
+        duration,
+        frequency,
+        direction
+      });
     });
 
     this.webSocket.on('open', () => {

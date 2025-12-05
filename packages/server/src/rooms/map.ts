@@ -1302,6 +1302,70 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       player.stopSound(soundId);
     });
   }
+
+  /**
+   * Shake the map for all players
+   * 
+   * This method triggers a shake animation on the map for all players currently on the map.
+   * The shake effect creates a visual feedback that can be used for earthquakes, explosions,
+   * impacts, or any dramatic event that should affect the entire map visually.
+   * 
+   * ## Architecture
+   * 
+   * Broadcasts a shake event to all clients connected to the map. Each client receives
+   * the shake configuration and triggers the shake animation on the map container using
+   * Canvas Engine's shake directive.
+   * 
+   * @param options - Optional shake configuration
+   * @param options.intensity - Shake intensity in pixels (default: 10)
+   * @param options.duration - Duration of the shake animation in milliseconds (default: 500)
+   * @param options.frequency - Number of shake oscillations during the animation (default: 10)
+   * @param options.direction - Direction of the shake - 'x', 'y', or 'both' (default: 'both')
+   * 
+   * @example
+   * ```ts
+   * // Basic shake with default settings
+   * map.shakeMap();
+   * 
+   * // Intense earthquake effect
+   * map.shakeMap({
+   *   intensity: 25,
+   *   duration: 1000,
+   *   frequency: 15,
+   *   direction: 'both'
+   * });
+   * 
+   * // Horizontal shake for side impact
+   * map.shakeMap({
+   *   intensity: 15,
+   *   duration: 400,
+   *   direction: 'x'
+   * });
+   * 
+   * // Vertical shake for ground impact
+   * map.shakeMap({
+   *   intensity: 20,
+   *   duration: 600,
+   *   direction: 'y'
+   * });
+   * ```
+   */
+  shakeMap(options?: {
+    intensity?: number;
+    duration?: number;
+    frequency?: number;
+    direction?: 'x' | 'y' | 'both';
+  }): void {
+    this.$broadcast({
+      type: "shakeMap",
+      value: {
+        intensity: options?.intensity ?? 10,
+        duration: options?.duration ?? 500,
+        frequency: options?.frequency ?? 10,
+        direction: options?.direction ?? 'both',
+      },
+    });
+  }
 }
 
 export interface RpgMap {
