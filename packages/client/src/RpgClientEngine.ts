@@ -250,6 +250,14 @@ export class RpgClientEngine<T = any> {
       this.setCameraFollow(targetId, smoothMove);
     });
 
+    this.webSocket.on("flash", (data) => {
+      const { object, type, duration, cycles, alpha, tint } = data;
+      const sprite = object ? this.sceneMap.getObjectById(object) : undefined;
+      if (sprite && typeof sprite.flash === 'function') {
+        sprite.flash({ type, duration, cycles, alpha, tint });
+      }
+    });
+
     this.webSocket.on('open', () => {
       this.hooks.callHooks("client-engine-onConnected", this, this.socket).subscribe();
       // Start ping/pong for synchronization
@@ -959,6 +967,72 @@ export class RpgClientEngine<T = any> {
     this.initializePredictionController();
     this.frameOffset = 0;
     this.inputFrameCounter = 0;
+  }
+
+  /**
+   * Trigger a flash animation on a sprite
+   * 
+   * This method allows you to trigger a flash effect on any sprite from client-side code.
+   * The flash can be configured with various options including type (alpha, tint, or both),
+   * duration, cycles, and color.
+   * 
+   * ## Design
+   * 
+   * The flash is applied directly to the sprite object using its flash trigger.
+   * This is useful for client-side visual feedback, UI interactions, or local effects
+   * that don't need to be synchronized with the server.
+   * 
+   * @param spriteId - The ID of the sprite to flash. If not provided, flashes the current player
+   * @param options - Flash configuration options
+   * @param options.type - Type of flash effect: 'alpha' (opacity), 'tint' (color), or 'both' (default: 'alpha')
+   * @param options.duration - Duration of the flash animation in milliseconds (default: 300)
+   * @param options.cycles - Number of flash cycles (flash on/off) (default: 1)
+   * @param options.alpha - Alpha value when flashing, from 0 to 1 (default: 0.3)
+   * @param options.tint - Tint color when flashing as hex value or color name (default: 0xffffff - white)
+   * 
+   * @example
+   * ```ts
+   * // Flash the current player with default settings
+   * engine.flash();
+   * 
+   * // Flash a specific sprite with red tint
+   * engine.flash('sprite-id', { type: 'tint', tint: 0xff0000 });
+   * 
+   * // Flash with both alpha and tint for dramatic effect
+   * engine.flash(undefined, { 
+   *   type: 'both', 
+   *   alpha: 0.5, 
+   *   tint: 0xff0000,
+   *   duration: 200,
+   *   cycles: 2
+   * });
+   * 
+   * // Quick damage flash on current player
+   * engine.flash(undefined, { 
+   *   type: 'tint', 
+   *   tint: 'red', 
+   *   duration: 150,
+   *   cycles: 1
+   * });
+   * ```
+   */
+  flash(
+    spriteId?: string,
+    options?: {
+      type?: 'alpha' | 'tint' | 'both';
+      duration?: number;
+      cycles?: number;
+      alpha?: number;
+      tint?: number | string;
+    }
+  ): void {
+    const targetId = spriteId || this.playerId;
+    if (!targetId) return;
+
+    const sprite = this.sceneMap.getObjectById(targetId);
+    if (sprite && typeof sprite.flash === 'function') {
+      sprite.flash(options);
+    }
   }
 
   private applyServerAck(ack: { frame: number; serverTick?: number; x?: number; y?: number; direction?: Direction }) {

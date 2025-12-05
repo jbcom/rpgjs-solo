@@ -19,6 +19,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   frames: { x: number; y: number; ts: number }[] = [];
   graphicsSignals = signal<any[]>([]);
   _component = {} // temporary component memory
+  flashTrigger = trigger();
 
   constructor() {
     super();
@@ -86,14 +87,87 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
 
   private animationSubscription?: Subscription;
 
-  flash(color: string, duration: number = 100) {
-    return new Promise((resolve) => {
-      const lastTint = this.tint();
-      this.tint.set(color);
-      setTimeout(() => {
-        this.tint.set(lastTint);
-        resolve(true);
-      }, duration);
+  /**
+   * Trigger a flash animation on this sprite
+   * 
+   * This method triggers a flash effect using CanvasEngine's flash directive.
+   * The flash can be configured with various options including type (alpha, tint, or both),
+   * duration, cycles, and color.
+   * 
+   * ## Design
+   * 
+   * The flash uses a trigger system that is connected to the flash directive in the
+   * character component. This allows for flexible configuration and can be triggered
+   * from both server events and client-side code.
+   * 
+   * @param options - Flash configuration options
+   * @param options.type - Type of flash effect: 'alpha' (opacity), 'tint' (color), or 'both' (default: 'alpha')
+   * @param options.duration - Duration of the flash animation in milliseconds (default: 300)
+   * @param options.cycles - Number of flash cycles (flash on/off) (default: 1)
+   * @param options.alpha - Alpha value when flashing, from 0 to 1 (default: 0.3)
+   * @param options.tint - Tint color when flashing as hex value or color name (default: 0xffffff - white)
+   * 
+   * @example
+   * ```ts
+   * // Simple flash with default settings (alpha flash)
+   * player.flash();
+   * 
+   * // Flash with red tint
+   * player.flash({ type: 'tint', tint: 0xff0000 });
+   * 
+   * // Flash with both alpha and tint
+   * player.flash({ 
+   *   type: 'both', 
+   *   alpha: 0.5, 
+   *   tint: 0xff0000,
+   *   duration: 200,
+   *   cycles: 2
+   * });
+   * 
+   * // Quick damage flash
+   * player.flash({ 
+   *   type: 'tint', 
+   *   tint: 0xff0000, 
+   *   duration: 150,
+   *   cycles: 1
+   * });
+   * ```
+   */
+  flash(options?: {
+    type?: 'alpha' | 'tint' | 'both';
+    duration?: number;
+    cycles?: number;
+    alpha?: number;
+    tint?: number | string;
+  }): void {
+    const flashOptions = {
+      type: options?.type || 'alpha',
+      duration: options?.duration ?? 300,
+      cycles: options?.cycles ?? 1,
+      alpha: options?.alpha ?? 0.3,
+      tint: options?.tint ?? 0xffffff,
+    };
+    
+    // Convert color name to hex if needed
+    let tintValue = flashOptions.tint;
+    if (typeof tintValue === 'string') {
+      // Common color name to hex mapping
+      const colorMap: Record<string, number> = {
+        'white': 0xffffff,
+        'red': 0xff0000,
+        'green': 0x00ff00,
+        'blue': 0x0000ff,
+        'yellow': 0xffff00,
+        'cyan': 0x00ffff,
+        'magenta': 0xff00ff,
+        'black': 0x000000,
+      };
+      tintValue = colorMap[tintValue.toLowerCase()] ?? 0xffffff;
+    }
+    
+    this.flashTrigger.start({
+      ...flashOptions,
+      tint: tintValue,
     });
   }
 

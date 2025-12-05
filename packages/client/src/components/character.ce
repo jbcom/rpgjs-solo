@@ -1,4 +1,4 @@
-<Container x={smoothX} y={smoothY} zIndex={y} viewportFollow={shouldFollowCamera} controls onBeforeDestroy visible>
+<Container x={smoothX} y={smoothY} zIndex={y} viewportFollow={shouldFollowCamera} controls onBeforeDestroy visible >
   @for (component of componentsBehind) {
     <Container>
       <component object />
@@ -7,7 +7,7 @@
   <Particle emit={@emitParticleTrigger} settings={@particleSettings} zIndex={1000} name={particleName} />
   <Container>
     @for (graphicObj of graphicsSignals) {
-      <Sprite sheet={@sheet(@graphicObj)} direction tint hitbox />
+      <Sprite sheet={@sheet(@graphicObj)} direction tint hitbox flash={flashConfig} />
     }
   </Container>
   @for (component of componentsInFront) {
@@ -29,7 +29,7 @@
 </Container>
 
 <script>
-  import { signal, effect, mount, computed, tick, animatedSignal } from "canvasengine";
+  import { signal, effect, mount, computed, tick, animatedSignal, on } from "canvasengine";
   import { lastValueFrom, combineLatest, pairwise, filter, map, startWith } from "rxjs";
   import { Particle } from "@canvasengine/presets";
   import { GameEngineToken, ModulesToken } from "@rpgjs/common";
@@ -97,8 +97,50 @@
     graphics, 
     hitbox,
     isConnected,
-    graphicsSignals
+    graphicsSignals,
+    flashTrigger
   } = object;
+
+  /**
+   * Flash configuration signals for dynamic options
+   * These signals are updated when the flash trigger is activated with options
+   */
+  const flashType = signal<'alpha' | 'tint' | 'both'>('alpha');
+  const flashDuration = signal(300);
+  const flashCycles = signal(1);
+  const flashAlpha = signal(0.3);
+  const flashTint = signal(0xffffff);
+
+  /**
+   * Listen to flash trigger to update configuration dynamically
+   * When flash is triggered with options, update the signals
+   */
+  on(flashTrigger, (data) => {
+    if (data && typeof data === 'object') {
+      if (data.type !== undefined) flashType.set(data.type);
+      if (data.duration !== undefined) flashDuration.set(data.duration);
+      if (data.cycles !== undefined) flashCycles.set(data.cycles);
+      if (data.alpha !== undefined) flashAlpha.set(data.alpha);
+      if (data.tint !== undefined) flashTint.set(data.tint);
+    }
+  });
+
+  /**
+   * Flash configuration for the sprite
+   * 
+   * This configuration is used by the flash directive to create visual feedback effects.
+   * The flash trigger is exposed through the object, allowing both server events and
+   * client-side code to trigger flash animations. Options can be passed dynamically
+   * through the trigger, which updates the reactive signals.
+   */
+  const flashConfig = computed(() => ({
+    trigger: flashTrigger,
+    type: flashType(),
+    duration: flashDuration(),
+    cycles: flashCycles(),
+    alpha: flashAlpha(),
+    tint: flashTint(),
+  }));
 
   const particleSettings = client.particleSettings;
 

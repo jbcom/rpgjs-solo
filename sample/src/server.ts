@@ -66,7 +66,8 @@ export default createServer({
           },
           async onInput(player: RpgPlayer, input: any) {
             console.log(player.x(), player.y())
-            player.moveTo({ x: 100, y: 100 })
+            //player.moveTo({ x: 100, y: 100 })
+            player.flash({ type: 'tint', tint: 0xff0000 })
           } 
         },
         maps: [

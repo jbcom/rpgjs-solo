@@ -937,6 +937,79 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
 
   /**
+   * Trigger a flash animation on this player
+   * 
+   * This method sends a flash animation event to the client, creating a visual
+   * feedback effect on the player's sprite. The flash can be configured with
+   * various options including type (alpha, tint, or both), duration, cycles, and color.
+   * 
+   * ## Design
+   * 
+   * The flash is sent as a broadcast event to all clients viewing this player.
+   * This is useful for visual feedback when the player takes damage, receives
+   * a buff, or when an important event occurs.
+   * 
+   * @param options - Flash configuration options
+   * @param options.type - Type of flash effect: 'alpha' (opacity), 'tint' (color), or 'both' (default: 'alpha')
+   * @param options.duration - Duration of the flash animation in milliseconds (default: 300)
+   * @param options.cycles - Number of flash cycles (flash on/off) (default: 1)
+   * @param options.alpha - Alpha value when flashing, from 0 to 1 (default: 0.3)
+   * @param options.tint - Tint color when flashing as hex value or color name (default: 0xffffff - white)
+   * 
+   * @example
+   * ```ts
+   * // Simple flash with default settings (alpha flash)
+   * player.flash();
+   * 
+   * // Flash with red tint when taking damage
+   * player.flash({ type: 'tint', tint: 0xff0000 });
+   * 
+   * // Flash with both alpha and tint for dramatic effect
+   * player.flash({ 
+   *   type: 'both', 
+   *   alpha: 0.5, 
+   *   tint: 0xff0000,
+   *   duration: 200,
+   *   cycles: 2
+   * });
+   * 
+   * // Quick damage flash
+   * player.flash({ 
+   *   type: 'tint', 
+   *   tint: 'red', 
+   *   duration: 150,
+   *   cycles: 1
+   * });
+   * ```
+   */
+  flash(options?: {
+    type?: 'alpha' | 'tint' | 'both';
+    duration?: number;
+    cycles?: number;
+    alpha?: number;
+    tint?: number | string;
+  }): void {
+    const map = this.getCurrentMap();
+    if (!map) return;
+
+    const flashOptions = {
+      type: options?.type || 'alpha',
+      duration: options?.duration ?? 300,
+      cycles: options?.cycles ?? 1,
+      alpha: options?.alpha ?? 0.3,
+      tint: options?.tint ?? 0xffffff,
+    };
+
+    map.$broadcast({
+      type: "flash",
+      value: {
+        object: this.id,
+        ...flashOptions,
+      },
+    });
+  }
+
+  /**
    * Set the hitbox of the player for collision detection
    * 
    * This method defines the hitbox used for collision detection in the physics engine.

@@ -44,8 +44,8 @@
     "collision",
     "deterministic"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "Samuel Ronce",
+  "license": "MIT",
   "description": "A deterministic 2D top-down physics library for RPG, sandbox and MMO games",
   "devDependencies": {
     "@types/node": "^24.10.0",
