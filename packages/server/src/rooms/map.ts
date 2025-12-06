@@ -67,8 +67,9 @@ export interface EventHooks {
   onInShape?: (zone: RpgShape, player: RpgPlayer) => void;
   /** Called when a player exits a shape */
   onOutShape?: (zone: RpgShape, player: RpgPlayer) => void;
-
+  /** Called when a player is detected entering a shape */
   onDetectInShape?: (player: RpgPlayer, shape: RpgShape) => void;
+  /** Called when a player is detected exiting a shape */
   onDetectOutShape?: (player: RpgPlayer, shape: RpgShape) => void;
 }
 
@@ -96,14 +97,111 @@ export type EventPosOption = {
   path: "map-{id}"
 })
 export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
+  /** 
+   * Synchronized signal containing all players currently on the map
+   * 
+   * This signal is automatically synchronized with clients using @signe/sync.
+   * Players are indexed by their unique ID.
+   * 
+   * @example
+   * ```ts
+   * // Get all players
+   * const allPlayers = map.players();
+   * 
+   * // Get a specific player
+   * const player = map.players()['player-id'];
+   * ```
+   */
   @users(RpgPlayer) players = signal({});
+  
+  /** 
+   * Synchronized signal containing all events (NPCs, objects) on the map
+   * 
+   * This signal is automatically synchronized with clients using @signe/sync.
+   * Events are indexed by their unique ID.
+   * 
+   * @example
+   * ```ts
+   * // Get all events
+   * const allEvents = map.events();
+   * 
+   * // Get a specific event
+   * const event = map.events()['event-id'];
+   * ```
+   */
   @sync(RpgPlayer) events = signal({});
+  
+  /** 
+   * Signal containing the map's database of items, classes, and other game data
+   * 
+   * This database can be dynamically populated using `addInDatabase()` and
+   * `removeInDatabase()` methods. It's used to store game entities like items,
+   * classes, skills, etc. that are specific to this map.
+   * 
+   * @example
+   * ```ts
+   * // Add data to database
+   * map.addInDatabase('Potion', PotionClass);
+   * 
+   * // Access database
+   * const potion = map.database()['Potion'];
+   * ```
+   */
   database = signal({});
-  /** Array of map configurations - can contain MapOptions objects or instances of map classes */
+  
+  /** 
+   * Array of map configurations - can contain MapOptions objects or instances of map classes
+   * 
+   * This array stores the configuration for this map and any related maps.
+   * It's populated when the map is loaded via `updateMap()`.
+   */
   maps: (MapOptions | any)[] = []
+  
+  /** 
+   * Array of sound IDs to play when players join the map
+   * 
+   * These sounds are automatically played for each player when they join the map.
+   * Sounds must be defined on the client side.
+   * 
+   * @example
+   * ```ts
+   * // Set sounds for the map
+   * map.sounds = ['background-music', 'ambient-forest'];
+   * ```
+   */
   sounds: string[] = []
+  
+  /** 
+   * BehaviorSubject that completes when the map data is ready
+   * 
+   * This subject is used to signal when the map has finished loading all its data.
+   * Players wait for this to complete before the map is fully initialized.
+   * 
+   * @example
+   * ```ts
+   * // Wait for map data to be ready
+   * map.dataIsReady$.subscribe(() => {
+   *   console.log('Map is ready!');
+   * });
+   * ```
+   */
   dataIsReady$ = new BehaviorSubject<void>(undefined);
+  
+  /** 
+   * Global configuration object for the map
+   * 
+   * This object contains configuration settings that apply to the entire map.
+   * It's populated from the map data when `updateMap()` is called.
+   */
   globalConfig: any = {}
+  
+  /** 
+   * Damage formulas configuration for the map
+   * 
+   * Contains formulas for calculating damage from skills, physical attacks,
+   * critical hits, and element coefficients. Default formulas are merged
+   * with custom formulas when the map is loaded.
+   */
   damageFormulas: any = {}
   /** Internal: Map of shapes by name */
   private _shapes: Map<string, RpgShape> = new Map();
@@ -274,7 +372,31 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     });
   }
 
-  // autoload by @signe/room
+  /**
+   * Intercepts and modifies packets before they are sent to clients
+   * 
+   * This method is automatically called by @signe/room for each packet sent to clients.
+   * It adds timestamp and acknowledgment information to sync packets for client-side
+   * prediction reconciliation. This helps with network synchronization and reduces
+   * perceived latency.
+   * 
+   * ## Architecture
+   * 
+   * Adds metadata to packets:
+   * - `timestamp`: Current server time for client-side prediction
+   * - `ack`: Acknowledgment info with last processed frame and authoritative position
+   * 
+   * @param player - The player receiving the packet
+   * @param packet - The packet data to intercept
+   * @param conn - The connection object
+   * @returns Modified packet with timestamp and ack info, or null if player is invalid
+   * 
+   * @example
+   * ```ts
+   * // This method is called automatically by the framework
+   * // You typically don't call it directly
+   * ```
+   */
   interceptorPacket(player: RpgPlayer, packet: any, conn: MockConnection) {
     let obj: any = {}
 
@@ -311,6 +433,33 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     };
   }
 
+  /**
+   * Called when a player joins the map
+   * 
+   * This method is automatically called by @signe/room when a player connects to the map.
+   * It initializes the player's connection, sets up the map context, and waits for
+   * the map data to be ready before playing sounds and triggering hooks.
+   * 
+   * ## Architecture
+   * 
+   * 1. Sets player's map reference and context
+   * 2. Initializes the player
+   * 3. Waits for map data to be ready
+   * 4. Plays map sounds for the player
+   * 5. Triggers `server-player-onJoinMap` hook
+   * 
+   * @param player - The player joining the map
+   * @param conn - The connection object for the player
+   * 
+   * @example
+   * ```ts
+   * // This method is called automatically by the framework
+   * // You can listen to the hook to perform custom logic
+   * server.addHook('server-player-onJoinMap', (player, map) => {
+   *   console.log(`Player ${player.id} joined map ${map.id}`);
+   * });
+   * ```
+   */
   onJoin(player: RpgPlayer, conn: MockConnection) {
     player.map = this;
     player.context = context;
@@ -326,6 +475,29 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     ).subscribe();
   }
 
+  /**
+   * Called when a player leaves the map
+   * 
+   * This method is automatically called by @signe/room when a player disconnects from the map.
+   * It cleans up the player's pending inputs and triggers the appropriate hooks.
+   * 
+   * ## Architecture
+   * 
+   * 1. Triggers `server-player-onLeaveMap` hook
+   * 2. Clears pending inputs to prevent processing after disconnection
+   * 
+   * @param player - The player leaving the map
+   * @param conn - The connection object for the player
+   * 
+   * @example
+   * ```ts
+   * // This method is called automatically by the framework
+   * // You can listen to the hook to perform custom cleanup
+   * server.addHook('server-player-onLeaveMap', (player, map) => {
+   *   console.log(`Player ${player.id} left map ${map.id}`);
+   * });
+   * ```
+   */
   onLeave(player: RpgPlayer, conn: MockConnection) {
     this.hooks
       .callHooks("server-player-onLeaveMap", player, this)
@@ -333,42 +505,170 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     player.pendingInputs = [];
   }
 
+  /**
+   * Get the hooks system for this map
+   * 
+   * Returns the dependency-injected Hooks instance that allows you to trigger
+   * and listen to various game events.
+   * 
+   * @returns The Hooks instance for this map
+   * 
+   * @example
+   * ```ts
+   * // Trigger a custom hook
+   * map.hooks.callHooks('custom-event', data).subscribe();
+   * ```
+   */
   get hooks() {
     return inject<Hooks>(context, ModulesToken);
   }
 
+  /**
+   * Get the width of the map in pixels
+   * 
+   * @returns The width of the map in pixels, or 0 if not loaded
+   * 
+   * @example
+   * ```ts
+   * const width = map.widthPx;
+   * console.log(`Map width: ${width}px`);
+   * ```
+   */
   get widthPx(): number {
     return this.data()?.width ?? 0
   }
 
+  /**
+   * Get the height of the map in pixels
+   * 
+   * @returns The height of the map in pixels, or 0 if not loaded
+   * 
+   * @example
+   * ```ts
+   * const height = map.heightPx;
+   * console.log(`Map height: ${height}px`);
+   * ```
+   */
   get heightPx(): number {
     return this.data()?.height ?? 0
   }
 
+  /**
+   * Get the unique identifier of the map
+   * 
+   * @returns The map ID, or empty string if not loaded
+   * 
+   * @example
+   * ```ts
+   * const mapId = map.id;
+   * console.log(`Current map: ${mapId}`);
+   * ```
+   */
   get id(): string {
     return this.data()?.id ?? ''
   }
 
+  /**
+   * Get the X position of this map in the world coordinate system
+   * 
+   * This is used when maps are part of a larger world map. The world position
+   * indicates where this map is located relative to other maps.
+   * 
+   * @returns The X position in world coordinates, or 0 if not in a world
+   * 
+   * @example
+   * ```ts
+   * const worldX = map.worldX;
+   * console.log(`Map is at world position (${worldX}, ${map.worldY})`);
+   * ```
+   */
   get worldX(): number {
     const worldMaps = this.getWorldMapsManager?.();
     return worldMaps?.getMapInfo(this.id)?.worldX ?? 0
   }
+  
+  /**
+   * Get the Y position of this map in the world coordinate system
+   * 
+   * This is used when maps are part of a larger world map. The world position
+   * indicates where this map is located relative to other maps.
+   * 
+   * @returns The Y position in world coordinates, or 0 if not in a world
+   * 
+   * @example
+   * ```ts
+   * const worldY = map.worldY;
+   * console.log(`Map is at world position (${map.worldX}, ${worldY})`);
+   * ```
+   */
   get worldY(): number {
     const worldMaps = this.getWorldMapsManager?.();
     return worldMaps?.getMapInfo(this.id)?.worldY ?? 0
   }
 
+  /**
+   * Handle GUI interaction from a player
+   * 
+   * This method is called when a player interacts with a GUI element.
+   * It synchronizes the player's changes to ensure the client state is up to date.
+   * 
+   * @param player - The player performing the interaction
+   * @param value - The interaction data from the client
+   * 
+   * @example
+   * ```ts
+   * // This method is called automatically when a player interacts with a GUI
+   * // The interaction data is sent from the client
+   * ```
+   */
   @Action('gui.interaction')
   guiInteraction(player: RpgPlayer, value) {
     //this.hooks.callHooks("server-player-guiInteraction", player, value);
     player.syncChanges();
   }
 
+  /**
+   * Handle GUI exit from a player
+   * 
+   * This method is called when a player closes or exits a GUI.
+   * It removes the GUI from the player's active GUIs.
+   * 
+   * @param player - The player exiting the GUI
+   * @param guiId - The ID of the GUI being exited
+   * @param data - Optional data associated with the GUI exit
+   * 
+   * @example
+   * ```ts
+   * // This method is called automatically when a player closes a GUI
+   * // The GUI is removed from the player's active GUIs
+   * ```
+   */
   @Action('gui.exit')
   guiExit(player: RpgPlayer, { guiId, data }) {
     player.removeGui(guiId, data)
   }
 
+  /**
+   * Handle action input from a player
+   * 
+   * This method is called when a player performs an action (like pressing a button).
+   * It checks for collisions with events and triggers the appropriate hooks.
+   * 
+   * ## Architecture
+   * 
+   * 1. Gets all entities colliding with the player
+   * 2. Triggers `onAction` hook on colliding events
+   * 3. Triggers `onInput` hook on the player
+   * 
+   * @param player - The player performing the action
+   * @param action - The action data (button pressed, etc.)
+   * 
+   * @example
+   * ```ts
+   * // This method is called automatically when a player presses an action button
+   * // Events near the player will have their onAction hook triggered
+   * ```
+   */
   @Action('action')
   onAction(player: RpgPlayer, action: any) {
     // Get collisions using the helper method from RpgCommonMap
@@ -382,6 +682,28 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     player.execMethod('onInput', [action]);
   }
 
+  /**
+   * Handle movement input from a player
+   * 
+   * This method is called when a player sends movement input from the client.
+   * It queues the input for processing by the game loop. Inputs are processed
+   * with frame numbers to ensure proper ordering and client-side prediction.
+   * 
+   * ## Architecture
+   * 
+   * - Inputs are queued in `player.pendingInputs`
+   * - Duplicate frames are skipped to prevent processing the same input twice
+   * - Inputs are processed asynchronously by the game loop
+   * 
+   * @param player - The player sending the movement input
+   * @param input - The input data containing frame number, input direction, and timestamp
+   * 
+   * @example
+   * ```ts
+   * // This method is called automatically when a player moves
+   * // The input is queued and processed by processInput()
+   * ```
+   */
   @Action('move')
   async onInput(player: RpgPlayer, input: any) {
     if (typeof input?.frame === 'number') {
@@ -399,6 +721,32 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
   }
 
+  /**
+   * Update the map configuration and data
+   * 
+   * This endpoint receives map data from the client and initializes the map.
+   * It loads the map configuration, damage formulas, events, and physics.
+   * 
+   * ## Architecture
+   * 
+   * 1. Validates the request body using MapUpdateSchema
+   * 2. Updates map data, global config, and damage formulas
+   * 3. Merges events and sounds from map configuration
+   * 4. Triggers hooks for map loading
+   * 5. Loads physics engine
+   * 6. Creates all events on the map
+   * 7. Completes the dataIsReady$ subject
+   * 
+   * @param request - HTTP request containing map data
+   * @returns Promise that resolves when the map is fully loaded
+   * 
+   * @example
+   * ```ts
+   * // This endpoint is called automatically when a map is loaded
+   * // POST /map/update
+   * // Body: { id: string, width: number, height: number, config?: any, damageFormulas?: any }
+   * ```
+   */
   @Request({
     path: "/map/update",
     method: "POST"
@@ -454,12 +802,31 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   /**
    * Update (or create) a world configuration and propagate to all maps in that world
    * 
-   * Body must contain the world config as defined by Tiled world import or an array of maps.
-   * If the world does not exist yet for this scene, it is created (auto-create).
+   * This endpoint receives world map configuration data (typically from Tiled world import)
+   * and creates or updates the world manager. The world ID is extracted from the URL path.
+   * 
+   * ## Architecture
+   * 
+   * 1. Extracts world ID from URL path parameter
+   * 2. Normalizes input to array of WorldMapConfig
+   * 3. Ensures all required map properties are present (width, height, tile sizes)
+   * 4. Creates or updates the world manager
    * 
    * Expected payload examples:
-   * - { id: string, maps: WorldMapConfig[] }
-   * - WorldMapConfig[]
+   * - `{ id: string, maps: WorldMapConfig[] }`
+   * - `WorldMapConfig[]`
+   * 
+   * @param request - HTTP request containing world configuration
+   * @returns Promise resolving to `{ ok: true }` when complete
+   * 
+   * @example
+   * ```ts
+   * // POST /world/my-world/update
+   * // Body: [{ id: 'map1', worldX: 0, worldY: 0, width: 800, height: 600 }]
+   * 
+   * // Or with nested structure
+   * // Body: { id: 'my-world', maps: [{ id: 'map1', ... }] }
+   * ```
    */
   @Request({
     path: "/world/:id/update",
@@ -639,11 +1006,31 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     };
   }
 
+  /**
+   * Main game loop that processes player inputs
+   * 
+   * This private method runs continuously every 50ms to process pending inputs
+   * for all players on the map. It ensures inputs are processed in order and
+   * prevents concurrent processing for the same player.
+   * 
+   * ## Architecture
+   * 
+   * - Runs every 50ms for responsive input processing
+   * - Processes inputs for each player with pending inputs
+   * - Uses a flag to prevent concurrent processing for the same player
+   * - Calls `processInput()` to handle anti-cheat validation and movement
+   * 
+   * @example
+   * ```ts
+   * // This method is called automatically in the constructor
+   * // You typically don't call it directly
+   * ```
+   */
   private loop() {
     setInterval(async () => {
       for (const player of this.getPlayers()) {
         if (player.pendingInputs.length > 0) {
-          const anyPlayer = player as RpgPlayer;
+          const anyPlayer = player as any;
           if (!anyPlayer._isProcessingInputs) {
             anyPlayer._isProcessingInputs = true;
             await this.processInput(player.id).finally(() => {
@@ -656,7 +1043,21 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 
   /**
-   * Get a world manager by id (if multiple supported in future)
+   * Get a world manager by id
+   * 
+   * Returns the world maps manager for the given world ID. Currently, only
+   * one world manager is supported per map instance.
+   * 
+   * @param id - The world ID (currently unused, returns the single manager)
+   * @returns The WorldMapsManager instance, or null if not initialized
+   * 
+   * @example
+   * ```ts
+   * const worldManager = map.getWorldMaps('my-world');
+   * if (worldManager) {
+   *   const mapInfo = worldManager.getMapInfo('map1');
+   * }
+   * ```
    */
   getWorldMaps(id: string): WorldMapsManager | null {
     if (!this.worldMapsManager) return null;
@@ -665,6 +1066,20 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   /**
    * Delete a world manager by id
+   * 
+   * Removes the world maps manager from this map instance. Currently, only
+   * one world manager is supported, so this clears the single manager.
+   * 
+   * @param id - The world ID (currently unused)
+   * @returns true if the manager was deleted, false if it didn't exist
+   * 
+   * @example
+   * ```ts
+   * const deleted = map.deleteWorldMaps('my-world');
+   * if (deleted) {
+   *   console.log('World manager removed');
+   * }
+   * ```
    */
   deleteWorldMaps(id: string): boolean {
     if (!this.worldMapsManager) return false;
@@ -675,6 +1090,26 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   /**
    * Create a world manager dynamically
+   * 
+   * Creates a new WorldMapsManager instance and configures it with the provided
+   * map configurations. This is used when loading world data from Tiled or
+   * other map editors.
+   * 
+   * @param world - World configuration object
+   * @param world.id - Optional world identifier
+   * @param world.maps - Array of map configurations for the world
+   * @returns The newly created WorldMapsManager instance
+   * 
+   * @example
+   * ```ts
+   * const manager = map.createDynamicWorldMaps({
+   *   id: 'my-world',
+   *   maps: [
+   *     { id: 'map1', worldX: 0, worldY: 0, width: 800, height: 600 },
+   *     { id: 'map2', worldX: 800, worldY: 0, width: 800, height: 600 }
+   *   ]
+   * });
+   * ```
    */
   createDynamicWorldMaps(world: { id?: string; maps: WorldMapConfig[] }): WorldMapsManager {
     const manager = new WorldMapsManager();
@@ -685,6 +1120,22 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   /**
    * Update world maps by id. Auto-create when missing.
+   * 
+   * Updates the world maps configuration. If the world manager doesn't exist,
+   * it is automatically created. This is useful for dynamically loading world
+   * data or updating map positions.
+   * 
+   * @param id - The world ID
+   * @param maps - Array of map configurations to update
+   * @returns Promise that resolves when the update is complete
+   * 
+   * @example
+   * ```ts
+   * await map.updateWorldMaps('my-world', [
+   *   { id: 'map1', worldX: 0, worldY: 0, width: 800, height: 600 },
+   *   { id: 'map2', worldX: 800, worldY: 0, width: 800, height: 600 }
+   * ]);
+   * ```
    */
   async updateWorldMaps(id: string, maps: WorldMapConfig[]) {
     let world = this.getWorldMaps(id);
@@ -880,30 +1331,165 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     await eventInstance.execMethod('onInit')
   }
 
+  /**
+   * Get an event by its ID
+   * 
+   * Returns the event with the specified ID, or undefined if not found.
+   * The return type can be narrowed using TypeScript generics.
+   * 
+   * @param eventId - The unique identifier of the event
+   * @returns The event instance, or undefined if not found
+   * 
+   * @example
+   * ```ts
+   * // Get any event
+   * const event = map.getEvent('npc-1');
+   * 
+   * // Get event with type narrowing
+   * const npc = map.getEvent<MyNPC>('npc-1');
+   * if (npc) {
+   *   npc.speak('Hello!');
+   * }
+   * ```
+   */
   getEvent<T extends RpgPlayer>(eventId: string): T | undefined {
     return this.events()[eventId] as T
   }
 
+  /**
+   * Get a player by their ID
+   * 
+   * Returns the player with the specified ID, or undefined if not found.
+   * 
+   * @param playerId - The unique identifier of the player
+   * @returns The player instance, or undefined if not found
+   * 
+   * @example
+   * ```ts
+   * const player = map.getPlayer('player-123');
+   * if (player) {
+   *   console.log(`Player ${player.name} is on the map`);
+   * }
+   * ```
+   */
   getPlayer(playerId: string): RpgPlayer | undefined {
     return this.players()[playerId]
   }
 
+  /**
+   * Get all players currently on the map
+   * 
+   * Returns an array of all players that are currently connected to this map.
+   * 
+   * @returns Array of all RpgPlayer instances on the map
+   * 
+   * @example
+   * ```ts
+   * const players = map.getPlayers();
+   * console.log(`There are ${players.length} players on the map`);
+   * 
+   * players.forEach(player => {
+   *   console.log(`- ${player.name}`);
+   * });
+   * ```
+   */
   getPlayers(): RpgPlayer[] {
     return Object.values(this.players())
   }
 
+  /**
+   * Get all events on the map
+   * 
+   * Returns an array of all events (NPCs, objects, etc.) that are currently
+   * on this map.
+   * 
+   * @returns Array of all RpgEvent instances on the map
+   * 
+   * @example
+   * ```ts
+   * const events = map.getEvents();
+   * console.log(`There are ${events.length} events on the map`);
+   * 
+   * events.forEach(event => {
+   *   console.log(`- ${event.name} at (${event.x}, ${event.y})`);
+   * });
+   * ```
+   */
   getEvents(): RpgEvent[] {
     return Object.values(this.events())
   }
 
+  /**
+   * Get the first event that matches a condition
+   * 
+   * Searches through all events on the map and returns the first one that
+   * matches the provided callback function.
+   * 
+   * @param cb - Callback function that returns true for the desired event
+   * @returns The first matching event, or undefined if none found
+   * 
+   * @example
+   * ```ts
+   * // Find an event by name
+   * const npc = map.getEventBy(event => event.name === 'Merchant');
+   * 
+   * // Find an event at a specific position
+   * const chest = map.getEventBy(event => 
+   *   event.x === 100 && event.y === 200
+   * );
+   * ```
+   */
   getEventBy(cb: (event: RpgEvent) => boolean): RpgEvent | undefined {
     return this.getEventsBy(cb)[0]
   }
 
+  /**
+   * Get all events that match a condition
+   * 
+   * Searches through all events on the map and returns all events that
+   * match the provided callback function.
+   * 
+   * @param cb - Callback function that returns true for desired events
+   * @returns Array of all matching events
+   * 
+   * @example
+   * ```ts
+   * // Find all NPCs
+   * const npcs = map.getEventsBy(event => event.name.startsWith('NPC-'));
+   * 
+   * // Find all events in a specific area
+   * const nearbyEvents = map.getEventsBy(event => 
+   *   event.x >= 0 && event.x <= 100 &&
+   *   event.y >= 0 && event.y <= 100
+   * );
+   * ```
+   */
   getEventsBy(cb: (event: RpgEvent) => boolean): RpgEvent[] {
     return this.getEvents().filter(cb)
   }
 
+  /**
+   * Remove an event from the map
+   * 
+   * Removes the event with the specified ID from the map. The event will
+   * be removed from the synchronized events signal, causing it to disappear
+   * on all clients.
+   * 
+   * @param eventId - The unique identifier of the event to remove
+   * 
+   * @example
+   * ```ts
+   * // Remove an event
+   * map.removeEvent('npc-1');
+   * 
+   * // Remove event after interaction
+   * const chest = map.getEvent('chest-1');
+   * if (chest) {
+   *   // ... do something with chest ...
+   *   map.removeEvent('chest-1');
+   * }
+   * ```
+   */
   removeEvent(eventId: string) {
     delete this.events()[eventId]
   }
@@ -989,15 +1575,43 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 
   /**
-   * Set the sync schema for the map
-   * @param schema - The schema to set
-   */
-  /**
    * Configure runtime synchronized properties on the map
-   *
-   * Design
+   * 
+   * This method allows you to dynamically add synchronized properties to the map
+   * that will be automatically synced with clients. The schema follows the same
+   * structure as module properties with `$initial`, `$syncWithClient`, and `$permanent` options.
+   * 
+   * ## Architecture
+   * 
    * - Reads a schema object shaped like module props
    * - Creates typed sync signals with @signe/sync
+   * - Properties are accessible as `map.propertyName`
+   * 
+   * @param schema - Schema object defining the properties to sync
+   * @param schema[key].$initial - Initial value for the property
+   * @param schema[key].$syncWithClient - Whether to sync this property to clients
+   * @param schema[key].$permanent - Whether to persist this property
+   * 
+   * @example
+   * ```ts
+   * // Add synchronized properties to the map
+   * map.setSync({
+   *   weather: {
+   *     $initial: 'sunny',
+   *     $syncWithClient: true,
+   *     $permanent: false
+   *   },
+   *   timeOfDay: {
+   *     $initial: 12,
+   *     $syncWithClient: true,
+   *     $permanent: false
+   *   }
+   * });
+   * 
+   * // Use the properties
+   * map.weather.set('rainy');
+   * const currentWeather = map.weather();
+   * ```
    */
   setSync(schema: Record<string, any>) {
     for (let key in schema) {

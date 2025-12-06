@@ -52,7 +52,10 @@ export default createServer({
           {
             id: 'map',
             events: [{ event: Event() }],
-            sounds: ['bgm']
+            sounds: ['bgm'],
+            onJoin() {
+              console.log('test')
+            }
           }
         ],
         worldMaps: [
