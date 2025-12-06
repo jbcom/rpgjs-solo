@@ -67,6 +67,18 @@ You can play sounds from the server side using the `playSound()` method on a pla
 player.playSound(soundId: string, options?: { volume?: number; loop?: boolean }): void
 ```
 
+### Using `player.stopAllSounds()`
+
+Stop all currently playing sounds for this specific player. This is useful when changing maps or resetting the audio state for a player.
+
+```typescript
+/**
+ * Stop all currently playing sounds for this player
+ * Useful when changing maps to prevent sound overlap.
+ */
+player.stopAllSounds(): void
+```
+
 ### Using `map.playSound()`
 
 To play a sound for **all players on the map**, use the `playSound()` method on the map instance. This is ideal for environmental sounds, battle music, or map-wide events.
@@ -80,6 +92,18 @@ To play a sound for **all players on the map**, use the `playSound()` method on 
  * @param options.loop - Whether the sound should loop (default: false)
  */
 map.playSound(soundId: string, options?: { volume?: number; loop?: boolean }): void
+```
+
+### Using `map.stopSound()`
+
+Stop a specific sound for all players on the map.
+
+```typescript
+/**
+ * Stop a sound for all players on the map
+ * @param soundId - Sound identifier to stop
+ */
+map.stopSound(soundId: string): void
 ```
 
 ### Examples
@@ -122,6 +146,163 @@ player.stopSound("background-music");
 map.stopSound("battle-theme");
 ```
 
+#### Stop All Sounds
+
+You can also stop all currently playing sounds at once:
+
+```typescript
+// Stop all sounds for this player
+player.stopAllSounds();
+
+// To stop all sounds for all players on a map, iterate through players
+const map = player.getCurrentMap();
+map?.getPlayers().forEach(p => p.stopAllSounds());
+```
+
+This is particularly useful when changing maps to prevent sound overlap. See the [Map Sounds Configuration](#map-sounds-configuration) section below for automatic sound stopping when joining maps.
+
+## Map Sounds Configuration
+
+Maps can automatically play sounds when a player joins. These sounds are configured using the `sounds` property in the map configuration.
+
+### Basic Map Sounds
+
+The simplest way to configure map sounds is using a plain object with `provideServerModules`:
+
+```typescript
+import { provideServerModules } from '@rpgjs/server';
+
+provideServerModules([
+  {
+    maps: [
+      {
+        id: 'town',
+        sounds: ['town-bgm', 'town-ambience'] // These sounds play when player joins
+      }
+    ]
+  }
+])
+```
+
+### Stop All Sounds Before Joining
+
+By default, sounds from the previous map continue playing when a player changes maps. If you want to stop all sounds before playing the new map's sounds, use the `stopAllSoundsBeforeJoin` option:
+
+```typescript
+import { provideServerModules } from '@rpgjs/server';
+
+provideServerModules([
+  {
+    maps: [
+      {
+        id: 'battle-map',
+        sounds: ['battle-theme'],
+        stopAllSoundsBeforeJoin: true // Stop all previous sounds before playing battle theme
+      }
+    ]
+  }
+])
+```
+
+**When to use `stopAllSoundsBeforeJoin: true`:**
+- Battle maps (to cut off peaceful background music)
+- Important cutscenes or story moments
+- Areas where you want a clean audio transition
+- Maps with their own distinct audio atmosphere
+
+**When to keep it `false` (default):**
+- Smooth transitions between similar areas
+- Continuous ambient sounds that should carry over
+- When you want sounds to layer naturally
+
+### Complete Map Sound Example
+
+```typescript
+import { provideServerModules } from '@rpgjs/server';
+
+provideServerModules([
+  {
+    maps: [
+      // Peaceful town - sounds continue from previous map
+      {
+        id: 'town',
+        sounds: ['town-bgm']
+      },
+      
+      // Battle arena - stops all sounds for dramatic effect
+      {
+        id: 'battle-arena',
+        sounds: ['battle-theme'],
+        stopAllSoundsBeforeJoin: true
+      },
+      
+      // Boss room - stops all sounds and plays boss music
+      {
+        id: 'boss-room',
+        sounds: ['boss-theme'],
+        stopAllSoundsBeforeJoin: true
+      }
+    ]
+  }
+])
+```
+
+### Using defineModule (Alternative)
+
+You can also use `defineModule` to define your server configuration separately:
+
+```typescript
+import { defineModule, type RpgServer } from '@rpgjs/common';
+import { provideServerModules } from '@rpgjs/server';
+
+// Define your server module
+const serverModule = defineModule<RpgServer>({
+  maps: [
+    {
+      id: 'town',
+      sounds: ['town-bgm'],
+      stopAllSoundsBeforeJoin: false
+    }
+  ]
+});
+
+// Then use it with provideServerModules
+provideServerModules([serverModule])
+```
+
+### Alternative: Using @MapData or @RpgModule (Legacy)
+
+For backward compatibility, you can still use decorators, though plain objects are now the recommended approach:
+
+```typescript
+import { MapData, RpgMap } from '@rpgjs/server';
+
+@MapData({
+  id: 'town',
+  sounds: ['town-bgm', 'town-ambience'],
+  stopAllSoundsBeforeJoin: false
+})
+class TownMap extends RpgMap {}
+```
+
+Or with `@RpgModule`:
+
+```typescript
+import { RpgServer, RpgModule } from '@rpgjs/server';
+
+@RpgModule<RpgServer>({
+  maps: [
+    {
+      id: 'town',
+      sounds: ['town-bgm']
+    }
+  ]
+})
+class MyServerModule {}
+```
+
+> **Note:** Using plain objects with `provideServerModules` or `defineModule` is the recommended approach. Decorators are still supported for backward compatibility but not required.
+
 ### Use Cases
 
 **Using `map.playSound()` (for all players):**
@@ -141,54 +322,74 @@ map.stopSound("battle-theme");
 ### Complete Example
 
 ```typescript
-import { RpgPlayer, RpgPlayerHooks, RpgMap } from '@rpgjs/server';
+import { provideServerModules, RpgPlayer, RpgPlayerHooks, RpgMap, RpgEvent } from '@rpgjs/server';
 
-const player: RpgPlayerHooks = {
-  async onJoin(player: RpgPlayer) {
-    // Play welcome sound for this player only
-    player.playSound("welcome", { volume: 0.6 });
-  },
+provideServerModules([
+  {
+    player: {
+      async onConnected(player: RpgPlayer) {
+        // Stop all sounds when player first connects (clean state)
+        player.stopAllSounds();
+        
+        // Play welcome sound for this player only
+        player.playSound("welcome", { volume: 0.6 });
+      },
 
-  async onLevelUp(player: RpgPlayer) {
-    // Play level up sound for this player only
-    player.playSound("level-up", { volume: 0.8 });
+      async onLevelUp(player: RpgPlayer) {
+        // Play level up sound for this player only
+        player.playSound("level-up", { volume: 0.8 });
+        
+        // Show level up animation
+        player.showComponentAnimation("level-up", {
+          text: `Level ${player.level}`,
+          color: "gold"
+        });
+      },
+
+      async onTouchEvent(player: RpgPlayer, event: RpgEvent) {
+        if (event.name === "Treasure Chest") {
+          const map = player.getCurrentMap();
+          
+          // Play chest opening sound for everyone on the map
+          map?.playSound("chest-open", { volume: 0.7 });
+          
+          // Play item pickup sound only for this player
+          player.playSound("item-pickup", { volume: 0.5 });
+        }
+      },
+
+      async onBattleStart(player: RpgPlayer) {
+        const map = player.getCurrentMap();
+        
+        // Play battle music for everyone with loop
+        map?.playSound("battle-theme", { volume: 0.8, loop: true });
+      },
+
+      async onBattleEnd(player: RpgPlayer) {
+        const map = player.getCurrentMap();
+        
+        // Stop battle music for everyone
+        map?.stopSound("battle-theme");
+        
+        // Play victory sound for this player
+        player.playSound("victory", { volume: 1.0 });
+      }
+    },
     
-    // Show level up animation
-    player.showComponentAnimation("level-up", {
-      text: `Level ${player.level}`,
-      color: "gold"
-    });
-  },
-
-  async onTouchEvent(player: RpgPlayer, event: RpgEvent) {
-    if (event.name === "Treasure Chest") {
-      const map = player.getCurrentMap();
-      
-      // Play chest opening sound for everyone on the map
-      map?.playSound("chest-open", { volume: 0.7 });
-      
-      // Play item pickup sound only for this player
-      player.playSound("item-pickup", { volume: 0.5 });
-    }
-  },
-
-  async onBattleStart(player: RpgPlayer) {
-    const map = player.getCurrentMap();
-    
-    // Play battle music for everyone with loop
-    map?.playSound("battle-theme", { volume: 0.8, loop: true });
-  },
-
-  async onBattleEnd(player: RpgPlayer) {
-    const map = player.getCurrentMap();
-    
-    // Stop battle music for everyone
-    map?.stopSound("battle-theme");
-    
-    // Play victory sound for this player
-    player.playSound("victory", { volume: 1.0 });
+    maps: [
+      {
+        id: 'town',
+        sounds: ['town-bgm'],
+        stopAllSoundsBeforeJoin: false
+      },
+      {
+        id: 'battle-arena',
+        sounds: ['battle-theme'],
+        stopAllSoundsBeforeJoin: true
+      }
+    ]
   }
-};
+]);
 ```
 
 ## Dynamic Sound Resolver

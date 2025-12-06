@@ -584,14 +584,14 @@ export interface RpgServer {
      * @example
      * 
      * ```ts
-     * import { RpgServer, RpgModule } from '@rpgjs/server'
+     * import { RpgServer } from '@rpgjs/server'
+     * import { defineModule } from '@rpgjs/common'
      * 
-     * @RpgModule<RpgServer>({
+     * export default defineModule<RpgServer>({
      *     hooks: {
      *        player: ['onAuth']
      *    }
      * })
-     * class RpgServerEngine { }
      * ```
      * 
      * Emit the hook:
@@ -631,18 +631,18 @@ export interface RpgServer {
      * Object containing the hooks concerning the engine
      * 
      * ```ts
-     * import { RpgServerEngine, RpgServerEngineHooks, RpgModule, RpgClient } from '@rpgjs/server'
+     * import { RpgServerEngine, RpgServerEngineHooks, RpgServer } from '@rpgjs/server'
+     * import { defineModule } from '@rpgjs/common'
      * 
-     * const engine: RpgEngineHooks = {
+     * const engine: RpgServerEngineHooks = {
      *      onStart(server: RpgServerEngine) {
      *          console.log('server is started')
      *      }
      * }
      * 
-     * @RpgModule<RpgServer>({
+     * export default defineModule<RpgServer>({
      *      engine
      * })
-     * class RpgServerModule {}
      * ```
      * 
      * @prop {RpgServerEngineHooks} [engine]
@@ -654,7 +654,8 @@ export interface RpgServer {
      * Give the `player` object hooks. Each time a player connects, an instance of `RpgPlayer` is created.
      * 
      * ```ts
-     * import { RpgPlayer, RpgServer, RpgPlayerHooks, RpgModule } from '@rpgjs/server'
+     * import { RpgPlayer, RpgServer, RpgPlayerHooks } from '@rpgjs/server'
+     * import { defineModule } from '@rpgjs/common'
      * 
      * const player: RpgPlayerHooks = {
      *      onConnected(player: RpgPlayer) {
@@ -662,10 +663,9 @@ export interface RpgServer {
      *      }
      * }
      * 
-     * @RpgModule<RpgServer>({
+     * export default defineModule<RpgServer>({
      *      player
      * })
-     * class RpgServerEngine { } 
      * ``` 
      * 
      * @prop {RpgClassPlayer<RpgPlayer>} [player]
@@ -677,15 +677,15 @@ export interface RpgServer {
      * References all data in the server. it is mainly used to retrieve data according to their identifier
      * 
      * ```ts
-     * import { RpgServer, RpgModule } from '@rpgjs/server'
+     * import { RpgServer } from '@rpgjs/server'
+     * import { defineModule } from '@rpgjs/common'
      * import { Potion } from 'my-database/items/potion'
      * 
-     * @RpgModule<RpgServer>({
+     * export default defineModule<RpgServer>({
      *      database: {
      *          Potion
      *      }
      * })
-     * class RpgServerEngine { } 
      * ``` 
      * 
      * @prop { { [dataName]: data } } [database]
@@ -697,7 +697,8 @@ export interface RpgServer {
      * Array of all maps. Each element can be either a class (decorated with `@MapData` or not) or a `MapOptions` object
      * 
      * ```ts
-     * import { RpgMap, MapData, RpgServer, RpgModule } from '@rpgjs/server'
+     * import { RpgMap, MapData, RpgServer } from '@rpgjs/server'
+     * import { defineModule } from '@rpgjs/common'
      * 
      * // Class that extends RpgMap (optional)
      * @MapData({
@@ -715,19 +716,21 @@ export interface RpgServer {
      * })
      * class SimpleMap {}
      * 
-     * @RpgModule<RpgServer>({
+     * export default defineModule<RpgServer>({
      *      maps: [
      *          TownMap,
      *          SimpleMap
      *      ]
      * })
-     * class RpgServerEngine { } 
      * ``` 
      * 
      * It is possible to just give the object as well
      * 
      * ```ts
-     * @RpgModule<RpgServer>({
+     * import { RpgServer } from '@rpgjs/server'
+     * import { defineModule } from '@rpgjs/common'
+     * 
+     * export default defineModule<RpgServer>({
      *      maps: [
      *          {
      *              id: 'town',
@@ -736,18 +739,19 @@ export interface RpgServer {
      *          }
      *      ]
      * })
-     * class RpgServerEngine { } 
      * ``` 
      * 
      * Since version 3.0.0-beta.8, you can just pass the path to the file. The identifier will then be the name of the file
      * 
      *  ```ts
-     * @RpgModule<RpgServer>({
+     * import { RpgServer } from '@rpgjs/server'
+     * import { defineModule } from '@rpgjs/common'
+     * 
+     * export default defineModule<RpgServer>({
      *      maps: [
      *          require('./tmx/mymap.tmx') // id is "mymap"
      *      ]
      * })
-     * class RpgServerEngine { } 
      * ``` 
      * 
      * @prop {(new () => any) | MapOptions)[]} [maps]
@@ -763,7 +767,8 @@ export interface RpgServer {
      * map-specific hooks defined in `@MapData` which only apply to a specific map class.
      * 
      * ```ts
-     * import { RpgServer, RpgModule, RpgMapHooks, RpgMap, RpgPlayer } from '@rpgjs/server'
+     * import { RpgServer, RpgMapHooks, RpgMap, RpgPlayer } from '@rpgjs/server'
+     * import { defineModule } from '@rpgjs/common'
      * 
      * const mapHooks: RpgMapHooks = {
      *     onLoad(map: RpgMap) {
@@ -784,10 +789,9 @@ export interface RpgServer {
      *     }
      * }
      * 
-     * @RpgModule<RpgServer>({
+     * export default defineModule<RpgServer>({
      *     map: mapHooks
      * })
-     * class RpgServerEngine {}
      * ```
      * 
      * @prop {RpgMapHooks} [map]
@@ -822,20 +826,24 @@ export interface RpgServer {
      * @memberof RpgServer
      * @example
      * ```ts
+     * import { RpgServer } from '@rpgjs/server'
+     * import { defineModule } from '@rpgjs/common'
      * import myworld from 'myworld.world'
      * 
-     * @RpgModule<RpgServer>({
+     * export default defineModule<RpgServer>({
      *     worldMaps: [
      *         myworld
      *     ]
      * })
-     * class RpgServerEngine {}
      * ```
      * 
      * @example
      * ```ts
+     * import { RpgServer } from '@rpgjs/server'
+     * import { defineModule } from '@rpgjs/common'
+     * 
      * // Manual world configuration
-     * @RpgModule<RpgServer>({
+     * export default defineModule<RpgServer>({
      *     worldMaps: [
      *         {
      *             id: 'my-world',
@@ -860,7 +868,6 @@ export interface RpgServer {
      *         }
      *     ]
      * })
-     * class RpgServerEngine {}
      * ```
      */
     worldMaps?: WorldMap[]
@@ -886,11 +893,12 @@ export interface RpgServer {
      * Example:
      * 
      * ```ts
-     * import { RpgModule, RpgServer, Presets } from '@rpgjs/server'
+     * import { RpgServer, Presets } from '@rpgjs/server'
+     * import { defineModule } from '@rpgjs/common'
      * 
      * const { ATK, PDEF } = Presets
      * 
-     * @RpgModule<RpgServer>({
+     * export default defineModule<RpgServer>({
      *      damageFormulas: {
      *          damagePhysic(a, b) {
      *              let damage = a[ATK] - b[PDEF]
@@ -899,7 +907,6 @@ export interface RpgServer {
      *          }
      *      }
      * })
-     * class RpgServerEngine { } 
      * ```
      * @prop {object} damageFormulas
      * @memberof RpgServer
