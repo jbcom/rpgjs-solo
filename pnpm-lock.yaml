@@ -57,9 +57,12 @@ importers:
       canvasengine:
         specifier: '*'
         version: 2.0.0-beta.37(@types/react@19.1.10)(pixi.js@8.12.0)(react@19.1.1)
+      pixi-filters:
+        specifier: ^6.1.5
+        version: 6.1.5(pixi.js@8.14.3)
       pixi.js:
         specifier: ^8.9.2
-        version: 8.12.0
+        version: 8.14.3
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -1928,6 +1931,11 @@ packages:
 
   pixi-filters@6.1.4:
     resolution: {integrity: sha512-6QdkhR8hZ/jXyV7GZG8R0UKkRy9jPeZsOnHaQiKSFEe4tGJ4PfUG90vaC9eyi7g+YKxhKLpNOXu6tmO1+R2tpQ==}
+    peerDependencies:
+      pixi.js: '>=8.0.0-0'
+
+  pixi-filters@6.1.5:
+    resolution: {integrity: sha512-Ewb/J+kxAbaNN+0/ATJbglAJG+skGJfh7BIDP3ILIDdD6wWk1p0pGa25pVf1T8hGBOQSUNVAmwwJBwkj+cyLLA==}
     peerDependencies:
       pixi.js: '>=8.0.0-0'
 
@@ -4439,6 +4447,11 @@ snapshots:
       pixi.js: 8.12.0
 
   pixi-filters@6.1.4(pixi.js@8.14.3):
+    dependencies:
+      '@types/gradient-parser': 0.1.5
+      pixi.js: 8.14.3
+
+  pixi-filters@6.1.5(pixi.js@8.14.3):
     dependencies:
       '@types/gradient-parser': 0.1.5
       pixi.js: 8.14.3

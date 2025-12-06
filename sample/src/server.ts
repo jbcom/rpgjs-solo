@@ -3,8 +3,6 @@ import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
 
-
-
 export function Event() {
   return {
     name: "EV-1",
@@ -54,20 +52,13 @@ export default createServer({
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             console.log("join map");
             player.setGraphic("hero");
-            
-            // Initialize HP for testing the HP bar component
-            player.addParameter(MAXHP, { start: 100, end: 500 });
-            player.hp = 80; // Start with 80% HP to demonstrate the bar
-            
             player.teleport({ x: 100, y: 100 }); 
           },
           onLeaveMap: (player: RpgPlayer, map: RpgMap) => {
 
           },
           async onInput(player: RpgPlayer, input: any) {
-            console.log(player.x(), player.y())
-            //player.moveTo({ x: 100, y: 100 })
-            player.getCurrentMap()?.shakeMap({ intensity: 10, duration: 1000 })
+
           } 
         },
         maps: [

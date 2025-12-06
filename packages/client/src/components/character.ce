@@ -7,7 +7,7 @@
   <Particle emit={@emitParticleTrigger} settings={@particleSettings} zIndex={1000} name={particleName} />
   <Container>
     @for (graphicObj of graphicsSignals) {
-      <Sprite sheet={@sheet(@graphicObj)} direction tint hitbox flash={flashConfig} />
+      <Sprite sheet={@sheet(@graphicObj)} direction tint hitbox flash={flashConfig}  />
     }
   </Container>
   @for (component of componentsInFront) {
@@ -30,6 +30,7 @@
 
 <script>
   import { signal, effect, mount, computed, tick, animatedSignal, on } from "canvasengine";
+
   import { lastValueFrom, combineLatest, pairwise, filter, map, startWith } from "rxjs";
   import { Particle } from "@canvasengine/presets";
   import { GameEngineToken, ModulesToken } from "@rpgjs/common";

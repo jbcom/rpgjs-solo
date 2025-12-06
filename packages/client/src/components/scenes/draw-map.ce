@@ -13,7 +13,8 @@
 </Container>
 
 <script>
-    import { effect, signal, computed, mount, on } from 'canvasengine'
+    import { NoiseFilter } from 'pixi-filters';
+    import { effect, signal, computed, mount, on, tick } from 'canvasengine'
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
 
@@ -26,6 +27,7 @@
     const animations = engine.sceneMap.animations
     const backgroundMusic = { src: mapParams?.backgroundMusic, autoplay: true, loop: true }
     const backgroundAmbientSound = { src: mapParams?.backgroundAmbientSound, autoplay: true, loop: true }
+
     
     const data = signal(map().data)
 

@@ -32,6 +32,7 @@
     "@signe/di": "^2.5.2",
     "@signe/room": "^2.5.2",
     "@signe/sync": "^2.5.2",
+    "pixi-filters": "^6.1.5",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
