@@ -1,15 +1,69 @@
 import { findModules, provideModules } from "@rpgjs/common";
+import { FactoryProvider } from "@signe/di";
 import { RpgClientEngine } from "./RpgClientEngine";
 import { RpgClient } from "./RpgClient";
 import { inject } from "@signe/di";
 import { RpgGui } from "./Gui/Gui";
 import { getSoundMetadata } from "./Sound";
 
-export function provideClientModules(modules: RpgClient[]) {
+/**
+ * Type for client modules that can be either:
+ * - An object implementing RpgClient interface
+ * - A class decorated with @RpgModule decorator
+ */
+export type RpgClientModule = RpgClient | (new () => any);
+
+/**
+ * Provides client modules configuration to Dependency Injection
+ * 
+ * This function accepts an array of client modules that can be either:
+ * - Objects implementing the RpgClient interface
+ * - Classes decorated with the @RpgModule decorator (which will be instantiated)
+ * 
+ * @param modules - Array of client modules (objects or classes)
+ * @returns FactoryProvider configuration for DI
+ * @example
+ * ```ts
+ * // Using an object
+ * provideClientModules([
+ *   {
+ *     engine: {
+ *       onConnected(engine) {
+ *         console.log('Client connected')
+ *       }
+ *     }
+ *   }
+ * ])
+ * 
+ * // Using a decorated class
+ * @RpgModule<RpgClient>({
+ *   engine: {
+ *     onStart(engine) {
+ *       console.log('Client started')
+ *     }
+ *   }
+ * })
+ * class MyClientModule {}
+ * 
+ * provideClientModules([MyClientModule])
+ * ```
+ */
+export function provideClientModules(modules: RpgClientModule[]): FactoryProvider {
   return provideModules(modules, "client", (modules, context) => {
     const mainModuleClient = findModules(context, 'Client')
     modules = [...mainModuleClient, ...modules]
     modules = modules.map((module) => {
+      // If module is a class (constructor function), instantiate it
+      // The RpgModule decorator adds properties to the prototype, which will be accessible via the instance
+      if (typeof module === 'function') {
+        const instance = new module() as any;
+        // Copy all enumerable properties (including from prototype) to a plain object
+        const moduleObj: any = {};
+        for (const key in instance) {
+          moduleObj[key] = instance[key];
+        }
+        module = moduleObj;
+      }
       if ('client' in module) {
         module = module.client as any;
       }
@@ -84,7 +138,7 @@ export function provideClientModules(modules: RpgClient[]) {
         const gui = [...module.gui];
         module.gui = {
           load: (engine: RpgClientEngine) => {
-            const guiService = inject(engine.context, RpgGui);
+            const guiService = inject(engine.context, RpgGui) as RpgGui;
             gui.forEach((gui) => {
               guiService.add(gui);
             });

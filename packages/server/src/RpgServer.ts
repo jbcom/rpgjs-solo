@@ -1,9 +1,10 @@
+import { MapOptions } from "./decorators/map"
 import { RpgPlayer } from "./Player/Player"
 import { type RpgMap } from "./rooms/map"
 import { RpgServerEngine } from "./RpgServerEngine"
 
 type RpgShape = any
-type RpgClassMap<T> = any
+type RpgClassMap<T> = new () => T
 type RpgClassEvent<T> = any
 type RpgEvent = any
 type MatchMakerOption = any
@@ -11,7 +12,7 @@ type RpgMatchMaker = any
 type IStoreState = any
 type TiledMap = any
 type WorldMap = any
-type MapOptions = any
+
 
 export interface RpgServerEngineHooks {
     /**
@@ -595,11 +596,12 @@ export interface RpgServer {
     database?: object | any[],
 
     /** 
-     * Array of all maps. Each element is an `RpgMap` class
+     * Array of all maps. Each element can be either a class (decorated with `@MapData` or not) or a `MapOptions` object
      * 
      * ```ts
      * import { RpgMap, MapData, RpgServer, RpgModule } from '@rpgjs/server'
      * 
+     * // Class that extends RpgMap (optional)
      * @MapData({
      *      id: 'town',
      *      file: require('./tmx/mymap.tmx'),
@@ -607,9 +609,18 @@ export interface RpgServer {
      * })
      * class TownMap extends RpgMap { }
      * 
+     * // Or a simple class without extending RpgMap
+     * @MapData({
+     *      id: 'map',
+     *      file: '',
+     *      events: [{ event: Event() }]
+     * })
+     * class SimpleMap {}
+     * 
      * @RpgModule<RpgServer>({
      *      maps: [
-     *          TownMap
+     *          TownMap,
+     *          SimpleMap
      *      ]
      * })
      * class RpgServerEngine { } 
@@ -641,10 +652,10 @@ export interface RpgServer {
      * class RpgServerEngine { } 
      * ``` 
      * 
-     * @prop {RpgClassMap<RpgMap>[]} [maps]
+     * @prop {(new () => any) | MapOptions)[]} [maps]
      * @memberof RpgServer
      * */
-    maps?: RpgClassMap<RpgMap>[] | MapOptions[] | string[] | TiledMap[],
+    maps?: ((new () => any) | MapOptions)[],
 
     map?: RpgMapHooks
 

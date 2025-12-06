@@ -86,6 +86,10 @@ export default {
           {
             id: "cursor",
             src: "cursor.wav",
+          },
+          {
+            id: "bgm",
+            src: "music.mp3"
           }
         ],
         spritesheets: [

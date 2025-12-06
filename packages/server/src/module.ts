@@ -83,7 +83,28 @@ export function provideServerModules(modules: RpgServerModule[]): FactoryProvide
           maps: {
             load: (engine: RpgMap) => {
               maps.forEach((map) => {
-                engine.maps.push(map);
+                // If map is a class (constructor function), extract properties from class and prototype
+                // Otherwise, use the object directly
+                let mapInstance: any;
+                if (typeof map === 'function') {
+                  // Extract properties from the class (static properties set by @MapData decorator)
+                  // and from the prototype (instance properties like _events)
+                  // The decorator sets properties on both the class and prototype, so we check both
+                  const MapClass = map as any;
+                  mapInstance = {
+                    id: MapClass.prototype?.id ?? MapClass.id,
+                    file: MapClass.prototype?.file ?? MapClass.file,
+                    type: MapClass.type,
+                    name: MapClass.prototype?.name,
+                    sounds: MapClass.prototype?.sounds,
+                    lowMemory: MapClass.prototype?.lowMemory,
+                    events: MapClass.prototype?._events,
+                    syncSchema: MapClass.prototype?.$schema,
+                  };
+                } else {
+                  mapInstance = map;
+                }
+                engine.maps.push(mapInstance);
               });
             },
           }

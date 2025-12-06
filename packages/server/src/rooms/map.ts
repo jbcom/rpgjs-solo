@@ -12,6 +12,7 @@ import { BehaviorSubject } from "rxjs";
 import { COEFFICIENT_ELEMENTS, DAMAGE_CRITICAL, DAMAGE_PHYSIC, DAMAGE_SKILL } from "../presets";
 import { z } from "zod";
 import { EntityState } from "@rpgjs/physic";
+import { MapOptions } from "../decorators/map";
 
 /**
  * Interface for input controls configuration
@@ -98,7 +99,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   @users(RpgPlayer) players = signal({});
   @sync(RpgPlayer) events = signal({});
   database = signal({});
-  maps: any[] = []
+  /** Array of map configurations - can contain MapOptions objects or instances of map classes */
+  maps: (MapOptions | any)[] = []
+  sounds: string[] = []
   dataIsReady$ = new BehaviorSubject<void>(undefined);
   globalConfig: any = {}
   damageFormulas: any = {}
@@ -315,6 +318,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     player._onInit()
     this.dataIsReady$.pipe(
       finalize(() => {
+        this.sounds.forEach(sound => player.playSound(sound,{ loop: true }));
         this.hooks
           .callHooks("server-player-onJoinMap", player, this)
           .subscribe();
@@ -423,6 +427,15 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
           ...mapFound.events,
           ...map.events
         ]
+      }
+      if (mapFound?.sounds) {
+        this.sounds = [
+          ...(map.sounds ?? []),
+          ...mapFound.sounds
+        ]
+      }
+      else {
+        this.sounds = map.sounds ?? []
       }
     }
 

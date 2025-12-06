@@ -24,7 +24,7 @@ export interface MapOptions {
     * @prop {string} file
     * @memberof MapData
     * */
-    file: any,
+    file?: any,
 
     /** 
      * The name of the map.
