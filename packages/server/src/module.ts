@@ -100,6 +100,9 @@ export function provideServerModules(modules: RpgServerModule[]): FactoryProvide
                     lowMemory: MapClass.prototype?.lowMemory,
                     events: MapClass.prototype?._events,
                     syncSchema: MapClass.prototype?.$schema,
+                    onLoad: MapClass.prototype?.onLoad,
+                    onJoin: MapClass.prototype?.onJoin,
+                    onLeave: MapClass.prototype?.onLeave,
                   };
                 } else {
                   mapInstance = map;

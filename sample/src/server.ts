@@ -54,7 +54,7 @@ export default createServer({
             events: [{ event: Event() }],
             sounds: ['bgm'],
             onJoin() {
-              console.log('test')
+              console.log('testaa')
             }
           }
         ],

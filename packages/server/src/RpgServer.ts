@@ -421,6 +421,9 @@ export interface RpgEventHooks {
 /**
  * Map hooks interface for handling map lifecycle events
  * 
+ * These hooks are global hooks that apply to all maps in the game.
+ * They are defined in the RpgModule configuration and executed for every map instance.
+ * 
  * @interface RpgMapHooks
  * @since 4.0.0
  */
@@ -473,6 +476,74 @@ export interface RpgMapHooks {
      * ```
      */
     onBeforeUpdate<T, U = RpgMap>(mapData: T, map: U): U | Promise<U>
+
+    /**
+     * Called when a map is loaded and initialized
+     * 
+     * This hook is executed once when the map data is loaded and ready.
+     * It applies to all maps globally. Use this to initialize map-specific properties
+     * or setup that should happen for every map.
+     * 
+     * @param {RpgMap} map - The map instance that was loaded
+     * @returns {any}
+     * @memberof RpgMapHooks
+     * @example
+     * ```ts
+     * const mapHooks: RpgMapHooks = {
+     *     onLoad(map: RpgMap) {
+     *         console.log(`Map ${map.id} loaded`)
+     *         // Initialize global map properties
+     *     }
+     * }
+     * ```
+     */
+    onLoad?: (map: RpgMap) => any
+
+    /**
+     * Called when a player joins any map
+     * 
+     * This hook is executed each time a player joins any map in the game.
+     * It applies globally to all maps. Use this to perform actions that should
+     * happen whenever a player enters any map.
+     * 
+     * @param {RpgPlayer} player - The player joining the map
+     * @param {RpgMap} map - The map instance the player joined
+     * @returns {any}
+     * @memberof RpgMapHooks
+     * @example
+     * ```ts
+     * const mapHooks: RpgMapHooks = {
+     *     onJoin(player: RpgPlayer, map: RpgMap) {
+     *         console.log(`${player.name} joined map ${map.id}`)
+     *         // Perform global actions when player joins any map
+     *     }
+     * }
+     * ```
+     */
+    onJoin?: (player: RpgPlayer, map: RpgMap) => any
+
+    /**
+     * Called when a player leaves any map
+     * 
+     * This hook is executed each time a player leaves any map in the game.
+     * It applies globally to all maps. Use this to perform cleanup or actions
+     * that should happen whenever a player exits any map.
+     * 
+     * @param {RpgPlayer} player - The player leaving the map
+     * @param {RpgMap} map - The map instance the player left
+     * @returns {any}
+     * @memberof RpgMapHooks
+     * @example
+     * ```ts
+     * const mapHooks: RpgMapHooks = {
+     *     onLeave(player: RpgPlayer, map: RpgMap) {
+     *         console.log(`${player.name} left map ${map.id}`)
+     *         // Perform global cleanup when player leaves any map
+     *     }
+     * }
+     * ```
+     */
+    onLeave?: (player: RpgPlayer, map: RpgMap) => any
 }
 
 export interface RpgServer {
@@ -657,6 +728,45 @@ export interface RpgServer {
      * */
     maps?: ((new () => any) | MapOptions)[],
 
+    /** 
+     * Global map hooks that apply to all maps in the game
+     * 
+     * These hooks are executed for every map instance and allow you to define
+     * global behavior that should happen for all maps. They are different from
+     * map-specific hooks defined in `@MapData` which only apply to a specific map class.
+     * 
+     * ```ts
+     * import { RpgServer, RpgModule, RpgMapHooks, RpgMap, RpgPlayer } from '@rpgjs/server'
+     * 
+     * const mapHooks: RpgMapHooks = {
+     *     onLoad(map: RpgMap) {
+     *         console.log(`Map ${map.id} loaded`)
+     *         // Initialize global map properties
+     *     },
+     *     onJoin(player: RpgPlayer, map: RpgMap) {
+     *         console.log(`${player.name} joined map ${map.id}`)
+     *         // Perform global actions when player joins any map
+     *     },
+     *     onLeave(player: RpgPlayer, map: RpgMap) {
+     *         console.log(`${player.name} left map ${map.id}`)
+     *         // Perform global cleanup when player leaves any map
+     *     },
+     *     onBeforeUpdate(mapData, map) {
+     *         // Modify map data before update
+     *         return map
+     *     }
+     * }
+     * 
+     * @RpgModule<RpgServer>({
+     *     map: mapHooks
+     * })
+     * class RpgServerEngine {}
+     * ```
+     * 
+     * @prop {RpgMapHooks} [map]
+     * @memberof RpgServer
+     * @since 4.0.0
+     * */
     map?: RpgMapHooks
 
     event?: RpgEventHooks

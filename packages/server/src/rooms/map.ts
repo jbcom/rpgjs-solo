@@ -466,8 +466,18 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     player.conn = conn;
     player._onInit()
     this.dataIsReady$.pipe(
-      finalize(() => {
+      finalize(async () => {
         this.sounds.forEach(sound => player.playSound(sound,{ loop: true }));
+        
+        // Execute global map hooks (from RpgServer.map)
+        await lastValueFrom(this.hooks.callHooks("server-map-onJoin", player, this));
+        
+        // Execute map-specific hooks (from @MapData or MapOptions)
+        if (typeof (this as any).onJoin === 'function') {
+          await (this as any).onJoin(player);
+        }
+        
+        // Execute player hooks
         this.hooks
           .callHooks("server-player-onJoinMap", player, this)
           .subscribe();
@@ -498,7 +508,16 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * });
    * ```
    */
-  onLeave(player: RpgPlayer, conn: MockConnection) {
+  async onLeave(player: RpgPlayer, conn: MockConnection) {
+    // Execute global map hooks (from RpgServer.map)
+    await lastValueFrom(this.hooks.callHooks("server-map-onLeave", player, this));
+    
+    // Execute map-specific hooks (from @MapData or MapOptions)
+    if (typeof (this as any).onLeave === 'function') {
+      await (this as any).onLeave(player);
+    }
+    
+    // Execute player hooks
     this.hooks
       .callHooks("server-player-onLeaveMap", player, this)
       .subscribe();
@@ -785,6 +804,17 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       else {
         this.sounds = map.sounds ?? []
       }
+      
+      // Attach map-specific hooks from MapOptions or @MapData
+      if (mapFound?.onLoad) {
+        (this as any).onLoad = mapFound.onLoad;
+      }
+      if (mapFound?.onJoin) {
+        (this as any).onJoin = mapFound.onJoin;
+      }
+      if (mapFound?.onLeave) {
+        (this as any).onLeave = mapFound.onLeave;
+      }
     }
 
     await lastValueFrom(this.hooks.callHooks("server-map-onBeforeUpdate", map, this))
@@ -796,6 +826,15 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
 
     this.dataIsReady$.complete()
+    
+    // Execute global map hooks (from RpgServer.map)
+    await lastValueFrom(this.hooks.callHooks("server-map-onLoad", this))
+    
+    // Execute map-specific hooks (from @MapData or MapOptions)
+    if (typeof (this as any).onLoad === 'function') {
+      await (this as any).onLoad();
+    }
+    
     // TODO: Update map
   }
 

@@ -175,6 +175,75 @@ export interface MapOptions {
      * @memberof MapData
      * */
     lowMemory?: boolean
+
+    /** 
+     * Called when the map is loaded and initialized
+     * 
+     * This hook is executed once when the map data is loaded and ready.
+     * Use this to initialize map-specific properties or setup.
+     * 
+     * @prop { () => any } [onLoad]
+     * @memberof MapData
+     * @example
+     * ```ts
+     * @MapData({
+     *     id: 'town',
+     *     file: require('./tmx/town.tmx'),
+     *     onLoad() {
+     *         console.log('Town map loaded')
+     *         // Initialize map properties
+     *     }
+     * })
+     * class TownMap extends RpgMap {}
+     * ```
+     * */
+    onLoad?: () => any
+
+    /** 
+     * Called when a player joins the map
+     * 
+     * This hook is executed each time a player joins the map.
+     * Use this to perform actions when a player enters the map.
+     * 
+     * @prop { (player: RpgPlayer) => any } [onJoin]
+     * @memberof MapData
+     * @example
+     * ```ts
+     * @MapData({
+     *     id: 'town',
+     *     file: require('./tmx/town.tmx'),
+     *     onJoin(player: RpgPlayer) {
+     *         console.log(`${player.name} joined the town`)
+     *         // Perform actions when player joins
+     *     }
+     * })
+     * class TownMap extends RpgMap {}
+     * ```
+     * */
+    onJoin?: (player: RpgPlayer) => any
+
+    /** 
+     * Called when a player leaves the map
+     * 
+     * This hook is executed each time a player leaves the map.
+     * Use this to perform cleanup or actions when a player exits the map.
+     * 
+     * @prop { (player: RpgPlayer) => any } [onLeave]
+     * @memberof MapData
+     * @example
+     * ```ts
+     * @MapData({
+     *     id: 'town',
+     *     file: require('./tmx/town.tmx'),
+     *     onLeave(player: RpgPlayer) {
+     *         console.log(`${player.name} left the town`)
+     *         // Perform cleanup when player leaves
+     *     }
+     * })
+     * class TownMap extends RpgMap {}
+     * ```
+     * */
+    onLeave?: (player: RpgPlayer) => any
 }
 
 export function MapData(options: MapOptions) {
@@ -194,5 +263,16 @@ export function MapData(options: MapOptions) {
             target.prototype.$schema = options.syncSchema
         }
         target.prototype._events = options.events
+        
+        // Store hooks on prototype
+        if (options.onLoad) {
+            target.prototype.onLoad = options.onLoad
+        }
+        if (options.onJoin) {
+            target.prototype.onJoin = options.onJoin
+        }
+        if (options.onLeave) {
+            target.prototype.onLeave = options.onLeave
+        }
     }
 }
