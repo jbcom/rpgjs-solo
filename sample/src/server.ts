@@ -33,13 +33,15 @@ export default createServer({
           },
           async onConnected(player: RpgPlayer) {
             player.name.set('plop')
-            await player.changeMap("map");
+            await player.changeMap("map", {
+              x: 100,
+              y: 100,
+            });
             // console.log(player.conn?.state)
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             console.log("join map");
             player.setGraphic("hero");
-            player.teleport({ x: 100, y: 100 }); 
           },
           onLeaveMap: (player: RpgPlayer, map: RpgMap) => {
 

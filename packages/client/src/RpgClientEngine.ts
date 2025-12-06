@@ -247,6 +247,10 @@ export class RpgClientEngine<T = any> {
       this.stopSound(soundId);
     });
 
+    this.webSocket.on("stopAllSounds", () => {
+      this.stopAllSounds();
+    });
+
     this.webSocket.on("cameraFollow", (data) => {
       const { targetId, smoothMove } = data;
       this.setCameraFollow(targetId, smoothMove);
@@ -699,6 +703,26 @@ export class RpgClientEngine<T = any> {
     } else {
       console.warn(`Sound with id "${soundId}" not found or cannot be stopped`);
     }
+  }
+
+  /**
+   * Stop all currently playing sounds
+   * 
+   * This method stops all sounds that are currently playing.
+   * Useful when changing maps to prevent sound overlap.
+   * 
+   * @example
+   * ```ts
+   * // Stop all sounds
+   * engine.stopAllSounds();
+   * ```
+   */
+  stopAllSounds(): void {
+    this.sounds.forEach((sound) => {
+      if (sound && sound.stop) {
+        sound.stop();
+      }
+    });
   }
 
   /**

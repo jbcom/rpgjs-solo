@@ -868,6 +868,27 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   }
 
   /**
+   * Stop all currently playing sounds for this player
+   * 
+   * This method stops all sounds that are currently playing for the player.
+   * Useful when changing maps to prevent sound overlap.
+   * 
+   * @example
+   * ```ts
+   * // Stop all sounds before changing map
+   * player.stopAllSounds();
+   * await player.changeMap("new-map");
+   * ```
+   */
+  stopAllSounds(): void {
+    const map = this.getCurrentMap();
+    if (!map) return;
+
+    // Send stop all command only to this player
+    this.emit("stopAllSounds", {});
+  }
+
+  /**
    * Make the camera follow another player or event
    * 
    * This method sends an instruction to the client to fix the viewport on another sprite.

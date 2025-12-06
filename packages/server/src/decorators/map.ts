@@ -98,6 +98,29 @@ export interface MapOptions {
     sounds?: string[]
 
     /** 
+     * Whether to stop all sounds before playing the map sounds when a player joins.
+     * 
+     * If set to `true`, all currently playing sounds will be stopped before playing the new map sounds.
+     * This prevents sound overlap when changing maps.
+     * 
+     * By default, this is `false`, meaning sounds from the previous map will continue playing.
+     * 
+     * ```ts
+     * @MapData({
+     *     id: 'battle-map',
+     *     sounds: ['battle-theme'],
+     *     stopAllSoundsBeforeJoin: true // Stop all sounds before playing battle theme
+     * })
+     * class BattleMap extends RpgMap {}
+     * ```
+     * 
+     * @prop {boolean} [stopAllSoundsBeforeJoin=false]
+     * @memberof MapData
+     * @since 5.0.0
+     * */
+    stopAllSoundsBeforeJoin?: boolean
+
+    /** 
      * Specify which properties will be synchronized with the client. On the client side, you can retrieve the values synchronized with the valueChanges property on the scene
      * 
      * You must create the schema:
@@ -256,6 +279,7 @@ export function MapData(options: MapOptions) {
         target.prototype.id = options.id
         target.prototype.sounds = options.sounds
         target.prototype.lowMemory = options.lowMemory
+        target.prototype.stopAllSoundsBeforeJoin = options.stopAllSoundsBeforeJoin
 
         target.prototype.$schema = {}
 
