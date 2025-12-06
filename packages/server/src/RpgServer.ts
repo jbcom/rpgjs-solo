@@ -2,16 +2,43 @@ import { MapOptions } from "./decorators/map"
 import { RpgPlayer } from "./Player/Player"
 import { type RpgMap } from "./rooms/map"
 import { RpgServerEngine } from "./RpgServerEngine"
+import { WorldMapConfig, RpgShape } from "@rpgjs/common"
+import { RpgEvent } from "./Player/Player"
 
-type RpgShape = any
 type RpgClassMap<T> = new () => T
-type RpgClassEvent<T> = any
-type RpgEvent = any
+type RpgClassEvent<T> = RpgEvent
 type MatchMakerOption = any
 type RpgMatchMaker = any
 type IStoreState = any
-type TiledMap = any
-type WorldMap = any
+
+/**
+ * Interface for world map configuration
+ * 
+ * Represents a world that contains multiple maps with their spatial relationships.
+ * This is typically used with Tiled Map Editor's world files.
+ * 
+ * @interface WorldMap
+ * @example
+ * ```ts
+ * const worldMap: WorldMap = {
+ *   id: 'my-world',
+ *   maps: [
+ *     { id: 'map1', worldX: 0, worldY: 0, width: 800, height: 600 },
+ *     { id: 'map2', worldX: 800, worldY: 0, width: 800, height: 600 }
+ *   ]
+ * }
+ * ```
+ */
+export interface WorldMap {
+  /** Optional world identifier */
+  id?: string;
+  /** Array of map configurations that belong to this world */
+  maps: WorldMapConfig[];
+  /** Only show adjacent maps (used by Tiled Map Editor) */
+  onlyShowAdjacentMaps?: boolean;
+  /** Type identifier (used by Tiled Map Editor, should be 'world') */
+  type?: 'world';
+}
 
 
 export interface RpgServerEngineHooks {
@@ -782,41 +809,59 @@ export interface RpgServer {
     events?: RpgClassEvent<RpgEvent>[]
 
     /**
-     * Loads the content of a `.world` file from Tiled Map Editor into the map scene
+     * Array of world map configurations
      * 
-     * > Note, that if the map already exists (i.e. you have already defined an RpgMap), the world will retrieve the already existing map. Otherwise it will create a new map
+     * Loads the content of a `.world` file from Tiled Map Editor into the map scene.
+     * Each world contains multiple maps with their spatial relationships.
      * 
-     * @prop {object[]} [worldMaps]
-     * object is 
-     * ```ts
-     * {
-     *  id?: string
-     *  maps: {
-     *      id?: string
-     *      properties?: object
-     *      fileName: string;
-            height: number;
-            width: number;
-            x: number;
-            y: number;
-     *  }[],
-        onlyShowAdjacentMaps: boolean, // only for Tiled Map Editor
-        type: 'world' // only for Tiled Map Editor
-     * }
-     * ```
+     * > Note: If a map already exists (i.e. you have already defined an RpgMap), 
+     * > the world will retrieve the already existing map. Otherwise it will create a new map.
+     * 
+     * @prop {WorldMap[]} [worldMaps]
      * @since 3.0.0-beta.8
+     * @memberof RpgServer
      * @example
      * ```ts
      * import myworld from 'myworld.world'
      * 
      * @RpgModule<RpgServer>({
-     *      worldMaps: [
-     *          myworld
-     *      ]
+     *     worldMaps: [
+     *         myworld
+     *     ]
      * })
-     * class RpgServerEngine { } 
+     * class RpgServerEngine {}
      * ```
-     * @memberof RpgServer
+     * 
+     * @example
+     * ```ts
+     * // Manual world configuration
+     * @RpgModule<RpgServer>({
+     *     worldMaps: [
+     *         {
+     *             id: 'my-world',
+     *             maps: [
+     *                 {
+     *                     id: 'map1',
+     *                     worldX: 0,
+     *                     worldY: 0,
+     *                     width: 800,
+     *                     height: 600,
+     *                     tileWidth: 32,
+     *                     tileHeight: 32
+     *                 },
+     *                 {
+     *                     id: 'map2',
+     *                     worldX: 800,
+     *                     worldY: 0,
+     *                     width: 800,
+     *                     height: 600
+     *                 }
+     *             ]
+     *         }
+     *     ]
+     * })
+     * class RpgServerEngine {}
+     * ```
      */
     worldMaps?: WorldMap[]
 
@@ -866,6 +911,10 @@ export interface RpgServer {
         coefficientElements?: (a, b, bDef) => number
     }
 
+    /*
+    * Scalability configuration for the server
+    * @deprecated
+    */
     scalability?: {
         matchMaker: MatchMakerOption,
         stateStore: IStoreState
