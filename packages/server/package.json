@@ -18,15 +18,15 @@
     "@rpgjs/common": "workspace:*",
     "@rpgjs/physic": "workspace:*",
     "@rpgjs/database": "^4.3.0",
-    "@signe/di": "^2.5.1",
-    "@signe/reactive": "^2.5.1",
-    "@signe/room": "^2.5.1",
-    "@signe/sync": "^2.5.1",
+    "@signe/di": "^2.5.2",
+    "@signe/reactive": "^2.5.2",
+    "@signe/room": "^2.5.2",
+    "@signe/sync": "^2.5.2",
     "rxjs": "^7.8.2",
     "zod": "^4.1.13"
   },
   "devDependencies": {
-    "vite": "^7.2.4",
+    "vite": "^7.2.6",
     "vite-plugin-dts": "^4.5.4"
   },
   "type": "module"

@@ -21,3 +21,4 @@ export { Control } from "./services/keyboardControls";
 export { RpgClientObject } from "./Game/Object";
 export { RpgClientPlayer } from "./Game/Player";
 export { RpgClientEvent } from "./Game/Event";
+export { withMobile } from "./components/gui/mobile";

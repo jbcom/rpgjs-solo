@@ -14,7 +14,7 @@ export enum Control {
 
 export function provideKeyboardControls() {
   return {
-    provide: KeyboardControls,
+    provide: 'KeyboardControls',
     useValue: null,
   };
 }

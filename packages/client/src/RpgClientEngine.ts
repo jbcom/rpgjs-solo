@@ -1,5 +1,5 @@
 import Canvas from "./components/scenes/canvas.ce";
-import { Context, inject } from "@signe/di";
+import { inject } from './core/inject'
 import { signal, bootstrapCanvas, KeyboardControls, Howl, trigger } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
@@ -64,12 +64,12 @@ export class RpgClientEngine<T = any> {
   private readonly PING_INTERVAL_MS = 5000; // Send ping every 5 seconds
   private lastInputTime = 0;
 
-  constructor(public context: Context) {
-    this.webSocket = inject(context, WebSocketToken);
-    this.guiService = inject(context, RpgGui);
-    this.loadMapService = inject(context, LoadMapToken);
-    this.hooks = inject<Hooks>(context, ModulesToken);
-    this.globalConfig = inject(context, GlobalConfigToken)
+  constructor(public context) {
+    this.webSocket = inject(WebSocketToken);
+    this.guiService = inject(RpgGui);
+    this.loadMapService = inject(LoadMapToken);
+    this.hooks = inject<Hooks>(ModulesToken);
+    this.globalConfig = inject(GlobalConfigToken)
 
     if (!this.globalConfig) {
       this.globalConfig = {} as T
@@ -127,8 +127,8 @@ export class RpgClientEngine<T = any> {
    * ```
    */
   setKeyboardControls(controlInstance: any) {
-    const currentValues = this.context.values['inject:' + KeyboardControls]
-    this.context.values['inject:' + KeyboardControls] = {
+    const currentValues = this.context.values['inject:' + 'KeyboardControls']
+    this.context.values['inject:' + 'KeyboardControls'] = {
       ...currentValues,
       values: new Map([['__default__', controlInstance]])
     }

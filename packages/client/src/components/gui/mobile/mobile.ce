@@ -1,0 +1,95 @@
+<Container justifyContent="space-between" alignItems="flex-end" width="100%" height="100%">
+    <Container justifyContent="flex-start" alignItems="flex-end" margin={100} gap={20}>
+        <Button 
+            text="A"
+            width={60}
+            height={60}
+            style={{
+                backgroundColor: {
+                    normal: '#4CAF50',
+                    hover: '#45a049',
+                    pressed: '#3d8b40'
+                },
+                border: {
+                    color: '#2e7d32',
+                    width: 3,
+                    radius: 30
+                },
+                text: {
+                    color: '#ffffff',
+                    fontSize: 24,
+                    fontFamily: 'Arial'
+                }
+            }}
+            click={onButtonAClick}
+        />
+        <Button 
+            text="B"
+            width={60}
+            height={60}
+            style={{
+                backgroundColor: {
+                    normal: '#f44336',
+                    hover: '#da190b',
+                    pressed: '#c62828'
+                },
+                border: {
+                    color: '#b71c1c',
+                    width: 3,
+                    radius: 30
+                },
+                text: {
+                    color: '#ffffff',
+                    fontSize: 24,
+                    fontFamily: 'Arial'
+                }
+            }}
+            click={onButtonBClick}
+        />
+    </Container>
+    <Container margin={100}>
+         <Joystick onChange onEnd />
+    </Container>
+ </Container>
+ 
+ <script>
+     import { effect } from 'canvasengine'
+     import { Joystick } from '@canvasengine/presets'
+     import { Button } from 'canvasengine'
+     import { inject } from '../../../core/inject'
+     import { RpgClientEngine } from '../../../RpgClientEngine'
+
+    let lastDirection = null
+    const client = inject(RpgClientEngine)
+
+    const onChange = (event) => {
+       const control = inject('KeyboardControls')
+       if (lastDirection !== event.direction) {
+           if (lastDirection !== null) {
+               control.applyControl(lastDirection, true)
+           }
+           lastDirection = event.direction
+           control.applyControl(lastDirection)
+       }
+    }
+    
+    const onEnd = () => {
+       const control = inject('KeyboardControls')
+       if (lastDirection !== null) {
+           control.applyControl(lastDirection, false)
+           lastDirection = null
+       }
+    }
+
+    const onButtonAClick = () => {
+        if (client) {
+            client.processAction({ action: 'action' })
+        }
+    }
+
+    const onButtonBClick = () => {
+        if (client) {
+            client.processAction({ action: 'back' })
+        }
+    }
+ </script>

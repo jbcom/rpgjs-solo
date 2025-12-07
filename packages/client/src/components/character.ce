@@ -432,7 +432,7 @@
   mount((element) => {
     hooks.callHooks("client-sprite-onAdd", object).subscribe()
     hooks.callHooks("client-sceneMap-onAddSprite", client.sceneMap, object).subscribe()
-    client.setKeyboardControls(element.directives.controls)
+    if (isMe()) client.setKeyboardControls(element.directives.controls)
   })
 
   /**

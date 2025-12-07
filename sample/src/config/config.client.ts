@@ -23,6 +23,7 @@ import { provideTiledMap } from "@rpgjs/tiledmap/client";
 import { provideMain } from "../modules/main";
 import TooltipComponent from "../components/tooltip.ce";
 import { RpgClientObject } from "@rpgjs/client";
+import { withMobile } from "@rpgjs/client";
 
 
 export default {
@@ -46,6 +47,7 @@ export default {
     provideClientGlobalConfig(),
     provideMain(),
     provideClientModules([
+      withMobile(),
       {
         spritesheetResolver: (id: string) => {
           if (id === "hero") {
@@ -76,7 +78,10 @@ export default {
         },
         sceneMap: {
           onAfterLoading: (scene) => {
-
+          //   const engine = inject(RpgClientEngine)
+          //   effect(() => {
+          //     console.log(engine.sceneMap.currentPlayer()?.x()) 
+          //  })
           },
         },
         sounds: [

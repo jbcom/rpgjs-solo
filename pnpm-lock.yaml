@@ -86,27 +86,27 @@ importers:
         specifier: workspace:*
         version: link:../physic
       '@signe/di':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.2
+        version: 2.5.2
       '@signe/reactive':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.2
+        version: 2.5.2
       '@signe/sync':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.2
+        version: 2.5.2
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
     devDependencies:
       vite:
-        specifier: ^7.2.4
-        version: 7.2.4(@types/node@24.10.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.1)
+        specifier: ^7.2.6
+        version: 7.2.6(@types/node@24.10.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.1)
       vite-plugin-dts:
         specifier: ^4.5.4
-        version: 4.5.4(@types/node@24.10.1)(rollup@4.46.2)(typescript@5.9.3)(vite@7.2.4(@types/node@24.10.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.1))
+        version: 4.5.4(@types/node@24.10.1)(rollup@4.46.2)(typescript@5.9.3)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.1))
       vitest:
-        specifier: ^4.0.14
-        version: 4.0.14(@types/node@24.10.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.1)
+        specifier: ^4.0.15
+        version: 4.0.15(@types/node@24.10.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.1)
 
   packages/physic:
     devDependencies:
@@ -150,17 +150,17 @@ importers:
         specifier: workspace:*
         version: link:../physic
       '@signe/di':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.2
+        version: 2.5.2
       '@signe/reactive':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.2
+        version: 2.5.2
       '@signe/room':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.2
+        version: 2.5.2
       '@signe/sync':
-        specifier: ^2.5.1
-        version: 2.5.1
+        specifier: ^2.5.2
+        version: 2.5.2
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -169,11 +169,11 @@ importers:
         version: 4.1.13
     devDependencies:
       vite:
-        specifier: ^7.2.4
-        version: 7.2.4(@types/node@24.10.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.1)
+        specifier: ^7.2.6
+        version: 7.2.6(@types/node@24.10.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.1)
       vite-plugin-dts:
         specifier: ^4.5.4
-        version: 4.5.4(@types/node@24.10.1)(rollup@4.46.2)(typescript@5.9.3)(vite@7.2.4(@types/node@24.10.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.1))
+        version: 4.5.4(@types/node@24.10.1)(rollup@4.46.2)(typescript@5.9.3)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.1))
 
   packages/tiledmap:
     dependencies:
@@ -1053,26 +1053,14 @@ packages:
   '@shikijs/vscode-textmate@10.0.2':
     resolution: {integrity: sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==}
 
-  '@signe/di@2.5.1':
-    resolution: {integrity: sha512-Lg5IQG+jBd9b+Pg1M0lYYQYNsVFzei+y5X6yivshb5+OkOK0sgZGW1iHZJgRbGcW9ovEsYud12f9kB9QCooSEQ==}
-
   '@signe/di@2.5.2':
     resolution: {integrity: sha512-SIwYkPwTaqw8QXLeb2XdQrthQpebdGc9ZLYq4tSvg4uWt3tJv1PGLgKhUcp/OAVRUTzdGE/GCTlZGFU3bfjsWg==}
-
-  '@signe/reactive@2.5.1':
-    resolution: {integrity: sha512-rIaOqGtmTZyEaGce4NPRgMP4ZT+elAG7s5Jb8OcFNImeTAg4VzUPrDULA0FzS/q1Ak/YbqHFUaclcVxkOCVrDA==}
 
   '@signe/reactive@2.5.2':
     resolution: {integrity: sha512-gqQDKFl6iNN7HoVLHQ7nKSx9/88RwziPUX3cyNwaBTjZJ07udYg9ZqYPoUt4qMZay5qWGwENw8OVN43Qw79hXQ==}
 
-  '@signe/room@2.5.1':
-    resolution: {integrity: sha512-6wsk5j69nHPtlsHmaLfFmJ+F1FFOHOE4x2FuZEM7uQk+VWSHV4/b8duScacjYhyTX4a/Lzvd/7Jclc4G+e19ww==}
-
   '@signe/room@2.5.2':
     resolution: {integrity: sha512-TNHsP42XlKYJ6HEMtIk9yp2FhIisukdmhoLUxffzOTXWTBgbDZ21V3U9j0UE07uaRQD8fxyKOMgRJYyCJbgG/w==}
-
-  '@signe/sync@2.5.1':
-    resolution: {integrity: sha512-n+5ucKBrZxpQcte453D6bw4bXDm21O6AaDzzLqRqePFXJROyPol2r5+qJvD1MdANrEuCLd6E91/X0zJLgHAgqQ==}
 
   '@signe/sync@2.5.2':
     resolution: {integrity: sha512-JvyFSd61EL5/NrViiThl5uZ8xRmwdz8RTLcug15txgrASGHmtuZOkB4NPGkYpz2+oq8NuJVLp2ttp5VceFbkfA==}
@@ -3480,24 +3468,11 @@ snapshots:
 
   '@shikijs/vscode-textmate@10.0.2': {}
 
-  '@signe/di@2.5.1': {}
-
   '@signe/di@2.5.2': {}
-
-  '@signe/reactive@2.5.1':
-    dependencies:
-      rxjs: 7.8.2
 
   '@signe/reactive@2.5.2':
     dependencies:
       rxjs: 7.8.2
-
-  '@signe/room@2.5.1':
-    dependencies:
-      '@signe/sync': 2.5.1
-      dset: 3.1.4
-      partysocket: 1.1.5
-      zod: 3.25.76
 
   '@signe/room@2.5.2':
     dependencies:
@@ -3505,12 +3480,6 @@ snapshots:
       dset: 3.1.4
       partysocket: 1.1.5
       zod: 3.25.76
-
-  '@signe/sync@2.5.1':
-    dependencies:
-      '@signe/reactive': 2.5.1
-      partysocket: 1.1.5
-      rxjs: 7.8.2
 
   '@signe/sync@2.5.2':
     dependencies:
@@ -3949,7 +3918,7 @@ snapshots:
     dependencies:
       '@barvynkoa/particle-emitter': 0.0.1(pixi.js@8.14.3)
       '@pixi/layout': 3.1.0(@types/react@19.1.10)(pixi.js@8.14.3)(react@19.1.1)(yoga-layout@3.2.1)
-      '@signe/reactive': 2.5.1
+      '@signe/reactive': 2.5.2
       howler: 2.2.4
       pixi-filters: 6.1.4(pixi.js@8.14.3)
       pixi-viewport: 6.0.3(pixi.js@8.14.3)
