@@ -1,0 +1,51 @@
+<Rect
+  x={0} 
+  y={0} 
+  width={width}
+  height={height}
+  color="black"
+  alpha={opacity}
+/>
+
+<script>
+  import { animatedSignal, mount, computed } from "canvasengine";
+  import { inject, RpgClientEngine } from "@rpgjs/client";
+
+  const {
+    onFinish,
+    duration,
+    color,
+    fadeIn
+  } = defineProps({
+    duration: {
+      default: 1000
+    },
+    color: {
+      default: 'black'
+    },
+    fadeIn: {
+      default: true
+    }
+  });
+
+  const engine = inject(RpgClientEngine);
+  
+  // Calculate width and height from engine
+  const width = 1920
+  
+  const height = 1080
+
+  // Animation: fade in from transparent to opaque, or fade out from opaque to transparent
+  const opacity = animatedSignal(fadeIn() ? 0 : 1, {
+    duration: duration(),
+    onComplete: () => {
+      if (onFinish) {
+        onFinish();
+      }
+    }
+  });
+
+  mount(() => {
+    opacity.set(fadeIn() ? 1 : 0);
+  });
+</script>

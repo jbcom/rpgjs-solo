@@ -17,6 +17,7 @@ import Shadow from "../components/shadow.ce";
 import WoodComponent from "../components/wood.ce";
 import WoodUiComponent from "../components/wood-ui.ce";
 import VueComponent from "../vue-component-with-injections.vue";
+import FadeComponent from "../components/fade.ce";
 import { signal, effect } from 'canvasengine'
 import { provideVueGui } from "@rpgjs/vue";
 import { provideTiledMap } from "@rpgjs/tiledmap/client";
@@ -73,15 +74,26 @@ export default {
         sprite: {
           componentsBehind: [Shadow],
           onInit: (sprite) => {
-            const engine = inject(RpgClientEngine)
+           
           }
         },
+        transitions: [
+          {
+            id: "fade",
+            component: FadeComponent,
+          },
+        ],
         sceneMap: {
+
           onAfterLoading: (scene) => {
           //   const engine = inject(RpgClientEngine)
           //   effect(() => {
           //     console.log(engine.sceneMap.currentPlayer()?.x()) 
           //  })
+            const engine = inject(RpgClientEngine)
+            setTimeout(() => {
+              engine.startTransition("fade")
+            }, 1000)
           },
         },
         sounds: [

@@ -12,6 +12,7 @@ import { load } from "@signe/sync";
 import { RpgClientMap } from "./Game/Map"
 import { RpgGui } from "./Gui/Gui";
 import { AnimationManager } from "./Game/AnimationManager";
+import { TransitionManager } from "./Game/TransitionManager";
 import { lastValueFrom, Observable } from "rxjs";
 import { GlobalConfigToken } from "./module";
 import * as PIXI from "pixi.js";
@@ -36,6 +37,7 @@ export class RpgClientEngine<T = any> {
   spritesheets: Map<string, any> = new Map();
   sounds: Map<string, any> = new Map();
   componentAnimations: any[] = [];
+  transitions: any[] = [];
   private spritesheetResolver?: (id: string) => any | Promise<any>;
   private soundResolver?: (id: string) => any | Promise<any>;
   particleSettings: {
@@ -161,6 +163,7 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-gui-load", this).subscribe();
     this.hooks.callHooks("client-particles-load", this).subscribe();
     this.hooks.callHooks("client-componentAnimations-load", this).subscribe();
+    this.hooks.callHooks("client-transitions-load", this).subscribe();
     this.hooks.callHooks("client-sprite-load", this).subscribe();
 
     await lastValueFrom(this.hooks.callHooks("client-engine-onStart", this));
@@ -932,6 +935,196 @@ export class RpgClientEngine<T = any> {
       throw new Error(`Component animation with id ${id} not found`)
     }
     return componentAnimation.instance
+  }
+
+  /**
+   * Add a transition to the engine
+   * 
+   * Transitions are screen effects that can be displayed during scene changes,
+   * map loading, or any other moment where a visual transition is needed.
+   * They are displayed on top of the entire canvas and can have custom props
+   * that can be functions (similar to ComponentAnimation).
+   * 
+   * @param transition - The transition configuration
+   * @param transition.id - Unique identifier for the transition
+   * @param transition.component - The component function to render
+   * @param transition.props - Optional props to pass to the component (can be a function)
+   * @returns The added transition configuration
+   * 
+   * @example
+   * ```ts
+   * // Add a fade transition
+   * engine.addTransition({
+   *   id: 'fade',
+   *   component: FadeComponent
+   * });
+   * 
+   * // Add a transition with props
+   * engine.addTransition({
+   *   id: 'slide',
+   *   component: SlideComponent,
+   *   props: { direction: 'left', duration: 500 }
+   * });
+   * 
+   * // Add a transition with function props
+   * engine.addTransition({
+   *   id: 'custom',
+   *   component: CustomTransition,
+   *   props: (engine) => ({ width: engine.width(), height: engine.height() })
+   * });
+   * ```
+   */
+  addTransition(transition: {
+    component: any,
+    id: string,
+    props?: any | ((engine: RpgClientEngine) => any)
+  }) {
+    const instance = new TransitionManager()
+    this.transitions.push({
+      id: transition.id,
+      component: transition.component,
+      props: transition.props,
+      instance: instance,
+      current: instance.current
+    })
+    return transition;
+  }
+
+  /**
+   * Remove a transition from the engine
+   * 
+   * Removes a transition by its ID. This will not affect any currently
+   * running transitions, only prevent new ones from being started.
+   * 
+   * @param id - The unique identifier of the transition to remove
+   * @returns true if the transition was found and removed, false otherwise
+   * 
+   * @example
+   * ```ts
+   * // Remove a transition
+   * engine.removeTransition('fade');
+   * ```
+   */
+  removeTransition(id: string): boolean {
+    const index = this.transitions.findIndex((transition) => transition.id === id);
+    if (index !== -1) {
+      this.transitions.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Modify an existing transition
+   * 
+   * Updates the component or props of an existing transition. This will
+   * not affect any currently running transitions, only future ones.
+   * 
+   * @param id - The unique identifier of the transition to modify
+   * @param updates - The updates to apply (component and/or props)
+   * @returns true if the transition was found and modified, false otherwise
+   * 
+   * @example
+   * ```ts
+   * // Update transition props
+   * engine.modifyTransition('fade', {
+   *   props: { duration: 2000, color: 'white' }
+   * });
+   * 
+   * // Update transition component
+   * engine.modifyTransition('fade', {
+   *   component: NewFadeComponent
+   * });
+   * ```
+   */
+  modifyTransition(id: string, updates: {
+    component?: any,
+    props?: any | ((engine: RpgClientEngine) => any)
+  }): boolean {
+    const transition = this.transitions.find((transition) => transition.id === id);
+    if (!transition) {
+      return false;
+    }
+    if (updates.component !== undefined) {
+      transition.component = updates.component;
+    }
+    if (updates.props !== undefined) {
+      transition.props = updates.props;
+    }
+    return true;
+  }
+
+  /**
+   * Get a transition by its ID
+   * 
+   * Retrieves the TransitionManager instance for a specific transition,
+   * which can be used to start the transition.
+   * 
+   * @param id - The unique identifier of the transition
+   * @returns The TransitionManager instance for the transition
+   * @throws Error if the transition is not found
+   * 
+   * @example
+   * ```ts
+   * // Get a transition and start it
+   * const fadeTransition = engine.getTransition('fade');
+   * fadeTransition.start({ duration: 1000 });
+   * ```
+   */
+  getTransition(id: string): TransitionManager {
+    const transition = this.transitions.find((transition) => transition.id === id)
+    if (!transition) {
+      throw new Error(`Transition with id ${id} not found`)
+    }
+    return transition.instance
+  }
+
+  /**
+   * Start a transition
+   * 
+   * Convenience method to start a transition by its ID. This combines
+   * getTransition and start into a single call. The transition will
+   * automatically receive an onFinish callback to remove itself when done.
+   * 
+   * @param id - The unique identifier of the transition to start
+   * @param props - Additional props to pass to the transition component
+   * @returns The created transition object
+   * 
+   * @example
+   * ```ts
+   * // Start a fade transition
+   * engine.startTransition('fade', { duration: 1000, color: 'black' });
+   * 
+   * // Start with onFinish callback
+   * engine.startTransition('fade', {
+   *   duration: 1000,
+   *   onFinish: () => console.log('Fade complete')
+   * });
+   * ```
+   */
+  startTransition(id: string, props: any = {}) {
+    const transition = this.transitions.find((t) => t.id === id);
+    if (!transition) {
+      throw new Error(`Transition with id ${id} not found`);
+    }
+
+    // Get base props (can be a function or object)
+    let baseProps = {};
+    if (transition.props) {
+      if (typeof transition.props === 'function') {
+        baseProps = transition.props(this);
+      } else {
+        baseProps = transition.props;
+      }
+    }
+
+    // Merge base props with provided props (provided props take precedence)
+    const finalProps = {
+      ...baseProps,
+      ...props,
+    };
+
+    return transition.instance.start(finalProps);
   }
 
   async processInput({ input }: { input: Direction }) {

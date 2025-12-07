@@ -155,6 +155,16 @@ export function provideClientModules(modules: RpgClientModule[]): FactoryProvide
           },
         };
       }
+      if (module.transitions) {
+        const transitions = [...module.transitions];
+        module.transitions = {
+          load: (engine: RpgClientEngine) => {
+            transitions.forEach((transition) => {
+              engine.addTransition(transition);
+            });
+          },
+        };
+      }
       if (module.particles) {
         const particles = [...module.particles];
         module.particles = {

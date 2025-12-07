@@ -14,7 +14,16 @@
           }} /> 
         }
       </Container>
-  } 
+  }
+  <Container positionType="absolute" top={0} left={0} right={0} bottom={0}>
+    @for (transition of transitions) {
+      <Container>
+        @for (activeTransition of transition.current) {
+          <transition.component ...activeTransition />
+        }
+      </Container>
+    }
+  </Container>
 </Canvas>
 
 <script>
@@ -30,6 +39,7 @@
   const gui = computed(() => {
     return Object.values(guiService.gui()).filter((gui) => !gui.attachToSprite)
   })
+  const transitions = engine.transitions
   const worldWidth = computed(() => sceneData()?.width)
   const worldHeight = computed(() => sceneData()?.height)
 

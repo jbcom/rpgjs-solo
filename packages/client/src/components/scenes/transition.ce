@@ -1,0 +1,60 @@
+<Rect
+  x={0} 
+  y={0} 
+  width={@engine.width} 
+  height={@engine.height} 
+  fill={color} 
+  alpha={opacity} 
+  zIndex={100000}
+/>
+
+<script>
+  import { animatedSignal, mount, computed, signal } from "canvasengine";
+  import { inject } from "../../core/inject";
+  import { RpgClientEngine } from "../../RpgClientEngine";
+
+  const {
+    onFinish,
+    duration,
+    color,
+    fadeIn
+  } = defineProps({
+    duration: {
+      default: 1000
+    },
+    color: {
+      default: 'black'
+    },
+    fadeIn: {
+      default: true
+    }
+  });
+
+  const engine = inject(RpgClientEngine);
+  
+  // Calculate width and height from engine
+  const width = computed(() => {
+    const w = engine.width();
+    return typeof w === 'string' ? parseInt(w) || 1920 : w;
+  });
+  
+  const height = computed(() => {
+    const h = engine.height();
+    return typeof h === 'string' ? parseInt(h) || 1080 : h;
+  });
+
+  // Animation: fade in from transparent to opaque, or fade out from opaque to transparent
+  const opacity = animatedSignal(fadeIn() ? 0 : 1, {
+    duration: duration(),
+    onComplete: () => {
+      if (onFinish) {
+        onFinish();
+      }
+    }
+  });
+
+  mount(() => {
+    // Start the fade animation
+    opacity.set(fadeIn() ? 1 : 0);
+  });
+</script>
