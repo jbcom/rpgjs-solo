@@ -1,18 +1,25 @@
 <Container x={smoothX} y={smoothY} zIndex={y} viewportFollow={shouldFollowCamera} controls onBeforeDestroy visible >
-  @for (component of componentsBehind) {
+  @for (compConfig of normalizedComponentsBehind) {
     <Container>
-      <component object />
+      <compConfig.component object ...compConfig.props />
     </Container>
   } 
   <Particle emit={@emitParticleTrigger} settings={@particleSettings} zIndex={1000} name={particleName} />
   <Container>
     @for (graphicObj of graphicsSignals) {
-      <Sprite sheet={@sheet(@graphicObj)} direction tint hitbox flash={flashConfig}  />
+      <Sprite 
+        sheet={@sheet(@graphicObj)} 
+        direction 
+        tint 
+        hitbox 
+        flash={flashConfig}
+        
+        />
     }
   </Container>
-  @for (component of componentsInFront) {
-    <Container>
-      <component object />
+  @for (compConfig of normalizedComponentsInFront) {
+    <Container dependencies={@compConfig.@dependencies}>
+      <compConfig.component object ...compConfig.props />
     </Container>
   } 
   @for (attachedGui of attachedGuis) {
@@ -52,6 +59,137 @@
   const componentsBehind = client.spriteComponentsBehind;
   const componentsInFront = client.spriteComponentsInFront;
   const isMe = computed(() => id() === playerId);
+
+  /**
+   * Normalize a single sprite component configuration
+   * 
+   * Handles both direct component references and configuration objects with optional props and dependencies.
+   * Extracts the component reference and creates a computed function that returns the props.
+   * 
+   * ## Design
+   * 
+   * Supports two formats:
+   * 1. Direct component: `ShadowComponent`
+   * 2. Configuration object: `{ component: LightHalo, props: {...}, dependencies: (object) => [...] }`
+   * 
+   * The normalization process:
+   * - Extracts the actual component from either format
+   * - Extracts dependencies function if provided
+   * - Creates a computed function that returns props (static object or dynamic function result)
+   * - Returns a normalized object with `component`, `props`, and `dependencies`
+   * 
+   * @param comp - Component reference or configuration object
+   * @returns Normalized component configuration with component, props, and dependencies
+   * 
+   * @example
+   * ```ts
+   * // Direct component
+   * normalizeComponent(ShadowComponent)
+   * // => { component: ShadowComponent, props: {}, dependencies: undefined }
+   * 
+   * // With static props
+   * normalizeComponent({ component: LightHalo, props: { radius: 30 } })
+   * // => { component: LightHalo, props: { radius: 30 }, dependencies: undefined }
+   * 
+   * // With dynamic props and dependencies
+   * normalizeComponent({ 
+   *   component: HealthBar, 
+   *   props: (object) => ({ hp: object.hp(), maxHp: object.param.maxHp() }),
+   *   dependencies: (object) => [object.hp, object.param.maxHp]
+   * })
+   * // => { component: HealthBar, props: {...}, dependencies: (object) => [...] }
+   * ```
+   */
+  const normalizeComponent = (comp) => {
+    let componentRef;
+    let propsValue;
+    let dependenciesFn;
+    
+    // If it's a direct component reference
+    if (typeof comp === 'function' || (comp && typeof comp === 'object' && !comp.component)) {
+      componentRef = comp;
+      propsValue = undefined;
+      dependenciesFn = undefined;
+    }
+    // If it's a configuration object with component and props
+    else if (comp && typeof comp === 'object' && comp.component) {
+      componentRef = comp.component;
+      // Support both "data" (legacy) and "props" (new) for backward compatibility
+      propsValue = comp.props !== undefined ? comp.props : comp.data;
+      dependenciesFn = comp.dependencies;
+    }
+    // Fallback: treat as direct component
+    else {
+      componentRef = comp;
+      propsValue = undefined;
+      dependenciesFn = undefined;
+    }
+    
+    // Return props directly (object or function), not as computed
+    // The computed will be created in the template when needed
+    return {
+      component: componentRef,
+      props: typeof propsValue === 'function' ? propsValue(object) : propsValue || {},
+      dependencies: dependenciesFn ? dependenciesFn(object) : []
+    };
+  };
+
+  /**
+   * Normalize an array of sprite components
+   * 
+   * Applies normalization to each component in the array using `normalizeComponent`.
+   * 
+   * @param components - Array of component references or configuration objects
+   * @returns Array of normalized component configurations
+   */
+  const normalizeComponents = (components) => {
+    return components.map((comp) => normalizeComponent(comp));
+  };
+
+
+  /**
+   * Normalized components to render behind sprites
+   * Handles both direct component references and configuration objects with optional props and dependencies
+   * 
+   * Supports multiple formats:
+   * 1. Direct component: `ShadowComponent`
+   * 2. Configuration object: `{ component: LightHalo, props: {...} }`
+   * 3. With dynamic props: `{ component: LightHalo, props: (object) => {...} }`
+   * 4. With dependencies: `{ component: HealthBar, dependencies: (object) => [object.hp, object.param.maxHp] }`
+   * 
+   * Components with dependencies will only be displayed when all dependencies are resolved (!= undefined).
+   * The object is passed to the dependencies function to allow sprite-specific dependency resolution.
+   * 
+   * @example
+   * ```ts
+   * // Direct component
+   * componentsBehind: [ShadowComponent]
+   * 
+   * // With static props
+   * componentsBehind: [{ component: LightHalo, props: { radius: 30 } }]
+   * 
+   * // With dynamic props and dependencies
+   * componentsBehind: [{ 
+   *   component: HealthBar, 
+   *   props: (object) => ({ hp: object.hp(), maxHp: object.param.maxHp() }),
+   *   dependencies: (object) => [object.hp, object.param.maxHp]
+   * }]
+   * ```
+   */
+  const normalizedComponentsBehind = computed(() => {
+    return normalizeComponents(componentsBehind());
+  });
+
+  /**
+   * Normalized components to render in front of sprites
+   * Handles both direct component references and configuration objects with optional props and dependencies
+   * 
+   * See `normalizedComponentsBehind` for format details.
+   * Components with dependencies will only be displayed when all dependencies are resolved.
+   */
+  const normalizedComponentsInFront = computed(() => {
+    return normalizeComponents(componentsInFront());
+  });
   
   /**
    * Determine if the camera should follow this sprite

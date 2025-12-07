@@ -18,6 +18,15 @@ const guideMenu = [{
   ]
 }]
 
+const prebuiltComponentsMenu = [{
+  text: 'Prebuilt Components',
+  collapsed: false,
+  items: [
+    { text: "Overview", link: "/guide/prebuilt-components/" },
+    { text: "Light Halo", link: "/guide/prebuilt-components/light-halo" }
+  ]
+}]
+
 const guiMenu = [{
   text: 'GUI',
   collapsed: false,
@@ -73,6 +82,7 @@ export default {
   themeConfig: {
     search: {
       '/guide/': guideMenu,
+      '/guide/prebuilt-components/': prebuiltComponentsMenu,
       '/gui/': guiMenu,
       '/advanced/': advancedMenu,
       '/hooks/': hooksMenu,
@@ -113,7 +123,11 @@ export default {
       },
     ],
     sidebar: {
-      '/guide/': guideMenu,
+      '/guide/': [
+        guideMenu[0],
+        prebuiltComponentsMenu[0]
+      ],
+      '/guide/prebuilt-components/': prebuiltComponentsMenu,
       '/gui/': guiMenu,
       '/advanced/': advancedMenu,
       '/hooks/': hooksMenu,

@@ -53,11 +53,7 @@ export default createServer({
         maps: [
           {
             id: 'map',
-            events: [{ event: Event() }],
-            sounds: ['bgm'],
-            onJoin() {
-              console.log('testaa')
-            }
+            events: [{ event: Event() }]
           }
         ],
         worldMaps: [

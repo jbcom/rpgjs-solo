@@ -787,13 +787,38 @@ export class RpgClientEngine<T = any> {
    * Add a component to render behind sprites
    * Components added with this method will be displayed with a lower z-index than the sprite
    * 
-   * @param component - The component to add behind sprites
-   * @returns The added component
+   * Supports multiple formats:
+   * 1. Direct component: `ShadowComponent`
+   * 2. Configuration object: `{ component: LightHalo, props: {...} }`
+   * 3. With dynamic props: `{ component: LightHalo, props: (object) => {...} }`
+   * 4. With dependencies: `{ component: HealthBar, dependencies: (object) => [object.hp, object.param.maxHp] }`
+   * 
+   * Components with dependencies will only be displayed when all dependencies are resolved (!= undefined).
+   * The object (sprite) is passed to the dependencies function to allow sprite-specific dependency resolution.
+   * 
+   * @param component - The component to add behind sprites, or a configuration object
+   * @param component.component - The component function to render
+   * @param component.props - Static props object or function that receives the sprite object and returns props
+   * @param component.dependencies - Function that receives the sprite object and returns an array of Signals
+   * @returns The added component or configuration
    * 
    * @example
    * ```ts
    * // Add a shadow component behind all sprites
    * engine.addSpriteComponentBehind(ShadowComponent);
+   * 
+   * // Add a component with static props
+   * engine.addSpriteComponentBehind({ 
+   *   component: LightHalo, 
+   *   props: { radius: 30 } 
+   * });
+   * 
+   * // Add a component with dynamic props and dependencies
+   * engine.addSpriteComponentBehind({ 
+   *   component: HealthBar, 
+   *   props: (object) => ({ hp: object.hp(), maxHp: object.param.maxHp() }),
+   *   dependencies: (object) => [object.hp, object.param.maxHp]
+   * });
    * ```
    */
   addSpriteComponentBehind(component: any) {
@@ -805,16 +830,41 @@ export class RpgClientEngine<T = any> {
    * Add a component to render in front of sprites
    * Components added with this method will be displayed with a higher z-index than the sprite
    * 
-   * @param component - The component to add in front of sprites
-   * @returns The added component
+   * Supports multiple formats:
+   * 1. Direct component: `HealthBarComponent`
+   * 2. Configuration object: `{ component: StatusIndicator, props: {...} }`
+   * 3. With dynamic props: `{ component: HealthBar, props: (object) => {...} }`
+   * 4. With dependencies: `{ component: HealthBar, dependencies: (object) => [object.hp, object.param.maxHp] }`
+   * 
+   * Components with dependencies will only be displayed when all dependencies are resolved (!= undefined).
+   * The object (sprite) is passed to the dependencies function to allow sprite-specific dependency resolution.
+   * 
+   * @param component - The component to add in front of sprites, or a configuration object
+   * @param component.component - The component function to render
+   * @param component.props - Static props object or function that receives the sprite object and returns props
+   * @param component.dependencies - Function that receives the sprite object and returns an array of Signals
+   * @returns The added component or configuration
    * 
    * @example
    * ```ts
    * // Add a health bar component in front of all sprites
    * engine.addSpriteComponentInFront(HealthBarComponent);
+   * 
+   * // Add a component with static props
+   * engine.addSpriteComponentInFront({ 
+   *   component: StatusIndicator, 
+   *   props: { type: 'poison' } 
+   * });
+   * 
+   * // Add a component with dynamic props and dependencies
+   * engine.addSpriteComponentInFront({ 
+   *   component: HealthBar, 
+   *   props: (object) => ({ hp: object.hp(), maxHp: object.param.maxHp() }),
+   *   dependencies: (object) => [object.hp, object.param.maxHp]
+   * });
    * ```
    */
-  addSpriteComponentInFront(component: any) {
+  addSpriteComponentInFront(component: any | { component: any, props: (object: any) => any, dependencies?: (object: any) => any[] }) {
     this.spriteComponentsInFront.update((components: any[]) => [...components, component])
     return component
   }

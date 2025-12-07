@@ -241,4 +241,12 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     const engine = inject(RpgClientEngine);
     engine.getComponentAnimation(id).displayEffect(params, this);
   }
+  
+  isEvent(): boolean {
+    return this.type === 'event';
+  }
+
+  isPlayer(): boolean {
+    return this.type === 'player';
+  }
 }

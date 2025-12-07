@@ -2,6 +2,7 @@ import {
   BoxComponent,
   inject,
   KeyboardControls,
+  LightHalo,
   Presets,
   provideClientGlobalConfig,
   provideClientModules,
@@ -13,7 +14,6 @@ import {
 } from "@rpgjs/client";
 import Map from "../components/map.ce";
 import Shadow from "../components/shadow.ce";
-import HpBar from "../../../packages/client/src/components/prebuilt/hp-bar.ce";
 import WoodComponent from "../components/wood.ce";
 import WoodUiComponent from "../components/wood-ui.ce";
 import VueComponent from "../vue-component-with-injections.vue";
@@ -22,6 +22,7 @@ import { provideVueGui } from "@rpgjs/vue";
 import { provideTiledMap } from "@rpgjs/tiledmap/client";
 import { provideMain } from "../modules/main";
 import TooltipComponent from "../components/tooltip.ce";
+import { RpgClientObject } from "@rpgjs/client";
 
 
 export default {
@@ -70,7 +71,7 @@ export default {
         sprite: {
           componentsBehind: [Shadow],
           onInit: (sprite) => {
-            sprite.wood = signal(0)
+            const engine = inject(RpgClientEngine)
           }
         },
         sceneMap: {

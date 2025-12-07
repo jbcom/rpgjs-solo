@@ -17,6 +17,7 @@
  */
 
 export { default as HpBar } from './hp-bar.ce';
+export { default as LightHalo } from './light-halo.ce';
 
 
 
