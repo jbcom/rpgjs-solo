@@ -25,7 +25,7 @@
   @for (attachedGui of attachedGuis) {
     @if (shouldDisplayAttachedGui) {
       <Container>
-        <attachedGui.component ...attachedGui.data() object={object} onFinish={(data) => {
+        <attachedGui.component ...attachedGui.data() dependencies={@attachedGui.@dependencies} object={object} onFinish={(data) => {
           onAttachedGuiFinish(attachedGui, data)
         }} onInteraction={(name, data) => {
           onAttachedGuiInteraction(attachedGui, name, data)

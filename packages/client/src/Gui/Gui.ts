@@ -195,14 +195,13 @@ export class RpgGui {
     if (!guiId) {
       throw new Error("GUI must have a name or id");
     }
-
     const guiInstance: GuiInstance = {
       name: guiId,
       component: gui.component,
       display: signal(gui.display || false),
       data: signal(gui.data || {}),
       autoDisplay: gui.autoDisplay || false,
-      dependencies: gui.dependencies,
+      dependencies: gui.dependencies ? gui.dependencies() : [],
       attachToSprite: gui.attachToSprite || false,
     };
 
@@ -317,8 +316,9 @@ export class RpgGui {
       // Handle Vue component display
       this._handleVueComponentDisplay(id, data, dependencies, guiInstance);
     } else {
-      // Handle CanvasEngine component display
-      this._handleCanvasComponentDisplay(id, data, dependencies, guiInstance);
+      guiInstance.data.set(data);
+      guiInstance.display.set(true);
+      console.log(guiInstance.dependencies)
     }
   }
 
@@ -371,33 +371,7 @@ export class RpgGui {
    * @param guiInstance - GUI instance
    */
   private _handleCanvasComponentDisplay(id: string, data: any, dependencies: Signal[], guiInstance: GuiInstance) {
-    // Unsubscribe from previous subscription if exists
-    if (guiInstance.subscription) {
-      guiInstance.subscription.unsubscribe();
-      guiInstance.subscription = undefined;
-    }
-
-    // Use runtime dependencies or config dependencies
-    const deps = dependencies.length > 0 
-      ? dependencies 
-      : (guiInstance.dependencies ? guiInstance.dependencies() : []);
-
-    if (deps.length > 0) {
-      // Subscribe to dependencies
-      guiInstance.subscription = combineLatest(
-        deps.map(dependency => dependency.observable)
-      ).subscribe((values) => {
-        if (values.every(value => value !== undefined)) {
-          guiInstance.data.set(data);
-          guiInstance.display.set(true);
-        }
-      });
-      return;
-    }
-
-    // No dependencies, display immediately
-    guiInstance.data.set(data);
-    guiInstance.display.set(true);
+    
   }
 
   /**
