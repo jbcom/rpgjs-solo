@@ -580,6 +580,9 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
         this.hpSignal.set(val)
     }
 
+    get hp(): number {
+        return this.hpSignal()
+    }
 
     /** 
      * Changes the skill points
@@ -601,7 +604,9 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
         this.spSignal.set(val)
     }
 
-   
+    get sp(): number {
+        return this.spSignal()
+    }   
 
     /** 
      * Changing the player's experience. 

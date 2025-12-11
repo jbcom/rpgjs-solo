@@ -9,7 +9,6 @@ beforeEach(async () => {
    const fixture = await testing();  
    const client = await fixture.createClient()
    player = client.player
-   console.log(player.level)
 })
 
 test('Test HP', () => {

@@ -26,7 +26,6 @@
     "pixi.js": "^8.9.2"
   },
   "dependencies": {
-<<<<<<< HEAD
     "@rpgjs/client": "workspace:*",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/server": "workspace:*",
@@ -34,13 +33,6 @@
     "@signe/room": "^2.6.0",
     "@signe/sync": "^2.6.0",
     "pixi-filters": "^6.1.5",
-=======
-    "@rpgjs/common": "*",
-    "@rpgjs/server": "*",
-    "@signe/di": "^2.4.0",
-    "@signe/room": "^2.4.0",
-    "@signe/sync": "^2.4.0",
->>>>>>> 382183f8 (feat: update pnpm-lock and package configurations)
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
