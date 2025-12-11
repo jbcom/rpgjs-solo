@@ -1,14 +1,18 @@
-<Rect
-  x={0} 
-  y={0} 
-  width={width}
-  height={height}
-  color="black"
-  alpha={opacity}
-/>
+
+
+<Container positionType="absolute" top={0} left={0} right={0} bottom={0}>
+  <Rect
+    x={0} 
+    y={0} 
+    width={width}
+    height={height}
+    color="black"
+    alpha={opacity}
+  />
+</Container>
 
 <script>
-  import { animatedSignal, mount, computed } from "canvasengine";
+  import { animatedSignal, mount, computed, signal } from "canvasengine";
   import { inject, RpgClientEngine } from "@rpgjs/client";
 
   const {
@@ -29,11 +33,9 @@
   });
 
   const engine = inject(RpgClientEngine);
-  
-  // Calculate width and height from engine
-  const width = 1920
-  
-  const height = 1080
+
+  const width = signal(0)
+  const height = signal(0)
 
   // Animation: fade in from transparent to opaque, or fade out from opaque to transparent
   const opacity = animatedSignal(fadeIn() ? 0 : 1, {
@@ -45,7 +47,10 @@
     }
   });
 
-  mount(() => {
+  mount((element) => {
     opacity.set(fadeIn() ? 1 : 0);
+    console.log(opacity())
+    width.set(element.props.context.canvasSize().width)
+    height.set(element.props.context.canvasSize().height)
   });
 </script>

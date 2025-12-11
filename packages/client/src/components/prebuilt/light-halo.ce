@@ -1,71 +1,5 @@
-<!-- 
-  Light Halo Component
-  
-  A beautiful animated light halo effect that pulses and moves around sprites.
-  Creates a glowing light effect with smooth animations for size and opacity.
-  
-  ## Design
-  
-  The halo uses a radial gradient to create a soft light effect that:
-  - Pulses in size (breathing effect)
-  - Fades in and out (opacity animation)
-  - Can be positioned relative to the sprite
-  - Uses blur and alpha for realistic light diffusion
-  
-  ## Props
-  
-  All props are optional and have sensible defaults:
-  - `baseRadius` (number, default: 30) - Base radius in pixels
-  - `radiusVariation` (number, default: 10) - Pulse variation range
-  - `baseOpacity` (number, default: 0.6) - Base opacity (0-1)
-  - `opacityVariation` (number, default: 0.3) - Opacity fade range
-  - `sizeSpeed` (number, default: 0.002) - Size animation speed
-  - `opacitySpeed` (number, default: 0.003) - Opacity animation speed
-  - `lightColor` (number, default: 0xffffaa) - Light color (hex)
-  
-  @example
-  ```ts
-  import LightHalo from './light-halo.ce';
-  
-  // Basic usage with defaults
-  export default defineModule<RpgClient>({
-    sprite: {
-      componentsBehind: [LightHalo]
-    }
-  })
-  
-  // Custom configuration
-  export default defineModule<RpgClient>({
-    sprite: {
-      componentsBehind: [{
-        component: LightHalo,
-        props: {
-          baseRadius: 50,
-          radiusVariation: 15,
-          lightColor: 0xffaaaa,
-          baseOpacity: 0.8
-        }
-      }]
-    }
-  })
-  
-  // Dynamic props based on sprite state
-  export default defineModule<RpgClient>({
-    sprite: {
-      componentsBehind: [{
-        component: LightHalo,
-        props: (object: RpgClientObject) => ({
-          baseRadius: 30 + (object.param.level() * 2),
-          lightColor: object.param.level() > 10 ? 0xffaa00 : 0xffffaa
-        })
-      }]
-    }
-  })
-  ```
--->
-
 <Container x={position.@x} y={position.@y}>
-  <Graphics draw={drawHalo} />
+  <Graphics draw={drawHalo}  />
 </Container>
 
 <script>
@@ -181,9 +115,7 @@ const drawHalo = (g) => {
   const color = getLightColor();
   
   if (opacity <= 0 || radius <= 0) return;
-  
-  g.clear();
-  
+
   // Set blend mode to ADD for glowing light effect
   g.blendMode = 'add';
   
@@ -209,7 +141,6 @@ const drawHalo = (g) => {
 // ====================
 // Animation loop
 // ====================
-
 tick(() => {
   time.update(t => t + 1);
 });

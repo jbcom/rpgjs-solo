@@ -16,7 +16,7 @@ export const withMobile = () => (
                 autoDisplay: true,
                 dependencies: () => {
                     const engine = inject(RpgClientEngine);
-                    return [signal(isMobile() ||undefined), engine.scene.currentPlayer]
+                    return [signal(isMobile() ||undefined), engine.controlsReady]
                 }
             }
         ]

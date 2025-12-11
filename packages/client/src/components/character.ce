@@ -13,15 +13,14 @@
         tint 
         hitbox 
         flash={flashConfig}
-        
-        />
+      />
     }
   </Container>
   @for (compConfig of normalizedComponentsInFront) {
     <Container dependencies={@compConfig.@dependencies}>
       <compConfig.component object ...compConfig.props />
     </Container>
-  } 
+  }
   @for (attachedGui of attachedGuis) {
     @if (shouldDisplayAttachedGui) {
       <Container>

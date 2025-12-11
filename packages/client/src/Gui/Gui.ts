@@ -318,7 +318,6 @@ export class RpgGui {
     } else {
       guiInstance.data.set(data);
       guiInstance.display.set(true);
-      console.log(guiInstance.dependencies)
     }
   }
 

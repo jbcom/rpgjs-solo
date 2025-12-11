@@ -1,95 +1,80 @@
 <Container justifyContent="space-between" alignItems="flex-end" width="100%" height="100%">
-    <Container justifyContent="flex-start" alignItems="flex-end" margin={100} gap={20}>
-        <Button 
-            text="A"
-            width={60}
-            height={60}
-            style={{
-                backgroundColor: {
-                    normal: '#4CAF50',
-                    hover: '#45a049',
-                    pressed: '#3d8b40'
-                },
-                border: {
-                    color: '#2e7d32',
-                    width: 3,
-                    radius: 30
-                },
-                text: {
-                    color: '#ffffff',
-                    fontSize: 24,
-                    fontFamily: 'Arial'
-                }
-            }}
-            click={onButtonAClick}
-        />
-        <Button 
-            text="B"
-            width={60}
-            height={60}
-            style={{
-                backgroundColor: {
-                    normal: '#f44336',
-                    hover: '#da190b',
-                    pressed: '#c62828'
-                },
-                border: {
-                    color: '#b71c1c',
-                    width: 3,
-                    radius: 30
-                },
-                text: {
-                    color: '#ffffff',
-                    fontSize: 24,
-                    fontFamily: 'Arial'
-                }
-            }}
-            click={onButtonBClick}
-        />
-    </Container>
-    <Container margin={100}>
-         <Joystick onChange onEnd />
-    </Container>
- </Container>
- 
- <script>
-     import { effect } from 'canvasengine'
-     import { Joystick } from '@canvasengine/presets'
-     import { Button } from 'canvasengine'
-     import { inject } from '../../../core/inject'
-     import { RpgClientEngine } from '../../../RpgClientEngine'
+    <!-- Gamepad buttons A and B (left side) -->
+    <Container justifyContent="flex-start" alignItems="flex-end"  gap={20}>
+        <Container display="flex" direction="column" gap={20} margin={50}>
+            <!-- Button B (top) -->
+  
+            <!-- Button A (bottom) -->
+            <Button 
+                text="A"
+                shape="circle"
+                width={70}
+                height={70}
+                controls={controlsInstance}
+                controlName="action"
+                style={{
+                    backgroundColor: {
+                        normal: "#2ecc71",
+                        hover: "#27ae60",
+                        pressed: "#229954",
+                        disabled: "#7f8c8d"
+                    },
+                    text: {
+                        fontSize: 24,
+                        fontFamily: "Arial Bold",
+                        color: "#ffffff"
+                    }
+                }}
+            />
 
-    let lastDirection = null
-    const client = inject(RpgClientEngine)
+            <Button 
+                text="B"
+                shape="circle"
+                width={70}
+                height={70}
+                controls={controlsInstance}
+                controlName="back"
+                style={{
+                    backgroundColor: {
+                        normal: "#e74c3c",
+                        hover: "#c0392b",
+                        pressed: "#a93226",
+                        disabled: "#7f8c8d"
+                    },
+                    text: {
+                        fontSize: 24,
+                        fontFamily: "Arial Bold",
+                        color: "#ffffff"
+                    }
+                }}
+            />
 
-    const onChange = (event) => {
-       const control = inject('KeyboardControls')
-       if (lastDirection !== event.direction) {
-           if (lastDirection !== null) {
-               control.applyControl(lastDirection, true)
-           }
-           lastDirection = event.direction
-           control.applyControl(lastDirection)
-       }
-    }
+        </Container>
+    </Container>
     
-    const onEnd = () => {
-       const control = inject('KeyboardControls')
-       if (lastDirection !== null) {
-           control.applyControl(lastDirection, false)
-           lastDirection = null
-       }
-    }
+    <Container margin={100} alignItems="flex-end">
+        <Container>
+            <Joystick 
+                controls={controlsInstance}
+                outerColor="#34495e"
+                innerColor="#3498db"
+            />
+        </Container>
+    </Container>
+</Container>
 
-    const onButtonAClick = () => {
-        if (client) {
-            client.processAction({ action: 'action' })
-        }
-    }
+<script>
+    import { signal, mount } from 'canvasengine'
+    import { Button } from 'canvasengine'
+    import { inject } from '../../../core/inject'
+    import { RpgClientEngine } from '../../../RpgClientEngine'
+    import { Direction } from '@rpgjs/common'
 
-    const onButtonBClick = () => {
-        if (client) {
-            client.processAction({ action: 'back' })
-        }
-    }
- </script>
+
+    const controlsInstance = signal(null)
+
+    mount((element) => {
+        const control = inject('KeyboardControls')
+        controlsInstance.set(control)
+    })
+</script>

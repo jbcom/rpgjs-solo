@@ -29,15 +29,15 @@
     "@rpgjs/client": "workspace:*",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/server": "workspace:*",
-    "@signe/di": "^2.5.2",
-    "@signe/room": "^2.5.2",
-    "@signe/sync": "^2.5.2",
+    "@signe/di": "^2.6.0",
+    "@signe/room": "^2.6.0",
+    "@signe/sync": "^2.6.0",
     "pixi-filters": "^6.1.5",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@canvasengine/compiler": "2.0.0-beta.38",
-    "vite": "^7.2.6",
+    "@canvasengine/compiler": "2.0.0-beta.40",
+    "vite": "^7.2.7",
     "vite-plugin-dts": "^4.5.4",
     "vitest": "^4.0.15"
   },

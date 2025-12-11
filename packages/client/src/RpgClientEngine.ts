@@ -12,8 +12,7 @@ import { load } from "@signe/sync";
 import { RpgClientMap } from "./Game/Map"
 import { RpgGui } from "./Gui/Gui";
 import { AnimationManager } from "./Game/AnimationManager";
-import { TransitionManager } from "./Game/TransitionManager";
-import { lastValueFrom, Observable } from "rxjs";
+import { lastValueFrom, Observable, combineLatest, BehaviorSubject, filter, switchMap, take } from "rxjs";
 import { GlobalConfigToken } from "./module";
 import * as PIXI from "pixi.js";
 import { PrebuiltComponentAnimations } from "./components/animations";
@@ -37,7 +36,6 @@ export class RpgClientEngine<T = any> {
   spritesheets: Map<string, any> = new Map();
   sounds: Map<string, any> = new Map();
   componentAnimations: any[] = [];
-  transitions: any[] = [];
   private spritesheetResolver?: (id: string) => any | Promise<any>;
   private soundResolver?: (id: string) => any | Promise<any>;
   particleSettings: {
@@ -55,6 +53,8 @@ export class RpgClientEngine<T = any> {
   /** Trigger for map shake animation */
   mapShakeTrigger = trigger();
 
+  controlsReady = signal(undefined); 
+
   private predictionEnabled = false;
   private prediction?: PredictionController<Direction>;
   private readonly SERVER_CORRECTION_THRESHOLD = 30;
@@ -65,6 +65,12 @@ export class RpgClientEngine<T = any> {
   private pingInterval: any = null;
   private readonly PING_INTERVAL_MS = 5000; // Send ping every 5 seconds
   private lastInputTime = 0;
+  // Track map loading state for onAfterLoading hook using RxJS
+  private mapLoadCompleted$ = new BehaviorSubject<boolean>(false);
+  private playerIdReceived$ = new BehaviorSubject<boolean>(false);
+  private playersReceived$ = new BehaviorSubject<boolean>(false);
+  private eventsReceived$ = new BehaviorSubject<boolean>(false);
+  private onAfterLoadingSubscription?: any;
 
   constructor(public context) {
     this.webSocket = inject(WebSocketToken);
@@ -134,6 +140,7 @@ export class RpgClientEngine<T = any> {
       ...currentValues,
       values: new Map([['__default__', controlInstance]])
     }
+    this.controlsReady.set(true);
   }
 
   async start() {
@@ -163,7 +170,6 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-gui-load", this).subscribe();
     this.hooks.callHooks("client-particles-load", this).subscribe();
     this.hooks.callHooks("client-componentAnimations-load", this).subscribe();
-    this.hooks.callHooks("client-transitions-load", this).subscribe();
     this.hooks.callHooks("client-sprite-load", this).subscribe();
 
     await lastValueFrom(this.hooks.callHooks("client-engine-onStart", this));
@@ -192,12 +198,27 @@ export class RpgClientEngine<T = any> {
 
   private initListeners() {
     this.webSocket.on("sync", (data) => {
-      if (data.pId) this.playerIdSignal.set(data.pId)
+      if (data.pId) {
+        this.playerIdSignal.set(data.pId);
+        // Signal that player ID was received
+        this.playerIdReceived$.next(true);
+      }
 
       // Apply client-side prediction filtering and server reconciliation
       this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: data }).subscribe();
 
       load(this.sceneMap, data, true);
+      
+      // Check if players and events are present in sync data
+      const players = data.players || this.sceneMap.players();
+      if (players && Object.keys(players).length > 0) {
+        this.playersReceived$.next(true);
+      }
+      
+      const events = data.events || this.sceneMap.events();
+      if (events !== undefined) {
+        this.eventsReceived$.next(true);
+      }
     });
 
     // Handle pong responses for RTT measurement
@@ -269,7 +290,7 @@ export class RpgClientEngine<T = any> {
 
     this.webSocket.on("shakeMap", (data) => {
       const { intensity, duration, frequency, direction } = data || {};
-      this.mapShakeTrigger.start({
+      (this.mapShakeTrigger as any).start({
         intensity,
         duration,
         frequency,
@@ -366,10 +387,24 @@ export class RpgClientEngine<T = any> {
   }
 
   private async loadScene(mapId: string) {
-    this.hooks.callHooks("client-sceneMap-onBeforeLoading", this.sceneMap).subscribe();
+    await lastValueFrom(this.hooks.callHooks("client-sceneMap-onBeforeLoading", this.sceneMap));
 
     // Clear client prediction states when changing maps
     this.clearClientPredictionStates();
+
+    // Reset all conditions for new map loading
+    this.mapLoadCompleted$.next(false);
+    this.playerIdReceived$.next(false);
+    this.playersReceived$.next(false);
+    this.eventsReceived$.next(false);
+
+    // Unsubscribe previous subscription if exists
+    if (this.onAfterLoadingSubscription) {
+      this.onAfterLoadingSubscription.unsubscribe();
+    }
+
+    // Setup RxJS observable to wait for all conditions
+    this.setupOnAfterLoadingObserver();
 
     this.webSocket.updateProperties({ room: mapId })
     await this.webSocket.reconnect(() => {
@@ -378,7 +413,25 @@ export class RpgClientEngine<T = any> {
     })
     const res = await this.loadMapService.load(mapId)
     this.sceneMap.data.set(res)
-    this.hooks.callHooks("client-sceneMap-onAfterLoading", this.sceneMap).subscribe();
+    
+    // Check if playerId is already present
+    if (this.playerIdSignal()) {
+      this.playerIdReceived$.next(true);
+    }
+    
+    // Check if players and events are already present in sceneMap
+    const players = this.sceneMap.players();
+    if (players && Object.keys(players).length > 0) {
+      this.playersReceived$.next(true);
+    }
+    
+    const events = this.sceneMap.events();
+    if (events !== undefined) {
+      this.eventsReceived$.next(true);
+    }
+    
+    // Signal that map loading is completed (this should be last to ensure other checks are done)
+    this.mapLoadCompleted$.next(true);
     this.sceneMap.loadPhysic()
   }
 
@@ -938,157 +991,12 @@ export class RpgClientEngine<T = any> {
   }
 
   /**
-   * Add a transition to the engine
-   * 
-   * Transitions are screen effects that can be displayed during scene changes,
-   * map loading, or any other moment where a visual transition is needed.
-   * They are displayed on top of the entire canvas and can have custom props
-   * that can be functions (similar to ComponentAnimation).
-   * 
-   * @param transition - The transition configuration
-   * @param transition.id - Unique identifier for the transition
-   * @param transition.component - The component function to render
-   * @param transition.props - Optional props to pass to the component (can be a function)
-   * @returns The added transition configuration
-   * 
-   * @example
-   * ```ts
-   * // Add a fade transition
-   * engine.addTransition({
-   *   id: 'fade',
-   *   component: FadeComponent
-   * });
-   * 
-   * // Add a transition with props
-   * engine.addTransition({
-   *   id: 'slide',
-   *   component: SlideComponent,
-   *   props: { direction: 'left', duration: 500 }
-   * });
-   * 
-   * // Add a transition with function props
-   * engine.addTransition({
-   *   id: 'custom',
-   *   component: CustomTransition,
-   *   props: (engine) => ({ width: engine.width(), height: engine.height() })
-   * });
-   * ```
-   */
-  addTransition(transition: {
-    component: any,
-    id: string,
-    props?: any | ((engine: RpgClientEngine) => any)
-  }) {
-    const instance = new TransitionManager()
-    this.transitions.push({
-      id: transition.id,
-      component: transition.component,
-      props: transition.props,
-      instance: instance,
-      current: instance.current
-    })
-    return transition;
-  }
-
-  /**
-   * Remove a transition from the engine
-   * 
-   * Removes a transition by its ID. This will not affect any currently
-   * running transitions, only prevent new ones from being started.
-   * 
-   * @param id - The unique identifier of the transition to remove
-   * @returns true if the transition was found and removed, false otherwise
-   * 
-   * @example
-   * ```ts
-   * // Remove a transition
-   * engine.removeTransition('fade');
-   * ```
-   */
-  removeTransition(id: string): boolean {
-    const index = this.transitions.findIndex((transition) => transition.id === id);
-    if (index !== -1) {
-      this.transitions.splice(index, 1);
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Modify an existing transition
-   * 
-   * Updates the component or props of an existing transition. This will
-   * not affect any currently running transitions, only future ones.
-   * 
-   * @param id - The unique identifier of the transition to modify
-   * @param updates - The updates to apply (component and/or props)
-   * @returns true if the transition was found and modified, false otherwise
-   * 
-   * @example
-   * ```ts
-   * // Update transition props
-   * engine.modifyTransition('fade', {
-   *   props: { duration: 2000, color: 'white' }
-   * });
-   * 
-   * // Update transition component
-   * engine.modifyTransition('fade', {
-   *   component: NewFadeComponent
-   * });
-   * ```
-   */
-  modifyTransition(id: string, updates: {
-    component?: any,
-    props?: any | ((engine: RpgClientEngine) => any)
-  }): boolean {
-    const transition = this.transitions.find((transition) => transition.id === id);
-    if (!transition) {
-      return false;
-    }
-    if (updates.component !== undefined) {
-      transition.component = updates.component;
-    }
-    if (updates.props !== undefined) {
-      transition.props = updates.props;
-    }
-    return true;
-  }
-
-  /**
-   * Get a transition by its ID
-   * 
-   * Retrieves the TransitionManager instance for a specific transition,
-   * which can be used to start the transition.
-   * 
-   * @param id - The unique identifier of the transition
-   * @returns The TransitionManager instance for the transition
-   * @throws Error if the transition is not found
-   * 
-   * @example
-   * ```ts
-   * // Get a transition and start it
-   * const fadeTransition = engine.getTransition('fade');
-   * fadeTransition.start({ duration: 1000 });
-   * ```
-   */
-  getTransition(id: string): TransitionManager {
-    const transition = this.transitions.find((transition) => transition.id === id)
-    if (!transition) {
-      throw new Error(`Transition with id ${id} not found`)
-    }
-    return transition.instance
-  }
-
-  /**
    * Start a transition
    * 
-   * Convenience method to start a transition by its ID. This combines
-   * getTransition and start into a single call. The transition will
-   * automatically receive an onFinish callback to remove itself when done.
+   * Convenience method to display a transition by its ID using the GUI system.
    * 
    * @param id - The unique identifier of the transition to start
-   * @param props - Additional props to pass to the transition component
-   * @returns The created transition object
+   * @param props - Props to pass to the transition component
    * 
    * @example
    * ```ts
@@ -1103,28 +1011,10 @@ export class RpgClientEngine<T = any> {
    * ```
    */
   startTransition(id: string, props: any = {}) {
-    const transition = this.transitions.find((t) => t.id === id);
-    if (!transition) {
-      throw new Error(`Transition with id ${id} not found`);
+    if (!this.guiService.exists(id)) {
+      throw new Error(`Transition with id ${id} not found. Make sure to add it using engine.addTransition() or in your module's transitions property.`);
     }
-
-    // Get base props (can be a function or object)
-    let baseProps = {};
-    if (transition.props) {
-      if (typeof transition.props === 'function') {
-        baseProps = transition.props(this);
-      } else {
-        baseProps = transition.props;
-      }
-    }
-
-    // Merge base props with provided props (provided props take precedence)
-    const finalProps = {
-      ...baseProps,
-      ...props,
-    };
-
-    return transition.instance.start(finalProps);
+    this.guiService.display(id, props);
   }
 
   async processInput({ input }: { input: Direction }) {
@@ -1228,6 +1118,46 @@ export class RpgClientEngine<T = any> {
 
   getCurrentPlayer() {
     return this.sceneMap.getCurrentPlayer()
+  }
+
+  /**
+   * Setup RxJS observer to wait for all conditions before calling onAfterLoading hook
+   * 
+   * This method uses RxJS `combineLatest` to wait for all conditions to be met,
+   * regardless of the order in which they arrive:
+   * 1. The map loading is completed (loadMapService.load is finished)
+   * 2. We received a player ID (pId)
+   * 3. Players array has at least one element
+   * 4. Events property is present in the sync data
+   * 
+   * Once all conditions are met, it uses `switchMap` to call the onAfterLoading hook once.
+   * 
+   * ## Design
+   * 
+   * Uses BehaviorSubjects to track each condition state, allowing events to arrive
+   * in any order. The `combineLatest` operator waits until all observables emit `true`,
+   * then `take(1)` ensures the hook is called only once, and `switchMap` handles
+   * the hook execution.
+   * 
+   * @example
+   * ```ts
+   * // Called automatically in loadScene to setup the observer
+   * this.setupOnAfterLoadingObserver();
+   * ```
+   */
+  private setupOnAfterLoadingObserver(): void {
+    this.onAfterLoadingSubscription = combineLatest([
+      this.mapLoadCompleted$.pipe(filter(completed => completed === true)),
+      this.playerIdReceived$.pipe(filter(received => received === true)),
+      this.playersReceived$.pipe(filter(received => received === true)),
+      this.eventsReceived$.pipe(filter(received => received === true))
+    ]).pipe(
+      take(1), // Only execute once when all conditions are met
+      switchMap(() => {
+        // Call the hook and return the observable
+        return this.hooks.callHooks("client-sceneMap-onAfterLoading", this.sceneMap);
+      })
+    ).subscribe();
   }
 
   /**

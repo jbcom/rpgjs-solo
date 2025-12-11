@@ -73,27 +73,24 @@ export default {
         },
         sprite: {
           componentsBehind: [Shadow],
+         // componentsInFront: [LightHalo],
           onInit: (sprite) => {
            
           }
         },
-        transitions: [
-          {
-            id: "fade",
-            component: FadeComponent,
+        sceneMap: { 
+          onBeforeLoading: (scene) => {
+            console.log(scene)
+            const gui = inject(RpgGui)
+            gui.display('fade', {
+              fadeIn: false,
+              duration: 5000
+            })
           },
-        ],
-        sceneMap: {
-
-          onAfterLoading: (scene) => {
-          //   const engine = inject(RpgClientEngine)
-          //   effect(() => {
-          //     console.log(engine.sceneMap.currentPlayer()?.x()) 
-          //  })
-            const engine = inject(RpgClientEngine)
-            setTimeout(() => {
-              engine.startTransition("fade")
-            }, 1000)
+          onAfterLoading: async (scene) => {
+            const gui = inject(RpgGui)
+            await new Promise(resolve => setTimeout(resolve, 5000))
+            gui.hide('fade')
           },
         },
         sounds: [
@@ -151,7 +148,11 @@ export default {
             id: "my-tooltip",
             component: TooltipComponent,
             attachToSprite: true
-          }
+          },
+          {
+            id: "fade",
+            component: FadeComponent,
+          },
         ],
         componentAnimations: [
           {

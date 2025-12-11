@@ -159,8 +159,13 @@ export function provideClientModules(modules: RpgClientModule[]): FactoryProvide
         const transitions = [...module.transitions];
         module.transitions = {
           load: (engine: RpgClientEngine) => {
+            const guiService = inject(engine.context, RpgGui) as RpgGui;
             transitions.forEach((transition) => {
-              engine.addTransition(transition);
+              guiService.add({
+                name: transition.id,
+                component: transition.component,
+                data: transition.props || {}
+              });
             });
           },
         };

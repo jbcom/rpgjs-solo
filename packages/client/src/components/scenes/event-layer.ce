@@ -17,6 +17,7 @@
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
     import Character from "../character.ce";
+    import LightHalo from "../prebuilt/light-halo.ce";
    
     const engine = inject(RpgClientEngine);
     const { children } = defineProps()

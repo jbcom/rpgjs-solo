@@ -47,7 +47,13 @@ export default createServer({
 
           },
           async onInput(player: RpgPlayer, input: any) {
-
+            const map = player.getCurrentMap()
+            map?.shakeMap({
+              intensity: 10,
+              duration: 1000,
+              frequency: 10,
+              direction: 'x',
+            })
           } 
         },
         maps: [
