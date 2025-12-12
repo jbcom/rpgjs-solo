@@ -185,7 +185,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   async execMethod(method: string, methodData: any[] = [], target?: any) {
     let ret: any;
     if (target) {
-      ret = await target[method](...methodData);
+      if (typeof target[method] === 'function') {
+        ret = await target[method](...methodData);
+      }
     }
     else {
       ret = await lastValueFrom(this.hooks

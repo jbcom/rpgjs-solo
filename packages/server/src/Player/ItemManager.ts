@@ -278,6 +278,7 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
         // Create new item instance
         instance = new Item(data);
         instance.id.set(itemId);
+        instance.quantity.set(nb);
 
         // Attach hooks from class instance or object
         if (itemInstance) {
@@ -294,6 +295,7 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
 
       // Call onAdd hook - use stored instance if available
       const hookTarget = (instance as any)._itemInstance || instance;
+      // Only call onAdd if it exists and is a function
       (this as any)["execMethod"]("onAdd", [this], hookTarget);
       return instance;
     }
@@ -315,7 +317,9 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       }
       // Call onRemove hook - use stored instance if available
       const hookTarget = (item as any)._itemInstance || item;
-      this["execMethod"]("onRemove", [this], hookTarget);
+      if (hookTarget && typeof hookTarget.onRemove === 'function') {
+        this["execMethod"]("onRemove", [this], hookTarget);
+      }
       return this.items()[itemIndex];
     }
 

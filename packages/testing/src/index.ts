@@ -4,6 +4,7 @@ import { createServer, provideServerModules, RpgServer, RpgPlayer } from "@rpgjs
 import { h, Container } from "canvasengine";
 import { clearInject as clearClientInject } from "@rpgjs/client";
 import { clearInject as clearServerInject } from "@rpgjs/server";
+import { combineLatest, filter, take, race, timer, firstValueFrom } from "rxjs";
 
 /**
  * Provides a default map loader for testing environments
@@ -470,4 +471,147 @@ export async function nextTick(client: RpgClientEngine, timestamp?: number): Pro
 
     // 6. Trigger VueJS tick if Vue is used (handled by CanvasEngine internally)
     // CanvasEngine handles this automatically through its tick system
+}
+
+/**
+ * Wait for synchronization to complete on the client
+ * 
+ * This function waits for the client to receive and process synchronization data
+ * from the server. It monitors the `playersReceived$` and `eventsReceived$` observables
+ * in the RpgClientEngine to determine when synchronization is complete.
+ * 
+ * ## Design
+ * 
+ * - Uses `combineLatest` to wait for both `playersReceived$` and `eventsReceived$` to be `true`
+ * - Filters to only proceed when both are `true`
+ * - Includes a timeout to prevent waiting indefinitely
+ * - Resets the observables to `false` before waiting to ensure we catch the next sync
+ * 
+ * @param client - The RpgClientEngine instance
+ * @param timeout - Maximum time to wait in milliseconds (default: 1000ms)
+ * @returns Promise that resolves when synchronization is complete
+ * @throws Error if timeout is exceeded
+ * 
+ * @example
+ * ```ts
+ * import { waitForSync } from '@rpgjs/testing'
+ * 
+ * const client = await fixture.createClient()
+ * 
+ * // Wait for sync to complete
+ * await waitForSync(client.client)
+ * 
+ * // Now you can safely test client-side state
+ * expect(client.client.sceneMap.players()).toBeDefined()
+ * ```
+ */
+export async function waitForSync(client: RpgClientEngine, timeout: number = 1000): Promise<void> {
+    if (!client) {
+        throw new Error('waitForSync: client parameter is required')
+    }
+
+    // Access private observables via type assertion
+    const playersReceived$ = (client as any).playersReceived$ as any
+    const eventsReceived$ = (client as any).eventsReceived$ as any
+
+    if (!playersReceived$ || !eventsReceived$) {
+        throw new Error('waitForSync: playersReceived$ or eventsReceived$ not found in client')
+    }
+
+    // Check if observables are already true - if so, sync has already arrived, don't reset
+    const playersAlreadyTrue = playersReceived$.getValue ? playersReceived$.getValue() === true : false;
+    const eventsAlreadyTrue = eventsReceived$.getValue ? eventsReceived$.getValue() === true : false;
+
+    // If both observables are already true, sync has already completed - return immediately
+    if (playersAlreadyTrue && eventsAlreadyTrue) {
+        return;
+    }
+
+    // Reset observables to false to ensure we catch the next sync
+    // Note: This is only needed when waitForSync is called standalone.
+    // When called from waitForSyncComplete, observables are already reset before nextTick
+    playersReceived$.next(false)
+    eventsReceived$.next(false)
+
+    // Wait for both observables to be true
+    const syncComplete$ = combineLatest([
+        playersReceived$.pipe(filter(received => received === true)),
+        eventsReceived$.pipe(filter(received => received === true))
+    ]).pipe(
+        take(1)
+    )
+
+    // Create a timeout promise
+    const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+            reject(new Error(`waitForSync: Timeout after ${timeout}ms. Synchronization did not complete.`))
+        }, timeout)
+    })
+
+    // Race between sync completion and timeout
+    await Promise.race([
+        firstValueFrom(syncComplete$),
+        timeoutPromise
+    ])
+}
+
+/**
+ * Wait for complete synchronization cycle (server sync + client receive)
+ * 
+ * This function performs a complete synchronization cycle:
+ * 1. Triggers a game tick using `nextTick()` which calls `syncChanges()` on all players
+ * 2. Waits for the client to receive and process the synchronization data
+ * 
+ * This is useful when you need to ensure that server-side changes are fully
+ * synchronized to the client before testing client-side state.
+ * 
+ * ## Design
+ * 
+ * - Calls `nextTick()` to trigger server-side sync
+ * - Waits for client to receive sync data using `waitForSync()`
+ * - Ensures complete synchronization cycle is finished
+ * 
+ * @param player - The RpgPlayer instance (optional, will sync all players if not provided)
+ * @param client - The RpgClientEngine instance
+ * @param timeout - Maximum time to wait in milliseconds (default: 1000ms)
+ * @returns Promise that resolves when synchronization is complete
+ * @throws Error if timeout is exceeded
+ * 
+ * @example
+ * ```ts
+ * import { waitForSyncComplete } from '@rpgjs/testing'
+ * 
+ * const client = await fixture.createClient()
+ * const player = client.player
+ * 
+ * // Make a server-side change
+ * player.addItem('potion', 5)
+ * 
+ * // Wait for sync to complete
+ * await waitForSyncComplete(player, client.client)
+ * 
+ * // Now you can safely test client-side state
+ * const clientPlayer = client.client.sceneMap.players()[player.id]
+ * expect(clientPlayer.items()).toBeDefined()
+ * ```
+ */
+export async function waitForSyncComplete(player: RpgPlayer | null, client: RpgClientEngine, timeout: number = 1000): Promise<void> {
+    if (!client) {
+        throw new Error('waitForSyncComplete: client parameter is required')
+    }
+
+    // Reset observables BEFORE calling nextTick to ensure we catch the sync that will be sent
+    // This prevents race condition where sync arrives before we start waiting
+    const playersReceived$ = (client as any).playersReceived$ as any
+    const eventsReceived$ = (client as any).eventsReceived$ as any
+    if (playersReceived$ && eventsReceived$) {
+        playersReceived$.next(false)
+        eventsReceived$.next(false)
+    }
+
+    // Trigger sync by calling nextTick (which calls syncChanges on all players)
+    await nextTick(client)
+
+    // Wait for client to receive and process the sync
+    await waitForSync(client, timeout)
 }
