@@ -14,6 +14,7 @@ const guideMenu = [{
     { text: "Sounds", link: "/guide/sounds" },
     { text: "Synchronization", link: "/guide/synchronization" },
     { text: "Battle AI", link: "/guide/battle-ai" },
+    { text: "Testing", link: "/guide/testing" },
     { text: "Attach GUI", link: "/guide/gui/attach-gui" }
   ]
 }]
