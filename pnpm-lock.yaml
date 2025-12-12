@@ -44,7 +44,7 @@ importers:
     dependencies:
       '@canvasengine/presets':
         specifier: '*'
-        version: 2.0.0-beta.40(canvasengine@2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.10.1)(react@19.1.0))(pixi.js@8.10.1)
+        version: 2.0.0-beta.41(canvasengine@2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.10.1)(react@19.1.0))(pixi.js@8.10.1)
       '@rpgjs/client':
         specifier: workspace:*
         version: 'link:'
@@ -65,7 +65,7 @@ importers:
         version: 2.6.0
       canvasengine:
         specifier: '*'
-        version: 2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.10.1)(react@19.1.0)
+        version: 2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.10.1)(react@19.1.0)
       pixi-filters:
         specifier: ^6.1.5
         version: 6.1.5(pixi.js@8.10.1)
@@ -77,8 +77,8 @@ importers:
         version: 7.8.2
     devDependencies:
       '@canvasengine/compiler':
-        specifier: 2.0.0-beta.40
-        version: 2.0.0-beta.40(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+        specifier: 2.0.0-beta.41
+        version: 2.0.0-beta.41(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
       vite:
         specifier: ^7.2.7
         version: 7.2.7(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
@@ -199,8 +199,8 @@ importers:
         specifier: ^2.6.0
         version: 2.6.0
       canvasengine:
-        specifier: 2.0.0-beta.40
-        version: 2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0)
+        specifier: 2.0.0-beta.41
+        version: 2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0)
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -219,7 +219,7 @@ importers:
     dependencies:
       '@canvasengine/presets':
         specifier: '*'
-        version: 2.0.0-beta.40(canvasengine@2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0))(pixi.js@8.14.3)
+        version: 2.0.0-beta.41(canvasengine@2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0))(pixi.js@8.14.3)
       '@canvasengine/tiled':
         specifier: ^2.0.0-beta.40
         version: 2.0.0-beta.40
@@ -237,7 +237,7 @@ importers:
         version: link:../vite
       canvasengine:
         specifier: '*'
-        version: 2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0)
+        version: 2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0)
     devDependencies:
       '@canvasengine/compiler':
         specifier: ^2.0.0-beta.40
@@ -323,8 +323,8 @@ importers:
   sample:
     dependencies:
       '@canvasengine/presets':
-        specifier: 2.0.0-beta.40
-        version: 2.0.0-beta.40(canvasengine@2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0))(pixi.js@8.14.3)
+        specifier: 2.0.0-beta.41
+        version: 2.0.0-beta.41(canvasengine@2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0))(pixi.js@8.14.3)
       '@rpgjs/client':
         specifier: workspace:*
         version: link:../packages/client
@@ -350,8 +350,8 @@ importers:
         specifier: ^2.6.0
         version: 2.6.0
       canvasengine:
-        specifier: 2.0.0-beta.40
-        version: 2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0)
+        specifier: 2.0.0-beta.41
+        version: 2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0)
       pixi.js:
         specifier: ^8.14.3
         version: 8.14.3
@@ -360,11 +360,11 @@ importers:
         version: 3.5.25(typescript@5.9.3)
     devDependencies:
       '@canvasengine/compiler':
-        specifier: 2.0.0-beta.40
-        version: 2.0.0-beta.40(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+        specifier: 2.0.0-beta.41
+        version: 2.0.0-beta.41(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
       '@vitejs/plugin-vue':
-        specifier: ^6.0.2
-        version: 6.0.2(vite@7.2.7(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.25(typescript@5.9.3))
+        specifier: ^6.0.3
+        version: 6.0.3(vite@7.2.7(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.25(typescript@5.9.3))
       path-browserify:
         specifier: ^1.0.1
         version: 1.0.1
@@ -439,14 +439,20 @@ packages:
   '@canvasengine/compiler@2.0.0-beta.40':
     resolution: {integrity: sha512-i6VUhxCKJqhAk8+Vg9GyuDGfpLuJdP6RoXnVJA8Hm0X++qYthfqeiveoEZB579WtpuSErB0vLgvH4P3IUFN+Vw==}
 
-  '@canvasengine/presets@2.0.0-beta.40':
-    resolution: {integrity: sha512-kn7LxH+CGBuTzZ+ZWXWykSOXKpJD7Aw/GLJbNNmL9bA2PWT0fBdB12cW2rqidk7Co37ztjcCk8RuyvhK4iUa1Q==}
+  '@canvasengine/compiler@2.0.0-beta.41':
+    resolution: {integrity: sha512-5BVlvpfmth1H8Wt+vQmle3n+3Trs0vFG59Tnxi8fnTYpcdWLynJbJlFOlIljFqkHKP/h6BNfb4RR9hLgF3gPvw==}
+
+  '@canvasengine/presets@2.0.0-beta.41':
+    resolution: {integrity: sha512-lQ6/BVvnO9bDK1Hrs68JvfPTxRfzZjGBd3SZ/acU0/Ayb98rksUDq9JVg0qQbigHYjmKWA0CU9HD7lLPT9n6cg==}
     peerDependencies:
       canvasengine: ^2.0.0-beta.24
       pixi.js: ^8.9.2
 
   '@canvasengine/tiled@2.0.0-beta.40':
     resolution: {integrity: sha512-VtxUkVtWMRMUJP33DFtYy8Efc4A3KeH6XTwt2HLQ2Ieghyhn5k+FlJ3TsBo8tc7pOwDgD6YYxmh94zjAZtfivA==}
+
+  '@canvasengine/tiled@2.0.0-beta.41':
+    resolution: {integrity: sha512-BylTi2XSWGQsKt06wfUdHHb9KOfRB/0LugYdxIUBzSdPiGr+Fym5e1EgHy3Dzd2W5A1iRPqdGWMfi0O45Xv8ww==}
 
   '@canvasengine/tilemap@5.0.1':
     resolution: {integrity: sha512-QZgTueWWYLwkdwYo+9oQ5aVxHGB15Oyac0VTiKinnOO+NDzBGJZi9GUu/s9AW7cJA4w36I0JwsqpW84J77gm7Q==}
@@ -1127,8 +1133,8 @@ packages:
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
 
-  '@rolldown/pluginutils@1.0.0-beta.50':
-    resolution: {integrity: sha512-5e76wQiQVeL1ICOZVUg4LSOVYg9jyhGCin+icYozhsUzM+fHE7kddi1bdiE0jwVqTfkjba3jUFbEkoC9WkdvyA==}
+  '@rolldown/pluginutils@1.0.0-beta.53':
+    resolution: {integrity: sha512-vENRlFU4YbrwVqNDZ7fLvy+JR1CRkyr01jhSiDpE1u6py3OMzQfztQU2jxykW3ALNxO4kSlqIDeYyD0Y9RcQeQ==}
 
   '@rollup/pluginutils@5.1.4':
     resolution: {integrity: sha512-USm05zrsFxYLPdWWq+K3STlWiT/3ELn3RcV5hJMghpeAIhxfsUIg6mt12CBJBInWMV4VneoV7SfGv8xIwo2qNQ==}
@@ -1351,11 +1357,11 @@ packages:
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
-  '@vitejs/plugin-vue@6.0.2':
-    resolution: {integrity: sha512-iHmwV3QcVGGvSC1BG5bZ4z6iwa1SOpAPWmnjOErd4Ske+lZua5K9TtAVdx0gMBClJ28DViCbSmZitjWZsWO3LA==}
+  '@vitejs/plugin-vue@6.0.3':
+    resolution: {integrity: sha512-TlGPkLFLVOY3T7fZrwdvKpjprR3s4fxRln0ORDo1VQ7HHyxJwTlrjKU3kpVWTlaAjIEuCTokmjkZnr8Tpc925w==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
-      vite: ^5.0.0 || ^6.0.0 || ^7.0.0
+      vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0-0
       vue: ^3.2.25
 
   '@vitest/coverage-v8@4.0.15':
@@ -1604,8 +1610,8 @@ packages:
     resolution: {integrity: sha512-Sp1ablJ0ivDkSzjcaJdxEunN5/XvksFJ2sMBFfq6x0ryhQV/2b/KwFe21cMpmHtPOSij8K99/wSfoEuTObmuMQ==}
     engines: {node: '>= 0.4'}
 
-  canvasengine@2.0.0-beta.40:
-    resolution: {integrity: sha512-uFhJyNek4OtmIRXXgQp8y0f6Vt9Bhc8qs1BPYWwHrI4KM0Mh3t/cv06ndoFt3k5qJ/O1eKF2EakJzJHL/WKrkw==}
+  canvasengine@2.0.0-beta.41:
+    resolution: {integrity: sha512-i/otf42kuS3MqDbjyZU9kdTJ90+rFMSdUrarv9l48VGMfNkd5/zyXqq+wCBkcHPX2miPX03ol945PxZmWza11A==}
     peerDependencies:
       pixi.js: ^8.9.2
 
@@ -3115,25 +3121,50 @@ snapshots:
       - tsx
       - yaml
 
-  '@canvasengine/presets@2.0.0-beta.40(canvasengine@2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.10.1)(react@19.1.0))(pixi.js@8.10.1)':
+  '@canvasengine/compiler@2.0.0-beta.41(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)':
     dependencies:
-      '@canvasengine/tiled': 2.0.0-beta.40
+      acorn: 8.15.0
+      peggy: 4.2.0
+      typescript: 5.9.3
+      vite: 6.2.5(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+    transitivePeerDependencies:
+      - '@types/node'
+      - jiti
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - terser
+      - tsx
+      - yaml
+
+  '@canvasengine/presets@2.0.0-beta.41(canvasengine@2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.10.1)(react@19.1.0))(pixi.js@8.10.1)':
+    dependencies:
+      '@canvasengine/tiled': 2.0.0-beta.41
       '@canvasengine/tilemap': 5.0.1(pixi.js@8.10.1)
-      canvasengine: 2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.10.1)(react@19.1.0)
+      canvasengine: 2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.10.1)(react@19.1.0)
       pixi.js: 8.10.1
       revolt-fx: 1.3.5(pixi.js@8.10.1)
       rxjs: 7.8.2
 
-  '@canvasengine/presets@2.0.0-beta.40(canvasengine@2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0))(pixi.js@8.14.3)':
+  '@canvasengine/presets@2.0.0-beta.41(canvasengine@2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0))(pixi.js@8.14.3)':
     dependencies:
-      '@canvasengine/tiled': 2.0.0-beta.40
+      '@canvasengine/tiled': 2.0.0-beta.41
       '@canvasengine/tilemap': 5.0.1(pixi.js@8.14.3)
-      canvasengine: 2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0)
+      canvasengine: 2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0)
       pixi.js: 8.14.3
       revolt-fx: 1.3.5(pixi.js@8.14.3)
       rxjs: 7.8.2
 
   '@canvasengine/tiled@2.0.0-beta.40':
+    dependencies:
+      buffer: 6.0.3
+      xml-js: 1.6.11
+      xmlbuilder: 15.1.1
+
+  '@canvasengine/tiled@2.0.0-beta.41':
     dependencies:
       buffer: 6.0.3
       xml-js: 1.6.11
@@ -3781,7 +3812,7 @@ snapshots:
 
   '@polka/url@1.0.0-next.29': {}
 
-  '@rolldown/pluginutils@1.0.0-beta.50': {}
+  '@rolldown/pluginutils@1.0.0-beta.53': {}
 
   '@rollup/pluginutils@5.1.4(rollup@4.45.0)':
     dependencies:
@@ -4010,9 +4041,9 @@ snapshots:
     dependencies:
       '@types/node': 24.10.3
 
-  '@vitejs/plugin-vue@6.0.2(vite@7.2.7(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.25(typescript@5.9.3))':
+  '@vitejs/plugin-vue@6.0.3(vite@7.2.7(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.25(typescript@5.9.3))':
     dependencies:
-      '@rolldown/pluginutils': 1.0.0-beta.50
+      '@rolldown/pluginutils': 1.0.0-beta.53
       vite: 7.2.7(@types/node@25.0.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
       vue: 3.5.25(typescript@5.9.3)
 
@@ -4344,7 +4375,7 @@ snapshots:
       es-errors: 1.3.0
       function-bind: 1.1.2
 
-  canvasengine@2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.10.1)(react@19.1.0):
+  canvasengine@2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.10.1)(react@19.1.0):
     dependencies:
       '@barvynkoa/particle-emitter': 0.0.1(pixi.js@8.10.1)
       '@pixi/layout': 3.0.2(@types/react@19.1.3)(pixi.js@8.10.1)(react@19.1.0)(yoga-layout@3.2.1)
@@ -4361,7 +4392,7 @@ snapshots:
       - '@types/react'
       - react
 
-  canvasengine@2.0.0-beta.40(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0):
+  canvasengine@2.0.0-beta.41(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0):
     dependencies:
       '@barvynkoa/particle-emitter': 0.0.1(pixi.js@8.14.3)
       '@pixi/layout': 3.0.2(@types/react@19.1.3)(pixi.js@8.14.3)(react@19.1.0)(yoga-layout@3.2.1)
