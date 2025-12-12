@@ -276,6 +276,140 @@ test('onLevelUp hook is called when leveling up', () => {
 })
 ```
 
+## Testing Map Changes
+
+You can test map changes and verify that players correctly transition between maps. The testing fixture provides a `waitForMapChange()` helper method to wait for map transitions.
+
+### Basic Map Change Test
+
+First, define maps in your server module and set up an initial map change:
+
+```typescript
+import { testing } from '@rpgjs/testing'
+import { defineModule, createModule } from '@rpgjs/common'
+import { RpgPlayer, RpgServer } from '@rpgjs/server'
+import { RpgClient } from '@rpgjs/client'
+import { beforeEach, test, expect } from 'vitest'
+
+// Define server module with multiple maps
+const serverModule = defineModule<RpgServer>({
+  maps: [
+    {
+      id: 'map1',
+      file: '',
+    },
+    {
+      id: 'map2',
+      file: '',
+    }
+  ],
+  player: {
+    async onConnected(player) {
+      // Start player on map1
+      await player.changeMap('map1', { x: 100, y: 100 })
+    },
+    onJoinMap(player) {
+      console.log('Player joined map:', player.getCurrentMap()?.id)
+    }
+  }
+})
+
+// Define client module
+const clientModule = defineModule<RpgClient>({
+  // Client-side logic
+})
+
+let player: RpgPlayer
+let client: any
+
+beforeEach(async () => {
+  const myModule = createModule('TestModule', [{
+    server: serverModule,
+    client: clientModule
+  }])
+  
+  const fixture = await testing(myModule)
+  client = await fixture.createClient()
+  player = client.player
+})
+
+test('Player can change map', async () => {
+  // Wait for initial map change (from onConnected hook)
+  player = await client.waitForMapChange('map1')
+  
+  const initialMap = player.getCurrentMap()
+  expect(initialMap).toBeDefined()
+  expect(initialMap?.id).toBe('map1')
+  
+  // Change to another map
+  const result = await player.changeMap('map2', { x: 200, y: 200 })
+  expect(result).toBe(true)
+  
+  // Wait for map change to complete
+  player = await client.waitForMapChange('map2')
+  
+  const newMap = player.getCurrentMap()
+  expect(newMap).toBeDefined()
+  expect(newMap?.id).toBe('map2')
+  
+  // Verify player position on new map
+  expect(player.x()).toBe(200)
+  expect(player.y()).toBe(200)
+})
+```
+
+### Using `waitForMapChange()`
+
+The `waitForMapChange()` method is available on the client object returned by `createClient()`. It:
+
+- Polls the player's current map until it matches the expected map ID
+- Returns a Promise that resolves with the updated player instance
+- Throws an error if the timeout is exceeded (default: 5000ms)
+
+```typescript
+// Wait for player to be on map1 (default timeout: 5000ms)
+player = await client.waitForMapChange('map1')
+
+// Wait with custom timeout (in milliseconds)
+player = await client.waitForMapChange('map2', 10000)
+```
+
+### Testing Map Hooks
+
+You can test hooks that fire when players join maps:
+
+```typescript
+const serverModule = defineModule<RpgServer>({
+  maps: [
+    { id: 'map1', file: '' },
+    { id: 'map2', file: '' }
+  ],
+  player: {
+    async onConnected(player) {
+      await player.changeMap('map1')
+    },
+    onJoinMap(player) {
+      const mapId = player.getCurrentMap()?.id
+      player.setVariable('lastMapJoined', mapId)
+    }
+  }
+})
+
+test('onJoinMap hook is called when changing maps', async () => {
+  const fixture = await testing([myModule])
+  const client = await fixture.createClient()
+  
+  // Wait for initial map
+  await client.waitForMapChange('map1')
+  expect(client.player.getVariable('lastMapJoined')).toBe('map1')
+  
+  // Change map and verify hook was called
+  await client.player.changeMap('map2')
+  await client.waitForMapChange('map2')
+  expect(client.player.getVariable('lastMapJoined')).toBe('map2')
+})
+```
+
 ## Testing Multiple Clients
 
 You can create multiple clients to test multiplayer scenarios:

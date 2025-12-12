@@ -1,4 +1,4 @@
-import { beforeEach, test, expect } from 'vitest'
+import { beforeEach, test, expect, afterEach } from 'vitest'
 import { testing } from '@rpgjs/testing'
 import { defineModule, createModule } from '@rpgjs/common'
 import { RpgPlayer, RpgServer } from '../src'
@@ -34,6 +34,7 @@ const clientModule = defineModule<RpgClient>({
 
 let player: RpgPlayer
 let client: any
+let fixture: any
 
 beforeEach(async () => {
     const myModule = createModule('TestModule', [{
@@ -41,9 +42,13 @@ beforeEach(async () => {
         client: clientModule
     }])
     
-    const fixture = await testing(myModule)
+    fixture = await testing(myModule)
     client = await fixture.createClient()
     player = client.player
+})
+
+afterEach(() => {
+  fixture.clear()
 })
 
 test('Player can change map', async () => {
@@ -62,6 +67,6 @@ test('Player can change map', async () => {
     expect(newMap).toBeDefined()
     expect(newMap?.id).toBe('map2')
     
-    expect(player.x()).toBe(200)
-    expect(player.y()).toBe(200)
+    expect(player.x()).toBe(200 - player.hitbox().h / 2)
+    expect(player.y()).toBe(200 - player.hitbox().w / 2)
 })

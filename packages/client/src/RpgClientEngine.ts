@@ -45,6 +45,8 @@ export class RpgClientEngine<T = any> {
     }
   renderer: PIXI.Renderer;
   tick: Observable<number>;
+  private canvasApp?: any;
+  private canvasElement?: any;
   playerIdSignal = signal<string | null>(null);
   spriteComponentsBehind = signal<any[]>([]);
   spriteComponentsInFront = signal<any[]>([]);
@@ -71,6 +73,10 @@ export class RpgClientEngine<T = any> {
   private playersReceived$ = new BehaviorSubject<boolean>(false);
   private eventsReceived$ = new BehaviorSubject<boolean>(false);
   private onAfterLoadingSubscription?: any;
+  
+  // Store subscriptions and event listeners for cleanup
+  private tickSubscriptions: any[] = [];
+  private resizeHandler?: () => void;
 
   constructor(public context) {
     this.webSocket = inject(WebSocketToken);
@@ -140,7 +146,7 @@ export class RpgClientEngine<T = any> {
       ...currentValues,
       values: new Map([['__default__', controlInstance]])
     }
-    this.controlsReady.set(true);
+    this.controlsReady.set(undefined);
   }
 
   async start() {
@@ -148,16 +154,19 @@ export class RpgClientEngine<T = any> {
     this.selector = document.body.querySelector("#rpg") as HTMLElement;
 
     const { app, canvasElement } = await bootstrapCanvas(this.selector, Canvas);
+    this.canvasApp = app;
+    this.canvasElement = canvasElement;
     this.renderer = app.renderer as PIXI.Renderer;
     this.tick = canvasElement?.propObservables?.context['tick'].observable
 
-    this.tick.subscribe(() => {
+    const inputCheckSubscription = this.tick.subscribe(() => {
       if (Date.now() - this.lastInputTime > 100) {
         const player = this.getCurrentPlayer();
         if (!player) return;
         (this.sceneMap as any).stopMovement(player);
       }
-    })
+    });
+    this.tickSubscriptions.push(inputCheckSubscription);
 
 
     this.hooks.callHooks("client-spritesheets-load", this).subscribe();
@@ -175,11 +184,12 @@ export class RpgClientEngine<T = any> {
     await lastValueFrom(this.hooks.callHooks("client-engine-onStart", this));
 
     // wondow is resize
-    window.addEventListener('resize', () => {
+    this.resizeHandler = () => {
       this.hooks.callHooks("client-engine-onWindowResize", this).subscribe();
-    })
+    };
+    window.addEventListener('resize', this.resizeHandler);
 
-    this.tick.subscribe((tick) => {
+    const tickSubscription = this.tick.subscribe((tick) => {
       this.hooks.callHooks("client-engine-onStep", this, tick).subscribe();
 
       // Clean up old prediction states and input history every 60 ticks (approximately every second at 60fps)
@@ -188,7 +198,8 @@ export class RpgClientEngine<T = any> {
         this.prediction?.cleanup(now);
         this.prediction?.tryApplyPendingSnapshot();
       }
-    })
+    });
+    this.tickSubscriptions.push(tickSubscription);
 
     await this.webSocket.connection(() => {
       this.initListeners()
@@ -1293,5 +1304,180 @@ export class RpgClientEngine<T = any> {
    */
   private async replayUnackedInputsFromFrame(_startFrame: number): Promise<void> {
     // Prediction controller handles replay internally. Kept for backwards compatibility.
+  }
+
+  /**
+   * Clear all client resources and reset state
+   * 
+   * This method should be called to clean up all client-side resources when
+   * shutting down or resetting the client engine. It:
+   * - Destroys the PIXI renderer
+   * - Stops all sounds
+   * - Cleans up subscriptions and event listeners
+   * - Resets scene map
+   * - Stops ping/pong interval
+   * - Clears prediction states
+   * 
+   * ## Design
+   * 
+   * This method is used primarily in testing environments to ensure clean
+   * state between tests. In production, the client engine typically persists
+   * for the lifetime of the application.
+   * 
+   * @example
+   * ```ts
+   * // In test cleanup
+   * afterEach(() => {
+   *   clientEngine.clear();
+   * });
+   * ```
+   */
+  clear(): void {
+    try {
+      // First, unsubscribe from all tick subscriptions to stop rendering attempts
+      for (const subscription of this.tickSubscriptions) {
+        if (subscription && typeof subscription.unsubscribe === 'function') {
+          subscription.unsubscribe();
+        }
+      }
+      this.tickSubscriptions = [];
+
+      // Stop ping/pong interval
+      if (this.pingInterval) {
+        clearInterval(this.pingInterval);
+        this.pingInterval = null;
+      }
+
+      // Clean up onAfterLoading subscription
+      if (this.onAfterLoadingSubscription && typeof this.onAfterLoadingSubscription.unsubscribe === 'function') {
+        this.onAfterLoadingSubscription.unsubscribe();
+        this.onAfterLoadingSubscription = undefined;
+      }
+
+      // Clean up canvasElement (CanvasEngine) BEFORE destroying PIXI app
+      // This prevents CanvasEngine from trying to render after PIXI is destroyed
+      // CanvasEngine manages its own render loop which could try to access PIXI after destruction
+      if (this.canvasElement) {
+        try {
+          // Try to stop or cleanup canvasElement if it has cleanup methods
+          if (typeof (this.canvasElement as any).destroy === 'function') {
+            (this.canvasElement as any).destroy();
+          }
+          // Clear the reference
+          this.canvasElement = undefined;
+        } catch (error) {
+          // Ignore errors during canvasElement cleanup
+        }
+      }
+
+      // Reset scene map if it exists (this should stop any ongoing animations/renders)
+      if (this.sceneMap && typeof (this.sceneMap as any).reset === 'function') {
+        (this.sceneMap as any).reset();
+      }
+
+      // Stop all sounds
+      this.stopAllSounds();
+
+      // Remove resize event listener
+      if (this.resizeHandler && typeof window !== 'undefined') {
+        window.removeEventListener('resize', this.resizeHandler);
+        this.resizeHandler = undefined;
+      }
+
+      // Destroy PIXI app and renderer if they exist
+      // Destroy the app first, which will destroy the renderer
+      // Store renderer reference before destroying app (since app.destroy() will destroy the renderer)
+      const rendererStillExists = this.renderer && typeof this.renderer.destroy === 'function';
+      
+      if (this.canvasApp && typeof this.canvasApp.destroy === 'function') {
+        try {
+          // Stop the ticker first to prevent any render calls during destruction
+          if (this.canvasApp.ticker) {
+            if (typeof this.canvasApp.ticker.stop === 'function') {
+              this.canvasApp.ticker.stop();
+            }
+            // Also remove all listeners from ticker to prevent callbacks
+            if (typeof this.canvasApp.ticker.removeAll === 'function') {
+              this.canvasApp.ticker.removeAll();
+            }
+          }
+          
+          // Stop the renderer's ticker if it exists separately
+          if (this.renderer && (this.renderer as any).ticker) {
+            if (typeof (this.renderer as any).ticker.stop === 'function') {
+              (this.renderer as any).ticker.stop();
+            }
+            if (typeof (this.renderer as any).ticker.removeAll === 'function') {
+              (this.renderer as any).ticker.removeAll();
+            }
+          }
+          
+          // Remove the canvas from DOM before destroying to prevent render attempts
+          if (this.canvasApp.canvas && this.canvasApp.canvas.parentNode) {
+            this.canvasApp.canvas.parentNode.removeChild(this.canvasApp.canvas);
+          }
+          
+          // Destroy with minimal options to avoid issues
+          // Don't pass options that might trigger additional cleanup that could fail
+          this.canvasApp.destroy(true);
+        } catch (error) {
+          // Ignore errors during destruction
+        }
+        this.canvasApp = undefined;
+        // canvasApp.destroy() already destroyed the renderer, so just null it
+        this.renderer = null as any;
+      } else if (rendererStillExists) {
+        // Fallback: destroy renderer directly only if app doesn't exist or wasn't destroyed
+        try {
+          // Stop the renderer's ticker if it has one
+          if ((this.renderer as any).ticker) {
+            if (typeof (this.renderer as any).ticker.stop === 'function') {
+              (this.renderer as any).ticker.stop();
+            }
+            if (typeof (this.renderer as any).ticker.removeAll === 'function') {
+              (this.renderer as any).ticker.removeAll();
+            }
+          }
+          
+          this.renderer.destroy(true);
+        } catch (error) {
+          // Ignore errors during destruction
+        }
+        this.renderer = null as any;
+      }
+
+      // Clean up prediction controller
+      if (this.prediction) {
+        // Prediction controller cleanup is handled internally when destroyed
+        this.prediction = undefined;
+      }
+
+      // Reset signals
+      this.playerIdSignal.set(null);
+      this.cameraFollowTargetId.set(null);
+      this.spriteComponentsBehind.set([]);
+      this.spriteComponentsInFront.set([]);
+      
+      // Clear maps and arrays
+      this.spritesheets.clear();
+      this.sounds.clear();
+      this.componentAnimations = [];
+      this.particleSettings.emitters = [];
+
+      // Reset state
+      this.stopProcessingInput = false;
+      this.lastInputTime = 0;
+      this.inputFrameCounter = 0;
+      this.frameOffset = 0;
+      this.rtt = 0;
+
+      // Reset behavior subjects
+      this.mapLoadCompleted$.next(false);
+      this.playerIdReceived$.next(false);
+      this.playersReceived$.next(false);
+      this.eventsReceived$.next(false);
+    } catch (error) {
+      console.warn('Error during client engine cleanup:', error);
+    }
   }
 }

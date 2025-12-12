@@ -22,7 +22,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@rpgjs/testing': path.resolve(__dirname, '../testing/src'),
-      '@rpgjs/common': path.resolve(__dirname, '../common/src')
+      '@rpgjs/common': path.resolve(__dirname, '../common/src'),
+      '@rpgjs/server': path.resolve(__dirname, '../server/src'),
+      '@rpgjs/physic': path.resolve(__dirname, '../physic/src'),
+      '@rpgjs/vite': path.resolve(__dirname, '../vite/src'),
+      '@rpgjs/vue': path.resolve(__dirname, '../vue/src')
     }
   },
   test: {

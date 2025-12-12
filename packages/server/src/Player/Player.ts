@@ -268,13 +268,13 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       const worldPositionX = (map.worldX ?? 0) + this.x();
       const worldPositionY = (map.worldY ?? 0) + this.y();
 
-      const changeMap = async (adjacentCoords: {x: number, y: number}, positionCalculator: (nextMapInfo: any) => {x: number, y: number}) => {
+      const changeMap = async (directionNumber: number, positionCalculator: (nextMapInfo: any) => {x: number, y: number}) => {
         if (this.touchSide) {
           return false;
         }
         this.touchSide = true;
 
-        const [nextMap] = worldMaps.getAdjacentMaps(map, adjacentCoords);
+        const [nextMap] = worldMaps.getAdjacentMaps(map, directionNumber);
         if (!nextMap) {
           this.touchSide = false;
           return false;
@@ -299,40 +299,28 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       };
   // Check left border
       if (nextPosition.x < marginLeftRight && direction === Direction.Left) {
-        ret = await changeMap({
-          x: (map.worldX ?? 0) - 1,
-          y: worldPositionY
-        }, nextMapInfo => ({
+        ret = await changeMap(2, nextMapInfo => ({
           x: nextMapInfo.width - (this.hitbox().w) - marginLeftRight,
           y: (map.worldY ?? 0) - (nextMapInfo.y ?? 0) + nextPosition.y
         }));
       }
       // Check right border
       else if (nextPosition.x > map.widthPx - this.hitbox().w - marginLeftRight && direction === Direction.Right) {
-        ret = await changeMap({
-          x: (map.worldX ?? 0) + map.widthPx + 1,
-          y: worldPositionY
-        }, nextMapInfo => ({
+        ret = await changeMap(3, nextMapInfo => ({
           x: marginLeftRight,
           y: (map.worldY ?? 0) - (nextMapInfo.y ?? 0) + nextPosition.y
         }));
       }
       // Check top border
       else if (nextPosition.y < marginTopDown && direction === Direction.Up) {
-        ret = await changeMap({
-          x: worldPositionX,
-          y: (map.worldY ?? 0) - 1
-        }, nextMapInfo => ({
+        ret = await changeMap(0, nextMapInfo => ({
           x: (map.worldX ?? 0) - (nextMapInfo.x ?? 0) + nextPosition.x,
           y: nextMapInfo.height - this.hitbox().h - marginTopDown
         }));
       }
       // Check bottom border
       else if (nextPosition.y > map.heightPx - this.hitbox().h - marginTopDown && direction === Direction.Down) {
-        ret = await changeMap({
-          x: worldPositionX,
-          y: (map.worldY ?? 0) + map.heightPx + 1
-        }, nextMapInfo => ({
+        ret = await changeMap(1, nextMapInfo => ({
           x: (map.worldX ?? 0) - (nextMapInfo.x ?? 0) + nextPosition.x,
           y: marginTopDown
         }));

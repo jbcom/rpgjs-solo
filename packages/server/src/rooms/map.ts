@@ -6,7 +6,7 @@ import { generateShortUUID, sync, type, users } from "@signe/sync";
 import { signal } from "@signe/reactive";
 import { inject } from "@signe/di";
 import { context } from "../core/context";;
-import { finalize, lastValueFrom } from "rxjs";
+import { finalize, lastValueFrom, throttleTime } from "rxjs";
 import { Subject } from "rxjs";
 import { BehaviorSubject } from "rxjs";
 import { COEFFICIENT_ELEMENTS, DAMAGE_CRITICAL, DAMAGE_PHYSIC, DAMAGE_SKILL } from "../presets";
@@ -207,6 +207,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   private _shapes: Map<string, RpgShape> = new Map();
   /** Internal: Map of shape entity UUIDs to RpgShape instances */
   private _shapeEntities: Map<string, RpgShape> = new Map();
+  /** Internal: Subscription for the input processing loop */
+  private _inputLoopSubscription?: any;
+  /** Enable/disable automatic tick processing (useful for unit tests) */
+  private _autoTickEnabled: boolean = true;
 
   constructor() {
     super();
@@ -215,7 +219,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this.throttleStorage = this.isStandalone ? 0 : 1000;
     this.sessionExpiryTime = 1000 * 60 * 5; //5 minutes
     this.setupCollisionDetection();
-    this.loop();
+    if (this._autoTickEnabled) {
+      this.loop();
+    }
   }
 
   /**
@@ -1052,25 +1058,31 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   /**
    * Main game loop that processes player inputs
    * 
-   * This private method runs continuously every 50ms to process pending inputs
-   * for all players on the map. It ensures inputs are processed in order and
-   * prevents concurrent processing for the same player.
+   * This private method subscribes to tick$ and processes pending inputs
+   * for all players on the map with a throttle of 50ms. It ensures inputs are
+   * processed in order and prevents concurrent processing for the same player.
    * 
    * ## Architecture
    * 
-   * - Runs every 50ms for responsive input processing
+   * - Subscribes to tick$ with throttleTime(50ms) for responsive input processing
    * - Processes inputs for each player with pending inputs
    * - Uses a flag to prevent concurrent processing for the same player
    * - Calls `processInput()` to handle anti-cheat validation and movement
    * 
    * @example
    * ```ts
-   * // This method is called automatically in the constructor
+   * // This method is called automatically in the constructor if autoTick is enabled
    * // You typically don't call it directly
    * ```
    */
   private loop() {
-    setInterval(async () => {
+    if (this._inputLoopSubscription) {
+      this._inputLoopSubscription.unsubscribe();
+    }
+    
+    this._inputLoopSubscription = this.tick$.pipe(
+      throttleTime(50) // Throttle to 50ms for input processing
+    ).subscribe(async ({ timestamp }) => {
       for (const player of this.getPlayers()) {
         if (player.pendingInputs.length > 0) {
           const anyPlayer = player as any;
@@ -1082,7 +1094,35 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
           }
         }
       }
-    }, 50); // Increased frequency from 100ms to 50ms for better responsiveness
+    });
+  }
+
+  /**
+   * Enable or disable automatic tick processing
+   * 
+   * When disabled, the input processing loop will not run automatically.
+   * This is useful for unit tests where you want manual control over when
+   * inputs are processed.
+   * 
+   * @param enabled - Whether to enable automatic tick processing (default: true)
+   * 
+   * @example
+   * ```ts
+   * // Disable auto tick for testing
+   * map.setAutoTick(false);
+   * 
+   * // Manually trigger tick processing
+   * await map.processInput('player1');
+   * ```
+   */
+  setAutoTick(enabled: boolean): void {
+    this._autoTickEnabled = enabled;
+    if (enabled && !this._inputLoopSubscription) {
+      this.loop();
+    } else if (!enabled && this._inputLoopSubscription) {
+      this._inputLoopSubscription.unsubscribe();
+      this._inputLoopSubscription = undefined;
+    }
   }
 
   /**
@@ -2035,6 +2075,38 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         direction: options?.direction ?? 'both',
       },
     });
+  }
+
+  /**
+   * Clear all server resources and reset state
+   * 
+   * This method should be called to clean up all server-side resources when
+   * shutting down or resetting the map. It stops the input processing loop
+   * and ensures that all subscriptions are properly cleaned up.
+   * 
+   * ## Design
+   * 
+   * This method is used primarily in testing environments to ensure clean
+   * state between tests. It stops the tick subscription to prevent memory leaks.
+   * 
+   * @example
+   * ```ts
+   * // In test cleanup
+   * afterEach(() => {
+   *   map.clear();
+   * });
+   * ```
+   */
+  clear(): void {
+    try {
+      // Stop input processing loop
+      if (this._inputLoopSubscription) {
+        this._inputLoopSubscription.unsubscribe();
+        this._inputLoopSubscription = undefined;
+      }
+    } catch (error) {
+      console.warn('Error during map cleanup:', error);
+    }
   }
 }
 

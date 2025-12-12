@@ -2,6 +2,8 @@ import { mergeConfig, Provider } from "@signe/di";
 import { provideRpg, startGame, provideClientModules, provideLoadMap, provideClientGlobalConfig, inject, WebSocketToken, AbstractWebsocket, RpgClientEngine, RpgClient, LoadMapToken } from "@rpgjs/client";
 import { createServer, provideServerModules, RpgServer, RpgPlayer } from "@rpgjs/server";
 import { h, Container } from "canvasengine";
+import { clearInject as clearClientInject } from "@rpgjs/client";
+import { clearInject as clearServerInject } from "@rpgjs/server";
 
 /**
  * Provides a default map loader for testing environments
@@ -29,7 +31,8 @@ export function provideTestingLoadMap() {
             data: {
                 width: 1024,
                 height: 768,
-                hitboxes: []
+                hitboxes: [],
+                params: {}
             },
             component: h(Container),
             width: 1024,
@@ -115,6 +118,14 @@ function normalizeModules(modules: any[]): { serverModules: RpgServer[], clientM
     return { serverModules, clientModules }
 }
 
+// Global storage for all created fixtures and clients (for clear() function)
+const globalFixtures: Array<{
+    context: any;
+    clientEngine: RpgClientEngine;
+    websocket: AbstractWebsocket;
+    server?: any;
+}> = []
+
 /**
  * Testing utility function to set up server and client instances for unit testing
  * 
@@ -158,6 +169,15 @@ export async function testing(
             ...(serverConfig.providers || [])
         ]
     })
+    
+    // Store created instances for cleanup
+    const createdClients: Array<{
+        context: any;
+        clientEngine: RpgClientEngine;
+        websocket: AbstractWebsocket;
+        server?: any;
+    }> = []
+    
     return {
         async createClient() {
             // Check if LoadMapToken is already provided in clientConfig.providers
@@ -169,7 +189,7 @@ export async function testing(
                 return provider?.provide === LoadMapToken
             }) || false
             
-            const client = await startGame(
+            const context = await startGame(
                 mergeConfig({
                     ...clientConfig,
                     providers: [
@@ -189,6 +209,33 @@ export async function testing(
                 throw new Error('Player ID is not available')
             }
             const playerIdString: string = playerId
+            
+            // Get server instance
+            const server = websocket.getServer()
+            
+            // Disable auto tick for unit tests (manual control via nextTick)
+            // The map will be available after the player connects, so we disable it asynchronously
+            setTimeout(() => {
+                try {
+                    const serverMap = server?.subRoom as any
+                    if (serverMap && typeof serverMap.setAutoTick === 'function') {
+                        serverMap.setAutoTick(false)
+                    }
+                } catch (error) {
+                    // Ignore errors if map is not ready yet
+                }
+            }, 0)
+            
+            // Store instance for cleanup (both locally and globally)
+            const clientInstance = {
+                context,
+                clientEngine,
+                websocket,
+                server
+            }
+            createdClients.push(clientInstance)
+            globalFixtures.push(clientInstance)
+            
             return {
                 get server() {
                     return  websocket.getServer()
@@ -231,8 +278,196 @@ export async function testing(
                         `Timeout: Player did not reach map ${expectedMapId} within ${timeout}ms. ` +
                         `Current map: ${currentMap?.id || 'null'}`
                     )
+                },
+                /**
+                 * Manually trigger a game tick for processing inputs and physics
+                 * 
+                 * This method is a convenience wrapper around the exported nextTick() function.
+                 * 
+                 * @param timestamp - Optional timestamp to use for the tick (default: Date.now())
+                 * @returns Promise that resolves when the tick is complete
+                 * 
+                 * @example
+                 * ```ts
+                 * const client = await fixture.createClient()
+                 * 
+                 * // Manually advance the game by one tick
+                 * await client.nextTick()
+                 * ```
+                 */
+                async nextTick(timestamp?: number): Promise<void> {
+                    return nextTick(this.client, timestamp)
                 }
             }
+        },
+        /**
+         * Clear all server, client instances and reset the DOM
+         * 
+         * This method should be called in afterEach to clean up test state.
+         * It destroys all created client instances, clears the server, and resets the DOM.
+         * 
+         * @example
+         * ```ts
+         * const fixture = await testing([myModule])
+         * 
+         * afterEach(() => {
+         *   fixture.clear()
+         * })
+         * ```
+         */
+        clear() {
+            // Use the global clear function
+            clear()
         }
     }
+}
+
+/**
+ * Clear all caches and reset test state
+ * 
+ * This function should be called after the end of each test to clean up
+ * all server and client instances, clear caches, and reset the DOM.
+ * 
+ * ## Design
+ * 
+ * Cleans up all created fixtures, client engines, server instances, and resets
+ * the DOM to a clean state. This ensures no state leaks between tests.
+ * 
+ * @returns void
+ * 
+ * @example
+ * ```ts
+ * import { clear } from '@rpgjs/testing'
+ * 
+ * afterEach(() => {
+ *   clear()
+ * })
+ * ```
+ */
+export function clear(): void {
+    // Clean up all created client and server instances from all fixtures
+    for (const client of globalFixtures) {
+        try {
+            // Clear client engine
+            if (client.clientEngine && typeof (client.clientEngine as any).clear === 'function') {
+                (client.clientEngine as any).clear()
+            }
+            
+            // Clear server map (subRoom)
+            const serverMap = client.server?.subRoom as any
+            if (serverMap && typeof serverMap.clear === 'function') {
+                serverMap.clear()
+            }
+        } catch (error) {
+            // Silently ignore cleanup errors
+            console.warn('Error during cleanup:', error)
+        }
+    }
+    
+    // Clear the global fixtures array
+    globalFixtures.length = 0
+    
+    // Clear client context injection
+    try {
+        clearClientInject()
+    } catch (error) {
+        console.warn('Error clearing client inject:', error)
+    }
+    
+    // Clear server context injection
+    try {
+        clearServerInject()
+    } catch (error) {
+        console.warn('Error clearing server inject:', error)
+    }
+    
+    // Reset DOM
+    if (typeof window !== 'undefined' && window.document) {
+        window.document.body.innerHTML = `<div id="rpg"></div>`
+    }
+}
+
+/**
+ * Manually trigger a game tick for processing inputs and physics
+ * 
+ * This function allows you to manually advance the game by one tick.
+ * It performs the following operations:
+ * 1. On server: processes pending inputs and advances physics
+ * 2. Server sends data to client
+ * 3. Client retrieves data and performs inputs (move, etc.) and server reconciliation
+ * 4. A tick is performed on the client
+ * 5. A tick is performed on VueJS (if Vue is used)
+ * 
+ * @param client - The RpgClientEngine instance
+ * @param timestamp - Optional timestamp to use for the tick (default: Date.now())
+ * @returns Promise that resolves when the tick is complete
+ * 
+ * @example
+ * ```ts
+ * import { nextTick } from '@rpgjs/testing'
+ * 
+ * const client = await fixture.createClient()
+ * 
+ * // Manually advance the game by one tick
+ * await nextTick(client.client, Date.now())
+ * ```
+ */
+export async function nextTick(client: RpgClientEngine, timestamp?: number): Promise<void> {
+    if (!client) {
+        throw new Error('nextTick: client parameter is required')
+    }
+
+    const tickTimestamp = timestamp ?? Date.now()
+    const delta = 16 // 16ms for 60fps
+
+    // Get server instance from client context
+    const websocket = (client as any).webSocket
+    if (!websocket) {
+        throw new Error('nextTick: websocket not found in client')
+    }
+
+    const server = websocket.getServer()
+    if (!server) {
+        throw new Error('nextTick: server not found')
+    }
+
+    // Get server map (subRoom)
+    const serverMap = server.subRoom as any
+    if (!serverMap) {
+        return
+    }
+
+    // 1. On server: Process inputs for all players
+    for (const player of serverMap.getPlayers()) {
+        if (player.pendingInputs && player.pendingInputs.length > 0) {
+            await serverMap.processInput(player.id)
+        }
+    }
+
+    // 2. Run physics tick on server map
+    if (typeof serverMap.runFixedTicks === 'function') {
+        serverMap.runFixedTicks(delta)
+    }
+
+    // 3. Server sends data to client - trigger sync for all players
+    // The sync is triggered by calling syncChanges() on each player
+    for (const player of serverMap.getPlayers()) {
+        if (player && typeof (player as any).syncChanges === 'function') {
+            (player as any).syncChanges()
+        }
+    }
+
+    // 4. Client retrieves data and performs reconciliation
+    // The sync data will be received by the client through the websocket
+    // We need to wait a bit for the sync data to be processed
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    // 5. Run physics tick on client map (performs client-side prediction)
+    const sceneMap = (client as any).sceneMap
+    if (sceneMap && typeof sceneMap.stepPredictionTick === 'function') {
+        sceneMap.stepPredictionTick()
+    }
+
+    // 6. Trigger VueJS tick if Vue is used (handled by CanvasEngine internally)
+    // CanvasEngine handles this automatically through its tick system
 }
