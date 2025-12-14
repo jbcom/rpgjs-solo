@@ -219,11 +219,6 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       if (isString(item)) {
         itemId = item as string;
         data = (this as any).databaseById(itemId);
-        if (!data) {
-          throw new Error(
-            `The ID=${itemId} data is not found in the database. Add the data in the property "database"`
-          );
-        }
       }
       // Handle class: create instance and add to database if needed
       else if (typeof item === 'function' || (item as any).prototype) {

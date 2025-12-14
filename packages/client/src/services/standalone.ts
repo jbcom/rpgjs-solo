@@ -10,6 +10,10 @@ import { provideKeyboardControls } from "./keyboardControls";
 type ServerIo = any;
 type ClientIo = any;
 
+interface StandaloneOptions {
+  env?: Record<string, any>;
+}
+
 class BridgeWebsocket extends AbstractWebsocket {
   private room: ServerIo;
   private socket: ClientIo;
@@ -20,13 +24,15 @@ class BridgeWebsocket extends AbstractWebsocket {
       await server.onStart();
       this.context.set('server', server)
       return server
-    }   
+    },
+    env: {}
   }
   private serverInstance: any;
 
-  constructor(protected context: Context, private server: any) {
+  constructor(protected context: Context, private server: any, options: StandaloneOptions = {}) {
     super(context);
     // fake room
+    this.rooms.env = options.env || {};
     this.room = new ServerIo("lobby-1", this.rooms);
   }
 
@@ -157,11 +163,11 @@ class UpdateMapStandaloneService extends UpdateMapService {
   }
 }
 
-export function provideRpg(server: any) {
+export function provideRpg(server: any, options: StandaloneOptions = {}) {
   return [
     {
       provide: WebSocketToken,
-      useFactory: (context: Context) => new BridgeWebsocket(context, server),
+      useFactory: (context: Context) => new BridgeWebsocket(context, server, options),
     },
     {
       provide: UpdateMapToken,

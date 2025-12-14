@@ -127,6 +127,19 @@ export function provideServerModules(modules: RpgServerModule[]): FactoryProvide
           }
         };
       }
+      if (module.database && typeof module.database === 'object') {
+        const database = {...module.database};
+        module = {
+          ...module,
+          databaseHooks: {
+            load: (engine: RpgMap) => {
+              for (const key in database) {
+                engine.addInDatabase(key, database[key]);
+              }
+            },
+          }
+        };
+      }
       return module;
     })
     return modules

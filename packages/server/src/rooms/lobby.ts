@@ -11,6 +11,11 @@ import { RpgPlayer } from "../Player/Player";
 })
 export class LobbyRoom {
   @users(RpgPlayer) players = signal({});
+  autoSync: boolean = true;
+
+  constructor(room) {
+    this.autoSync = room.env.TEST === 'true' ? false : true;
+  }
 
   onJoin(player: RpgPlayer, conn: MockConnection) {
     player.map = this;

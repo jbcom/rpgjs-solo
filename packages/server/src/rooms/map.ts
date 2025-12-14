@@ -1,5 +1,5 @@
-import { Action, MockConnection, Request, Room, RoomOnJoin } from "@signe/room";
-import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, Direction, RpgCommonPlayer, RpgShape } from "@rpgjs/common";
+import { Action, MockConnection, Request, Room, RoomMethods, RoomOnJoin } from "@signe/room";
+import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, Direction, RpgCommonPlayer, RpgShape, findModules } from "@rpgjs/common";
 import { WorldMapsManager, type WorldMapConfig } from "@rpgjs/common";
 import { RpgPlayer, RpgEvent } from "../Player/Player";
 import { generateShortUUID, sync, type, users } from "@signe/sync";
@@ -212,12 +212,23 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   /** Enable/disable automatic tick processing (useful for unit tests) */
   private _autoTickEnabled: boolean = true;
 
-  constructor() {
+  autoSync: boolean = true;
+
+  constructor(room) {
     super();
     this.hooks.callHooks("server-map-onStart", this).subscribe();
-    this.throttleSync = this.isStandalone ? 0 : 50; // Reduced from 100ms to 50ms for better responsiveness
-    this.throttleStorage = this.isStandalone ? 0 : 1000;
-    this.sessionExpiryTime = 1000 * 60 * 5; //5 minutes
+    const isTest = room.env.TEST === 'true' ? true : false;
+    if (isTest) {
+      this.autoSync = false;
+      this.setAutoTick(false);
+      this.throttleSync = 0;
+      this.throttleStorage = 0;
+    }
+    else {
+      this.throttleSync = this.isStandalone ? 1 : 50
+      this.throttleStorage = this.isStandalone ? 1 : 50
+    }; 
+    this.sessionExpiryTime = 1000 * 60 * 5;
     this.setupCollisionDetection();
     if (this._autoTickEnabled) {
       this.loop();
@@ -649,7 +660,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   @Action('gui.interaction')
   guiInteraction(player: RpgPlayer, value) {
-    //this.hooks.callHooks("server-player-guiInteraction", player, value);
+    this.hooks.callHooks("server-player-guiInteraction", player, value);
     player.syncChanges();
   }
 
@@ -791,6 +802,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
     await lastValueFrom(this.hooks.callHooks("server-maps-load", this))
     await lastValueFrom(this.hooks.callHooks("server-worldMaps-load", this))
+    await lastValueFrom(this.hooks.callHooks("server-databaseHooks-load", this))
 
     map.events = map.events ?? []
 
@@ -1709,6 +1721,20 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 
   /**
+   * Apply sync to the client
+   * 
+   * This method applies sync to the client by calling the `$applySync()` method.
+   * 
+   * @example
+   * ```ts
+   * map.applySyncToClient();
+   * ```
+   */
+  applySyncToClient() {
+   this.$applySync();
+  }
+
+  /**
    * Create a shape dynamically on the map
    * 
    * This method creates a static hitbox on the map that can be used for
@@ -2110,8 +2136,4 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 }
 
-export interface RpgMap {
-  $send: (conn: MockConnection, data: any) => void;
-  $broadcast: (data: any) => void;
-  $sessionTransfer: (userOrPublicId: any | string, targetRoomId: string) => void;
-}
+export interface RpgMap extends RoomMethods {}

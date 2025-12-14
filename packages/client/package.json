@@ -29,9 +29,9 @@
     "@rpgjs/client": "workspace:*",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/server": "workspace:*",
-    "@signe/di": "^2.6.0",
-    "@signe/room": "^2.6.0",
-    "@signe/sync": "^2.6.0",
+    "@signe/di": "^2.7.2",
+    "@signe/room": "^2.7.2",
+    "@signe/sync": "^2.7.2",
     "pixi-filters": "^6.1.5",
     "rxjs": "^7.8.2"
   },
