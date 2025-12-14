@@ -41,8 +41,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   private speedScalar = 50; // Default speed scalar for movement
 
   // World Maps properties
-  tileWidth?: number;
-  tileHeight?: number;
+  tileWidth: number = 32;
+  tileHeight: number = 32;
   worldMapsManager?: WorldMapsManager;
 
   // Synchronization throttling properties
@@ -59,6 +59,96 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   get isStandalone() {
     return typeof window !== 'undefined'
   }
+  
+
+  /**
+   * Get the width of the map in pixels
+   * 
+   * @returns The width of the map in pixels, or 0 if not loaded
+   * 
+   * @example
+   * ```ts
+   * const width = map.widthPx;
+   * console.log(`Map width: ${width}px`);
+   * ```
+   */
+  get widthPx(): number {
+    return this.data()?.width ?? 0
+  }
+
+  /**
+   * Get the height of the map in pixels
+   * 
+   * @returns The height of the map in pixels, or 0 if not loaded
+   * 
+   * @example
+   * ```ts
+   * const height = map.heightPx;
+   * console.log(`Map height: ${height}px`);
+   * ```
+   */
+  get heightPx(): number {
+    return this.data()?.height ?? 0
+  }
+
+  /**
+   * Get the unique identifier of the map
+   * 
+   * @returns The map ID, or empty string if not loaded
+   * 
+   * @example
+   * ```ts
+   * const mapId = map.id;
+   * console.log(`Current map: ${mapId}`);
+   * ```
+   */
+  get id(): string {
+    return this.data()?.id ?? ''
+  }
+
+    /**
+   * Get the X position of this map in the world coordinate system
+   * 
+   * This is used when maps are part of a larger world map. The world position
+   * indicates where this map is located relative to other maps.
+   * 
+   * @returns The X position in world coordinates, or 0 if not in a world
+   * 
+   * @example
+   * ```ts
+   * const worldX = map.worldX;
+   * console.log(`Map is at world position (${worldX}, ${map.worldY})`);
+   * ```
+   */
+    get worldX(): number {
+      const worldMaps = this.getWorldMapsManager?.();
+      if (!worldMaps) return 0;
+      // Extract real map ID (remove "map-" prefix if present)
+      const mapId = this.id.startsWith('map-') ? this.id.slice(4) : this.id;
+      return worldMaps.getMapInfo(mapId)?.worldX ?? 0
+    }
+    
+    /**
+     * Get the Y position of this map in the world coordinate system
+     * 
+     * This is used when maps are part of a larger world map. The world position
+     * indicates where this map is located relative to other maps.
+     * 
+     * @returns The Y position in world coordinates, or 0 if not in a world
+     * 
+     * @example
+     * ```ts
+     * const worldY = map.worldY;
+     * console.log(`Map is at world position (${map.worldX}, ${worldY})`);
+     * ```
+     */
+    get worldY(): number {
+      const worldMaps = this.getWorldMapsManager?.();
+      if (!worldMaps) return 0;
+      // Extract real map ID (remove "map-" prefix if present)
+      const mapId = this.id.startsWith('map-') ? this.id.slice(4) : this.id;
+      return worldMaps.getMapInfo(mapId)?.worldY ?? 0
+    }
 
   /**
    * Observable representing the game loop tick
@@ -579,6 +669,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   setInWorldMaps(worldMap: RpgWorldMaps): void {
     this.worldMapsManager = worldMap;
   }
+
+  
 
   /**
    * Create a temporary and moving hitbox on the map

@@ -91,10 +91,69 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   context?: Context;
   conn: MockConnection | null = null;
   touchSide: boolean = false; // Protection against map change loops
-  
+
+  /**
+   * Computed signal for world X position
+   * 
+   * Calculates the absolute world X position from the map's world position
+   * plus the player's local X position. Returns 0 if no map is assigned.
+   * 
+   * @example
+   * ```ts
+   * const worldX = player.worldX();
+   * console.log(`Player is at world X: ${worldX}`);
+   * ```
+   */
+  get worldPositionX() {
+    return this._getComputedWorldPosition('x');
+  }
+
+  /**
+   * Computed signal for world Y position
+   * 
+   * Calculates the absolute world Y position from the map's world position
+   * plus the player's local Y position. Returns 0 if no map is assigned.
+   * 
+   * @example
+   * ```ts
+   * const worldY = player.worldY();
+   * console.log(`Player is at world Y: ${worldY}`);
+   * ```
+   */
+  get worldPositionY() {
+    return this._getComputedWorldPosition('y');
+  }
+
+  private _worldPositionSignals = new WeakMap<any, any>();
+
+  private _getComputedWorldPosition(axis: 'x' | 'y') {
+    // We use a WeakMap to cache the computed signal per instance
+    // This ensures that if the player object is copied (e.g. in tests),
+    // the new instance gets its own signal bound to itself.
+    if (!this._worldPositionSignals) {
+      this._worldPositionSignals = new WeakMap();
+    }
+
+    const key = axis;
+    let signals = this._worldPositionSignals.get(this);
+    if (!signals) {
+      signals = {};
+      this._worldPositionSignals.set(this, signals);
+    }
+
+    if (!signals[key]) {
+      signals[key] = computed(() => {
+        const map = this.map as RpgMap | null;
+        const mapWorldPos = map ? (map[axis === 'x' ? 'worldX' : 'worldY'] ?? 0) : 0;
+        return mapWorldPos + (this[axis] as any)();
+      });
+    }
+    return signals[key];
+  }
+
   /** Internal: Shapes attached to this player */
   private _attachedShapes: Map<string, RpgShape> = new Map();
-  
+
   /** Internal: Shapes where this player is currently located */
   private _inShapes: Set<RpgShape> = new Set();
   /** Last processed client input timestamp for reconciliation */
@@ -118,10 +177,10 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     super();
     // Use type assertion to access mixin properties
     (this as any).expCurve = {
-        basis: 30,
-        extra: 20,
-        accelerationA: 30,
-        accelerationB: 30
+      basis: 30,
+      extra: 20,
+      accelerationA: 30,
+      accelerationB: 30
     };
 
     (this as any).addParameter(MAXHP, MAXHP_CURVE);
@@ -139,7 +198,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     combineLatest([this.x.observable, this.y.observable])
       .subscribe(([x, y]) => {
         pendingUpdate = { x, y };
-        
+
         // Schedule a synchronous update using queueMicrotask
         // This groups multiple rapid changes (x and y in the same tick) into a single frame
         if (!updateScheduled) {
@@ -163,7 +222,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
         }
       })
   }
-  
+
   _onInit() {
     this.hooks.callHooks("server-playerProps-load", this).subscribe();
   }
@@ -175,6 +234,10 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   // compatibility with v4
   get server() {
     return this.map
+  }
+
+  setMap(map: RpgMap) {
+    this.map = map;
   }
 
   applyFrames() {
@@ -219,12 +282,12 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   ): Promise<any | null | boolean> {
     const realMapId = 'map-' + mapId;
     const room = this.getCurrentMap();
-    
+
     const canChange: boolean[] = await lastValueFrom(this.hooks.callHooks("server-player-canChangeMap", this, {
       id: mapId,
     }));
     if (canChange.some(v => v === false)) return false;
-    
+
     if (positions && typeof positions === 'object') {
       this.teleport(positions)
     }
@@ -236,118 +299,81 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     return true;
   }
 
-  /**
-   * Auto change map when player touches map borders
-   * 
-   * This method checks if the player touches the current map borders
-   * and automatically performs a change to the adjacent map if it exists.
-   * 
-   * @param nextPosition - The next position of the player
-   * @returns Promise<boolean> - true if a map change occurred
-   * 
-   * @example
-   * ```ts
-   * // Called automatically by the movement system
-   * const changed = await player.autoChangeMap({ x: newX, y: newY });
-   * if (changed) {
-   *   console.log('Player changed map automatically');
-   * }
-   * ```
-   */
-  async autoChangeMap(nextPosition: { x: number; y: number }, forcedDirection?: any): Promise<boolean> {
-    const map = this.getCurrentMap() as RpgMap; // Cast to access extended properties
-    if (!map) return false;
-
-    const worldMaps = map.getWorldMapsManager?.();
-    let ret: boolean = false;
-
+  async autoChangeMap(nextPosition: Vector2): Promise<boolean> {
+    const map = this.getCurrentMap()
+    const worldMaps = map?.getInWorldMaps()
+    let ret: boolean = false
     if (worldMaps && map) {
-      const direction = forcedDirection ?? this.getDirection();
-      const marginLeftRight = (map.tileWidth ?? 32) / 2;
-      const marginTopDown = (map.tileHeight ?? 32) / 2;
+        const direction = this.getDirection()
+        const marginLeftRight = map.tileWidth / 2
+        const marginTopDown = map.tileHeight / 2
 
-      // Current world position of the player
-      const worldPositionX = (map.worldX ?? 0) + this.x();
-      const worldPositionY = (map.worldY ?? 0) + this.y();
-
-      const changeMap = async (directionNumber: number, positionCalculator: (nextMapInfo: any) => {x: number, y: number}) => {
-        if (this.touchSide) {
-          return false;
-        }
-        this.touchSide = true;
-
-        const [nextMap] = worldMaps.getAdjacentMaps(map, directionNumber);
-        if (!nextMap) {
-          this.touchSide = false;
-          return false;
+        const changeMap = async (adjacent, to) => {
+            if (this.touchSide) {
+                return false
+            }
+            this.touchSide = true
+            const [nextMap] = worldMaps.getAdjacentMaps(map, adjacent)
+            if (!nextMap) return false
+            const id = nextMap.id as string
+            const nextMapInfo = worldMaps.getMapInfo(id)
+            return !!(await this.changeMap(id, to(nextMapInfo)))
         }
 
-        const id = nextMap.id as string;
-        const nextMapInfo = worldMaps.getMapInfo(id);
-        if (!nextMapInfo) {
-          this.touchSide = false;
-          return false;
+        if (nextPosition.x < marginLeftRight && direction == Direction.Left) {
+            ret = await changeMap({
+                x: map.worldX - 1,
+                y: this.worldPositionY() + 1
+            }, nextMapInfo => ({
+                x: (nextMapInfo.width) - this.hitbox().w - marginLeftRight,
+                y: map.worldY - nextMapInfo.y + nextPosition.y
+            }))
         }
-
-        const newPosition = positionCalculator(nextMapInfo);
-        const success = await this.changeMap(id, newPosition);
-        
-        // Reset touchSide after a delay to allow the change
-        setTimeout(() => {
-          this.touchSide = false;
-        }, 100);
-
-        return !!success;
-      };
-  // Check left border
-      if (nextPosition.x < marginLeftRight && direction === Direction.Left) {
-        ret = await changeMap(2, nextMapInfo => ({
-          x: nextMapInfo.width - (this.hitbox().w) - marginLeftRight,
-          y: (map.worldY ?? 0) - (nextMapInfo.y ?? 0) + nextPosition.y
-        }));
-      }
-      // Check right border
-      else if (nextPosition.x > map.widthPx - this.hitbox().w - marginLeftRight && direction === Direction.Right) {
-        ret = await changeMap(3, nextMapInfo => ({
-          x: marginLeftRight,
-          y: (map.worldY ?? 0) - (nextMapInfo.y ?? 0) + nextPosition.y
-        }));
-      }
-      // Check top border
-      else if (nextPosition.y < marginTopDown && direction === Direction.Up) {
-        ret = await changeMap(0, nextMapInfo => ({
-          x: (map.worldX ?? 0) - (nextMapInfo.x ?? 0) + nextPosition.x,
-          y: nextMapInfo.height - this.hitbox().h - marginTopDown
-        }));
-      }
-      // Check bottom border
-      else if (nextPosition.y > map.heightPx - this.hitbox().h - marginTopDown && direction === Direction.Down) {
-        ret = await changeMap(1, nextMapInfo => ({
-          x: (map.worldX ?? 0) - (nextMapInfo.x ?? 0) + nextPosition.x,
-          y: marginTopDown
-        }));
-      }
-      else {
-        this.touchSide = false;
-      }
+        else if (nextPosition.x > map.widthPx - this.hitbox().w - marginLeftRight && direction == Direction.Right) {
+            ret = await changeMap({
+                x: map.worldX + map.widthPx + 1,
+                y: this.worldPositionY() + 1
+            }, nextMapInfo => ({
+                x: marginLeftRight,
+                y: map.worldY - nextMapInfo.y + nextPosition.y
+            }))
+        }
+        else if (nextPosition.y < marginTopDown && direction == Direction.Up) {
+            ret = await changeMap({
+                x: this.worldPositionX() + 1,
+                y: map.worldY - 1
+            }, nextMapInfo => ({
+                x: map.worldX - nextMapInfo.x + nextPosition.x,
+                y: (nextMapInfo.height) - this.hitbox().h - marginTopDown,
+            }))
+        }
+        else if (nextPosition.y > map.heightPx - this.hitbox().h - marginTopDown && direction == Direction.Down) {
+            ret = await changeMap({
+                x: this.worldPositionX() + 1,
+                y: map.worldY + map.heightPx + 1
+            }, nextMapInfo => ({
+                x: map.worldX - nextMapInfo.x + nextPosition.x,
+                y: marginTopDown,
+            }))
+        }
+        else {
+            this.touchSide = false
+        }
     }
-
-    return ret;
-  }
+    return ret
+}
 
   async teleport(positions: { x: number; y: number }) {
     if (!this.map) return false;
-    if (this.map.physic) {
+    if (this.map && this.map.physic) {
       // Skip collision check for teleportation (allow teleporting through walls)
       const entity = this.map.physic.getEntityByUUID(this.id);
       if (entity) {
         this.map.physic.teleport(entity, { x: positions.x, y: positions.y });
       }
     }
-    else {
-      this.x.set(positions.x)
-      this.y.set(positions.y)
-    }
+    this.x.set(positions.x)
+    this.y.set(positions.y)
     // Wait for the frame to be added before applying frames
     // This ensures the frame is added before applyFrames() is called
     queueMicrotask(() => {
@@ -505,7 +531,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     // Handle overloaded signature: attachShape(options) or attachShape(id, options)
     let zoneId: string;
     let shapeOptions: AttachShapeOptions;
-    
+
     if (typeof idOrOptions === 'string') {
       zoneId = idOrOptions;
       if (!options) {
@@ -543,7 +569,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     if (shapeOptions.positioning) {
       const playerWidth = playerEntity.width || playerEntity.radius * 2 || 32;
       const playerHeight = playerEntity.height || playerEntity.radius * 2 || 32;
-      
+
       switch (shapeOptions.positioning) {
         case 'top':
           offset = new Vector2(0, -playerHeight / 2);
@@ -566,7 +592,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
     // Get zone manager and create attached zone
     const zoneManager = map.physic.getZoneManager();
-    
+
     // Convert direction from Direction enum to string if needed
     // Direction enum values are already strings ("up", "down", "left", "right")
     let direction: 'up' | 'down' | 'left' | 'right' = 'down';
@@ -607,7 +633,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
           entities.forEach((entity) => {
             const event = map.getEvent<RpgEvent>(entity.uuid);
             const player = map.getPlayer(entity.uuid);
-            
+
             if (event) {
               event.execMethod("onInShape", [shape, this]);
               // Track that this event is in the shape
@@ -628,7 +654,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
           entities.forEach((entity) => {
             const event = map.getEvent<RpgEvent>(entity.uuid);
             const player = map.getPlayer(entity.uuid);
-            
+
             if (event) {
               event.execMethod("onOutShape", [shape, this]);
               // Remove from tracking
@@ -665,10 +691,10 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     // Store mapping from zoneId to physicZoneId for future reference
     (this as any)._zoneIdMap = (this as any)._zoneIdMap || new Map();
     (this as any)._zoneIdMap.set(zoneId, physicZoneId);
-    
+
     // Store the shape
     this._attachedShapes.set(zoneId, shape);
-    
+
     // Update shape position when player moves
     const updateShapePosition = () => {
       const currentEntity = map.physic.getEntityByUUID(this.id);
@@ -679,7 +705,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
         }
       }
     };
-    
+
     // Listen to position changes to update shape position
     playerEntity.onPositionChange(() => {
       updateShapePosition();
@@ -687,7 +713,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
     return shape;
   }
-  
+
   /**
    * Get all shapes attached to this player
    * 
@@ -707,7 +733,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   getShapes(): RpgShape[] {
     return Array.from(this._attachedShapes.values());
   }
-  
+
   /**
    * Get all shapes where this player is currently located
    * 
@@ -1054,13 +1080,13 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     if (typeof height !== 'number' || height <= 0) {
       throw new Error('setHitbox: height must be a positive number');
     }
-    
+
     // Update hitbox signal
     this.hitbox.set({
       w: width,
       h: height,
     });
-    
+
     // Update physics entity if map exists
     const map = this.getCurrentMap();
     if (map && map.physic) {
@@ -1109,18 +1135,17 @@ export class RpgEvent extends RpgPlayer {
  * Extends the RpgPlayer class with additional interfaces from mixins.
  * This provides proper TypeScript support for all mixin methods and properties.
  */
-export interface RpgPlayer extends 
-IVariableManager, 
-IMoveManager, 
-IGoldManager, 
-IComponentManager, 
-IGuiManager, 
-IItemManager, 
-IEffectManager,
-IParameterManager,
-IElementManager,
-ISkillManager,
-IBattleManager,
-IClassManager,
-IStateManager
- {} 
+export interface RpgPlayer extends
+  IVariableManager,
+  IMoveManager,
+  IGoldManager,
+  IComponentManager,
+  IGuiManager,
+  IItemManager,
+  IEffectManager,
+  IParameterManager,
+  IElementManager,
+  ISkillManager,
+  IBattleManager,
+  IClassManager,
+  IStateManager { } 

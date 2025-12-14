@@ -1,12 +1,12 @@
 <Container>
-    <Rect width={1000} height={1000} color="black" />
+    <Rect width={500} height={500} color={data.@color} />
     <EventLayerComponent></EventLayerComponent>
 </Container>
 
 <script>
 import { EventLayerComponent } from "@rpgjs/client"
 
-const { data } = defineProps()
+const { data, } = defineProps()
 
 const color = computed(() => data().color)
 </script>

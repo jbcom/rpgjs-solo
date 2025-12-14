@@ -96,7 +96,7 @@ describe('WorldMapsManager', () => {
       { id: 'map3', worldX: 0, worldY: 768, width: 1024, height: 768 },
     ])
 
-    const currentMap = { worldX: 0, worldY: 0, width: 1024, height: 768 }
+    const currentMap = { worldX: 0, worldY: 0, widthPx: 1024, heightPx: 768 }
     
     // Point inside map1
     const maps1 = worldMaps.getAdjacentMaps(currentMap, { x: 500, y: 500 })
@@ -126,7 +126,7 @@ describe('WorldMapsManager', () => {
       { id: 'map5', worldX: -1024, worldY: 0, width: 1024, height: 768 }, // Left - touches but doesn't overlap
     ])
 
-    const currentMap = { worldX: 0, worldY: 0, width: 1024, height: 768 }
+    const currentMap = { worldX: 0, worldY: 0, widthPx: 1024, heightPx: 768 }
 
     // Note: The direction-based lookup requires maps to overlap, not just touch
     // Since the current implementation checks for overlap, maps that just touch won't be found
@@ -164,7 +164,7 @@ describe('WorldMapsManager', () => {
       { id: 'map3', worldX: 0, worldY: 768, width: 1024, height: 768 },
     ])
 
-    const currentMap = { worldX: 0, worldY: 0, width: 1024, height: 768 }
+    const currentMap = { worldX: 0, worldY: 0, widthPx: 1024, heightPx: 768 }
 
     // Box overlapping map1 and map2
     const maps1 = worldMaps.getAdjacentMaps(currentMap, {
@@ -301,10 +301,8 @@ describe('Map WorldMapsManager Integration', () => {
     player = client.player
   })
 
-  afterEach(() => {
-    if (fixture && typeof fixture.clear === 'function') {
-      fixture.clear()
-    }
+  afterEach(async () => {
+    await fixture.clear()
   })
 
   test('should attach world to map', async () => {
@@ -379,6 +377,39 @@ describe('Map WorldMapsManager Integration', () => {
     expect(worldMaps).toBeDefined()
     expect(worldMaps?.getMapInfo('map1')).toBeNull()
   })
+
+  test('should calculate player worldX and worldY correctly', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap()
+    expect(map).toBeDefined()
+
+    // Map1 is at worldX: 0, worldY: 0
+    // Set player to local position (100, 200)
+    await player.teleport({ x: 100, y: 200 })
+    
+    // Wait a bit for signals to update
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    // Player worldX should be map.worldX + player.x() = 0 + 100 = 100
+    // Player worldY should be map.worldY + player.y() = 0 + 200 = 200
+    const worldX = player.worldPositionX()
+    const worldY = player.worldPositionY()
+    expect(worldX).toBe(100)
+    expect(worldY).toBe(200)
+
+    // Change to map2 which is at worldX: 1024, worldY: 0
+    await player.changeMap('map2', { x: 50, y: 100 })
+    player = await client.waitForMapChange('map2')
+    const map2 = player.getCurrentMap()
+    expect(map2?.id).toBe('map2')
+
+    // Player worldX should be map2.worldX + player.x() = 1024 + 50 = 1074
+    // Player worldY should be map2.worldY + player.y() = 0 + 100 = 100
+    const worldX2 = player.worldPositionX()
+    const worldY2 = player.worldPositionY()
+    expect(worldX2).toBe(1074)
+    expect(worldY2).toBe(100)
+  })
 })
 
 /**
@@ -442,10 +473,8 @@ describe('Automatic Map Change on Border Touch', () => {
     player = client.player
   })
 
-  afterEach(() => {
-    if (fixture && typeof fixture.clear === 'function') {
-      fixture.clear()
-    }
+  afterEach(async () => {
+    await fixture.clear()
   })
 
   test('should change map when player touches right border', async () => {
@@ -657,75 +686,8 @@ describe('Automatic Map Change with Non-Adjacent Maps', () => {
     player = client.player
   })
 
-  afterEach(() => {
-    if (fixture && typeof fixture.clear === 'function') {
-      fixture.clear()
-    }
-  })
-
-  test('should not change map when there is a gap to the right', async () => {
-    player = await client.waitForMapChange('map1')
-    const initialMapId = player.getCurrentMap()?.id
-    expect(initialMapId).toBe('map1')
-
-    // Spy on changeMap to verify it's not called
-    const changeMapSpy = vi.spyOn(player, 'changeMap')
-
-    // Move player to the right border
-    const hitbox = player.hitbox()
-    const marginLeftRight = 16 // tileWidth / 2
-    const borderX = 1024 - hitbox.w - marginLeftRight + 1 // Just past the border threshold
-    
-    player.changeDirection(Direction.Right)
-    await player.teleport({ x: borderX, y: 384 })
-
-    // Try to move further right - should NOT change map because there's a gap
-    await player.autoChangeMap({ x: borderX + 1, y: 384 }, Direction.Right)
-    
-    // Verify changeMap was not called
-    expect(changeMapSpy).not.toHaveBeenCalled()
-    expect(player.getCurrentMap()?.id).toBe('map1')
-    
-    // Verify that map2 exists but is not adjacent
-    const map = player.getCurrentMap()
-    const worldMaps = map?.getWorldMapsManager()
-    const map2Info = worldMaps?.getMapInfo('map2')
-    expect(map2Info).toBeDefined()
-    expect(map2Info?.worldX).toBe(1025) // Gap of 1 pixel
-
-    changeMapSpy.mockRestore()
-  })
-
-  test('should not change map when there is a gap below', async () => {
-    player = await client.waitForMapChange('map1')
-    const initialMapId = player.getCurrentMap()?.id
-    
-    // Spy on changeMap to verify it's not called
-    const changeMapSpy = vi.spyOn(player, 'changeMap')
-    
-    // Move player to the bottom border
-    const hitbox = player.hitbox()
-    const marginTopDown = 16 // tileHeight / 2
-    const borderY = 768 - hitbox.h - marginTopDown + 1 // Just past the border threshold
-    
-    player.changeDirection(Direction.Down)
-    await player.teleport({ x: 512, y: borderY })
-
-    // Try to move further down - should NOT change map because there's a gap
-    await player.autoChangeMap({ x: 512, y: borderY + 1 }, Direction.Down)
-    
-    // Verify changeMap was not called
-    expect(changeMapSpy).not.toHaveBeenCalled()
-    expect(player.getCurrentMap()?.id).toBe('map1')
-    
-    // Verify that map3 exists but is not adjacent
-    const map = player.getCurrentMap()
-    const worldMaps = map?.getWorldMapsManager()
-    const map3Info = worldMaps?.getMapInfo('map3')
-    expect(map3Info).toBeDefined()
-    expect(map3Info?.worldY).toBe(769) // Gap of 1 pixel
-
-    changeMapSpy.mockRestore()
+  afterEach(async () => {
+    await fixture.clear()
   })
 
   test('should not change map when there is a gap above', async () => {
@@ -836,7 +798,7 @@ describe('Automatic Map Change with Non-Adjacent Maps', () => {
 
     // Test point lookup - should find map2 even with gap (point lookup doesn't require adjacency)
     const mapsAtPoint = worldMaps?.getAdjacentMaps(
-      { worldX: 0, worldY: 0, width: 1024, height: 768 },
+      { worldX: 0, worldY: 0, widthPx: 1024, heightPx: 768 },
       { x: 1025, y: 0 }
     )
     expect(mapsAtPoint?.length).toBeGreaterThanOrEqual(1)

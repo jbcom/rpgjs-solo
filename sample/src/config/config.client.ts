@@ -30,13 +30,20 @@ import { withMobile } from "@rpgjs/client";
 export default {
   providers: [
     provideLoadMap((id: string) => {
+      const colorMap = {
+        "center-map": "red",
+        "left-map": "blue",
+        "right-map": "green",
+        "top-map": "yellow",
+        "bottom-map": "purple",
+      }
        return {
           id,
           component: Map,
-          width: 2048,
-          height: 1536,
+          width: 500,
+          height: 500,
           data: {
-            color: id === "simplemap" ? "red" : "blue"
+            color: colorMap[id]
           },
           hitboxes: [],
        }

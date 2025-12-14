@@ -33,8 +33,8 @@ export default createServer({
           },
           async onConnected(player: RpgPlayer) {
             player.name.set('plop')
-            await player.changeMap("map", {
-              x: 100,
+            await player.changeMap("center-map", {
+              x: 400,
               y: 100,
             });
             // console.log(player.conn?.state)
@@ -67,19 +67,40 @@ export default createServer({
             id: 'world',
             maps: [
               {
-                id: 'map',
-                worldX: 0,
-                worldY: 640,
-                width: 2048,
-                height: 2048,
+                id: 'center-map',
+                worldX: 500,
+                worldY: 500,
+                width: 500,
+                height: 500,
               },
               {
-                id: 'simplemap',
+                id: 'left-map',
                 worldX: 0,
+                worldY: 500,
+                width: 500,
+                height: 500,
+              },
+              {
+                id: 'right-map',
+                worldX: 1000,
+                worldY: 500,
+                width: 500,
+                height: 500,
+              },
+              {
+                id: 'top-map',
+                worldX: 500,
                 worldY: 0,
-                width: 800,
-                height: 640,
-              }
+                width: 500,
+                height: 500,
+              },
+              {
+                id: 'bottom-map',
+                worldX: 500,
+                worldY: 1000,
+                width: 500,
+                height: 500,
+              },
             ]
           }
         ]

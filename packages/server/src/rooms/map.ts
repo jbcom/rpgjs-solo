@@ -114,7 +114,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   @users(RpgPlayer) players = signal({});
-  
+
   /** 
    * Synchronized signal containing all events (NPCs, objects) on the map
    * 
@@ -131,7 +131,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   @sync(RpgPlayer) events = signal({});
-  
+
   /** 
    * Signal containing the map's database of items, classes, and other game data
    * 
@@ -149,7 +149,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   database = signal({});
-  
+
   /** 
    * Array of map configurations - can contain MapOptions objects or instances of map classes
    * 
@@ -157,7 +157,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * It's populated when the map is loaded via `updateMap()`.
    */
   maps: (MapOptions | any)[] = []
-  
+
   /** 
    * Array of sound IDs to play when players join the map
    * 
@@ -171,7 +171,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   sounds: string[] = []
-  
+
   /** 
    * BehaviorSubject that completes when the map data is ready
    * 
@@ -187,7 +187,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   dataIsReady$ = new BehaviorSubject<void>(undefined);
-  
+
   /** 
    * Global configuration object for the map
    * 
@@ -195,7 +195,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * It's populated from the map data when `updateMap()` is called.
    */
   globalConfig: any = {}
-  
+
   /** 
    * Damage formulas configuration for the map
    * 
@@ -228,7 +228,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     else {
       this.throttleSync = this.isStandalone ? 1 : 50
       this.throttleStorage = this.isStandalone ? 1 : 50
-    }; 
+    };
     this.sessionExpiryTime = 1000 * 60 * 5;
     this.setupCollisionDetection();
     if (this._autoTickEnabled) {
@@ -303,7 +303,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         // One of the entities is a shape
         const shape = shapeA || shapeB;
         const otherEntity = shapeA ? entityB : entityA;
-        
+
         if (shape) {
           const shapeKey = `${otherEntity.uuid}-${shape.name}`;
           if (!activeShapeCollisions.has(shapeKey)) {
@@ -339,7 +339,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       if (event) {
         // Mark this collision as processed
         activeCollisions.add(collisionKey);
-        
+
         // Trigger the onPlayerTouch hook on the event
         event.execMethod('onPlayerTouch', [player]);
       }
@@ -362,7 +362,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         // One of the entities is a shape
         const shape = shapeA || shapeB;
         const otherEntity = shapeA ? entityB : entityA;
-        
+
         if (shape) {
           const shapeKey = `${otherEntity.uuid}-${shape.name}`;
           if (activeShapeCollisions.has(shapeKey)) {
@@ -479,7 +479,11 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   onJoin(player: RpgPlayer, conn: MockConnection) {
-    player.map = this;
+    if (player.setMap) {
+      player.setMap(this);
+    } else {
+      player.map = this;
+    }
     player.context = context;
     player.conn = conn;
     player._onInit()
@@ -489,17 +493,17 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         if ((this as any).stopAllSoundsBeforeJoin) {
           player.stopAllSounds();
         }
-        
-        this.sounds.forEach(sound => player.playSound(sound,{ loop: true }));
-        
+
+        this.sounds.forEach(sound => player.playSound(sound, { loop: true }));
+
         // Execute global map hooks (from RpgServer.map)
         await lastValueFrom(this.hooks.callHooks("server-map-onJoin", player, this));
-        
+
         // // Execute map-specific hooks (from @MapData or MapOptions)
         if (typeof (this as any)._onJoin === 'function') {
           await (this as any)._onJoin(player);
         }
-        
+
         // Execute player hooks
         await lastValueFrom(this.hooks.callHooks("server-player-onJoinMap", player, this));
       })
@@ -532,12 +536,12 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   async onLeave(player: RpgPlayer, conn: MockConnection) {
     // Execute global map hooks (from RpgServer.map)
     await lastValueFrom(this.hooks.callHooks("server-map-onLeave", player, this));
-    
+
     // Execute map-specific hooks (from @MapData or MapOptions)
     if (typeof (this as any)._onLeave === 'function') {
       await (this as any)._onLeave(player);
     }
-    
+
     // Execute player hooks
     await lastValueFrom(this.hooks.callHooks("server-player-onLeaveMap", player, this));
     player.pendingInputs = [];
@@ -559,89 +563,6 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   get hooks() {
     return inject<Hooks>(context, ModulesToken);
-  }
-
-  /**
-   * Get the width of the map in pixels
-   * 
-   * @returns The width of the map in pixels, or 0 if not loaded
-   * 
-   * @example
-   * ```ts
-   * const width = map.widthPx;
-   * console.log(`Map width: ${width}px`);
-   * ```
-   */
-  get widthPx(): number {
-    return this.data()?.width ?? 0
-  }
-
-  /**
-   * Get the height of the map in pixels
-   * 
-   * @returns The height of the map in pixels, or 0 if not loaded
-   * 
-   * @example
-   * ```ts
-   * const height = map.heightPx;
-   * console.log(`Map height: ${height}px`);
-   * ```
-   */
-  get heightPx(): number {
-    return this.data()?.height ?? 0
-  }
-
-  /**
-   * Get the unique identifier of the map
-   * 
-   * @returns The map ID, or empty string if not loaded
-   * 
-   * @example
-   * ```ts
-   * const mapId = map.id;
-   * console.log(`Current map: ${mapId}`);
-   * ```
-   */
-  get id(): string {
-    return this.data()?.id ?? ''
-  }
-
-  /**
-   * Get the X position of this map in the world coordinate system
-   * 
-   * This is used when maps are part of a larger world map. The world position
-   * indicates where this map is located relative to other maps.
-   * 
-   * @returns The X position in world coordinates, or 0 if not in a world
-   * 
-   * @example
-   * ```ts
-   * const worldX = map.worldX;
-   * console.log(`Map is at world position (${worldX}, ${map.worldY})`);
-   * ```
-   */
-  get worldX(): number {
-    const worldMaps = this.getWorldMapsManager?.();
-    return worldMaps?.getMapInfo(this.id)?.worldX ?? 0
-  }
-  
-  /**
-   * Get the Y position of this map in the world coordinate system
-   * 
-   * This is used when maps are part of a larger world map. The world position
-   * indicates where this map is located relative to other maps.
-   * 
-   * @returns The Y position in world coordinates, or 0 if not in a world
-   * 
-   * @example
-   * ```ts
-   * const worldY = map.worldY;
-   * console.log(`Map is at world position (${map.worldX}, ${worldY})`);
-   * ```
-   */
-  get worldY(): number {
-    const worldMaps = this.getWorldMapsManager?.();
-    return worldMaps?.getMapInfo(this.id)?.worldY ?? 0
   }
 
   /**
@@ -824,7 +745,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       else {
         this.sounds = map.sounds ?? []
       }
-      
+
       // Attach map-specific hooks from MapOptions or @MapData
       if (mapFound?.onLoad) {
         (this as any)._onLoad = mapFound.onLoad;
@@ -849,15 +770,15 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
 
     this.dataIsReady$.complete()
-    
+
     // Execute global map hooks (from RpgServer.map)
     await lastValueFrom(this.hooks.callHooks("server-map-onLoad", this))
-    
+
     // Execute map-specific hooks (from @MapData or MapOptions)
     if (typeof (this as any)._onLoad === 'function') {
       await (this as any)._onLoad();
     }
-    
+
     // TODO: Update map
   }
 
@@ -1092,7 +1013,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     if (this._inputLoopSubscription) {
       this._inputLoopSubscription.unsubscribe();
     }
-    
+
     this._inputLoopSubscription = this.tick$.pipe(
       throttleTime(50) // Throttle to 50ms for input processing
     ).subscribe(async ({ timestamp }) => {
@@ -1401,7 +1322,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     eventInstance.x.set(x);
     eventInstance.y.set(y);
-    
+
     this.events()[id] = eventInstance;
 
     await eventInstance.execMethod('onInit')
@@ -1712,7 +1633,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   applySyncToClient() {
-   this.$applySync();
+    this.$applySync();
   }
 
   /**
@@ -1791,7 +1712,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     properties?: Record<string, any>;
   }): RpgShape {
     const { x, y, width, height } = obj;
-    
+
     // Validate required parameters
     if (typeof x !== 'number' || typeof y !== 'number') {
       throw new Error('Shape x and y must be numbers');
@@ -2117,4 +2038,4 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 }
 
-export interface RpgMap extends RoomMethods {}
+export interface RpgMap extends RoomMethods { }

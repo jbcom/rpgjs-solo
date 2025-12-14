@@ -126,7 +126,7 @@ export class WorldMapsManager {
    * ```
    */
   getAdjacentMaps(
-    map: { worldX: number; worldY: number; width: number; height: number },
+    map: { worldX: number; worldY: number; widthPx: number; heightPx: number },
     search:
       | { minX: number; minY: number; maxX: number; maxY: number }
       | { x: number; y: number }
@@ -138,20 +138,26 @@ export class WorldMapsManager {
     if (typeof search === 'number') {
       const src = map;
       return maps.filter(m => {
-        const horizontallyOverlaps =
-          Math.max(src.worldX, m.worldX) < Math.min(src.worldX + src.width, m.worldX + m.width);
-        const verticallyOverlaps =
-          Math.max(src.worldY, m.worldY) < Math.min(src.worldY + src.height, m.worldY + m.height);
+        // Check if maps overlap or touch in the perpendicular direction
+        // For vertical directions (Up/Down), we need horizontal overlap or touch
+        // For horizontal directions (Left/Right), we need vertical overlap or touch
+        const horizontallyOverlapsOrTouches =
+          Math.max(src.worldX, m.worldX) <= Math.min(src.worldX + src.widthPx, m.worldX + m.widthPx);
+        const verticallyOverlapsOrTouches =
+          Math.max(src.worldY, m.worldY) <= Math.min(src.worldY + src.heightPx, m.worldY + m.heightPx);
+
+        const marginLeftRight = src.tileWidth / 2
+        const marginTopDown = src.tileHeight / 2
   
         switch (search) {
-          case 0:
-            return verticallyOverlaps && m.worldY + m.height === src.worldY;
-          case 1:
-            return verticallyOverlaps && m.worldY === src.worldY + src.height;
-          case 2:
-            return horizontallyOverlaps && m.worldX + m.width === src.worldX;
-          case 3:
-            return horizontallyOverlaps && m.worldX === src.worldX + src.width;
+          case 0: // Up
+            return verticallyOverlapsOrTouches && m.worldY + m.heightPx - marginTopDown === src.worldY;
+          case 1: // Down
+            return verticallyOverlapsOrTouches && m.worldY + marginTopDown === src.worldY + src.heightPx;
+          case 2: // Left
+            return horizontallyOverlapsOrTouches && m.worldX + m.widthPx - marginLeftRight === src.worldX;
+          case 3: // Right
+            return horizontallyOverlapsOrTouches && m.worldX + marginLeftRight === src.worldX + src.widthPx;
           default:
             return false;
         }
@@ -161,8 +167,8 @@ export class WorldMapsManager {
     // Point lookup ----------------------------------------------------------
     if ('x' in search && 'y' in search) {
       const found = maps.find(m =>
-        search.x >= m.worldX && search.x < m.worldX + m.width &&
-        search.y >= m.worldY && search.y < m.worldY + m.height
+        search.x >= m.worldX && search.x < m.worldX + m.widthPx &&
+        search.y >= m.worldY && search.y < m.worldY + m.heightPx
       );
       return found ? [found] : [];
     }
@@ -172,9 +178,9 @@ export class WorldMapsManager {
       const { minX, minY, maxX, maxY } = search;
       return maps.filter(m => {
         const aLeft = m.worldX;
-        const aRight = m.worldX + m.width;
+        const aRight = m.worldX + m.widthPx;
         const aTop = m.worldY;
-        const aBottom = m.worldY + m.height;
+        const aBottom = m.worldY + m.heightPx;
         const bLeft = minX;
         const bRight = maxX;
         const bTop = minY;

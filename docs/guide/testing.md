@@ -94,7 +94,7 @@ const playerId = client.playerId
 
 ## Testing with Custom Modules
 
-You can test your custom modules by passing them to the `testing()` function:
+You can test your custom modules by passing them to the `testing()` function. The recommended way is to use `createModule` with an object containing `server` and `client` properties:
 
 ```typescript
 import { testing } from '@rpgjs/testing'
@@ -103,8 +103,27 @@ import type { RpgServer, RpgClient } from '@rpgjs/server'
 
 // Define your server module
 const serverModule = defineModule<RpgServer>({
+  maps: [
+    {
+      id: 'test-map',
+      file: '',
+    },
+  ],
+  database: {
+    // Define items, weapons, armors, etc. here
+    TestPotion: {
+      id: 'TestPotion',
+      name: 'Test Potion',
+      description: 'Restores 100 HP',
+      price: 200,
+      hpValue: 100,
+      consumable: true,
+      _type: 'item' as const,
+    },
+  },
   player: {
-    onConnected(player) {
+    async onConnected(player) {
+      await player.changeMap('test-map', { x: 100, y: 100 })
       player.setVariable('test', 'value')
     }
   }
@@ -115,14 +134,27 @@ const clientModule = defineModule<RpgClient>({
   // Client-side logic
 })
 
-// Create the module
-const myModule = createModule('MyModule', [serverModule, clientModule])
+// Create the module with server and client separated
+const myModule = createModule('MyModule', [
+  {
+    server: serverModule,
+    client: clientModule,
+  },
+])
 
 // Use it in tests
+let player: RpgPlayer
+let client: any
+let fixture: any
+
 beforeEach(async () => {
-  const fixture = await testing([myModule])
-  const client = await fixture.createClient()
-  player = client.player
+  fixture = await testing(myModule)
+  client = await fixture.createClient()
+  player = await client.waitForMapChange('test-map')
+})
+
+afterEach(async () => {
+  await fixture.clear()
 })
 
 test('Module hook was called', () => {
@@ -162,23 +194,31 @@ const fixture = await testing([], {
 
 ```typescript
 import { testing } from '@rpgjs/testing'
-import { beforeEach, test, expect } from 'vitest'
+import { beforeEach, afterEach, test, expect } from 'vitest'
 import { RpgPlayer } from '@rpgjs/server'
+import { defineModule, createModule } from '@rpgjs/common'
+import type { RpgServer, RpgClient } from '@rpgjs/server'
 import { myModule } from './my-module'
 
 let player: RpgPlayer
 let server: any
+let client: any
+let fixture: any
 
 beforeEach(async () => {
-  const fixture = await testing(
-    [myModule], // Modules
+  fixture = await testing(
+    myModule, // Module (can be a single module or array)
     { /* client config */ }, // Client configuration
     { /* server config */ }  // Server configuration
   )
   
-  const client = await fixture.createClient()
-  player = client.player
+  client = await fixture.createClient()
+  player = await client.waitForMapChange('test-map') // Wait for initial map change
   server = client.server
+})
+
+afterEach(async () => {
+  await fixture.clear() // Clean up after each test
 })
 
 test('Test player parameters', () => {
@@ -199,15 +239,20 @@ You can test player actions and server hooks:
 
 ```typescript
 import { testing } from '@rpgjs/testing'
-import { beforeEach, test, expect } from 'vitest'
+import { beforeEach, afterEach, test, expect } from 'vitest'
 import { RpgPlayer } from '@rpgjs/server'
 
 let player: RpgPlayer
+let fixture: any
 
 beforeEach(async () => {
-  const fixture = await testing()
+  fixture = await testing()
   const client = await fixture.createClient()
   player = client.player
+})
+
+afterEach(async () => {
+  await fixture.clear()
 })
 
 test('Player can move', async () => {
@@ -240,12 +285,20 @@ Test server-side hooks and events:
 ```typescript
 import { testing } from '@rpgjs/testing'
 import { defineModule, createModule } from '@rpgjs/common'
-import type { RpgServer } from '@rpgjs/server'
-import { beforeEach, test, expect, vi } from 'vitest'
+import type { RpgServer, RpgClient } from '@rpgjs/server'
+import { beforeEach, afterEach, test, expect, vi } from 'vitest'
+import { RpgPlayer } from '@rpgjs/server'
 
 const serverModule = defineModule<RpgServer>({
+  maps: [
+    {
+      id: 'test-map',
+      file: '',
+    },
+  ],
   player: {
-    onConnected(player) {
+    async onConnected(player) {
+      await player.changeMap('test-map', { x: 100, y: 100 })
       player.setVariable('connected', true)
     },
     onLevelUp(player) {
@@ -254,14 +307,26 @@ const serverModule = defineModule<RpgServer>({
   }
 })
 
-const testModule = createModule('TestModule', [serverModule])
+const clientModule = defineModule<RpgClient>({})
+
+const testModule = createModule('TestModule', [
+  {
+    server: serverModule,
+    client: clientModule,
+  },
+])
 
 let player: RpgPlayer
+let fixture: any
 
 beforeEach(async () => {
-  const fixture = await testing([testModule])
+  fixture = await testing(testModule)
   const client = await fixture.createClient()
-  player = client.player
+  player = await client.waitForMapChange('test-map')
+})
+
+afterEach(async () => {
+  await fixture.clear()
 })
 
 test('onConnected hook was called', () => {
@@ -321,6 +386,7 @@ const clientModule = defineModule<RpgClient>({
 
 let player: RpgPlayer
 let client: any
+let fixture: any
 
 beforeEach(async () => {
   const myModule = createModule('TestModule', [{
@@ -328,15 +394,17 @@ beforeEach(async () => {
     client: clientModule
   }])
   
-  const fixture = await testing(myModule)
+  fixture = await testing(myModule)
   client = await fixture.createClient()
-  player = client.player
+  player = await client.waitForMapChange('map1')
+})
+
+afterEach(async () => {
+  await fixture.clear()
 })
 
 test('Player can change map', async () => {
-  // Wait for initial map change (from onConnected hook)
-  player = await client.waitForMapChange('map1')
-  
+  // Player is already on map1 from beforeEach (waitForMapChange was called there)
   const initialMap = player.getCurrentMap()
   expect(initialMap).toBeDefined()
   expect(initialMap?.id).toBe('map1')
@@ -346,6 +414,7 @@ test('Player can change map', async () => {
   expect(result).toBe(true)
   
   // Wait for map change to complete
+  // Always assign the result back to player to get the updated instance
   player = await client.waitForMapChange('map2')
   
   const newMap = player.getCurrentMap()
@@ -363,15 +432,26 @@ test('Player can change map', async () => {
 The `waitForMapChange()` method is available on the client object returned by `createClient()`. It:
 
 - Polls the player's current map until it matches the expected map ID
-- Returns a Promise that resolves with the updated player instance
+- Returns a Promise that resolves with the **updated player instance**
 - Throws an error if the timeout is exceeded (default: 5000ms)
+
+**Important:** Always assign the returned value to your player variable, as it returns an updated player instance:
 
 ```typescript
 // Wait for player to be on map1 (default timeout: 5000ms)
+// Note: Assign the result back to player to get the updated instance
 player = await client.waitForMapChange('map1')
 
 // Wait with custom timeout (in milliseconds)
 player = await client.waitForMapChange('map2', 10000)
+
+// Example: Wait for initial map change after onConnected
+beforeEach(async () => {
+  fixture = await testing(myModule)
+  client = await fixture.createClient()
+  // onConnected changes map, so wait for it
+  player = await client.waitForMapChange('test-map')
+})
 ```
 
 ### Testing Map Hooks
@@ -396,17 +476,19 @@ const serverModule = defineModule<RpgServer>({
 })
 
 test('onJoinMap hook is called when changing maps', async () => {
-  const fixture = await testing([myModule])
+  const fixture = await testing(myModule)
   const client = await fixture.createClient()
   
-  // Wait for initial map
-  await client.waitForMapChange('map1')
-  expect(client.player.getVariable('lastMapJoined')).toBe('map1')
+  // Wait for initial map (assign result to get updated player)
+  let player = await client.waitForMapChange('map1')
+  expect(player.getVariable('lastMapJoined')).toBe('map1')
   
   // Change map and verify hook was called
-  await client.player.changeMap('map2')
-  await client.waitForMapChange('map2')
-  expect(client.player.getVariable('lastMapJoined')).toBe('map2')
+  await player.changeMap('map2')
+  player = await client.waitForMapChange('map2')
+  expect(player.getVariable('lastMapJoined')).toBe('map2')
+  
+  await fixture.clear()
 })
 ```
 
@@ -416,12 +498,16 @@ You can create multiple clients to test multiplayer scenarios:
 
 ```typescript
 import { testing } from '@rpgjs/testing'
-import { beforeEach, test, expect } from 'vitest'
+import { beforeEach, afterEach, test, expect } from 'vitest'
 
 let fixture: any
 
 beforeEach(async () => {
   fixture = await testing()
+})
+
+afterEach(async () => {
+  await fixture.clear()
 })
 
 test('Multiple players can exist', async () => {
@@ -449,28 +535,181 @@ import { provideTestingLoadMap } from '@rpgjs/testing'
 const mapLoaderProvider = provideTestingLoadMap()
 ```
 
+### `waitForSyncComplete()`
+
+Waits for server-client synchronization to complete. Useful when testing client-side state after server-side changes:
+
+```typescript
+import { waitForSyncComplete } from '@rpgjs/testing'
+
+// After making server-side changes
+player.addItem('potion', 5)
+await waitForSyncComplete(player, client.client)
+
+// Now test client-side state
+const clientPlayer = client.client.sceneMap.players()[player.id]
+expect(clientPlayer.items()).toBeDefined()
+```
+
+## Cleanup and Test Isolation
+
+### Using `fixture.clear()`
+
+It's recommended to call `fixture.clear()` in an `afterEach` hook to ensure proper cleanup between tests. This clears all server and client instances, caches, and resets the DOM:
+
+```typescript
+let fixture: any
+
+beforeEach(async () => {
+  fixture = await testing(myModule)
+  const client = await fixture.createClient()
+  player = client.player
+})
+
+afterEach(async () => {
+  await fixture.clear() // Clean up after each test
+})
+```
+
+This ensures:
+- No state leaks between tests
+- All server and client instances are properly destroyed
+- DOM is reset to a clean state
+- Injection contexts are cleared
+
+## Testing Database Items
+
+### Defining Items in Module Database
+
+You can define items, weapons, and armors directly in your server module's `database` property:
+
+```typescript
+const serverModule = defineModule<RpgServer>({
+  database: {
+    TestPotion: {
+      id: 'TestPotion',
+      name: 'Test Potion',
+      description: 'Restores 100 HP',
+      price: 200,
+      hpValue: 100,
+      consumable: true,
+      _type: 'item' as const,
+    },
+    TestSword: {
+      name: 'Test Sword',
+      description: 'A basic sword',
+      price: 500,
+      atk: 50,
+      _type: 'weapon' as const,
+    },
+  },
+  player: {
+    async onConnected(player) {
+      await player.changeMap('test-map', { x: 100, y: 100 })
+    },
+  },
+})
+```
+
+### Adding Items Dynamically to Maps
+
+You can also add items to a map's database dynamically using `addInDatabase()`:
+
+```typescript
+test('should add item dynamically', () => {
+  const customItem = {
+    id: 'custom-item',
+    name: 'Custom Item',
+    price: 100,
+    _type: 'item' as const,
+  }
+  
+  // Add item to current map's database
+  player.getCurrentMap()?.addInDatabase('custom-item', customItem)
+  
+  // Now you can use it
+  const item = player.addItem('custom-item', 1)
+  expect(item).toBeDefined()
+})
+```
+
+## Synchronization Utilities
+
+### `waitForSyncComplete()`
+
+When you make server-side changes (like adding items, changing player state), you may need to wait for the synchronization to complete before testing client-side state:
+
+```typescript
+import { waitForSyncComplete } from '@rpgjs/testing'
+
+test('should sync item to client', async () => {
+  // Make a server-side change
+  player.addItem('TestPotion', 5)
+  
+  // Wait for sync to complete
+  await waitForSyncComplete(player, client.client)
+  
+  // Now you can safely test client-side state
+  const clientPlayer = client.client.sceneMap.players()[player.id]
+  expect(clientPlayer.items()).toBeDefined()
+})
+```
+
 ## Best Practices
 
 1. **Use `beforeEach`**: Create a fresh fixture and client for each test to ensure isolation
-2. **Test modules separately**: Create focused tests for individual modules
-3. **Use async/await**: The `testing()` and `createClient()` functions are async
-4. **Clean up**: The testing environment automatically cleans up between tests
-5. **Mock external dependencies**: Use Vitest mocks for external services or APIs
+2. **Use `afterEach` with `fixture.clear()`**: Always clean up after each test to prevent state leaks
+3. **Test modules separately**: Create focused tests for individual modules
+4. **Use async/await**: The `testing()` and `createClient()` functions are async
+5. **Wait for map changes**: Use `waitForMapChange()` after `onConnected` or `changeMap()` calls
+6. **Assign player from `waitForMapChange()`**: Always assign the returned value to get the updated player instance
+7. **Mock external dependencies**: Use Vitest mocks for external services or APIs
+8. **Define items in database**: Use the module's `database` property for test items
 
 ## Example: Complete Test Suite
 
 ```typescript
 import { testing } from '@rpgjs/testing'
-import { beforeEach, describe, test, expect } from 'vitest'
+import { beforeEach, afterEach, describe, test, expect } from 'vitest'
 import { RpgPlayer, MAXHP_CURVE, MAXSP_CURVE, MAXHP, MAXSP } from '@rpgjs/server'
+import { defineModule, createModule } from '@rpgjs/common'
+import type { RpgServer, RpgClient } from '@rpgjs/server'
 
 describe('Player Parameters', () => {
   let player: RpgPlayer
+  let fixture: any
 
   beforeEach(async () => {
-    const fixture = await testing()
+    const serverModule = defineModule<RpgServer>({
+      maps: [
+        {
+          id: 'test-map',
+          file: '',
+        },
+      ],
+      player: {
+        async onConnected(player) {
+          await player.changeMap('test-map', { x: 100, y: 100 })
+        },
+      },
+    })
+
+    const clientModule = defineModule<RpgClient>({})
+
+    const myModule = createModule('TestModule', [
+      {
+        server: serverModule,
+        client: clientModule,
+      },
+    ])
+
+    fixture = await testing(myModule)
     const client = await fixture.createClient()
-    player = client.player
+    player = await client.waitForMapChange('test-map')
+  })
+
+  afterEach(async () => {
+    await fixture.clear()
   })
 
   test('Player has correct initial HP', () => {
