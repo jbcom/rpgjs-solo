@@ -5,16 +5,21 @@ import { context } from "../core/context";
 import { users } from "@signe/sync";
 import { signal } from "@signe/reactive";
 import { RpgPlayer } from "../Player/Player";
+import { BaseRoom } from "./BaseRoom";
 
 @Room({
   path: "lobby-{id}",
 })
-export class LobbyRoom {
+export class LobbyRoom extends BaseRoom {
   @users(RpgPlayer) players = signal({});
   autoSync: boolean = true;
 
   constructor(room) {
-    this.autoSync = room.env.TEST === 'true' ? false : true;
+    super();
+    const isTest = room.env.TEST === 'true' ? true : false;
+    if (isTest) {
+      this.autoSync = false;
+    }
   }
 
   onJoin(player: RpgPlayer, conn: MockConnection) {

@@ -440,8 +440,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   }
 
   databaseById(id: string) {
-    const map = this.getCurrentMap();
-    if (!map) return;
+    // Use this.map directly to support both RpgMap and LobbyRoom
+    const map = this.map as any;
+    if (!map || !map.database) return;
     const data = map.database()[id];
     if (!data)
       throw new Error(

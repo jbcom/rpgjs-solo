@@ -160,16 +160,17 @@ describe("Item Management - Basic Operations", () => {
     expect(item.quantity()).toBe(5);
   });
 
-  test("should throw error when adding item without map", async () => {
+  test("should add item when player is in Lobby (no map)", async () => {
     const newFixture = await testing();
     const newClient = await newFixture.createClient();
     const newPlayer = newClient.player;
 
-    expect(() => {
-      newPlayer.addItem("TestPotion", 1);
-    }).toThrow("Player must be on a map to add items");
-
-    newFixture.clear();
+    newPlayer.getCurrentMap()?.addInDatabase("TestPotion", TestPotion);
+    const item = newPlayer.addItem("TestPotion", 1);
+    expect(item).toBeDefined();
+    expect(item.id()).toBe("TestPotion");
+    expect(item.quantity()).toBe(1);
+    await newFixture.clear();
   });
 
   test("should throw error when adding item with invalid string ID", () => {
@@ -309,17 +310,27 @@ describe("Item Management - Use Item", () => {
   });
 
   test("should handle hitRate chance (failure)", () => {
+    // Create a potion with low hitRate (10% chance)
+    const lowHitRatePotion: ItemObject = {
+      id: "LowHitRatePotion",
+      name: "Low Hit Rate Potion",
+      price: 200,
+      consumable: true,
+      hitRate: 0.1, // 10% chance
+    };
+    player.getCurrentMap()?.addInDatabase("LowHitRatePotion", lowHitRatePotion);
+    
     // Mock Math.random to return a value that fails hitRate
     const originalRandom = Math.random;
-    Math.random = vi.fn(() => 0.99); // 0.99 > 1.0 (default hitRate)
+    Math.random = vi.fn(() => 0.9); // 0.9 > 0.1 (hitRate)
 
-    player.addItem("TestPotion", 1);
+    player.addItem("LowHitRatePotion", 1);
     expect(() => {
-      player.useItem("TestPotion");
+      player.useItem("LowHitRatePotion");
     }).toThrow();
 
     // Item should still be removed even on failure
-    expect(player.hasItem("TestPotion")).toBe(false);
+    expect(player.hasItem("LowHitRatePotion")).toBe(false);
 
     Math.random = originalRandom;
   });

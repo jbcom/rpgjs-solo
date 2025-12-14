@@ -218,14 +218,6 @@ export async function testing(
     ],
   });
 
-  // Store created instances for cleanup
-  const createdClients: Array<{
-    context: any;
-    clientEngine: RpgClientEngine;
-    websocket: AbstractWebsocket;
-    server?: any;
-  }> = [];
-
   // Check if LoadMapToken is already provided in clientConfig.providers
   // (provideLoadMap returns an array with LoadMapToken)
   const hasLoadMap =
@@ -236,7 +228,7 @@ export async function testing(
       return provider?.provide === LoadMapToken;
     }) || false;
 
-  const context = await startGame(
+  await startGame(
     mergeConfig(
       {
         ...clientConfig,

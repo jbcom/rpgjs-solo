@@ -206,8 +206,10 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       });
     }
     addItem(item: ItemClass | ItemObject | string, nb: number = 1): Item {
-      const map = (this as any).getCurrentMap();
-      if (!map) {
+      // Use this.map directly to support both RpgMap and LobbyRoom
+      // If no map, player is in Lobby
+      const map = (this as any).getCurrentMap() || (this as any).map;
+      if (!map || !map.database) {
         throw new Error('Player must be on a map to add items');
       }
 
@@ -266,9 +268,29 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       let instance: Item;
 
       if (existingItem) {
-        // Item already exists, just update quantity
+        // Item already exists, update quantity and merge properties
         instance = existingItem;
         instance.quantity.update((it) => it + nb);
+        
+        // Update item properties from merged data (e.g., name, description, price)
+        if (data.name !== undefined) {
+          instance.name.set(data.name);
+        }
+        if (data.description !== undefined) {
+          instance.description.set(data.description);
+        }
+        if (data.price !== undefined) {
+          instance.price.set(data.price);
+        }
+        
+        // Update stored instance if it's an object with hooks
+        if (itemInstance && typeof itemInstance === 'object' && !(itemInstance instanceof Function)) {
+          (instance as any)._itemInstance = itemInstance;
+          // Update hooks if they exist
+          if (itemInstance.onAdd) {
+            instance.onAdd = itemInstance.onAdd.bind(itemInstance);
+          }
+        }
       } else {
         // Create new item instance
         instance = new Item(data);
@@ -372,7 +394,13 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
     getParamItem(name: string): number {
       let nb = 0;
       for (let item of this.equipments()) {
-        nb += item[name] || 0;
+        // Retrieve item data from database to get properties like atk, pdef, sdef
+        try {
+          const itemData = (this as any).databaseById(item.id());
+          nb += itemData[name] || 0;
+        } catch {
+          // If item not in database, skip it
+        }
       }
       const modifier = (this as any).paramsModifier?.[name];
       if (modifier) {
@@ -403,19 +431,31 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       if (!inventory) {
         throw ItemLog.notInInventory(itemId);
       }
-      const item = inventory;
-      if ((item as any).consumable === false) {
+      
+      // Retrieve item data from database to check consumable and hitRate
+      const itemData = (this as any).databaseById(itemId);
+      const consumable = itemData?.consumable;
+      
+      // If consumable is explicitly false, throw error
+      if (consumable === false) {
         throw ItemLog.notUseItem(itemId);
       }
-      const hitRate = (item as any).hitRate ?? 1;
-      const hookTarget = (item as any)._itemInstance || item;
+      
+      // If consumable is undefined and item is not of type 'item', it's not consumable
+      if (consumable === undefined && itemData?._type && itemData._type !== 'item') {
+        throw ItemLog.notUseItem(itemId);
+      }
+      
+      const hitRate = itemData?.hitRate ?? 1;
+      const hookTarget = (inventory as any)._itemInstance || inventory;
+      
       if (Math.random() > hitRate) {
         this.removeItem(itemClass);
         this["execMethod"]("onUseFailed", [this], hookTarget);
         throw ItemLog.chanceToUseFailed(itemId);
       }
-      (this as any).applyEffect?.(item);
-      (this as any).applyStates?.(this, item);
+      (this as any).applyEffect?.(itemData);
+      (this as any).applyStates?.(this, itemData);
       this["execMethod"]("onUse", [this], hookTarget);
       this.removeItem(itemClass);
       return inventory;

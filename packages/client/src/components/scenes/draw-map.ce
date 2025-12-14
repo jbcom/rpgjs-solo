@@ -20,15 +20,15 @@
 
     const engine = inject(RpgClientEngine);
     const componentAnimations = engine.componentAnimations
-    const map = engine.sceneMap.data
+    const map = engine.sceneMap?.data
     const sceneComponent = computed(() => map()?.component)
     const sceneParams = map()?.params
-    const mapParams = map().params
+    const mapParams = map()?.params
     const animations = engine.sceneMap.animations
     const backgroundMusic = { src: mapParams?.backgroundMusic, autoplay: true, loop: true }
     const backgroundAmbientSound = { src: mapParams?.backgroundAmbientSound, autoplay: true, loop: true }
 
-    const data = signal(map().data)
+    const data = signal(map()?.data)
 
     const scale = mapParams?.scale || 1
     const worldWidth = (mapParams?.width || 2048) * scale

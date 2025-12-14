@@ -13,6 +13,7 @@ import { COEFFICIENT_ELEMENTS, DAMAGE_CRITICAL, DAMAGE_PHYSIC, DAMAGE_SKILL } fr
 import { z } from "zod";
 import { EntityState } from "@rpgjs/physic";
 import { MapOptions } from "../decorators/map";
+import { BaseRoom } from "./BaseRoom";
 
 /**
  * Interface for input controls configuration
@@ -1244,8 +1245,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   /**
    * Add data to the map's database
    * 
-   * This method allows you to dynamically add items, classes, or any data to the map's database.
-   * By default, if an ID already exists, the operation is ignored to prevent overwriting existing data.
+   * This method delegates to BaseRoom's implementation to avoid code duplication.
    * 
    * @param id - Unique identifier for the data
    * @param data - The data to store (can be a class, object, or any value)
@@ -1269,23 +1269,13 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   addInDatabase(id: string, data: any, options?: { force?: boolean }): boolean {
-    const database = this.database();
-    
-    // Check if ID already exists
-    if (database[id] !== undefined && !options?.force) {
-      // Ignore the addition if ID exists and force is not enabled
-      return false;
-    }
-    
-    // Add or overwrite the data
-    database[id] = data;
-    return true;
+    return BaseRoom.prototype.addInDatabase.call(this, id, data, options);
   }
 
   /**
    * Remove data from the map's database
    * 
-   * This method allows you to remove items or data from the map's database.
+   * This method delegates to BaseRoom's implementation to avoid code duplication.
    * 
    * @param id - Unique identifier of the data to remove
    * @returns true if data was removed, false if ID didn't exist
@@ -1303,16 +1293,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   removeInDatabase(id: string): boolean {
-    const database = this.database();
-    
-    // Check if ID exists
-    if (database[id] === undefined) {
-      return false;
-    }
-    
-    // Remove the data
-    delete database[id];
-    return true;
+    return BaseRoom.prototype.removeInDatabase.call(this, id);
   }
 
   /**
