@@ -153,7 +153,12 @@ export class RpgClientEngine<T = any> {
     this.sceneMap = new RpgClientMap()
     this.selector = document.body.querySelector("#rpg") as HTMLElement;
 
-    const { app, canvasElement } = await bootstrapCanvas(this.selector, Canvas);
+    const bootstrapOptions = (this.globalConfig as any)?.bootstrapCanvasOptions;
+    const { app, canvasElement } = await bootstrapCanvas(
+      this.selector,
+      Canvas,
+      bootstrapOptions
+    );
     this.canvasApp = app;
     this.canvasElement = canvasElement;
     this.renderer = app.renderer as PIXI.Renderer;

@@ -19,6 +19,7 @@ import {
   RpgPlayer,
 } from "@rpgjs/server";
 import { h, Container } from "canvasengine";
+import { mockComponents } from "@canvasengine/testing";
 import { clearInject as clearClientInject } from "@rpgjs/client";
 import { clearInject as clearServerInject } from "@rpgjs/server";
 import { combineLatest, filter, take, firstValueFrom, Subject, map, throwError, race, timer, switchMap } from "rxjs";
@@ -157,6 +158,20 @@ const globalFixtures: Array<{
   server?: any;
 }> = [];
 
+export interface TestingFixture {
+  createClient(): Promise<{
+    socket: AbstractWebsocket;
+    client: RpgClientEngine;
+    playerId: string;
+    player: RpgPlayer;
+  }>;
+  server: RpgServer;
+  clear(): Promise<void>;
+  applySyncToClient(): Promise<void>;
+  waitForMapChange(expectedMapId: string, timeout?: number): Promise<RpgPlayer>;
+  nextTick(timestamp?: number): Promise<void>;
+  waitForSync(timeout?: number): Promise<void>;
+}
 
 /**
  * Testing utility function to set up server and client instances for unit testing
@@ -233,7 +248,13 @@ export async function testing(
       {
         ...clientConfig,
         providers: [
-          provideClientGlobalConfig({}),
+          provideClientGlobalConfig({
+            // TODO
+            // bootstrapCanvasOptions: {
+            //   components: mockComponents,
+            //   autoRegister: false,
+            // },
+          }),
           ...(hasLoadMap ? [] : [provideTestingLoadMap()]), // Add only if not already provided
           provideClientModules(clientModules),
           ...(clientConfig.providers || []),

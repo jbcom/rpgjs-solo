@@ -1,5 +1,5 @@
 import { beforeEach, test, expect, afterEach, describe, vi } from "vitest";
-import { testing, waitForSyncComplete } from "@rpgjs/testing";
+import { testing, waitForSyncComplete, TestingFixture } from "@rpgjs/testing";
 import { defineModule, createModule } from "@rpgjs/common";
 import { RpgPlayer, RpgServer } from "../src";
 import { RpgClient } from "../../client/src";
@@ -57,7 +57,7 @@ const TestNoPriceItem = {
 
 let player: RpgPlayer;
 let clientTesting: any;
-let fixture: any;
+let fixture: TestingFixture;
 
   // Define server module with items in database
   const serverModule = defineModule<RpgServer>({

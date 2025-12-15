@@ -17,6 +17,7 @@
     "vite-plugin-dts": "^4.5.4"
   },
   "dependencies": {
+    "@canvasengine/testing": "2.0.0-beta.42",
     "@rpgjs/client": "workspace:*",
     "@rpgjs/server": "workspace:*",
     "@signe/di": "^2.6.0",
