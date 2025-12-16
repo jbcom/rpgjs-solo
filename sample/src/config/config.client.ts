@@ -25,6 +25,7 @@ import { provideMain } from "../modules/main";
 import TooltipComponent from "../components/tooltip.ce";
 import { RpgClientObject } from "@rpgjs/client";
 import { withMobile } from "@rpgjs/client";
+import { provideActionBattle } from "@rpgjs/action-battle/client";
 
 
 export default {
@@ -54,6 +55,7 @@ export default {
     provideVueGui(),
     provideClientGlobalConfig(),
     provideMain(),
+    provideActionBattle(),
     provideClientModules([
       withMobile(),
       {

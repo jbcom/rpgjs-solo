@@ -95,6 +95,12 @@ export const packages = (type: "build" | "dev") => {
       buildScript,
       dependencies: createDependencies(packagesPath, ['server', 'client', 'vite']),
     },
+
+    {
+      name: "action-battle",
+      buildScript,
+      dependencies: createDependencies(packagesPath, ['client', 'server']),
+    },
     
     // Sample package (depends on all others)
     {

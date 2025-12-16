@@ -3,6 +3,7 @@ import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
 import { Direction } from "@rpgjs/common";
+import { provideActionBattle, BattleAi } from "@rpgjs/action-battle/server";
 
 export function Event() {
   return {
@@ -15,6 +16,7 @@ export function Event() {
       // this.infiniteMoveRoute([
       //   Move.tileRandom(),
       // ])
+      this.battleAi = new BattleAi(this)
     },
     onPlayerTouch(player: RpgPlayer) {
      console.log("touch");
@@ -30,6 +32,7 @@ export default createServer({
   providers: [
   //  provideTiledMap(),
     provideMain(),
+    provideActionBattle(),
     provideServerModules([
       {
         player: {
@@ -54,14 +57,14 @@ export default createServer({
           },
           async onInput(player: RpgPlayer, input: any) {
             
-            const map = player.getCurrentMap()
-            const event =map?.getEventBy(event => event.name() === "EV-1")
-            console.log(event)
-            event!.animationFixed = true 
+            // const map = player.getCurrentMap()
+            // const event =map?.getEventBy(event => event.name() === "EV-1")
+            // console.log(event)
+            // event!.animationFixed = true 
             
-            event!.changeDirection(Direction.Left)
-            event!.directionFixed = true
-            event!.knockback({ x: 100, y: 1 }, 100)
+            // event!.changeDirection(Direction.Left)
+            // event!.directionFixed = true
+            // event!.knockback({ x: 100, y: 1 }, 100)
             // map?.shakeMap({
             //   intensity: 10,
             //   duration: 1000,
