@@ -12,6 +12,16 @@ export class RpgClientMap extends RpgCommonMap<any> {
   @sync(RpgClientEvent) events = signal<Record<string, RpgClientEvent>>({});
   currentPlayer = computed(() => this.players()[this.engine.playerIdSignal()!])
 
+  constructor() {
+    super();
+    // Détecter l'environnement de test
+    const isTest = (typeof process !== 'undefined' && process.env?.TEST === 'true') 
+      || (typeof window !== 'undefined' && (window as any).__RPGJS_TEST__ === true);
+    if (isTest) {
+      this.autoTickEnabled = false;
+    }
+  }
+
   getCurrentPlayer() {
     return this.currentPlayer()
   }

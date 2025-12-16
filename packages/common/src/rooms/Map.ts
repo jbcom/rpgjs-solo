@@ -56,6 +56,12 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   private physicsAccumulatorMs = 0;
   private physicsSyncDepth = 0;
 
+  /**
+   * Whether to automatically subscribe to tick$ for physics updates
+   * Set to false in test environments for manual control with nextTick()
+   */
+  protected autoTickEnabled: boolean = true;
+
   get isStandalone() {
     return typeof window !== 'undefined'
   }
@@ -322,9 +328,12 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
     });
 
-    this.tickSubscription = this.tick$.subscribe(({ delta }) => {
-      this.runFixedTicks(delta);
-    });
+    // S'abonner au ticker automatique seulement si autoTickEnabled est true
+    if (this.autoTickEnabled) {
+      this.tickSubscription = this.tick$.subscribe(({ delta }) => {
+        this.runFixedTicks(delta);
+      });
+    }
   }
 
   async movePlayer(player: T, direction: Direction) {
@@ -460,6 +469,47 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     }
 
     return executed;
+  }
+
+  /**
+   * Manually trigger a single game tick
+   * 
+   * This method allows you to manually advance the game by one tick (16ms at 60fps).
+   * It's primarily useful for testing where you need precise control over when
+   * physics updates occur, rather than relying on the automatic tick$ subscription.
+   * 
+   * ## Use Cases
+   * 
+   * - **Testing**: Control exactly when physics steps occur in unit tests
+   * - **Manual control**: Step through game state manually for debugging
+   * - **Deterministic testing**: Ensure consistent timing in test scenarios
+   * 
+   * ## Important
+   * 
+   * This method should NOT be used in production code alongside the automatic `tick$`
+   * subscription, as it will cause double-stepping. Use either:
+   * - Automatic ticks (via `loadPhysic()` which subscribes to `tick$`)
+   * - Manual ticks (via `nextTick()` without `loadPhysic()` subscription)
+   * 
+   * @param deltaMs - Optional delta time in milliseconds (default: 16ms for 60fps)
+   * @returns Number of physics ticks executed
+   * 
+   * @example
+   * ```ts
+   * // In tests: manually advance game by one tick
+   * map.nextTick(); // Advances by 16ms (one frame at 60fps)
+   * 
+   * // With custom delta
+   * map.nextTick(32); // Advances by 32ms (two frames at 60fps)
+   * 
+   * // In a test loop
+   * for (let i = 0; i < 60; i++) {
+   *   map.nextTick(); // Simulate 1 second of game time
+   * }
+   * ```
+   */
+  nextTick(deltaMs: number = 16): number {
+    return this.runFixedTicks(deltaMs);
   }
 
   /**

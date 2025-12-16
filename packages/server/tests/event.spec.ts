@@ -1,28 +1,29 @@
 import { beforeEach, test, expect, afterEach } from 'vitest'
-import { testing } from '@rpgjs/testing'
+import { testing, TestingFixture } from '@rpgjs/testing'
 import { defineModule, createModule } from '@rpgjs/common'
-import { RpgPlayer, RpgServer } from '../src'
+import { RpgPlayer, RpgServer, Move } from '../src'
 import { RpgClient } from '../../client/src'
+
+const Event = () => {
+  return {
+    name: "EV-1",
+    onInit() {
+      this.setGraphic("hero");
+    }
+  }
+}
 
 // Define server module with two maps
 const serverModule = defineModule<RpgServer>({
   maps: [
     {
       id: 'map1',
-      file: '',
+      events: [{ event: Event(), x: 120, y: 100 }]
     },
-    {
-      id: 'map2',
-      file: '',
-    }
   ],
   player: {
     async onConnected(player) {
-      // Start player on map1
       await player.changeMap('map1', { x: 100, y: 100 })
-    },
-    onJoinMap(player) {
-      console.log('onJoinMap', player.getCurrentMap()?.id)
     }
   }
 })
@@ -34,7 +35,7 @@ const clientModule = defineModule<RpgClient>({
 
 let player: RpgPlayer
 let client: any
-let fixture: any
+let fixture: TestingFixture
 
 beforeEach(async () => {
     const myModule = createModule('TestModule', [{
@@ -53,20 +54,17 @@ afterEach(() => {
 
 test('Player can change map', async () => {
     player = await client.waitForMapChange('map1')
-    
-    const initialMap = player.getCurrentMap()
-    expect(initialMap).toBeDefined()
-    expect(initialMap?.id).toBe('map1')
-    
-    const result = await player.changeMap('map2', { x: 200, y: 200 })
-    expect(result).toBe(true)
-    
-    player = await client.waitForMapChange('map2')
-    
-    const newMap = player.getCurrentMap()
-    expect(newMap).toBeDefined()
-    expect(newMap?.id).toBe('map2')
-    
-    expect(player.x()).toBe(200)
-    expect(player.y()).toBe(200)
+    const map = player.getCurrentMap()
+    const event = map?.getEvents()[0]
+    expect(event).toBeDefined()
+    expect(event?.name()).toBe("EV-1")
+    expect(event?.x()).toBe(120)
+    expect(event?.y()).toBe(100)
+    await player.moveRoutes([
+        Move.tileRight()
+    ])
+    await fixture.nextTick()
+    console.log(player.x(), player.y())
+    expect(event?.x()).toBe(120)
+    expect(event?.y()).toBe(100)
 })

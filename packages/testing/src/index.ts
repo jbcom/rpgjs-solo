@@ -164,13 +164,15 @@ export interface TestingFixture {
     client: RpgClientEngine;
     playerId: string;
     player: RpgPlayer;
+    waitForMapChange(expectedMapId: string, timeout?: number): Promise<RpgPlayer>;
   }>;
   server: RpgServer;
   clear(): Promise<void>;
   applySyncToClient(): Promise<void>;
-  waitForMapChange(expectedMapId: string, timeout?: number): Promise<RpgPlayer>;
   nextTick(timestamp?: number): Promise<void>;
-  waitForSync(timeout?: number): Promise<void>;
+  nextTickTimes(times: number, timestamp?: number): Promise<void>;
+  wait(ms: number): Promise<void>;
+  waitUntil(promise: Promise<any>): Promise<void>;
 }
 
 /**
@@ -205,7 +207,7 @@ export async function testing(
   modules: ({ server?: RpgServer; client?: RpgClient } | Provider)[] = [],
   clientConfig: any = {},
   serverConfig: any = {}
-) {
+): Promise<TestingFixture> {
   // Normalize modules to extract server/client from providers if needed
   const { serverModules, clientModules } = normalizeModules(modules as any[]);
 
@@ -270,14 +272,14 @@ export async function testing(
 
   return {
     async createClient() {
-      return {
+      const clientObj = {
         socket: websocket.getSocket(),
         client: clientEngine,
         get playerId() {
           return Object.keys(websocket.getServer().subRoom.players())[0];
         },
         get player(): RpgPlayer {
-          return websocket.getServer().subRoom.players()[this.playerId] as RpgPlayer;
+          return websocket.getServer().subRoom.players()[clientObj.playerId] as RpgPlayer;
         },
         /**
          * Wait for player to be on a specific map
@@ -309,9 +311,9 @@ export async function testing(
           timeout = 5000
         ): Promise<RpgPlayer> {
           // Check if already on the expected map
-          const currentMap = this.player.getCurrentMap();
+          const currentMap = clientObj.player.getCurrentMap();
           if (currentMap?.id === expectedMapId) {
-            return this.player;
+            return clientObj.player;
           }
 
           // Create observable that filters map changes for the expected map ID
@@ -325,7 +327,7 @@ export async function testing(
           const timeout$ = timer(timeout).pipe(
             take(1),
             switchMap(() => {
-              const currentMap = this.player.getCurrentMap();
+              const currentMap = clientObj.player.getCurrentMap();
               return throwError(() => new Error(
                 `Timeout: Player did not reach map ${expectedMapId} within ${timeout}ms. ` +
                   `Current map: ${currentMap?.id || "null"}`
@@ -341,33 +343,16 @@ export async function testing(
             if (error instanceof Error) {
               throw error;
             }
-            const currentMap = this.player.getCurrentMap();
+            const currentMap = clientObj.player.getCurrentMap();
             throw new Error(
               `Timeout: Player did not reach map ${expectedMapId} within ${timeout}ms. ` +
                 `Current map: ${currentMap?.id || "null"}`
             );
           }
         },
-        /**
-         * Manually trigger a game tick for processing inputs and physics
-         *
-         * This method is a convenience wrapper around the exported nextTick() function.
-         *
-         * @param timestamp - Optional timestamp to use for the tick (default: Date.now())
-         * @returns Promise that resolves when the tick is complete
-         *
-         * @example
-         * ```ts
-         * const client = await fixture.createClient()
-         *
-         * // Manually advance the game by one tick
-         * await client.nextTick()
-         * ```
-         */
-        async nextTick(timestamp?: number): Promise<void> {
-          return nextTick(this.client, timestamp);
-        },
+        
       };
+      return clientObj;
     },
     get server() {
         return websocket.getServer();
@@ -391,8 +376,56 @@ export async function testing(
       return clear();
     },
     async applySyncToClient() {
-      this.server.subRoom.applySyncToClient();
+      websocket.getServer().subRoom.applySyncToClient();
       await waitForSync(clientEngine);
+    },
+    /**
+     * Manually trigger a game tick for processing inputs and physics
+     *
+     * This method is a convenience wrapper around the exported nextTick() function.
+     * It uses the clientEngine from the fixture, so no client parameter is needed.
+     *
+     * @param timestamp - Optional timestamp to use for the tick (default: Date.now())
+     * @returns Promise that resolves when the tick is complete
+     *
+     * @example
+     * ```ts
+     * const fixture = await testing([myModule])
+     *
+     * // Manually advance the game by one tick
+     * await fixture.nextTick()
+     * ```
+     */
+    async nextTick(timestamp?: number): Promise<void> {
+      return nextTick(clientEngine, timestamp);
+    },
+    async nextTickTimes(times: number, timestamp?: number): Promise<void> {
+      for (let i = 0; i < times; i++) {
+        await nextTick(clientEngine, timestamp);
+      }
+    },
+    async wait(ms: number): Promise<void> {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    },
+    async waitUntil<T = any>(promise: Promise<T>): Promise<T> {
+      let tick = 0
+      let finish = false
+      return new Promise<T>((resolve: (value: T) => void, reject: (reason?: any) => void) => {
+          promise.then((value: T) => {  
+              finish = true
+              resolve(value)
+          }).catch(reject)
+          const timeout = () => {
+            setTimeout(() => {
+              if (!finish) {
+                  tick++
+                  nextTick(clientEngine, Date.now() + tick * 16)
+                  timeout()
+              }
+            }, 0)
+          }
+          timeout()
+      })
     },
   };
 }
@@ -529,10 +562,7 @@ export async function nextTick(
     }
   }
 
-  // 2. Run physics tick on server map
-  if (typeof serverMap.runFixedTicks === "function") {
-    serverMap.runFixedTicks(delta);
-  }
+  serverMap.nextTick(delta);
 
   // 3. Server sends data to client - trigger sync for all players
   // The sync is triggered by calling syncChanges() on each player

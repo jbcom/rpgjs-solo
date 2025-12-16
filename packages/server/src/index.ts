@@ -13,3 +13,4 @@ export * from "./Gui";
 export { RpgShape, RpgModule } from "@rpgjs/common";
 export * from "./decorators/event";
 export * from "./decorators/map";
+export * from "./Player/MoveManager";

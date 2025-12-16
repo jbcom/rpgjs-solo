@@ -31,4 +31,9 @@ Object.defineProperty(global.window.HTMLMediaElement.prototype, 'load', {
 
 window.document.body.innerHTML = `<div id="rpg"></div>`
 
+// Définir une variable globale pour que le client puisse détecter l'environnement de test
+if (typeof window !== 'undefined') {
+  (window as any).__RPGJS_TEST__ = true;
+}
+
 console.error = () => {}

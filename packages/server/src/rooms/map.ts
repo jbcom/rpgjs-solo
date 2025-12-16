@@ -222,6 +222,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     if (isTest) {
       this.autoSync = false;
       this.setAutoTick(false);
+      this.autoTickEnabled = false;
       this.throttleSync = 0;
       this.throttleStorage = 0;
     }

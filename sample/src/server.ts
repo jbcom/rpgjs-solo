@@ -34,31 +34,33 @@ export default createServer({
           async onConnected(player: RpgPlayer) {
             player.name.set('plop')
             await player.changeMap("center-map", {
-              x: 400,
-              y: 100,
+              x: 200,
+              y: 150,
             });
             // console.log(player.conn?.state)
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             console.log("join map");
             player.setGraphic("hero");
+            
           },
           onLeaveMap: (player: RpgPlayer, map: RpgMap) => {
 
           },
           async onInput(player: RpgPlayer, input: any) {
             const map = player.getCurrentMap()
-            map?.shakeMap({
-              intensity: 10,
-              duration: 1000,
-              frequency: 10,
-              direction: 'x',
-            })
+            // map?.shakeMap({
+            //   intensity: 10,
+            //   duration: 1000,
+            //   frequency: 10,
+            //   direction: 'x',
+            // })
+            //console.log(player.x(), player.y())
           } 
         },
         maps: [
           {
-            id: 'map',
+            id: 'center-map',
             events: [{ event: Event() }]
           }
         ],

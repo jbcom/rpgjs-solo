@@ -16,8 +16,9 @@ import {
   isFunction,
   capitalize
 } from "@rpgjs/common";
+import type { MovementBody } from "@rpgjs/physic";
 import { RpgMap } from "../rooms/map";
-import { Observable, Subscription, takeUntil, Subject, tap, switchMap, of, from } from 'rxjs';
+import { Observable, Subscription, takeUntil, Subject, tap, switchMap, of, from, take } from 'rxjs';
 import { RpgPlayer } from "./Player";
 
 
@@ -629,8 +630,6 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
     }
 
     moveRoutes(routes: Routes): Promise<boolean> {
-      let count = 0;
-      let frequence = 0;
       const player = this as unknown as PlayerWithMixins;
 
       // Break any existing route movement
@@ -641,122 +640,298 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
         this._finishRoute = resolve;
 
         // Process function routes first
-        const processedRoutes = routes.map((route: any) => {
-          if (typeof route === 'function') {
-            const map = player.getCurrentMap() as any;
-            if (!map) {
-              return undefined;
+        const processedRoutes = await Promise.all(
+          routes.map(async (route: any) => {
+            if (typeof route === 'function') {
+              const map = player.getCurrentMap() as any;
+              if (!map) {
+                return undefined;
+              }
+              return route.apply(route, [player, map]);
             }
-            return route.apply(route, [player, map]);
-          }
-          return route;
-        });
+            return route;
+          })
+        );
 
         // Flatten nested arrays
-        const flatRoutes = this.flattenRoutes(processedRoutes);
-        let routeIndex = 0;
+        // Note: We keep promises in the routes array and handle them in the strategy
+        const finalRoutes = this.flattenRoutes(processedRoutes);
 
-        const executeNextRoute = async (): Promise<void> => {
-          // Check if player still exists and is on a map
-          if (!player || !player.getCurrentMap()) {
-            this._finishRoute = null;
-            resolve(false);
-            return;
+        // Create a movement strategy that handles all routes
+        class RouteMovementStrategy implements MovementStrategy {
+          private routeIndex = 0;
+          private currentTarget: { x: number; y: number } | null = null;
+          private currentDirection: { x: number; y: number } = { x: 0, y: 0 };
+          private finished = false;
+          private waitingForPromise = false;
+          private promiseStartTime = 0;
+          private promiseDuration = 0;
+          private readonly routes: Routes;
+          private readonly player: PlayerWithMixins;
+          private readonly onComplete: (success: boolean) => void;
+          private readonly tileSize: number;
+          private readonly tolerance: number;
+
+          constructor(
+            routes: Routes,
+            player: PlayerWithMixins,
+            onComplete: (success: boolean) => void
+          ) {
+            this.routes = routes;
+            this.player = player;
+            this.onComplete = onComplete;
+            this.tileSize = player.nbPixelInTile || 32;
+            this.tolerance = 2; // Tolerance in pixels for reaching target
+
+            // Process initial route
+            this.processNextRoute();
           }
 
-          // Handle frequency timing
-          if (count >= (player.nbPixelInTile || 32)) {
-            if (frequence < (player.frequency || 0)) {
-              frequence++;
-              setTimeout(executeNextRoute, 16); // ~60fps timing
+          private processNextRoute(): void {
+            // Check if we've completed all routes
+            if (this.routeIndex >= this.routes.length) {
+              this.finished = true;
+              this.onComplete(true);
               return;
             }
-          }
 
-          frequence = 0;
-          count++;
+            const currentRoute = this.routes[this.routeIndex];
+            this.routeIndex++;
 
-          // Check if we've completed all routes
-          if (routeIndex >= flatRoutes.length) {
-            this._finishRoute = null;
-            resolve(true);
-            return;
-          }
+            if (currentRoute === undefined) {
+              this.processNextRoute();
+              return;
+            }
 
-          const currentRoute = flatRoutes[routeIndex];
-          routeIndex++;
+            try {
+              // Handle different route types
+              if (typeof currentRoute === 'object' && 'then' in currentRoute) {
+                // Handle Promise (like Move.wait())
+                // For Move.wait(), we need to track the wait time
+                // Check if it's a wait promise by checking if it resolves after a delay
+                this.waitingForPromise = true;
+                this.promiseStartTime = Date.now();
 
-          if (currentRoute === undefined) {
-            executeNextRoute();
-            return;
-          }
+                // Try to get duration from promise if possible (for Move.wait())
+                // Move.wait() creates a promise that resolves after a delay
+                // We'll use a default duration and let the promise resolve naturally
+                this.promiseDuration = 1000; // Default 1 second, will be updated when promise resolves
 
-          try {
-            // Handle different route types
-            if (typeof currentRoute === 'object' && 'then' in currentRoute) {
-              // Handle Promise
-              await currentRoute;
-              executeNextRoute();
-            } else if (typeof currentRoute === 'string' && currentRoute.startsWith('turn-')) {
-              // Handle turn commands
-              const directionStr = currentRoute.replace('turn-', '');
-              let direction: Direction = Direction.Down;
+                // Set up promise resolution handler
+                (currentRoute as Promise<any>).then(() => {
+                  this.waitingForPromise = false;
+                  this.processNextRoute();
+                }).catch(() => {
+                  this.waitingForPromise = false;
+                  this.processNextRoute();
+                });
+              } else if (typeof currentRoute === 'string' && currentRoute.startsWith('turn-')) {
+                // Handle turn commands - just change direction, no movement
+                const directionStr = currentRoute.replace('turn-', '');
+                let direction: Direction = Direction.Down;
 
-              // Convert string direction to Direction enum
-              switch (directionStr) {
-                case 'up':
-                case Direction.Up:
-                  direction = Direction.Up;
-                  break;
-                case 'down':
-                case Direction.Down:
-                  direction = Direction.Down;
-                  break;
-                case 'left':
-                case Direction.Left:
-                  direction = Direction.Left;
-                  break;
-                case 'right':
-                case Direction.Right:
-                  direction = Direction.Right;
-                  break;
-              }
-
-              if (player.changeDirection) {
-                player.changeDirection(direction);
-              }
-              executeNextRoute();
-            } else if (typeof currentRoute === 'number') {
-              // Handle Direction enum values
-              if (player.moveByDirection) {
-                await player.moveByDirection(currentRoute as unknown as Direction, 1);
-              } else {
-                // Fallback to movement strategy - use direction as velocity components
-                let vx = 0, vy = 0;
-                const direction = currentRoute as unknown as Direction;
-                switch (direction) {
-                  case Direction.Right: vx = 1; break;
-                  case Direction.Left: vx = -1; break;
-                  case Direction.Down: vy = 1; break;
-                  case Direction.Up: vy = -1; break;
+                switch (directionStr) {
+                  case 'up':
+                  case Direction.Up:
+                    direction = Direction.Up;
+                    break;
+                  case 'down':
+                  case Direction.Down:
+                    direction = Direction.Down;
+                    break;
+                  case 'left':
+                  case Direction.Left:
+                    direction = Direction.Left;
+                    break;
+                  case 'right':
+                  case Direction.Right:
+                    direction = Direction.Right;
+                    break;
                 }
-                const speed = player.speed?.() ?? 3;
-                this.addMovement(new LinearMove({ x: vx * speed, y: vy * speed }, 0.1));
-                setTimeout(executeNextRoute, 100);
+
+                if (this.player.changeDirection) {
+                  this.player.changeDirection(direction);
+                }
+                // Turn is instant, continue immediately
+                this.processNextRoute();
+              } else if (typeof currentRoute === 'number' || typeof currentRoute === 'string') {
+                // Handle Direction enum values (number or string) - calculate target position
+                const moveDirection = currentRoute as unknown as Direction;
+                const map = this.player.getCurrentMap() as any;
+                if (!map) {
+                  this.finished = true;
+                  this.onComplete(false);
+                  return;
+                }
+
+                // Get current position (center of entity)
+                const entity = map.physic.getEntityByUUID(this.player.id);
+                if (!entity) {
+                  this.finished = true;
+                  this.onComplete(false);
+                  return;
+                }
+
+                const currentX = entity.position.x;
+                const currentY = entity.position.y;
+
+                // Calculate target position based on direction and player speed
+                let targetX = currentX;
+                let targetY = currentY;
+
+                // Get player speed
+                let playerSpeed = 3;
+                if (typeof this.player.speed === 'function') {
+                  const speedResult = this.player.speed();
+                  playerSpeed = typeof speedResult === 'number' ? speedResult : 3;
+                } else if (typeof this.player.speed === 'number') {
+                  playerSpeed = this.player.speed;
+                }
+
+                // Use player speed as distance, not tile size
+                let distance = playerSpeed;
+
+                // Merge consecutive routes of same direction
+                while (this.routeIndex < this.routes.length) {
+                  const nextRoute = this.routes[this.routeIndex];
+                  if (nextRoute === currentRoute) {
+                    distance += playerSpeed;
+                    this.routeIndex++;
+                  } else {
+                    break;
+                  }
+                }
+
+                switch (moveDirection) {
+                  case Direction.Right:
+                  case 'right' as any:
+                    targetX = currentX + distance;
+                    break;
+                  case Direction.Left:
+                  case 'left' as any:
+                    targetX = currentX - distance;
+                    break;
+                  case Direction.Down:
+                  case 'down' as any:
+                    targetY = currentY + distance;
+                    break;
+                  case Direction.Up:
+                  case 'up' as any:
+                    targetY = currentY - distance;
+                    break;
+                }
+
+                this.currentTarget = { x: targetX, y: targetY };
+                this.currentDirection = { x: 0, y: 0 };
+              } else if (Array.isArray(currentRoute)) {
+                // Handle array of directions - insert them into routes
+                for (let i = currentRoute.length - 1; i >= 0; i--) {
+                  this.routes.splice(this.routeIndex, 0, currentRoute[i]);
+                }
+                this.processNextRoute();
+              } else {
+                // Unknown route type, skip
+                this.processNextRoute();
+              }
+            } catch (error) {
+              console.warn('Error processing route:', error);
+              this.processNextRoute();
+            }
+          }
+
+          update(body: MovementBody, dt: number): void {
+            // Don't process if waiting for promise
+            if (this.waitingForPromise) {
+              body.setVelocity({ x: 0, y: 0 });
+              // Check if promise wait time has elapsed (fallback)
+              if (Date.now() - this.promiseStartTime > this.promiseDuration) {
+                this.waitingForPromise = false;
+                this.processNextRoute();
+              }
+              return;
+            }
+
+            // If no target, try to process next route
+            if (!this.currentTarget) {
+              if (!this.finished) {
+                this.processNextRoute();
+              }
+              if (!this.currentTarget) {
+                body.setVelocity({ x: 0, y: 0 });
                 return;
               }
-              executeNextRoute();
-            } else {
-              // Unknown route type, skip
-              executeNextRoute();
             }
-          } catch (error) {
-            console.warn('Error executing route:', error);
-            executeNextRoute();
-          }
-        };
 
-        executeNextRoute();
+            const entity = body.getEntity?.();
+            if (!entity) {
+              this.finished = true;
+              this.onComplete(false);
+              return;
+            }
+
+            const dx = this.currentTarget.x - entity.position.x;
+            const dy = this.currentTarget.y - entity.position.y;
+            const distance = Math.hypot(dx, dy);
+
+            // Check if we've reached the target
+            if (distance <= this.tolerance) {
+              // Target reached, process next route
+              this.currentTarget = null;
+              this.currentDirection = { x: 0, y: 0 };
+              body.setVelocity({ x: 0, y: 0 });
+
+              // Process next route
+              if (!this.finished) {
+                this.processNextRoute();
+              }
+              return;
+            }
+
+            // Get speed scalar from map (default 50 if not found)
+            const map = this.player.getCurrentMap() as any;
+            const speedScalar = map?.speedScalar ?? 50;
+
+            // Calculate direction and speed
+            if (distance > 0) {
+              this.currentDirection = { x: dx / distance, y: dy / distance };
+            }
+
+            // Get player speed
+            let playerSpeed = 3;
+            if (typeof this.player.speed === 'function') {
+              const speedResult = this.player.speed();
+              playerSpeed = typeof speedResult === 'number' ? speedResult : 3;
+            } else if (typeof this.player.speed === 'number') {
+              playerSpeed = this.player.speed;
+            }
+
+            // Apply velocity towards target
+            body.setVelocity({
+              x: this.currentDirection.x * playerSpeed * speedScalar,
+              y: this.currentDirection.y * playerSpeed * speedScalar,
+            });
+          }
+
+          isFinished(): boolean {
+            return this.finished;
+          }
+
+          onFinished(): void {
+            this.onComplete(true);
+          }
+        }
+
+        // Create and add the route movement strategy
+        const routeStrategy = new RouteMovementStrategy(
+          finalRoutes,
+          player,
+          (success: boolean) => {
+            this._finishRoute = null;
+            resolve(success);
+          }
+        );
+
+        this.addMovement(routeStrategy);
       });
     }
 
