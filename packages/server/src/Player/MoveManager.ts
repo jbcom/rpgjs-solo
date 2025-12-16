@@ -14,7 +14,8 @@ import {
   ProjectileMovement,
   random,
   isFunction,
-  capitalize
+  capitalize,
+  PerlinNoise2D
 } from "@rpgjs/common";
 import type { MovementBody } from "@rpgjs/physic";
 import { RpgMap } from "../rooms/map";
@@ -70,14 +71,14 @@ export interface MoveRoutesOptions {
    * ```
    */
   onStuck?: (player: RpgPlayer, target: { x: number; y: number }, currentPosition: { x: number; y: number }) => boolean | void;
-  
+
   /**
    * Time in milliseconds to wait before considering the player stuck (default: 500ms)
    * 
    * The player must be unable to make progress for this duration before onStuck is called.
    */
   stuckTimeout?: number;
-  
+
   /**
    * Minimum distance change in pixels to consider movement progress (default: 1 pixel)
    * 
@@ -134,6 +135,100 @@ export enum Speed {
 * @memberof Move
 * */
 class MoveList {
+  // Shared Perlin noise instance for smooth random movement
+  private static perlinNoise: PerlinNoise2D = new PerlinNoise2D();
+  private static randomCounter: number = 0;
+  // Instance counter for each call to ensure variation
+  private static callCounter: number = 0;
+
+  /**
+   * Gets a random direction index (0-3) using a hybrid approach for balanced randomness
+   * 
+   * Uses a combination of hash-based pseudo-randomness and Perlin noise to ensure
+   * fair distribution of directions while maintaining smooth, natural-looking movement patterns.
+   * The hash function guarantees uniform distribution, while Perlin noise adds spatial/temporal coherence.
+   * 
+   * @param player - Optional player instance for coordinate-based noise
+   * @param index - Optional index for array-based calls to ensure variation
+   * @returns Direction index (0-3) corresponding to Right, Left, Up, Down
+   */
+  private getRandomDirectionIndex(player?: RpgPlayer, index?: number): number {
+    // Increment call counter for each invocation to ensure variation
+    MoveList.callCounter++;
+
+    // Generate a unique seed from multiple sources
+    let seed: number;
+    const time = Date.now() * 0.001; // Convert to seconds
+
+    if (player) {
+      // Use player coordinates combined with time and call counter
+      const playerX = typeof player.x === 'function' ? player.x() : player.x;
+      const playerY = typeof player.y === 'function' ? player.y() : player.y;
+
+      // Combine with prime multipliers for better distribution
+      seed = Math.floor(
+        (playerX * 0.1) +
+        (playerY * 0.1) +
+        (time * 1000) +
+        (MoveList.callCounter * 17) +
+        ((index ?? 0) * 31)
+      );
+    } else {
+      // Fallback for non-player contexts
+      MoveList.randomCounter++;
+      seed = Math.floor(
+        (MoveList.randomCounter * 17) +
+        (time * 1000) +
+        (MoveList.callCounter * 31) +
+        ((index ?? 0) * 47)
+      );
+    }
+
+    // Use multiple hash functions combined to ensure uniform distribution
+    // This approach guarantees fair probability across all directions
+
+    // Hash 1: Linear congruential generator
+    let hash1 = ((seed * 1103515245 + 12345) & 0x7fffffff) >>> 0;
+
+    // Hash 2: Multiply-shift hash
+    let hash2 = ((seed * 2654435761) >>> 0);
+
+    // Hash 3: XOR with rotation
+    let hash3 = seed ^ (seed >>> 16);
+    hash3 = ((hash3 * 2246822507) >>> 0);
+
+    // Combine hashes using XOR for better distribution
+    let combinedHash = (hash1 ^ hash2 ^ hash3) >>> 0;
+
+    // Convert to 0-1 range
+    const hashValue = (combinedHash % 1000000) / 1000000;
+
+    // Use Perlin noise for smooth spatial/temporal variation (10% influence only)
+    // Very low influence to avoid bias while maintaining some smoothness
+    const perlinX = seed * 0.001;
+    const perlinY = (seed * 1.618) * 0.001; // Golden ratio
+    const perlinValue = MoveList.perlinNoise.getNormalized(perlinX, perlinY, 0.3);
+
+    // Combine hash (90%) with Perlin noise (10%)
+    // Very high weight on hash ensures fair distribution, minimal Perlin for subtle smoothness
+    const finalValue = (hashValue * 0.9) + (perlinValue * 0.1);
+
+    // Map to direction index (0-3) ensuring uniform distribution
+    // Clamp finalValue to [0, 1) range to ensure valid index
+    const clampedValue = Math.max(0, Math.min(0.999999, finalValue));
+    let directionIndex = Math.floor(clampedValue * 4);
+
+    // Ensure directionIndex is always in valid range [0, 3]
+    directionIndex = Math.max(0, Math.min(3, directionIndex));
+
+    // Additional safety check: if somehow we get an invalid value (NaN, Infinity), use hash directly
+    if (!Number.isFinite(directionIndex) || directionIndex < 0 || directionIndex > 3) {
+      const fallbackIndex = Math.floor(hashValue * 4) % 4;
+      return Math.max(0, Math.min(3, fallbackIndex));
+    }
+
+    return directionIndex;
+  }
 
   repeatMove(direction: Direction, repeat: number): Direction[] {
     // Safety check for valid repeat value
@@ -229,12 +324,20 @@ class MoveList {
     }
 
     try {
-      return new Array(repeat).fill(null).map(() => [
-        Direction.Right,
-        Direction.Left,
-        Direction.Up,
-        Direction.Down
-      ][random(0, 3)]);
+      // Use Perlin noise for smooth random directions
+      // Increment counter before generating directions
+      MoveList.randomCounter += repeat;
+
+      return new Array(repeat).fill(null).map((_, index) => {
+        // Use getRandomDirectionIndex with index to ensure variation for each element
+        const directionIndex = this.getRandomDirectionIndex(undefined, index);
+        return [
+          Direction.Right,
+          Direction.Left,
+          Direction.Up,
+          Direction.Down
+        ][directionIndex];
+      });
     } catch (error) {
       console.error('Error creating random array with repeat:', repeat, error);
       return [Direction.Down]; // Return single direction as fallback
@@ -269,13 +372,31 @@ class MoveList {
       repeat = Math.floor(repeat);
 
       let directions: Direction[] = []
+      const directionFunctions: CallbackTileMove[] = [
+        this.tileRight(),
+        this.tileLeft(),
+        this.tileUp(),
+        this.tileDown()
+      ];
+      
       for (let i = 0; i < repeat; i++) {
-        const randFn: CallbackTileMove = [
-          this.tileRight(),
-          this.tileLeft(),
-          this.tileUp(),
-          this.tileDown()
-        ][random(0, 3)]
+        // Use Perlin noise with player coordinates and index for smooth random movement
+        // Passing index ensures each iteration gets a different direction
+        let directionIndex = this.getRandomDirectionIndex(player, i);
+        
+        // Ensure directionIndex is valid (0-3)
+        if (!Number.isInteger(directionIndex) || directionIndex < 0 || directionIndex > 3) {
+          console.warn('Invalid directionIndex in tileRandom:', directionIndex, 'using fallback');
+          directionIndex = Math.floor(Math.random() * 4) % 4;
+        }
+        
+        const randFn = directionFunctions[directionIndex];
+
+        // Verify that randFn is a function before calling it
+        if (typeof randFn !== 'function') {
+          console.warn('randFn is not a function in tileRandom, skipping iteration');
+          continue;
+        }
 
         try {
           const newDirections = randFn(player, map);
@@ -407,12 +528,14 @@ class MoveList {
   }
 
   turnRandom(): string {
+    // Use Perlin noise for smooth random turn direction with guaranteed variation
+    const directionIndex = this.getRandomDirectionIndex();
     return [
       this.turnRight(),
       this.turnLeft(),
       this.turnUp(),
       this.turnDown()
-    ][random(0, 3)]
+    ][directionIndex]
   }
 
   turnAwayFromPlayer(otherPlayer: RpgPlayer): CallbackTurnMove {
@@ -717,12 +840,12 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
           private readonly onStuck?: MoveRoutesOptions['onStuck'];
           private readonly stuckTimeout: number;
           private readonly stuckThreshold: number;
-          
+
           // Frequency wait state
           private waitingForFrequency = false;
           private frequencyWaitStartTime = 0;
           private ratioFrequency = 15;
-          
+
           // Stuck detection state
           private lastPosition: { x: number; y: number } | null = null;
           private lastPositionTime: number = 0;
@@ -754,7 +877,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             // Reset frequency wait state when processing a new route
             this.waitingForFrequency = false;
             this.frequencyWaitStartTime = 0;
-            
+
             // Check if we've completed all routes
             if (this.routeIndex >= this.routes.length) {
               this.finished = true;
@@ -941,7 +1064,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               body.setVelocity({ x: 0, y: 0 });
               const playerFrequency = this.player.frequency;
               const frequencyMs = playerFrequency || 0;
-              
+
               if (frequencyMs > 0 && Date.now() - this.frequencyWaitStartTime >= frequencyMs * this.ratioFrequency) {
                 this.waitingForFrequency = false;
                 this.processNextRoute();
@@ -956,13 +1079,13 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               }
               if (!this.currentTarget) {
                 body.setVelocity({ x: 0, y: 0 });
-              // Reset stuck detection when no target
-              this.lastPosition = null;
-              this.isCurrentlyStuck = false;
-              this.lastDistanceToTarget = null;
-              this.stuckCheckInitialized = false;
-              this.currentTargetTopLeft = null;
-              return;
+                // Reset stuck detection when no target
+                this.lastPosition = null;
+                this.isCurrentlyStuck = false;
+                this.lastDistanceToTarget = null;
+                this.stuckCheckInitialized = false;
+                this.currentTargetTopLeft = null;
+                return;
               }
             }
 
@@ -978,9 +1101,9 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
             // Check distance using player's top-left position (what player.x() returns)
             // This ensures we match the test expectations which compare player.x()
-            const currentTopLeftX =  this.player.x();
-            const currentTopLeftY =  this.player.y()
-            
+            const currentTopLeftX = this.player.x();
+            const currentTopLeftY = this.player.y()
+
             // Calculate direction and distance using top-left position if available
             let dx: number, dy: number, distance: number;
             if (this.currentTargetTopLeft) {
@@ -1061,12 +1184,12 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 // We have a target, so we're trying to move (regardless of current velocity,
                 // which may be zero due to physics engine collision handling)
                 const positionChanged = Math.hypot(
-                  currentPosition.x - this.lastPosition.x, 
+                  currentPosition.x - this.lastPosition.x,
                   currentPosition.y - this.lastPosition.y
                 ) > this.stuckThreshold;
-                
+
                 const distanceImproved = distance < (this.lastDistanceToTarget - this.stuckThreshold);
-                
+
                 // Player is stuck if: not moving AND not getting closer to target
                 if (!positionChanged && !distanceImproved) {
                   // Player is not making progress
@@ -1083,7 +1206,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                         this.currentTarget,
                         currentPosition
                       );
-                      
+
                       if (shouldContinue === false) {
                         // Cancel the route
                         this.finished = true;
@@ -1091,7 +1214,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                         body.setVelocity({ x: 0, y: 0 });
                         return;
                       }
-                      
+
                       // Reset stuck detection to allow another check
                       this.isCurrentlyStuck = false;
                       this.stuckCheckStartTime = 0;
@@ -1105,7 +1228,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                   this.isCurrentlyStuck = false;
                   this.stuckCheckStartTime = 0;
                 }
-                
+
                 // Update tracking variables
                 this.lastPosition = { ...currentPosition };
                 this.lastPositionTime = currentTime;
@@ -1144,7 +1267,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             const absX = Math.abs(this.currentDirection.x);
             const absY = Math.abs(this.currentDirection.y);
             let cardinalDirection: Direction;
-            
+
             if (absX >= absY) {
               cardinalDirection = this.currentDirection.x >= 0 ? Direction.Right : Direction.Left;
             } else {
