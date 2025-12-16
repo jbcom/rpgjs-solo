@@ -108,6 +108,84 @@ export abstract class RpgCommonPlayer {
   // Store intended movement direction (not synced, only used locally)
   private _intendedDirection: Direction | null = null;
 
+  // Direction and animation locking (server-side only, not synced)
+  private _directionFixed = signal(false);
+  private _animationFixed = signal(false);
+
+  /**
+   * Get whether direction changes are locked
+   * 
+   * @returns True if direction is locked and cannot be changed automatically
+   * 
+   * @example
+   * ```ts
+   * if (player.directionFixed) {
+   *   // Direction is locked, won't change automatically
+   * }
+   * ```
+   */
+  get directionFixed(): boolean {
+    return this._directionFixed();
+  }
+
+  /**
+   * Set whether direction changes are locked
+   * 
+   * When set to true, the player's direction will not change automatically
+   * during movement or from physics engine callbacks.
+   * 
+   * @param value - True to lock direction, false to allow automatic changes
+   * 
+   * @example
+   * ```ts
+   * // Lock direction during a special animation
+   * player.directionFixed = true;
+   * player.setAnimation('attack');
+   * // ... later
+   * player.directionFixed = false;
+   * ```
+   */
+  set directionFixed(value: boolean) {
+    this._directionFixed.set(value);
+  }
+
+  /**
+   * Get whether animation changes are locked
+   * 
+   * @returns True if animation is locked and cannot be changed automatically
+   * 
+   * @example
+   * ```ts
+   * if (player.animationFixed) {
+   *   // Animation is locked, won't change automatically
+   * }
+   * ```
+   */
+  get animationFixed(): boolean {
+    return this._animationFixed();
+  }
+
+  /**
+   * Set whether animation changes are locked
+   * 
+   * When set to true, the player's animation will not change automatically
+   * during movement or from physics engine callbacks.
+   * 
+   * @param value - True to lock animation, false to allow automatic changes
+   * 
+   * @example
+   * ```ts
+   * // Lock animation during a special skill
+   * player.animationFixed = true;
+   * player.setAnimation('skill');
+   * // ... later
+   * player.animationFixed = false;
+   * ```
+   */
+  set animationFixed(value: boolean) {
+    this._animationFixed.set(value);
+  }
+
   pendingInputs: any[] = [];
 
   /**
@@ -117,6 +195,8 @@ export abstract class RpgCommonPlayer {
    * and directional abilities. This should be called when the player
    * intends to move in a specific direction, not when they are pushed
    * by physics or sliding.
+   * 
+   * If `directionFixed` is true, this method will not change the direction.
    *
    * @param direction - The new direction to face
    *
@@ -124,9 +204,17 @@ export abstract class RpgCommonPlayer {
    * ```ts
    * // Player presses right arrow key
    * player.changeDirection(Direction.Right);
+   * 
+   * // Lock direction to prevent automatic changes
+   * player.directionFixed = true;
+   * player.changeDirection(Direction.Up); // This will be ignored
    * ```
    */
   changeDirection(direction: Direction) {
+    // Don't change direction if it's locked
+    if (this._directionFixed()) {
+      return;
+    }
     this.direction.set(direction);
   }
 

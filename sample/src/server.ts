@@ -2,6 +2,7 @@ import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosi
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
+import { Direction } from "@rpgjs/common";
 
 export function Event() {
   return {
@@ -10,9 +11,10 @@ export function Event() {
     onInit() {
       this.setGraphic("hero");
       this.teleport({ x: 200, y: 200 })
-      this.infiniteMoveRoute([
-        Move.tileRandom(),
-      ])
+      this.frequency = Frequency.Low;
+      // this.infiniteMoveRoute([
+      //   Move.tileRandom(),
+      // ])
     },
     onPlayerTouch(player: RpgPlayer) {
      console.log("touch");
@@ -51,12 +53,15 @@ export default createServer({
 
           },
           async onInput(player: RpgPlayer, input: any) {
-            player.speed.set(10);
-            player.moveRoutes([
-              Move.tileRight(2),
-              Move.tileDown(2),
-            ])
+            
             const map = player.getCurrentMap()
+            const event =map?.getEventBy(event => event.name() === "EV-1")
+            console.log(event)
+            event!.animationFixed = true 
+            
+            event!.changeDirection(Direction.Left)
+            event!.directionFixed = true
+            event!.knockback({ x: 100, y: 1 }, 100)
             // map?.shakeMap({
             //   intensity: 10,
             //   duration: 1000,

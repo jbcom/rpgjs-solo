@@ -424,6 +424,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * When `nbTimes` is set to a finite number, the animation will play that many times
    * before returning to the previous animation state.
    * 
+   * If `animationFixed` is true, this method will not change the animation.
+   * 
    * @param animationName - The name of the animation to play (e.g., 'attack', 'skill', 'walk')
    * @param nbTimes - Number of times to repeat the animation (default: Infinity for continuous)
    * 
@@ -435,14 +437,19 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * // Play attack animation 3 times then return to previous state
    * player.setAnimation('attack', 3);
    * 
-   * // Play skill animation once
-   * player.setAnimation('skill', 1);
+   * // Lock animation to prevent automatic changes
+   * player.animationFixed = true;
+   * player.setAnimation('skill'); // This will be ignored
    * 
    * // Set idle/stand animation
    * player.setAnimation('stand');
    * ```
    */
   setAnimation(animationName: string, nbTimes: number = Infinity) {
+    // Don't change animation if it's locked
+    if (this.animationFixed) {
+      return;
+    }
     const map = this.getCurrentMap();
     if (!map) return;
     if (nbTimes === Infinity) {

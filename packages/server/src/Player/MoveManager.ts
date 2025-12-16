@@ -686,6 +686,22 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       return this._frequency();
     }
 
+    set directionFixed(value: boolean) {
+      (this as any)._directionFixed.set(value);
+    }
+
+    get directionFixed(): boolean {
+      return (this as any)._directionFixed();
+    }
+
+    set animationFixed(value: boolean) {
+      (this as any)._animationFixed.set(value);
+    }
+
+    get animationFixed(): boolean {
+      return (this as any)._animationFixed();
+    }
+
     addMovement(strategy: MovementStrategy): void {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
@@ -1375,6 +1391,12 @@ export interface IMoveManager {
 
   /** Frequency for movement timing (milliseconds between movements) */
   frequency: number;
+
+  /** Whether direction changes are locked (prevents automatic direction changes) */
+  directionFixed: boolean;
+
+  /** Whether animation changes are locked (prevents automatic animation changes) */
+  animationFixed: boolean;
 
   /**
    * Add a custom movement strategy to this entity

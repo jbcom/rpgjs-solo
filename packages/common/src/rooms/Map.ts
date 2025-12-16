@@ -1027,6 +1027,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       const owner = (entity as any).owner;
       if (!owner) return;
       if (cardinalDirection === 'idle') return;
+      // Don't change direction if it's locked
+      if (owner.directionFixed) return;
       owner.changeDirection(cardinalDirection as Direction);
     });
 
@@ -1034,6 +1036,9 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       // Get owner from entity (same pattern as onDirectionChange)
       const owner = (entity as any).owner;
       if (!owner) return;
+      
+      // Don't change animation if it's locked
+      if (owner.animationFixed) return;
       
       // Only change animation if intensity is low (avoid animation flicker on micro-movements)
       // Intensity threshold: 10 pixels/second (adjust based on your game's needs)
