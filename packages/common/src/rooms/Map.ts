@@ -360,12 +360,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         break;
     }
 
-    // Ensure player's facing/intended direction is updated before auto-change evaluation
-    if (typeof (player as any).setIntendedDirection === 'function') {
-      (player as any).setIntendedDirection(direction);
-    } else if (typeof (player as any).changeDirection === 'function') {
-      (player as any).changeDirection(direction);
-    }
+    player.changeDirection(direction);
 
     // Check for automatic map change if the method exists
     if (typeof (player as any).autoChangeMap === 'function') {
@@ -1035,14 +1030,32 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     });
 
     entity.onMovementChange(({ isMoving, intensity }) => {
+      // Get owner from entity (same pattern as onDirectionChange)
+      const owner = (entity as any).owner;
+      if (!owner) return;
+      
       // Only change animation if intensity is low (avoid animation flicker on micro-movements)
       // Intensity threshold: 10 pixels/second (adjust based on your game's needs)
       const LOW_INTENSITY_THRESHOLD = 10;
       
+      // Try to use setAnimation method if available (preferred method)
+      // Otherwise, try to access animationName signal directly
+      const hasSetAnimation = typeof owner.setAnimation === 'function';
+      const animationNameSignal = owner.animationName;
+      const ownerHasAnimationName = animationNameSignal && typeof animationNameSignal === 'object' && typeof animationNameSignal.set === 'function';
+      
       if (isMoving && intensity > LOW_INTENSITY_THRESHOLD) {
-        owner.animationName.set("walk");
+        if (hasSetAnimation) {
+          owner.setAnimation("walk");
+        } else if (ownerHasAnimationName) {
+          animationNameSignal.set("walk");
+        }
       } else if (!isMoving) {
-        owner.animationName.set("stand");
+        if (hasSetAnimation) {
+          owner.setAnimation("stand");
+        } else if (ownerHasAnimationName) {
+          animationNameSignal.set("stand");
+        }
       }
       // If moving with high intensity, keep current animation (e.g., already running)
     });
@@ -1072,8 +1085,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       if (changed) {
         owner.applyFrames?.();
       }
-
-      console.log(owner.x(), owner.y(), entityWidth, entityHeight, entity.owner.name(), this);
     });
 
     return id;
@@ -1142,9 +1153,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     if (!entity) return false;
 
     const speedValue = typeof player.speed === "function" ? Number(player.speed()) : 0;
-    if (typeof player.setIntendedDirection === "function") {
-      player.setIntendedDirection(direction);
-    }
 
     let vx = 0, vy = 0;
     switch (direction) {
@@ -1201,11 +1209,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     // Stop all movement using the MovementManager (clears strategies and stops entity movement)
     this.moveManager.stopMovement(player.id);
-
-    // Reset intended direction
-    if (typeof player.setIntendedDirection === "function") {
-      player.setIntendedDirection(null);
-    }
 
     player.pendingInputs = [];
     

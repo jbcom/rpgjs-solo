@@ -82,7 +82,7 @@ export abstract class RpgCommonPlayer {
     h: 32,
   });
   @sync() _gold = signal(0);
-  animationName = signal("stand");
+  @sync() animationName = signal("stand");
   @sync() hpSignal = signal(0);
   @sync() spSignal = signal(0);
   @sync() _exp = signal(0);

@@ -48,6 +48,10 @@ export default createServer({
 
           },
           async onInput(player: RpgPlayer, input: any) {
+           player.moveRoutes([
+            Move.tileRight(2),
+            Move.tileDown(2),
+           ])
             const map = player.getCurrentMap()
             // map?.shakeMap({
             //   intensity: 10,

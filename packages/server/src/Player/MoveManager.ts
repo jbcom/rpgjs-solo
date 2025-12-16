@@ -1094,28 +1094,18 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               return;
             }
 
-            // Get player speed
-            let playerSpeed = this.player.speed();
+            // Convert vector direction to cardinal direction (like moveBody does)
+            const absX = Math.abs(this.currentDirection.x);
+            const absY = Math.abs(this.currentDirection.y);
+            let cardinalDirection: Direction;
+            
+            if (absX >= absY) {
+              cardinalDirection = this.currentDirection.x >= 0 ? Direction.Right : Direction.Left;
+            } else {
+              cardinalDirection = this.currentDirection.y >= 0 ? Direction.Down : Direction.Up;
+            }
 
-            // Apply velocity towards target
-            // Compensate for linearDamping: the physics engine multiplies velocity by (1 - linearDamping)
-            // So we need to divide by (1 - linearDamping) to get the desired velocity after damping
-            const physicsEntity = body.getEntity?.();
-            const linearDamping = physicsEntity ? (physicsEntity as any).linearDamping ?? 0.2 : 0.2;
-            const dampingCompensation = 1 / (1 - linearDamping);
-            
-            // Reduce velocity when close to target to avoid overshooting
-            // Use a smooth deceleration: velocity scales with distance when close
-            const decelerationDistance = playerSpeed * speedScalar * 0.5; // Start decelerating at half a speed unit
-            const velocityScale = distance < decelerationDistance ? Math.max(0.1, distance / decelerationDistance) : 1.0;
-            
-            const calculatedVelocityX = this.currentDirection.x * playerSpeed * speedScalar * dampingCompensation * velocityScale;
-            const calculatedVelocityY = this.currentDirection.y * playerSpeed * speedScalar * dampingCompensation * velocityScale;
-            
-            body.setVelocity({
-              x: calculatedVelocityX,
-              y: calculatedVelocityY,
-            });
+            map.movePlayer(this.player as any, cardinalDirection)
           }
 
           isFinished(): boolean {

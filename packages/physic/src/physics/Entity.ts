@@ -737,6 +737,7 @@ export class Entity {
    */
   public setVelocity(velocity: Vector2 | { x: number; y: number }): Entity {
     const oldVelocity = this.velocity.clone();
+
     if (velocity instanceof Vector2) {
       this.velocity.copyFrom(velocity);
     } else {
