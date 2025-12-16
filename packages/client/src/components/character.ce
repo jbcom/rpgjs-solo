@@ -1,4 +1,5 @@
 <Container x={smoothX} y={smoothY} zIndex={y} viewportFollow={shouldFollowCamera} controls onBeforeDestroy visible >
+  <Text text={smoothX + " " + smoothY} y={-100} />
   @for (compConfig of normalizedComponentsBehind) {
     <Container>
       <compConfig.component object ...compConfig.props />

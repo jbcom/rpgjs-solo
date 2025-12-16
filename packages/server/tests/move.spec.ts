@@ -517,3 +517,85 @@ describe("Move Routes - Complex Scenarios", () => {
   });
   
 });
+
+describe("Move Routes - Stuck Detection", () => {
+  test("should call onStuck when player is blocked", async () => {
+    const initialX = player.x();
+    const initialY = player.y();
+    
+    let stuckCalled = false;
+    let stuckTarget: { x: number; y: number } | null = null;
+    let stuckPosition: { x: number; y: number } | null = null;
+
+    // Create an obstacle by blocking tiles to the right
+    const map = player.getCurrentMap() as any;
+    const entity = map.physic.getEntityByUUID(player.id);
+    
+    if (entity) {
+      // Block tiles to the right of the player
+      // Calculate tile coordinates based on player position
+      const playerTileX = Math.floor(initialX / 32);
+      
+      entity.canEnterTile(({ x, y }) => {
+        // Block tiles starting 1-2 tiles to the right of player
+        const tileX = Math.floor(x);
+        if (tileX >= playerTileX + 1 && tileX <= playerTileX + 2) {
+          return false; // Block these tiles
+        }
+        return true;
+      });
+    }
+
+    // Try to move right - player should get stuck
+    const promise = player.moveRoutes([Move.right(5)], {
+      onStuck: (p, target, currentPos) => {
+        stuckCalled = true;
+        stuckTarget = target;
+        stuckPosition = currentPos;
+        return false; // Cancel the route
+      },
+      stuckTimeout: 400, // Timeout for stuck detection
+      stuckThreshold: 1
+    });
+
+    // Wait for the promise to resolve (either completion or stuck cancellation)
+    await fixture.waitUntil(promise);
+
+    // Give some time for stuck detection to trigger
+    await fixture.nextTickTimes(30);
+    await fixture.wait(500);
+
+    // Verify onStuck was called
+    expect(stuckCalled).toBe(true);
+    expect(stuckTarget).not.toBeNull();
+    expect(stuckPosition).not.toBeNull();
+    
+    // Player should have moved some distance but not reached the target
+    expect(player.x()).toBeGreaterThan(initialX);
+    expect(player.x()).toBeLessThan(initialX + 150); // Should be blocked before reaching far right
+  });
+
+  test("should not call onStuck when player moves normally", async () => {
+    const initialX = player.x();
+    
+    let stuckCalled = false;
+
+    // Move without obstacles - should not trigger onStuck
+    await fixture.waitUntil(
+      player.moveRoutes([Move.right(2)], {
+        onStuck: () => {
+          stuckCalled = true;
+          return false;
+        },
+        stuckTimeout: 300,
+        stuckThreshold: 1
+      })
+    );
+
+    // Verify onStuck was NOT called
+    expect(stuckCalled).toBe(false);
+    
+    // Player should have moved successfully
+    expect(player.x()).toBeGreaterThan(initialX);
+  });
+});

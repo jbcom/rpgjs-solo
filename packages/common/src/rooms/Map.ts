@@ -315,6 +315,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         event.id = key;
         this.createCharacterHitbox(event, "npc", {
           mass: 100,
+          isStatic: true,
         });
       } else if (type === "remove") {
         // Clean up movement event subscriptions
@@ -563,6 +564,10 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     if (!owner?.id) {
       return;
     }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/9f237fe7-f2e4-4415-9fd6-3cbb65b81c81',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Map.ts:558',message:'createCharacterHitbox called',data:{ownerId:owner.id,ownerName:owner.name?.(),kind,isStatic:options?.isStatic,mass:options?.mass},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
 
     const hitbox = typeof owner.hitbox === "function" ? owner.hitbox() : owner.hitbox;
     const width = hitbox?.w ?? 32;
@@ -1014,6 +1019,10 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     const isStatic = !!options.isStatic;
 
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/9f237fe7-f2e4-4415-9fd6-3cbb65b81c81',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Map.ts:1015',message:'addCharacter creating entity',data:{id,ownerName:(options.owner as any).name?.(),isStatic,centerX,centerY},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+
     const entity = this.physic.createEntity({
       uuid: id,
       position: { x: centerX, y: centerY },
@@ -1032,8 +1041,14 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     if (isStatic) {
       entity.freeze();
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/9f237fe7-f2e4-4415-9fd6-3cbb65b81c81',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Map.ts:1033',message:'Entity frozen',data:{id,ownerName:(options.owner as any).name?.(),isFrozen:entity.isStatic()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
     } else {
       entity.unfreeze();
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/9f237fe7-f2e4-4415-9fd6-3cbb65b81c81',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Map.ts:1036',message:'Entity NOT frozen',data:{id,ownerName:(options.owner as any).name?.(),isFrozen:entity.isStatic()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
     }
 
     // Store owner reference directly on entity for syncing positions
@@ -1074,6 +1089,15 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       const topLeftY = y - entityHeight / 2;
       let changed = false;
 
+      // #region agent log
+      const ownerName = (entity as any).owner?.name?.();
+      const entityIsStatic = entity.isStatic();
+      const oldX = typeof owner.x === "function" ? owner.x() : owner.x;
+      const oldY = typeof owner.y === "function" ? owner.y() : owner.y;
+      fetch('http://127.0.0.1:7242/ingest/9f237fe7-f2e4-4415-9fd6-3cbb65b81c81',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Map.ts:1069',message:'onPositionChange triggered',data:{ownerName,entityIsStatic,centerX:x,centerY:y,topLeftX,topLeftY,oldX,oldY,entityWidth,entityHeight},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+
+
       if (typeof owner.x === "function" && typeof owner.x.set === "function") {
         owner.x.set(Math.round(topLeftX));
         changed = true;
@@ -1083,6 +1107,9 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         changed = true;
       }
       if (changed) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/9f237fe7-f2e4-4415-9fd6-3cbb65b81c81',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Map.ts:1087',message:'Position updated',data:{ownerName,entityIsStatic,newX:Math.round(topLeftX),newY:Math.round(topLeftY)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         owner.applyFrames?.();
       }
     });

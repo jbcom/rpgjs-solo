@@ -44,6 +44,48 @@ type CallbackTileMove = (player: RpgPlayer, map) => Direction[]
 type CallbackTurnMove = (player: RpgPlayer, map) => string
 type Routes = (string | Promise<any> | Direction | Direction[] | Function)[]
 
+/**
+ * Options for moveRoutes method
+ */
+export interface MoveRoutesOptions {
+  /**
+   * Callback function called when the player gets stuck (cannot move towards target)
+   * 
+   * This callback is triggered when the player is trying to move but cannot make progress
+   * towards the target position, typically due to obstacles or collisions.
+   * 
+   * @param player - The player instance that is stuck
+   * @param target - The target position the player was trying to reach
+   * @param currentPosition - The current position of the player
+   * @returns If true, the route will continue; if false, the route will be cancelled
+   * 
+   * @example
+   * ```ts
+   * await player.moveRoutes([Move.right()], {
+   *   onStuck: (player, target, currentPos) => {
+   *     console.log('Player is stuck!');
+   *     return false; // Cancel the route
+   *   }
+   * });
+   * ```
+   */
+  onStuck?: (player: RpgPlayer, target: { x: number; y: number }, currentPosition: { x: number; y: number }) => boolean | void;
+  
+  /**
+   * Time in milliseconds to wait before considering the player stuck (default: 500ms)
+   * 
+   * The player must be unable to make progress for this duration before onStuck is called.
+   */
+  stuckTimeout?: number;
+  
+  /**
+   * Minimum distance change in pixels to consider movement progress (default: 1 pixel)
+   * 
+   * If the player moves less than this distance over the stuckTimeout period, they are considered stuck.
+   */
+  stuckThreshold?: number;
+}
+
 export enum Frequency {
   Lowest = 600,
   Lower = 400,
@@ -629,7 +671,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       this.addMovement(new ProjectileMovement(type, config));
     }
 
-    moveRoutes(routes: Routes): Promise<boolean> {
+    moveRoutes(routes: Routes, options?: MoveRoutesOptions): Promise<boolean> {
       const player = this as unknown as PlayerWithMixins;
 
       // Break any existing route movement
@@ -671,17 +713,32 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
           private readonly onComplete: (success: boolean) => void;
           private readonly tileSize: number;
           private readonly tolerance: number;
+          private readonly onStuck?: MoveRoutesOptions['onStuck'];
+          private readonly stuckTimeout: number;
+          private readonly stuckThreshold: number;
+          
+          // Stuck detection state
+          private lastPosition: { x: number; y: number } | null = null;
+          private lastPositionTime: number = 0;
+          private stuckCheckStartTime: number = 0;
+          private lastDistanceToTarget: number | null = null;
+          private isCurrentlyStuck: boolean = false;
+          private stuckCheckInitialized: boolean = false;
 
           constructor(
             routes: Routes,
             player: PlayerWithMixins,
-            onComplete: (success: boolean) => void
+            onComplete: (success: boolean) => void,
+            options?: MoveRoutesOptions
           ) {
             this.routes = routes;
             this.player = player;
             this.onComplete = onComplete;
             this.tileSize = player.nbPixelInTile || 32;
             this.tolerance = 2; // Tolerance in pixels for reaching target
+            this.onStuck = options?.onStuck;
+            this.stuckTimeout = options?.stuckTimeout ?? 500; // Default 500ms
+            this.stuckThreshold = options?.stuckThreshold ?? 1; // Default 1 pixel
 
             // Process initial route
             this.processNextRoute();
@@ -823,6 +880,12 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
                 this.currentTarget = { x: targetX, y: targetY };
                 this.currentDirection = { x: 0, y: 0 };
+                // Reset stuck detection when starting a new movement
+                this.lastPosition = null;
+                this.isCurrentlyStuck = false;
+                this.stuckCheckStartTime = 0;
+                this.lastDistanceToTarget = null;
+                this.stuckCheckInitialized = false;
               } else if (Array.isArray(currentRoute)) {
                 // Handle array of directions - insert them into routes
                 for (let i = currentRoute.length - 1; i >= 0; i--) {
@@ -858,7 +921,12 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               }
               if (!this.currentTarget) {
                 body.setVelocity({ x: 0, y: 0 });
-                return;
+              // Reset stuck detection when no target
+              this.lastPosition = null;
+              this.isCurrentlyStuck = false;
+              this.lastDistanceToTarget = null;
+              this.stuckCheckInitialized = false;
+              return;
               }
             }
 
@@ -869,8 +937,11 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               return;
             }
 
-            const dx = this.currentTarget.x - entity.position.x;
-            const dy = this.currentTarget.y - entity.position.y;
+            const currentPosition = { x: entity.position.x, y: entity.position.y };
+            const currentTime = Date.now();
+
+            const dx = this.currentTarget.x - currentPosition.x;
+            const dy = this.currentTarget.y - currentPosition.y;
             const distance = Math.hypot(dx, dy);
 
             // Check if we've reached the target
@@ -879,12 +950,82 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               this.currentTarget = null;
               this.currentDirection = { x: 0, y: 0 };
               body.setVelocity({ x: 0, y: 0 });
+              // Reset stuck detection
+              this.lastPosition = null;
+              this.isCurrentlyStuck = false;
+              this.lastDistanceToTarget = null;
+              this.stuckCheckInitialized = false;
 
               // Process next route
               if (!this.finished) {
                 this.processNextRoute();
               }
               return;
+            }
+
+            // Stuck detection: check if player is making progress
+            if (this.onStuck && this.currentTarget) {
+              // Initialize tracking on first update
+              if (!this.stuckCheckInitialized) {
+                this.lastPosition = { ...currentPosition };
+                this.lastDistanceToTarget = distance;
+                this.stuckCheckInitialized = true;
+                // Update tracking and continue (don't return early)
+                this.lastPositionTime = currentTime;
+              } else if (this.lastPosition && this.lastDistanceToTarget !== null) {
+                // We have a target, so we're trying to move (regardless of current velocity,
+                // which may be zero due to physics engine collision handling)
+                const positionChanged = Math.hypot(
+                  currentPosition.x - this.lastPosition.x, 
+                  currentPosition.y - this.lastPosition.y
+                ) > this.stuckThreshold;
+                
+                const distanceImproved = distance < (this.lastDistanceToTarget - this.stuckThreshold);
+                
+                // Player is stuck if: not moving AND not getting closer to target
+                if (!positionChanged && !distanceImproved) {
+                  // Player is not making progress
+                  if (!this.isCurrentlyStuck) {
+                    // Start stuck timer
+                    this.stuckCheckStartTime = currentTime;
+                    this.isCurrentlyStuck = true;
+                  } else {
+                    // Check if stuck timeout has elapsed
+                    if (currentTime - this.stuckCheckStartTime >= this.stuckTimeout) {
+                      // Player is stuck, call onStuck callback
+                      const shouldContinue = this.onStuck(
+                        this.player as any,
+                        this.currentTarget,
+                        currentPosition
+                      );
+                      
+                      if (shouldContinue === false) {
+                        // Cancel the route
+                        this.finished = true;
+                        this.onComplete(false);
+                        body.setVelocity({ x: 0, y: 0 });
+                        return;
+                      }
+                      
+                      // Reset stuck detection to allow another check
+                      this.isCurrentlyStuck = false;
+                      this.stuckCheckStartTime = 0;
+                      // Reset position tracking to start fresh check
+                      this.lastPosition = { ...currentPosition };
+                      this.lastDistanceToTarget = distance;
+                    }
+                  }
+                } else {
+                  // Player is making progress, reset stuck detection
+                  this.isCurrentlyStuck = false;
+                  this.stuckCheckStartTime = 0;
+                }
+                
+                // Update tracking variables
+                this.lastPosition = { ...currentPosition };
+                this.lastPositionTime = currentTime;
+                this.lastDistanceToTarget = distance;
+              }
             }
 
             // Get speed scalar from map (default 50 if not found)
@@ -928,7 +1069,8 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
           (success: boolean) => {
             this._finishRoute = null;
             resolve(success);
-          }
+          },
+          options
         );
 
         this.addMovement(routeStrategy);
@@ -1113,9 +1255,10 @@ export interface IMoveManager {
    * Give an itinerary to follow using movement strategies
    * 
    * @param routes - Array of movement instructions to execute
+   * @param options - Optional configuration including onStuck callback
    * @returns Promise that resolves when all routes are completed
    */
-  moveRoutes(routes: Routes): Promise<boolean>;
+  moveRoutes(routes: Routes, options?: MoveRoutesOptions): Promise<boolean>;
 
   /**
    * Give a path that repeats itself in a loop to a character

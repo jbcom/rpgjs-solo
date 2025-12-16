@@ -18,12 +18,12 @@ const serverModule = defineModule<RpgServer>({
   maps: [
     {
       id: 'map1',
-      events: [{ event: Event(), x: 120, y: 100 }]
+      events: [{ event: Event(), x: 100, y: 150 }]
     },
   ],
   player: {
     async onConnected(player) {
-      await player.changeMap('map1', { x: 100, y: 100 })
+      await player.changeMap('map1', { x: 100, y: 126 })
     }
   }
 })
@@ -52,19 +52,21 @@ afterEach(() => {
   fixture.clear()
 })
 
-test('Player can change map', async () => {
+test('Player to touch event', async () => {
     player = await client.waitForMapChange('map1')
     const map = player.getCurrentMap()
     const event = map?.getEvents()[0]
     expect(event).toBeDefined()
     expect(event?.name()).toBe("EV-1")
-    expect(event?.x()).toBe(120)
-    expect(event?.y()).toBe(100)
-    await player.moveRoutes([
-        Move.tileRight()
-    ])
-    await fixture.nextTick()
-    console.log(player.x(), player.y())
-    expect(event?.x()).toBe(120)
-    expect(event?.y()).toBe(100)
+    expect(event?.x()).toBe(100)
+    expect(event?.y()).toBe(150)
+    await fixture.waitUntil(
+        player.moveRoutes([
+          Move.down(2)
+        ], {
+          onStuck: () => false
+        })
+    )
+    expect(event?.x()).toBe(100)
+    expect(event?.y()).toBe(150)
 })
