@@ -369,7 +369,16 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       // Skip collision check for teleportation (allow teleporting through walls)
       const entity = this.map.physic.getEntityByUUID(this.id);
       if (entity) {
-        this.map.physic.teleport(entity, { x: positions.x, y: positions.y });
+        const hitbox = typeof this.hitbox === "function" ? this.hitbox() : this.hitbox;
+        const width = hitbox?.w ?? 32;
+        const height = hitbox?.h ?? 32;
+        
+        // Convert top-left position to center position for physics engine
+        // positions.x/y are TOP-LEFT coordinates, but physic.teleport expects CENTER coordinates
+        const centerX = positions.x + width / 2;
+        const centerY = positions.y + height / 2;
+        
+        this.map.physic.teleport(entity, { x: centerX, y: centerY });
       }
     }
     this.x.set(positions.x)

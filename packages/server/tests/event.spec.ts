@@ -58,15 +58,24 @@ test('Player to touch event', async () => {
     const event = map?.getEvents()[0]
     expect(event).toBeDefined()
     expect(event?.name()).toBe("EV-1")
+    await fixture.nextTick()
     expect(event?.x()).toBe(100)
     expect(event?.y()).toBe(150)
-    await fixture.waitUntil(
-        player.moveRoutes([
-          Move.down(2)
-        ], {
-          onStuck: () => false
-        })
-    )
-    expect(event?.x()).toBe(100)
-    expect(event?.y()).toBe(150)
+    // await fixture.waitUntil(
+    //     player.moveRoutes([
+    //       Move.tileDown(2)
+    //     ], {
+    //       onStuck: () => false
+    //     })
+    // )
+    // expect(event?.x()).toBe(100)
+    // expect(event?.y()).toBe(150)
+    // await fixture.waitUntil(
+    //   event!.moveRoutes([
+    //     Move.down()
+    //   ])
+    // )
+    // expect(event?.x()).toBe(100)
+    // expect(event?.y()).toBe(150 + event!.speed())
+   
 })

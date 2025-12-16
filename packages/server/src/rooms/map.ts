@@ -1321,8 +1321,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     eventInstance.map = this;
     eventInstance.context = context;
 
-    eventInstance.x.set(x);
-    eventInstance.y.set(y);
+    await eventInstance.teleport({ x, y });
 
     this.events()[id] = eventInstance;
 

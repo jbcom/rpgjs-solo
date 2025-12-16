@@ -702,7 +702,8 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
         // Create a movement strategy that handles all routes
         class RouteMovementStrategy implements MovementStrategy {
           private routeIndex = 0;
-          private currentTarget: { x: number; y: number } | null = null;
+          private currentTarget: { x: number; y: number } | null = null; // Center position for physics
+          private currentTargetTopLeft: { x: number; y: number } | null = null; // Top-left position for player.x() comparison
           private currentDirection: { x: number; y: number } = { x: 0, y: 0 };
           private finished = false;
           private waitingForPromise = false;
@@ -735,7 +736,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             this.player = player;
             this.onComplete = onComplete;
             this.tileSize = player.nbPixelInTile || 32;
-            this.tolerance = 2; // Tolerance in pixels for reaching target
+            this.tolerance = 0.5; // Tolerance in pixels for reaching target (reduced for precision)
             this.onStuck = options?.onStuck;
             this.stuckTimeout = options?.stuckTimeout ?? 500; // Default 500ms
             this.stuckThreshold = options?.stuckThreshold ?? 1; // Default 1 pixel
@@ -821,34 +822,20 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                   return;
                 }
 
-                // Get current position (center of entity)
-                const entity = map.physic.getEntityByUUID(this.player.id);
-                if (!entity) {
-                  this.finished = true;
-                  this.onComplete(false);
-                  return;
-                }
-
-                const currentX = entity.position.x;
-                const currentY = entity.position.y;
-
-                // Calculate target position based on direction and player speed
-                let targetX = currentX;
-                let targetY = currentY;
+                // Get current position (top-left from player, which is what player.x() returns)
+                // We calculate target based on top-left position to match player.x() expectations
+                const currentTopLeftX = typeof this.player.x === 'function' ? this.player.x() : this.player.x;
+                const currentTopLeftY = typeof this.player.y === 'function' ? this.player.y() : this.player.y;
 
                 // Get player speed
-                let playerSpeed = 3;
-                if (typeof this.player.speed === 'function') {
-                  const speedResult = this.player.speed();
-                  playerSpeed = typeof speedResult === 'number' ? speedResult : 3;
-                } else if (typeof this.player.speed === 'number') {
-                  playerSpeed = this.player.speed;
-                }
+                let playerSpeed = this.player.speed()
 
                 // Use player speed as distance, not tile size
                 let distance = playerSpeed;
 
                 // Merge consecutive routes of same direction
+                const initialDistance = distance;
+                const initialRouteIndex = this.routeIndex;
                 while (this.routeIndex < this.routes.length) {
                   const nextRoute = this.routes[this.routeIndex];
                   if (nextRoute === currentRoute) {
@@ -859,26 +846,49 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                   }
                 }
 
+                // Calculate target top-left position
+                let targetTopLeftX = currentTopLeftX;
+                let targetTopLeftY = currentTopLeftY;
+
                 switch (moveDirection) {
                   case Direction.Right:
                   case 'right' as any:
-                    targetX = currentX + distance;
+                    targetTopLeftX = currentTopLeftX + distance;
                     break;
                   case Direction.Left:
                   case 'left' as any:
-                    targetX = currentX - distance;
+                    targetTopLeftX = currentTopLeftX - distance;
                     break;
                   case Direction.Down:
                   case 'down' as any:
-                    targetY = currentY + distance;
+                    targetTopLeftY = currentTopLeftY + distance;
                     break;
                   case Direction.Up:
                   case 'up' as any:
-                    targetY = currentY - distance;
+                    targetTopLeftY = currentTopLeftY - distance;
                     break;
                 }
 
-                this.currentTarget = { x: targetX, y: targetY };
+                // Convert target top-left to center position for physics engine
+                // Get entity to access hitbox dimensions
+                const entity = map.physic.getEntityByUUID(this.player.id);
+                if (!entity) {
+                  this.finished = true;
+                  this.onComplete(false);
+                  return;
+                }
+
+                // Get hitbox dimensions for conversion
+                const hitbox = this.player.hitbox();
+                const hitboxWidth = hitbox?.w ?? 32;
+                const hitboxHeight = hitbox?.h ?? 32;
+
+                // Convert top-left to center: center = topLeft + (size / 2)
+                const targetX = targetTopLeftX + hitboxWidth / 2;
+                const targetY = targetTopLeftY + hitboxHeight / 2;
+
+                this.currentTarget = { x: targetX, y: targetY }; // Center position for physics engine
+                this.currentTargetTopLeft = { x: targetTopLeftX, y: targetTopLeftY }; // Top-left position for player.x() comparison
                 this.currentDirection = { x: 0, y: 0 };
                 // Reset stuck detection when starting a new movement
                 this.lastPosition = null;
@@ -926,6 +936,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               this.isCurrentlyStuck = false;
               this.lastDistanceToTarget = null;
               this.stuckCheckInitialized = false;
+              this.currentTargetTopLeft = null;
               return;
               }
             }
@@ -940,27 +951,62 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             const currentPosition = { x: entity.position.x, y: entity.position.y };
             const currentTime = Date.now();
 
-            const dx = this.currentTarget.x - currentPosition.x;
-            const dy = this.currentTarget.y - currentPosition.y;
-            const distance = Math.hypot(dx, dy);
+            // Check distance using player's top-left position (what player.x() returns)
+            // This ensures we match the test expectations which compare player.x()
+            const currentTopLeftX =  this.player.x();
+            const currentTopLeftY =  this.player.y()
+            
+            // Calculate direction and distance using top-left position if available
+            let dx: number, dy: number, distance: number;
+            if (this.currentTargetTopLeft) {
+              dx = this.currentTargetTopLeft.x - currentTopLeftX;
+              dy = this.currentTargetTopLeft.y - currentTopLeftY;
+              distance = Math.hypot(dx, dy);
 
-            // Check if we've reached the target
-            if (distance <= this.tolerance) {
-              // Target reached, process next route
-              this.currentTarget = null;
-              this.currentDirection = { x: 0, y: 0 };
-              body.setVelocity({ x: 0, y: 0 });
-              // Reset stuck detection
-              this.lastPosition = null;
-              this.isCurrentlyStuck = false;
-              this.lastDistanceToTarget = null;
-              this.stuckCheckInitialized = false;
+              // Check if we've reached the target (using top-left position)
+              if (distance <= this.tolerance) {
+                // Target reached, process next route
+                this.currentTarget = null;
+                this.currentTargetTopLeft = null;
+                this.currentDirection = { x: 0, y: 0 };
+                body.setVelocity({ x: 0, y: 0 });
+                // Reset stuck detection
+                this.lastPosition = null;
+                this.isCurrentlyStuck = false;
+                this.lastDistanceToTarget = null;
+                this.stuckCheckInitialized = false;
 
-              // Process next route
-              if (!this.finished) {
-                this.processNextRoute();
+                // Process next route
+                if (!this.finished) {
+                  this.processNextRoute();
+                }
+                return;
               }
-              return;
+            } else {
+              // Fallback: use center position distance if top-left target not available
+              dx = this.currentTarget.x - currentPosition.x;
+              dy = this.currentTarget.y - currentPosition.y;
+              distance = Math.hypot(dx, dy);
+
+              // Check if we've reached the target (using center position as fallback)
+              if (distance <= this.tolerance) {
+                // Target reached, process next route
+                this.currentTarget = null;
+                this.currentTargetTopLeft = null;
+                this.currentDirection = { x: 0, y: 0 };
+                body.setVelocity({ x: 0, y: 0 });
+                // Reset stuck detection
+                this.lastPosition = null;
+                this.isCurrentlyStuck = false;
+                this.lastDistanceToTarget = null;
+                this.stuckCheckInitialized = false;
+
+                // Process next route
+                if (!this.finished) {
+                  this.processNextRoute();
+                }
+                return;
+              }
             }
 
             // Stuck detection: check if player is making progress
@@ -1033,23 +1079,42 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             const speedScalar = map?.speedScalar ?? 50;
 
             // Calculate direction and speed
+            // Use the distance calculated above (from top-left if available, center otherwise)
             if (distance > 0) {
               this.currentDirection = { x: dx / distance, y: dy / distance };
+            } else {
+              // If distance is 0 or negative, we've reached or passed the target
+              this.currentTarget = null;
+              this.currentTargetTopLeft = null;
+              this.currentDirection = { x: 0, y: 0 };
+              body.setVelocity({ x: 0, y: 0 });
+              if (!this.finished) {
+                this.processNextRoute();
+              }
+              return;
             }
 
             // Get player speed
-            let playerSpeed = 3;
-            if (typeof this.player.speed === 'function') {
-              const speedResult = this.player.speed();
-              playerSpeed = typeof speedResult === 'number' ? speedResult : 3;
-            } else if (typeof this.player.speed === 'number') {
-              playerSpeed = this.player.speed;
-            }
+            let playerSpeed = this.player.speed();
 
             // Apply velocity towards target
+            // Compensate for linearDamping: the physics engine multiplies velocity by (1 - linearDamping)
+            // So we need to divide by (1 - linearDamping) to get the desired velocity after damping
+            const physicsEntity = body.getEntity?.();
+            const linearDamping = physicsEntity ? (physicsEntity as any).linearDamping ?? 0.2 : 0.2;
+            const dampingCompensation = 1 / (1 - linearDamping);
+            
+            // Reduce velocity when close to target to avoid overshooting
+            // Use a smooth deceleration: velocity scales with distance when close
+            const decelerationDistance = playerSpeed * speedScalar * 0.5; // Start decelerating at half a speed unit
+            const velocityScale = distance < decelerationDistance ? Math.max(0.1, distance / decelerationDistance) : 1.0;
+            
+            const calculatedVelocityX = this.currentDirection.x * playerSpeed * speedScalar * dampingCompensation * velocityScale;
+            const calculatedVelocityY = this.currentDirection.y * playerSpeed * speedScalar * dampingCompensation * velocityScale;
+            
             body.setVelocity({
-              x: this.currentDirection.x * playerSpeed * speedScalar,
-              y: this.currentDirection.y * playerSpeed * speedScalar,
+              x: calculatedVelocityX,
+              y: calculatedVelocityY,
             });
           }
 

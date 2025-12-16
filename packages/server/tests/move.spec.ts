@@ -56,8 +56,8 @@ describe("Move Routes - Basic Movements", () => {
     await fixture.waitUntil(
       player.moveRoutes([Direction.Right])
     );
-  
-    expect(player.x()).toBeGreaterThan(initialX);
+
+    expect(player.x()).toBe(initialX + player.speed());
     expect(player.y()).toBe(initialY);
   });
 
@@ -69,7 +69,7 @@ describe("Move Routes - Basic Movements", () => {
       player.moveRoutes([Direction.Left])
     );
 
-    expect(player.x()).toBeLessThan(initialX);
+    expect(player.x()).toBe(initialX - player.speed());
     expect(player.y()).toBe(initialY);
   });
 
@@ -82,7 +82,7 @@ describe("Move Routes - Basic Movements", () => {
     );
 
     expect(player.x()).toBe(initialX);
-    expect(player.y()).toBeLessThan(initialY);
+    expect(player.y()).toBe(initialY - player.speed());
   });
 
   test("should move down using Direction enum", async () => {
@@ -94,7 +94,7 @@ describe("Move Routes - Basic Movements", () => {
     );
 
     expect(player.x()).toBe(initialX);
-    expect(player.y()).toBeGreaterThan(initialY);
+    expect(player.y()).toBe(initialY + player.speed());
   });
 
   test("should execute multiple movements in sequence", async () => {
