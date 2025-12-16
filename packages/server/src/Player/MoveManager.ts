@@ -718,6 +718,11 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
           private readonly stuckTimeout: number;
           private readonly stuckThreshold: number;
           
+          // Frequency wait state
+          private waitingForFrequency = false;
+          private frequencyWaitStartTime = 0;
+          private ratioFrequency = 15;
+          
           // Stuck detection state
           private lastPosition: { x: number; y: number } | null = null;
           private lastPositionTime: number = 0;
@@ -746,6 +751,10 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
           }
 
           private processNextRoute(): void {
+            // Reset frequency wait state when processing a new route
+            this.waitingForFrequency = false;
+            this.frequencyWaitStartTime = 0;
+            
             // Check if we've completed all routes
             if (this.routeIndex >= this.routes.length) {
               this.finished = true;
@@ -896,6 +905,9 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 this.stuckCheckStartTime = 0;
                 this.lastDistanceToTarget = null;
                 this.stuckCheckInitialized = false;
+                // Reset frequency wait state when starting a new movement
+                this.waitingForFrequency = false;
+                this.frequencyWaitStartTime = 0;
               } else if (Array.isArray(currentRoute)) {
                 // Handle array of directions - insert them into routes
                 for (let i = currentRoute.length - 1; i >= 0; i--) {
@@ -919,6 +931,19 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               // Check if promise wait time has elapsed (fallback)
               if (Date.now() - this.promiseStartTime > this.promiseDuration) {
                 this.waitingForPromise = false;
+                this.processNextRoute();
+              }
+              return;
+            }
+
+            // Don't process if waiting for frequency delay
+            if (this.waitingForFrequency) {
+              body.setVelocity({ x: 0, y: 0 });
+              const playerFrequency = this.player.frequency;
+              const frequencyMs = playerFrequency || 0;
+              
+              if (frequencyMs > 0 && Date.now() - this.frequencyWaitStartTime >= frequencyMs * this.ratioFrequency) {
+                this.waitingForFrequency = false;
                 this.processNextRoute();
               }
               return;
@@ -965,7 +990,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
               // Check if we've reached the target (using top-left position)
               if (distance <= this.tolerance) {
-                // Target reached, process next route
+                // Target reached, wait for frequency before processing next route
                 this.currentTarget = null;
                 this.currentTargetTopLeft = null;
                 this.currentDirection = { x: 0, y: 0 };
@@ -976,9 +1001,16 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 this.lastDistanceToTarget = null;
                 this.stuckCheckInitialized = false;
 
-                // Process next route
+                // Wait for frequency before processing next route
                 if (!this.finished) {
-                  this.processNextRoute();
+                  const playerFrequency = this.player.frequency;
+                  if (playerFrequency && playerFrequency > 0) {
+                    this.waitingForFrequency = true;
+                    this.frequencyWaitStartTime = Date.now();
+                  } else {
+                    // No frequency delay, process immediately
+                    this.processNextRoute();
+                  }
                 }
                 return;
               }
@@ -990,7 +1022,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
               // Check if we've reached the target (using center position as fallback)
               if (distance <= this.tolerance) {
-                // Target reached, process next route
+                // Target reached, wait for frequency before processing next route
                 this.currentTarget = null;
                 this.currentTargetTopLeft = null;
                 this.currentDirection = { x: 0, y: 0 };
@@ -1001,9 +1033,16 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 this.lastDistanceToTarget = null;
                 this.stuckCheckInitialized = false;
 
-                // Process next route
+                // Wait for frequency before processing next route
                 if (!this.finished) {
-                  this.processNextRoute();
+                  const playerFrequency = player.frequency;
+                  if (playerFrequency && playerFrequency > 0) {
+                    this.waitingForFrequency = true;
+                    this.frequencyWaitStartTime = Date.now();
+                  } else {
+                    // No frequency delay, process immediately
+                    this.processNextRoute();
+                  }
                 }
                 return;
               }
@@ -1089,7 +1128,14 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               this.currentDirection = { x: 0, y: 0 };
               body.setVelocity({ x: 0, y: 0 });
               if (!this.finished) {
-                this.processNextRoute();
+                const playerFrequency = typeof this.player.frequency === 'function' ? this.player.frequency() : this.player.frequency;
+                if (playerFrequency && playerFrequency > 0) {
+                  this.waitingForFrequency = true;
+                  this.frequencyWaitStartTime = Date.now();
+                } else {
+                  // No frequency delay, process immediately
+                  this.processNextRoute();
+                }
               }
               return;
             }

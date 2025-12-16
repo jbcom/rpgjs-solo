@@ -147,6 +147,7 @@ export abstract class RpgCommonPlayer {
     return this.direction();
   }
 
+  abstract isEvent(): boolean;
 }
 
 export type PlayerCtor<T extends RpgCommonPlayer = RpgCommonPlayer> = Constructor<T>

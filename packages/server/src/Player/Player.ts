@@ -1117,6 +1117,10 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       }, this)
     }
   }
+
+  isEvent(): boolean {
+    return false;
+  }
 }
 
 export class RpgEvent extends RpgPlayer {
@@ -1134,6 +1138,10 @@ export class RpgEvent extends RpgPlayer {
     const map = this.getCurrentMap();
     if (!map) return;
     map.removeEvent(this.id);
+  }
+
+  override isEvent(): boolean {
+    return true;
   }
 }
 

@@ -362,14 +362,15 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     player.changeDirection(direction);
 
-    // Check for automatic map change if the method exists
-    if (typeof (player as any).autoChangeMap === 'function') {
+     // Check for automatic map change if the method exists
+    if (typeof (player as any).autoChangeMap === 'function' && !player.isEvent()) {
       const mapChanged = await (player as any).autoChangeMap({ x: nextX, y: nextY }, direction);
       if (mapChanged) {
        this.stopMovement(player);
        return
       }
     }
+    
     this.moveBody(player, direction);
   }
 
@@ -1152,7 +1153,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const entity = this.physic.getEntityByUUID(player.id);
     if (!entity) return false;
 
-    const speedValue = typeof player.speed === "function" ? Number(player.speed()) : 0;
+    const speedValue = player.speed()
 
     let vx = 0, vy = 0;
     switch (direction) {

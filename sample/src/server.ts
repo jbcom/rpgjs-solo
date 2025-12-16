@@ -1,4 +1,4 @@
-import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, EventMode, MapData } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, EventMode, MapData, Frequency } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
@@ -10,6 +10,9 @@ export function Event() {
     onInit() {
       this.setGraphic("hero");
       this.teleport({ x: 200, y: 200 })
+      this.infiniteMoveRoute([
+        Move.tileRandom(),
+      ])
     },
     onPlayerTouch(player: RpgPlayer) {
      console.log("touch");
@@ -48,10 +51,11 @@ export default createServer({
 
           },
           async onInput(player: RpgPlayer, input: any) {
-           player.moveRoutes([
-            Move.tileRight(2),
-            Move.tileDown(2),
-           ])
+            player.speed.set(10);
+            player.moveRoutes([
+              Move.tileRight(2),
+              Move.tileDown(2),
+            ])
             const map = player.getCurrentMap()
             // map?.shakeMap({
             //   intensity: 10,
