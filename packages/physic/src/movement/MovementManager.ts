@@ -1,7 +1,7 @@
 import { PhysicsEngine } from '../api/PhysicsEngine';
 import { Entity } from '../physics/Entity';
 import { EntityMovementBody } from './adapters/EntityMovementBody';
-import { MovementBody, MovementStrategy } from './MovementStrategy';
+import { MovementBody, MovementStrategy, MovementOptions } from './MovementStrategy';
 
 /**
  * Resolves an entity from an identifier.
@@ -17,9 +17,19 @@ import { MovementBody, MovementStrategy } from './MovementStrategy';
  */
 export type EntityResolver = (id: string) => MovementBody | undefined;
 
+/**
+ * Internal entry for tracking a strategy with its options and Promise resolver
+ */
+interface StrategyEntry {
+  strategy: MovementStrategy;
+  options?: MovementOptions;
+  resolve?: () => void;
+  started: boolean;
+}
+
 interface MovementEntry {
   body: MovementBody;
-  strategies: MovementStrategy[];
+  strategies: StrategyEntry[];
 }
 
 /**
@@ -61,11 +71,38 @@ export class MovementManager {
 
   /**
    * Adds a movement strategy to an entity.
+   * 
+   * Returns a Promise that resolves when the movement completes (when `isFinished()` returns true).
+   * If the strategy doesn't implement `isFinished()`, the Promise resolves immediately after adding.
    *
    * @param target - Entity instance or entity UUID when a resolver is configured
    * @param strategy - Strategy to execute
+   * @param options - Optional callbacks for movement lifecycle events
+   * @returns Promise that resolves when the movement completes
+   * 
+   * @example
+   * ```typescript
+   * // Simple usage - fire and forget
+   * manager.add(player, new Dash(8, { x: 1, y: 0 }, 200));
+   * 
+   * // Wait for completion
+   * await manager.add(player, new Dash(8, { x: 1, y: 0 }, 200));
+   * console.log('Dash finished!');
+   * 
+   * // With callbacks
+   * await manager.add(player, new Knockback({ x: -1, y: 0 }, 5, 300), {
+   *   onStart: () => {
+   *     player.directionFixed = true;
+   *     player.animationFixed = true;
+   *   },
+   *   onComplete: () => {
+   *     player.directionFixed = false;
+   *     player.animationFixed = false;
+   *   }
+   * });
+   * ```
    */
-  add(target: Entity | MovementBody | string, strategy: MovementStrategy): void {
+  add(target: Entity | MovementBody | string, strategy: MovementStrategy, options?: MovementOptions): Promise<void> {
     const body = this.resolveTarget(target);
     const key = body.id;
 
@@ -73,11 +110,31 @@ export class MovementManager {
       this.entries.set(key, { body, strategies: [] });
     }
 
-    this.entries.get(key)!.strategies.push(strategy);
+    // If the strategy doesn't have isFinished, resolve immediately
+    if (!strategy.isFinished) {
+      const entry: StrategyEntry = { strategy, started: false };
+      if (options) {
+        entry.options = options;
+      }
+      this.entries.get(key)!.strategies.push(entry);
+      return Promise.resolve();
+    }
+
+    // Create a Promise that will resolve when the strategy finishes
+    return new Promise<void>((resolve) => {
+      const entry: StrategyEntry = { strategy, resolve, started: false };
+      if (options) {
+        entry.options = options;
+      }
+      this.entries.get(key)!.strategies.push(entry);
+    });
   }
 
   /**
    * Removes a specific strategy from an entity.
+   * 
+   * Note: This will NOT trigger the onComplete callback or resolve the Promise.
+   * Use this when you want to cancel a movement without completion.
    *
    * @param target - Entity instance or identifier
    * @param strategy - Strategy instance to remove
@@ -90,7 +147,7 @@ export class MovementManager {
       return false;
     }
 
-    const index = entry.strategies.indexOf(strategy);
+    const index = entry.strategies.findIndex(e => e.strategy === strategy);
     if (index === -1) {
       return false;
     }
@@ -178,7 +235,7 @@ export class MovementManager {
   getStrategies(target: Entity | MovementBody | string): MovementStrategy[] {
     const body = this.resolveTarget(target);
     const entry = this.entries.get(body.id);
-    return entry ? [...entry.strategies] : [];
+    return entry ? entry.strategies.map(e => e.strategy) : [];
   }
 
   /**
@@ -186,6 +243,14 @@ export class MovementManager {
    *
    * Call this method once per frame before `PhysicsEngine.step()` so that the
    * physics simulation integrates the velocities that strategies configure.
+   * 
+   * This method handles the movement lifecycle:
+   * - Triggers `onStart` callback on first update
+   * - Calls `strategy.update()` each frame
+   * - When `isFinished()` returns true:
+   *   - Calls `strategy.onFinished()` if defined
+   *   - Triggers `onComplete` callback
+   *   - Resolves the Promise returned by `add()`
    *
    * @param dt - Time delta in seconds
    */
@@ -199,16 +264,34 @@ export class MovementManager {
       }
 
       for (let i = strategies.length - 1; i >= 0; i -= 1) {
-        const current = strategies[i];
-        if (!current) {
+        const strategyEntry = strategies[i];
+        if (!strategyEntry) {
           continue;
         }
 
-        current.update(body, dt);
+        const { strategy, options, resolve } = strategyEntry;
 
-        if (current.isFinished?.()) {
+        // Trigger onStart on first update
+        if (!strategyEntry.started) {
+          strategyEntry.started = true;
+          options?.onStart?.();
+        }
+
+        strategy.update(body, dt);
+
+        const isFinished = strategy.isFinished?.();
+
+        if (isFinished) {
           strategies.splice(i, 1);
-          current.onFinished?.();
+          
+          // Call strategy's own onFinished callback
+          strategy.onFinished?.();
+          
+          // Call options onComplete callback
+          options?.onComplete?.();
+          
+          // Resolve the Promise
+          resolve?.();
         }
       }
 

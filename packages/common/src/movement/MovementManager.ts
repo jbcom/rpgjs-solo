@@ -1,6 +1,7 @@
 import {
   MovementManager as PhysicMovementManager,
   MovementStrategy,
+  MovementOptions,
   PhysicsEngine,
 } from '@rpgjs/physic';
 
@@ -17,8 +18,16 @@ export class MovementManager {
     return this.physicProvider().getMovementManager();
   }
 
-  add(id: string, strategy: MovementStrategy): void {
-    this.core.add(id, strategy);
+  /**
+   * Adds a movement strategy and returns a Promise that resolves when it completes.
+   * 
+   * @param id - Entity identifier
+   * @param strategy - Movement strategy to add
+   * @param options - Optional callbacks for movement lifecycle events
+   * @returns Promise that resolves when the movement completes
+   */
+  add(id: string, strategy: MovementStrategy, options?: MovementOptions): Promise<void> {
+    return this.core.add(id, strategy, options);
   }
 
   remove(id: string, strategy: MovementStrategy): boolean {

@@ -1,5 +1,5 @@
 export { MovementManager } from './MovementManager';
-export type { MovementStrategy, MovementBody } from '@rpgjs/physic';
+export type { MovementStrategy, MovementBody, MovementOptions } from '@rpgjs/physic';
 export {
   CompositeMovement,
   Dash,

@@ -2,6 +2,7 @@ import { PlayerCtor, ProjectileType } from "@rpgjs/common";
 import { RpgCommonPlayer, Direction, Entity } from "@rpgjs/common";
 import {
   MovementStrategy,
+  MovementOptions,
   LinearMove,
   Dash,
   Knockback,
@@ -44,6 +45,9 @@ function wait(sec: number) {
 type CallbackTileMove = (player: RpgPlayer, map) => Direction[]
 type CallbackTurnMove = (player: RpgPlayer, map) => string
 type Routes = (string | Promise<any> | Direction | Direction[] | Function)[]
+
+// Re-export MovementOptions from @rpgjs/common for convenience
+export type { MovementOptions };
 
 /**
  * Options for moveRoutes method
@@ -702,25 +706,54 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       return (this as any)._animationFixed();
     }
 
-    addMovement(strategy: MovementStrategy): void {
+    /**
+     * Add a movement strategy to this entity
+     * 
+     * Returns a Promise that resolves when the movement completes (when `isFinished()` returns true).
+     * If the strategy doesn't implement `isFinished()`, the Promise resolves immediately.
+     * 
+     * @param strategy - The movement strategy to add
+     * @param options - Optional callbacks for start and completion events
+     * @returns Promise that resolves when the movement completes
+     * 
+     * @example
+     * ```ts
+     * // Fire and forget
+     * player.addMovement(new LinearMove({ x: 1, y: 0 }, 200));
+     * 
+     * // Wait for completion
+     * await player.addMovement(new Dash(10, { x: 1, y: 0 }, 200));
+     * console.log('Dash completed!');
+     * 
+     * // With callbacks
+     * await player.addMovement(new Knockback({ x: -1, y: 0 }, 5, 300), {
+     *   onStart: () => console.log('Knockback started'),
+     *   onComplete: () => console.log('Knockback completed')
+     * });
+     * ```
+     */
+    addMovement(strategy: MovementStrategy, options?: MovementOptions): Promise<void> {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
-      if (!map) return;
+      if (!map) return Promise.resolve();
 
-      map.moveManager.add((this as unknown as PlayerWithMixins).id, strategy);
+      const playerId = (this as unknown as PlayerWithMixins).id;
+      return map.moveManager.add(playerId, strategy, options);
     }
 
     removeMovement(strategy: MovementStrategy): boolean {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return false;
 
-      return map.moveManager.remove((this as unknown as PlayerWithMixins).id, strategy);
+      const playerId = (this as unknown as PlayerWithMixins).id;
+      return map.moveManager.remove(playerId, strategy);
     }
 
     clearMovements(): void {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
 
-      map.moveManager.clear((this as unknown as PlayerWithMixins).id);
+      const playerId = (this as unknown as PlayerWithMixins).id;
+      map.moveManager.clear(playerId);
     }
 
     hasActiveMovements(): boolean {
@@ -737,17 +770,59 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       return map.moveManager.getStrategies((this as unknown as PlayerWithMixins).id);
     }
 
+    /**
+     * Move toward a target player or position using AI pathfinding
+     * 
+     * Uses the `SeekAvoid` strategy to navigate toward the target while avoiding obstacles.
+     * The movement speed is based on the player's current `speed` property, scaled appropriately.
+     * 
+     * @param target - Target player or position `{ x, y }` to move toward
+     * 
+     * @example
+     * ```ts
+     * // Move toward another player
+     * player.moveTo(otherPlayer);
+     * 
+     * // Move toward a specific position
+     * player.moveTo({ x: 200, y: 150 });
+     * ```
+     */
     moveTo(target: RpgCommonPlayer | { x: number, y: number }): void {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
 
+      const playerId = (this as unknown as PlayerWithMixins).id;
       const engine = map.physic;
 
+      // Calculate maxSpeed based on player's speed
+      // Original values: 180 for player target, 80 for position target (with default speed=4)
+      // Factor: 45 for player (180/4), 20 for position (80/4)
+      const playerSpeed = (this as any).speed();
+
+      // Remove ALL movement strategies that could interfere with SeekAvoid
+      // This includes SeekAvoid, Dash, Knockback, and LinearRepulsion
+      const existingStrategies = this.getActiveMovements();
+      const conflictingStrategies = existingStrategies.filter(s => 
+        s instanceof SeekAvoid || 
+        s instanceof Dash || 
+        s instanceof Knockback || 
+        s instanceof LinearRepulsion
+      );
+      
+      if (conflictingStrategies.length > 0) {
+        conflictingStrategies.forEach(s => this.removeMovement(s));
+      }
+
       if ('id' in target) {
-        const targetProvider = () => (map as any).getBody(target.id) ?? null;
+        const targetProvider = () => {
+          const body = (map as any).getBody(target.id) ?? null;
+          return body;
+        };
+        // Factor 45: with speed=4 gives 180 (original value)
+        const maxSpeed = playerSpeed * 45;
         map.moveManager.add(
-          (this as unknown as PlayerWithMixins).id,
-          new SeekAvoid(engine, targetProvider, 180, 140, 80, 48)
+          playerId,
+          new SeekAvoid(engine, targetProvider, maxSpeed, 140, 80, 48)
         );
         return;
       }
@@ -758,9 +833,11 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       });
       staticTarget.freeze();
 
+      // Factor 20: with speed=4 gives 80 (original value)
+      const maxSpeed = playerSpeed * 20;
       map.moveManager.add(
-        (this as unknown as PlayerWithMixins).id,
-        new SeekAvoid(engine, () => staticTarget, 80, 140, 80, 48)
+        playerId,
+        new SeekAvoid(engine, () => staticTarget, maxSpeed, 140, 80, 48)
       );
     }
 
@@ -768,35 +845,371 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
 
+      const playerId = (this as unknown as PlayerWithMixins).id;
       const strategies = this.getActiveMovements();
-      strategies.forEach(strategy => {
-        if (strategy instanceof SeekAvoid || strategy instanceof LinearRepulsion) {
+      const toRemove = strategies.filter(s => s instanceof SeekAvoid || s instanceof LinearRepulsion);
+      
+      if (toRemove.length > 0) {
+        toRemove.forEach(strategy => {
           this.removeMovement(strategy);
+        });
+      }
+    }
+
+    /**
+     * Perform a dash movement in the specified direction
+     * 
+     * Creates a burst of velocity for a fixed duration. The total speed is calculated
+     * by adding the player's base speed (`this.speed()`) to the additional dash speed.
+     * This ensures faster players also dash faster proportionally.
+     * 
+     * With default speed=4 and additionalSpeed=4: total = 8 (same as original default)
+     * 
+     * @param direction - Normalized direction vector `{ x, y }` for the dash
+     * @param additionalSpeed - Extra speed added on top of base speed (default: 4)
+     * @param duration - Duration in milliseconds (default: 200)
+     * @param options - Optional callbacks for movement events
+     * @returns Promise that resolves when the dash completes
+     * 
+     * @example
+     * ```ts
+     * // Dash to the right and wait for completion
+     * await player.dash({ x: 1, y: 0 });
+     * 
+     * // Powerful dash with callbacks
+     * await player.dash({ x: 0, y: -1 }, 12, 300, {
+     *   onStart: () => console.log('Dash started!'),
+     *   onComplete: () => console.log('Dash finished!')
+     * });
+     * ```
+     */
+    dash(direction: { x: number, y: number }, additionalSpeed: number = 4, duration: number = 200, options?: MovementOptions): Promise<void> {
+      const playerSpeed = (this as any).speed();
+      // Total dash speed = base speed + additional speed
+      // With speed=4, additionalSpeed=4: gives 8 (original default value)
+      const totalSpeed = playerSpeed + additionalSpeed;
+      // Physic strategies expect seconds (dt is in seconds), while the server API exposes milliseconds
+      const durationSeconds = duration / 1000;
+      return this.addMovement(new Dash(totalSpeed, direction, durationSeconds), options);
+    }
+
+    /**
+     * Apply knockback effect in the specified direction
+     * 
+     * Pushes the entity with an initial force that decays over time.
+     * Returns a Promise that resolves when the knockback completes.
+     * 
+     * This method handles multiple concurrent knockbacks correctly by checking
+     * if there are still active Knockback strategies after completion, rather than
+     * relying on a counter that could get out of sync.
+     * 
+     * @param direction - Normalized direction vector `{ x, y }` for the knockback
+     * @param force - Initial knockback force (default: 5)
+     * @param duration - Duration in milliseconds (default: 300)
+     * @param options - Optional callbacks for movement events
+     * @returns Promise that resolves when the knockback completes
+     * 
+     * @example
+     * ```ts
+     * // Knockback with direction/animation lock that resets after
+     * await player.knockback({ x: -1, y: 0 }, 5, 300, {
+     *   onStart: () => {
+     *     player.directionFixed = true;
+     *     player.animationFixed = true;
+     *   },
+     *   onComplete: () => {
+     *     player.directionFixed = false;
+     *     player.animationFixed = false;
+     *   }
+     * });
+     * 
+     * // Simple knockback and wait
+     * await player.knockback({ x: 1, y: 1 }, 10, 500);
+     * console.log('Knockback finished!');
+     * ```
+     */
+    async knockback(direction: { x: number, y: number }, force: number = 5, duration: number = 300, options?: MovementOptions): Promise<void> {
+      // Physic strategies expect seconds (dt is in seconds), while the server API exposes milliseconds
+      const durationSeconds = duration / 1000;
+
+      const selfAny = this as any;
+      const lockKey = '__rpg_knockback_lock__';
+
+      type KnockbackLockState = {
+        prevDirectionFixed: boolean;
+        prevAnimationFixed: boolean;
+        prevAnimationName?: string;
+        monitorIntervalId?: ReturnType<typeof setInterval>;
+        destroySubscription?: Subscription;
+      };
+
+      /**
+       * Restore the previous fixed states captured at the start of the first knockback.
+       *
+       * This is intentionally idempotent: once restored, the lock is removed and subsequent
+       * calls become no-ops.
+       */
+      const restoreKnockbackLock = (): void => {
+        const lock: KnockbackLockState | undefined = selfAny[lockKey];
+        if (!lock) {
+          return;
         }
-      });
+
+        if (lock.monitorIntervalId) {
+          clearInterval(lock.monitorIntervalId);
+          lock.monitorIntervalId = undefined;
+        }
+
+        if (lock.destroySubscription) {
+          try {
+            lock.destroySubscription.unsubscribe();
+          } catch {
+            // ignore - best effort cleanup
+          }
+          lock.destroySubscription = undefined;
+        }
+
+        // Restore previous fixed flags
+        this.directionFixed = lock.prevDirectionFixed;
+
+        // Restore animation + fixed flag
+        const prevAnimFixed = lock.prevAnimationFixed;
+        this.animationFixed = false; // temporarily unlock so we can restore animation
+
+        const prevAnimationName = lock.prevAnimationName;
+        const hasSetAnimation = typeof selfAny.setAnimation === 'function';
+        const animSignal = selfAny.animationName;
+        if (!prevAnimFixed && prevAnimationName) {
+          if (hasSetAnimation) {
+            selfAny.setAnimation(prevAnimationName);
+          } else if (animSignal && typeof animSignal === 'object' && typeof animSignal.set === 'function') {
+            animSignal.set(prevAnimationName);
+          }
+        }
+
+        this.animationFixed = prevAnimFixed;
+
+        delete selfAny[lockKey];
+      };
+
+      // Check if this is the first knockback by looking at active movement strategies
+      // This is more reliable than a counter which could get out of sync
+      const activeKnockbacks = this.getActiveMovements().filter(s => s instanceof Knockback);
+      const isFirstKnockback = activeKnockbacks.length === 0 && !selfAny[lockKey];
+
+      if (isFirstKnockback) {
+        // Capture previous animation name (signals are callable functions with `.set`)
+        const animSignal = selfAny.animationName;
+        let prevAnimationName: string | undefined;
+        if (typeof animSignal === 'function') {
+          try {
+            prevAnimationName = animSignal();
+          } catch {
+            // ignore - best effort
+          }
+        }
+
+        // Store original state before any modifications
+        const lock: KnockbackLockState = {
+          prevDirectionFixed: this.directionFixed,
+          prevAnimationFixed: this.animationFixed,
+          prevAnimationName
+        };
+        selfAny[lockKey] = lock;
+
+        // Now set the fixed states
+        this.directionFixed = true;
+
+        // Set animation to "stand" before locking it
+        const hasSetAnimation = typeof selfAny.setAnimation === 'function';
+        if (hasSetAnimation) {
+          selfAny.setAnimation("stand");
+        } else if (animSignal && typeof animSignal === 'object' && typeof animSignal.set === 'function') {
+          animSignal.set("stand");
+        }
+
+        this.animationFixed = true;
+
+        // Safety net: ensure we restore fixed flags when knockbacks are cancelled
+        // (e.g., map change calls stopMovement(), which clears strategies without resolving the Promise).
+        const intervalMs = 16;
+        lock.monitorIntervalId = setInterval(() => {
+          const currentLock: KnockbackLockState | undefined = selfAny[lockKey];
+          if (!currentLock) {
+            return;
+          }
+          const hasKnockback = this.getActiveMovements().some(s => s instanceof Knockback);
+          if (!hasKnockback) {
+            restoreKnockbackLock();
+          }
+        }, intervalMs);
+
+        // Also clean up when the player is destroyed (best effort).
+        const destroy$ = selfAny._destroy$;
+        if (destroy$ && typeof destroy$.pipe === 'function') {
+          lock.destroySubscription = destroy$.pipe(take(1)).subscribe(() => {
+            restoreKnockbackLock();
+          });
+        }
+      }
+
+      const strategy = new Knockback(direction, force, durationSeconds);
+      const addPromise = this.addMovement(strategy, options);
+      let cancelIntervalId: ReturnType<typeof setInterval> | null = null;
+
+      try {
+        // IMPORTANT:
+        // - `MovementManager.remove()/clear()/stopMovement()` can cancel the strategy WITHOUT resolving the Promise.
+        // - We therefore consider the knockback finished when the strategy disappears from active movements,
+        //   or when `add()` resolves normally.
+        const cancelledOrRemoved = new Promise<void>((resolve) => {
+          const start = Date.now();
+          // Give some slack beyond the declared duration to account for tick scheduling.
+          const maxMs = Math.max(0, duration + 1000);
+          cancelIntervalId = setInterval(() => {
+            const active = this.getActiveMovements();
+            const stillPresent = active.includes(strategy);
+            if (!stillPresent) {
+              resolve();
+              return;
+            }
+            if (Date.now() - start > maxMs) {
+              resolve();
+            }
+          }, 16);
+        });
+
+        await Promise.race([addPromise, cancelledOrRemoved]);
+      } finally {
+        if (cancelIntervalId) {
+          clearInterval(cancelIntervalId);
+          cancelIntervalId = null;
+        }
+
+        // Check if ALL knockbacks are finished by looking at active strategies
+        // This ensures we only restore state when no knockbacks remain
+        const remainingKnockbacks = this.getActiveMovements().filter(s => s instanceof Knockback);
+
+        if (remainingKnockbacks.length === 0) {
+          restoreKnockbackLock();
+        }
+      }
     }
 
-    dash(direction: { x: number, y: number }, speed: number = 8, duration: number = 200): void {
-      this.addMovement(new Dash(speed, direction, duration));
-    }
-
-    knockback(direction: { x: number, y: number }, force: number = 5, duration: number = 300): void {
-      this.addMovement(new Knockback(direction, force, duration));
-    }
-
-    followPath(waypoints: Array<{ x: number, y: number }>, speed: number = 2, loop: boolean = false): void {
+    /**
+     * Follow a sequence of waypoints
+     * 
+     * Makes the entity move through a list of positions at a speed calculated
+     * from the player's base speed. The `speedMultiplier` allows adjusting
+     * the travel speed relative to the player's normal movement speed.
+     * 
+     * With default speed=4 and multiplier=0.5: speed = 2 (same as original default)
+     * 
+     * @param waypoints - Array of `{ x, y }` positions to follow in order
+     * @param speedMultiplier - Multiplier applied to base speed (default: 0.5)
+     * @param loop - Whether to loop back to start after reaching the end (default: false)
+     * 
+     * @example
+     * ```ts
+     * // Follow a patrol path at normal speed
+     * const patrol = [
+     *   { x: 100, y: 100 },
+     *   { x: 200, y: 100 },
+     *   { x: 200, y: 200 }
+     * ];
+     * player.followPath(patrol, 1, true); // Loop at full speed
+     * 
+     * // Slow walk through waypoints
+     * player.followPath(waypoints, 0.25, false);
+     * ```
+     */
+    followPath(waypoints: Array<{ x: number, y: number }>, speedMultiplier: number = 0.5, loop: boolean = false): void {
+      const playerSpeed = (this as any).speed();
+      // Path follow speed = player base speed * multiplier
+      // With speed=4, multiplier=0.5: gives 2 (original default value)
+      const speed = playerSpeed * speedMultiplier;
       this.addMovement(new PathFollow(waypoints, speed, loop));
     }
 
+    /**
+     * Apply oscillating movement pattern
+     * 
+     * Creates a back-and-forth movement along the specified axis. The movement
+     * oscillates sinusoidally between -amplitude and +amplitude from the starting position.
+     * 
+     * @param direction - Primary oscillation axis (normalized direction vector)
+     * @param amplitude - Maximum distance from center in pixels (default: 50)
+     * @param period - Time for a complete cycle in milliseconds (default: 2000)
+     * 
+     * @example
+     * ```ts
+     * // Horizontal oscillation
+     * player.oscillate({ x: 1, y: 0 }, 100, 3000);
+     * 
+     * // Diagonal bobbing motion
+     * player.oscillate({ x: 1, y: 1 }, 30, 1000);
+     * ```
+     */
     oscillate(direction: { x: number, y: number }, amplitude: number = 50, period: number = 2000): void {
       this.addMovement(new Oscillate(direction, amplitude, period));
     }
 
-    applyIceMovement(direction: { x: number, y: number }, maxSpeed: number = 4): void {
+    /**
+     * Apply ice movement physics
+     * 
+     * Simulates slippery surface physics where the entity accelerates gradually
+     * and has difficulty stopping. The maximum speed is based on the player's
+     * base speed multiplied by a speed factor.
+     * 
+     * With default speed=4 and factor=1: maxSpeed = 4 (same as original default)
+     * 
+     * @param direction - Target movement direction `{ x, y }`
+     * @param speedFactor - Factor multiplied with base speed for max speed (default: 1.0)
+     * 
+     * @example
+     * ```ts
+     * // Normal ice physics
+     * player.applyIceMovement({ x: 1, y: 0 });
+     * 
+     * // Fast ice sliding
+     * player.applyIceMovement({ x: 0, y: 1 }, 1.5);
+     * ```
+     */
+    applyIceMovement(direction: { x: number, y: number }, speedFactor: number = 1): void {
+      const playerSpeed = (this as any).speed();
+      // Max ice speed = player base speed * factor
+      // With speed=4, factor=1: gives 4 (original default value)
+      const maxSpeed = playerSpeed * speedFactor;
       this.addMovement(new IceMovement(direction, maxSpeed));
     }
 
-    shootProjectile(type: ProjectileType, direction: { x: number, y: number }, speed: number = 200): void {
+    /**
+     * Shoot a projectile in the specified direction
+     * 
+     * Creates a projectile with ballistic trajectory. The speed is calculated
+     * from the player's base speed multiplied by a speed factor.
+     * 
+     * With default speed=4 and factor=50: speed = 200 (same as original default)
+     * 
+     * @param type - Type of projectile trajectory (`Straight`, `Arc`, or `Bounce`)
+     * @param direction - Normalized direction vector `{ x, y }`
+     * @param speedFactor - Factor multiplied with base speed (default: 50)
+     * 
+     * @example
+     * ```ts
+     * // Straight projectile
+     * player.shootProjectile(ProjectileType.Straight, { x: 1, y: 0 });
+     * 
+     * // Fast arc projectile
+     * player.shootProjectile(ProjectileType.Arc, { x: 1, y: -0.5 }, 75);
+     * ```
+     */
+    shootProjectile(type: ProjectileType, direction: { x: number, y: number }, speedFactor: number = 50): void {
+      const playerSpeed = (this as any).speed();
+      // Projectile speed = player base speed * factor
+      // With speed=4, factor=50: gives 200 (original default value)
+      const speed = playerSpeed * speedFactor;
+
       const config = {
         speed,
         direction,
@@ -889,6 +1302,10 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             this.processNextRoute();
           }
 
+          private debugLog(message: string, data?: any): void {
+            // Debug logging disabled - enable if needed for troubleshooting
+          }
+
           private processNextRoute(): void {
             // Reset frequency wait state when processing a new route
             this.waitingForFrequency = false;
@@ -896,6 +1313,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
             // Check if we've completed all routes
             if (this.routeIndex >= this.routes.length) {
+              this.debugLog('COMPLETE all routes finished');
               this.finished = true;
               this.onComplete(true);
               return;
@@ -913,8 +1331,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               // Handle different route types
               if (typeof currentRoute === 'object' && 'then' in currentRoute) {
                 // Handle Promise (like Move.wait())
-                // For Move.wait(), we need to track the wait time
-                // Check if it's a wait promise by checking if it resolves after a delay
+                this.debugLog(`WAIT for promise (route ${this.routeIndex}/${this.routes.length})`);
                 this.waitingForPromise = true;
                 this.promiseStartTime = Date.now();
 
@@ -925,9 +1342,11 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
                 // Set up promise resolution handler
                 (currentRoute as Promise<any>).then(() => {
+                  this.debugLog('WAIT promise resolved');
                   this.waitingForPromise = false;
                   this.processNextRoute();
                 }).catch(() => {
+                  this.debugLog('WAIT promise rejected');
                   this.waitingForPromise = false;
                   this.processNextRoute();
                 });
@@ -955,6 +1374,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                     break;
                 }
 
+                this.debugLog(`TURN to ${directionStr}`);
                 if (this.player.changeDirection) {
                   this.player.changeDirection(direction);
                 }
@@ -1038,6 +1458,9 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 this.currentTarget = { x: targetX, y: targetY }; // Center position for physics engine
                 this.currentTargetTopLeft = { x: targetTopLeftX, y: targetTopLeftY }; // Top-left position for player.x() comparison
                 this.currentDirection = { x: 0, y: 0 };
+                
+                this.debugLog(`MOVE direction=${moveDirection} from=(${currentTopLeftX.toFixed(1)}, ${currentTopLeftY.toFixed(1)}) to=(${targetTopLeftX.toFixed(1)}, ${targetTopLeftY.toFixed(1)}) dist=${distance.toFixed(1)}`);
+                
                 // Reset stuck detection when starting a new movement
                 this.lastPosition = null;
                 this.isCurrentlyStuck = false;
@@ -1130,6 +1553,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               // Check if we've reached the target (using top-left position)
               if (distance <= this.tolerance) {
                 // Target reached, wait for frequency before processing next route
+                this.debugLog(`TARGET reached at (${currentTopLeftX.toFixed(1)}, ${currentTopLeftY.toFixed(1)})`);
                 this.currentTarget = null;
                 this.currentTargetTopLeft = null;
                 this.currentDirection = { x: 0, y: 0 };
@@ -1217,6 +1641,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                     // Check if stuck timeout has elapsed
                     if (currentTime - this.stuckCheckStartTime >= this.stuckTimeout) {
                       // Player is stuck, call onStuck callback
+                      this.debugLog(`STUCK detected at (${currentPosition.x.toFixed(1)}, ${currentPosition.y.toFixed(1)}) target=(${this.currentTarget.x.toFixed(1)}, ${this.currentTarget.y.toFixed(1)})`);
                       const shouldContinue = this.onStuck(
                         this.player as any,
                         this.currentTarget,
@@ -1225,6 +1650,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
                       if (shouldContinue === false) {
                         // Cancel the route
+                        this.debugLog('STUCK cancelled route');
                         this.finished = true;
                         this.onComplete(false);
                         body.setVelocity({ x: 0, y: 0 });
@@ -1401,9 +1827,13 @@ export interface IMoveManager {
   /**
    * Add a custom movement strategy to this entity
    * 
+   * Returns a Promise that resolves when the movement completes.
+   * 
    * @param strategy - The movement strategy to add
+   * @param options - Optional callbacks for movement lifecycle events
+   * @returns Promise that resolves when the movement completes
    */
-  addMovement(strategy: MovementStrategy): void;
+  addMovement(strategy: MovementStrategy, options?: MovementOptions): Promise<void>;
 
   /**
    * Remove a specific movement strategy from this entity
@@ -1447,29 +1877,41 @@ export interface IMoveManager {
   /**
    * Perform a dash movement in the specified direction
    * 
+   * The total speed is calculated by adding the player's base speed to the additional speed.
+   * Returns a Promise that resolves when the dash completes.
+   * 
    * @param direction - Normalized direction vector
-   * @param speed - Movement speed (default: 8)
+   * @param additionalSpeed - Extra speed added on top of base speed (default: 4)
    * @param duration - Duration in milliseconds (default: 200)
+   * @param options - Optional callbacks for movement lifecycle events
+   * @returns Promise that resolves when the dash completes
    */
-  dash(direction: { x: number, y: number }, speed?: number, duration?: number): void;
+  dash(direction: { x: number, y: number }, additionalSpeed?: number, duration?: number, options?: MovementOptions): Promise<void>;
 
   /**
    * Apply knockback effect in the specified direction
    * 
+   * The force is scaled by the player's base speed for consistent behavior.
+   * Returns a Promise that resolves when the knockback completes.
+   * 
    * @param direction - Normalized direction vector
-   * @param force - Initial knockback force (default: 5)
+   * @param force - Force multiplier applied to base speed (default: 5)
    * @param duration - Duration in milliseconds (default: 300)
+   * @param options - Optional callbacks for movement lifecycle events
+   * @returns Promise that resolves when the knockback completes
    */
-  knockback(direction: { x: number, y: number }, force?: number, duration?: number): void;
+  knockback(direction: { x: number, y: number }, force?: number, duration?: number, options?: MovementOptions): Promise<void>;
 
   /**
    * Follow a sequence of waypoints
    * 
+   * Speed is calculated from the player's base speed multiplied by the speedMultiplier.
+   * 
    * @param waypoints - Array of x,y positions to follow
-   * @param speed - Movement speed (default: 2)
+   * @param speedMultiplier - Multiplier applied to base speed (default: 0.5)
    * @param loop - Whether to loop back to start (default: false)
    */
-  followPath(waypoints: Array<{ x: number, y: number }>, speed?: number, loop?: boolean): void;
+  followPath(waypoints: Array<{ x: number, y: number }>, speedMultiplier?: number, loop?: boolean): void;
 
   /**
    * Apply oscillating movement pattern
@@ -1483,19 +1925,23 @@ export interface IMoveManager {
   /**
    * Apply ice movement physics
    * 
+   * Max speed is calculated from the player's base speed multiplied by the speedFactor.
+   * 
    * @param direction - Target movement direction
-   * @param maxSpeed - Maximum speed when fully accelerated (default: 4)
+   * @param speedFactor - Factor multiplied with base speed for max speed (default: 1.0)
    */
-  applyIceMovement(direction: { x: number, y: number }, maxSpeed?: number): void;
+  applyIceMovement(direction: { x: number, y: number }, speedFactor?: number): void;
 
   /**
    * Shoot a projectile in the specified direction
    * 
+   * Speed is calculated from the player's base speed multiplied by the speedFactor.
+   * 
    * @param type - Type of projectile trajectory
    * @param direction - Normalized direction vector
-   * @param speed - Projectile speed (default: 200)
+   * @param speedFactor - Factor multiplied with base speed (default: 50)
    */
-  shootProjectile(type: ProjectileType, direction: { x: number, y: number }, speed?: number): void;
+  shootProjectile(type: ProjectileType, direction: { x: number, y: number }, speedFactor?: number): void;
 
   /**
    * Give an itinerary to follow using movement strategies

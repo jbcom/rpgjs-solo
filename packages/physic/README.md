@@ -793,6 +793,59 @@ loop();
 - Call `movement.update(dt)` manually when you need custom timing, or use `engine.stepWithMovements(dt)` to update movements and advance the simulation in one call.
 - Use `movement.stopMovement(entity)` to completely stop an entity's movement, clearing all strategies and stopping velocity (useful when changing maps or teleporting).
 
+#### Awaiting Movement Completion
+
+The `add()` method returns a Promise that resolves when the movement completes (when `isFinished()` returns true). This allows you to chain movements or execute code after a movement finishes:
+
+```typescript
+// Wait for a dash to complete
+await movement.add(player, new Dash(8, { x: 1, y: 0 }, 0.2));
+console.log('Dash completed!');
+
+// Chain multiple movements
+await movement.add(player, new Dash(8, { x: 1, y: 0 }, 0.2));
+await movement.add(player, new Dash(8, { x: 0, y: 1 }, 0.2));
+console.log('Both dashes completed!');
+```
+
+#### Movement Callbacks
+
+You can pass `MovementOptions` to the `add()` method for lifecycle callbacks:
+
+```typescript
+import { MovementOptions, Knockback } from '@rpgjs/physic';
+
+// Apply knockback with callbacks
+await movement.add(player, new Knockback({ x: -1, y: 0 }, 5, 0.3), {
+  onStart: () => {
+    // Called when the movement starts (first update)
+    player.directionFixed = true;
+    player.animationFixed = true;
+    console.log('Knockback started!');
+  },
+  onComplete: () => {
+    // Called when the movement completes
+    player.directionFixed = false;
+    player.animationFixed = false;
+    console.log('Knockback finished!');
+  }
+});
+```
+
+The `MovementOptions` interface:
+
+```typescript
+interface MovementOptions {
+  /** Callback executed when the movement starts (first update call) */
+  onStart?: () => void;
+  
+  /** Callback executed when the movement completes (isFinished returns true) */
+  onComplete?: () => void;
+}
+```
+
+**Note:** If the strategy doesn't implement `isFinished()`, the Promise resolves immediately after the strategy is added, and `onComplete` will not be called automatically.
+
 ### Static Obstacles
 
 Create immovable obstacles (walls, trees, decorations) by setting `mass` to `0` or `Infinity`. 

@@ -1033,6 +1033,9 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     });
 
     entity.onMovementChange(({ isMoving, intensity }) => {
+      // Prevent animation changes on client side (same as onDirectionChange)
+      if (!('$send' in this)) return;
+      
       // Get owner from entity (same pattern as onDirectionChange)
       const owner = (entity as any).owner;
       if (!owner) return;

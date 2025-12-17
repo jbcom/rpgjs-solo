@@ -1,6 +1,43 @@
 import type { Entity } from '../physics/Entity';
 
 /**
+ * Options for movement strategies
+ * 
+ * Allows configuring callbacks that are triggered during the movement lifecycle.
+ * These options can be passed when adding a strategy to the MovementManager.
+ * 
+ * @example
+ * ```typescript
+ * // Add a dash with callbacks
+ * const promise = manager.add(player, new Dash(8, { x: 1, y: 0 }, 200), {
+ *   onStart: () => {
+ *     player.directionFixed = true;
+ *     player.animationFixed = true;
+ *   },
+ *   onComplete: () => {
+ *     player.directionFixed = false;
+ *     player.animationFixed = false;
+ *   }
+ * });
+ * 
+ * // Wait for completion
+ * await promise;
+ * console.log('Dash completed!');
+ * ```
+ */
+export interface MovementOptions {
+  /**
+   * Callback executed when the movement starts (first update call)
+   */
+  onStart?: () => void;
+
+  /**
+   * Callback executed when the movement completes (isFinished returns true)
+   */
+  onComplete?: () => void;
+}
+
+/**
  * Minimal interface implemented by elements that can receive movement updates.
  */
 export interface MovementBody {

@@ -69,6 +69,7 @@ export class SeekAvoid implements MovementStrategy {
     const neighbors = this.engine.queryAABB(bounds);
 
     const push = new Vector2(0, 0);
+    let neighborCount = 0;
     if (!arrived) {
       for (const other of neighbors) {
         if (other === entity || other === target || other.isStatic()) {
@@ -81,6 +82,7 @@ export class SeekAvoid implements MovementStrategy {
           continue;
         }
 
+        neighborCount++;
         if (d2 < EPSILON) {
           d2 = EPSILON;
         }

@@ -11,6 +11,7 @@ export function Event() {
     mode: EventMode.Scenario,
     onInit() {
       this.setGraphic("hero");
+      this.speed.set(1)
       this.teleport({ x: 200, y: 200 })
       this.frequency = Frequency.Low;
       // this.infiniteMoveRoute([

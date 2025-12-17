@@ -5,6 +5,53 @@ type RpgEventWithBattleAi = RpgEvent & {
 };
 
 /**
+ * AI Debug Logger
+ * 
+ * Conditional logging utility for AI behavior debugging.
+ * Enable by setting `AiDebug.enabled = true` or via environment variable `RPGJS_DEBUG_AI=1`
+ * 
+ * @example
+ * ```ts
+ * // Enable debug logging
+ * AiDebug.enabled = true;
+ * 
+ * // Or filter by event ID
+ * AiDebug.filterEventId = 'goblin-1';
+ * ```
+ */
+export const AiDebug = {
+  /** Enable/disable all AI debug logs */
+  enabled: (typeof process !== 'undefined' && process.env?.RPGJS_DEBUG_AI === '1') || false,
+  
+  /** Filter logs to a specific event ID (null = all events) */
+  filterEventId: null as string | null,
+  
+  /** Log categories to enable (empty = all) */
+  categories: [] as string[],
+  
+  /**
+   * Log an AI debug message
+   * 
+   * @param category - Log category (e.g., 'state', 'attack', 'movement', 'damage')
+   * @param eventId - Event ID for filtering
+   * @param message - Log message
+   * @param data - Optional additional data
+   */
+  log(category: string, eventId: string | undefined, message: string, data?: any): void {
+    if (!this.enabled) return;
+    if (this.filterEventId && eventId !== this.filterEventId) return;
+    if (this.categories.length > 0 && !this.categories.includes(category)) return;
+    
+    const prefix = `[AI:${category}]${eventId ? ` [${eventId.substring(0, 8)}]` : ''}`;
+    if (data !== undefined) {
+      console.log(prefix, message, data);
+    } else {
+      console.log(prefix, message);
+    }
+  }
+};
+
+/**
  * AI State enumeration
  * 
  * Defines the different states an AI can be in, each with its own behavior.
@@ -92,6 +139,13 @@ export class BattleAi {
   private lastAttackTime: number = 0;
   private updateInterval?: any;
 
+  /**
+   * Log AI debug message for this event
+   */
+  private debugLog(category: string, message: string, data?: any): void {
+    AiDebug.log(category, this.event.id, message, data);
+  }
+
   // State machine
   private state: AiState = AiState.Idle;
   private stateStartTime: number = 0;
@@ -131,6 +185,13 @@ export class BattleAi {
   private lastHpCheck: number = 0;
   private recentDamageTaken: number = 0;
   private damageCheckInterval: number = 2000;
+
+  // Movement state tracking to avoid redundant moveTo calls
+  private isMovingToTarget: boolean = false;
+
+  // Direction hysteresis to prevent animation flickering
+  private lastFacingDirection: string | null = null;
+
 
   /**
    * Create a new Battle AI Controller
@@ -200,6 +261,8 @@ export class BattleAi {
     this.setupVision();
     this.startAiBehaviorLoop();
     this.changeState(AiState.Idle);
+
+    this.debugLog('init', `AI created (type=${this.enemyType}, visionRange=${this.visionRange}, attackRange=${this.attackRange})`);
   }
 
   /**
@@ -313,9 +376,11 @@ export class BattleAi {
     };
 
     if (!validTransitions[this.state].includes(newState)) {
+      this.debugLog('state', `INVALID transition ${this.state} -> ${newState}`);
       return;
     }
 
+    this.debugLog('state', `STATE change: ${this.state} -> ${newState}`);
     this.state = newState;
     this.stateStartTime = Date.now();
 
@@ -426,6 +491,7 @@ export class BattleAi {
    */
   private updateCombatBehavior(currentTime: number) {
     if (!this.target) {
+      this.debugLog('combat', 'No target, returning to idle');
       this.changeState(AiState.Idle);
       return;
     }
@@ -434,7 +500,9 @@ export class BattleAi {
 
     // Check if target is still in range
     if (distance > this.visionRange * 1.5) {
+      this.debugLog('combat', `Target out of range (dist=${distance.toFixed(1)}, maxRange=${(this.visionRange * 1.5).toFixed(1)})`);
       this.target = null;
+      this.isMovingToTarget = false;
       this.event.stopMoveTo();
       this.changeState(AiState.Idle);
       return;
@@ -444,6 +512,8 @@ export class BattleAi {
     if (this.event.param[MAXHP]) {
       const hpPercent = this.event.hp / this.event.param[MAXHP];
       if (hpPercent <= this.fleeThreshold) {
+        this.debugLog('combat', `HP low (${(hpPercent * 100).toFixed(0)}%), fleeing`);
+        this.isMovingToTarget = false;
         this.changeState(AiState.Flee);
         return;
       }
@@ -451,6 +521,8 @@ export class BattleAi {
 
     // Try dodge
     if (this.canDodge() && this.shouldDodge()) {
+      this.debugLog('combat', 'Attempting dodge');
+      this.isMovingToTarget = false;
       this.tryDodge();
       return;
     }
@@ -458,23 +530,42 @@ export class BattleAi {
     // Movement based on enemy type
     if (this.enemyType === EnemyType.Ranged) {
       if (distance < this.attackRange * 0.6) {
+        this.debugLog('movement', `Retreating (dist=${distance.toFixed(1)}, minRange=${(this.attackRange * 0.6).toFixed(1)})`);
+        this.isMovingToTarget = false;
         this.retreatFromTarget();
       } else if (distance > this.attackRange) {
-        this.event.moveTo(this.target);
+        if (!this.isMovingToTarget) {
+          this.debugLog('movement', `Moving to target (dist=${distance.toFixed(1)}, attackRange=${this.attackRange})`);
+          this.isMovingToTarget = true;
+          this.event.moveTo(this.target);
+        }
       } else {
-        this.event.stopMoveTo();
+        if (this.isMovingToTarget) {
+          this.debugLog('movement', `In range, stopping (dist=${distance.toFixed(1)})`);
+          this.isMovingToTarget = false;
+          this.event.stopMoveTo();
+        }
       }
     } else {
       if (distance > this.attackRange) {
-        this.event.moveTo(this.target);
+        if (!this.isMovingToTarget) {
+          this.debugLog('movement', `Moving to target (dist=${distance.toFixed(1)}, attackRange=${this.attackRange})`);
+          this.isMovingToTarget = true;
+          this.event.moveTo(this.target);
+        }
       } else {
-        this.event.stopMoveTo();
+        if (this.isMovingToTarget) {
+          this.debugLog('movement', `In range, stopping (dist=${distance.toFixed(1)})`);
+          this.isMovingToTarget = false;
+          this.event.stopMoveTo();
+        }
       }
     }
 
     // Attack if ready
     if (distance <= this.attackRange && currentTime - this.lastAttackTime >= this.attackCooldown) {
       if (!this.chargingAttack) {
+        this.debugLog('attack', `Attacking (dist=${distance.toFixed(1)}, cooldown=${this.attackCooldown}ms)`);
         this.selectAndPerformAttack();
         this.lastAttackTime = currentTime;
       }
@@ -512,12 +603,14 @@ export class BattleAi {
 
     // Continue combo if active
     if (this.comboCount > 0 && this.comboCount < this.comboMax) {
+      this.debugLog('attack', `Continuing combo (${this.comboCount}/${this.comboMax})`);
       this.performComboAttack();
       return;
     }
 
     // Select pattern based on weights
     const pattern = this.selectAttackPattern();
+    this.debugLog('attack', `Selected pattern: ${pattern}`);
     this.performAttackPattern(pattern);
   }
 
@@ -785,7 +878,12 @@ export class BattleAi {
   }
 
   /**
-   * Face the current target
+   * Face the current target with hysteresis to prevent animation flickering
+   * 
+   * Uses multiple strategies to prevent flickering:
+   * 1. When very close to target (collision), keep current direction
+   * 2. When near diagonal, require significant difference to change
+   * 3. Only change if direction is clearly wrong (opposite)
    */
   private faceTarget() {
     if (!this.target) return;
@@ -794,14 +892,45 @@ export class BattleAi {
     const dy = this.target.y() - this.event.y();
     const absX = Math.abs(dx);
     const absY = Math.abs(dy);
+    const distance = Math.sqrt(dx * dx + dy * dy);
 
-    let direction: string;
-    if (absX >= absY) {
-      direction = dx >= 0 ? 'right' : 'left';
-    } else {
-      direction = dy >= 0 ? 'down' : 'up';
+    // When very close to target (in collision range), don't change direction
+    // This prevents flickering when in melee combat
+    const minDistanceForDirectionChange = 40;
+    if (this.lastFacingDirection && distance < minDistanceForDirectionChange) {
+      return; // Keep current direction when in collision
     }
-    this.event.changeDirection(direction as any);
+
+    // Calculate the "ideal" direction
+    let newDirection: string;
+    if (absX >= absY) {
+      newDirection = dx >= 0 ? 'right' : 'left';
+    } else {
+      newDirection = dy >= 0 ? 'down' : 'up';
+    }
+
+    // Hysteresis: only change direction if the difference is significant (> 20%)
+    // This prevents flickering when the target is near diagonal
+    const hysteresisThreshold = 0.2; // 20% difference required to change
+    const ratio = absX > 0 || absY > 0 ? Math.min(absX, absY) / Math.max(absX, absY) : 0;
+    
+    // If ratio is close to 1 (diagonal), keep the current direction
+    if (this.lastFacingDirection && ratio > (1 - hysteresisThreshold)) {
+      // Near diagonal - keep current direction unless it's completely wrong
+      // Only change if moving in the opposite direction
+      const isOpposite = 
+        (this.lastFacingDirection === 'left' && dx > 20) ||
+        (this.lastFacingDirection === 'right' && dx < -20) ||
+        (this.lastFacingDirection === 'up' && dy > 20) ||
+        (this.lastFacingDirection === 'down' && dy < -20);
+      
+      if (!isOpposite) {
+        return; // Keep current direction
+      }
+    }
+
+    this.lastFacingDirection = newDirection;
+    this.event.changeDirection(newDirection as any);
   }
 
   /**
@@ -810,8 +939,14 @@ export class BattleAi {
   private tryDodge() {
     const currentTime = Date.now();
 
-    if (currentTime - this.lastDodgeTime < this.dodgeCooldown) return;
-    if (Math.random() > this.dodgeChance) return;
+    if (currentTime - this.lastDodgeTime < this.dodgeCooldown) {
+      this.debugLog('dodge', `Dodge on cooldown (${this.dodgeCooldown - (currentTime - this.lastDodgeTime)}ms remaining)`);
+      return;
+    }
+    if (Math.random() > this.dodgeChance) {
+      this.debugLog('dodge', `Dodge roll failed (chance=${(this.dodgeChance * 100).toFixed(0)}%)`);
+      return;
+    }
     if (!this.target) return;
 
     const dx = this.target.x() - this.event.x();
@@ -825,11 +960,13 @@ export class BattleAi {
     const dodgeDirY = dx / dist;
     const side = Math.random() > 0.5 ? 1 : -1;
 
+    this.debugLog('dodge', `Dodging (dir=${side > 0 ? 'right' : 'left'})`);
     this.event.dash({ x: dodgeDirX * side, y: dodgeDirY * side }, 12, 300);
     this.lastDodgeTime = currentTime;
 
     // Counter-attack for defensive types
     if (this.enemyType === EnemyType.Defensive && Math.random() < 0.5) {
+      this.debugLog('dodge', 'Counter-attack after dodge');
       setTimeout(() => {
         if (this.target && this.state === AiState.Combat) {
           this.selectAndPerformAttack();
@@ -983,6 +1120,7 @@ export class BattleAi {
    * Handle player entering vision
    */
   onDetectInShape(player: InstanceType<typeof RpgPlayer>, shape: any) {
+    this.debugLog('vision', `Player ${player.id} entered vision (state=${this.state})`);
     this.target = player;
 
     if (this.state === AiState.Idle) {
@@ -996,8 +1134,10 @@ export class BattleAi {
    * Handle player leaving vision
    */
   onDetectOutShape(player: InstanceType<typeof RpgPlayer>, shape: any) {
+    this.debugLog('vision', `Player ${player.id} left vision (wasTarget=${this.target === player})`);
     if (this.target === player) {
       this.target = null;
+      this.isMovingToTarget = false;
       this.event.stopMoveTo();
       this.changeState(AiState.Idle);
     }
@@ -1013,6 +1153,8 @@ export class BattleAi {
     // Apply damage using RPGJS system
     const { damage } = this.event.applyDamage(attacker);
 
+    this.debugLog('damage', `Took ${damage} damage from ${attacker.id} (HP: ${this.event.hp}/${this.event.param[MAXHP] || '?'})`);
+
     // Visual feedback
     this.event.flash({
       type: 'tint',
@@ -1027,12 +1169,15 @@ export class BattleAi {
 
     // Brief stun
     if (this.state !== AiState.Stunned && this.state !== AiState.Flee) {
+      this.debugLog('damage', 'Stunned from damage');
+      this.isMovingToTarget = false;
       this.stunnedUntil = Date.now() + 150;
       this.changeState(AiState.Stunned);
     }
 
     // Check death
     if (this.event.hp <= 0) {
+      this.debugLog('damage', 'Defeated!');
       this.kill();
       return true;
     }
