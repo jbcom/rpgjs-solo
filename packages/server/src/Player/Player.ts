@@ -1141,9 +1141,19 @@ export class RpgEvent extends RpgPlayer {
     return ret;
   }
 
+  /**
+   * Remove this event from the map
+   * 
+   * Stops all movements before removing to prevent "unable to resolve entity" errors
+   * from the MovementManager when the entity is destroyed while moving.
+   */
   remove() {
     const map = this.getCurrentMap();
     if (!map) return;
+    
+    // Stop all movements before removing to prevent MovementManager errors
+    this.stopMoveTo();
+    
     map.removeEvent(this.id);
   }
 

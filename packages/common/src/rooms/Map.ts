@@ -1179,6 +1179,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         break;
     }
 
+    // Input sets the base velocity. Movement strategies (dash/knockback/AI, etc.)
+    // are responsible for adding or overriding velocity when needed.
     entity.setVelocity({ x: vx, y: vy });
     entity.wakeUp();
     return true;

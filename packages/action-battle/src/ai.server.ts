@@ -5,6 +5,84 @@ type RpgEventWithBattleAi = RpgEvent & {
 };
 
 /**
+ * Hit result data returned after applying damage
+ * 
+ * Contains information about the hit including damage dealt,
+ * knockback parameters, and whether the target was defeated.
+ * Used by hooks to customize hit behavior.
+ * 
+ * @example
+ * ```ts
+ * const hitResult: HitResult = {
+ *   damage: 25,
+ *   knockbackForce: 50,
+ *   knockbackDuration: 300,
+ *   defeated: false,
+ *   attacker: this.event,
+ *   target: player
+ * };
+ * ```
+ */
+export interface HitResult {
+  /** Damage dealt to the target */
+  damage: number;
+  /** Knockback force applied (from weapon or default) */
+  knockbackForce: number;
+  /** Knockback duration in milliseconds */
+  knockbackDuration: number;
+  /** Whether the target was defeated */
+  defeated: boolean;
+  /** The entity that attacked */
+  attacker: RpgEvent | RpgPlayer;
+  /** The entity that was hit */
+  target: RpgPlayer | RpgEvent;
+}
+
+/**
+ * Hook options for customizing hit behavior
+ * 
+ * Allows overriding knockback parameters and adding custom effects
+ * when a hit is applied.
+ * 
+ * @example
+ * ```ts
+ * const hooks: ApplyHitHooks = {
+ *   onBeforeHit(result) {
+ *     // Reduce knockback for armored enemies
+ *     if (result.target.hasState('armored')) {
+ *       result.knockbackForce *= 0.5;
+ *     }
+ *     return result;
+ *   },
+ *   onAfterHit(result) {
+ *     // Add poison effect on hit
+ *     if (Math.random() < 0.3) {
+ *       result.target.addState('poison');
+ *     }
+ *   }
+ * };
+ * ```
+ */
+export interface ApplyHitHooks {
+  /**
+   * Called before the hit is applied
+   * Can modify the hit result before damage and knockback
+   * 
+   * @param result - The hit result data
+   * @returns Modified hit result or void to use original
+   */
+  onBeforeHit?: (result: HitResult) => HitResult | void;
+  
+  /**
+   * Called after the hit is applied
+   * Used for side effects like adding states, playing sounds, etc.
+   * 
+   * @param result - The final hit result data
+   */
+  onAfterHit?: (result: HitResult) => void;
+}
+
+/**
  * AI Debug Logger
  * 
  * Conditional logging utility for AI behavior debugging.
@@ -90,6 +168,18 @@ export enum AttackPattern {
   Zone = "zone",
   DashAttack = "dashAttack"
 }
+
+/**
+ * Default knockback configuration
+ * 
+ * Used when no weapon is equipped or weapon doesn't specify knockback.
+ */
+export const DEFAULT_KNOCKBACK = {
+  /** Default knockback force */
+  force: 50,
+  /** Default knockback duration in milliseconds */
+  duration: 300
+};
 
 /**
  * Advanced Battle AI Controller for events
@@ -189,6 +279,9 @@ export class BattleAi {
   // Movement state tracking to avoid redundant moveTo calls
   private isMovingToTarget: boolean = false;
 
+  // Callback when AI is defeated
+  private onDefeatedCallback?: (event: RpgEvent) => void;
+
   // Direction hysteresis to prevent animation flickering
   private lastFacingDirection: string | null = null;
 
@@ -231,6 +324,8 @@ export class BattleAi {
       attackPatterns?: AttackPattern[];
       patrolWaypoints?: Array<{ x: number; y: number }>;
       groupBehavior?: boolean;
+      /** Callback called when the AI is defeated */
+      onDefeated?: (event: RpgEvent) => void;
     } = {}
   ) {
     event.battleAi = this;
@@ -256,6 +351,9 @@ export class BattleAi {
     // Initialize patrol
     this.patrolWaypoints = options.patrolWaypoints || [];
     this.currentPatrolIndex = 0;
+
+    // Initialize defeat callback
+    this.onDefeatedCallback = options.onDefeated;
 
     // Setup AI systems
     this.setupVision();
@@ -749,11 +847,58 @@ export class BattleAi {
   }
 
   /**
-   * Apply hit to target using RPGJS damage system
+   * Apply hit to target using RPGJS damage system with knockback
+   * 
+   * Calculates damage using RPGJS formula, applies knockback based on
+   * equipped weapon's knockbackForce property, and triggers visual effects.
+   * Supports hooks for customizing behavior.
+   * 
+   * @param target - The player or entity being hit
+   * @param hooks - Optional hooks for customizing hit behavior
+   * @returns The hit result containing damage and knockback info
+   * 
+   * @example
+   * ```ts
+   * // Basic hit
+   * this.applyHit(player);
+   * 
+   * // With custom hooks
+   * this.applyHit(player, {
+   *   onBeforeHit(result) {
+   *     result.knockbackForce *= 1.5; // Increase knockback
+   *     return result;
+   *   },
+   *   onAfterHit(result) {
+   *     console.log(`Dealt ${result.damage} damage!`);
+   *   }
+   * });
+   * ```
    */
-  private applyHit(target: RpgPlayer) {
+  private applyHit(target: RpgPlayer, hooks?: ApplyHitHooks): HitResult {
     // Use RPGJS damage formula
     const { damage } = target.applyDamage(this.event as any);
+
+    // Get knockback force from equipped weapon
+    const knockbackForce = this.getWeaponKnockbackForce();
+    const knockbackDuration = DEFAULT_KNOCKBACK.duration;
+
+    // Create hit result
+    let hitResult: HitResult = {
+      damage,
+      knockbackForce,
+      knockbackDuration,
+      defeated: target.hp <= 0,
+      attacker: this.event,
+      target
+    };
+
+    // Call onBeforeHit hook
+    if (hooks?.onBeforeHit) {
+      const modified = hooks.onBeforeHit(hitResult);
+      if (modified) {
+        hitResult = modified;
+      }
+    }
 
     // Visual feedback
     target.flash({
@@ -762,7 +907,61 @@ export class BattleAi {
       duration: 200,
       cycles: 1
     });
-    target.showHit(`-${damage}`);
+    target.showHit(`-${hitResult.damage}`);
+
+    // Apply knockback
+    if (hitResult.knockbackForce > 0) {
+      const dx = target.x() - this.event.x();
+      const dy = target.y() - this.event.y();
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance > 0) {
+        const knockbackDirection = {
+          x: dx / distance,
+          y: dy / distance
+        };
+        target.knockback(knockbackDirection, hitResult.knockbackForce, hitResult.knockbackDuration);
+      }
+    }
+
+    // Call onAfterHit hook
+    if (hooks?.onAfterHit) {
+      hooks.onAfterHit(hitResult);
+    }
+
+    return hitResult;
+  }
+
+  /**
+   * Get knockback force from equipped weapon
+   * 
+   * Retrieves the knockbackForce property from the event's equipped weapon.
+   * Falls back to DEFAULT_KNOCKBACK.force if no weapon or property is set.
+   * 
+   * @returns Knockback force value
+   * 
+   * @example
+   * ```ts
+   * // Weapon with knockbackForce: 80
+   * const force = this.getWeaponKnockbackForce(); // 80
+   * 
+   * // No weapon equipped
+   * const force = this.getWeaponKnockbackForce(); // 50 (default)
+   * ```
+   */
+  private getWeaponKnockbackForce(): number {
+    try {
+      const equipments = (this.event as any).equipments?.() || [];
+      for (const item of equipments) {
+        const itemData = (this.event as any).databaseById?.(item.id());
+        if (itemData?._type === 'weapon' && itemData.knockbackForce !== undefined) {
+          return itemData.knockbackForce;
+        }
+      }
+    } catch {
+      // If error, return default
+    }
+    return DEFAULT_KNOCKBACK.force;
   }
 
   /**
@@ -1187,9 +1386,16 @@ export class BattleAi {
 
   /**
    * Kill this AI
+   * 
+   * Stops all movements, cleans up resources, calls the onDefeated hook,
+   * and removes the event from the map.
    */
   private kill() {
-    console.log(`AI ${this.event.id} has been defeated!`);
+    // Call onDefeated hook before cleanup
+    if (this.onDefeatedCallback) {
+      this.onDefeatedCallback(this.event);
+    }
+    
     this.destroy();
     this.event.remove();
   }

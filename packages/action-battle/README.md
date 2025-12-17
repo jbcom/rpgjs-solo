@@ -13,6 +13,8 @@ The AI controller manages **behavior only** - all stats (HP, ATK, skills, items,
 - **Dodge System**: Enemies can dodge and counter-attack
 - **Group Behavior**: Enemies coordinate attacks and formations
 - **Patrol System**: Waypoint-based patrolling
+- **Knockback System**: Weapon-based knockback force
+- **Hook System**: Customize hit behavior with `onBeforeHit` and `onAfterHit` hooks
 
 ## Installation
 
@@ -152,7 +154,12 @@ new BattleAi(event, {
   ],
   
   // Group coordination
-  groupBehavior: true
+  groupBehavior: true,
+  
+  // Callback when AI is defeated
+  onDefeated: (event) => {
+    console.log(`${event.name()} was defeated!`);
+  }
 });
 ```
 
@@ -354,6 +361,102 @@ function Wolf() {
 }
 ```
 
+### Complete Example with Weapons
+
+```typescript
+import { createServer, RpgPlayer, RpgMap, EventMode, MAXHP, ATK, PDEF } from "@rpgjs/server";
+import { provideActionBattle, BattleAi, EnemyType } from "@rpgjs/action-battle/server";
+
+// Define weapons with knockback
+const IronSword = {
+  id: 'iron-sword',
+  name: 'Iron Sword',
+  description: 'A reliable iron sword',
+  atk: 15,
+  knockbackForce: 40,
+  _type: 'weapon' as const,
+};
+
+const GiantMaul = {
+  id: 'giant-maul',
+  name: 'Giant Maul',
+  description: 'Massive hammer with devastating knockback',
+  atk: 30,
+  knockbackForce: 100,
+  _type: 'weapon' as const,
+};
+
+const GoblinDagger = {
+  id: 'goblin-dagger',
+  name: 'Goblin Dagger',
+  description: 'Small rusty dagger',
+  atk: 8,
+  knockbackForce: 20,
+  _type: 'weapon' as const,
+};
+
+// Enemy with weapon
+function GoblinWarrior() {
+  return {
+    name: "Goblin Warrior",
+    mode: EventMode.Scenario,
+    onInit() {
+      this.setGraphic("goblin");
+      
+      // Stats
+      this.hp = 60;
+      this.param[MAXHP] = 60;
+      this.param[ATK] = 12;
+      this.param[PDEF] = 5;
+      
+      // Equip weapon (knockbackForce: 20)
+      this.addItem(GoblinDagger);
+      this.equip(GoblinDagger.id);
+      
+      // AI
+      new BattleAi(this, {
+        enemyType: EnemyType.Aggressive,
+        attackRange: 45
+      });
+    }
+  };
+}
+
+// Server setup
+export default createServer({
+  providers: [
+    provideActionBattle(),
+    {
+      database: {
+        'iron-sword': IronSword,
+        'giant-maul': GiantMaul,
+        'goblin-dagger': GoblinDagger
+      },
+      player: {
+        onJoinMap(player: RpgPlayer, map: RpgMap) {
+          // Setup player stats
+          player.hp = 100;
+          player.param[MAXHP] = 100;
+          player.param[ATK] = 15;
+          
+          // Give player a weapon with high knockback
+          player.addItem(GiantMaul);
+          player.equip(GiantMaul.id);
+          
+          // Player attacks will now knock enemies back with force 100
+        }
+      },
+      maps: [
+        {
+          id: 'battle-map',
+          events: [{ event: GoblinWarrior() }]
+        }
+      ]
+    }
+  ]
+});
+```
+
 ## API Reference
 
 ### BattleAi Methods
@@ -387,8 +490,288 @@ The module handles player attacks via the `action` input:
 
 ```typescript
 // Player presses action key -> attack animation + hitbox
-// Hitbox detects enemy -> enemy.battleAi.takeDamage(player)
+// Hitbox detects enemy -> applyPlayerHitToEvent(player, event)
 // Damage uses RPGJS formula: target.applyDamage(attacker)
+// Knockback force is based on equipped weapon's knockbackForce property
+```
+
+## Knockback System
+
+Knockback force is determined by the equipped weapon's `knockbackForce` property.
+
+### Creating Weapons with Knockback
+
+```typescript
+// Light weapon - low knockback
+const Dagger = {
+  id: 'dagger',
+  name: 'Iron Dagger',
+  atk: 10,
+  knockbackForce: 20,
+  _type: 'weapon' as const,
+};
+
+// Heavy weapon - high knockback
+const Warhammer = {
+  id: 'warhammer',
+  name: 'War Hammer',
+  atk: 30,
+  knockbackForce: 100,
+  _type: 'weapon' as const,
+};
+```
+
+### Default Knockback
+
+If no weapon is equipped or the weapon doesn't have `knockbackForce`, the default value is used:
+
+```typescript
+import { DEFAULT_KNOCKBACK } from "@rpgjs/action-battle/server";
+
+console.log(DEFAULT_KNOCKBACK.force);    // 50
+console.log(DEFAULT_KNOCKBACK.duration); // 300ms
+```
+
+## Hook System
+
+Customize hit behavior using hooks. Available on both player-to-enemy and enemy-to-player hits.
+
+### HitResult Interface
+
+```typescript
+interface HitResult {
+  damage: number;           // Damage dealt
+  knockbackForce: number;   // Knockback force (from weapon)
+  knockbackDuration: number; // Knockback duration in ms
+  defeated: boolean;        // Whether target was defeated
+  attacker: RpgPlayer | RpgEvent;
+  target: RpgPlayer | RpgEvent;
+}
+```
+
+### Using Hooks with applyPlayerHitToEvent
+
+```typescript
+import { applyPlayerHitToEvent } from "@rpgjs/action-battle/server";
+
+// In your custom attack handler
+const result = applyPlayerHitToEvent(player, event, {
+  onBeforeHit(hitResult) {
+    // Modify knockback for armored enemies
+    if ((hitResult.target as any).hasState?.('armored')) {
+      hitResult.knockbackForce *= 0.5;
+    }
+    
+    // Critical hit - double knockback
+    if (Math.random() < 0.1) {
+      hitResult.knockbackForce *= 2;
+      console.log('Critical hit!');
+    }
+    
+    return hitResult; // Must return modified result
+  },
+  
+  onAfterHit(hitResult) {
+    // Award gold on kill
+    if (hitResult.defeated) {
+      (hitResult.attacker as any).gold += 10;
+    }
+    
+    // Apply poison on hit (30% chance)
+    if (Math.random() < 0.3) {
+      (hitResult.target as any).addState?.('poison');
+    }
+    
+    // Play custom sound
+    playSound('hit');
+  }
+});
+```
+
+### Custom Attack Implementation
+
+Override the default attack to add custom hooks:
+
+```typescript
+import { 
+  applyPlayerHitToEvent, 
+  DEFAULT_PLAYER_ATTACK_HITBOXES,
+  getPlayerWeaponKnockbackForce 
+} from "@rpgjs/action-battle/server";
+
+// Custom attack with hooks
+function customAttack(player: RpgPlayer) {
+  player.setAnimation('attack', 1);
+  
+  const direction = player.getDirection();
+  const hitboxConfig = DEFAULT_PLAYER_ATTACK_HITBOXES[direction] || DEFAULT_PLAYER_ATTACK_HITBOXES.default;
+  
+  const hitboxes = [{
+    x: player.x() + hitboxConfig.offsetX,
+    y: player.y() + hitboxConfig.offsetY,
+    width: hitboxConfig.width,
+    height: hitboxConfig.height
+  }];
+
+  const map = player.getCurrentMap();
+  map?.createMovingHitbox(hitboxes, { speed: 3 }).subscribe({
+    next(hits) {
+      hits.forEach((hit) => {
+        if (hit instanceof RpgEvent) {
+          applyPlayerHitToEvent(player, hit, {
+            onBeforeHit(result) {
+              // Custom modifications
+              return result;
+            },
+            onAfterHit(result) {
+              // Custom effects
+            }
+          });
+        }
+      });
+    }
+  });
+}
+```
+
+### Getting Weapon Knockback Force
+
+```typescript
+import { getPlayerWeaponKnockbackForce } from "@rpgjs/action-battle/server";
+
+const force = getPlayerWeaponKnockbackForce(player);
+console.log(`Player knockback force: ${force}`);
+```
+
+## onDefeated Hook
+
+The `onDefeated` callback is triggered when an AI enemy is killed. Use it to:
+- Award experience, gold, or items to the player
+- Spawn loot drops
+- Trigger events or cutscenes
+- Update quest progress
+- Play death animations or sounds
+
+### Basic Usage
+
+```typescript
+new BattleAi(this, {
+  enemyType: EnemyType.Aggressive,
+  onDefeated: (event) => {
+    console.log(`${event.name()} was defeated!`);
+  }
+});
+```
+
+### Award Rewards on Kill
+
+```typescript
+function Goblin() {
+  return {
+    name: "Goblin",
+    onInit() {
+      this.setGraphic("goblin");
+      this.hp = 50;
+      this.param[MAXHP] = 50;
+      this.param[ATK] = 10;
+      
+      new BattleAi(this, {
+        enemyType: EnemyType.Aggressive,
+        onDefeated: (event) => {
+          // Find the player who killed this enemy
+          const map = event.getCurrentMap();
+          const players = map?.getPlayersIn() || [];
+          
+          players.forEach(player => {
+            // Award gold
+            player.gold += 25;
+            
+            // Award experience
+            player.exp += 50;
+            
+            // Random loot drop
+            if (Math.random() < 0.3) {
+              player.addItem(HealthPotion);
+            }
+          });
+        }
+      });
+    }
+  };
+}
+```
+
+### Spawn Loot on Death
+
+```typescript
+new BattleAi(this, {
+  onDefeated: (event) => {
+    const map = event.getCurrentMap();
+    if (!map) return;
+    
+    // Spawn loot at enemy position
+    map.createDynamicEvent({
+      x: event.x(),
+      y: event.y(),
+      event: LootChest({ items: [GoldCoin, HealthPotion] })
+    });
+  }
+});
+```
+
+### Track Kill Count
+
+```typescript
+let killCount = 0;
+
+new BattleAi(this, {
+  onDefeated: (event) => {
+    killCount++;
+    
+    // Check quest progress
+    if (killCount >= 10) {
+      triggerQuestComplete('slay_goblins');
+    }
+  }
+});
+```
+
+### Boss Death Event
+
+```typescript
+function DragonBoss() {
+  return {
+    name: "Ancient Dragon",
+    onInit() {
+      this.setGraphic("dragon");
+      this.hp = 1000;
+      this.param[MAXHP] = 1000;
+      
+      new BattleAi(this, {
+        enemyType: EnemyType.Tank,
+        onDefeated: (event) => {
+          const map = event.getCurrentMap();
+          
+          // Announce victory
+          map?.getPlayersIn()?.forEach(player => {
+            player.showNotification({
+              message: "The Ancient Dragon has been slain!",
+              time: 5000
+            });
+            
+            // Reward all participants
+            player.gold += 1000;
+            player.exp += 5000;
+            player.addItem(DragonScale);
+          });
+          
+          // Open dungeon exit
+          map?.setTileProperty(exitX, exitY, { passable: true });
+        }
+      });
+    }
+  };
+}
 ```
 
 ## Visual Feedback
@@ -398,4 +781,4 @@ Automatic feedback:
 - **Flash Effect**: Red flash when taking damage
 - **Damage Numbers**: Floating damage text
 - **Attack Animation**: Triggers `attack` animation
-- **Knockback**: Enemies pushed back on hit
+- **Knockback**: Entities pushed back based on weapon `knockbackForce`

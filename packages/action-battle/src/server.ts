@@ -1,6 +1,6 @@
 import { RpgEvent, RpgPlayer, type RpgServer } from "@rpgjs/server";
 import { defineModule } from "@rpgjs/common";
-import { BattleAi } from "./ai.server";
+import { BattleAi, HitResult, ApplyHitHooks, DEFAULT_KNOCKBACK } from "./ai.server";
 
 /**
  * Default player attack hitboxes offsets for each direction
@@ -17,6 +17,123 @@ export const DEFAULT_PLAYER_ATTACK_HITBOXES = {
   default: { offsetX: 0, offsetY: -32, width: 32, height: 32 }
 };
 
+/**
+ * Get knockback force from player's equipped weapon
+ * 
+ * Retrieves the knockbackForce property from the player's equipped weapon.
+ * Falls back to DEFAULT_KNOCKBACK.force if no weapon or property is set.
+ * 
+ * @param player - The player to get weapon knockback from
+ * @returns Knockback force value
+ * 
+ * @example
+ * ```ts
+ * // Player with weapon having knockbackForce: 80
+ * const force = getPlayerWeaponKnockbackForce(player); // 80
+ * 
+ * // No weapon equipped
+ * const force = getPlayerWeaponKnockbackForce(player); // 50 (default)
+ * ```
+ */
+export function getPlayerWeaponKnockbackForce(player: RpgPlayer): number {
+  try {
+    const equipments = player.equipments?.() || [];
+    for (const item of equipments) {
+      const itemData = (player as any).databaseById?.(item.id());
+      if (itemData?._type === 'weapon' && itemData.knockbackForce !== undefined) {
+        return itemData.knockbackForce;
+      }
+    }
+  } catch {
+    // If error, return default
+  }
+  return DEFAULT_KNOCKBACK.force;
+}
+
+/**
+ * Apply hit from player to target (event with AI)
+ * 
+ * Handles damage calculation, knockback based on weapon, and visual effects.
+ * Can be customized using hooks.
+ * 
+ * @param player - The attacking player
+ * @param target - The event being hit
+ * @param hooks - Optional hooks for customizing hit behavior
+ * @returns Hit result if AI exists, undefined otherwise
+ * 
+ * @example
+ * ```ts
+ * // Basic hit
+ * const result = applyPlayerHitToEvent(player, event);
+ * 
+ * // With custom hooks
+ * const result = applyPlayerHitToEvent(player, event, {
+ *   onBeforeHit(result) {
+ *     result.knockbackForce *= 2; // Double knockback
+ *     return result;
+ *   },
+ *   onAfterHit(result) {
+ *     if (result.defeated) {
+ *       player.gold += 10;
+ *     }
+ *   }
+ * });
+ * ```
+ */
+export function applyPlayerHitToEvent(
+  player: RpgPlayer, 
+  target: RpgEvent, 
+  hooks?: ApplyHitHooks
+): HitResult | undefined {
+  const ai = (target as any).battleAi as BattleAi;
+  if (!ai) return undefined;
+
+  // Get knockback force from player's weapon
+  const knockbackForce = getPlayerWeaponKnockbackForce(player);
+
+  // Apply damage to AI
+  const defeated = ai.takeDamage(player);
+
+  // Calculate knockback direction (away from player)
+  const dx = target.x() - player.x();
+  const dy = target.y() - player.y();
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  // Create hit result
+  let hitResult: HitResult = {
+    damage: 0, // Will be set by takeDamage internally
+    knockbackForce,
+    knockbackDuration: DEFAULT_KNOCKBACK.duration,
+    defeated,
+    attacker: player,
+    target
+  };
+
+  // Call onBeforeHit hook
+  if (hooks?.onBeforeHit) {
+    const modified = hooks.onBeforeHit(hitResult);
+    if (modified) {
+      hitResult = modified;
+    }
+  }
+
+  // Apply knockback only if not defeated (entity still exists)
+  if (!hitResult.defeated && hitResult.knockbackForce > 0 && distance > 0) {
+    const knockbackDirection = {
+      x: dx / distance,
+      y: dy / distance
+    };
+    target.knockback(knockbackDirection, hitResult.knockbackForce, hitResult.knockbackDuration);
+  }
+
+  // Call onAfterHit hook
+  if (hooks?.onAfterHit) {
+    hooks.onAfterHit(hitResult);
+  }
+
+  return hitResult;
+}
+
 export default defineModule<RpgServer>({
   player: {
     /**
@@ -24,6 +141,7 @@ export default defineModule<RpgServer>({
      *
      * When a player presses the action key, create an attack hitbox
      * that can damage AI enemies within range and knockback the event.
+     * Knockback force is based on the player's equipped weapon.
      * Triggers attack animation and visual effects.
      *
      * @param player - The player performing the action
@@ -64,29 +182,9 @@ export default defineModule<RpgServer>({
           next(hits) {
             hits.forEach((hit) => {
               if (hit instanceof RpgEvent) {
-                // Check if the event has AI
-                const ai = (hit as any).battleAi as BattleAi;
-                if (ai) {
-                  // Apply damage to AI
-                  const defeated = ai.takeDamage(player);
-
-                  // Calculate knockback direction (away from player)
-                  const dx = hit.x() - player.x();
-                  const dy = hit.y() - player.y();
-                  const distance = Math.sqrt(dx * dx + dy * dy);
-                  
-                  // Normalize direction for knockback
-                  const knockbackDirection = {
-                    x: distance > 0 ? dx / distance : 0,
-                    y: distance > 0 ? dy / distance : 0
-                  };
-                  
-                  // Knockback the event with stronger force
-                  hit.knockback(knockbackDirection, 50, 300);
-
-                  if (defeated) {
-                    console.log(`Player ${player.id} defeated AI ${hit.id}`);
-                  }
+                const result = applyPlayerHitToEvent(player, hit);
+                if (result?.defeated) {
+                  console.log(`Player ${player.id} defeated AI ${hit.id}`);
                 }
               }
             });
