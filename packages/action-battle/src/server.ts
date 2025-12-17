@@ -39,8 +39,11 @@ export default defineModule<RpgServer>({
         const playerY = player.y();
         const direction = player.getDirection();
 
+        // Convert Direction enum to string key
+        const directionKey = direction as string;
+
         // Get hitbox configuration for the direction
-        const hitboxConfig = DEFAULT_PLAYER_ATTACK_HITBOXES[direction] || DEFAULT_PLAYER_ATTACK_HITBOXES.default;
+        const hitboxConfig = DEFAULT_PLAYER_ATTACK_HITBOXES[directionKey as keyof typeof DEFAULT_PLAYER_ATTACK_HITBOXES] || DEFAULT_PLAYER_ATTACK_HITBOXES.default;
         
         // Convert relative hitbox to absolute coordinates
         const hitboxes: Array<{
@@ -78,8 +81,8 @@ export default defineModule<RpgServer>({
                     y: distance > 0 ? dy / distance : 0
                   };
                   
-                  // Knockback the event
-                  hit.knockback(knockbackDirection, 15, 300);
+                  // Knockback the event with stronger force
+                  hit.knockback(knockbackDirection, 50, 300);
 
                   if (defeated) {
                     console.log(`Player ${player.id} defeated AI ${hit.id}`);
