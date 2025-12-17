@@ -897,41 +897,38 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * Apply knockback effect in the specified direction
      * 
      * Pushes the entity with an initial force that decays over time.
-     * Returns a Promise that resolves when the knockback completes.
+     * Returns a Promise that resolves when the knockback completes **or is cancelled**.
      * 
-     * This method handles multiple concurrent knockbacks correctly by checking
-     * if there are still active Knockback strategies after completion, rather than
-     * relying on a counter that could get out of sync.
+     * ## Design notes
+     * - The underlying physics `MovementManager` can cancel strategies via `remove()`, `clear()`,
+     *   or `stopMovement()` **without resolving the Promise** returned by `add()`.
+     * - For this reason, this method considers the knockback finished when either:
+     *   - the `add()` promise resolves (normal completion), or
+     *   - the strategy is no longer present in the active movements list (cancellation).
+     * - When multiple knockbacks overlap, `directionFixed` and `animationFixed` are restored
+     *   only after **all** knockbacks have finished (including cancellations).
      * 
      * @param direction - Normalized direction vector `{ x, y }` for the knockback
      * @param force - Initial knockback force (default: 5)
      * @param duration - Duration in milliseconds (default: 300)
      * @param options - Optional callbacks for movement events
-     * @returns Promise that resolves when the knockback completes
+     * @returns Promise that resolves when the knockback completes or is cancelled
      * 
      * @example
      * ```ts
-     * // Knockback with direction/animation lock that resets after
-     * await player.knockback({ x: -1, y: 0 }, 5, 300, {
-     *   onStart: () => {
-     *     player.directionFixed = true;
-     *     player.animationFixed = true;
-     *   },
-     *   onComplete: () => {
-     *     player.directionFixed = false;
-     *     player.animationFixed = false;
-     *   }
-     * });
-     * 
-     * // Simple knockback and wait
-     * await player.knockback({ x: 1, y: 1 }, 10, 500);
-     * console.log('Knockback finished!');
+     * // Simple knockback (await is optional)
+     * await player.knockback({ x: 1, y: 0 }, 5, 300);
+     *
+     * // Overlapping knockbacks: flags are restored only after the last one ends
+     * player.knockback({ x: -1, y: 0 }, 5, 300);
+     * player.knockback({ x: 0, y: 1 }, 3, 200);
+     *
+     * // Cancellation (e.g. map change) will still restore fixed flags
+     * // even if the underlying movement strategy promise is never resolved.
      * ```
      */
     async knockback(direction: { x: number, y: number }, force: number = 5, duration: number = 300, options?: MovementOptions): Promise<void> {
-      // Physic strategies expect seconds (dt is in seconds), while the server API exposes milliseconds
       const durationSeconds = duration / 1000;
-
       const selfAny = this as any;
       const lockKey = '__rpg_knockback_lock__';
 
@@ -939,159 +936,100 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
         prevDirectionFixed: boolean;
         prevAnimationFixed: boolean;
         prevAnimationName?: string;
-        monitorIntervalId?: ReturnType<typeof setInterval>;
-        destroySubscription?: Subscription;
       };
 
-      /**
-       * Restore the previous fixed states captured at the start of the first knockback.
-       *
-       * This is intentionally idempotent: once restored, the lock is removed and subsequent
-       * calls become no-ops.
-       */
-      const restoreKnockbackLock = (): void => {
-        const lock: KnockbackLockState | undefined = selfAny[lockKey];
-        if (!lock) {
-          return;
-        }
-
-        if (lock.monitorIntervalId) {
-          clearInterval(lock.monitorIntervalId);
-          lock.monitorIntervalId = undefined;
-        }
-
-        if (lock.destroySubscription) {
-          try {
-            lock.destroySubscription.unsubscribe();
-          } catch {
-            // ignore - best effort cleanup
-          }
-          lock.destroySubscription = undefined;
-        }
-
-        // Restore previous fixed flags
-        this.directionFixed = lock.prevDirectionFixed;
-
-        // Restore animation + fixed flag
-        const prevAnimFixed = lock.prevAnimationFixed;
-        this.animationFixed = false; // temporarily unlock so we can restore animation
-
-        const prevAnimationName = lock.prevAnimationName;
-        const hasSetAnimation = typeof selfAny.setAnimation === 'function';
-        const animSignal = selfAny.animationName;
-        if (!prevAnimFixed && prevAnimationName) {
-          if (hasSetAnimation) {
-            selfAny.setAnimation(prevAnimationName);
-          } else if (animSignal && typeof animSignal === 'object' && typeof animSignal.set === 'function') {
-            animSignal.set(prevAnimationName);
-          }
-        }
-
-        this.animationFixed = prevAnimFixed;
-
+      const getLock = (): KnockbackLockState | undefined => selfAny[lockKey];
+      const setLock = (lock: KnockbackLockState): void => {
+        selfAny[lockKey] = lock;
+      };
+      const clearLock = (): void => {
         delete selfAny[lockKey];
       };
 
-      // Check if this is the first knockback by looking at active movement strategies
-      // This is more reliable than a counter which could get out of sync
-      const activeKnockbacks = this.getActiveMovements().filter(s => s instanceof Knockback);
-      const isFirstKnockback = activeKnockbacks.length === 0 && !selfAny[lockKey];
+      const hasActiveKnockback = (): boolean =>
+        this.getActiveMovements().some(s => s instanceof Knockback);
 
-      if (isFirstKnockback) {
-        // Capture previous animation name (signals are callable functions with `.set`)
+      const setAnimationName = (name: string): void => {
+        if (typeof selfAny.setAnimation === 'function') {
+          selfAny.setAnimation(name);
+          return;
+        }
         const animSignal = selfAny.animationName;
-        let prevAnimationName: string | undefined;
+        if (animSignal && typeof animSignal === 'object' && typeof animSignal.set === 'function') {
+          animSignal.set(name);
+        }
+      };
+
+      const getAnimationName = (): string | undefined => {
+        const animSignal = selfAny.animationName;
         if (typeof animSignal === 'function') {
           try {
-            prevAnimationName = animSignal();
+            return animSignal();
           } catch {
-            // ignore - best effort
+            return undefined;
           }
         }
+        return undefined;
+      };
 
-        // Store original state before any modifications
-        const lock: KnockbackLockState = {
+      const restore = (): void => {
+        const lock = getLock();
+        if (!lock) return;
+
+        this.directionFixed = lock.prevDirectionFixed;
+
+        const prevAnimFixed = lock.prevAnimationFixed;
+        this.animationFixed = false; // temporarily unlock so we can restore animation
+        if (!prevAnimFixed && lock.prevAnimationName) {
+          setAnimationName(lock.prevAnimationName);
+        }
+        this.animationFixed = prevAnimFixed;
+
+        clearLock();
+      };
+
+      const ensureLockInitialized = (): void => {
+        if (getLock()) return;
+
+        setLock({
           prevDirectionFixed: this.directionFixed,
           prevAnimationFixed: this.animationFixed,
-          prevAnimationName
-        };
-        selfAny[lockKey] = lock;
+          prevAnimationName: getAnimationName(),
+        });
 
-        // Now set the fixed states
         this.directionFixed = true;
-
-        // Set animation to "stand" before locking it
-        const hasSetAnimation = typeof selfAny.setAnimation === 'function';
-        if (hasSetAnimation) {
-          selfAny.setAnimation("stand");
-        } else if (animSignal && typeof animSignal === 'object' && typeof animSignal.set === 'function') {
-          animSignal.set("stand");
-        }
-
+        setAnimationName('stand');
         this.animationFixed = true;
+      };
 
-        // Safety net: ensure we restore fixed flags when knockbacks are cancelled
-        // (e.g., map change calls stopMovement(), which clears strategies without resolving the Promise).
-        const intervalMs = 16;
-        lock.monitorIntervalId = setInterval(() => {
-          const currentLock: KnockbackLockState | undefined = selfAny[lockKey];
-          if (!currentLock) {
-            return;
-          }
-          const hasKnockback = this.getActiveMovements().some(s => s instanceof Knockback);
-          if (!hasKnockback) {
-            restoreKnockbackLock();
-          }
-        }, intervalMs);
-
-        // Also clean up when the player is destroyed (best effort).
-        const destroy$ = selfAny._destroy$;
-        if (destroy$ && typeof destroy$.pipe === 'function') {
-          lock.destroySubscription = destroy$.pipe(take(1)).subscribe(() => {
-            restoreKnockbackLock();
-          });
-        }
-      }
-
-      const strategy = new Knockback(direction, force, durationSeconds);
-      const addPromise = this.addMovement(strategy, options);
-      let cancelIntervalId: ReturnType<typeof setInterval> | null = null;
-
-      try {
-        // IMPORTANT:
-        // - `MovementManager.remove()/clear()/stopMovement()` can cancel the strategy WITHOUT resolving the Promise.
-        // - We therefore consider the knockback finished when the strategy disappears from active movements,
-        //   or when `add()` resolves normally.
-        const cancelledOrRemoved = new Promise<void>((resolve) => {
+      const waitUntilRemovedOrTimeout = (strategy: MovementStrategy): Promise<void> => {
+        return new Promise<void>((resolve) => {
           const start = Date.now();
-          // Give some slack beyond the declared duration to account for tick scheduling.
           const maxMs = Math.max(0, duration + 1000);
-          cancelIntervalId = setInterval(() => {
+
+          const intervalId = setInterval(() => {
             const active = this.getActiveMovements();
-            const stillPresent = active.includes(strategy);
-            if (!stillPresent) {
-              resolve();
-              return;
-            }
-            if (Date.now() - start > maxMs) {
+            if (!active.includes(strategy) || (Date.now() - start > maxMs)) {
+              clearInterval(intervalId);
               resolve();
             }
           }, 16);
         });
+      };
 
-        await Promise.race([addPromise, cancelledOrRemoved]);
+      // First knockback creates the lock and freezes direction/animation.
+      // Next knockbacks reuse the lock and keep the fixed flags enabled.
+      ensureLockInitialized();
+
+      const strategy = new Knockback(direction, force, durationSeconds);
+      const addPromise = this.addMovement(strategy, options);
+
+      try {
+        await Promise.race([addPromise, waitUntilRemovedOrTimeout(strategy)]);
       } finally {
-        if (cancelIntervalId) {
-          clearInterval(cancelIntervalId);
-          cancelIntervalId = null;
-        }
-
-        // Check if ALL knockbacks are finished by looking at active strategies
-        // This ensures we only restore state when no knockbacks remain
-        const remainingKnockbacks = this.getActiveMovements().filter(s => s instanceof Knockback);
-
-        if (remainingKnockbacks.length === 0) {
-          restoreKnockbackLock();
+        // Restore only when ALL knockbacks are done (including cancellations).
+        if (!hasActiveKnockback()) {
+          restore();
         }
       }
     }
