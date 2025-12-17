@@ -46,6 +46,9 @@ export class CollisionResolver {
    * Resolves a collision
    * 
    * Separates entities and applies collision response.
+   * First checks if the collision should be resolved using resolution filters.
+   * If any entity has a resolution filter that returns false, the collision
+   * is skipped (entities pass through) but events are still fired.
    * 
    * @param collision - Collision information to resolve
    */
@@ -54,6 +57,12 @@ export class CollisionResolver {
 
     // Skip if penetration is too small
     if (depth < this.config.minPenetrationDepth) {
+      return;
+    }
+
+    // Check resolution filters - if either entity says no, skip resolution
+    // This allows entities to pass through each other while still detecting collisions
+    if (!entityA.shouldResolveCollisionWith(entityB)) {
       return;
     }
 

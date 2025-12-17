@@ -1096,13 +1096,14 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
     });
 
-    // Add collision filter for through/throughOtherPlayer/throughEvent
-    // This filter allows dynamic collision filtering based on owner properties
-    entity.addCollisionFilter((self, other) => {
+    // Add resolution filter for through/throughOtherPlayer/throughEvent
+    // This filter determines if collisions should be RESOLVED (blocking) or just DETECTED.
+    // When returning false, entities pass through each other but collision events still fire.
+    entity.addResolutionFilter((self, other) => {
       const selfOwner = (self as any).owner;
       const otherOwner = (other as any).owner;
 
-      // If either entity has no owner, allow collision (e.g., walls, obstacles)
+      // If either entity has no owner, resolve collision (e.g., walls, obstacles must block)
       if (!selfOwner || !otherOwner) {
         return true;
       }
@@ -1112,7 +1113,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       if (typeof selfOwner._through === "function") {
         try {
           if (selfOwner._through() === true) {
-            return false; // No collision
+            return false; // Pass through but events still fire
           }
         } catch {
           // Ignore errors
@@ -1134,7 +1135,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         if (typeof selfOwner._throughOtherPlayer === "function") {
           try {
             if (selfOwner._throughOtherPlayer() === true) {
-              return false; // No collision with players
+              return false; // Pass through players but events still fire
             }
           } catch {
             // Ignore errors
@@ -1150,7 +1151,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         if (typeof selfOwner._throughEvent === "function") {
           try {
             if (selfOwner._throughEvent() === true) {
-              return false; // No collision with events
+              return false; // Pass through events but events still fire
             }
           } catch {
             // Ignore errors
@@ -1160,7 +1161,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         }
       }
 
-      return true; // Allow collision
+      return true; // Resolve collision (block movement)
     });
 
     return id;

@@ -73,7 +73,7 @@ export function Event() {
       this.speed.set(1)
       this.teleport({ x: 100, y: 200 })
       this.frequency = Frequency.Low;
-      this.through = true;
+      this.through = false;
       
       // Configure enemy stats
       this.hp = 1000;

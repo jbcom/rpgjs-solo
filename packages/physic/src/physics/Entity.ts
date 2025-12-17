@@ -31,6 +31,36 @@ export type CardinalDirection = 'idle' | 'up' | 'down' | 'left' | 'right';
 export type CollisionFilter = (self: Entity, other: Entity) => boolean;
 
 /**
+ * Resolution filter function type
+ * 
+ * A filter that determines whether a collision should be **resolved** (blocking) 
+ * or just **detected** (notification only).
+ * 
+ * Unlike CollisionFilter which prevents detection entirely, ResolutionFilter
+ * allows collision events to fire while optionally skipping the physical blocking.
+ * 
+ * Return `true` to resolve the collision (entities block each other),
+ * `false` to skip resolution (entities pass through but events still fire).
+ * 
+ * @param self - The entity that owns this filter
+ * @param other - The other entity in the collision
+ * @returns `true` to resolve (block), `false` to skip resolution (pass through)
+ * 
+ * @example
+ * ```typescript
+ * // Filter that allows passing through players but still triggers events
+ * const throughPlayerFilter: ResolutionFilter = (self, other) => {
+ *   const otherOwner = (other as any).owner;
+ *   if (otherOwner?.type === 'player') {
+ *     return false; // Pass through but events still fire
+ *   }
+ *   return true; // Block other entities
+ * };
+ * ```
+ */
+export type ResolutionFilter = (self: Entity, other: Entity) => boolean;
+
+/**
  * Configuration options for creating an entity
  */
 export interface EntityConfig {
@@ -254,6 +284,7 @@ export class Entity {
   private leaveTileHandlers: Set<EntityTileHandler>;
   private canEnterTileHandlers: Set<EntityCanEnterTileHandler>;
   private collisionFilterHandlers: Set<CollisionFilter>;
+  private resolutionFilterHandlers: Set<ResolutionFilter>;
   private wasMoving: boolean;
   private lastCardinalDirection: CardinalDirection = 'idle';
 
@@ -339,6 +370,7 @@ export class Entity {
     this.leaveTileHandlers = new Set();
     this.canEnterTileHandlers = new Set();
     this.collisionFilterHandlers = new Set();
+    this.resolutionFilterHandlers = new Set();
 
     // Initialize movement state
     this.wasMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
@@ -1015,6 +1047,69 @@ export class Entity {
 
     // Check collision filters on the other entity
     for (const filter of other.collisionFilterHandlers) {
+      if (!filter(other, this)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Adds a resolution filter to this entity
+   * 
+   * Resolution filters determine whether a collision should be **resolved** (blocking)
+   * or just **detected** (notification only). Unlike collision filters which prevent
+   * detection entirely, resolution filters allow collision events to fire while
+   * optionally skipping the physical blocking.
+   * 
+   * This enables scenarios like:
+   * - Players passing through other players but still triggering touch events
+   * - Entities passing through characters but still calling onPlayerTouch hooks
+   * - Ghost mode where collisions are detected but not resolved
+   * 
+   * @param filter - Function that returns `true` to resolve (block), `false` to skip
+   * @returns Unsubscribe function to remove the filter
+   * 
+   * @example
+   * ```typescript
+   * // Allow entity to pass through players but still trigger events
+   * const unsubscribe = entity.addResolutionFilter((self, other) => {
+   *   const otherOwner = (other as any).owner;
+   *   if (otherOwner?.type === 'player') {
+   *     return false; // Pass through but events still fire
+   *   }
+   *   return true; // Block other entities
+   * });
+   * 
+   * // Later, remove the filter
+   * unsubscribe();
+   * ```
+   */
+  public addResolutionFilter(filter: ResolutionFilter): () => void {
+    this.resolutionFilterHandlers.add(filter);
+    return () => this.resolutionFilterHandlers.delete(filter);
+  }
+
+  /**
+   * Checks if this entity should resolve (block) a collision with another entity
+   * 
+   * This is called by the CollisionResolver to determine if the collision should
+   * result in physical blocking or just notification.
+   * 
+   * @param other - Other entity to check
+   * @returns True if collision should be resolved (blocking), false to pass through
+   */
+  public shouldResolveCollisionWith(other: Entity): boolean {
+    // Check resolution filters on this entity
+    for (const filter of this.resolutionFilterHandlers) {
+      if (!filter(this, other)) {
+        return false;
+      }
+    }
+
+    // Check resolution filters on the other entity
+    for (const filter of other.resolutionFilterHandlers) {
       if (!filter(other, this)) {
         return false;
       }
