@@ -749,6 +749,14 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       return this._through();
     }
 
+    set throughEvent(value: boolean) {
+      this._throughEvent.set(value);
+    }
+
+    get throughEvent(): boolean {
+      return this._throughEvent();
+    }
+
     set frequency(value: number) {
       this._frequency.set(value);
     }
@@ -1815,11 +1823,63 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
  * This interface defines the public API of the MoveManager mixin.
  */
 export interface IMoveManager {
-  /** Whether the player passes through other players */
+  /** 
+   * Whether the player passes through other players
+   * 
+   * When `true`, the player can walk through other player entities without collision.
+   * This is useful for busy areas where players shouldn't block each other.
+   * 
+   * @default true
+   * 
+   * @example
+   * ```ts
+   * // Disable player-to-player collision
+   * player.throughOtherPlayer = true;
+   * 
+   * // Enable player-to-player collision
+   * player.throughOtherPlayer = false;
+   * ```
+   */
   throughOtherPlayer: boolean;
 
-  /** Whether the player goes through events or other players */
+  /** 
+   * Whether the player goes through all characters (players and events)
+   * 
+   * When `true`, the player can walk through all character entities (both players and events)
+   * without collision. Walls and obstacles still block movement.
+   * This takes precedence over `throughOtherPlayer` and `throughEvent`.
+   * 
+   * @default false
+   * 
+   * @example
+   * ```ts
+   * // Enable ghost mode - pass through all characters
+   * player.through = true;
+   * 
+   * // Disable ghost mode
+   * player.through = false;
+   * ```
+   */
   through: boolean;
+
+  /** 
+   * Whether the player passes through events (NPCs, objects)
+   * 
+   * When `true`, the player can walk through event entities without collision.
+   * This is useful for NPCs that shouldn't block player movement.
+   * 
+   * @default false
+   * 
+   * @example
+   * ```ts
+   * // Allow passing through events
+   * player.throughEvent = true;
+   * 
+   * // Block passage through events
+   * player.throughEvent = false;
+   * ```
+   */
+  throughEvent: boolean;
 
   /** Frequency for movement timing (milliseconds between movements) */
   frequency: number;

@@ -11,6 +11,26 @@ const DIRECTION_CHANGE_THRESHOLD_SQ = DIRECTION_CHANGE_THRESHOLD * DIRECTION_CHA
 export type CardinalDirection = 'idle' | 'up' | 'down' | 'left' | 'right';
 
 /**
+ * Collision filter function type
+ * 
+ * A filter that determines whether a collision should be processed between two entities.
+ * Return `true` to allow the collision, `false` to ignore it.
+ * 
+ * @param self - The entity that owns this filter
+ * @param other - The other entity in the collision
+ * @returns `true` if collision should occur, `false` to ignore
+ * 
+ * @example
+ * ```typescript
+ * // Filter that ignores collisions with entities tagged as "ghost"
+ * const ghostFilter: CollisionFilter = (self, other) => {
+ *   return !(other as any).isGhost;
+ * };
+ * ```
+ */
+export type CollisionFilter = (self: Entity, other: Entity) => boolean;
+
+/**
  * Configuration options for creating an entity
  */
 export interface EntityConfig {
@@ -233,6 +253,7 @@ export class Entity {
   private enterTileHandlers: Set<EntityTileHandler>;
   private leaveTileHandlers: Set<EntityTileHandler>;
   private canEnterTileHandlers: Set<EntityCanEnterTileHandler>;
+  private collisionFilterHandlers: Set<CollisionFilter>;
   private wasMoving: boolean;
   private lastCardinalDirection: CardinalDirection = 'idle';
 
@@ -317,6 +338,7 @@ export class Entity {
     this.enterTileHandlers = new Set();
     this.leaveTileHandlers = new Set();
     this.canEnterTileHandlers = new Set();
+    this.collisionFilterHandlers = new Set();
 
     // Initialize movement state
     this.wasMoving = this.velocity.lengthSquared() > MOVEMENT_EPSILON_SQ;
@@ -930,19 +952,75 @@ export class Entity {
   }
 
   /**
+   * Adds a collision filter to this entity
+   * 
+   * Collision filters allow dynamic, conditional collision filtering beyond static bitmasks.
+   * Each filter is called when checking if this entity can collide with another.
+   * If any filter returns `false`, the collision is ignored.
+   * 
+   * This enables scenarios like:
+   * - Players passing through other players (`throughOtherPlayer`)
+   * - Entities passing through all characters (`through`)
+   * - Custom game-specific collision rules
+   * 
+   * @param filter - Function that returns `true` to allow collision, `false` to ignore
+   * @returns Unsubscribe function to remove the filter
+   * 
+   * @example
+   * ```typescript
+   * // Allow entity to pass through other players
+   * const unsubscribe = entity.addCollisionFilter((self, other) => {
+   *   const otherOwner = (other as any).owner;
+   *   if (otherOwner?.type === 'player') {
+   *     return false; // No collision with players
+   *   }
+   *   return true; // Collide with everything else
+   * });
+   * 
+   * // Later, remove the filter
+   * unsubscribe();
+   * ```
+   */
+  public addCollisionFilter(filter: CollisionFilter): () => void {
+    this.collisionFilterHandlers.add(filter);
+    return () => this.collisionFilterHandlers.delete(filter);
+  }
+
+  /**
    * Checks if this entity can collide with another entity
+   * 
+   * First checks collision masks (bitmask filtering), then executes all registered
+   * collision filters. If any filter returns `false`, the collision is ignored.
    * 
    * @param other - Other entity to check
    * @returns True if collision is possible
    */
   public canCollideWith(other: Entity): boolean {
-    // Check collision masks
+    // Check collision masks first (fast path)
     const categoryA = this.collisionCategory;
     const maskA = this.collisionMask;
     const categoryB = other.collisionCategory;
     const maskB = other.collisionMask;
 
-    return (categoryA & maskB) !== 0 && (categoryB & maskA) !== 0;
+    if ((categoryA & maskB) === 0 || (categoryB & maskA) === 0) {
+      return false;
+    }
+
+    // Check collision filters on this entity
+    for (const filter of this.collisionFilterHandlers) {
+      if (!filter(this, other)) {
+        return false;
+      }
+    }
+
+    // Check collision filters on the other entity
+    for (const filter of other.collisionFilterHandlers) {
+      if (!filter(other, this)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**

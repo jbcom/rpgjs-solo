@@ -16,6 +16,7 @@ export {
   Entity,
   type EntityConfig,
   type CardinalDirection,
+  type CollisionFilter,
   type EntityCollisionEvent,
   type EntityCollisionHandler,
   type EntityPositionSyncEvent,

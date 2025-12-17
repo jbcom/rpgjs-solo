@@ -1096,6 +1096,73 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
     });
 
+    // Add collision filter for through/throughOtherPlayer/throughEvent
+    // This filter allows dynamic collision filtering based on owner properties
+    entity.addCollisionFilter((self, other) => {
+      const selfOwner = (self as any).owner;
+      const otherOwner = (other as any).owner;
+
+      // If either entity has no owner, allow collision (e.g., walls, obstacles)
+      if (!selfOwner || !otherOwner) {
+        return true;
+      }
+
+      // Check if selfOwner has _through property (passes through everything)
+      // This applies to both players and events
+      if (typeof selfOwner._through === "function") {
+        try {
+          if (selfOwner._through() === true) {
+            return false; // No collision
+          }
+        } catch {
+          // Ignore errors
+        }
+      } else if (selfOwner.through === true) {
+        return false;
+      }
+
+      // Determine the type of both entities via lookup in players/events
+      const playersMap = this.players();
+      const eventsMap = this.events();
+      const isSelfPlayer = !!playersMap[self.uuid];
+      const isOtherPlayer = !!playersMap[other.uuid];
+      const isOtherEvent = !!eventsMap[other.uuid];
+
+      // throughOtherPlayer only applies when SELF is a player and OTHER is also a player
+      // (players passing through other players)
+      if (isSelfPlayer && isOtherPlayer) {
+        if (typeof selfOwner._throughOtherPlayer === "function") {
+          try {
+            if (selfOwner._throughOtherPlayer() === true) {
+              return false; // No collision with players
+            }
+          } catch {
+            // Ignore errors
+          }
+        } else if (selfOwner.throughOtherPlayer === true) {
+          return false;
+        }
+      }
+
+      // throughEvent only applies when SELF is a player and OTHER is an event
+      // (players passing through events)
+      if (isSelfPlayer && isOtherEvent) {
+        if (typeof selfOwner._throughEvent === "function") {
+          try {
+            if (selfOwner._throughEvent() === true) {
+              return false; // No collision with events
+            }
+          } catch {
+            // Ignore errors
+          }
+        } else if (selfOwner.throughEvent === true) {
+          return false;
+        }
+      }
+
+      return true; // Allow collision
+    });
+
     return id;
   }
 

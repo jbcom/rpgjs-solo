@@ -73,6 +73,7 @@ export function Event() {
       this.speed.set(1)
       this.teleport({ x: 100, y: 200 })
       this.frequency = Frequency.Low;
+      this.through = true;
       
       // Configure enemy stats
       this.hp = 1000;
@@ -85,11 +86,11 @@ export function Event() {
       this.equip(EnemyClaw.id);
       
       // Initialize AI behavior
-      this.battleAi = new BattleAi(this, {
-        enemyType: EnemyType.Aggressive,
-        visionRange: 150,
-        attackRange: 50,
-      });
+      // this.battleAi = new BattleAi(this, {
+      //   enemyType: EnemyType.Aggressive,
+      //   visionRange: 150,
+      //   attackRange: 50,
+      // });
     },
     onPlayerTouch(player: RpgPlayer) {
      console.log("touch");
