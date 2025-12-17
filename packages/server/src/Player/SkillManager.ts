@@ -1,27 +1,143 @@
 import {
-  Constructor,
   isArray,
   isInstanceOf,
   isString,
   PlayerCtor,
-  RpgCommonPlayer,
 } from "@rpgjs/common";
 import { SkillLog } from "../logs";
 import { RpgPlayer } from "./Player";
 import { Effect } from "./EffectManager";
 
 /**
- * Interface defining dependencies from other mixins that SkillManager needs
+ * Type for skill class constructor
  */
-interface SkillManagerDependencies {
-  sp: number;
-  skills(): any[];
-  hasEffect(effect: string): boolean;
-  databaseById(id: string): any;
-  applyStates(player: RpgPlayer, skill: any): void;
+type SkillClass = { new (...args: any[]): any };
+
+/**
+ * Interface defining the hooks that can be implemented on skill classes or objects
+ * 
+ * These hooks are called at specific moments during the skill lifecycle:
+ * - `onLearn`: When the skill is learned by the player
+ * - `onUse`: When the skill is successfully used
+ * - `onUseFailed`: When the skill usage fails (e.g., chance roll failed)
+ * - `onForget`: When the skill is forgotten
+ * 
+ * @example
+ * ```ts
+ * const skillHooks: SkillHooks = {
+ *   onLearn(player) {
+ *     console.log('Skill learned!');
+ *   },
+ *   onUse(player, target) {
+ *     console.log('Skill used on target');
+ *   }
+ * };
+ * ```
+ */
+export interface SkillHooks {
+  /**
+   * Called when the skill is learned by the player
+   * 
+   * @param player - The player learning the skill
+   */
+  onLearn?: (player: RpgPlayer) => void | Promise<void>;
+
+  /**
+   * Called when the skill is successfully used
+   * 
+   * @param player - The player using the skill
+   * @param target - The target player(s) if any
+   */
+  onUse?: (player: RpgPlayer, target?: RpgPlayer | RpgPlayer[]) => void | Promise<void>;
+
+  /**
+   * Called when the skill usage fails (e.g., chance roll failed)
+   * 
+   * @param player - The player attempting to use the skill
+   * @param target - The intended target player(s) if any
+   */
+  onUseFailed?: (player: RpgPlayer, target?: RpgPlayer | RpgPlayer[]) => void | Promise<void>;
+
+  /**
+   * Called when the skill is forgotten
+   * 
+   * @param player - The player forgetting the skill
+   */
+  onForget?: (player: RpgPlayer) => void | Promise<void>;
 }
 
+/**
+ * Interface for skill object definition
+ * 
+ * Defines the properties that a skill can have when defined as an object.
+ * Skills can be defined as objects, classes, or string IDs referencing the database.
+ * 
+ * @example
+ * ```ts
+ * const fireSkill: SkillObject = {
+ *   id: 'fire',
+ *   name: 'Fire',
+ *   description: 'A basic fire spell',
+ *   spCost: 10,
+ *   hitRate: 0.9,
+ *   power: 50,
+ *   onUse(player) {
+ *     console.log('Fire spell cast!');
+ *   }
+ * };
+ * 
+ * player.learnSkill(fireSkill);
+ * ```
+ */
+export interface SkillObject extends SkillHooks {
+  /**
+   * Unique identifier for the skill
+   * If not provided, one will be auto-generated
+   */
+  id?: string;
 
+  /**
+   * Display name of the skill
+   */
+  name?: string;
+
+  /**
+   * Description of the skill
+   */
+  description?: string;
+
+  /**
+   * SP (Skill Points) cost to use the skill
+   * @default 0
+   */
+  spCost?: number;
+
+  /**
+   * Hit rate (0-1) - probability of successful skill usage
+   * @default 1
+   */
+  hitRate?: number;
+
+  /**
+   * Base power of the skill for damage calculation
+   */
+  power?: number;
+
+  /**
+   * Coefficient multipliers for damage calculation
+   */
+  coefficient?: Record<string, number>;
+
+  /**
+   * Type marker for database
+   */
+  _type?: 'skill';
+
+  /**
+   * Allow additional properties
+   */
+  [key: string]: any;
+}
 
 /**
  * Skill Manager Mixin
@@ -30,92 +146,299 @@ interface SkillManagerDependencies {
  * learning, forgetting, and using skills, including SP cost management,
  * hit rate calculations, and skill effects application.
  * 
+ * Supports three input formats for skills:
+ * - **String ID**: References a skill in the database
+ * - **Class**: A skill class that will be instantiated
+ * - **Object**: A skill object with properties and hooks
+ * 
  * @param Base - The base class to extend with skill management
  * @returns Extended class with skill management methods
  * 
  * @example
  * ```ts
- * class MyPlayer extends WithSkillManager(BasePlayer) {
- *   constructor() {
- *     super();
- *     // Skill system is automatically initialized
- *   }
- * }
+ * // Using string ID (from database)
+ * player.learnSkill('fire');
  * 
- * const player = new MyPlayer();
- * player.learnSkill(Fire);
- * player.useSkill(Fire, targetPlayer);
+ * // Using skill class
+ * player.learnSkill(FireSkill);
+ * 
+ * // Using skill object
+ * player.learnSkill({
+ *   id: 'ice',
+ *   name: 'Ice',
+ *   spCost: 15,
+ *   onUse(player) {
+ *     console.log('Ice spell cast!');
+ *   }
+ * });
  * ```
  */
-export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase) {
-  return class extends Base {
-    _getSkillIndex(skillClass: any | string) {
-      return (this as any).skills().findIndex((skill) => {
-        if (isString(skill)) {
-          return skill.id == skillClass;
-        }
-        if (isString(skillClass)) {
-          return skillClass == (skill.id || skill);
-        }
-        return isInstanceOf(skill, skillClass);
+export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
+  return class extends (Base as any) {
+    /**
+     * Find the index of a skill in the skills array
+     * 
+     * Searches by ID for both string inputs and object/class inputs.
+     * 
+     * @param skillInput - Skill ID, class, or object to find
+     * @returns Index of the skill or -1 if not found
+     */
+    _getSkillIndex(skillInput: SkillClass | SkillObject | string): number {
+      // Get the ID to search for
+      let searchId = '';
+      
+      if (isString(skillInput)) {
+        searchId = skillInput as string;
+      } else if (typeof skillInput === 'function') {
+        // It's a class - use the class name as ID
+        searchId = (skillInput as any).id || skillInput.name;
+      } else {
+        // It's an object - use its id property
+        searchId = (skillInput as SkillObject).id || '';
+      }
+
+      return (this as any).skills().findIndex((skill: any) => {
+        const skillId = skill.id || skill.name || '';
+        return skillId === searchId;
       });
     }
 
-    getSkill(skillClass: any | string) {
-      const index = this._getSkillIndex(skillClass);
-      return this.skills()[index] ?? null;
+    /**
+     * Retrieves a learned skill
+     * 
+     * Searches the player's learned skills by ID, class, or object.
+     * 
+     * @param skillInput - Skill ID, class, or object to find
+     * @returns The skill data if found, null otherwise
+     * 
+     * @example
+     * ```ts
+     * const skill = player.getSkill('fire');
+     * if (skill) {
+     *   console.log(`Fire skill costs ${skill.spCost} SP`);
+     * }
+     * ```
+     */
+    getSkill(skillInput: SkillClass | SkillObject | string): any | null {
+      const index = this._getSkillIndex(skillInput);
+      return (this as any).skills()[index] ?? null;
     }
 
-    learnSkill(skillId: any | string) {
+    /**
+     * Learn a new skill
+     * 
+     * Adds a skill to the player's skill list. Supports three input formats:
+     * - **String ID**: Retrieves the skill from the database
+     * - **Class**: Creates an instance and adds to database if needed
+     * - **Object**: Uses directly and adds to database if needed
+     * 
+     * @param skillInput - Skill ID, class, or object to learn
+     * @returns The learned skill data
+     * @throws SkillLog.alreadyLearned if the skill is already known
+     * 
+     * @example
+     * ```ts
+     * // From database
+     * player.learnSkill('fire');
+     * 
+     * // From class
+     * player.learnSkill(FireSkill);
+     * 
+     * // From object
+     * player.learnSkill({
+     *   id: 'custom-skill',
+     *   name: 'Custom Skill',
+     *   spCost: 20,
+     *   onLearn(player) {
+     *     console.log('Learned custom skill!');
+     *   }
+     * });
+     * ```
+     */
+    learnSkill(skillInput: SkillClass | SkillObject | string): any {
+      // Get the map for database operations
+      const map = (this as any).getCurrentMap() || (this as any).map;
+      
+      let skillId = '';
+      let skillData: any;
+
+      // Handle string: retrieve from database
+      if (isString(skillInput)) {
+        skillId = skillInput as string;
+        skillData = (this as any).databaseById(skillId);
+      }
+      // Handle class: create instance and add to database if needed
+      else if (typeof skillInput === 'function') {
+        const SkillClassCtor = skillInput as SkillClass;
+        skillId = (SkillClassCtor as any).id || SkillClassCtor.name;
+        
+        // Check if already in database
+        const existingData = map?.database()?.[skillId];
+        if (existingData) {
+          skillData = existingData;
+        } else if (map) {
+          // Add the class to the database
+          map.addInDatabase(skillId, SkillClassCtor);
+          skillData = SkillClassCtor;
+        } else {
+          skillData = SkillClassCtor;
+        }
+        
+        // Create instance of the class for hooks
+        const skillInstance = new SkillClassCtor();
+        // Merge instance properties with class static properties
+        skillData = { ...skillData, ...skillInstance, id: skillId };
+      }
+      // Handle object: use directly and add to database if needed
+      else {
+        const skillObj = skillInput as SkillObject;
+        skillId = skillObj.id || `skill-${Date.now()}`;
+        
+        // Ensure the object has an id
+        skillObj.id = skillId;
+        
+        // Check if already in database
+        const existingData = map?.database()?.[skillId];
+        if (existingData) {
+          // Merge with existing data
+          skillData = { ...existingData, ...skillObj };
+          if (map) {
+            map.addInDatabase(skillId, skillData, { force: true });
+          }
+        } else if (map) {
+          // Add the object to the database
+          map.addInDatabase(skillId, skillObj);
+          skillData = skillObj;
+        } else {
+          skillData = skillObj;
+        }
+      }
+
+      // Check if already learned
       if (this.getSkill(skillId)) {
-        throw SkillLog.alreadyLearned(skillId);
+        throw SkillLog.alreadyLearned(skillData);
       }
-      const instance = (this as any).databaseById(skillId);
-      this.skills().push(instance);
-      this["execMethod"]("onLearn", [this], instance);
-      return instance;
+
+      // Add to skills list
+      (this as any).skills().push(skillData);
+      
+      // Call onLearn hook
+      this["execMethod"]("onLearn", [this], skillData);
+      
+      return skillData;
     }
 
-    forgetSkill(skillId: any | string) {
-      if (isString(skillId)) skillId = (this as any).databaseById(skillId);
-      const index = this._getSkillIndex(skillId);
-      if (index == -1) {
-        throw SkillLog.notLearned(skillId);
+    /**
+     * Forget a learned skill
+     * 
+     * Removes a skill from the player's skill list.
+     * 
+     * @param skillInput - Skill ID, class, or object to forget
+     * @returns The forgotten skill data
+     * @throws SkillLog.notLearned if the skill is not known
+     * 
+     * @example
+     * ```ts
+     * player.forgetSkill('fire');
+     * // or
+     * player.forgetSkill(FireSkill);
+     * ```
+     */
+    forgetSkill(skillInput: SkillClass | SkillObject | string): any {
+      const index = this._getSkillIndex(skillInput);
+      
+      if (index === -1) {
+        // Get skill data for error message
+        let skillData: any = skillInput;
+        if (isString(skillInput)) {
+          try {
+            skillData = (this as any).databaseById(skillInput);
+          } catch {
+            skillData = { name: skillInput, id: skillInput };
+          }
+        } else if (typeof skillInput === 'function') {
+          skillData = { name: (skillInput as SkillClass).name, id: (skillInput as any).id || (skillInput as SkillClass).name };
+        }
+        throw SkillLog.notLearned(skillData);
       }
-      const instance = this.skills()[index];
-      this.skills().splice(index, 1);
-      this["execMethod"]("onForget", [this], instance);
-      return instance;
+      
+      const skillData = (this as any).skills()[index];
+      (this as any).skills().splice(index, 1);
+      
+      // Call onForget hook
+      this["execMethod"]("onForget", [this], skillData);
+      
+      return skillData;
     }
 
-    useSkill(skillId: any | string, otherPlayer?: RpgPlayer | RpgPlayer[]) {
-      const skill = this.getSkill(skillId);
+    /**
+     * Use a learned skill
+     * 
+     * Executes a skill, consuming SP and applying effects to targets.
+     * The skill must be learned and the player must have enough SP.
+     * 
+     * @param skillInput - Skill ID, class, or object to use
+     * @param otherPlayer - Optional target player(s) to apply skill effects to
+     * @returns The used skill data
+     * @throws SkillLog.restriction if player has CAN_NOT_SKILL effect
+     * @throws SkillLog.notLearned if skill is not known
+     * @throws SkillLog.notEnoughSp if not enough SP
+     * @throws SkillLog.chanceToUseFailed if hit rate check fails
+     * 
+     * @example
+     * ```ts
+     * // Use skill without target
+     * player.useSkill('fire');
+     * 
+     * // Use skill on a target
+     * player.useSkill('fire', enemy);
+     * 
+     * // Use skill on multiple targets
+     * player.useSkill('fire', [enemy1, enemy2]);
+     * ```
+     */
+    useSkill(skillInput: SkillClass | SkillObject | string, otherPlayer?: RpgPlayer | RpgPlayer[]): any {
+      const skill = this.getSkill(skillInput);
+      
+      // Check for skill restriction effect
       if ((this as any).hasEffect(Effect.CAN_NOT_SKILL)) {
-        throw SkillLog.restriction(skillId);
+        throw SkillLog.restriction(skill || skillInput);
       }
+      
+      // Check if skill is learned
       if (!skill) {
-        throw SkillLog.notLearned(skillId);
+        throw SkillLog.notLearned(skillInput);
       }
-      if (skill.spCost > (this as any).sp) {
-        throw SkillLog.notEnoughSp(skillId, skill.spCost, (this as any).sp);
+      
+      // Check SP cost
+      const spCost = skill.spCost || 0;
+      if (spCost > (this as any).sp) {
+        throw SkillLog.notEnoughSp(skill, spCost, (this as any).sp);
       }
-      (this as any).sp -= skill.spCost / ((this as any).hasEffect(Effect.HALF_SP_COST) ? 2 : 1);
+      
+      // Consume SP (halved if HALF_SP_COST effect is active)
+      const costMultiplier = (this as any).hasEffect(Effect.HALF_SP_COST) ? 2 : 1;
+      (this as any).sp -= spCost / costMultiplier;
+      
+      // Check hit rate
       const hitRate = skill.hitRate ?? 1;
       if (Math.random() > hitRate) {
         this["execMethod"]("onUseFailed", [this, otherPlayer], skill);
-        throw SkillLog.chanceToUseFailed(skillId);
+        throw SkillLog.chanceToUseFailed(skill);
       }
+      
+      // Apply effects to targets
       if (otherPlayer) {
-        let players: any = otherPlayer;
-        if (!isArray(players)) {
-          players = [otherPlayer];
-        }
-        for (let player of players) {
+        const players: RpgPlayer[] = isArray(otherPlayer) ? otherPlayer as RpgPlayer[] : [otherPlayer as RpgPlayer];
+        for (const player of players) {
           (this as any).applyStates(player, skill);
           (player as any).applyDamage(this, skill);
         }
       }
+      
+      // Call onUse hook
       this["execMethod"]("onUse", [this, otherPlayer], skill);
+      
       return skill;
     }
   } as unknown as TBase;
@@ -131,39 +454,44 @@ export interface ISkillManager {
   /**
    * Retrieves a learned skill. Returns null if not found
    * 
-   * @param skillClass - Skill class or data id
-   * @returns Instance of SkillClass or null
+   * @param skillInput - Skill class, object, or data id
+   * @returns The skill data or null
    */
-  getSkill(skillClass: any | string): any | null;
+  getSkill(skillInput: SkillClass | SkillObject | string): any | null;
 
   /**
    * Learn a skill
    * 
-   * @param skillId - Skill class or data id
-   * @returns Instance of SkillClass
+   * Supports three input formats:
+   * - String ID: Retrieves from database
+   * - Class: Creates instance and adds to database
+   * - Object: Uses directly and adds to database
+   * 
+   * @param skillInput - Skill class, object, or data id
+   * @returns The learned skill data
    * @throws SkillLog.alreadyLearned if the player already knows the skill
    */
-  learnSkill(skillId: any | string): any;
+  learnSkill(skillInput: SkillClass | SkillObject | string): any;
 
   /**
    * Forget a skill
    * 
-   * @param skillId - Skill class or data id
-   * @returns Instance of SkillClass
+   * @param skillInput - Skill class, object, or data id
+   * @returns The forgotten skill data
    * @throws SkillLog.notLearned if trying to forget a skill not learned
    */
-  forgetSkill(skillId: any | string): any;
+  forgetSkill(skillInput: SkillClass | SkillObject | string): any;
 
   /**
-   * Using a skill
+   * Use a skill
    * 
-   * @param skillId - Skill class or data id
+   * @param skillInput - Skill class, object, or data id
    * @param otherPlayer - Optional target player(s) to apply skill to
-   * @returns Instance of SkillClass
+   * @returns The used skill data
    * @throws SkillLog.restriction if player has Effect.CAN_NOT_SKILL
    * @throws SkillLog.notLearned if player tries to use an unlearned skill
    * @throws SkillLog.notEnoughSp if player does not have enough SP
    * @throws SkillLog.chanceToUseFailed if the chance to use the skill has failed
    */
-  useSkill(skillId: any | string, otherPlayer?: RpgPlayer | RpgPlayer[]): any;
+  useSkill(skillInput: SkillClass | SkillObject | string, otherPlayer?: RpgPlayer | RpgPlayer[]): any;
 }
