@@ -70,10 +70,18 @@ export function Event() {
     mode: EventMode.Scenario,
     onInit() {
       this.setGraphic("hero");
-      this.speed.set(1)
+      this.speed.set(4)
       this.teleport({ x: 100, y: 200 })
-      this.frequency = Frequency.Low;
+      
       this.through = false;
+      this.infiniteMoveRoute([
+        Move.tileRandom()
+      ], {
+        onStuck: (player, target, currentPos) => {
+          console.log("stuck");
+          return true;
+        }
+      })
       
       // Configure enemy stats
       this.hp = 1000;

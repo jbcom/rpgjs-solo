@@ -205,100 +205,62 @@ export enum Speed {
 * Move.turnTowardPlayer(player) | Turns in the direction of the designated player
 * @memberof Move
 * */
+/**
+ * Tracks player state for stuck detection in random movement
+ * 
+ * Stores the last known position and direction for each player to detect
+ * when they are stuck (position hasn't changed) and need a different direction.
+ */
+interface PlayerMoveState {
+  lastX: number;
+  lastY: number;
+  lastDirection: number;
+  stuckCount: number;
+}
+
 class MoveList {
   // Shared Perlin noise instance for smooth random movement
   private static perlinNoise: PerlinNoise2D = new PerlinNoise2D();
   private static randomCounter: number = 0;
   // Instance counter for each call to ensure variation
   private static callCounter: number = 0;
+  // Track player positions and directions to detect stuck state
+  private static playerMoveStates: Map<string, PlayerMoveState> = new Map();
+  // Threshold for considering a player as "stuck" (in pixels)
+  private static readonly STUCK_THRESHOLD = 2;
+
 
   /**
-   * Gets a random direction index (0-3) using a hybrid approach for balanced randomness
+   * Clears the movement state for a specific player
    * 
-   * Uses a combination of hash-based pseudo-randomness and Perlin noise to ensure
-   * fair distribution of directions while maintaining smooth, natural-looking movement patterns.
-   * The hash function guarantees uniform distribution, while Perlin noise adds spatial/temporal coherence.
+   * Should be called when a player changes map or is destroyed to prevent
+   * memory leaks and stale stuck detection data.
    * 
-   * @param player - Optional player instance for coordinate-based noise
-   * @param index - Optional index for array-based calls to ensure variation
-   * @returns Direction index (0-3) corresponding to Right, Left, Up, Down
+   * @param playerId - The ID of the player to clear state for
+   * 
+   * @example
+   * ```ts
+   * // Clear state when player leaves map
+   * Move.clearPlayerState(player.id);
+   * ```
    */
-  private getRandomDirectionIndex(player?: RpgPlayer, index?: number): number {
-    // Increment call counter for each invocation to ensure variation
-    MoveList.callCounter++;
+  static clearPlayerState(playerId: string): void {
+    MoveList.playerMoveStates.delete(playerId);
+  }
 
-    // Generate a unique seed from multiple sources
-    let seed: number;
-    const time = Date.now() * 0.001; // Convert to seconds
-
-    if (player) {
-      // Use player coordinates combined with time and call counter
-      const playerX = typeof player.x === 'function' ? player.x() : player.x;
-      const playerY = typeof player.y === 'function' ? player.y() : player.y;
-
-      // Combine with prime multipliers for better distribution
-      seed = Math.floor(
-        (playerX * 0.1) +
-        (playerY * 0.1) +
-        (time * 1000) +
-        (MoveList.callCounter * 17) +
-        ((index ?? 0) * 31)
-      );
-    } else {
-      // Fallback for non-player contexts
-      MoveList.randomCounter++;
-      seed = Math.floor(
-        (MoveList.randomCounter * 17) +
-        (time * 1000) +
-        (MoveList.callCounter * 31) +
-        ((index ?? 0) * 47)
-      );
-    }
-
-    // Use multiple hash functions combined to ensure uniform distribution
-    // This approach guarantees fair probability across all directions
-
-    // Hash 1: Linear congruential generator
-    let hash1 = ((seed * 1103515245 + 12345) & 0x7fffffff) >>> 0;
-
-    // Hash 2: Multiply-shift hash
-    let hash2 = ((seed * 2654435761) >>> 0);
-
-    // Hash 3: XOR with rotation
-    let hash3 = seed ^ (seed >>> 16);
-    hash3 = ((hash3 * 2246822507) >>> 0);
-
-    // Combine hashes using XOR for better distribution
-    let combinedHash = (hash1 ^ hash2 ^ hash3) >>> 0;
-
-    // Convert to 0-1 range
-    const hashValue = (combinedHash % 1000000) / 1000000;
-
-    // Use Perlin noise for smooth spatial/temporal variation (10% influence only)
-    // Very low influence to avoid bias while maintaining some smoothness
-    const perlinX = seed * 0.001;
-    const perlinY = (seed * 1.618) * 0.001; // Golden ratio
-    const perlinValue = MoveList.perlinNoise.getNormalized(perlinX, perlinY, 0.3);
-
-    // Combine hash (90%) with Perlin noise (10%)
-    // Very high weight on hash ensures fair distribution, minimal Perlin for subtle smoothness
-    const finalValue = (hashValue * 0.9) + (perlinValue * 0.1);
-
-    // Map to direction index (0-3) ensuring uniform distribution
-    // Clamp finalValue to [0, 1) range to ensure valid index
-    const clampedValue = Math.max(0, Math.min(0.999999, finalValue));
-    let directionIndex = Math.floor(clampedValue * 4);
-
-    // Ensure directionIndex is always in valid range [0, 3]
-    directionIndex = Math.max(0, Math.min(3, directionIndex));
-
-    // Additional safety check: if somehow we get an invalid value (NaN, Infinity), use hash directly
-    if (!Number.isFinite(directionIndex) || directionIndex < 0 || directionIndex > 3) {
-      const fallbackIndex = Math.floor(hashValue * 4) % 4;
-      return Math.max(0, Math.min(3, fallbackIndex));
-    }
-
-    return directionIndex;
+  /**
+   * Clears all player movement states
+   * 
+   * Useful for cleanup during server shutdown or when resetting game state.
+   * 
+   * @example
+   * ```ts
+   * // Clear all states on server shutdown
+   * Move.clearAllPlayerStates();
+   * ```
+   */
+  static clearAllPlayerStates(): void {
+    MoveList.playerMoveStates.clear();
   }
 
   repeatMove(direction: Direction, repeat: number): Direction[] {
@@ -379,41 +341,13 @@ class MoveList {
   }
 
   random(repeat: number = 1): Direction[] {
-    // Safety check for valid repeat value
-    if (!Number.isFinite(repeat) || repeat < 0 || repeat > 10000) {
-      console.warn('Invalid repeat value in random:', repeat, 'using default value 1');
-      repeat = 1;
-    }
-
-    // Ensure repeat is an integer
-    repeat = Math.floor(repeat);
-
-    // Additional safety check - ensure repeat is a safe integer
-    if (repeat < 0 || repeat > Number.MAX_SAFE_INTEGER || !Number.isSafeInteger(repeat)) {
-      console.warn('Unsafe repeat value in random:', repeat, 'using default value 1');
-      repeat = 1;
-    }
-
-    try {
-      // Use Perlin noise for smooth random directions
-      // Increment counter before generating directions
-      MoveList.randomCounter += repeat;
-
-      return new Array(repeat).fill(null).map((_, index) => {
-        // Use getRandomDirectionIndex with index to ensure variation for each element
-        const directionIndex = this.getRandomDirectionIndex(undefined, index);
-        return [
-          Direction.Right,
-          Direction.Left,
-          Direction.Up,
-          Direction.Down
-        ][directionIndex];
-      });
-    } catch (error) {
-      console.error('Error creating random array with repeat:', repeat, error);
-      return [Direction.Down]; // Return single direction as fallback
-    }
-  }
+    return new Array(repeat).fill(null).map(() => [
+        Direction.Right,
+        Direction.Left,
+        Direction.Up,
+        Direction.Down
+    ][random(0, 3)])
+}
 
   tileRight(repeat: number = 1): CallbackTileMove {
     return this.repeatTileMove('right', repeat, 'tileWidth')
@@ -433,61 +367,22 @@ class MoveList {
 
   tileRandom(repeat: number = 1): CallbackTileMove {
     return (player: RpgPlayer, map): Direction[] => {
-      // Safety check for valid repeat value
-      if (!Number.isFinite(repeat) || repeat < 0 || repeat > 1000) {
-        console.warn('Invalid repeat value in tileRandom:', repeat, 'using default value 1');
-        repeat = 1;
-      }
-
-      // Ensure repeat is an integer
-      repeat = Math.floor(repeat);
-
-      let directions: Direction[] = []
-      const directionFunctions: CallbackTileMove[] = [
-        this.tileRight(),
-        this.tileLeft(),
-        this.tileUp(),
-        this.tileDown()
-      ];
-      
-      for (let i = 0; i < repeat; i++) {
-        // Use Perlin noise with player coordinates and index for smooth random movement
-        // Passing index ensures each iteration gets a different direction
-        let directionIndex = this.getRandomDirectionIndex(player, i);
-        
-        // Ensure directionIndex is valid (0-3)
-        if (!Number.isInteger(directionIndex) || directionIndex < 0 || directionIndex > 3) {
-          console.warn('Invalid directionIndex in tileRandom:', directionIndex, 'using fallback');
-          directionIndex = Math.floor(Math.random() * 4) % 4;
+        let directions: Direction[] = []
+        for (let i = 0; i < repeat; i++) {
+            const randFn: CallbackTileMove = [
+                this.tileRight(),
+                this.tileLeft(),
+                this.tileUp(),
+                this.tileDown()
+            ][random(0, 3)]
+            directions = [
+                ...directions,
+                ...randFn(player, map)
+            ]
         }
-        
-        const randFn = directionFunctions[directionIndex];
-
-        // Verify that randFn is a function before calling it
-        if (typeof randFn !== 'function') {
-          console.warn('randFn is not a function in tileRandom, skipping iteration');
-          continue;
-        }
-
-        try {
-          const newDirections = randFn(player, map);
-          if (Array.isArray(newDirections)) {
-            directions = [...directions, ...newDirections];
-          }
-        } catch (error) {
-          console.warn('Error in tileRandom iteration:', error);
-          // Continue with next iteration instead of breaking
-        }
-
-        // Safety check to prevent excessive array growth
-        if (directions.length > 10000) {
-          console.warn('tileRandom generated too many directions, truncating');
-          break;
-        }
-      }
-      return directions
+        return directions
     }
-  }
+}
 
   private _awayFromPlayerDirection(player: RpgPlayer, otherPlayer: RpgPlayer): Direction {
     const directionOtherPlayer = otherPlayer.getDirection()
@@ -1671,12 +1566,29 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                         return;
                       }
 
-                      // Reset stuck detection to allow another check
+                      // Continue route: abandon the current target and move on.
+                      //
+                      // ## Why?
+                      // When random movement hits an obstacle, the physics engine can keep the entity
+                      // at the same position while this strategy keeps trying to reach the same target,
+                      // resulting in an infinite "stuck loop". By dropping the current target here,
+                      // we allow the route to advance and (in the common case of `infiniteMoveRoute`)
+                      // re-evaluate `Move.tileRandom()` on the next cycle, producing a new direction.
+                      this.currentTarget = null;
+                      this.currentTargetTopLeft = null;
+                      this.currentDirection = { x: 0, y: 0 };
+                      body.setVelocity({ x: 0, y: 0 });
+
+                      // Reset stuck detection to start fresh on the next target
                       this.isCurrentlyStuck = false;
                       this.stuckCheckStartTime = 0;
-                      // Reset position tracking to start fresh check
-                      this.lastPosition = { ...currentPosition };
-                      this.lastDistanceToTarget = distance;
+                      this.lastPosition = null;
+                      this.lastDistanceToTarget = null;
+                      this.stuckCheckInitialized = false;
+
+                      // Advance to next route instruction immediately
+                      this.processNextRoute();
+                      return;
                     }
                   }
                 } else {
@@ -1766,14 +1678,14 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       }, []);
     }
 
-    infiniteMoveRoute(routes: Routes): void {
+    infiniteMoveRoute(routes: Routes, options?: MoveRoutesOptions): void {
       this._infiniteRoutes = routes;
       this._isInfiniteRouteActive = true;
 
       const executeInfiniteRoute = (isBreaking: boolean = false) => {
         if (isBreaking || !this._isInfiniteRouteActive) return;
 
-        this.moveRoutes(routes).then((completed) => {
+        this.moveRoutes(routes, options).then((completed) => {
           // Only continue if the route completed successfully and we're still active
           if (completed && this._isInfiniteRouteActive) {
             executeInfiniteRoute();
@@ -1814,7 +1726,6 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
   return WithMoveManagerClass as unknown as PlayerCtor;
 }
-
 /**
  * Interface for Move Manager functionality
  * 
@@ -2037,3 +1948,4 @@ export interface IMoveManager {
    */
   replayRoutes(): void;
 }
+
