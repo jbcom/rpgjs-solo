@@ -281,10 +281,23 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     const activeCollisions = new Set<string>();
     const activeShapeCollisions = new Set<string>();
 
+    // Helper function to check if entities have different z (height)
+    const hasDifferentZ = (entityA: any, entityB: any): boolean => {
+      const zA = entityA.owner.z();
+      const zB = entityB.owner.z();
+      return zA !== zB;
+    };
+
     // Listen to collision enter events
     this.physic.getEvents().onCollisionEnter((collision) => {
       const entityA = collision.entityA;
       const entityB = collision.entityB;
+
+      // Skip collision callbacks if entities have different z (height)
+      // Higher z entities should not trigger collision callbacks with lower z entities
+      if (hasDifferentZ(entityA, entityB)) {
+        return;
+      }
 
       // Create a unique key for this collision pair
       const collisionKey = entityA.uuid < entityB.uuid
@@ -350,6 +363,11 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this.physic.getEvents().onCollisionExit((collision) => {
       const entityA = collision.entityA;
       const entityB = collision.entityB;
+
+      // Skip collision callbacks if entities have different z (height)
+      if (hasDifferentZ(entityA, entityB)) {
+        return;
+      }
 
       const collisionKey = entityA.uuid < entityB.uuid
         ? `${entityA.uuid}-${entityB.uuid}`

@@ -1,4 +1,4 @@
-<Container x={smoothX} y={smoothY} zIndex={y} viewportFollow={shouldFollowCamera} controls onBeforeDestroy visible >
+<Container x={smoothX} y={smoothY} zIndex={z} viewportFollow={shouldFollowCamera} controls onBeforeDestroy visible >
   @for (compConfig of normalizedComponentsBehind) {
     <Container>
       <compConfig.component object ...compConfig.props />
@@ -343,6 +343,10 @@
 
   const smoothY = animatedSignal(y(), {
     duration: isMe() ? 0 : 0,
+  });
+
+  const z = computed(() => {
+    return object.y() + object.z()
   });
 
   const realAnimationName = signal(animationName());

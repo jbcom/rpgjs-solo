@@ -74,14 +74,14 @@ export function Event() {
       this.teleport({ x: 100, y: 200 })
       
       this.through = false;
-      this.infiniteMoveRoute([
-        Move.tileRandom()
-      ], {
-        onStuck: (player, target, currentPos) => {
-          console.log("stuck");
-          return true;
-        }
-      })
+      // this.infiniteMoveRoute([
+      //   Move.tileRandom()
+      // ], {
+      //   onStuck: (player, target, currentPos) => {
+      //     console.log("stuck");
+      //     return true;
+      //   }
+      // })
       
       // Configure enemy stats
       this.hp = 1000;
@@ -130,6 +130,7 @@ export default createServer({
           },
           async onConnected(player: RpgPlayer) {
             player.name.set('plop')
+            player.z.set(100)
             await player.changeMap("center-map", {
               x: 200,
               y: 150,

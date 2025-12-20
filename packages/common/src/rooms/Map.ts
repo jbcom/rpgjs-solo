@@ -1108,6 +1108,11 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         return true;
       }
 
+    
+      if (selfOwner.z() !== otherOwner.z()) {
+        return false; // Don't resolve collision
+      }
+
       // Check if selfOwner has _through property (passes through everything)
       // This applies to both players and events
       if (typeof selfOwner._through === "function") {
