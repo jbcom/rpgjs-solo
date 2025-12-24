@@ -14,11 +14,10 @@
     const { object } = defineProps();
 
     const hitbox = object.hitbox;
-    const widthShadow = 20;
     const shadow = computed(() => ({
         x: hitbox().w / 2,
-        y: hitbox().h,
-        width: hitbox().w + widthShadow,
-        height: hitbox().h,
+        y: hitbox().h / 2 + 20,
+        width: hitbox().w,
+        height: hitbox().h / 2,
     }))
 </script>

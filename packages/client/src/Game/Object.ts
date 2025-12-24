@@ -211,11 +211,56 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
    * player.setAnimation('spell');
    * ```
    */
-  setAnimation(animationName: string, nbTimes: number = Infinity) {
+  setAnimation(animationName: string, nbTimes?: number): void;
+  /**
+   * Set a custom animation with temporary graphic change
+   *
+   * Plays a custom animation for the specified number of repetitions and temporarily
+   * changes the player's graphic (sprite sheet) during the animation. The graphic
+   * is automatically reset when the animation finishes.
+   *
+   * @param animationName - Name of the animation to play
+   * @param graphic - The graphic(s) to temporarily use during the animation
+   * @param nbTimes - Number of times to repeat the animation (default: Infinity for continuous)
+   *
+   * @example
+   * ```ts
+   * // Play attack animation with temporary graphic change
+   * player.setAnimation('attack', 'hero_attack', 3);
+   * ```
+   */
+  setAnimation(animationName: string, graphic?: string | string[], nbTimes?: number): void;
+  setAnimation(animationName: string, graphicOrNbTimes?: string | string[] | number, nbTimes?: number): void {
     if (this.animationIsPlaying()) return;
     this.animationIsPlaying.set(true);
     const previousAnimationName = this.animationName();
+    const previousGraphics = this.graphics();
     this.animationCurrentIndex.set(0);
+
+    let graphic: string | string[] | undefined;
+    let finalNbTimes: number = Infinity;
+
+    // Handle overloads
+    if (typeof graphicOrNbTimes === 'number') {
+      // setAnimation(animationName, nbTimes)
+      finalNbTimes = graphicOrNbTimes;
+    } else if (graphicOrNbTimes !== undefined) {
+      // setAnimation(animationName, graphic, nbTimes)
+      graphic = graphicOrNbTimes;
+      finalNbTimes = nbTimes ?? Infinity;
+    } else {
+      // setAnimation(animationName) - nbTimes remains Infinity
+      finalNbTimes = Infinity;
+    }
+
+    // Temporarily change graphic if provided
+    if (graphic !== undefined) {
+      if (Array.isArray(graphic)) {
+        this.graphics.set(graphic);
+      } else {
+        this.graphics.set([graphic]);
+      }
+    }
 
     // Clean up any existing subscription
     if (this.animationSubscription) {
@@ -224,9 +269,13 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
 
     this.animationSubscription =
       this.animationCurrentIndex.observable.subscribe((index) => {
-        if (index >= nbTimes) {
+        if (index >= finalNbTimes) {
           this.animationCurrentIndex.set(0);
           this.animationName.set(previousAnimationName);
+          // Reset graphic to previous value if it was changed
+          if (graphic !== undefined) {
+            this.graphics.set(previousGraphics);
+          }
           this.animationIsPlaying.set(false);
           if (this.animationSubscription) {
             this.animationSubscription.unsubscribe();

@@ -105,6 +105,12 @@ export function Event() {
     },
     async onAction(player: RpgPlayer) {
       player.gold = 100;
+      player.showText("Hello", {
+        face: {
+          id: 'facesetId',
+          expression: 'happy'
+        }
+      })
       this.setGraphic("monster")
     },
   };
@@ -114,7 +120,7 @@ export default createServer({
   providers: [
   //  provideTiledMap(),
     provideMain(),
-    provideActionBattle(),
+   // provideActionBattle(),
     provideServerModules([
       {
         // Register weapons and armor in database
@@ -130,7 +136,7 @@ export default createServer({
           },
           async onConnected(player: RpgPlayer) {
             player.name.set('plop')
-            player.z.set(100)
+            //player.z.set(100)
             await player.changeMap("center-map", {
               x: 200,
               y: 150,
@@ -159,7 +165,7 @@ export default createServer({
 
           },
           async onInput(player: RpgPlayer, input: any) {
-            
+            player.setGraphicAnimation('attack', 'monster', Infinity)
             // const map = player.getCurrentMap()
             // const event =map?.getEventBy(event => event.name() === "EV-1")
             // console.log(event)

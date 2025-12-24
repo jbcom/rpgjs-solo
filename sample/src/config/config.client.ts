@@ -18,6 +18,7 @@ import WoodComponent from "../components/wood.ce";
 import WoodUiComponent from "../components/wood-ui.ce";
 import VueComponent from "../vue-component-with-injections.vue";
 import FadeComponent from "../components/fade.ce";
+import PlayerStatsComponent from "../components/player-stats.ce";
 import { signal, effect } from 'canvasengine'
 import { provideVueGui } from "@rpgjs/vue";
 import { provideTiledMap } from "@rpgjs/tiledmap/client";
@@ -59,7 +60,7 @@ export default {
     provideClientModules([
       withMobile(),
       {
-        spritesheetResolver: (id: string) => {
+        spritesheetResolver: async (id: string) => {
           if (id === "hero") {
             return Presets.LPCSpritesheetPreset({
               id: "hero",
@@ -76,6 +77,17 @@ export default {
               width: 1728,
               height: 5568,
               ratio: 1.5,
+            })
+          }
+          else if (id === "facesetId") {
+            return  Presets.FacesetPreset({
+              id: "facesetId",
+              image: "faceset.png",
+              width: 1024,
+              height: 1024,
+            }, 3, 4, {
+              happy: [0, 0],
+              sad: [1, 0],
             })
           }
           return undefined;
@@ -117,23 +129,7 @@ export default {
           }
         ],
         spritesheets: [
-          Presets.FacesetPreset({
-            id: "facesetId",
-            image: "faceset.png",
-            width: 1024,
-            height: 1024,
-          }, 3, 4, {
-            happy: [0, 0],
-            sad: [1, 0],
-          }),
         
-          Presets.LPCSpritesheetPreset({
-            id: "monster",
-            imageSource: "monster.png",
-            width: 1728,
-            height: 5568,
-            ratio: 1.5,
-          }),
           {
             id: "animation",
             width: 1024,
@@ -146,6 +142,15 @@ export default {
           {
             id: "wood-ui",
             component: WoodUiComponent,
+            autoDisplay: true,
+            dependencies: () => {
+              const engine = inject(RpgClientEngine)
+              return [engine.scene.currentPlayer]
+            }
+          },
+          {
+            id: "player-stats",
+            component: PlayerStatsComponent,
             autoDisplay: true,
             dependencies: () => {
               const engine = inject(RpgClientEngine)

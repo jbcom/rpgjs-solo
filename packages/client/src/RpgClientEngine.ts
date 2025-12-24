@@ -271,11 +271,16 @@ export class RpgClientEngine<T = any> {
       this.getComponentAnimation(id).displayEffect(params, player || position)
     });
 
-    this.webSocket.on("setAnimation", (data) => {
-      const { animationName, nbTimes, object } = data;
-      const player = this.sceneMap.getObjectById(object);
-      player.setAnimation(animationName, nbTimes)
-    })
+     this.webSocket.on("setAnimation", (data) => {    
+      console.log(data);
+      const { animationName, nbTimes, object, graphic } = data;
+       const player = this.sceneMap.getObjectById(object);
+       if (graphic !== undefined) {
+         player.setAnimation(animationName, graphic, nbTimes);
+       } else {
+         player.setAnimation(animationName, nbTimes);
+       }
+     })
 
     this.webSocket.on("playSound", (data) => {
       const { soundId, volume, loop } = data;

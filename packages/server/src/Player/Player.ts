@@ -416,43 +416,94 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     return dataLoaded
   }
 
+ 
   /**
+   * @deprecated Use setGraphicAnimation instead.
+   * @param animationName - The name of the animation to play (e.g., 'attack', 'skill', 'walk')
+   * @param nbTimes - Number of times to repeat the animation (default: Infinity for continuous)
+   */
+  setAnimation(animationName: string, nbTimes: number = Infinity) {
+    console.warn('setAnimation is deprecated. Use setGraphicAnimation instead.');
+    this.setGraphicAnimation(animationName, nbTimes);
+  }
+
+  /**
+   * @deprecated Use setGraphicAnimation instead.
+   * @param graphic - The graphic to use for the animation (e.g., 'attack', 'skill', 'walk')
+   * @param animationName - The name of the animation to play (e.g., 'attack', 'skill', 'walk')
+   * @param replaceGraphic - Whether to replace the player's graphic (default: false)
+   */
+  showAnimation(graphic: string, animationName: string, replaceGraphic: boolean = false) {
+    if (replaceGraphic) {
+      console.warn('showAnimation is deprecated. Use player.setGraphicAnimation instead.');
+      this.setGraphicAnimation(animationName, graphic);
+    }
+    else {
+      console.warn('showAnimation is deprecated. Use map.showAnimation instead.');
+      const map = this.getCurrentMap();
+      map?.showAnimation({ x: this.x(), y: this.y() }, graphic, animationName);
+    }
+  }
+
+   /**
    * Set the current animation of the player's sprite
-   * 
+   *
    * This method changes the animation state of the player's current sprite.
    * It's used to trigger character animations like attack, skill, or custom movements.
    * When `nbTimes` is set to a finite number, the animation will play that many times
    * before returning to the previous animation state.
-   * 
+   *
    * If `animationFixed` is true, this method will not change the animation.
-   * 
+   *
    * @param animationName - The name of the animation to play (e.g., 'attack', 'skill', 'walk')
    * @param nbTimes - Number of times to repeat the animation (default: Infinity for continuous)
-   * 
-   * @example
-   * ```ts
-   * // Set continuous walk animation
-   * player.setAnimation('walk');
-   * 
-   * // Play attack animation 3 times then return to previous state
-   * player.setAnimation('attack', 3);
-   * 
-   * // Lock animation to prevent automatic changes
-   * player.animationFixed = true;
-   * player.setAnimation('skill'); // This will be ignored
-   * 
-   * // Set idle/stand animation
-   * player.setAnimation('stand');
-   * ```
    */
-  setAnimation(animationName: string, nbTimes: number = Infinity) {
+  setGraphicAnimation(animationName: string, nbTimes: number): void;
+  /**
+   * Set the current animation of the player's sprite with a temporary graphic change
+   *
+   * This method changes the animation state of the player's current sprite and temporarily
+   * changes the player's graphic (sprite sheet) during the animation. The graphic is
+   * automatically reset when the animation finishes.
+   *
+   * When `nbTimes` is set to a finite number, the animation will play that many times
+   * before returning to the previous animation state and graphic.
+   *
+   * If `animationFixed` is true, this method will not change the animation.
+   *
+   * @param animationName - The name of the animation to play (e.g., 'attack', 'skill', 'walk')
+   * @param graphic - The graphic(s) to temporarily use during the animation
+   * @param nbTimes - Number of times to repeat the animation (default: Infinity for continuous)
+   */
+  setGraphicAnimation(animationName: string, graphic: string | string[], nbTimes: number): void;
+  setGraphicAnimation(animationName: string, graphic: string | string[]): void;
+  setGraphicAnimation(animationName: string, graphicOrNbTimes?: string | string[] | number, nbTimes: number = 1): void {
     // Don't change animation if it's locked
     if (this.animationFixed) {
       return;
     }
+
+    let graphic: string | string[] | undefined;
+    let finalNbTimes: number = Infinity;
+
+    // Handle overloads
+    if (typeof graphicOrNbTimes === 'number') {
+      // setGraphicAnimation(animationName, nbTimes)
+      finalNbTimes = graphicOrNbTimes;
+    } else if (graphicOrNbTimes !== undefined) {
+      // setGraphicAnimation(animationName, graphic, nbTimes)
+      graphic = graphicOrNbTimes;
+      finalNbTimes = nbTimes ?? Infinity;
+    } else {
+      // setGraphicAnimation(animationName) - nbTimes remains Infinity
+      finalNbTimes = Infinity;
+    }
+
     const map = this.getCurrentMap();
     if (!map) return;
-    if (nbTimes === Infinity) {
+
+    if (finalNbTimes === Infinity) {
+      if (graphic) this.setGraphic(graphic);
       this.animationName.set(animationName);
     }
     else {
@@ -460,7 +511,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
         type: "setAnimation",
         value: {
           animationName,
-          nbTimes,
+          graphic,
+          nbTimes: finalNbTimes,
           object: this.id,
         },
       });

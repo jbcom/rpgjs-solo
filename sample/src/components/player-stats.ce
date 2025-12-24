@@ -1,0 +1,135 @@
+<DOMContainer>
+  <div class="player-stats-container">
+    <!-- HP Section -->
+    <div class="stat-item hp-item">
+      <div class="icon heart-icon">❤️</div>
+      <div class="stat-value hp-value">
+        <span class="stat-text">{hpCurrent()} / {hpMax()}</span>
+      </div>
+    </div>
+    
+    <!-- Gold Section -->
+    <div class="stat-item gold-item">
+      <div class="icon coin-icon">🪙</div>
+      <div class="stat-value gold-value">
+        <span class="stat-text">{gold()}</span>
+      </div>
+    </div>
+  </div>
+</DOMContainer>
+
+<style scoped>
+  .player-stats-container {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    align-items: center;
+    font-family: 'Courier New', monospace;
+    z-index: 1000;
+  }
+
+  .stat-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    background: rgba(20, 20, 20, 0.95);
+    padding: 10px 14px;
+    border-radius: 6px;
+    border-top-left-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  }
+
+  .icon {
+    font-size: 22px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .heart-icon {
+    color: #ff0000;
+    filter: drop-shadow(0 0 2px rgba(255, 0, 0, 0.8));
+  }
+
+  .coin-icon {
+    font-size: 20px;
+    filter: drop-shadow(0 0 2px rgba(255, 200, 0, 0.8));
+  }
+
+  .stat-value {
+    display: flex;
+    align-items: center;
+  }
+
+  .stat-text {
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 
+      2px 0 0 rgba(255, 0, 0, 0.6),
+      -2px 0 0 rgba(0, 100, 255, 0.6),
+      0 1px 0 rgba(255, 0, 0, 0.4),
+      0 -1px 0 rgba(0, 100, 255, 0.4),
+      1px 1px 0 rgba(255, 0, 0, 0.3),
+      -1px -1px 0 rgba(0, 100, 255, 0.3);
+    letter-spacing: 1px;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+</style>
+
+<script>
+  import { inject, RpgClientEngine } from "@rpgjs/client";
+  import { computed, effect } from "canvasengine";
+
+  const engine = inject(RpgClientEngine);
+  
+  // Get current player (use scene.currentPlayer for reactivity)
+  const currentPlayer = engine.scene.currentPlayer;
+
+  // HP values
+  const hpCurrent = computed(() => {
+    const player = currentPlayer();
+    //console.log(player);
+    return player.hpSignal() ?? 0;
+  });
+
+  const hpMax = computed(() => {
+    const player = currentPlayer();
+    if (!player) return 100;
+    // Try param.maxHp first
+    if (player.param && typeof player.param.maxHp === 'function') {
+      return player.param.maxHp() ?? 100;
+    }
+    // Try _param signal
+    if (player._param) {
+      const params = player._param();
+      if (params && params.maxHp) {
+        return params.maxHp;
+      }
+    }
+    return 100;
+  });
+
+  // Gold value
+  const gold = computed(() => {
+    const player = currentPlayer();
+    if (!player) return 0;
+    // Try _gold signal first
+    if (player._gold && typeof player._gold === 'function') {
+      return player._gold() ?? 0;
+    }
+    // Try gold() method
+    if (typeof player.gold === 'function') {
+      return player.gold() ?? 0;
+    }
+    return player.gold ?? 0;
+  });
+</script>
+
