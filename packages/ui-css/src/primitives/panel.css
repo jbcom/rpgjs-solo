@@ -1,7 +1,27 @@
 .rpg-ui-panel {
-  background: var(--rpg-ui-surface);
+  background: var(--rpg-ui-gradient-surface);
   color: var(--rpg-ui-text);
   border: var(--rpg-ui-border-width) solid var(--rpg-ui-border);
   border-radius: var(--rpg-ui-radius-lg);
   padding: var(--rpg-ui-spacing);
+  box-shadow: var(--rpg-ui-shadow-md), var(--rpg-ui-shadow-inset);
+  position: relative;
+}
+
+.rpg-ui-panel::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border: 1px solid var(--rpg-ui-bevel-light);
+  border-radius: calc(var(--rpg-ui-radius-lg) - 1px);
+  pointer-events: none;
+}
+
+.rpg-ui-panel-title {
+  font-size: var(--rpg-ui-font-size-lg);
+  font-weight: var(--rpg-ui-font-weight-bold);
+  text-shadow: var(--rpg-ui-text-shadow);
+  margin-bottom: var(--rpg-ui-spacing);
+  padding-bottom: var(--rpg-ui-spacing);
+  border-bottom: 1px solid var(--rpg-ui-border);
 }

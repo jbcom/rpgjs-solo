@@ -3,16 +3,47 @@
   --rpg-ui-bg: #000;
   --rpg-ui-surface: #111;
   --rpg-ui-border: currentColor;
+  --rpg-ui-border-light: #444;
+  --rpg-ui-border-dark: #000;
   --rpg-ui-text: #fff;
+  --rpg-ui-text-muted: #888;
   --rpg-ui-accent: currentColor;
+  --rpg-ui-success: #22c55e;
+  --rpg-ui-warning: #f59e0b;
+  --rpg-ui-danger: #ef4444;
+  --rpg-ui-info: #3b82f6;
+
+  /* Gradients */
+  --rpg-ui-gradient-surface: linear-gradient(180deg, var(--rpg-ui-surface) 0%, var(--rpg-ui-bg) 100%);
+  --rpg-ui-gradient-accent: linear-gradient(180deg, var(--rpg-ui-accent) 0%, color-mix(in srgb, var(--rpg-ui-accent), black 20%) 100%);
+  --rpg-ui-gradient-bar: linear-gradient(90deg, var(--rpg-ui-accent) 0%, color-mix(in srgb, var(--rpg-ui-accent), black 30%) 100%);
+
+  /* Shadows */
+  --rpg-ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --rpg-ui-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.6);
+  --rpg-ui-shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.8);
+  --rpg-ui-shadow-glow: 0 0 20px var(--rpg-ui-accent);
+  --rpg-ui-shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.5);
 
   /* Typography */
   --rpg-ui-font: system-ui, sans-serif;
   --rpg-ui-font-size: 1rem;
+  --rpg-ui-font-size-sm: 0.875rem;
+  --rpg-ui-font-size-lg: 1.125rem;
+  --rpg-ui-font-weight: normal;
+  --rpg-ui-font-weight-bold: 700;
+  --rpg-ui-text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
 
   /* Layout */
   --rpg-ui-radius-sm: 0;
-  --rpg-ui-radius-lg: 0;
+  --rpg-ui-radius-md: 4px;
+  --rpg-ui-radius-lg: 8px;
   --rpg-ui-border-width: 2px;
   --rpg-ui-spacing: 0.5rem;
+  --rpg-ui-spacing-lg: 1rem;
+
+  /* Effects */
+  --rpg-ui-bevel-light: var(--rpg-ui-border-light);
+  --rpg-ui-bevel-dark: var(--rpg-ui-border-dark);
+  --rpg-ui-border-double: 4px;
 }

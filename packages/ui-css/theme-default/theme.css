@@ -2,11 +2,24 @@
   --rpg-ui-bg: #1c1917;
   --rpg-ui-surface: #292524;
   --rpg-ui-border: #d6b36a;
+  --rpg-ui-border-light: #fde047;
+  --rpg-ui-border-dark: #78350f;
   --rpg-ui-text: #fef3c7;
+  --rpg-ui-text-muted: #a8a29e;
   --rpg-ui-accent: #f59e0b;
+  --rpg-ui-success: #22c55e;
+  --rpg-ui-warning: #eab308;
+  --rpg-ui-danger: #dc2626;
+  --rpg-ui-info: #3b82f6;
 
-  --rpg-ui-font: "Cinzel", serif;
+  --rpg-ui-font: "Cinzel", "Cinzel Decorative", serif;
 
   --rpg-ui-radius-sm: 4px;
-  --rpg-ui-radius-lg: 8px;
+  --rpg-ui-radius-md: 6px;
+  --rpg-ui-radius-lg: 10px;
+  --rpg-ui-border-width: 3px;
+  --rpg-ui-spacing: 0.75rem;
+  --rpg-ui-spacing-lg: 1.25rem;
+  --rpg-ui-font-weight: 600;
+  --rpg-ui-font-weight-bold: 800;
 }

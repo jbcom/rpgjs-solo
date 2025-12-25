@@ -4,3 +4,6 @@
 @import './primitives/dialog.css';
 @import './primitives/bar.css';
 @import './primitives/menu.css';
+@import './primitives/inventory.css';
+@import './primitives/stats.css';
+@import './primitives/character-card.css';

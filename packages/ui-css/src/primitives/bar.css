@@ -1,12 +1,66 @@
 .rpg-ui-bar {
-  background: var(--rpg-ui-surface);
+  background: var(--rpg-ui-bg);
   border: var(--rpg-ui-border-width) solid var(--rpg-ui-border);
   border-radius: var(--rpg-ui-radius-sm);
-  height: var(--rpg-ui-spacing);
+  height: calc(var(--rpg-ui-spacing) * 2);
   overflow: hidden;
+  box-shadow: var(--rpg-ui-shadow-inset);
+  position: relative;
+}
+
+.rpg-ui-bar::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 0;
 }
 
 .rpg-ui-bar-fill {
-  background: var(--rpg-ui-accent);
+  background: var(--rpg-ui-gradient-bar);
   height: 100%;
+  position: relative;
+  z-index: 1;
+  transition: width 0.3s ease;
+}
+
+.rpg-ui-bar-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 50%, transparent 100%);
+  animation: bar-shine 2s infinite;
+}
+
+@keyframes bar-shine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.rpg-ui-bar[data-type="health"] {
+  --rpg-ui-accent: var(--rpg-ui-danger);
+}
+
+.rpg-ui-bar[data-type="mana"] {
+  --rpg-ui-accent: var(--rpg-ui-info);
+}
+
+.rpg-ui-bar[data-type="experience"] {
+  --rpg-ui-accent: var(--rpg-ui-warning);
+}
+
+.rpg-ui-bar[data-type="stamina"] {
+  --rpg-ui-accent: var(--rpg-ui-success);
+}
+
+.rpg-ui-bar-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  font-size: var(--rpg-ui-font-size-sm);
+  font-weight: var(--rpg-ui-font-weight-bold);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
 }
