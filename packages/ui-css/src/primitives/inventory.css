@@ -1,95 +1,86 @@
 .rpg-ui-inventory {
   display: grid;
-  gap: var(--rpg-ui-spacing);
-  padding: var(--rpg-ui-spacing);
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 8px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: var(--rpg-ui-radius-md);
 }
 
 .rpg-ui-inventory-slot {
-  background: var(--rpg-ui-bg);
-  border: 2px solid var(--rpg-ui-border);
+  width: 48px;
+  height: 48px;
+  background: var(--rpg-ui-surface);
+  border: 2px solid var(--rpg-ui-border-dark);
   border-radius: var(--rpg-ui-radius-sm);
-  width: 64px;
-  height: 64px;
   position: relative;
   cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: var(--rpg-ui-shadow-inset);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .rpg-ui-inventory-slot:hover {
-  border-color: var(--rpg-ui-accent);
-  box-shadow: var(--rpg-ui-shadow-glow);
+  border-color: var(--rpg-ui-border-light);
   transform: scale(1.05);
+  z-index: 1;
 }
 
 .rpg-ui-inventory-slot[data-selected="true"] {
   border-color: var(--rpg-ui-accent);
-  box-shadow: 0 0 15px var(--rpg-ui-accent), var(--rpg-ui-shadow-inset);
-}
-
-.rpg-ui-inventory-slot[data-locked="true"] {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.rpg-ui-inventory-slot::before {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border: 1px solid var(--rpg-ui-bevel-light);
-  border-radius: calc(var(--rpg-ui-radius-sm) - 2px);
-  pointer-events: none;
+  box-shadow: 0 0 0 2px var(--rpg-ui-accent), inset 0 0 10px rgba(255, 204, 0, 0.2);
+  animation: rpg-pulse 2s infinite;
 }
 
 .rpg-ui-inventory-slot-icon {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2rem;
-  color: var(--rpg-ui-text);
+  font-size: 24px;
+  filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.5));
 }
 
 .rpg-ui-inventory-slot-quantity {
   position: absolute;
   bottom: 2px;
-  right: 4px;
-  font-size: var(--rpg-ui-font-size-sm);
-  font-weight: var(--rpg-ui-font-weight-bold);
-  color: var(--rpg-ui-text);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
-  background: rgba(0, 0, 0, 0.7);
-  padding: 1px 4px;
+  right: 2px;
+  font-size: 10px;
+  color: white;
+  font-weight: bold;
+  text-shadow: 1px 1px 0 #000;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0 2px;
   border-radius: 2px;
 }
 
-.rpg-ui-inventory-slot-rarity {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  border-radius: 0 0 calc(var(--rpg-ui-radius-sm) - 2px) calc(var(--rpg-ui-radius-sm) - 2px);
+/* Rarity Borders */
+.rpg-ui-inventory-slot[data-rarity="common"] {
+  border-color: #9ca3af;
 }
 
-.rpg-ui-inventory-slot-rarity[data-rarity="common"] {
-  background: #9ca3af;
+.rpg-ui-inventory-slot[data-rarity="uncommon"] {
+  border-color: #22c55e;
 }
 
-.rpg-ui-inventory-slot-rarity[data-rarity="uncommon"] {
-  background: #22c55e;
+.rpg-ui-inventory-slot[data-rarity="rare"] {
+  border-color: #3b82f6;
 }
 
-.rpg-ui-inventory-slot-rarity[data-rarity="rare"] {
-  background: #3b82f6;
+.rpg-ui-inventory-slot[data-rarity="epic"] {
+  border-color: #a855f7;
 }
 
-.rpg-ui-inventory-slot-rarity[data-rarity="epic"] {
-  background: #a855f7;
+.rpg-ui-inventory-slot[data-rarity="legendary"] {
+  border-color: #eab308;
+  box-shadow: 0 0 5px #eab308;
 }
 
-.rpg-ui-inventory-slot-rarity[data-rarity="legendary"] {
-  background: #f59e0b;
-  box-shadow: 0 0 10px #f59e0b;
+/* Locked/Empty */
+.rpg-ui-inventory-slot[data-locked="true"] {
+  background: repeating-linear-gradient(45deg,
+      #1c1917,
+      #1c1917 10px,
+      #292524 10px,
+      #292524 20px);
+  cursor: not-allowed;
+  opacity: 0.7;
 }

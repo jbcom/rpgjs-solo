@@ -1,25 +1,67 @@
 :root {
-  --rpg-ui-bg: #1c1917;
-  --rpg-ui-surface: #292524;
-  --rpg-ui-border: #d6b36a;
-  --rpg-ui-border-light: #fde047;
-  --rpg-ui-border-dark: #78350f;
-  --rpg-ui-text: #fef3c7;
-  --rpg-ui-text-muted: #a8a29e;
-  --rpg-ui-accent: #f59e0b;
-  --rpg-ui-success: #22c55e;
-  --rpg-ui-warning: #eab308;
-  --rpg-ui-danger: #dc2626;
-  --rpg-ui-info: #3b82f6;
+  /* -- Colors -- */
+  /* Surface: Dark wood/parchment feel */
+  --rpg-ui-bg: #2c241b;
+  --rpg-ui-surface: #453526;
+  --rpg-ui-surface-light: #5d4a35;
 
-  --rpg-ui-font: "Cinzel", "Cinzel Decorative", serif;
+  /* Borders: Gold/Bronze metallic look */
+  --rpg-ui-border: #8b6d36;
+  --rpg-ui-border-light: #cba856;
+  --rpg-ui-border-dark: #4a3818;
+  --rpg-ui-border-double: 4px;
+  /* For double border effect */
 
-  --rpg-ui-radius-sm: 4px;
-  --rpg-ui-radius-md: 6px;
-  --rpg-ui-radius-lg: 10px;
-  --rpg-ui-border-width: 3px;
-  --rpg-ui-spacing: 0.75rem;
-  --rpg-ui-spacing-lg: 1.25rem;
-  --rpg-ui-font-weight: 600;
-  --rpg-ui-font-weight-bold: 800;
+  /* Text */
+  --rpg-ui-text: #e8dcb5;
+  --rpg-ui-text-muted: #a39478;
+  --rpg-ui-text-shadow: 2px 2px 0px #000000;
+
+  /* Accents */
+  --rpg-ui-accent: #ffcc00;
+  /* Gold */
+  --rpg-ui-accent-hover: #ffdd44;
+  --rpg-ui-accent-active: #cc9900;
+
+  /* Status Colors */
+  --rpg-ui-success: #55a049;
+  /* Forest Green */
+  --rpg-ui-warning: #e69138;
+  /* Amber */
+  --rpg-ui-danger: #cc3333;
+  /* Blood Red */
+  --rpg-ui-info: #3d85c6;
+  /* Magic Blue */
+  --rpg-ui-mana: #3d85c6;
+  --rpg-ui-xp: #93c47d;
+
+  /* -- Typography -- */
+  /* Using Cinzel for that "Classic RPG" feel, fallback to serif */
+  --rpg-ui-font: "Cinzel", "Times New Roman", serif;
+  --rpg-ui-font-mono: "Courier New", monospace;
+  --rpg-ui-font-size: 16px;
+  --rpg-ui-font-size-sm: 14px;
+  --rpg-ui-font-size-lg: 20px;
+  --rpg-ui-font-size-xl: 24px;
+  --rpg-ui-font-weight: 400;
+  --rpg-ui-font-weight-bold: 700;
+
+  /* -- Spacing & Layout -- */
+  --rpg-ui-spacing: 0.5rem;
+  --rpg-ui-spacing-sm: 0.25rem;
+  --rpg-ui-spacing-lg: 1rem;
+  --rpg-ui-radius-sm: 2px;
+  /* Small radius for pixel feel */
+  --rpg-ui-radius-md: 4px;
+  --rpg-ui-radius-lg: 8px;
+
+  /* -- Effects -- */
+  --rpg-ui-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+  --rpg-ui-shadow-lg: 8px 8px 0px rgba(0, 0, 0, 0.6);
+  --rpg-ui-bevel-light: rgba(255, 255, 255, 0.1);
+  --rpg-ui-bevel-dark: rgba(0, 0, 0, 0.3);
+
+  /* -- Gradients -- */
+  --rpg-ui-gradient-surface: linear-gradient(180deg, var(--rpg-ui-surface) 0%, var(--rpg-ui-bg) 100%);
+  --rpg-ui-gradient-gloss: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, 0.1) 100%);
 }

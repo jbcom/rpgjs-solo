@@ -1,0 +1,59 @@
+.rpg-ui-input {
+    background: var(--rpg-ui-bg);
+    border: 2px solid var(--rpg-ui-border-dark);
+    color: var(--rpg-ui-text);
+    font-family: var(--rpg-ui-font);
+    font-size: var(--rpg-ui-font-size);
+    padding: 8px 12px;
+    border-radius: var(--rpg-ui-radius-sm);
+    outline: none;
+    transition: all 0.2s;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+    width: 100%;
+}
+
+.rpg-ui-input:focus {
+    border-color: var(--rpg-ui-accent);
+    box-shadow: 0 0 0 2px rgba(255, 204, 0, 0.2), inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.rpg-ui-input::placeholder {
+    color: var(--rpg-ui-text-muted);
+    opacity: 0.7;
+}
+
+.rpg-ui-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #111;
+}
+
+/* Checkbox / Toggle */
+.rpg-ui-checkbox {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: var(--rpg-ui-bg);
+    border: 2px solid var(--rpg-ui-border-dark);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+    margin-right: 8px;
+}
+
+.rpg-ui-checkbox:checked {
+    background: var(--rpg-ui-accent);
+    border-color: var(--rpg-ui-accent);
+}
+
+.rpg-ui-checkbox:checked::after {
+    content: "✔";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--rpg-ui-bg);
+    font-size: 14px;
+    font-weight: bold;
+}

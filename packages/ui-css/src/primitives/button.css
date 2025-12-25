@@ -1,55 +1,80 @@
 .rpg-ui-btn {
-  background: var(--rpg-ui-gradient-surface);
+  appearance: none;
+  border: none;
+  background: var(--rpg-ui-surface-light);
   color: var(--rpg-ui-text);
-  border: var(--rpg-ui-border-width) solid var(--rpg-ui-border);
-  border-radius: var(--rpg-ui-radius-sm);
-  padding: var(--rpg-ui-spacing) var(--rpg-ui-spacing-lg);
-  cursor: pointer;
   font-family: var(--rpg-ui-font);
   font-size: var(--rpg-ui-font-size);
-  font-weight: var(--rpg-ui-font-weight);
-  text-transform: uppercase;
-  text-shadow: var(--rpg-ui-text-shadow);
-  box-shadow: var(--rpg-ui-shadow-inset);
-  transition: all 0.15s ease;
+  padding: 8px 16px;
+  cursor: pointer;
   position: relative;
-}
 
-.rpg-ui-btn::before {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border: 1px solid var(--rpg-ui-bevel-light);
-  border-radius: calc(var(--rpg-ui-radius-sm) - 2px);
-  pointer-events: none;
+  /* Pixel Border */
+  box-shadow:
+    inset 2px 2px 0px rgba(255, 255, 255, 0.1),
+    inset -2px -2px 0px rgba(0, 0, 0, 0.3),
+    0 0 0 2px var(--rpg-ui-border-dark),
+    0 4px 0 2px var(--rpg-ui-border-dark),
+    /* 3D depth */
+    0 6px 4px rgba(0, 0, 0, 0.4);
+  /* Drop shadow */
+
+  margin-bottom: 6px;
+  /* Space for the 3D part */
+  transition: transform 0.1s, box-shadow 0.1s;
+  text-transform: uppercase;
+  font-weight: bold;
+  letter-spacing: 1px;
 }
 
 .rpg-ui-btn:hover {
-  box-shadow: var(--rpg-ui-shadow-inset), var(--rpg-ui-shadow-glow);
-  transform: translateY(-1px);
+  background: var(--rpg-ui-accent);
+  color: var(--rpg-ui-bg);
+  box-shadow:
+    inset 2px 2px 0px rgba(255, 255, 255, 0.3),
+    inset -2px -2px 0px rgba(0, 0, 0, 0.1),
+    0 0 0 2px var(--rpg-ui-border-dark),
+    0 4px 0 2px var(--rpg-ui-border-dark),
+    0 6px 4px rgba(0, 0, 0, 0.4);
 }
 
 .rpg-ui-btn:active {
-  transform: translateY(1px);
-  box-shadow: var(--rpg-ui-shadow-inset);
+  transform: translateY(4px);
+  box-shadow:
+    inset 2px 2px 0px rgba(0, 0, 0, 0.2),
+    0 0 0 2px var(--rpg-ui-border-dark),
+    0 0 0 2px var(--rpg-ui-border-dark),
+    /* Collapsed depth */
+    0 0 0 rgba(0, 0, 0, 0);
+  margin-bottom: 6px;
+  /* Keep layout stable */
 }
 
+/* Variants */
 .rpg-ui-btn[data-variant="primary"] {
-  background: var(--rpg-ui-gradient-accent);
-  font-weight: var(--rpg-ui-font-weight-bold);
+  background: var(--rpg-ui-accent);
+  color: var(--rpg-ui-bg);
 }
 
-.rpg-ui-btn[data-variant="success"] {
-  background: var(--rpg-ui-gradient-bar);
-  --rpg-ui-accent: var(--rpg-ui-success);
+.rpg-ui-btn[data-variant="primary"]:hover {
+  background: var(--rpg-ui-accent-hover);
 }
 
 .rpg-ui-btn[data-variant="danger"] {
-  background: var(--rpg-ui-gradient-bar);
-  --rpg-ui-accent: var(--rpg-ui-danger);
+  background: var(--rpg-ui-danger);
+  color: white;
+}
+
+.rpg-ui-btn[data-variant="danger"]:hover {
+  background: #ef4444;
+}
+
+.rpg-ui-btn[data-variant="success"] {
+  background: var(--rpg-ui-success);
+  color: white;
 }
 
 .rpg-ui-btn[data-variant="warning"] {
-  background: var(--rpg-ui-gradient-bar);
-  --rpg-ui-accent: var(--rpg-ui-warning);
+  background: var(--rpg-ui-warning);
+  color: black;
 }

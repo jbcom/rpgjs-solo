@@ -1,10 +1,35 @@
-/* Light reset for RPG UI components */
+/* Reset for RPG UI components */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
-* {
+:root {
+  /* Disable user selection by default for game UIs to prevent accidental text highlighting */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--rpg-ui-font, serif);
+  background-color: #000;
+  /* Default to black for game canvas background */
+  color: white;
+  overflow: hidden;
+  /* Prevent scrollbars on full screen games */
+}
+
+/* Allow selection on inputs */
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+button {
   font-family: inherit;
 }
