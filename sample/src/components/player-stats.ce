@@ -89,14 +89,13 @@
   import { computed, effect } from "canvasengine";
 
   const engine = inject(RpgClientEngine);
-  
+
   // Get current player (use scene.currentPlayer for reactivity)
   const currentPlayer = engine.scene.currentPlayer;
 
   // HP values
   const hpCurrent = computed(() => {
     const player = currentPlayer();
-    //console.log(player);
     return player.hpSignal() ?? 0;
   });
 

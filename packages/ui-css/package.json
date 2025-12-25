@@ -1,0 +1,33 @@
+{
+  "name": "@rpgjs/ui-css",
+  "version": "5.0.0-alpha.29",
+  "description": "CSS library for RPG UI components - framework-agnostic and fully customizable",
+  "license": "MIT",
+  "author": "Samuel Ronce",
+  "scripts": {
+    "build": "echo 'CSS package - no build needed'"
+  },
+  "exports": {
+    "./reset.css": "./src/reset.css",
+    "./tokens.css": "./src/tokens.css",
+    "./index.css": "./src/index.css",
+    "./theme-default.css": "./theme-default/theme.css"
+  },
+  "files": [
+    "src/",
+    "theme-default/"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "rpg",
+    "ui",
+    "css",
+    "components",
+    "framework-agnostic"
+  ],
+  "devDependencies": {
+    "vite": "^7.3.0"
+  }
+}

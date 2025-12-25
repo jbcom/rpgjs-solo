@@ -1,0 +1,14 @@
+.rpg-ui-btn {
+  background: var(--rpg-ui-surface);
+  color: var(--rpg-ui-text);
+  border: var(--rpg-ui-border-width) solid var(--rpg-ui-border);
+  border-radius: var(--rpg-ui-radius-sm);
+  padding: var(--rpg-ui-spacing);
+  cursor: pointer;
+  font-family: var(--rpg-ui-font);
+  font-size: var(--rpg-ui-font-size);
+}
+
+.rpg-ui-btn[data-variant="primary"] {
+  background: var(--rpg-ui-accent);
+}

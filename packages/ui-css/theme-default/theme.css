@@ -1,0 +1,12 @@
+:root {
+  --rpg-ui-bg: #1c1917;
+  --rpg-ui-surface: #292524;
+  --rpg-ui-border: #d6b36a;
+  --rpg-ui-text: #fef3c7;
+  --rpg-ui-accent: #f59e0b;
+
+  --rpg-ui-font: "Cinzel", serif;
+
+  --rpg-ui-radius-sm: 4px;
+  --rpg-ui-radius-lg: 8px;
+}

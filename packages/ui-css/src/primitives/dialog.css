@@ -1,0 +1,7 @@
+.rpg-ui-dialog {
+  background: var(--rpg-ui-surface);
+  color: var(--rpg-ui-text);
+  border: var(--rpg-ui-border-width) solid var(--rpg-ui-border);
+  border-radius: var(--rpg-ui-radius-lg);
+  padding: calc(var(--rpg-ui-spacing) * 2);
+}

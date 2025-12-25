@@ -59,11 +59,15 @@ export const packages = (type: "build" | "dev") => {
   return [
     // Core packages (no dependencies)
     {
-      name: "vite", 
+      name: "vite",
       buildScript
     },
     {
       name: "physic",
+      buildScript,
+    },
+    {
+      name: "ui-css",
       buildScript,
     },
     {

@@ -1,0 +1,10 @@
+/* Light reset for RPG UI components */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  font-family: inherit;
+}

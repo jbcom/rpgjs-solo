@@ -1,0 +1,12 @@
+.rpg-ui-bar {
+  background: var(--rpg-ui-surface);
+  border: var(--rpg-ui-border-width) solid var(--rpg-ui-border);
+  border-radius: var(--rpg-ui-radius-sm);
+  height: var(--rpg-ui-spacing);
+  overflow: hidden;
+}
+
+.rpg-ui-bar-fill {
+  background: var(--rpg-ui-accent);
+  height: 100%;
+}

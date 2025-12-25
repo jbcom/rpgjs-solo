@@ -1,0 +1,18 @@
+.rpg-ui-menu {
+  background: var(--rpg-ui-surface);
+  border: var(--rpg-ui-border-width) solid var(--rpg-ui-border);
+  border-radius: var(--rpg-ui-radius-lg);
+  padding: var(--rpg-ui-spacing);
+}
+
+.rpg-ui-menu-item {
+  color: var(--rpg-ui-text);
+  padding: var(--rpg-ui-spacing);
+  cursor: pointer;
+  font-family: var(--rpg-ui-font);
+  font-size: var(--rpg-ui-font-size);
+}
+
+.rpg-ui-menu-item:hover {
+  background: var(--rpg-ui-accent);
+}

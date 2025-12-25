@@ -1,0 +1,18 @@
+:root {
+  /* Colors */
+  --rpg-ui-bg: #000;
+  --rpg-ui-surface: #111;
+  --rpg-ui-border: currentColor;
+  --rpg-ui-text: #fff;
+  --rpg-ui-accent: currentColor;
+
+  /* Typography */
+  --rpg-ui-font: system-ui, sans-serif;
+  --rpg-ui-font-size: 1rem;
+
+  /* Layout */
+  --rpg-ui-radius-sm: 0;
+  --rpg-ui-radius-lg: 0;
+  --rpg-ui-border-width: 2px;
+  --rpg-ui-spacing: 0.5rem;
+}
