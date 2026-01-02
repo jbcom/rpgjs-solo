@@ -73,6 +73,7 @@ export class RpgClientEngine<T = any> {
   private playersReceived$ = new BehaviorSubject<boolean>(false);
   private eventsReceived$ = new BehaviorSubject<boolean>(false);
   private onAfterLoadingSubscription?: any;
+  private sceneResetQueued = false;
   
   // Store subscriptions and event listeners for cleanup
   private tickSubscriptions: any[] = [];
@@ -220,10 +221,23 @@ export class RpgClientEngine<T = any> {
         this.playerIdReceived$.next(true);
       }
 
+      if (this.sceneResetQueued) {
+        this.sceneMap.reset();
+        this.sceneResetQueued = false;
+      }
+
       // Apply client-side prediction filtering and server reconciliation
       this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: data }).subscribe();
 
       load(this.sceneMap, data, true);
+
+      for (const playerId in data.players ?? {}) {
+        const player = data.players[playerId]
+        if (!player._param) continue
+        for (const param in player._param) {
+         this.sceneMap.players()[playerId]._param()[param] = player._param[param]
+        }
+      }
       
       // Check if players and events are present in sync data
       const players = data.players || this.sceneMap.players();
@@ -256,7 +270,7 @@ export class RpgClientEngine<T = any> {
     });
 
     this.webSocket.on("changeMap", (data) => {
-      this.sceneMap.reset()
+      this.sceneResetQueued = true;
       // Reset camera follow to default (follow current player) when changing maps
       this.cameraFollowTargetId.set(null);
       this.loadScene(data.mapId);
@@ -1382,7 +1396,7 @@ export class RpgClientEngine<T = any> {
 
       // Reset scene map if it exists (this should stop any ongoing animations/renders)
       if (this.sceneMap && typeof (this.sceneMap as any).reset === 'function') {
-        (this.sceneMap as any).reset();
+        (this.sceneMap as any).reset(true);
       }
 
       // Stop all sounds

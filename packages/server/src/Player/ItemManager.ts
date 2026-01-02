@@ -1,5 +1,5 @@
 import { isInstanceOf, isString, Item, type PlayerCtor} from "@rpgjs/common";
-import { ATK, PDEF, SDEF } from "../presets";
+import { ATK, PDEF, SDEF } from "@rpgjs/common";
 import { ItemLog } from "../logs";
 import type { ItemClass, ItemInstance } from "@rpgjs/database";
 import { RpgPlayer } from "./Player";

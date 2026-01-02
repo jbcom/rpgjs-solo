@@ -27,6 +27,7 @@ import TooltipComponent from "../components/tooltip.ce";
 import { RpgClientObject } from "@rpgjs/client";
 import { withMobile } from "@rpgjs/client";
 import { provideActionBattle } from "@rpgjs/action-battle/client";
+import { HudComponent } from "@rpgjs/client";
 
 
 export default {
@@ -148,15 +149,6 @@ export default {
               return [engine.scene.currentPlayer]
             }
           },
-          {
-            id: "player-stats",
-            component: PlayerStatsComponent,
-            autoDisplay: true,
-            dependencies: () => {
-              const engine = inject(RpgClientEngine)
-              return [engine.scene.currentPlayer]
-            }
-          },
           VueComponent,
           {
             id: "my-tooltip",
@@ -167,6 +159,15 @@ export default {
             id: "fade",
             component: FadeComponent,
           },
+          {
+            id: "hud",
+            component: HudComponent,
+            autoDisplay: true,
+            dependencies: () => {
+              const engine = inject(RpgClientEngine)
+              return [engine.scene.currentPlayer]
+            }
+          }
         ],
         componentAnimations: [
           {

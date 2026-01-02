@@ -4,6 +4,7 @@ export class Gui {
 
     private _close: Function = () => {}
     private _blockPlayerInput: boolean = false
+    private _events = new Map<string, (data: any) => void>()
 
     constructor(
         public id: string,
@@ -32,6 +33,19 @@ export class Gui {
                 this._close = resolve
             }
         })
+    }
+
+    on(event: string, callback: (data: any) => void) {
+        this._events.set(event, callback)
+    }
+
+    async emit(event: string, data: any): Promise<any> {
+        const callback = this._events.get(event)
+        if (callback) {
+            return await callback(data)
+        } else {
+            return null
+        }
     }
 
     close(data?) {

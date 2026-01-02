@@ -1,5 +1,5 @@
 import { Hooks, ModulesToken, RpgCommonPlayer } from "@rpgjs/common";
-import { trigger, signal } from "canvasengine";
+import { trigger, signal, effect } from "canvasengine";
 import { filter, from, map, Subscription, switchMap } from "rxjs";
 import { inject } from "../core/inject";
 import { RpgClientEngine } from "../RpgClientEngine";

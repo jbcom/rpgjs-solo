@@ -1,21 +1,19 @@
 import { PrebuiltGui } from '@rpgjs/common'
 import { Gui } from './Gui'
 import { RpgPlayer } from '../Player/Player'
-import { IGui } from '../Interfaces/Gui'
 
-export class ShopGui extends Gui implements IGui {
+export class ShopGui extends Gui {
     constructor(player: RpgPlayer) {
         super(PrebuiltGui.Shop, player)
     }
 
     open(items: any[]) {
         items = items.map(item => {
-            const it = new item()
             return {
-                price: it.price,
-                name: it.name,
-                description: it.description,
-                id: it.id,
+                price: item.price,
+                name: item.name,
+                description: item.description,
+                id: item.id,
                 type: item.type
             }
         })

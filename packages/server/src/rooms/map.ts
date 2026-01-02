@@ -600,8 +600,11 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   @Action('gui.interaction')
-  guiInteraction(player: RpgPlayer, value) {
-    this.hooks.callHooks("server-player-guiInteraction", player, value);
+  async guiInteraction(player: RpgPlayer, value: { guiId: string, name: string, data: any }) {
+    const gui = player.getGui(value.guiId)
+    if (gui) {
+      await gui.emit(value.name, value.data)
+    }
     player.syncChanges();
   }
 

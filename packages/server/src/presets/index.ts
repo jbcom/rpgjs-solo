@@ -1,14 +1,5 @@
 import { random } from "@rpgjs/common"
-
-export const MAXHP: string = 'maxHp'
-export const MAXSP: string = 'maxSp'
-export const ATK: string = 'atk'
-export const PDEF: string = 'pdef'
-export const SDEF: string = 'sdef'
-export const STR: string = 'str'
-export const AGI: string = 'agi'
-export const INT: string = 'int'
-export const DEX: string = 'dex'
+import { DEX, AGI, ATK, PDEF, SDEF, STR, INT } from "@rpgjs/common"
 
 export const MAXHP_CURVE = {
     start: 741,

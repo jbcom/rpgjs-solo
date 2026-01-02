@@ -9,3 +9,4 @@ export * from "./PrebuiltGui";
 export * from "./database";
 export * from "./PerlinNoise";
 export * from "@rpgjs/physic";
+export * from "./Presets";

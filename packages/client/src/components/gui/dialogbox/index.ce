@@ -1,232 +1,44 @@
-<Container justifyContent="center" alignItems="center" width="100%" height="100%">
-  <Container
-    ref="dialogbox"
-    scale={{ x: scaleX }}
-    anchor={[0.5, 0.5]}
-    width={widthBox}
-    height
-    controls
-    ...positionBox()
-  >
-  <Rect 
-    width={widthBox} 
-    height 
-    color={@dialogboxStyles.@backgroundColor} 
-    alpha={@dialogboxStyles.@backgroundOpacity} />
-      <Container
-        flexDirection="row"
-        width={widthBox}
-        height
-        alpha={contentOpacity}
-      >
-        <Container flexDirection="row">
-          <Container flexDirection="column">
-            <Text
-              text
-              color="#fff"
-              fontSize={18}
-              margin
-              typewriter
-              style={textStyle}
-            />
-            @if (visibleSelection) {
-              <Selection selectedIndex={0} items={choices} onSelect />
+<DOMContainer width="100%" height="100%">
+    <div>
+        <div class="rpg-ui-dialog rpg-anim-fade-in">
+            <div class="rpg-ui-dialog-speaker">Elven Guide</div>
+            <div class="rpg-ui-dialog-content">
+                {message}
+            </div>
+            @if (face) {
+                <DOMSprite sheet={@faceSheet(@face.@id, @face.@expression)} />
             }
-          </Container>
-          @if (face) {
-            <Sprite sheet={@faceSheet(@face.@id, @face.@expression)} />
-          }
-        </Container>
-    </Container>
-</Container>  
-
-  
-</Container>
+        </div>
+    </div>
+</DOMContainer>
+    
 <script>
-  import Selection from './selection.ce'
+    import { signal } from "canvasengine";
+    import { mount, signal, computed } from "canvasengine";
+    import { inject } from "../../../core/inject";
+    import { RpgClientEngine } from "../../../RpgClientEngine";
 
-  import {
-    animatedSignal,
-    computed,
-    effect,
-    signal,
-    trigger,
-    mount
-  } from "canvasengine";
+    const engine = inject(RpgClientEngine);
+    const currentPlayer = engine.scene.currentPlayer
+    const keyboardControls = engine.globalConfig.keyboardControls;
 
-  import { inject } from "../../../core/inject";
-  import { RpgClientEngine } from "../../../RpgClientEngine";
-  import BoxComponent from "../box.ce";
+    const selectedItem = signal(0)
 
-  const {
-    message,
-    choices: _choices,
-    onFinish,
-    onInteraction,
-    face,
-    position,
-    typewriterEffect,
-    autoClose
-  } = defineProps();
-  
-  const client = inject(RpgClientEngine);
-  const keyboardControls = client.globalConfig.keyboardControls;
+    const {
+        message,
+        choices: _choices,
+        onFinish,
+        onInteraction,
+        face,
+        position,
+        typewriterEffect,
+        autoClose
+    } = defineProps();
 
-  const dialogboxStyles = client.globalConfig.box.styles ?? {
-    backgroundColor: "#1a1a2e",
-    backgroundOpacity: 0.9,
-  }
-  const dialogBoxTypewriterSound = client.globalConfig?.box?.sounds?.typewriter
-
-  const sounds = client.sounds;
-
-  client.stopProcessingInput = true;
-  let isDestroyed = false;
-
-  const texts = [message()]
-  const height = signal(256);
-  const margin = signal(40);
-  const isTextCompleted = signal(false);
-
-  const drawSpeaker = (g) => {
-    g.beginFill(0xffa500); // Orange color
-    g.lineStyle(2, 0x000000); // Black border
-    g.moveTo(0, 0);
-    g.lineTo(70, 0);
-    g.lineTo(80, 15);
-    g.lineTo(70, 30);
-    g.lineTo(0, 30);
-    g.lineTo(0, 0);
-    g.endFill();
-  };
-
-  const border = signal({ width: 5, color: "#595971" });
-  const shadow = signal({ color: "#000", blur: 10, offsetX: 10, offsetY: 10 });
-
-  const contentOpacity = animatedSignal(0, {
-    duration: 1000,
-  });
-
-  const scaleX = animatedSignal(0, {
-    duration: 500,
-  });
-
-  const positionBox = computed(() => {
-    if (position() === 'bottom') {
-      return { positionType: 'absolute', bottom: 10 };
-    }
-    else if (position() === 'top') {
-      return { positionType: 'absolute', top: 10 };
-    }
-    return {};
-  });
-
-  const widthBox = computed(() => {
-    return 700;
-  });
-
-  scaleX.set(1);
-  contentOpacity.set(1);
-
-  const currentTextIndex = signal(0);
-  const currentText = computed(() => texts?.[currentTextIndex()] ?? '');
-  const isChoiceDisplayed = signal(false);
-
-  const text = computed(() => {
-    const current = currentText();
-    return typeof current === "string" ? current : current.text;
-  });
-
-  const faceSheet = (graphicId, animationName) => {
+    const faceSheet = (graphicId, animationName) => {
     return {
-      definition: client.getSpriteSheet(graphicId),
+      definition: engine.getSpriteSheet(graphicId),
       playing: animationName,
     };
   }
-
-  const choices = computed(() => {
-    //const current = currentText();
-    //return typeof current === "string" ? null : current.choices;
-    return _choices;
-  });
-
-  const visibleSelection = computed(() => isChoiceDisplayed() && choices().length != 0)
-
-  const triggerSkip = trigger();
-
-  const typewriter = typewriterEffect() ? {
-    speed: 0.3,
-    skip: triggerSkip,
-    sound: {
-      src: sounds.get(dialogBoxTypewriterSound)?.src
-    },
-    onComplete: () => {
-      isTextCompleted.set(true);
-      if (autoClose()) {
-        setTimeout(() => {
-          onFinish();
-        }, 1000);
-      }
-    }
-  } : null;
-
-  const textStyle = {
-    wordWrap: true,
-    wordWrapWidth: widthBox() - margin() * 2 - (face ? 256 : 0)
-  }
-
-  mount((element) => {
-    const [dialogbox] = element.props.children
-    return () => {
-      dialogbox.directives.controls.onDestroy()
-      isDestroyed = true;
-      // Wait destroy is finished before start processing input
-      setTimeout(() => {
-        client.stopProcessingInput = false;
-      }, 500)
-    }
-  })
-
-  const controls = signal({
-    next: {
-      bind: keyboardControls.action,
-      keyDown(e) {
-        if (isDestroyed) return;
-        if (isChoiceDisplayed()) {
-          // If choices are displayed, do nothing (wait for selection)
-          return;
-        }
-
-        // If text is still typing, just skip (fast forward) the animation
-        if (!isTextCompleted()) {
-          triggerSkip.start();
-          isTextCompleted.set(true);
-        }
-        else {
-          const isFinished = currentTextIndex() === texts.length - 1;
-          currentTextIndex.update((index) => {
-            if (index < texts.length - 1) {
-              return index + 1;
-            }
-            return index;
-          });
-          isChoiceDisplayed.set(false);
-          isTextCompleted.set(false);
-          if (isFinished && onFinish) {
-            onFinish();
-          } 
-        }
-      },
-    },
-  });
-
-  const onSelect = (index) => {
-    onFinish(index);
-  }
-  
-  effect(() => {
-    if (choices().length != 0) {
-      isChoiceDisplayed.set(true);
-    }
-  });
 </script>

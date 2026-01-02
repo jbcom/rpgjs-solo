@@ -220,7 +220,8 @@ export function provideClientGlobalConfig(config: any = {}) {
       down: 'down',
       left: 'left',
       right: 'right',
-      action: 'space'
+      action: 'space',
+      escape: 'escape'
     }
   }
   return provideGlobalConfig(config)

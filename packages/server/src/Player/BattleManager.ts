@@ -1,6 +1,6 @@
 import { Constructor, PlayerCtor, RpgCommonPlayer } from "@rpgjs/common";
 import { RpgPlayer } from "./Player";
-import { ATK, PDEF, SDEF } from "../presets";
+import { ATK, PDEF, SDEF } from "@rpgjs/common";
 import { Effect } from "./EffectManager";
 import type { IElementManager } from "./ElementManager";
 import type { IEffectManager } from "./EffectManager";

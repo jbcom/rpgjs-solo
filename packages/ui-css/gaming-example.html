@@ -3,206 +3,74 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RPG UI - Pixel Fantasy Theme</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=VT323&display=swap"
-        rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RPG UI - Mobile Theme</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./src/index.css">
-    <link rel="stylesheet" href="./theme-default/theme.css">
-    <style>
-        body {
-            background-image: url('https://images.unsplash.com/photo-1519074069444-1ba4fff66d16?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80');
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-            padding: 40px;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            gap: 40px;
-            flex-wrap: wrap;
-        }
-
-        /* Overlay to darken background */
-        body::before {
-            content: "";
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: -1;
-        }
-
-        .column {
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-            flex: 1;
-            min-width: 300px;
-            max-width: 400px;
-        }
-
-        h2 {
-            color: var(--rpg-ui-accent);
-            text-transform: uppercase;
-            margin-bottom: 16px;
-            text-shadow: 2px 2px 0 #000;
-        }
-    </style>
+    <link id="theme-link" rel="stylesheet" href="./src/themes/rpg.css">
 </head>
 
 <body>
 
-    <!-- Left Column: Character & Stats -->
-    <div class="column">
-        <div class="rpg-ui-character-card rpg-anim-fade-in">
-            <div class="rpg-ui-character-card-header">
-                <div class="rpg-ui-character-card-avatar">🧙‍♂️</div>
-                <div class="rpg-ui-character-card-info">
-                    <div class="rpg-ui-character-card-name">Eldric</div>
-                    <div class="rpg-ui-character-card-class">Battle Mage <span class="rpg-ui-character-card-level">Lv.
-                            42</span></div>
-                </div>
-            </div>
-
-            <div class="rpg-ui-character-card-section-title">Vitals</div>
-            <div class="rpg-ui-bar" data-type="health">
-                <div class="rpg-ui-bar-fill" style="width: 75%;"></div>
-                <span class="rpg-ui-bar-label">HP: 2450/3200</span>
-            </div>
-            <div class="rpg-ui-bar" data-type="mana">
-                <div class="rpg-ui-bar-fill" style="width: 60%;"></div>
-                <span class="rpg-ui-bar-label">MP: 1200/2000</span>
-            </div>
-            <div class="rpg-ui-bar" data-type="experience">
-                <div class="rpg-ui-bar-fill" style="width: 90%;"></div>
-                <span class="rpg-ui-bar-label">XP: 90%</span>
-            </div>
-
-            <div class="rpg-ui-character-card-section-title">Attributes</div>
-            <div class="rpg-ui-stats">
-                <div class="rpg-ui-stat">
-                    <span class="rpg-ui-stat-label">STR</span>
-                    <span class="rpg-ui-stat-value">45 <span class="rpg-ui-stat-change"
-                            data-type="positive">+2</span></span>
-                </div>
-                <div class="rpg-ui-stat">
-                    <span class="rpg-ui-stat-label">INT</span>
-                    <span class="rpg-ui-stat-value">128 <span class="rpg-ui-stat-change"
-                            data-type="positive">+12</span></span>
-                </div>
-                <div class="rpg-ui-stat">
-                    <span class="rpg-ui-stat-label">DEX</span>
-                    <span class="rpg-ui-stat-value">64</span>
-                </div>
-            </div>
+    <!-- Top Left HUD -->
+    <div class="rpg-hud">
+        <div class="rpg-avatar">
+            🧙‍♂️
+            <div class="rpg-avatar-level">42</div>
         </div>
-
-        <div class="rpg-ui-panel rpg-anim-slide-up" style="animation-delay: 0.2s;">
-            <h2>Equipment</h2>
-            <div class="rpg-ui-inventory">
-                <div class="rpg-ui-inventory-slot" data-rarity="legendary" data-selected="true">
-                    <div class="rpg-ui-inventory-slot-icon">⚔️</div>
-                    <div class="rpg-ui-tooltip" data-visible="true"
-                        style="top: -40px; left: 50%; transform: translateX(-50%);">Excalibur</div>
-                </div>
-                <div class="rpg-ui-inventory-slot" data-rarity="epic">
-                    <div class="rpg-ui-inventory-slot-icon">🛡️</div>
-                </div>
-                <div class="rpg-ui-inventory-slot" data-rarity="rare">
-                    <div class="rpg-ui-inventory-slot-icon">💍</div>
-                </div>
-                <div class="rpg-ui-inventory-slot" data-rarity="common">
-                    <div class="rpg-ui-inventory-slot-icon">👢</div>
-                </div>
-                <div class="rpg-ui-inventory-slot" data-locked="true"></div>
-                <div class="rpg-ui-inventory-slot" data-locked="true"></div>
+        <div class="rpg-status-bars">
+            <div class="rpg-bar-container">
+                <span class="rpg-bar-text">HP 2450/3200</span>
+                <div class="rpg-bar-fill health" style="width: 75%;"></div>
+            </div>
+            <div class="rpg-bar-container">
+                <span class="rpg-bar-text">SP 1200/2000</span>
+                <div class="rpg-bar-fill mana" style="width: 60%;"></div>
             </div>
         </div>
     </div>
 
-    <!-- Middle Column: Dialog & Actions -->
-    <div class="column">
-        <div class="rpg-ui-dialog rpg-anim-slide-up" data-has-portrait="true" style="animation-delay: 0.4s;">
-            <div class="rpg-ui-dialog-portrait">
-                <div
-                    style="font-size: 64px; display: flex; align-items: center; justify-content: center; height: 100%;">
-                    🧝‍♀️</div>
-            </div>
-            <div class="rpg-ui-dialog-speaker">Elven Guide</div>
-            <div class="rpg-ui-dialog-content">
-                "Welcome, traveler! The path ahead is dangerous. Take this potion, you will need it."
-            </div>
-            <div class="rpg-ui-dialog-indicator"></div>
+    <!-- Top Right Minimap -->
+    <div class="rpg-minimap">
+        <!-- Placeholder map content -->
+        <div
+            style="width: 100%; height: 100%; background: radial-gradient(circle, #4caf50 20%, #2e7d32 80%); opacity: 0.5;">
         </div>
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff;">�</div>
+    </div>
 
-        <div class="rpg-ui-window rpg-anim-slide-up" style="animation-delay: 0.6s;">
-            <div class="rpg-ui-window-title">Quest Log</div>
-            <div class="rpg-ui-menu">
-                <div class="rpg-ui-menu-item" data-selected="true">Main Quest: The Dark Tower</div>
-                <div class="rpg-ui-menu-item">Side Quest: Lost Sheep</div>
-                <div class="rpg-ui-menu-item">Side Quest: Herb Gathering</div>
-            </div>
-        </div>
-
-        <div class="rpg-ui-panel rpg-anim-slide-up" style="animation-delay: 0.8s;">
-            <h2>Settings</h2>
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-                <input type="text" class="rpg-ui-input" placeholder="Character Name" value="Eldric">
-                <label style="display: flex; align-items: center; color: var(--rpg-ui-text);">
-                    <input type="checkbox" class="rpg-ui-checkbox" checked>
-                    Show Damage Numbers
-                </label>
-                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                    <button class="rpg-ui-btn" data-variant="primary">Save</button>
-                    <button class="rpg-ui-btn" data-variant="danger">Reset</button>
-                </div>
-            </div>
+    <!-- Center Dialog (Contextual) -->
+    <div class="rpg-ui-dialog rpg-anim-fade-in">
+        <div class="rpg-ui-dialog-speaker">Elven Guide</div>
+        <div class="rpg-ui-dialog-content">
+            "The path ahead is dangerous. Equip your best gear before proceeding!"
         </div>
     </div>
 
-    <!-- Hotbar (Fixed) -->
-    <div class="rpg-ui-hotbar rpg-anim-slide-up" style="animation-delay: 1s;">
-        <div class="rpg-ui-inventory-slot" data-active="true">
-            <div class="rpg-ui-hotbar-key">1</div>
-            <div class="rpg-ui-inventory-slot-icon">🗡️</div>
+    <!-- Bottom Item Dock -->
+    <div class="rpg-item-dock glass-panel rpg-anim-slide-up">
+        <div class="rpg-item-slot active">
+            🗡️
         </div>
-        <div class="rpg-ui-inventory-slot">
-            <div class="rpg-ui-hotbar-key">2</div>
-            <div class="rpg-ui-inventory-slot-icon">🔥</div>
+        <div class="rpg-item-slot">
+            �️
         </div>
-        <div class="rpg-ui-inventory-slot">
-            <div class="rpg-ui-hotbar-key">3</div>
-            <div class="rpg-ui-inventory-slot-icon">🧪</div>
-            <span class="rpg-ui-inventory-slot-quantity">5</span>
+        <div class="rpg-item-slot">
+            🧪
+            <span class="rpg-item-qty">5</span>
         </div>
-        <div class="rpg-ui-inventory-slot">
-            <div class="rpg-ui-hotbar-key">4</div>
-            <div class="rpg-ui-inventory-slot-icon">📜</div>
+        <div class="rpg-item-slot">
+            📜
+            <span class="rpg-item-qty">2</span>
         </div>
-        <div class="rpg-ui-inventory-slot">
-            <div class="rpg-ui-hotbar-key">5</div>
+        <div class="rpg-item-slot">
+            🎒
         </div>
     </div>
 
-    <!-- Toasts (Fixed) -->
-    <div class="rpg-ui-toast-container">
-        <div class="rpg-ui-toast" data-type="success">
-            <div class="rpg-ui-toast-icon">🏆</div>
-            <div class="rpg-ui-toast-content">
-                <div class="rpg-ui-toast-title">Achievement Unlocked!</div>
-                <div class="rpg-ui-toast-message">First Blood</div>
-            </div>
-        </div>
-        <div class="rpg-ui-toast" data-type="info">
-            <div class="rpg-ui-toast-icon">ℹ️</div>
-            <div class="rpg-ui-toast-content">
-                <div class="rpg-ui-toast-title">Game Saved</div>
-                <div class="rpg-ui-toast-message">Your progress has been saved.</div>
-            </div>
-        </div>
+    <!-- Action Button -->
+    <div class="rpg-fab rpg-anim-scale-in">
+        ⚔️
     </div>
 
 </body>

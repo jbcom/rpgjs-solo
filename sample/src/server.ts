@@ -148,8 +148,8 @@ export default createServer({
             player.setGraphic("hero");
             
             // Configure player stats
-            player.hp = 200;
-            player.param[MAXHP] = 200;
+            //player.hp = 200;
+            //player.param[MAXHP] = 200;
             player.param[ATK] = 20;
             player.param[PDEF] = 10;
             
@@ -165,7 +165,15 @@ export default createServer({
 
           },
           async onInput(player: RpgPlayer, input: any) {
-            player.setGraphicAnimation('attack', 'monster', Infinity)
+            // console.log("call shop")
+             player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
+            //  player.showText('Hello', {
+            //   face: {
+            //     id: 'facesetId',
+            //     expression: 'happy'
+            //   }
+            //  })
+           // player.hp -= 100;
             // const map = player.getCurrentMap()
             // const event =map?.getEventBy(event => event.name() === "EV-1")
             // console.log(event)

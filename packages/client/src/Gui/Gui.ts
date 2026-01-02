@@ -1,8 +1,9 @@
 import { Context, inject } from "@signe/di";
 import { signal, Signal, WritableSignal } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "../services/AbstractSocket";
-import { DialogboxComponent } from "../components/gui";
+import { DialogboxComponent, ShopComponent } from "../components/gui";
 import { combineLatest, Subscription } from "rxjs";
+import { PrebuiltGui } from "@rpgjs/common";
 
 interface GuiOptions {
   name?: string;
@@ -60,6 +61,10 @@ export class RpgGui {
     this.add({
       name: "rpg-dialog",
       component: DialogboxComponent,
+    });
+    this.add({
+      name: PrebuiltGui.Shop,
+      component: ShopComponent,
     });
   }
 

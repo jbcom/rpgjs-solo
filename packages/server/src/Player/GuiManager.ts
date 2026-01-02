@@ -128,6 +128,10 @@ export function WithGuiManager<TBase extends PlayerCtor>(
       return gui;
     }
 
+    getGui(guiId: string) {
+      return this._gui[guiId];
+    }
+
     /**
      * Closes the GUI and removes it from memory
      *
@@ -358,6 +362,7 @@ export interface IGuiManager {
   callMainMenu(): void;
   callShop(items: any[]): void;
   gui(guiId: string): Gui;
+  getGui(guiId: string): Gui;
   removeGui(guiId: string, data?: any): void;
   showAttachedGui(players?: RpgPlayer[] | RpgPlayer): void;
   hideAttachedGui(players?: RpgPlayer[] | RpgPlayer): void;

@@ -1,0 +1,37 @@
+<DOMContainer>
+    <div class="rpg-hud">
+        <div class="rpg-avatar">
+            <div class="rpg-avatar-level">{{ level() }}</div>
+        </div>
+        <div class="rpg-status-bars">
+            <div class="rpg-bar-container">
+                <span class="rpg-bar-text">HP {{ hp() }}/{{ hpMax() }}</span>
+                <div class="rpg-bar-fill health" style={{width: percentHp}}></div>
+            </div>
+            <div class="rpg-bar-container">
+                <span class="rpg-bar-text">SP {{ sp() }}/{{ spMax() }}</span>
+                <div class="rpg-bar-fill mana" style={{width: percentSp}}></div>
+            </div>
+        </div>
+    </div>
+</DOMContainer>
+
+<script>
+    import { inject } from "../../../core/inject";
+    import { RpgClientEngine } from "../../../RpgClientEngine";
+    import { effect, computed, signal } from "canvasengine";
+    import { MAXHP, MAXSP } from "@rpgjs/common";
+
+    const engine = inject(RpgClientEngine)
+    const currentPlayer = engine.scene.currentPlayer
+    const hp = computed(() => currentPlayer().hpSignal())
+    const hpMax = computed(() => currentPlayer()._param()[MAXHP])
+    const percentHp = computed(() => (hp() / hpMax() * 100) + '%')
+
+    const sp = computed(() => currentPlayer().spSignal())
+    const spMax = computed(() => currentPlayer()._param()[MAXSP])
+    const percentSp = computed(() => (sp() / spMax() * 100) + '%')
+
+    const level = computed(() => currentPlayer()._level())
+</script>
+    

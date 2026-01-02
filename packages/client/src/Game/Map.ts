@@ -1,7 +1,7 @@
 import { RpgCommonMap } from "@rpgjs/common";
 import { sync, users } from "@signe/sync";
 import { RpgClientPlayer } from "./Player";
-import { Signal, signal, computed } from "canvasengine";
+import { Signal, signal, computed, effect } from "canvasengine";
 import { RpgClientEvent } from "./Event";
 import { RpgClientEngine } from "../RpgClientEngine";
 import { inject } from "../core/inject";
@@ -26,8 +26,15 @@ export class RpgClientMap extends RpgCommonMap<any> {
     return this.currentPlayer()
   }
 
-  reset() {
-    this.players.set({})
+  reset(force = false) {
+    const currentPlayerId = this.engine.playerIdSignal();
+    const currentPlayer = !force && currentPlayerId
+      ? this.players()[currentPlayerId]
+      : undefined;
+
+    this.players.set(
+      currentPlayerId && currentPlayer ? { [currentPlayerId]: currentPlayer } : {}
+    );
     this.events.set({})
     this.clearPhysic()
   }

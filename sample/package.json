@@ -11,16 +11,17 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "@canvasengine/compiler": "2.0.0-beta.45",
+    "@canvasengine/compiler": "2.0.0-beta.47",
     "@vitejs/plugin-vue": "^6.0.3",
     "path-browserify": "^1.0.1",
     "vite": "^7.3.0"
   },
   "private": true,
   "dependencies": {
-    "@canvasengine/presets": "2.0.0-beta.45",
+    "@canvasengine/presets": "2.0.0-beta.47",
     "@rpgjs/client": "workspace:*",
     "@rpgjs/common": "workspace:*",
+    "@rpgjs/ui-css": "workspace:*",
     "@rpgjs/database": "^4.3.0",
     "@rpgjs/server": "workspace:*",
     "@rpgjs/tiledmap": "workspace:*",
@@ -28,7 +29,7 @@
     "@rpgjs/vue": "workspace:*",
     "@rpgjs/action-battle": "workspace:*",
     "@signe/di": "^2.7.3",
-    "canvasengine": "2.0.0-beta.45",
+    "canvasengine": "2.0.0-beta.47",
     "pixi.js": "^8.14.3",
     "vue": "^3.5.26"
   },

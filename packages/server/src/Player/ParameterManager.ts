@@ -1,6 +1,6 @@
 import { isString, PlayerCtor } from "@rpgjs/common";
 import { signal, computed, WritableSignal, ComputedSignal } from "@signe/reactive";
-import { MAXHP, MAXSP } from "../presets";
+import { MAXHP, MAXSP } from "@rpgjs/common";
 import { sync, type } from "@signe/sync";
 
 /**
