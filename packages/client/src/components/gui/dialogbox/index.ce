@@ -36,6 +36,9 @@
                     </div>
                 }
             </div>
+            @if (showIndicator) {
+                <div class="rpg-ui-dialog-indicator"></div>
+            }
         </div>
     </div>
 </DOMContainer>
@@ -52,6 +55,7 @@
     engine.stopProcessingInput = true;
 
     const selectedItem = signal(0)
+    let isDestroyed = false;
 
     const {
         message,
@@ -82,6 +86,8 @@
     const hasFace = computed(() => !!resolveProp(face));
 
     const displayMessage = signal("");
+    const fullMessage = signal("");
+    const isTyping = signal(false);
     let typewriterTimer = null;
     let rootElement = null;
 
@@ -94,23 +100,31 @@
         displayMessage.set("");
         if (!text) return;
         let index = 0;
+        isTyping.set(true);
         typewriterTimer = setInterval(() => {
             index += 1;
             displayMessage.set(text.slice(0, index));
             if (index >= text.length) {
                 clearInterval(typewriterTimer);
                 typewriterTimer = null;
+                isTyping.set(false);
             }
         }, 20);
     };
 
+    const finishTyping = () => {
+        if (typewriterTimer) clearInterval(typewriterTimer);
+        typewriterTimer = null;
+        displayMessage.set(fullMessage());
+        isTyping.set(false);
+    };
+
     effect(() => {
         const text = resolveProp(message) || "";
+        fullMessage.set(text);
         const useTypewriter = resolveProp(typewriterEffect) !== false;
         if (!useTypewriter) {
-            if (typewriterTimer) clearInterval(typewriterTimer);
-            typewriterTimer = null;
-            displayMessage.set(text);
+            finishTyping();
             return;
         }
         startTypewriter(text);
@@ -118,6 +132,7 @@
 
 
     const hasChoices = computed(() => choices.length > 0);
+    const showIndicator = computed(() => !hasChoices() && !isTyping());
     const nav = createTabindexNavigator(selectedItem, { count: () => choices.length }, 'wrap');
 
     function selectChoice(index) {
@@ -129,13 +144,10 @@
 
     function _onFinish(value) {
         if (onFinish) onFinish(value);
-        setTimeout(() => {
-            engine.stopProcessingInput = false;
-        }, 100);
     }
 
     const onSelect = (index) => {
-        _onFinish(choices[index]);
+        _onFinish(index);
     };
 
     const controls = signal({
@@ -160,6 +172,10 @@
         action: {
             bind: keyboardControls.action,
             keyDown() {
+                if (isTyping()) {
+                    finishTyping();
+                    return;
+                }
                 if (!hasChoices()) return;
                 onSelect(selectedItem());
             }
@@ -173,6 +189,10 @@
         action: {
             bind: keyboardControls.action,
             keyDown() {
+                if (isTyping()) {
+                    finishTyping();
+                    return;
+                }
                 if (hasChoices()) return;
                 _onFinish();
             }
@@ -185,4 +205,16 @@
             playing: animationName,
         };
     }
+
+    mount((element) => {
+    const dialogbox = element
+    return () => {
+      dialogbox.directives.controls.onDestroy()
+      isDestroyed = true;
+      // Wait destroy is finished before start processing input
+      setTimeout(() => {
+        engine.stopProcessingInput = false;
+      }, 100)
+    }
+  })
 </script>
