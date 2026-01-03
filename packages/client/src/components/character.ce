@@ -4,11 +4,11 @@
       <compConfig.component object ...compConfig.props />
     </Container>
   } 
-  <Particle emit={@emitParticleTrigger} settings={@particleSettings} zIndex={1000} name={particleName} />
+  <Particle emit={emitParticleTrigger} settings={particleSettings} zIndex={1000} name={particleName} />
   <Container>
     @for (graphicObj of graphicsSignals) {
       <Sprite 
-        sheet={@sheet(@graphicObj)} 
+        sheet={sheet(graphicObj)} 
         direction 
         tint 
         hitbox 
@@ -17,14 +17,14 @@
     }
   </Container>
   @for (compConfig of normalizedComponentsInFront) {
-    <Container dependencies={@compConfig.@dependencies}>
+    <Container dependencies={compConfig.dependencies}>
       <compConfig.component object ...compConfig.props />
     </Container>
   }
   @for (attachedGui of attachedGuis) {
     @if (shouldDisplayAttachedGui) {
       <Container>
-        <attachedGui.component ...attachedGui.data() dependencies={@attachedGui.@dependencies} object={object} onFinish={(data) => {
+        <attachedGui.component ...attachedGui.data() dependencies={attachedGui.dependencies} object={object} onFinish={(data) => {
           onAttachedGuiFinish(attachedGui, data)
         }} onInteraction={(name, data) => {
           onAttachedGuiInteraction(attachedGui, name, data)
@@ -362,9 +362,9 @@
   const sheet = (graphicObject) => {
     return {
       definition: graphicObject,
-      playing: realAnimationName,
+      playing: realAnimationName(),
       params: {
-        direction
+        direction: direction()
       },
       onFinish() {
         animationCurrentIndex.update(index => index + 1)

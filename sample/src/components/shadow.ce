@@ -1,8 +1,8 @@
 <Ellipse 
-    x={shadow.@x} 
-    y={shadow.@y} 
-    width={shadow.@width} 
-    height={shadow.@height} 
+    x={shadow().x} 
+    y={shadow().y} 
+    width={shadow().width} 
+    height={shadow().height} 
     color="black" 
     blur={10} 
     alpha={0.5}

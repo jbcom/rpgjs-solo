@@ -6,7 +6,7 @@
                 {message}
             </div>
             @if (face) {
-                <DOMSprite sheet={@faceSheet(@face.@id, @face.@expression)} />
+                <DOMSprite sheet={faceSheet(face.id, face.expression)} />
             }
         </div>
     </div>

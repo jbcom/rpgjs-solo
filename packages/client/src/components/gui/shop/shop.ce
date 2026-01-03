@@ -13,42 +13,123 @@
                 </div>
             </div>
 
-            <Navigation tabindex={selectedTab} controls={tabControls}>  
-                <div class="rpg-shop-tabs">
-                    @for ((tab,index) of tabs) {
-                        <div 
-                            class="rpg-shop-tab" 
-                            class={{active: @isSelectedTab(@index)}} 
-                            tabindex={index} 
-                            click={@selectTab(@index)}
-                        >{{ @tab }}</div>
-                    }
-                </div>
-            </Navigation>
-
-            <div class="rpg-shop-content">
-                <div class="rpg-shop-grid">
-                    <Navigation tabindex={selectedItem} controls={controls}>     
-                        @for ((item,index) of items) { 
-                            <div class="rpg-shop-card" tabindex={@index} click={@selectItem(@index)}>
-                                <div class="rpg-shop-card-icon">🗡️</div>
-                                <div class="rpg-shop-card-name">{{ @item.@name }}</div>
-                                <div class="rpg-shop-card-price">{{ @item.@price }} G</div>
-                            </div>
-                        }
+            <div class="rpg-shop-body">
+                <div class="rpg-shop-left">
+                @if (tradeView() === 'mode') {
+                    <div class="rpg-shop-content rpg-shop-content-mode">
+                        <div class="rpg-shop-details rpg-shop-details-mode">
+                            <div class="rpg-shop-details-header">
+                            <div class="rpg-shop-details-icon">🛒</div>
+                            <h2 style="margin: 0;">Choose an action</h2>
+                        </div>
+                        <div class="rpg-shop-trade">
+                            <Navigation tabindex={selectedModeIndex} controls={controls}>
+                                <div class="rpg-shop-tabs rpg-shop-trade-tabs">
+                                    <div
+                                        class="rpg-shop-tab"
+                                        class={{active: isSelectedModeIndex(0)}}
+                                        click={selectMode('buy')}
+                                    >Buy</div>
+                                    <div
+                                        class="rpg-shop-tab"
+                                        class={{active: isSelectedModeIndex(1)}}
+                                        click={selectMode('sell')}
+                                    >Sell</div>
+                                </div>
+                            </Navigation>
+                        </div>
+                        </div>
+                    </div>
+                }
+                @else {
+                    <div>
+                    <Navigation tabindex={selectedTab} controls={tabControls()}>  
+                        <div class="rpg-shop-tabs">
+                            @for ((tab,index) of tabs) {
+                                <div 
+                                    class="rpg-shop-tab" 
+                                    class={{active: isSelectedTab(index)}} 
+                                    tabindex={index} 
+                                    click={selectTab(index)}
+                                >{{ tab }}</div>
+                            }
+                        </div>
                     </Navigation>
-                </div>
 
-                <div class="rpg-shop-details">
-                    <div class="rpg-shop-details-header">
-                        <div class="rpg-shop-details-icon">⚔️</div>
-                        <h2 style="margin: 0;">{{ currentItem.@name }}</h2>
-                        <p style="color: #ffd700; font-weight: bold; margin: 8px 0;">{{ currentItem.@price }} G</p>
+                    <div class="rpg-shop-content">
+                        <div class="rpg-shop-grid">
+                            <Navigation tabindex={selectedItem} controls={controls()}>     
+                                @for ((item,index) of items) { 
+                                    <div class="rpg-shop-card" class={{disabled: isItemDisabled(item)}} tabindex={index} click={selectItem(index)}>
+                                        <div class="rpg-shop-card-icon">🗡️</div>
+                                        <div class="rpg-shop-card-name">{{ item.name }}</div>
+                                        <div class="rpg-shop-card-price">{{ item.price }} G</div>
+                                        @if (item.equipped) {
+                                            <div class="rpg-shop-card-tag">Equipped</div>
+                                        }
+                                    </div>
+                                }
+                            </Navigation>
+                        </div>
+
+                        <div class="rpg-shop-details">
+                            <div class="rpg-shop-details-header">
+                                <div class="rpg-shop-details-icon">⚔️</div>
+                                <h2 style="margin: 0;">{{ currentItem().name }}</h2>
+                                <p style="color: #ffd700; font-weight: bold; margin: 8px 0;">{{ currentItem().price }} G</p>
+                            </div>
+                            @if (currentItem().equipped) {
+                                <div class="rpg-shop-equipped">Already equipped</div>
+                            }
+                            <div class="rpg-shop-details-desc">
+                                {{ currentItem().description }}
+                            </div>
+                            @if (displayStats().length > 0) {
+                                <div class="rpg-shop-stats">
+                                    @for ((stat,index) of displayStats) {
+                                        <div class="rpg-shop-stat" class={{positive: stat.delta > 0, negative: stat.delta < 0}}>
+                                            <div class="rpg-shop-stat-key">{{ stat.label }}</div>
+                                            <div class="rpg-shop-stat-value">
+                                                {{ stat.delta > 0 ? '+' : '' }}{{ stat.delta }}
+                                            </div>
+                                            @if (stat.current !== undefined) {
+                                                <div class="rpg-shop-stat-current">{{ stat.current }} → {{ stat.next }}</div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            <button class="rpg-shop-btn" click={backToMode()}>Back</button>
+                        </div>
                     </div>
-                    <div class="rpg-shop-details-desc">
-                        {{ currentItem.@description }}
                     </div>
-                    <button class="rpg-shop-btn">Purchase</button>
+                }
+                @if (quantityDialogOpen) {
+                    <div class="rpg-shop-modal">
+                        <div class="rpg-shop-modal-card">
+                            <div class="rpg-shop-modal-title">{{ actionLabel }}</div>
+                            <div class="rpg-shop-modal-item">{{ currentItem().name }}</div>
+                            <div class="rpg-shop-quantity">
+                                <div class="rpg-shop-quantity-label">Quantity</div>
+                                <div class="rpg-shop-quantity-controls">
+                                    <button class="rpg-shop-btn" click={changeQuantity(-1)}>-</button>
+                                    <div class="rpg-shop-quantity-value">{{ quantity }}</div>
+                                    <button class="rpg-shop-btn" click={changeQuantity(1)}>+</button>
+                                </div>
+                            </div>
+                            <div class="rpg-shop-modal-total">
+                                <span>Total</span>
+                                <span>{{ totalPrice() }} G</span>
+                            </div>
+                            <div class="rpg-shop-modal-actions">
+                                <button class="rpg-shop-btn rpg-shop-btn-secondary" click={closeQuantityDialog()}>Cancel</button>
+                                <button class="rpg-shop-btn" click={confirmTrade()}>
+                                    {{ actionLabel() }} x{{ quantity() }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
                 </div>
             </div>
         </div>
@@ -65,18 +146,78 @@
 
     const selectedItem = signal(0)
     const selectedTab = signal(0)
+    const tradeMode = signal('buy')
+    const tradeView = signal('mode')
+    const selectedModeIndex = signal(0)
+    const quantity = signal(1)
+    const quantityDialogOpen = signal(false)
     const tabs = ['Weapons', 'Armor', 'Potions', 'Materials']
 
-    const { items, onInteraction , onFinish } = defineProps()
+    const { items, onInteraction , onFinish, playerParams } = defineProps()
+
+    console.log(playerParams)
 
     const currentItem = computed(() => items[selectedItem()])
     const gold = computed(() => currentPlayer()._gold())
+    const actionLabel = computed(() => tradeMode() === 'buy' ? 'Buy' : 'Sell')
+    const maxQuantity = computed(() => {
+        if (tradeMode() !== 'buy') return Infinity
+        const price = currentItem()?.price || 0
+        if (price <= 0) return 0
+        return Math.max(1, Math.floor(gold() / price))
+    })
+    const totalPrice = computed(() => {
+        const price = currentItem()?.price || 0
+        const unitPrice = tradeMode() === 'sell' ? price / 2 : price
+        return unitPrice * quantity()
+    })
+    const displayStats = computed(() => {
+        const stats = currentItem()?.stats || {}
+        const params = playerParams || {}
+        const order = ['atk', 'def', 'pdef', 'sdef', 'str', 'dex', 'int', 'agi', 'maxHp', 'maxSp']
+        const labels = {
+            atk: 'ATK',
+            def: 'DEF',
+            pdef: 'PDEF',
+            sdef: 'SDEF',
+            str: 'STR',
+            dex: 'DEX',
+            int: 'INT',
+            agi: 'AGI',
+            maxHp: 'MAX HP',
+            maxSp: 'MAX SP'
+        }
+        const orderedKeys = order.filter((key) => stats[key] !== undefined)
+        const extraKeys = Object.keys(stats).filter((key) => !order.includes(key))
+        const keys = orderedKeys.concat(extraKeys)
+        const list = []
+        for (const key of keys) {
+            const delta = stats[key]
+            if (delta === undefined || delta === 0) continue
+            let current = params[key]
+            if (current === undefined && key === 'def') current = params.pdef
+            const next = current !== undefined ? current + delta : undefined
+            list.push({
+                key,
+                label: labels[key] || key.toUpperCase(),
+                delta,
+                current,
+                next
+            })
+        }
+        return list
+    })
     const nav = createTabindexNavigator(selectedItem, { count: () => items.length }, 'wrap')
     const navTab = createTabindexNavigator(selectedTab, { count: () => tabs.length }, 'wrap')
+    const navMode = createTabindexNavigator(selectedModeIndex, { count: () => 2 }, 'wrap')
 
     function selectItem(index) {
        return function() {
         selectedItem.set(index)
+        quantity.set(1)
+        if (!isItemDisabled(items[index])) {
+            quantityDialogOpen.set(true)
+        }
        }
     }
 
@@ -90,13 +231,79 @@
         return computed(() => selectedTab() === index)
     }
 
+    function selectMode(mode) {
+        return function() {
+            tradeMode.set(mode)
+            selectedModeIndex.set(mode === 'buy' ? 0 : 1)
+            tradeView.set('items')
+        }
+    }
+
+    function isSelectedMode(mode) {
+        return computed(() => tradeMode() === mode)
+    }
+
+    function isSelectedModeIndex(index) {
+        return computed(() => selectedModeIndex() === index)
+    }
+
+    function isItemDisabled(item) {
+        if (tradeMode() !== 'buy') return false
+        const price = item?.price || 0
+        if (price <= 0) return true
+        return gold() < price
+    }
+
+    function backToMode() {
+        return function() {
+            tradeView.set('mode')
+        }
+    }
+
+    function changeQuantity(delta) {
+        return function() {
+            const limit = maxQuantity()
+            if (limit <= 0) return
+            const nextValue = Math.max(1, Math.min(limit, quantity() + delta))
+            if (nextValue !== quantity()) {
+                quantity.set(nextValue)
+            }
+        }
+    }
+
+    function closeQuantityDialog() {
+        return function() {
+            quantityDialogOpen.set(false)
+        }
+    }
+
+    function confirmTrade() {
+        return function() {
+            if (tradeMode() === 'buy' && isItemDisabled(currentItem())) {
+                quantityDialogOpen.set(false)
+                return
+            }
+            const action = tradeMode() === 'buy' ? 'buyItem' : 'sellItem'
+            onInteraction(action, { id: currentItem().id, nb: quantity() })
+            quantityDialogOpen.set(false)
+        }
+    }
+
     const controls = signal({
         up: {
             repeat: true,
             bind: keyboardControls.up,
             throttle: 150,
             keyDown() {
-                nav.next(-1)
+                if (quantityDialogOpen()) {
+                    changeQuantity(1)()
+                    return
+                }
+                if (tradeView() === 'mode') {
+                    navMode.next(-1)
+                } else {
+                    nav.next(-1)
+                }
             }
         },
         down: {
@@ -104,19 +311,61 @@
             bind: keyboardControls.down,
             throttle: 150,
             keyDown() {
-                nav.next(1)
+                if (quantityDialogOpen()) {
+                    changeQuantity(-1)()
+                    return
+                }
+                if (tradeView() === 'mode') {
+                    navMode.next(1)
+                } else {
+                    nav.next(1)
+                }
+            }
+        },
+        left: {
+            repeat: true,
+            bind: keyboardControls.left,
+            throttle: 150,
+            keyDown() {
+                return
+            }
+        },
+        right: {
+            repeat: true,
+            bind: keyboardControls.right,
+            throttle: 150,
+            keyDown() {
+                return
             }
         },
         action: {
             bind: keyboardControls.action,
             keyDown() {
-                onInteraction('buyItem', { id: currentItem().id, nb: 1 })
+                if (tradeView() === 'mode') {
+                    const mode = selectedModeIndex() === 0 ? 'buy' : 'sell'
+                    tradeMode.set(mode)
+                    tradeView.set('items')
+                } else if (quantityDialogOpen()) {
+                    const action = tradeMode() === 'buy' ? 'buyItem' : 'sellItem'
+                    onInteraction(action, { id: currentItem().id, nb: quantity() })
+                    quantityDialogOpen.set(false)
+                } else {
+                    if (!isItemDisabled(currentItem())) {
+                        quantityDialogOpen.set(true)
+                    }
+                }
             }
         },
         escape: {
             bind: keyboardControls.escape,
             keyDown() {
-                onFinish()
+                if (quantityDialogOpen()) {
+                    quantityDialogOpen.set(false)
+                } else if (tradeView() === 'items') {
+                    tradeView.set('mode')
+                } else {
+                    onFinish()
+                }
             }
         },
         gamepad: {

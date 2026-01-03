@@ -1,4 +1,4 @@
-<Text text={@parseDynamicValue(@component.@value, @object)} ...getComponentStyle(component) />
+<Text text={parseDynamicValue(component.value, object)} ...getComponentStyle(component) />
 
 <script>
 import { computed } from "canvasengine";

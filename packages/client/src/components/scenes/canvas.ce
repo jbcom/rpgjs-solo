@@ -1,4 +1,4 @@
-<Canvas width={@engine.width} height={@engine.height}>
+<Canvas width={engine.width} height={engine.height}>
   <Viewport worldWidth worldHeight clamp>
     @if (sceneData) {
       <SceneMap />
@@ -7,7 +7,7 @@
   @for (gui of gui) {
       <Container display="flex">
         @if (gui.display) {
-          <gui.component ...gui.data() dependencies={@gui.@dependencies} onFinish={(data) => {
+          <gui.component ...gui.data() dependencies={gui.dependencies} onFinish={(data) => {
             onGuiFinish(gui, data)
           }} onInteraction={(name, data) => {
             onGuiInteraction(gui, name, data)

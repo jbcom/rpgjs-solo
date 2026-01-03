@@ -1,8 +1,8 @@
 <Rect
   x={0} 
   y={0} 
-  width={@engine.width} 
-  height={@engine.height} 
+  width={engine.width} 
+  height={engine.height} 
   fill={color} 
   alpha={opacity} 
   zIndex={100000}

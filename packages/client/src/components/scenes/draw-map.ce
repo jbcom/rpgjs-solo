@@ -1,8 +1,8 @@
 <Container sound={backgroundMusic} shake={shakeConfig}>
   <Container sound={backgroundAmbientSound} />
 
-  <sceneComponent() data={map.@data} params={map.@params} />
-  
+  <sceneComponent() data={map().data} params={map().params} />
+
   @for (componentAnimation of componentAnimations) {
     <Container>
       @for (animation of componentAnimation.current) {

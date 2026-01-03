@@ -166,13 +166,14 @@ export default createServer({
           },
           async onInput(player: RpgPlayer, input: any) {
             // console.log("call shop")
-             player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
-            //  player.showText('Hello', {
-            //   face: {
-            //     id: 'facesetId',
-            //     expression: 'happy'
-            //   }
-            //  })
+           
+           //  player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
+             player.showText('Hello', {
+              face: {
+                id: 'facesetId',
+                expression: 'happy'
+              }
+             })
            // player.hp -= 100;
             // const map = player.getCurrentMap()
             // const event =map?.getEventBy(event => event.name() === "EV-1")
