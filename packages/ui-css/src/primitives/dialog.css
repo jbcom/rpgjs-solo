@@ -1,3 +1,34 @@
+.rpg-ui-dialog-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.rpg-ui-dialog-container[data-position="top"] {
+  align-items: flex-start;
+}
+
+.rpg-ui-dialog-container[data-position="middle"] {
+  align-items: center;
+}
+
+.rpg-ui-dialog-container[data-position="bottom"] {
+  align-items: flex-end;
+}
+
+.rpg-ui-dialog-container[data-full-width="true"] .rpg-ui-dialog {
+  width: 100%;
+}
+
+.rpg-ui-dialog-container[data-full-width="false"] .rpg-ui-dialog {
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .rpg-ui-dialog {
   background: var(--rpg-ui-surface);
   border: 4px solid var(--rpg-ui-border);
@@ -5,11 +36,10 @@
   padding: 24px;
   position: relative;
   box-shadow: var(--rpg-ui-shadow-lg);
-  min-height: 120px;
+  min-height: 256px;
   display: flex;
   flex-direction: column;
   margin-top: 24px;
-  /* Space for speaker name */
 }
 
 .rpg-ui-dialog-speaker {
@@ -29,10 +59,86 @@
 }
 
 .rpg-ui-dialog-content {
+  flex: 1;
+  min-width: 0;
   font-size: var(--rpg-ui-font-size-lg);
   line-height: 1.6;
   color: var(--rpg-ui-text);
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+  text-align: left;
+}
+
+.rpg-ui-dialog-choices {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rpg-ui-dialog-choice {
+  position: relative;
+  padding: 6px 12px 6px 28px;
+  border-radius: var(--rpg-ui-radius-sm);
+  cursor: pointer;
+  color: var(--rpg-ui-text);
+  outline: none;
+}
+
+.rpg-ui-dialog-choice::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rpg-ui-dialog-choice.active,
+.rpg-ui-dialog-choice:focus {
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.rpg-ui-dialog-choice.active::before,
+.rpg-ui-dialog-choice:focus::before {
+  background: var(--rpg-ui-accent);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+}
+
+.rpg-ui-dialog-body {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  min-height: 128px;
+  width: 100%;
+}
+
+.rpg-ui-dialog-face {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 96px;
+  align-self: flex-start;
+  border-radius: var(--rpg-ui-radius-sm);
+  overflow: hidden;
+  background: var(--rpg-ui-border-dark);
+  border: 2px solid var(--rpg-ui-border);
+  box-shadow: var(--rpg-ui-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rpg-ui-dialog-face > * {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .rpg-ui-dialog-indicator {

@@ -1,20 +1,47 @@
-<DOMContainer width="100%" height="100%">
-    <div>
+<DOMContainer width="100%" height="100%" controls={dialogControls}>
+    <div
+        class="rpg-ui-dialog-container"
+        data-position={dialogPosition()}
+        data-full-width={isFullWidth() ? "true" : "false"}
+        data-has-face={hasFace() ? "true" : "false"}
+    >
         <div class="rpg-ui-dialog rpg-anim-fade-in">
-            <div class="rpg-ui-dialog-speaker">Elven Guide</div>
-            <div class="rpg-ui-dialog-content">
-                {message}
+            <div class="rpg-ui-dialog-body">
+               <div>
+                    @if (speakerName()) {
+                        <div class="rpg-ui-dialog-speaker">{speakerName()}</div>
+                    }
+                    <div class="rpg-ui-dialog-content">
+                        {displayMessage()}
+                    </div>
+                    @if (hasChoices()) {
+                        <Navigation tabindex={selectedItem} controls={controls}>
+                            <div class="rpg-ui-dialog-choices">
+                                @for ((choice,index) of choices) {
+                                    <div
+                                        class="rpg-ui-dialog-choice"
+                                        class={{active: selectedItem() === index}}
+                                        tabindex={index}
+                                        data-choice-index={index}
+                                        click={selectChoice(index)}
+                                    >{{ choice.text }}</div>
+                                }
+                            </div>
+                        </Navigation>
+                    }
+               </div>
+                @if (hasFace()) {
+                    <div class="rpg-ui-dialog-face">
+                        <DOMSprite sheet={faceSheet(face.id, face.expression)} />
+                    </div>
+                }
             </div>
-            @if (face) {
-                <DOMSprite sheet={faceSheet(face.id, face.expression)} />
-            }
         </div>
     </div>
 </DOMContainer>
     
 <script>
-    import { signal } from "canvasengine";
-    import { mount, signal, computed } from "canvasengine";
+    import { effect, signal, computed, createTabindexNavigator, mount } from "canvasengine";
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
 
@@ -22,23 +49,140 @@
     const currentPlayer = engine.scene.currentPlayer
     const keyboardControls = engine.globalConfig.keyboardControls;
 
+    engine.stopProcessingInput = true;
+
     const selectedItem = signal(0)
 
     const {
         message,
-        choices: _choices,
+        choices,
         onFinish,
         onInteraction,
         face,
+        speaker,
         position,
         typewriterEffect,
-        autoClose
-    } = defineProps();
+        autoClose,
+        fullWidth
+    } = defineProps({
+        fullWidth: {
+            default: false
+        }
+    });
+
+    const resolveProp = (value) => typeof value === "function" ? value() : value;
+
+    const speakerName = computed(() => {
+        const value = resolveProp(speaker);
+        return value ? String(value) : "";
+    });
+
+    const dialogPosition = computed(() => resolveProp(position) || "bottom");
+    const isFullWidth = computed(() => resolveProp(fullWidth) !== false);
+    const hasFace = computed(() => !!resolveProp(face));
+
+    const displayMessage = signal("");
+    let typewriterTimer = null;
+    let rootElement = null;
+
+    mount((element) => {
+        rootElement = element;
+    });
+
+    const startTypewriter = (text) => {
+        if (typewriterTimer) clearInterval(typewriterTimer);
+        displayMessage.set("");
+        if (!text) return;
+        let index = 0;
+        typewriterTimer = setInterval(() => {
+            index += 1;
+            displayMessage.set(text.slice(0, index));
+            if (index >= text.length) {
+                clearInterval(typewriterTimer);
+                typewriterTimer = null;
+            }
+        }, 20);
+    };
+
+    effect(() => {
+        const text = resolveProp(message) || "";
+        const useTypewriter = resolveProp(typewriterEffect) !== false;
+        if (!useTypewriter) {
+            if (typewriterTimer) clearInterval(typewriterTimer);
+            typewriterTimer = null;
+            displayMessage.set(text);
+            return;
+        }
+        startTypewriter(text);
+    });
+
+
+    const hasChoices = computed(() => choices.length > 0);
+    const nav = createTabindexNavigator(selectedItem, { count: () => choices.length }, 'wrap');
+
+    function selectChoice(index) {
+        return function() {
+            selectedItem.set(index);
+            onSelect(index);
+        }
+    }
+
+    function _onFinish(value) {
+        if (onFinish) onFinish(value);
+        setTimeout(() => {
+            engine.stopProcessingInput = false;
+        }, 100);
+    }
+
+    const onSelect = (index) => {
+        _onFinish(choices[index]);
+    };
+
+    const controls = signal({
+        up: {
+            repeat: true,
+            bind: keyboardControls.up,
+            throttle: 150,
+            keyDown() {
+                if (!hasChoices()) return;
+                nav.next(-1);
+            }
+        },
+        down: {
+            repeat: true,
+            bind: keyboardControls.down,
+            throttle: 150,
+            keyDown() {
+                if (!hasChoices()) return;
+                nav.next(1);
+            }
+        },
+        action: {
+            bind: keyboardControls.action,
+            keyDown() {
+                if (!hasChoices()) return;
+                onSelect(selectedItem());
+            }
+        },
+        gamepad: {
+            enabled: true
+        }
+    });
+    
+    const dialogControls = signal({
+        action: {
+            bind: keyboardControls.action,
+            keyDown() {
+                if (hasChoices()) return;
+                _onFinish();
+            }
+        },
+    })
 
     const faceSheet = (graphicId, animationName) => {
-    return {
-      definition: engine.getSpriteSheet(graphicId),
-      playing: animationName,
-    };
-  }
+        return {
+            definition: engine.getSpriteSheet(graphicId),
+            playing: animationName,
+        };
+    }
 </script>

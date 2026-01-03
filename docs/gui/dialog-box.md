@@ -92,6 +92,17 @@ await player.showText('Hello!', {
 });
 ```
 
+### Speaker Name
+
+Overrides the speaker label shown in the dialog:
+
+```typescript
+await player.showText('Hello!', {
+    talkWith: this,
+    speaker: 'Mystery Voice'
+});
+```
+
 ### Face Display
 
 Shows a character face with a specific expression:

@@ -19,6 +19,7 @@ export interface DialogOptions {
     tranparent?: boolean,
     typewriterEffect?: boolean,
     talkWith?: RpgPlayer,
+    speaker?: string,
     face?: {
         id: string,
         expression: string
@@ -34,9 +35,17 @@ export class DialogGui extends Gui {
         if (!options.choices) options.choices = []
         if (options.autoClose == undefined) options.autoClose = false
         if (!options.position) options.position = DialogPosition.Bottom
-        if (options.fullWidth == undefined) options.fullWidth = true
+        if (options.fullWidth == undefined) options.fullWidth = false
         if (options.typewriterEffect  == undefined) options.typewriterEffect = true
         const event = options.talkWith
+        const resolveName = (target?: RpgPlayer): string | undefined => {
+            if (!target) return undefined
+            const rawName = (target as any).name
+            if (typeof rawName === 'function') return rawName()
+            if (rawName && typeof rawName.get === 'function') return rawName.get()
+            return rawName
+        }
+        const speaker = options.speaker ?? resolveName(event)
         let memoryDir
         if (event) {
             memoryDir = event.direction()
@@ -48,6 +57,7 @@ export class DialogGui extends Gui {
             position: options.position,
             fullWidth: options.fullWidth,
             typewriterEffect: options.typewriterEffect,
+            speaker,
             // remove value property. It is not useful to know this on the client side.
             choices: options.choices.map(choice => ({
                 text: choice.text
