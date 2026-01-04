@@ -10,6 +10,7 @@
 @import './primitives/bar.css';
 @import './primitives/inventory.css';
 @import './primitives/dialog.css';
+@import './primitives/save-load.css';
 @import './primitives/character-card.css';
 @import './primitives/stats.css';
 @import './primitives/hotbar.css';

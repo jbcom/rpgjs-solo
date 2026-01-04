@@ -1,0 +1,121 @@
+<DOMContainer width="100%" height="100%">
+    <div class="rpg-ui-save-load rpg-anim-fade-in">
+        <div class="rpg-ui-save-load-header">
+            <div class="rpg-ui-save-load-title">{title()}</div>
+            <div class="rpg-ui-save-load-subtitle">{subtitle()}</div>
+        </div>
+        <Navigation tabindex={selectedSlot} controls={controls}>
+            <div class="rpg-ui-save-load-list">
+                @for ((slot,index) of slotsValue()) {
+                    <div
+                        class="rpg-ui-save-load-slot"
+                        class={{active: isSelectedSlot(index), empty: !slot}}
+                        tabindex={index}
+                        data-slot-index={index}
+                        click={selectSlot(index)}
+                    >
+                        <div class="rpg-ui-save-load-slot-index">Slot {index + 1}</div>
+                        @if (slot) {
+                            <div class="rpg-ui-save-load-slot-meta">
+                                <div class="rpg-ui-save-load-slot-line">Level: {slot.level ?? "-"}</div>
+                                <div class="rpg-ui-save-load-slot-line">Exp: {slot.exp ?? "-"}</div>
+                                <div class="rpg-ui-save-load-slot-line">Map: {slot.map ?? "-"}</div>
+                                <div class="rpg-ui-save-load-slot-line">Date: {slot.date ?? "-"}</div>
+                            </div>
+                        }
+                        @else {
+                            <div class="rpg-ui-save-load-slot-empty">Empty Slot</div>
+                        }
+                    </div>
+                }
+            </div>
+        </Navigation>
+    </div>
+</DOMContainer>
+
+<script>
+    import { signal, computed, effect, createTabindexNavigator, mount } from "canvasengine";
+    import { inject } from "../../core/inject";
+    import { RpgClientEngine } from "../../RpgClientEngine";
+
+    const engine = inject(RpgClientEngine);
+    const keyboardControls = engine.globalConfig.keyboardControls;
+
+    const selectedSlot = signal(0);
+
+    const { mode, slots, onFinish, onInteraction } = defineProps({
+        mode: {
+            default: "load"
+        },
+        slots: {
+            default: () => []
+        }
+    });
+
+    const title = computed(() => mode === "save" ? "Save Game" : "Load Game");
+    const subtitle = computed(() => mode === "save"
+        ? "Choose a slot to overwrite or create."
+        : "Select a slot to load your progress."
+    );
+
+    const slotsValue = computed(() => slots || []);
+    const nav = createTabindexNavigator(selectedSlot, { count: () => slotsValue().length }, "wrap");
+
+    const isSelectedSlot = (index) => computed(() => selectedSlot() === index);
+
+    const canSelect = (slot) => {
+        if (mode === "load" && !slot) return false;
+        return true;
+    };
+
+    const triggerSelect = (index) => {
+        const list = slotsValue();
+        const slot = list[index];
+        if (!canSelect(slot)) return;
+        if (onInteraction) {
+            const action = mode === "save" ? "save" : "load";
+            onInteraction(action, { index, slot });
+        }
+    };
+
+    function selectSlot(index) {
+        return function() {
+            selectedSlot.set(index);
+            triggerSelect(index);
+        }
+    }
+
+    const controls = signal({
+        up: {
+            repeat: true,
+            bind: keyboardControls.up,
+            throttle: 150,
+            keyDown() {
+                nav.next(-1);
+            }
+        },
+        down: {
+            repeat: true,
+            bind: keyboardControls.down,
+            throttle: 150,
+            keyDown() {
+                nav.next(1);
+            }
+        },
+        action: {
+            bind: keyboardControls.action,
+            keyDown() {
+                triggerSelect(selectedSlot());
+            }
+        },
+        escape: {
+            bind: keyboardControls.escape,
+            keyDown() {
+                if (onFinish) onFinish();
+            }
+        },
+        gamepad: {
+            enabled: true
+        }
+    });
+</script>

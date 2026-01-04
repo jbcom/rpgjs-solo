@@ -1,6 +1,7 @@
 import { RpgPlayer } from "./Player";
-import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui } from "../Gui";
+import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui } from "../Gui";
 import { DialogOptions, Choice } from "../Gui/DialogGui";
+import { SaveLoadOptions, SaveSlot } from "../Gui/SaveLoadGui";
 import { Constructor, PlayerCtor } from "@rpgjs/common";
 
 /**
@@ -71,6 +72,23 @@ export function WithGuiManager<TBase extends PlayerCtor>(
       const gui = new MenuGui(<any>this);
       this._gui[gui.id] = gui;
       return gui.open();
+    }
+
+    showSaveLoad(slots: SaveSlot[] = [], options: SaveLoadOptions = {}): Promise<number | null> {
+      const gui = new SaveLoadGui(<any>this);
+      this._gui[gui.id] = gui;
+      return gui.open(slots, options).then((index) => {
+        if (typeof index !== 'number') return null;
+        return index;
+      });
+    }
+
+    showSave(slots: SaveSlot[] = [], options: SaveLoadOptions = {}): Promise<number | null> {
+      return this.showSaveLoad(slots, { ...options, mode: 'save' });
+    }
+
+    showLoad(slots: SaveSlot[] = [], options: SaveLoadOptions = {}): Promise<number | null> {
+      return this.showSaveLoad(slots, { ...options, mode: 'load' });
     }
 
     /**
@@ -351,6 +369,54 @@ export interface IGuiManager {
     message: string,
     options?: { time?: number; icon?: string; sound?: string }
   ): Promise<any>;
+
+  /**
+   * Display a save/load slots screen. Opens the GUI named `rpg-save`
+   *
+   * ```ts
+   * const index = await player.showSaveLoad(slots, { mode: 'save' })
+   * ```
+   *
+   * @title Show Save/Load
+   * @method player.showSaveLoad(slots,options)
+   * @param {Array<object>} slots
+   * @param {object} [options]
+   * @returns {Promise<number | null>}
+   * @memberof GuiManager
+   */
+  showSaveLoad(slots?: SaveSlot[], options?: SaveLoadOptions): Promise<number | null>;
+
+  /**
+   * Display a save slots screen. Opens the GUI named `rpg-save`
+   *
+   * ```ts
+   * const index = await player.showSave(slots)
+   * ```
+   *
+   * @title Show Save
+   * @method player.showSave(slots,options)
+   * @param {Array<object>} slots
+   * @param {object} [options]
+   * @returns {Promise<number | null>}
+   * @memberof GuiManager
+   */
+  showSave(slots?: SaveSlot[], options?: SaveLoadOptions): Promise<number | null>;
+
+  /**
+   * Display a load slots screen. Opens the GUI named `rpg-save`
+   *
+   * ```ts
+   * const index = await player.showLoad(slots)
+   * ```
+   *
+   * @title Show Load
+   * @method player.showLoad(slots,options)
+   * @param {Array<object>} slots
+   * @param {object} [options]
+   * @returns {Promise<number | null>}
+   * @memberof GuiManager
+   */
+  showLoad(slots?: SaveSlot[], options?: SaveLoadOptions): Promise<number | null>;
   /**
    * Calls main menu. Opens the GUI named `rpg-main-menu`
    *

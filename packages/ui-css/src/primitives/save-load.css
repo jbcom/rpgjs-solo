@@ -1,0 +1,100 @@
+.rpg-ui-save-load {
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 24px;
+  background: var(--rpg-ui-surface);
+  border: 4px solid var(--rpg-ui-border);
+  border-radius: var(--rpg-ui-radius-lg);
+  box-shadow: var(--rpg-ui-shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rpg-ui-save-load-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rpg-ui-save-load-title {
+  font-size: var(--rpg-ui-font-size-xl);
+  font-weight: bold;
+  color: var(--rpg-ui-text);
+}
+
+.rpg-ui-save-load-subtitle {
+  font-size: var(--rpg-ui-font-size-sm);
+  color: var(--rpg-ui-text-muted);
+}
+
+.rpg-ui-save-load-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rpg-ui-save-load-slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 20px 16px 36px;
+  border-radius: var(--rpg-ui-radius-md);
+  border: 2px solid var(--rpg-ui-border);
+  background: var(--rpg-ui-surface-light);
+  color: var(--rpg-ui-text);
+  cursor: pointer;
+  outline: none;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.rpg-ui-save-load-slot::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 18px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rpg-ui-save-load-slot-index {
+  font-size: var(--rpg-ui-font-size-lg);
+  font-weight: bold;
+}
+
+.rpg-ui-save-load-slot-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+}
+
+.rpg-ui-save-load-slot-line {
+  font-size: var(--rpg-ui-font-size-sm);
+  color: var(--rpg-ui-text);
+}
+
+.rpg-ui-save-load-slot-empty {
+  font-size: var(--rpg-ui-font-size-sm);
+  color: var(--rpg-ui-text-muted);
+}
+
+.rpg-ui-save-load-slot.active,
+.rpg-ui-save-load-slot:focus {
+  border-color: var(--rpg-ui-accent);
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.2);
+}
+
+.rpg-ui-save-load-slot.active::before,
+.rpg-ui-save-load-slot:focus::before {
+  background: var(--rpg-ui-accent);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+}
+
+.rpg-ui-save-load-slot.empty {
+  opacity: 0.75;
+}
