@@ -1,6 +1,11 @@
 <DOMContainer>
     <div class="rpg-hud">
         <div class="rpg-avatar">
+            @if (hasFace()) {
+                <div class="rpg-avatar-face">
+                    <DOMSprite sheet={faceSheet(face())} />
+                </div>
+            }
             <div class="rpg-avatar-level">{{ level() }}</div>
         </div>
         <div class="rpg-status-bars">
@@ -24,6 +29,19 @@
 
     const engine = inject(RpgClientEngine)
     const currentPlayer = engine.scene.currentPlayer
+    const { faceset } = defineProps();
+
+    const resolveProp = (value) => typeof value === "function" ? value() : value;
+    const face = computed(() => resolveProp(faceset));
+
+    const hasFace = computed(() => {
+        const value = face();
+        return !!(value && value.id);
+    });
+    const faceSheet = (faceValue) => ({
+        definition: engine.getSpriteSheet(faceValue.id),
+        playing: faceValue.expression || "default",
+    });
     const hp = getEntityProp(currentPlayer, "hp")
     const hpMax = getEntityProp(currentPlayer, "params.maxHp")
     const percentHp = computed(() => (hp() / hpMax() * 100) + '%')

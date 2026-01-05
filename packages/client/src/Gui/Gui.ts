@@ -240,7 +240,7 @@ export class RpgGui {
 
     // Auto display if enabled and it's a CanvasEngine component
     if (guiInstance.autoDisplay && typeof gui.component === 'function') {
-      this.display(guiId);
+      this.display(guiId, gui.data);
     }
   }
 

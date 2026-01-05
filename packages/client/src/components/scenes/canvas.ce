@@ -4,7 +4,7 @@
       <SceneMap />
     }
   </Viewport>
-  @for (gui of gui) {
+  @for (gui of guiList) {
       <Container display="flex">
         @if (gui.display) {
           <gui.component ...gui.data() dependencies={gui.dependencies} onFinish={(data) => {
@@ -27,7 +27,7 @@
   const engine = inject(RpgClientEngine);
   const guiService = inject(RpgGui);
   const sceneData = engine.sceneMap.data
-  const gui = computed(() => {
+  const guiList = computed(() => {
     return Object.values(guiService.gui()).filter((gui) => !gui.attachToSprite)
   })
   const worldWidth = computed(() => sceneData()?.width)

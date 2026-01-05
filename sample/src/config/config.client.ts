@@ -174,6 +174,12 @@ export default {
             dependencies: () => {
               const engine = inject(RpgClientEngine)
               return [engine.scene.currentPlayer]
+            },
+            data: {
+              faceset: {
+                id: 'facesetId',
+                expression: 'happy'
+              }
             }
           }
         ],

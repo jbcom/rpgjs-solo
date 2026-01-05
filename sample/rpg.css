@@ -108,6 +108,20 @@ body {
     z-index: 2;
 }
 
+.rpg-avatar-face {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    position: relative;
+}
+
+.rpg-avatar-face > * {
+    display: block;
+    position: absolute;
+    transform: translate(-42%, -45%) scale(0.35);
+}
+
 .rpg-avatar-level {
     position: absolute;
     bottom: -4px;
