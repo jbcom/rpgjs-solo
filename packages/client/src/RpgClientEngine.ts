@@ -288,8 +288,7 @@ export class RpgClientEngine<T = any> {
     });
 
     this.webSocket.on("notification", (data) => {
-      const { message, icon, sound, type } = data;
-      this.notificationManager.add({ message, icon, sound, type });
+      this.notificationManager.add(data);
     });
 
      this.webSocket.on("setAnimation", (data) => {    

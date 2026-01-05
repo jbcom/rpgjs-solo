@@ -30,8 +30,16 @@
         playing: "default"
     });
 
+    effect(() => {
+        const list = notifications();
+        const rowHeight = 68;
+        list.forEach((notif, index) => {
+            notif.layoutY.set(index * rowHeight);
+        });
+    });
+
     const notificationStyle = (notif) => ({
         opacity: notif.opacity(),
-        transform: `translateY(${notif.offset()}px)`
+        transform: `translateY(${notif.layoutY() + notif.offset()}px)`
     });
 </script>

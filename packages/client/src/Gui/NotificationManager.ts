@@ -14,6 +14,7 @@ export interface NotificationItem extends NotificationPayload {
   id: number;
   opacity: any;
   offset: any;
+  layoutY: any;
   removing: boolean;
 }
 
@@ -27,6 +28,7 @@ export class NotificationManager {
     const id = ++this._counter;
     const opacity = animatedSignal(0, { duration: DEFAULT_DURATION });
     const offset = animatedSignal(12, { duration: DEFAULT_DURATION });
+    const layoutY = animatedSignal(0, { duration: DEFAULT_DURATION });
     const item: NotificationItem = {
       id,
       message: payload.message,
@@ -36,6 +38,7 @@ export class NotificationManager {
       sound: payload.sound,
       opacity,
       offset,
+      layoutY,
       removing: false,
     };
     this.stack.update((list) => [...list, item]);

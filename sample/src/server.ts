@@ -190,8 +190,9 @@ export default createServer({
            
            //  player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
              //player.callMainMenu()
-             player.showNotification('Hello', {
+             player.showNotification('Yeah, you have unlocked the new weapon!', {
               icon: 'wood',
+              time: 2000,
              })
            // player.hp -= 100;
             // const map = player.getCurrentMap()
