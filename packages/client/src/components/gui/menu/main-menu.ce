@@ -75,6 +75,18 @@
                 }
             </div>
         </div>
+        @if (saveOverlay) {
+            <div class="rpg-ui-main-menu-overlay">
+                <div class="rpg-ui-main-menu-overlay-backdrop"></div>
+                <div class="rpg-ui-main-menu-overlay-content">
+                    <SaveLoadComponent
+                        mode="save"
+                        slots={saveLoadSlots}
+                        onFinish={closeSaveOverlay}
+                    />
+                </div>
+            </div>
+        }
     </div>
 </DOMContainer>
 
@@ -82,6 +94,7 @@
     import { signal, computed, effect } from "canvasengine";
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
+    import SaveLoadComponent from "../save-load.ce";
     import ItemsMenu from "./items-menu.ce";
     import SkillsMenu from "./skills-menu.ce";
     import EquipMenu from "./equip-menu.ce";
@@ -93,7 +106,7 @@
     const currentPlayer = engine.scene.currentPlayer;
     const keyboardControls = engine.globalConfig.keyboardControls;
 
-    const { menus, items, skills, equips, onFinish, onInteraction } = defineProps();
+    const { menus, items, skills, equips, saveLoad, onFinish, onInteraction } = defineProps();
 
     const defaultMenus = [
         { id: "items", label: "Items" },
@@ -116,8 +129,14 @@
         return false;
     };
 
+    const resolveProp = (value) => typeof value === "function" ? value() : value;
+    const saveLoadData = computed(() => resolveProp(saveLoad) || {});
+    const saveLoadMode = computed(() => saveLoadData().mode || "load");
+    const saveLoadSlots = computed(() => saveLoadData().slots || []);
+
     const selectedMenu = signal(0);
     const view = signal("menu");
+    const saveOverlay = signal(false);
 
     const selectableIndexes = computed(() => {
         const entries = menuEntries();
@@ -155,7 +174,7 @@
         const entry = menuEntries()[selectedMenu()];
         if (!entry || isMenuDisabled(entry)) return;
         if (entry.id === "save") {
-            if (onInteraction) onInteraction("openSave");
+            saveOverlay.set(true);
             return;
         }
         if (entry.id === "exit") {
@@ -166,6 +185,11 @@
     };
 
     const goBack = () => {
+        view.set("menu");
+    };
+
+    const closeSaveOverlay = () => {
+        saveOverlay.set(false);
         view.set("menu");
     };
 
@@ -215,6 +239,7 @@
             bind: keyboardControls.up,
             throttle: 150,
             keyDown() {
+                if (saveOverlay()) return;
                 if (view() !== "menu") return;
                 moveMenu(-1);
             }
@@ -224,6 +249,7 @@
             bind: keyboardControls.down,
             throttle: 150,
             keyDown() {
+                if (saveOverlay()) return;
                 if (view() !== "menu") return;
                 moveMenu(1);
             }
@@ -231,6 +257,7 @@
         action: {
             bind: keyboardControls.action,
             keyDown() {
+                if (saveOverlay()) return;
                 if (view() !== "menu") return;
                 openMenu();
             }
@@ -238,6 +265,7 @@
         escape: {
             bind: keyboardControls.escape,
             keyDown() {
+                if (saveOverlay()) return;
                 if (view() !== "menu") {
                     goBack();
                     return;

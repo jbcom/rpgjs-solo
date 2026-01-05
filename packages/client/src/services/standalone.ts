@@ -6,6 +6,7 @@ import { UpdateMapService, UpdateMapToken } from "@rpgjs/common";
 import { LoadMapToken } from "./loadMap";
 import { RpgGui } from "../Gui/Gui";
 import { provideKeyboardControls } from "./keyboardControls";
+import { provideSaveClient } from "./save";
 
 type ServerIo = any;
 type ClientIo = any;
@@ -17,6 +18,7 @@ interface StandaloneOptions {
 class BridgeWebsocket extends AbstractWebsocket {
   private room: ServerIo;
   private socket: ClientIo;
+  private pendingOn: Array<{ event: string; callback: (data: any) => void }> = [];
   private rooms = {
     partyFn: async (roomId: string) => {
       this.room = new ServerIo(roomId, this.rooms);
@@ -56,19 +58,27 @@ class BridgeWebsocket extends AbstractWebsocket {
     listeners?.(this.socket)
     await this.serverInstance.onConnect(this.socket.conn as any, { request } as any);
     this.room.clients.set(this.socket.id, this.socket);
+    this.pendingOn.forEach(({ event, callback }) => this.socket.addEventListener(event, callback));
+    this.pendingOn = [];
     return this.socket
   }
 
   on(key: string, callback: (data: any) => void) {
-    this.socket.addEventListener("message", (event) => {
+    const handler = (event) => {
       const object = JSON.parse(event);
       if (object.type === key) {
         callback(object.value);
       }
-    });
+    };
+    if (!this.socket) {
+      this.pendingOn.push({ event: "message", callback: handler });
+      return;
+    }
+    this.socket.addEventListener("message", handler);
   }
 
   off(event: string, callback: (data: any) => void) {
+    if (!this.socket) return;
     this.socket.removeEventListener(event, callback);
   }
 
@@ -174,6 +184,7 @@ export function provideRpg(server: any, options: StandaloneOptions = {}) {
       useClass: UpdateMapStandaloneService,
     },
     provideKeyboardControls(),
+    provideSaveClient(),
     RpgGui,
     RpgClientEngine,
   ];

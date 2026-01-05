@@ -4,6 +4,7 @@ export * from "./rooms/Map";
 export * from "./rooms/WorldMaps";
 export * from "./modules";
 export * from "./services/updateMap";
+export * from "./services/save";
 export * from "./Utils";
 export * from "./PrebuiltGui";
 export * from "./database";

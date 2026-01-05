@@ -44,16 +44,13 @@
     const selectedSlot = signal(0);
 
     const { mode, slots, onFinish, onInteraction } = defineProps({
-        mode: {
-            default: "load"
-        },
         slots: {
             default: () => []
         }
     });
 
-    const title = computed(() => mode === "save" ? "Save Game" : "Load Game");
-    const subtitle = computed(() => mode === "save"
+    const title = computed(() => mode() === "save" ? "Save Game" : "Load Game");
+    const subtitle = computed(() => mode() === "save"
         ? "Choose a slot to overwrite or create."
         : "Select a slot to load your progress."
     );
@@ -64,7 +61,7 @@
     const isSelectedSlot = (index) => computed(() => selectedSlot() === index);
 
     const canSelect = (slot) => {
-        if (mode === "load" && !slot) return false;
+        if (mode() === "load" && !slot) return false;
         return true;
     };
 
@@ -73,7 +70,7 @@
         const slot = list[index];
         if (!canSelect(slot)) return;
         if (onInteraction) {
-            const action = mode === "save" ? "save" : "load";
+            const action = mode() === "save" ? "save" : "load";
             onInteraction(action, { index, slot });
         }
     };

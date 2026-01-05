@@ -1,17 +1,11 @@
 import { PrebuiltGui } from '@rpgjs/common'
+import type { SaveSlot } from '@rpgjs/common'
 import { Gui } from './Gui'
 import { RpgPlayer } from '../Player/Player'
 
 export type SaveLoadMode = 'save' | 'load'
 
-export interface SaveSlot {
-    level?: number
-    exp?: number
-    map?: string
-    date?: string
-    snapshot?: string
-    [key: string]: any
-}
+export type { SaveSlot } from '@rpgjs/common'
 
 export interface SaveLoadOptions {
     mode?: SaveLoadMode

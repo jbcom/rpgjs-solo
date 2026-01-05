@@ -6,6 +6,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
 .rpg-ui-main-menu-layout {
@@ -116,6 +117,27 @@
   flex-direction: column;
   gap: 12px;
   padding: 16px;
+}
+
+.rpg-ui-main-menu-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.rpg-ui-main-menu-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.rpg-ui-main-menu-overlay-content {
+  position: relative;
+  z-index: 1;
+  width: min(760px, 90%);
 }
 
 .rpg-ui-menu-panel-header {

@@ -5,6 +5,7 @@ import { RpgClientEngine } from "../RpgClientEngine";
 import { AbstractWebsocket, WebSocketToken } from "./AbstractSocket";
 import { UpdateMapService, UpdateMapToken } from "@rpgjs/common";
 import { provideKeyboardControls } from "./keyboardControls";
+import { provideSaveClient } from "./save";
 
 interface MmorpgOptions {
     host?: string;
@@ -13,6 +14,7 @@ interface MmorpgOptions {
 class BridgeWebsocket extends AbstractWebsocket {
   private socket: any;
   private privateId: string;
+  private pendingOn: Array<{ event: string; callback: (data: any) => void }> = [];
 
   constructor(protected context: Context, private options: MmorpgOptions = {}) {
     super(context);
@@ -34,13 +36,20 @@ class BridgeWebsocket extends AbstractWebsocket {
     }, instance)
 
     listeners?.(this.socket)
+    this.pendingOn.forEach(({ event, callback }) => this.socket.on(event, callback));
+    this.pendingOn = [];
   }
 
   on(key: string, callback: (data: any) => void) {
+    if (!this.socket) {
+      this.pendingOn.push({ event: key, callback });
+      return;
+    }
     this.socket.on(key, callback);
   }
 
   off(event: string, callback: (data: any) => void) {
+    if (!this.socket) return;
     this.socket.off(event, callback);
   }
 
@@ -82,6 +91,7 @@ export function provideMmorpg(options: MmorpgOptions) {
       useFactory: (context: Context) => new UpdateMapStandaloneService(context, options),
     },
     provideKeyboardControls(),
+    provideSaveClient(),
     RpgGui,
     RpgClientEngine,
   ];

@@ -105,7 +105,7 @@ export class MenuGui extends Gui {
         this.on('exit', () => {
             this.close('exit')
         })
-        return super.open({ menus, items, equips: menuEquips, skills }, {
+        return super.open({ menus, items, equips: menuEquips, skills, saveLoad: 'save' }, {
             waitingAction: true,
             blockPlayerInput: true
         })

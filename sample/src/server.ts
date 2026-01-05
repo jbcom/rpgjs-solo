@@ -151,6 +151,14 @@ export default createServer({
               y: 150,
             });
           },
+          onLoad: (player: RpgPlayer, data: any) => {
+            console.log("load");
+            console.log(data);
+          },
+          onSave: (player: RpgPlayer, data: any) => {
+            console.log("save");
+            console.log(data);
+          },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             console.log("join map");
             player.setGraphic("hero");
