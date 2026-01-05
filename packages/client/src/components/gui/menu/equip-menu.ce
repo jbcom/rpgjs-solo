@@ -1,0 +1,106 @@
+<DOMContainer width="100%" height="100%">
+    <div class="rpg-ui-menu-panel rpg-ui-panel">
+        <div class="rpg-ui-menu-panel-header">Equip</div>
+        <div class="rpg-ui-menu-panel-body">
+            <div class="rpg-ui-menu-panel-list rpg-ui-menu">
+                <Navigation tabindex={selectedItem} controls={controls}>
+                    @for ((item,index) of items) {
+                        <div
+                            class="rpg-ui-menu-item"
+                            data-selected={selectedItem() === index ? "true" : "false"}
+                            tabindex={index}
+                            click={selectItem(index)}
+                        >
+                            <span>{item.name}</span>
+                            <span>{itemEquipped(item) ? "Equipped" : "Equip"}</span>
+                        </div>
+                    }
+                </Navigation>
+            </div>
+            <div class="rpg-ui-menu-panel-details rpg-ui-panel">
+                @if (currentItem()) {
+                    <div class="rpg-ui-menu-panel-details-title">{currentItem().name}</div>
+                    <div class="rpg-ui-menu-panel-details-desc">{currentItem().description || ""}</div>
+                    <div class="rpg-ui-menu-panel-details-meta">
+                        <span>Type: {currentItem().type || "-"}</span>
+                        <span>Status: {itemEquipped(currentItem()) ? "Equipped" : "Unequipped"}</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</DOMContainer>
+
+<script>
+    import { signal, computed, createTabindexNavigator } from "canvasengine";
+    import { inject } from "../../../core/inject";
+    import { RpgClientEngine } from "../../../RpgClientEngine";
+
+    const engine = inject(RpgClientEngine);
+    const keyboardControls = engine.globalConfig.keyboardControls;
+    const currentPlayer = engine.scene.currentPlayer;
+
+    const selectedItem = signal(0);
+    const { items, onInteraction, onBack } = defineProps();
+
+    const nav = createTabindexNavigator(selectedItem, { count: () => items.length }, "wrap");
+    const currentItem = computed(() => items[selectedItem()]);
+
+    const equippedIds = computed(() => {
+        const equipped = currentPlayer().equipments?.() || [];
+        return new Set(equipped.map((it) => it?.id?.() ?? it?.id ?? it?.name));
+    });
+
+    const itemEquipped = (item) => {
+        if (!item) return false;
+        return equippedIds().has(item.id);
+    };
+
+    function selectItem(index) {
+        return function() {
+            selectedItem.set(index);
+            toggleEquip(index);
+        }
+    }
+
+    const toggleEquip = (index) => {
+        const item = items[index];
+        if (!item) return;
+        const nextEquip = !itemEquipped(item);
+        if (onInteraction) onInteraction("equipItem", { id: item.id, equip: nextEquip });
+    };
+
+    const controls = signal({
+        up: {
+            repeat: true,
+            bind: keyboardControls.up,
+            throttle: 150,
+            keyDown() {
+                nav.next(-1);
+            }
+        },
+        down: {
+            repeat: true,
+            bind: keyboardControls.down,
+            throttle: 150,
+            keyDown() {
+                nav.next(1);
+            }
+        },
+        action: {
+            bind: keyboardControls.action,
+            keyDown() {
+                toggleEquip(selectedItem());
+            }
+        },
+        escape: {
+            bind: keyboardControls.escape,
+            keyDown() {
+                if (onBack) onBack();
+            }
+        },
+        gamepad: {
+            enabled: true
+        }
+    });
+</script>

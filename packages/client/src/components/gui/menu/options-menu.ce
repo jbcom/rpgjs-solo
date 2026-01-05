@@ -1,0 +1,35 @@
+<DOMContainer width="100%" height="100%" controls={controls}>
+    <div class="rpg-ui-menu-panel rpg-ui-panel">
+        <div class="rpg-ui-menu-panel-header">Options</div>
+        <div class="rpg-ui-menu-panel-body">
+            <div class="rpg-ui-menu-panel-details">
+                <div class="rpg-ui-menu-panel-details-title">Options</div>
+                <div class="rpg-ui-menu-panel-details-desc">
+                    Configure your preferences here.
+                </div>
+            </div>
+        </div>
+    </div>
+</DOMContainer>
+
+<script>
+    import { signal } from "canvasengine";
+    import { inject } from "../../../core/inject";
+    import { RpgClientEngine } from "../../../RpgClientEngine";
+
+    const engine = inject(RpgClientEngine);
+    const keyboardControls = engine.globalConfig.keyboardControls;
+    const { onBack } = defineProps();
+
+    const controls = signal({
+        escape: {
+            bind: keyboardControls.escape,
+            keyDown() {
+                if (onBack) onBack();
+            }
+        },
+        gamepad: {
+            enabled: true
+        }
+    });
+</script>

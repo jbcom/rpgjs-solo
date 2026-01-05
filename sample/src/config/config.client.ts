@@ -62,6 +62,14 @@ export default {
       withMobile(),
       {
         spritesheetResolver: async (id: string) => {
+          if (id === "potion" || id == 'wood') {
+            return Presets.IconPreset({
+              image: `${id}.png`,
+              framesWidth: 1,
+              framesHeight: 1,
+              id,
+            })
+          }
           if (id === "hero") {
             return Presets.LPCSpritesheetPreset({
               id: "hero",

@@ -16,3 +16,4 @@ export {
 
 export { DialogPosition } from './DialogGui'
 export type { SaveLoadMode, SaveLoadOptions, SaveSlot } from './SaveLoadGui'
+export type { MenuEntryId, MenuEntry, MenuGuiOptions } from './MenuGui'

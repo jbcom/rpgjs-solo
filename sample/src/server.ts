@@ -62,6 +62,16 @@ const BasicShield = {
   price: 50,
   pdef: 10,
   _type: 'armor' as const,
+  icon: 'wood',
+};
+
+const BasicPotion = {
+  id: 'basic-potion',
+  name: 'Basic Potion',
+  description: 'A basic potion',
+  price: 10,
+  _type: 'item' as const,
+  icon: 'potion',
 };
 
 export function Event() {
@@ -91,6 +101,7 @@ export function Event() {
       
       // Equip enemy weapon
       this.addItem(EnemyClaw);
+     
       this.equip(EnemyClaw.id);
       
       // Initialize AI behavior
@@ -155,6 +166,7 @@ export default createServer({
             
             // Equip player with weapon and armor
             player.addItem(HeavyHammer);
+            player.addItem(BasicPotion);
             player.equip(HeavyHammer.id);
             player.addItem(BasicShield);
             player.equip(BasicShield.id);
@@ -177,11 +189,7 @@ export default createServer({
             // console.log(choice)
            
            //  player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
-             player.showSave([{
-              id: 'save1',
-              name: 'Save 1',
-              date: new Date().toISOString()
-             }])
+             player.callMainMenu()
            // player.hp -= 100;
             // const map = player.getCurrentMap()
             // const event =map?.getEventBy(event => event.name() === "EV-1")

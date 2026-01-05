@@ -2,6 +2,7 @@ import { RpgPlayer } from "./Player";
 import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui } from "../Gui";
 import { DialogOptions, Choice } from "../Gui/DialogGui";
 import { SaveLoadOptions, SaveSlot } from "../Gui/SaveLoadGui";
+import { MenuGuiOptions } from "../Gui/MenuGui";
 import { Constructor, PlayerCtor } from "@rpgjs/common";
 
 /**
@@ -68,10 +69,10 @@ export function WithGuiManager<TBase extends PlayerCtor>(
       return gui.open(data);
     }
 
-    callMainMenu() {
+    callMainMenu(options: MenuGuiOptions = {}) {
       const gui = new MenuGui(<any>this);
       this._gui[gui.id] = gui;
-      return gui.open();
+      return gui.open(options);
     }
 
     showSaveLoad(slots: SaveSlot[] = [], options: SaveLoadOptions = {}): Promise<number | null> {
@@ -421,11 +422,12 @@ export interface IGuiManager {
    * Calls main menu. Opens the GUI named `rpg-main-menu`
    *
    * @title Call Main Menu
-   * @method player.callMainMenu()
+   * @method player.callMainMenu(options)
+   * @param {object} [options]
    * @returns {void}
    * @memberof GuiManager
    */
-  callMainMenu(): void;
+  callMainMenu(options?: MenuGuiOptions): void;
   callShop(items: any[]): void;
   gui(guiId: string): Gui;
   getGui(guiId: string): Gui;
