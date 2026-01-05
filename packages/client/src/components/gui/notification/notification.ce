@@ -1,4 +1,4 @@
-<DOMContainer width="100%" height="100%">
+<DOMContainer width="100%" height="100%" zIndex={100}>
     <div class="rpg-ui-notifications">
         @for ((notif,index) of notifications) {
             <div
