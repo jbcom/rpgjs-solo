@@ -189,7 +189,10 @@ export default createServer({
             // console.log(choice)
            
            //  player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
-             player.callMainMenu()
+             //player.callMainMenu()
+             player.showNotification('Hello', {
+              icon: 'wood',
+             })
            // player.hp -= 100;
             // const map = player.getCurrentMap()
             // const event =map?.getEventBy(event => event.name() === "EV-1")

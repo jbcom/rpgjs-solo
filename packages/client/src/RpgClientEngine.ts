@@ -20,6 +20,7 @@ import {
   PredictionController,
   type PredictionState,
 } from "@rpgjs/common";
+import { NotificationManager } from "./Gui/NotificationManager";
 
 export class RpgClientEngine<T = any> {
   private guiService: RpgGui;
@@ -78,6 +79,7 @@ export class RpgClientEngine<T = any> {
   // Store subscriptions and event listeners for cleanup
   private tickSubscriptions: any[] = [];
   private resizeHandler?: () => void;
+  private notificationManager: NotificationManager = new NotificationManager();
 
   constructor(public context) {
     this.webSocket = inject(WebSocketToken);
@@ -283,6 +285,11 @@ export class RpgClientEngine<T = any> {
       }
       const player = object ? this.sceneMap.getObjectById(object) : undefined;
       this.getComponentAnimation(id).displayEffect(params, player || position)
+    });
+
+    this.webSocket.on("notification", (data) => {
+      const { message, icon, sound, type } = data;
+      this.notificationManager.add({ message, icon, sound, type });
     });
 
      this.webSocket.on("setAnimation", (data) => {    

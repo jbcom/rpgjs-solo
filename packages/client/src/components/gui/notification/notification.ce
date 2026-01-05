@@ -1,0 +1,37 @@
+<DOMContainer width="100%" height="100%">
+    <div class="rpg-ui-notifications">
+        @for ((notif,index) of notifications) {
+            <div
+                class="rpg-ui-notification"
+                data-type={notif.type || "info"}
+                style={notificationStyle(notif)}
+            >
+                @if (notif.icon) {
+                    <div class="rpg-ui-notification-icon">
+                        <DOMSprite sheet={iconSheet(notif.icon)} />
+                    </div>
+                }
+                <div class="rpg-ui-notification-message">{notif.message}</div>
+            </div>
+        }
+    </div>
+</DOMContainer>
+
+<script>
+    import { effect, computed } from "canvasengine";
+    import { inject } from "../../../core/inject";
+    import { RpgClientEngine } from "../../../RpgClientEngine";
+
+    const engine = inject(RpgClientEngine);
+    const notifications = computed(() => engine.notificationManager.stack());
+
+    const iconSheet = (iconId) => ({
+        definition: engine.getSpriteSheet(iconId),
+        playing: "default"
+    });
+
+    const notificationStyle = (notif) => ({
+        opacity: notif.opacity(),
+        transform: `translateY(${notif.offset()}px)`
+    });
+</script>

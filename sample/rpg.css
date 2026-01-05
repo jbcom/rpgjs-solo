@@ -492,6 +492,65 @@ body {
     color: rgba(255, 255, 255, 0.8);
 }
 
+/* --- Notification --- */
+
+.rpg-ui-notifications {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 320px;
+}
+
+.rpg-ui-notification {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(20, 20, 30, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    color: #fff;
+}
+
+.rpg-ui-notification[data-type="info"] {
+    border-color: rgba(0, 229, 255, 0.6);
+}
+
+.rpg-ui-notification[data-type="warn"] {
+    border-color: rgba(246, 196, 83, 0.8);
+}
+
+.rpg-ui-notification[data-type="error"] {
+    border-color: rgba(239, 68, 68, 0.8);
+}
+
+.rpg-ui-notification-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.rpg-ui-notification-message {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.rpg-ui-notification-icon > * {
+    width: 100% !important;
+    height: 100% !important;
+    background-size: cover !important;
+    background-position: center !important;
+}
+
 .rpg-ui-menu-row-end {
     color: #fff;
     font-weight: 700;

@@ -9,6 +9,7 @@ import SkillsMenuComponent from "./menu/skills-menu.ce";
 import EquipMenuComponent from "./menu/equip-menu.ce";
 import OptionsMenuComponent from "./menu/options-menu.ce";
 import ExitMenuComponent from "./menu/exit-menu.ce";
+import NotificationComponent from "./notification/notification.ce";
 
 export {
     DialogboxComponent,
@@ -21,5 +22,6 @@ export {
     SkillsMenuComponent,
     EquipMenuComponent,
     OptionsMenuComponent,
-    ExitMenuComponent
+    ExitMenuComponent,
+    NotificationComponent
 }

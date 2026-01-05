@@ -58,15 +58,13 @@ export function WithGuiManager<TBase extends PlayerCtor>(
 
     showNotification(
       message: string,
-      options: { time?: number; icon?: string; sound?: string } = {}
+      options: { time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" } = {}
     ): Promise<any> {
-      const gui = new NotificationGui(<any>this);
-      this._gui[gui.id] = gui;
-      const data = {
+      this.emit('notification', {
         message,
         ...options,
-      };
-      return gui.open(data);
+      });
+      return Promise.resolve(true);
     }
 
     callMainMenu(options: MenuGuiOptions = {}) {
@@ -368,7 +366,7 @@ export interface IGuiManager {
    */
   showNotification(
     message: string,
-    options?: { time?: number; icon?: string; sound?: string }
+    options?: { time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" }
   ): Promise<any>;
 
   /**
