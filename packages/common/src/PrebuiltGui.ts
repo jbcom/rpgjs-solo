@@ -13,6 +13,7 @@
  * PrebuiltGui.Save | rpg-save
  * PrebuiltGui.Controls | rpg-controls
  * PrebuiltGui.Notification | rpg-notification
+ * PrebuiltGui.TitleScreen | rpg-title-screen
  * @memberof PrebuiltGui
  * */
  export enum PrebuiltGui {
@@ -23,5 +24,6 @@
     Gameover = 'rpg-gameover',
     Save = 'rpg-save',
     Controls = 'rpg-controls',
-    Notification = 'rpg-notification'
+    Notification = 'rpg-notification',
+    TitleScreen = 'rpg-title-screen'
 }

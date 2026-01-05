@@ -581,7 +581,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   get hooks() {
-    return inject<Hooks>(context, ModulesToken);
+    return BaseRoom.prototype.hooks;
   }
 
   /**

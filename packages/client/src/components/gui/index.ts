@@ -10,6 +10,7 @@ import EquipMenuComponent from "./menu/equip-menu.ce";
 import OptionsMenuComponent from "./menu/options-menu.ce";
 import ExitMenuComponent from "./menu/exit-menu.ce";
 import NotificationComponent from "./notification/notification.ce";
+import TitleScreenComponent from "./title-screen.ce";
 
 export {
     DialogboxComponent,
@@ -23,5 +24,6 @@ export {
     EquipMenuComponent,
     OptionsMenuComponent,
     ExitMenuComponent,
-    NotificationComponent
+    NotificationComponent,
+    TitleScreenComponent
 }

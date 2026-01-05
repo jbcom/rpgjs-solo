@@ -1,5 +1,5 @@
 import { inject } from "@signe/di";
-import { MockConnection, Room } from "@signe/room";
+import { Action, MockConnection, Room } from "@signe/room";
 import { Hooks, ModulesToken } from "@rpgjs/common";
 import { context } from "../core/context";
 import { users } from "@signe/sync";
@@ -26,9 +26,14 @@ export class LobbyRoom extends BaseRoom {
     player.map = this;
     player.context = context;
     player.conn = conn;
-    const hooks = inject<Hooks>(context, ModulesToken);
-    hooks
-      .callHooks("server-player-onConnected", player)
-      .subscribe();
+    this.hooks.callHooks("server-player-onConnected", player).subscribe();
+  }
+
+  @Action('gui.interaction')
+  async guiInteraction(player: RpgPlayer, value: { guiId: string, name: string, data: any }) {
+    const id = value.data.id
+    if (id === 'start') {
+      this.hooks.callHooks("server-player-onStart", player).subscribe();
+    }
   }
 }

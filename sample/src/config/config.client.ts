@@ -10,6 +10,7 @@ import {
   RpgClientEngine,
   RpgGui,
   Sound,
+  TitleScreenComponent,
   
 } from "@rpgjs/client";
 import Map from "../components/map.ce";
@@ -149,6 +150,26 @@ export default {
         ],
         gui: [
           {
+            id: "rpg-title-screen",
+            component: TitleScreenComponent,
+            autoDisplay: true,
+            data: {
+              title: "Chronicles",
+              subtitle: "of the Ancients",
+              version: "v1.0.0",
+              localActions: true,
+              saveLoad: {
+                mode: "load",
+                slots: [null, null, null]
+              },
+              entries: [
+                { id: "start", label: "Start" },
+                { id: "load", label: "Load" },
+                { id: "credits", label: "Credits", disabled: true }
+              ]
+            }
+          },
+          {
             id: "wood-ui",
             component: WoodUiComponent,
             autoDisplay: true,
@@ -167,21 +188,21 @@ export default {
             id: "fade",
             component: FadeComponent,
           },
-          {
-            id: "hud",
-            component: HudComponent,
-            autoDisplay: true,
-            dependencies: () => {
-              const engine = inject(RpgClientEngine)
-              return [engine.scene.currentPlayer]
-            },
-            data: {
-              faceset: {
-                id: 'facesetId',
-                expression: 'happy'
-              }
-            }
-          }
+          // {
+          //   id: "hud",
+          //   component: HudComponent,
+          //   autoDisplay: true,
+          //   dependencies: () => {
+          //     const engine = inject(RpgClientEngine)
+          //     return [engine.scene.currentPlayer]
+          //   },
+          //   data: {
+          //     faceset: {
+          //       id: 'facesetId',
+          //       expression: 'happy'
+          //     }
+          //   }
+          // }
         ],
         componentAnimations: [
           {

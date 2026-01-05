@@ -43,6 +43,9 @@
     --rpg-ui-radius-lg: 24px;
     --rpg-ui-radius-full: 9999px;
 
+    --rpg-ui-spacing-sm: 8px;
+    --rpg-ui-spacing-lg: 24px;
+
     /* -- Effects -- */
     --rpg-ui-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     --rpg-ui-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);

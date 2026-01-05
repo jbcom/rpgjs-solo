@@ -179,6 +179,14 @@ export interface RpgPlayerHooks {
     onConnected?: (player: RpgPlayer) => any
 
     /**
+    *  When the player starts the game from the lobby
+    * 
+    * @prop { (player: RpgPlayer) => any } [onStart]
+    * @memberof RpgPlayerHooks
+    */
+    onStart?: (player: RpgPlayer) => any
+
+    /**
     *  When the player presses a key on the client side
     * 
     * @prop { (player: RpgPlayer, data: { input: Direction | Control | string, moving: boolean }) => any } [onInput]

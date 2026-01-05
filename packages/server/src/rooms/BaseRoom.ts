@@ -1,4 +1,7 @@
 import { signal } from "@signe/reactive";
+import { inject } from "../core/inject";
+import { context } from "../core/context";
+import { Hooks, ModulesToken } from "@rpgjs/common";
 
 /**
  * Base class for rooms that need database functionality
@@ -20,6 +23,7 @@ import { signal } from "@signe/reactive";
  * ```
  */
 export abstract class BaseRoom {
+
   /**
    * Signal containing the room's database of items, classes, and other game data
    * 
@@ -117,4 +121,23 @@ export abstract class BaseRoom {
     this.database.set(database);
     return true;
   }
+
+   /**
+   * Get the hooks system for this map
+   * 
+   * Returns the dependency-injected Hooks instance that allows you to trigger
+   * and listen to various game events.
+   * 
+   * @returns The Hooks instance for this map
+   * 
+   * @example
+   * ```ts
+   * // Trigger a custom hook
+   * map.hooks.callHooks('custom-event', data).subscribe();
+   * ```
+   */
+    get hooks() {
+      return inject<Hooks>(ModulesToken, context);
+    }
+
 }

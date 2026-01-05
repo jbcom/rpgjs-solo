@@ -1,7 +1,7 @@
 import { Context, inject } from "@signe/di";
 import { signal, Signal, WritableSignal } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "../services/AbstractSocket";
-import { DialogboxComponent, ShopComponent, SaveLoadComponent, MainMenuComponent, NotificationComponent } from "../components/gui";
+import { DialogboxComponent, ShopComponent, SaveLoadComponent, MainMenuComponent, NotificationComponent, TitleScreenComponent } from "../components/gui";
 import { combineLatest, Subscription } from "rxjs";
 import { PrebuiltGui } from "@rpgjs/common";
 
@@ -78,6 +78,10 @@ export class RpgGui {
     this.add({
       name: PrebuiltGui.Save,
       component: SaveLoadComponent,
+    });
+    this.add({
+      name: PrebuiltGui.TitleScreen,
+      component: TitleScreenComponent,
     });
   }
 

@@ -145,14 +145,11 @@ export default createServer({
           props: {
             wood: Number
           },
-          async onConnected(player: RpgPlayer) {
-            player.name.set('plop')
-            //player.z.set(100)
-            await player.changeMap("center-map", {
+          onStart: (player: RpgPlayer) => {
+            player.changeMap("center-map", {
               x: 200,
               y: 150,
             });
-            // console.log(player.conn?.state)
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             console.log("join map");
