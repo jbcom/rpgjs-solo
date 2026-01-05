@@ -87,7 +87,7 @@
     import EquipMenu from "./equip-menu.ce";
     import OptionsMenu from "./options-menu.ce";
     import ExitMenu from "./exit-menu.ce";
-    import { MAXHP, MAXSP } from "@rpgjs/common";
+    import { getEntityProp } from "../../../utils/getEntityProp";
 
     const engine = inject(RpgClientEngine);
     const currentPlayer = engine.scene.currentPlayer;
@@ -173,13 +173,13 @@
         if (onInteraction) onInteraction("exit");
     };
 
-    const hp = computed(() => currentPlayer().hpSignal());
-    const hpMax = computed(() => currentPlayer()._param()[MAXHP]);
-    const sp = computed(() => currentPlayer().spSignal());
-    const spMax = computed(() => currentPlayer()._param()[MAXSP]);
-    const level = computed(() => currentPlayer()._level());
-    const exp = computed(() => currentPlayer()._exp());
-    const gold = computed(() => currentPlayer()._gold());
+    const hp = getEntityProp(currentPlayer, "hp");
+    const hpMax = getEntityProp(currentPlayer, "params.maxHp");
+    const sp = getEntityProp(currentPlayer, "sp");
+    const spMax = getEntityProp(currentPlayer, "params.maxSp");
+    const level = getEntityProp(currentPlayer, "level");
+    const exp = getEntityProp(currentPlayer, "exp");
+    const gold = getEntityProp(currentPlayer, "gold");
     const hpPercent = computed(() => {
         const max = hpMax() || 1;
         return `${Math.max(0, Math.min(100, (hp() / max) * 100))}%`;
@@ -193,15 +193,20 @@
         return `${Math.max(0, Math.min(100, (exp() / max) * 100))}%`;
     });
 
+    const paramValue = (key) => {
+        const valueSignal = getEntityProp(currentPlayer, `params.${key}`);
+        return computed(() => valueSignal() ?? 0);
+    };
+
     const paramsList = [
-        { label: "ATK", value: computed(() => currentPlayer()._param()?.atk ?? 0) },
-        { label: "DEF", value: computed(() => currentPlayer()._param()?.def ?? 0) },
-        { label: "PDEF", value: computed(() => currentPlayer()._param()?.pdef ?? 0) },
-        { label: "SDEF", value: computed(() => currentPlayer()._param()?.sdef ?? 0) },
-        { label: "STR", value: computed(() => currentPlayer()._param()?.str ?? 0) },
-        { label: "DEX", value: computed(() => currentPlayer()._param()?.dex ?? 0) },
-        { label: "INT", value: computed(() => currentPlayer()._param()?.int ?? 0) },
-        { label: "AGI", value: computed(() => currentPlayer()._param()?.agi ?? 0) }
+        { label: "ATK", value: paramValue("atk") },
+        { label: "DEF", value: paramValue("def") },
+        { label: "PDEF", value: paramValue("pdef") },
+        { label: "SDEF", value: paramValue("sdef") },
+        { label: "STR", value: paramValue("str") },
+        { label: "DEX", value: paramValue("dex") },
+        { label: "INT", value: paramValue("int") },
+        { label: "AGI", value: paramValue("agi") }
     ];
 
     const menuControls = signal({

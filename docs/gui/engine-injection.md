@@ -257,6 +257,34 @@ const globalConfig = engine.globalConfig;
 const particleSettings = engine.particleSettings;
 ```
 
+## Entity Property Signals
+
+Use `getEntityProp()` to read player or event properties through a single typed API.
+It returns a signal, so you can read it with `()` and compose it in `computed()` or `effect()`.
+
+```javascript
+import { getEntityProp } from "@rpgjs/client";
+import { computed } from "canvasengine";
+import { inject } from "@rpgjs/client";
+import { RpgClientEngine } from "@rpgjs/client";
+
+const engine = inject(RpgClientEngine);
+const currentPlayer = engine.scene.currentPlayer;
+
+const level = getEntityProp(currentPlayer, "level");
+const maxHp = getEntityProp(currentPlayer, "params.maxHp");
+const hp = getEntityProp(currentPlayer, "hp");
+
+const hpPercent = computed(() => (hp() / (maxHp() || 1)) * 100);
+```
+
+You can also use it with events:
+
+```javascript
+const someEvent = engine.scene.events()[eventId];
+const eventName = getEntityProp(someEvent, "name");
+```
+
 ## Signal Synchronization
 
 The signals are automatically synchronized with the server through the `@signe/sync` system:

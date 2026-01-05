@@ -19,19 +19,19 @@
 <script>
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
-    import { effect, computed, signal } from "canvasengine";
-    import { MAXHP, MAXSP } from "@rpgjs/common";
+    import { computed } from "canvasengine";
+    import { getEntityProp } from "../../../utils/getEntityProp";
 
     const engine = inject(RpgClientEngine)
     const currentPlayer = engine.scene.currentPlayer
-    const hp = computed(() => currentPlayer().hpSignal())
-    const hpMax = computed(() => currentPlayer()._param()[MAXHP])
+    const hp = getEntityProp(currentPlayer, "hp")
+    const hpMax = getEntityProp(currentPlayer, "params.maxHp")
     const percentHp = computed(() => (hp() / hpMax() * 100) + '%')
 
-    const sp = computed(() => currentPlayer().spSignal())
-    const spMax = computed(() => currentPlayer()._param()[MAXSP])
+    const sp = getEntityProp(currentPlayer, "sp")
+    const spMax = getEntityProp(currentPlayer, "params.maxSp")
     const percentSp = computed(() => (sp() / spMax() * 100) + '%')
 
-    const level = computed(() => currentPlayer()._level())
+    const level = getEntityProp(currentPlayer, "level")
 </script>
     
