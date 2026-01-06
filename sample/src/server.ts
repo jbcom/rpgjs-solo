@@ -190,6 +190,24 @@ export default createServer({
           onLeaveMap: (player: RpgPlayer, map: RpgMap) => {
 
           },
+          async onDead(player: RpgPlayer) {
+            const selection = await player.callGameover({
+                title: 'Game Over',
+                  subtitle: 'Choose your fate',
+                  entries: [
+                      { id: 'title', label: 'Title Screen' },
+                      { id: 'load', label: 'Load Game' }
+                  ]
+              })
+      
+              if (selection?.id === 'title') {
+                  await player.gui('rpg-title-screen').open()
+              }
+      
+              if (selection?.id === 'load') {
+                  await player.showLoad()
+              }
+          },
           async onInput(player: RpgPlayer, input: any) {
             // console.log("call shop")
 
@@ -204,7 +222,7 @@ export default createServer({
            
            //  player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
               player.hp -= 100;
-             player.callMainMenu()
+             //player.callMainMenu()
            // player.hp -= 100;
             // const map = player.getCurrentMap()
             // const event =map?.getEventBy(event => event.name() === "EV-1")

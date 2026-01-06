@@ -11,6 +11,7 @@ import OptionsMenuComponent from "./menu/options-menu.ce";
 import ExitMenuComponent from "./menu/exit-menu.ce";
 import NotificationComponent from "./notification/notification.ce";
 import TitleScreenComponent from "./title-screen.ce";
+import GameoverComponent from "./gameover.ce";
 
 export {
     DialogboxComponent,
@@ -25,5 +26,6 @@ export {
     OptionsMenuComponent,
     ExitMenuComponent,
     NotificationComponent,
-    TitleScreenComponent
+    TitleScreenComponent,
+    GameoverComponent
 }

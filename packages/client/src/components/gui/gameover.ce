@@ -1,0 +1,158 @@
+<DOMContainer width="100%" height="100%">
+    <div class="rpg-ui-gameover-screen rpg-anim-fade-in">
+        <div class="rpg-ui-gameover-splatter rpg-ui-gameover-splatter-left"></div>
+        <div class="rpg-ui-gameover-splatter rpg-ui-gameover-splatter-right"></div>
+        <div class="rpg-ui-gameover-splatter rpg-ui-gameover-splatter-center"></div>
+        <div class="rpg-ui-gameover-header rpg-anim-shake">
+            <div class="rpg-ui-gameover-title">{titleText()}</div>
+            @if (subtitleText()) {
+                <div class="rpg-ui-gameover-subtitle">{subtitleText()}</div>
+            }
+        </div>
+        <Navigation tabindex={selectedEntry} controls={controls}>
+            <div class="rpg-ui-menu rpg-ui-gameover-menu rpg-anim-slide-up">
+                @for ((entry,index) of entryList()) {
+                    <div
+                        class="rpg-ui-menu-item"
+                        class={{disabled: isEntryDisabled(entry)}}
+                        data-selected={selectedEntry() === index ? "true" : "false"}
+                        tabindex={index}
+                        click={selectEntry(index)}
+                    >{entry.label}</div>
+                }
+            </div>
+        </Navigation>
+    </div>
+</DOMContainer>
+
+<script>
+    import { signal, computed, effect } from "canvasengine";
+    import { PrebuiltGui } from "@rpgjs/common";
+    import { inject } from "../../core/inject";
+    import { RpgClientEngine } from "../../RpgClientEngine";
+    import { RpgGui } from "../../Gui/Gui";
+
+    const engine = inject(RpgClientEngine);
+    const guiService = inject(RpgGui);
+    const keyboardControls = engine.globalConfig.keyboardControls;
+
+    const { entries, title, subtitle, saveLoad, localActions, onInteraction } = defineProps({
+        entries: {
+            default: () => []
+        },
+        saveLoad: {
+            default: () => ({})
+        },
+        localActions: {
+            default: false
+        }
+    });
+
+    const defaultEntries = [
+        { id: "title", label: "Title Screen" },
+        { id: "load", label: "Load Game" }
+    ];
+
+    const resolveProp = (value) => typeof value === "function" ? value() : value;
+    const titleText = computed(() => resolveProp(title) || "Game Over");
+    const subtitleText = computed(() => resolveProp(subtitle) || "");
+    const localActionsEnabled = computed(() => resolveProp(localActions) === true);
+
+    const entryList = computed(() => {
+        const list = resolveProp(entries);
+        if (Array.isArray(list) && list.length) return list;
+        return defaultEntries;
+    });
+
+    const isEntryDisabled = (entry) => {
+        if (!entry) return true;
+        if (entry.disabled) return true;
+        if (entry.enabled === false) return true;
+        return false;
+    };
+
+    const selectedEntry = signal(0);
+    const selectableIndexes = computed(() => {
+        const list = entryList();
+        return list
+            .map((entry, index) => (isEntryDisabled(entry) ? null : index))
+            .filter((value) => value !== null);
+    });
+
+    effect(() => {
+        const available = selectableIndexes();
+        if (!available.length) return;
+        const current = selectedEntry();
+        if (!available.includes(current)) {
+            selectedEntry.set(available[0]);
+        }
+    });
+
+    const moveSelection = (delta) => {
+        const available = selectableIndexes();
+        if (!available.length) return;
+        const current = selectedEntry();
+        const currentIndex = Math.max(0, available.indexOf(current));
+        const nextIndex = (currentIndex + delta + available.length) % available.length;
+        selectedEntry.set(available[nextIndex]);
+    };
+
+    const triggerSelect = (index) => {
+        const list = entryList();
+        const entry = list[index];
+        if (!entry || isEntryDisabled(entry)) return;
+        if (localActionsEnabled()) {
+            if (entry.id === "title") {
+                guiService.hide(PrebuiltGui.Gameover);
+                guiService.display(PrebuiltGui.TitleScreen);
+            }
+            if (entry.id === "load") {
+                const config = resolveProp(saveLoad) || {};
+                const slots = Array.isArray(config.slots) ? config.slots : [null, null, null];
+                guiService.display(PrebuiltGui.Save, {
+                    ...config,
+                    mode: config.mode || "load",
+                    slots
+                });
+            }
+        }
+        if (onInteraction) {
+            onInteraction("select", { id: entry.id, index, entry });
+        }
+    };
+
+    function selectEntry(index) {
+        return function() {
+            selectedEntry.set(index);
+            triggerSelect(index);
+        };
+    }
+
+    const controls = signal({
+        up: {
+            repeat: true,
+            bind: keyboardControls.up,
+            throttle: 150,
+            keyDown() {
+                moveSelection(-1);
+            }
+        },
+        down: {
+            repeat: true,
+            bind: keyboardControls.down,
+            throttle: 150,
+            keyDown() {
+                moveSelection(1);
+            }
+        },
+        action: {
+            bind: keyboardControls.action,
+            keyDown() {
+                triggerSelect(selectedEntry());
+            }
+        },
+        gamepad: {
+            enabled: true
+        }
+    });
+</script>

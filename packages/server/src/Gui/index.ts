@@ -5,6 +5,7 @@ import { ShopGui } from './ShopGui'
 import { NotificationGui } from './NotificationGui'
 import { SaveLoadGui } from './SaveLoadGui'
 import { TitleGui } from './TitleGui'
+import { GameoverGui } from './GameoverGui'
 
 export { 
     Gui,
@@ -13,10 +14,12 @@ export {
     ShopGui,
     NotificationGui,
     SaveLoadGui,
-    TitleGui
+    TitleGui,
+    GameoverGui
 }
 
 export { DialogPosition } from './DialogGui'
 export type { SaveLoadMode, SaveLoadOptions, SaveSlot } from './SaveLoadGui'
 export type { MenuEntryId, MenuEntry, MenuGuiOptions } from './MenuGui'
 export type { TitleEntry, TitleGuiOptions, TitleGuiSelection } from './TitleGui'
+export type { GameoverEntry, GameoverGuiOptions, GameoverGuiSelection } from './GameoverGui'

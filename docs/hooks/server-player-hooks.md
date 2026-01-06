@@ -198,19 +198,23 @@ const player: RpgPlayerHooks = {
 **Example:**
 ```ts
 const player: RpgPlayerHooks = {
-    onDead(player: RpgPlayer) {
-        console.log(`${player.name} has died`)
-        
-        // Apply death penalty
-        player.gold = Math.floor(player.gold * 0.9) // Lose 10% gold
-        player.experience = Math.floor(player.experience * 0.95) // Lose 5% exp
-        
-        // Respawn player
-        setTimeout(() => {
-            player.hp = Math.floor(player.param.maxHp * 0.5) // Respawn with 50% HP
-            player.changeMap('respawn-point')
-            player.showText('You have been revived!')
-        }, 3000)
+    async onDead(player: RpgPlayer) {
+        const selection = await player.callGameover({
+            title: 'Game Over',
+            subtitle: 'Choose your fate',
+            entries: [
+                { id: 'title', label: 'Title Screen' },
+                { id: 'load', label: 'Load Game' }
+            ]
+        })
+
+        if (selection?.id === 'title') {
+            await player.gui('rpg-title-screen').open()
+        }
+
+        if (selection?.id === 'load') {
+            await player.showLoad()
+        }
     }
 }
 ```

@@ -1,8 +1,9 @@
 import { RpgPlayer } from "./Player";
-import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui } from "../Gui";
+import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui, GameoverGui } from "../Gui";
 import { DialogOptions, Choice } from "../Gui/DialogGui";
 import { SaveLoadOptions, SaveSlot } from "../Gui/SaveLoadGui";
 import { MenuGuiOptions } from "../Gui/MenuGui";
+import { GameoverGuiOptions, GameoverGuiSelection } from "../Gui/GameoverGui";
 import { Constructor, PlayerCtor } from "@rpgjs/common";
 
 /**
@@ -69,6 +70,12 @@ export function WithGuiManager<TBase extends PlayerCtor>(
 
     callMainMenu(options: MenuGuiOptions = {}) {
       const gui = new MenuGui(<any>this);
+      this._gui[gui.id] = gui;
+      return gui.open(options);
+    }
+
+    callGameover(options: GameoverGuiOptions = {}): Promise<GameoverGuiSelection | null> {
+      const gui = new GameoverGui(<any>this);
       this._gui[gui.id] = gui;
       return gui.open(options);
     }
@@ -426,6 +433,27 @@ export interface IGuiManager {
    * @memberof GuiManager
    */
   callMainMenu(options?: MenuGuiOptions): void;
+
+  /**
+   * Calls game over menu. Opens the GUI named `rpg-gameover`
+   *
+   * ```ts
+   * const selection = await player.callGameover()
+   * if (selection?.id === 'title') {
+   *     await player.gui('rpg-title-screen').open()
+   * }
+   * if (selection?.id === 'load') {
+   *     await player.showLoad()
+   * }
+   * ```
+   *
+   * @title Call Game Over Menu
+   * @method player.callGameover(options)
+   * @param {object} [options]
+   * @returns {Promise<GameoverGuiSelection | null>}
+   * @memberof GuiManager
+   */
+  callGameover(options?: GameoverGuiOptions): Promise<GameoverGuiSelection | null>;
   callShop(items: any[]): void;
   gui(guiId: string): Gui;
   getGui(guiId: string): Gui;
