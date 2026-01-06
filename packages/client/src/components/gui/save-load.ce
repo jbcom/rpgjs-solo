@@ -9,12 +9,12 @@
                 @for ((slot,index) of slotsValue) {
                     <div
                         class="rpg-ui-save-load-slot"
-                        class={{active: isSelectedSlot(index), empty: !slot}}
+                        class={{active: selectedSlot() === index, empty: !slot}}
                         tabindex={index}
                         data-slot-index={index}
                         click={selectSlot(index)}
                     >
-                        <div class="rpg-ui-save-load-slot-index">Slot {index + 1}</div>
+                        <div class="rpg-ui-save-load-slot-index">Slot {+index + 1}</div>
                         @if (slot) {
                             <div class="rpg-ui-save-load-slot-meta">
                                 <div class="rpg-ui-save-load-slot-line">Level: {slot.level ?? "-"}</div>
@@ -62,17 +62,27 @@
     const slotsValue = computed(() => localSlots());
     const nav = createTabindexNavigator(selectedSlot, { count: () => slotsValue().length }, "wrap");
 
-    const isSelectedSlot = (index) => computed(() => selectedSlot() === index);
-
     const canSelect = (slot) => {
         if (mode() === "load" && !slot) return false;
         return true;
     };
 
+    const normalizeSlotValue = (value) => {
+        if (!value) return null;
+        if (typeof value === "string") {
+            try {
+                return JSON.parse(value);
+            } catch {
+                return null;
+            }
+        }
+        return value;
+    };
+
     const normalizeSlots = (list) => {
         if (Array.isArray(list)) {
             const length = Math.max(list.length, DEFAULT_SLOTS);
-            return Array.from({ length }, (_, index) => list[index] ?? null);
+            return Array.from({ length }, (_, index) => normalizeSlotValue(list[index]));
         }
         if (!list || typeof list !== "object") {
             return defaultSlots();
@@ -85,7 +95,7 @@
         keys.forEach((key) => {
             const index = Number(key);
             if (index < 0 || index >= length) return;
-            slots[index] = JSON.parse(list[key]);
+            slots[index] = normalizeSlotValue(list[key]);
         });
         return slots;
     };
@@ -99,7 +109,7 @@
         try {
             const list = await saveClient.listSlots();
             localSlots.set(normalizeSlots(list));
-        } catch {
+        } catch (err) {
             localSlots.set(defaultSlots());
         }
     };
@@ -117,6 +127,7 @@
             await saveClient.loadSlot(index);
         }
         gui.hide(PrebuiltGui.Save);
+        gui.hide(PrebuiltGui.MainMenu);
 
     };
 
@@ -154,6 +165,7 @@
             bind: keyboardControls.escape,
             keyDown() {
                 if (onFinish) onFinish();
+                gui.hide(PrebuiltGui.Save);
             }
         },
         gamepad: {

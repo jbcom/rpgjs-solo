@@ -33,16 +33,23 @@ type PendingRequest = {
 };
 
 export class SaveClientService {
-  private webSocket: AbstractWebsocket;
+  private webSocket: AbstractWebsocket = inject(WebSocketToken);
   private pending: Map<string, PendingRequest> = new Map();
   private requestCounter = 0;
 
-  constructor() {
-    this.webSocket = inject(WebSocketToken);
-    this.webSocket.on("save.list.result", (data: SaveListResult) => this.resolveRequest(data.requestId, data));
-    this.webSocket.on("save.save.result", (data: SaveSaveResult) => this.resolveRequest(data.requestId, data));
-    this.webSocket.on("save.load.result", (data: SaveLoadResult) => this.resolveRequest(data.requestId, data));
-    this.webSocket.on("save.error", (data: SaveErrorResult) => this.rejectRequest(data.requestId, data.message));
+  initialize() {
+    const saveListResult = (data: SaveListResult) => this.resolveRequest(data.requestId, data);
+    const saveSaveResult = (data: SaveSaveResult) => this.resolveRequest(data.requestId, data);
+    const saveLoadResult = (data: SaveLoadResult) => this.resolveRequest(data.requestId, data);
+    const saveErrorResult = (data: SaveErrorResult) => this.rejectRequest(data.requestId, data.message);
+    this.webSocket.off("save.list.result", saveListResult);
+    this.webSocket.off("save.save.result", saveSaveResult);
+    this.webSocket.off("save.load.result", saveLoadResult);
+    this.webSocket.off("save.error", saveErrorResult);
+    this.webSocket.on("save.list.result", saveListResult);
+    this.webSocket.on("save.save.result", saveSaveResult);
+    this.webSocket.on("save.load.result", saveLoadResult);
+    this.webSocket.on("save.error", saveErrorResult);
   }
 
   listSlots(): Promise<SaveSlotList> {
@@ -59,9 +66,12 @@ export class SaveClientService {
 
   private request<T>(event: string, payload: Record<string, any>): Promise<T> {
     return new Promise((resolve, reject) => {
+      if (!this.webSocket) {
+        this.initialize();
+      }
       const requestId = this.nextRequestId();
       this.pending.set(requestId, { resolve, reject });
-      this.webSocket.emit(event, { requestId, ...payload });
+      this.webSocket?.emit(event, { requestId, ...payload });
     });
   }
 

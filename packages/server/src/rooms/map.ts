@@ -714,7 +714,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 
   @Action('save.list')
-  async listSlots(player: RpgPlayer, value: { requestId: string }) {
+  async listSaveSlots(player: RpgPlayer, value: { requestId: string }) {
     return await BaseRoom.prototype.listSaveSlots(player, value);
   }
 

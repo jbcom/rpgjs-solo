@@ -135,9 +135,10 @@
 }
 
 .rpg-ui-main-menu-overlay-content {
-  position: relative;
+  position: absolute;
   z-index: 1;
   width: min(760px, 90%);
+  top: 0;
 }
 
 .rpg-ui-menu-panel-header {

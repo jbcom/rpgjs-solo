@@ -107,7 +107,6 @@
                 guiService.hide(PrebuiltGui.TitleScreen);
             }
             if (entry.id === "load") {
-                guiService.hide(PrebuiltGui.TitleScreen);
                 const config = resolveProp(saveLoad) || {};
                 const slots = Array.isArray(config.slots) ? config.slots : [null, null, null];
                 guiService.display(PrebuiltGui.Save, {

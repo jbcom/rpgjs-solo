@@ -149,8 +149,10 @@ export abstract class BaseRoom {
       try {
         const slots = await storage.list(player);
         player.emit('save.list.result', { requestId: value?.requestId, slots });
+        return slots;
       } catch (error: any) {
-        player.emit('save.error', { requestId: value?.requestId, message: error?.message || 'save.list failed' });
+        player.showNotification(error?.message || 'save.list failed');
+        return [];
       }
     }
   

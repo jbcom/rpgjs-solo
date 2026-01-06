@@ -21,6 +21,7 @@ import {
   type PredictionState,
 } from "@rpgjs/common";
 import { NotificationManager } from "./Gui/NotificationManager";
+import { SaveClientService } from "./services/save";
 
 export class RpgClientEngine<T = any> {
   private guiService: RpgGui;
@@ -210,6 +211,8 @@ export class RpgClientEngine<T = any> {
     this.tickSubscriptions.push(tickSubscription);
 
     await this.webSocket.connection(() => {
+      const saveClient = inject(SaveClientService);
+      saveClient.initialize(this.webSocket);
       this.initListeners()
       this.guiService._initialize()
     });
@@ -449,6 +452,8 @@ export class RpgClientEngine<T = any> {
 
     this.webSocket.updateProperties({ room: mapId })
     await this.webSocket.reconnect(() => {
+      const saveClient = inject(SaveClientService);
+      saveClient.initialize(this.webSocket);
       this.initListeners()
       this.guiService._initialize()
     })
