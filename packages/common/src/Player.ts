@@ -76,7 +76,9 @@ export abstract class RpgCommonPlayer {
   @sync() direction = signal(Direction.Down);
   @sync() speed = signal(4);
   @sync() graphics = signal<any>([]);
-  @sync() canMove = signal(true);
+  @sync({
+    persist: false
+  }) canMove = signal(true);
   @sync() hitbox = signal<Hitbox>({
     w: 32,
     h: 32,

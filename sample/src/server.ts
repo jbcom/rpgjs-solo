@@ -1,9 +1,10 @@
-import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, EventMode, MapData, Frequency, ATK, PDEF } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, EventMode, MapData, Frequency, ATK, PDEF, LocalStorageSaveStorageStrategy } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
 import { Direction } from "@rpgjs/common";
 import { provideActionBattle, BattleAi, EnemyType } from "@rpgjs/action-battle/server";
+import { provideSaveStorage } from "@rpgjs/server";
 
 /**
  * Basic Sword weapon
@@ -132,6 +133,10 @@ export default createServer({
   //  provideTiledMap(),
     provideMain(),
    // provideActionBattle(),
+
+
+    provideSaveStorage(new LocalStorageSaveStorageStrategy({ key: "save" })),
+
     provideServerModules([
       {
         // Register weapons and armor in database
@@ -194,6 +199,7 @@ export default createServer({
             // console.log(choice)
            
            //  player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
+              player.hp -= 100;
              player.callMainMenu()
            // player.hp -= 100;
             // const map = player.getCurrentMap()

@@ -6,7 +6,7 @@
         </div>
         <Navigation tabindex={selectedSlot} controls={controls}>
             <div class="rpg-ui-save-load-list">
-                @for ((slot,index) of slotsValue()) {
+                @for ((slot,index) of slotsValue) {
                     <div
                         class="rpg-ui-save-load-slot"
                         class={{active: isSelectedSlot(index), empty: !slot}}
@@ -37,17 +37,21 @@
     import { signal, computed, effect, createTabindexNavigator, mount } from "canvasengine";
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
+    import { SaveClientService } from "../../services/save";
+    import { PrebuiltGui } from "@rpgjs/common";
+    import { RpgGui } from "../../Gui/Gui";
 
     const engine = inject(RpgClientEngine);
+    const saveClient = inject(SaveClientService);
+    const gui = inject(RpgGui);
     const keyboardControls = engine.globalConfig.keyboardControls;
 
     const selectedSlot = signal(0);
+    const DEFAULT_SLOTS = 4;
+    const defaultSlots = () => Array.from({ length: DEFAULT_SLOTS }, () => null);
+    const localSlots = signal(defaultSlots());
 
-    const { mode, slots, onFinish, onInteraction } = defineProps({
-        slots: {
-            default: () => []
-        }
-    });
+    const { mode, onFinish } = defineProps();
 
     const title = computed(() => mode() === "save" ? "Save Game" : "Load Game");
     const subtitle = computed(() => mode() === "save"
@@ -55,7 +59,7 @@
         : "Select a slot to load your progress."
     );
 
-    const slotsValue = computed(() => slots || []);
+    const slotsValue = computed(() => localSlots());
     const nav = createTabindexNavigator(selectedSlot, { count: () => slotsValue().length }, "wrap");
 
     const isSelectedSlot = (index) => computed(() => selectedSlot() === index);
@@ -65,14 +69,55 @@
         return true;
     };
 
-    const triggerSelect = (index) => {
+    const normalizeSlots = (list) => {
+        if (Array.isArray(list)) {
+            const length = Math.max(list.length, DEFAULT_SLOTS);
+            return Array.from({ length }, (_, index) => list[index] ?? null);
+        }
+        if (!list || typeof list !== "object") {
+            return defaultSlots();
+        }
+        const keys = Object.keys(list).filter((key) => /^\d+$/.test(key));
+        const indices = keys.map((key) => Number(key)).filter((index) => index >= 0);
+        const maxIndex = indices.length ? Math.max(...indices) : -1;
+        const length = Math.max(maxIndex + 1, DEFAULT_SLOTS);
+        const slots = Array.from({ length }, () => null);
+        keys.forEach((key) => {
+            const index = Number(key);
+            if (index < 0 || index >= length) return;
+            slots[index] = JSON.parse(list[key]);
+        });
+        return slots;
+    };
+
+    const hasProvidedSlots = (list) => {
+        if (Array.isArray(list)) return list.length > 0;
+        return !!(list && typeof list === "object" && Object.keys(list).length > 0);
+    };
+
+    const refreshSlots = async () => {
+        try {
+            const list = await saveClient.listSlots();
+            localSlots.set(normalizeSlots(list));
+        } catch {
+            localSlots.set(defaultSlots());
+        }
+    };
+
+    const triggerSelect = async (index) => {
         const list = slotsValue();
         const slot = list[index];
         if (!canSelect(slot)) return;
-        if (onInteraction) {
-            const action = mode() === "save" ? "save" : "load";
-            onInteraction(action, { index, slot });
+        const action = mode() === "save" ? "save" : "load";
+        if (action === "save") {
+            await saveClient.saveSlot(index);
+            await refreshSlots();
         }
+        if (action === "load") {
+            await saveClient.loadSlot(index);
+        }
+        gui.hide(PrebuiltGui.Save);
+
     };
 
     function selectSlot(index) {
@@ -113,6 +158,13 @@
         },
         gamepad: {
             enabled: true
+        }
+    });
+
+    mount(() => {
+        refreshSlots();
+        return () => {
+            engine.stopProcessingInput = false;
         }
     });
 </script>

@@ -41,6 +41,21 @@ const server = createServer({
 The server will build slot metadata automatically (level, exp, map, date), and you
 can extend it by passing custom fields from the client.
 
+### Built-in localStorage strategy (standalone)
+
+For standalone mode (server running in the browser), use the built-in localStorage
+strategy. It stores full slots (meta + snapshot) under a single key.
+
+```ts
+import { createServer, provideSaveStorage, LocalStorageSaveStorageStrategy } from "@rpgjs/server";
+
+const server = createServer({
+  providers: [
+    provideSaveStorage(new LocalStorageSaveStorageStrategy({ key: "save" }))
+  ]
+});
+```
+
 ## Client: request slots and trigger save/load
 
 The client uses `SaveClientService` to talk to the server. It is already included

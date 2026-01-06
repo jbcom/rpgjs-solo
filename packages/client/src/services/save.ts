@@ -87,7 +87,7 @@ export class SaveClientService {
 
 export function provideSaveClient() {
   return {
-    provide: SaveClientToken,
+    provide: SaveClientService,
     useClass: SaveClientService,
   };
 }
