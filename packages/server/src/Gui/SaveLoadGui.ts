@@ -32,16 +32,17 @@ export class SaveLoadGui extends Gui {
             if (index < 0 || index >= normalizedSlots.length) return
             const slot = normalizedSlots[index]
             if (mode === 'load') {
-                if (!slot?.snapshot) return
-                await this.player.load(slot.snapshot)
+                const result = await this.player.load(index, { reason: "load", source: "gui" }, { changeMap: true })
+                if (!result.ok) return
                 this.close(index)
                 return
             }
             if (mode === 'save') {
-                const snapshot = await this.player.save()
+                const result = await this.player.save(index, {}, { reason: "manual", source: "gui" })
+                if (!result) return
                 const updatedSlot: SaveSlot = {
                     ...(slot || {}),
-                    snapshot
+                    ...result.meta
                 }
                 normalizedSlots[index] = updatedSlot
                 slots[index] = updatedSlot

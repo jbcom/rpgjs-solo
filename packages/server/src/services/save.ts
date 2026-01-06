@@ -4,6 +4,20 @@ import { RpgPlayer } from "../Player/Player";
 
 export const SaveStorageToken = "SaveStorageToken";
 
+export type SaveSlotIndex = number | "auto";
+
+export interface SaveRequestContext {
+  reason?: "manual" | "auto" | "load";
+  source?: string;
+}
+
+export interface AutoSaveStrategy {
+  canSave?: (player: RpgPlayer, context?: SaveRequestContext) => boolean;
+  canLoad?: (player: RpgPlayer, context?: SaveRequestContext) => boolean;
+  shouldAutoSave?: (player: RpgPlayer, context?: SaveRequestContext) => boolean;
+  getDefaultSlot?: (player: RpgPlayer, context?: SaveRequestContext) => number | null;
+}
+
 export interface SaveStorageStrategy {
   list(player: RpgPlayer): Promise<SaveSlotList>;
   get(player: RpgPlayer, index: number): Promise<SaveSlot | null>;
@@ -59,6 +73,9 @@ export class InMemorySaveStorageStrategy implements SaveStorageStrategy {
 }
 
 let cachedSaveStorage: SaveStorageStrategy | null = null;
+let cachedAutoSave: AutoSaveStrategy | null = null;
+
+export const AutoSaveToken = "AutoSaveToken";
 
 export function resolveSaveStorageStrategy(): SaveStorageStrategy {
   if (cachedSaveStorage) return cachedSaveStorage;
@@ -68,6 +85,40 @@ export function resolveSaveStorageStrategy(): SaveStorageStrategy {
     cachedSaveStorage = new InMemorySaveStorageStrategy();
   }
   return cachedSaveStorage;
+}
+
+export function resolveAutoSaveStrategy(): AutoSaveStrategy {
+  if (cachedAutoSave) return cachedAutoSave;
+  try {
+    cachedAutoSave = inject<AutoSaveStrategy>(AutoSaveToken);
+  } catch {
+    cachedAutoSave = null;
+  }
+  cachedAutoSave ||= {
+    canSave: () => true,
+    canLoad: () => true,
+    shouldAutoSave: () => false,
+    getDefaultSlot: () => 0,
+  };
+  return cachedAutoSave;
+}
+
+export function resolveSaveSlot(
+  slot: SaveSlotIndex | undefined,
+  policy: AutoSaveStrategy,
+  player: RpgPlayer,
+  context?: SaveRequestContext
+): number | null {
+  if (typeof slot === "number") return slot;
+  const resolver = policy.getDefaultSlot;
+  if (!resolver) return null;
+  return resolver(player, context);
+}
+
+export function shouldAutoSave(player: RpgPlayer, context?: SaveRequestContext): boolean {
+  const strategy = resolveAutoSaveStrategy();
+  if (!strategy.shouldAutoSave) return false;
+  return strategy.shouldAutoSave(player, context);
 }
 
 export function buildSaveSlotMeta(player: RpgPlayer, overrides: SaveSlotMeta = {}): SaveSlotMeta {
@@ -84,6 +135,13 @@ export function buildSaveSlotMeta(player: RpgPlayer, overrides: SaveSlotMeta = {
 export function provideSaveStorage(strategy: SaveStorageStrategy) {
   return {
     provide: SaveStorageToken,
+    useValue: strategy,
+  };
+}
+
+export function provideAutoSave(strategy: AutoSaveStrategy) {
+  return {
+    provide: AutoSaveToken,
     useValue: strategy,
   };
 }

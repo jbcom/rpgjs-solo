@@ -82,6 +82,9 @@
                     <SaveLoadComponent
                         mode="save"
                         slots={saveLoadSlots}
+                        showAutoSlot={saveLoadData().showAutoSlot}
+                        autoSlotIndex={saveLoadData().autoSlotIndex}
+                        autoSlotLabel={saveLoadData().autoSlotLabel}
                         onFinish={closeSaveOverlay}
                     />
                 </div>
@@ -122,17 +125,19 @@
         return defaultMenus;
     });
 
-    const isMenuDisabled = (entry) => {
-        if (!entry) return true;
-        if (entry.disabled) return true;
-        if (entry.enabled === false) return true;
-        return false;
-    };
-
     const resolveProp = (value) => typeof value === "function" ? value() : value;
     const saveLoadData = computed(() => resolveProp(saveLoad) || {});
     const saveLoadMode = computed(() => saveLoadData().mode || "load");
     const saveLoadSlots = computed(() => saveLoadData().slots || []);
+    const saveLoadCanSave = computed(() => saveLoadData().canSave !== false);
+
+    const isMenuDisabled = (entry) => {
+        if (!entry) return true;
+        if (entry.disabled) return true;
+        if (entry.enabled === false) return true;
+        if (entry.id === "save" && !saveLoadCanSave()) return true;
+        return false;
+    };
 
     const selectedMenu = signal(0);
     const view = signal("menu");

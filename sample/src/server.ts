@@ -1,4 +1,4 @@
-import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, EventMode, MapData, Frequency, ATK, PDEF, LocalStorageSaveStorageStrategy } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, EventMode, MapData, Frequency, ATK, PDEF, LocalStorageSaveStorageStrategy, provideAutoSave } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
@@ -136,6 +136,10 @@ export default createServer({
 
 
     provideSaveStorage(new LocalStorageSaveStorageStrategy({ key: "save" })),
+    provideAutoSave({
+      canSave: (player) => true,
+      getDefaultSlot: () => 0
+    }),
 
     provideServerModules([
       {

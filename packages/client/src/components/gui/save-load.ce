@@ -6,21 +6,21 @@
         </div>
         <Navigation tabindex={selectedSlot} controls={controls}>
             <div class="rpg-ui-save-load-list">
-                @for ((slot,index) of slotsValue) {
+                @for ((item,displayIndex) of displaySlots) {
                     <div
                         class="rpg-ui-save-load-slot"
-                        class={{active: selectedSlot() === index, empty: !slot}}
-                        tabindex={index}
-                        data-slot-index={index}
-                        click={selectSlot(index)}
+                        class={{active: selectedSlot() === displayIndex, empty: !item.slot, auto: item.kind === "auto", readonly: item.readonly}}
+                        tabindex={displayIndex}
+                        data-slot-index={displayIndex}
+                        click={selectSlot(displayIndex)}
                     >
-                        <div class="rpg-ui-save-load-slot-index">Slot {+index + 1}</div>
-                        @if (slot) {
+                        <div class="rpg-ui-save-load-slot-index">{item.label}</div>
+                        @if (item.slot) {
                             <div class="rpg-ui-save-load-slot-meta">
-                                <div class="rpg-ui-save-load-slot-line">Level: {slot.level ?? "-"}</div>
-                                <div class="rpg-ui-save-load-slot-line">Exp: {slot.exp ?? "-"}</div>
-                                <div class="rpg-ui-save-load-slot-line">Map: {slot.map ?? "-"}</div>
-                                <div class="rpg-ui-save-load-slot-line">Date: {slot.date ?? "-"}</div>
+                                <div class="rpg-ui-save-load-slot-line">Level: {item.slot.level ?? "-"}</div>
+                                <div class="rpg-ui-save-load-slot-line">Exp: {item.slot.exp ?? "-"}</div>
+                                <div class="rpg-ui-save-load-slot-line">Map: {item.slot.map ?? "-"}</div>
+                                <div class="rpg-ui-save-load-slot-line">Date: {item.slot.date ?? "-"}</div>
                             </div>
                         }
                         @else {
@@ -51,7 +51,11 @@
     const defaultSlots = () => Array.from({ length: DEFAULT_SLOTS }, () => null);
     const localSlots = signal(defaultSlots());
 
-    const { mode, onFinish } = defineProps();
+    const { mode, onFinish, showAutoSlot, autoSlotIndex, autoSlotLabel } = defineProps({
+        showAutoSlot: false,
+        autoSlotIndex: 0,
+        autoSlotLabel: "Auto Save"
+    });
 
     const title = computed(() => mode() === "save" ? "Save Game" : "Load Game");
     const subtitle = computed(() => mode() === "save"
@@ -60,10 +64,35 @@
     );
 
     const slotsValue = computed(() => localSlots());
-    const nav = createTabindexNavigator(selectedSlot, { count: () => slotsValue().length }, "wrap");
+    const displaySlots = computed(() => {
+        const slots = slotsValue();
+        const items = slots.map((slot, index) => ({
+            kind: "slot",
+            slot,
+            slotIndex: index,
+            label: `Slot ${index + 1}`,
+            readonly: false
+        }));
+        if (!showAutoSlot) return items;
+        const index = typeof autoSlotIndex === "number" ? autoSlotIndex : 0;
+        const autoSlot = slots[index] ?? null;
+        const readonly = mode() === "save";
+        return [
+            {
+                kind: "auto",
+                slot: autoSlot,
+                slotIndex: index,
+                label: autoSlotLabel || "Auto Save",
+                readonly
+            },
+            ...items
+        ];
+    });
+    const nav = createTabindexNavigator(selectedSlot, { count: () => displaySlots().length }, "wrap");
 
-    const canSelect = (slot) => {
-        if (mode() === "load" && !slot) return false;
+    const canSelect = (item) => {
+        if (item.readonly) return false;
+        if (mode() === "load" && !item.slot) return false;
         return true;
     };
 
@@ -114,17 +143,18 @@
         }
     };
 
-    const triggerSelect = async (index) => {
-        const list = slotsValue();
-        const slot = list[index];
-        if (!canSelect(slot)) return;
+    const triggerSelect = async (displayIndex) => {
+        const list = displaySlots();
+        const item = list[displayIndex];
+        if (!item) return;
+        if (!canSelect(item)) return;
         const action = mode() === "save" ? "save" : "load";
         if (action === "save") {
-            await saveClient.saveSlot(index);
+            await saveClient.saveSlot(item.slotIndex);
             await refreshSlots();
         }
         if (action === "load") {
-            await saveClient.loadSlot(index);
+            await saveClient.loadSlot(item.slotIndex);
         }
         gui.hide(PrebuiltGui.Save);
         gui.hide(PrebuiltGui.MainMenu);

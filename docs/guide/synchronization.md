@@ -83,8 +83,8 @@ export const player: RpgPlayerHooks = {
   },
   async onDisconnect(player: RpgPlayer) {
     // Save the player data, including custom properties, to the database
-    const json = await player.save();
-    console.log(json); // --> { ..., "wood": 0 }
+    const snapshot = player.snapshot();
+    console.log(snapshot); // --> { ..., "wood": 0 }
   },
 };
 ```
@@ -111,8 +111,8 @@ export const player: RpgPlayerHooks = {
   },
   onConnected(player: RpgPlayer) {
     player.secret.set("mysecretvalue");
-    const json = await player.save();
-    console.log(json); // --> { ..., "secret": "mysecretvalue" }
+    const snapshot = player.snapshot();
+    console.log(snapshot); // --> { ..., "secret": "mysecretvalue" }
   },
 };
 ```
@@ -142,8 +142,8 @@ export const player: RpgPlayerHooks = {
   },
   async onConnected(player: RpgPlayer) {
     player.message.set("custom message");
-    const json = await player.save();
-    console.log(json); // --> { ... } // does not include the message property
+    const snapshot = player.snapshot();
+    console.log(snapshot); // --> { ... } // does not include the message property
   },
 };
 ```

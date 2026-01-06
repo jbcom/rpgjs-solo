@@ -4,7 +4,7 @@ import { context } from "../core/context";
 import { Hooks, ModulesToken } from "@rpgjs/common";
 import { Action } from "@signe/room";
 import { RpgPlayer } from "../Player/Player";
-import { buildSaveSlotMeta, resolveSaveStorageStrategy } from "../services/save";
+import { resolveSaveStorageStrategy } from "../services/save";
 
 /**
  * Base class for rooms that need database functionality
@@ -163,11 +163,12 @@ export abstract class BaseRoom {
         if (typeof value?.index !== 'number') {
           throw new Error('save.save requires an index');
         }
-        const snapshot = await player.save();
-        const meta = buildSaveSlotMeta(player, value?.meta);
-        await storage.save(player, value.index, snapshot, meta);
+        const result = await player.save(value.index, value?.meta, { reason: "manual", source: "gui" });
+        if (!result) {
+          throw new Error('save.save is not allowed');
+        }
         const slots = await storage.list(player);
-        player.emit('save.save.result', { requestId: value?.requestId, index: value.index, slots });
+        player.emit('save.save.result', { requestId: value?.requestId, index: result.index, slots });
       } catch (error: any) {
         player.emit('save.error', { requestId: value?.requestId, message: error?.message || 'save.save failed' });
       }
@@ -175,22 +176,17 @@ export abstract class BaseRoom {
   
     @Action('save.load')
     async loadSlot(player: RpgPlayer, value: { requestId: string; index: number }) {
-      const storage = resolveSaveStorageStrategy();
       try {
         if (typeof value?.index !== 'number') {
           throw new Error('save.load requires an index');
         }
-        const slot = await storage.get(player, value.index);
-        if (!slot?.snapshot) {
-          player.emit('save.load.result', { requestId: value?.requestId, index: value.index, ok: false });
-          return;
-        }
-        await player.load(slot.snapshot);
-        const { snapshot, ...meta } = slot;
-        if (meta.map) {
-          await player.changeMap(meta.map);
-        }
-        player.emit('save.load.result', { requestId: value?.requestId, index: value.index, ok: true, slot: meta });
+        const result = await player.load(value.index, { reason: "load", source: "gui" }, { changeMap: true });
+        player.emit('save.load.result', {
+          requestId: value?.requestId,
+          index: value.index,
+          ok: result.ok,
+          slot: result.slot
+        });
       } catch (error: any) {
         player.emit('save.error', { requestId: value?.requestId, message: error?.message || 'save.load failed' });
       }

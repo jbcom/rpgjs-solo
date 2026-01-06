@@ -2,6 +2,7 @@ import { PrebuiltGui } from '@rpgjs/common'
 import { Gui } from './Gui'
 import { RpgPlayer } from '../Player/Player'
 import { SaveLoadGui, SaveSlot } from './SaveLoadGui'
+import { resolveAutoSaveStrategy } from '../services/save'
 
 export type MenuEntryId = 'items' | 'skills' | 'equip' | 'options' | 'save' | 'exit'
 
@@ -16,6 +17,9 @@ export interface MenuGuiOptions {
     disabled?: MenuEntryId[]
     saveSlots?: SaveSlot[]
     saveMaxSlots?: number
+    saveShowAutoSlot?: boolean
+    saveAutoSlotIndex?: number
+    saveAutoSlotLabel?: string
 }
 
 export class MenuGui extends Gui {
@@ -105,7 +109,17 @@ export class MenuGui extends Gui {
         this.on('exit', () => {
             this.close('exit')
         })
-        return super.open({ menus, items, equips: menuEquips, skills, saveLoad: 'save' }, {
+        const autoSave = resolveAutoSaveStrategy();
+        const canSave = autoSave.canSave ? autoSave.canSave(this.player, { reason: "manual", source: "menu" }) : true;
+        const autoSlotIndex = options.saveAutoSlotIndex ?? autoSave.getDefaultSlot?.(this.player, { reason: "auto", source: "menu" }) ?? 0;
+        const saveLoad = {
+            mode: 'save',
+            canSave,
+            showAutoSlot: options.saveShowAutoSlot === true,
+            autoSlotIndex,
+            autoSlotLabel: options.saveAutoSlotLabel
+        };
+        return super.open({ menus, items, equips: menuEquips, skills, saveLoad }, {
             waitingAction: true,
             blockPlayerInput: true
         })

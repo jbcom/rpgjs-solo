@@ -36,6 +36,16 @@ import { ISkillManager, WithSkillManager } from "./SkillManager";
 import { IBattleManager, WithBattleManager } from "./BattleManager";
 import { IClassManager, WithClassManager } from "./ClassManager";
 import { IStateManager, WithStateManager } from "./StateManager";
+import {
+  buildSaveSlotMeta,
+  resolveAutoSaveStrategy,
+  resolveSaveSlot,
+  resolveSaveStorageStrategy,
+  shouldAutoSave,
+  type SaveRequestContext,
+  type SaveSlotIndex,
+  type SaveSlotMeta,
+} from "../services/save";
 
 /**
  * Combines multiple RpgCommonPlayer mixins into one
@@ -404,17 +414,58 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     });
   }
 
-  async save() {
-    const snapshot = createStatesSnapshot(this)
-    await lastValueFrom(this.hooks.callHooks("server-player-onSave", this, snapshot))
-    return JSON.stringify(snapshot)
+  snapshot() {
+    return createStatesSnapshot(this);
   }
 
-  async load(snapshot: string) {
-    const data = JSON.parse(snapshot)
-    const dataLoaded = load(this, data)
-    await lastValueFrom(this.hooks.callHooks("server-player-onLoad", this, dataLoaded))
-    return dataLoaded
+  async applySnapshot(snapshot: string | object) {
+    const data = typeof snapshot === "string" ? JSON.parse(snapshot) : snapshot;
+    const dataLoaded = load(this, data);
+    await lastValueFrom(this.hooks.callHooks("server-player-onLoad", this, dataLoaded));
+    return dataLoaded;
+  }
+
+  async save(slot: SaveSlotIndex = "auto", meta: SaveSlotMeta = {}, context: SaveRequestContext = {}) {
+    const policy = resolveAutoSaveStrategy();
+    if (policy.canSave && !policy.canSave(this, context)) {
+      return null;
+    }
+    const resolvedSlot = resolveSaveSlot(slot, policy, this, context);
+    if (resolvedSlot === null) {
+      return null;
+    }
+    const snapshot = this.snapshot();
+    await lastValueFrom(this.hooks.callHooks("server-player-onSave", this, snapshot));
+    const storage = resolveSaveStorageStrategy();
+    const finalMeta = buildSaveSlotMeta(this, meta);
+    await storage.save(this, resolvedSlot, JSON.stringify(snapshot), finalMeta);
+    return { index: resolvedSlot, meta: finalMeta };
+  }
+
+  async load(
+    slot: SaveSlotIndex = "auto",
+    context: SaveRequestContext = {},
+    options: { changeMap?: boolean } = {}
+  ) {
+    const policy = resolveAutoSaveStrategy();
+    if (policy.canLoad && !policy.canLoad(this, context)) {
+      return { ok: false };
+    }
+    const resolvedSlot = resolveSaveSlot(slot, policy, this, context);
+    if (resolvedSlot === null) {
+      return { ok: false };
+    }
+    const storage = resolveSaveStorageStrategy();
+    const slotData = await storage.get(this, resolvedSlot);
+    if (!slotData?.snapshot) {
+      return { ok: false };
+    }
+    await this.applySnapshot(slotData.snapshot);
+    const { snapshot, ...meta } = slotData;
+    if (options.changeMap !== false && meta.map) {
+      await this.changeMap(meta.map);
+    }
+    return { ok: true, slot: meta, index: resolvedSlot };
   }
 
  
@@ -532,6 +583,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   */
   syncChanges() {
     this._eventChanges();
+    if (shouldAutoSave(this, { reason: "auto", source: "syncChanges" })) {
+      void this.save("auto", {}, { reason: "auto", source: "syncChanges" });
+    }
   }
 
   databaseById(id: string) {
