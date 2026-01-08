@@ -769,12 +769,12 @@ body {
     color: #fff;
 }
 
-.rpg-shop-tab.active {
+.rpg-shop-tab.active, .rpg-shop-tab:focus {
     color: var(--rpg-ui-accent);
     font-weight: bold;
 }
 
-.rpg-shop-tab.active::after {
+.rpg-shop-tab.active::after, .rpg-shop-tab:focus::after {
     content: "";
     position: absolute;
     bottom: 0;

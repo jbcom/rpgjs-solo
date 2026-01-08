@@ -275,14 +275,16 @@ export default createServer({
            
            //  player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
              // player.hp -= 100;
-             console.log(input)
-             player.callMainMenu({
-              menus: [
-                { id: 'items', label: 'Items' },
-                { id: 'equip', label: 'Equip' },
-                { id: 'save', label: 'Save' },
-              ]
-             })
+            
+            //  player.callMainMenu({
+            //   menus: [
+            //     { id: 'items', label: 'Items' },
+            //     { id: 'equip', label: 'Equip' },
+            //     { id: 'save', label: 'Save' },
+            //   ]
+            //  })
+            player.gold = 1000;
+            player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
            // player.hp -= 100;
             // const map = player.getCurrentMap()
             // const event =map?.getEventBy(event => event.name() === "EV-1")

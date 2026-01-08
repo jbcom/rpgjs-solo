@@ -23,16 +23,16 @@
                             <h2 style="margin: 0;">Choose an action</h2>
                         </div>
                         <div class="rpg-shop-trade">
-                            <Navigation tabindex={selectedModeIndex} controls={controls}>
+                            <Navigation tabindex={selectedModeIndex} controls={modeControls}>
                                 <div class="rpg-shop-tabs rpg-shop-trade-tabs">
                                     <div
                                         class="rpg-shop-tab"
-                                        class={{active: isSelectedModeIndex(0)}}
+                                        class={{active: selectedModeIndex() === 0}}
                                         click={selectMode('buy')}
                                     >Buy</div>
                                     <div
                                         class="rpg-shop-tab"
-                                        class={{active: isSelectedModeIndex(1)}}
+                                        class={{active: selectedModeIndex() === 1}}
                                         click={selectMode('sell')}
                                     >Sell</div>
                                 </div>
@@ -43,12 +43,12 @@
                 }
                 @else {
                     <div>
-                    <Navigation tabindex={selectedTab} controls={tabControls()}>  
+                    <Navigation tabindex={selectedTab} controls={tabControls}>  
                         <div class="rpg-shop-tabs">
                             @for ((tab,index) of tabs) {
                                 <div 
                                     class="rpg-shop-tab" 
-                                    class={{active: isSelectedTab(index)}} 
+                                    class={{active: selectedTab() === index}} 
                                     tabindex={index} 
                                     click={selectTab(index)}
                                 >{{ tab }}</div>
@@ -58,7 +58,7 @@
 
                     <div class="rpg-shop-content">
                         <div class="rpg-shop-grid">
-                            <Navigation tabindex={selectedItem} controls={controls()}>     
+                            <Navigation tabindex={selectedItem} controls={itemControls}>     
                                 @for ((item,index) of items) { 
                                     <div class="rpg-shop-card" class={{disabled: isItemDisabled(item)}} tabindex={index} click={selectItem(index)}>
                                         <div class="rpg-shop-card-icon">🗡️</div>
@@ -153,13 +153,12 @@
     const quantityDialogOpen = signal(false)
     const tabs = ['Weapons', 'Armor', 'Potions', 'Materials']
 
-    const { items, onInteraction , onFinish, playerParams } = defineProps()
+    const { data, onInteraction , onFinish } = defineProps()
 
-    console.log(playerParams)
-
-    const currentItem = computed(() => items[selectedItem()])
+    const items = computed(() => data().items)
+    const currentItem = computed(() => items()[selectedItem()])
     const gold = computed(() => currentPlayer()._gold())
-    const actionLabel = computed(() => tradeMode() === 'buy' ? 'Buy' : 'Sell')
+    const actionLabel = computed(() => tradeMode() === 'buy' ? items()[selectedItem()].name : 'Sell')
     const maxQuantity = computed(() => {
         if (tradeMode() !== 'buy') return Infinity
         const price = currentItem()?.price || 0
@@ -173,7 +172,7 @@
     })
     const displayStats = computed(() => {
         const stats = currentItem()?.stats || {}
-        const params = playerParams || {}
+        const params = data().playerParams || {}
         const order = ['atk', 'def', 'pdef', 'sdef', 'str', 'dex', 'int', 'agi', 'maxHp', 'maxSp']
         const labels = {
             atk: 'ATK',
@@ -227,24 +226,12 @@
         }
     }
 
-    function isSelectedTab(index) {
-        return computed(() => selectedTab() === index)
-    }
-
     function selectMode(mode) {
         return function() {
             tradeMode.set(mode)
             selectedModeIndex.set(mode === 'buy' ? 0 : 1)
             tradeView.set('items')
         }
-    }
-
-    function isSelectedMode(mode) {
-        return computed(() => tradeMode() === mode)
-    }
-
-    function isSelectedModeIndex(index) {
-        return computed(() => selectedModeIndex() === index)
     }
 
     function isItemDisabled(item) {
@@ -289,7 +276,43 @@
         }
     }
 
-    const controls = signal({
+    const modeControls = signal({
+        left: {
+            repeat: true,
+            bind: keyboardControls.left,
+            throttle: 150,
+            keyDown() {
+                navMode.next(-1)
+            }
+        },
+        right: {
+            repeat: true,
+            bind: keyboardControls.right,
+            throttle: 150,
+            keyDown() {
+                navMode.next(1)
+            }
+        },
+        action: {
+            bind: keyboardControls.action,
+            keyDown() {
+                const mode = selectedModeIndex() === 0 ? 'buy' : 'sell'
+                tradeMode.set(mode)
+                tradeView.set('items')
+            }
+        },
+        escape: {
+            bind: keyboardControls.escape,
+            keyDown() {
+                onFinish()
+            }
+        },
+        gamepad: {
+            enabled: true
+        }
+    });
+
+    const itemControls = signal({
         up: {
             repeat: true,
             bind: keyboardControls.up,
@@ -299,11 +322,7 @@
                     changeQuantity(1)()
                     return
                 }
-                if (tradeView() === 'mode') {
-                    navMode.next(-1)
-                } else {
-                    nav.next(-1)
-                }
+                nav.next(-1)
             }
         },
         down: {
@@ -315,44 +334,20 @@
                     changeQuantity(-1)()
                     return
                 }
-                if (tradeView() === 'mode') {
-                    navMode.next(1)
-                } else {
-                    nav.next(1)
-                }
-            }
-        },
-        left: {
-            repeat: true,
-            bind: keyboardControls.left,
-            throttle: 150,
-            keyDown() {
-                return
-            }
-        },
-        right: {
-            repeat: true,
-            bind: keyboardControls.right,
-            throttle: 150,
-            keyDown() {
-                return
+                nav.next(1)
             }
         },
         action: {
             bind: keyboardControls.action,
             keyDown() {
-                if (tradeView() === 'mode') {
-                    const mode = selectedModeIndex() === 0 ? 'buy' : 'sell'
-                    tradeMode.set(mode)
-                    tradeView.set('items')
-                } else if (quantityDialogOpen()) {
+                if (quantityDialogOpen()) {
                     const action = tradeMode() === 'buy' ? 'buyItem' : 'sellItem'
                     onInteraction(action, { id: currentItem().id, nb: quantity() })
                     quantityDialogOpen.set(false)
-                } else {
-                    if (!isItemDisabled(currentItem())) {
-                        quantityDialogOpen.set(true)
-                    }
+                    return
+                }
+                if (!isItemDisabled(currentItem())) {
+                    quantityDialogOpen.set(true)
                 }
             }
         },
@@ -361,11 +356,9 @@
             keyDown() {
                 if (quantityDialogOpen()) {
                     quantityDialogOpen.set(false)
-                } else if (tradeView() === 'items') {
-                    tradeView.set('mode')
-                } else {
-                    onFinish()
+                    return
                 }
+                tradeView.set('mode')
             }
         },
         gamepad: {
