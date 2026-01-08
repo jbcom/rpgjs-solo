@@ -215,6 +215,83 @@
   font-size: var(--rpg-ui-font-size-sm);
 }
 
+.rpg-ui-equip-hint {
+  margin-top: 8px;
+  font-size: var(--rpg-ui-font-size-sm);
+  color: var(--rpg-ui-text-muted);
+}
+
+.rpg-ui-equip-stats {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rpg-ui-equip-stat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: var(--rpg-ui-radius-sm);
+  border: 1px solid var(--rpg-ui-border);
+  background: rgba(0, 0, 0, 0.2);
+  font-size: var(--rpg-ui-font-size-sm);
+}
+
+.rpg-ui-equip-stat.positive {
+  color: var(--rpg-ui-success);
+}
+
+.rpg-ui-equip-stat.negative {
+  color: var(--rpg-ui-danger);
+}
+
+.rpg-ui-equip-stat-current {
+  grid-column: span 2;
+  color: var(--rpg-ui-text-muted);
+  font-size: calc(var(--rpg-ui-font-size-sm) * 0.9);
+}
+
+.rpg-ui-equip-modal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  z-index: 6;
+}
+
+.rpg-ui-equip-modal-card {
+  width: min(760px, 92%);
+  padding: 16px;
+  border-radius: var(--rpg-ui-radius-md);
+  background: var(--rpg-ui-surface);
+  border: 2px solid var(--rpg-ui-border);
+  box-shadow: var(--rpg-ui-shadow-lg);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.rpg-ui-equip-modal-list {
+  min-height: 260px;
+}
+
+.rpg-ui-equip-modal-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rpg-ui-equip-modal-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--rpg-ui-text-muted);
+}
+
 .rpg-ui-menu-item.disabled {
   opacity: 0.5;
   pointer-events: none;
@@ -258,6 +335,10 @@
   background: var(--rpg-ui-accent);
   color: var(--rpg-ui-bg);
   cursor: pointer;
+}
+
+.rpg-ui-menu-confirm-btn[data-selected="true"] {
+  box-shadow: 0 0 0 2px var(--rpg-ui-border-light);
 }
 
 .rpg-ui-menu-confirm-btn-secondary {

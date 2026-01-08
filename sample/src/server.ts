@@ -66,6 +66,36 @@ const BasicShield = {
   icon: 'wood',
 };
 
+const BasicArmor = {
+  id: 'basic-armor',
+  name: 'Basic Armor',
+  description: 'A basic armor',
+  price: 50,
+  pdef: 10,
+  _type: 'armor' as const,
+  icon: 'armor',
+};
+
+const BasicHelmet = {
+  id: 'basic-helmet',
+  name: 'Basic Helmet',
+  description: 'A basic helmet',
+  price: 50,
+  pdef: 10,
+  _type: 'armor' as const,
+  icon: 'helmet',
+};
+
+const FireArmor = {
+  id: 'fire-armor',
+  name: 'Fire Armor',
+  description: 'A fire armor',
+  price: 50,
+  pdef: 10,
+  _type: 'armor' as const,
+  icon: 'fire-armor',
+};
+
 const BasicPotion = {
   id: 'basic-potion',
   name: 'Basic Potion',
@@ -149,6 +179,9 @@ export default createServer({
           'heavy-hammer': HeavyHammer,
           'enemy-claw': EnemyClaw,
           'basic-shield': BasicShield,
+          'basic-armor': BasicArmor,
+          'basic-helmet': BasicHelmet,
+          'fire-armor': FireArmor,
         },
         player: {
           props: {
@@ -181,9 +214,11 @@ export default createServer({
             // Equip player with weapon and armor
             player.addItem(HeavyHammer);
             player.addItem(BasicPotion);
-            player.equip(HeavyHammer.id);
+            player.addItem(BasicArmor);
+            player.addItem(BasicHelmet);
+            player.addItem(FireArmor);
             player.addItem(BasicShield);
-            player.equip(BasicShield.id);
+            player.addItem(BasicSword);
             
             console.log("Player equipped with:", player.equipments().map(e => e.name()));
           },
@@ -221,8 +256,8 @@ export default createServer({
             // console.log(choice)
            
            //  player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
-              player.hp -= 100;
-             //player.callMainMenu()
+             // player.hp -= 100;
+             player.callMainMenu()
            // player.hp -= 100;
             // const map = player.getCurrentMap()
             // const event =map?.getEventBy(event => event.name() === "EV-1")

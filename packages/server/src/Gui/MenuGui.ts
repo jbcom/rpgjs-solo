@@ -65,6 +65,7 @@ export class MenuGui extends Gui {
                 description: item.description(),
                 quantity: item.quantity(),
                 icon: data?.icon ?? (item as any)?.icon,
+                stats: data?.stats ?? data?.params ?? (item as any)?.stats ?? (item as any)?.params,
                 consumable: isConsumable,
                 type,
                 usable,
