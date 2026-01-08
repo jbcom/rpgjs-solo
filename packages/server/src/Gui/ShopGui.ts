@@ -8,12 +8,19 @@ export interface ShopGuiOptions {
     items: any[]
     sell?: ShopSellList
     sellMultiplier?: number
+    message?: string
+    face?: {
+        id: string
+        expression?: string
+    }
 }
 
 export class ShopGui extends Gui {
     private itemsInput: any[] = []
     private sellMultipliers: Record<string, number> = {}
     private baseSellMultiplier = 0.5
+    private messageInput?: string
+    private faceInput?: { id: string; expression?: string }
 
     constructor(player: RpgPlayer) {
         super(PrebuiltGui.Shop, player)
@@ -106,7 +113,7 @@ export class ShopGui extends Gui {
             })
             .filter(Boolean)
 
-        return { items, sellItems, playerParams }
+        return { items, sellItems, playerParams, message: this.messageInput, face: this.faceInput }
     }
 
     private refreshShop(clientActionId?: string) {
@@ -120,6 +127,8 @@ export class ShopGui extends Gui {
         this.itemsInput = options.items || []
         this.baseSellMultiplier = typeof options.sellMultiplier === 'number' ? options.sellMultiplier : 0.5
         this.sellMultipliers = this.normalizeSellMultipliers(options.sell)
+        this.messageInput = options.message
+        this.faceInput = options.face
         this.on('buyItem', ({ id, nb, clientActionId }) => {
             try {
                 this.player.buyItem(id, nb)

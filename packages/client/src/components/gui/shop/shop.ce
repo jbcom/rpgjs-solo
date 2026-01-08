@@ -2,14 +2,19 @@
         <div class="rpg-shop-container rpg-anim-fade-in">
             <div class="rpg-shop-header">
                 <div class="rpg-shop-merchant">
-                    <div class="rpg-shop-merchant-avatar">🧙‍♂️</div>
+                    <div>
+                        @if (hasFace) {
+                            <div class="rpg-shop-merchant-avatar">
+                                <DOMSprite sheet={faceSheet(face().id, face().expression)} />  
+                            </div>
+                        }
+                    </div>
                     <div class="rpg-shop-merchant-info">
-                        <h2>Mystic Merchant</h2>
-                        <p>"Rare goods for the brave."</p>
+                        <p>{{ shopMessage() }}</p>
                     </div>
                 </div>
                 <div class="rpg-shop-gold">
-                     {{ gold() }} G
+                     {{ gold() }} {{ goldTerm }}
                 </div>
             </div>
 
@@ -60,14 +65,14 @@
                         <div class="rpg-shop-grid">
                             <Navigation tabindex={selectedItem} controls={itemControls}>     
                                 @for ((item,index) of filteredItems) { 
-                                    <div class="rpg-shop-card" class={{disabled: isItemDisabled(item)}} tabindex={index} click={selectItem(index)}>
+                                    <div class="rpg-shop-card" class={{disabled: isItemDisabled(item), selected: selectedItem() === index}} tabindex={index} click={selectItem(index)}>
                                         <div class="rpg-shop-card-icon">
                                             @if (item.icon) {
                                                 <DOMSprite sheet={iconSheet(item.icon)} playing="default" />
                                             }
                                         </div>
                                         <div class="rpg-shop-card-name">{{ item.name }}</div>
-                                        <div class="rpg-shop-card-price">{{ item.price }} G</div>
+                                        <div class="rpg-shop-card-price">{{ item.price }} {{ goldTerm }}</div>
                                         @if (item.quantity !== undefined) {
                                             <div class="rpg-shop-card-qty">x{{ item.quantity }}</div>
                                         }
@@ -87,7 +92,7 @@
                                     }
                                 </div>
                                 <h2 style="margin: 0;">{{ currentItem()?.name || "" }}</h2>
-                                <p style="color: #ffd700; font-weight: bold; margin: 8px 0;">{{ currentItem()?.price ?? 0 }} G</p>
+                                <p style="color: #ffd700; font-weight: bold; margin: 8px 0;">{{ currentItem()?.price ?? 0 }} {{ goldTerm }}</p>
                                 @if (currentItem()?.quantity !== undefined) {
                                     <div class="rpg-shop-details-qty">Qty: x{{ currentItem()?.quantity }}</div>
                                 }
@@ -140,7 +145,7 @@
                             </div>
                             <div class="rpg-shop-modal-total">
                                 <span>Total</span>
-                                <span>{{ totalPrice() }} G</span>
+                                <span>{{ totalPrice() }} {{ goldTerm }}</span>
                             </div>
                             <div class="rpg-shop-modal-actions">
                                 <button class="rpg-shop-btn rpg-shop-btn-secondary" click={closeQuantityDialog()}>Cancel</button>
@@ -168,6 +173,7 @@
         definition: engine.getSpriteSheet(iconId),
         playing: "default"
     })
+    const goldTerm = engine.globalConfig.goldTerm || 'G'
 
     const selectedItem = signal(0)
     const selectedTab = signal(0)
@@ -176,6 +182,7 @@
     const selectedModeIndex = signal(0)
     const quantity = signal(1)
     const quantityDialogOpen = signal(false)
+    const defaultMessage = 'Welcome to my shop!'
     const tabs = [
         { id: 'item', label: 'Items' },
         { id: 'weapon', label: 'Weapons' },
@@ -184,10 +191,17 @@
 
     const { data, onInteraction , onFinish } = defineProps()
 
-    console.log(data())
-
     const resolveProp = (value) => typeof value === "function" ? value() : value
     const guiData = computed(() => resolveProp(data) || {})
+    const shopMessage = computed(() => {
+        const message = resolveProp(guiData().message)
+        return message ? String(message) : defaultMessage
+    })
+    const face = computed(() => resolveProp(guiData().face))
+    const hasFace = computed(() => {
+        const value = face()
+        return value && value.id
+    })
     const buyItems = computed(() => guiData().items || [])
     const sellItems = computed(() => guiData().sellItems || [])
     const activeItems = computed(() => tradeMode() === 'buy' ? buyItems() : sellItems())
@@ -200,6 +214,10 @@
     const currentItem = computed(() => filteredItems()[selectedItem()])
     const gold = computed(() => currentPlayer()._gold())
     const actionLabel = computed(() => tradeMode() === 'buy' ? 'Buy' : 'Sell')
+    const faceSheet = (graphicId, animationName) => ({
+        definition: engine.getSpriteSheet(graphicId),
+        playing: animationName || "default"
+    })
     const maxQuantity = computed(() => {
         const item = currentItem()
         if (!item) return 0

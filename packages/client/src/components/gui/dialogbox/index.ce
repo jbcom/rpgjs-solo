@@ -47,6 +47,7 @@
     import { effect, signal, computed, createTabindexNavigator, mount } from "canvasengine";
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
+    import { delay } from "@rpgjs/common";
 
     const engine = inject(RpgClientEngine);
     const currentPlayer = engine.scene.currentPlayer
@@ -199,14 +200,12 @@
     }
 
     mount((element) => {
-    const dialogbox = element
         return () => {
-        dialogbox.directives.controls.onDestroy()
-        isDestroyed = true;
-        // Wait destroy is finished before start processing input
-        setTimeout(() => {
-            engine.stopProcessingInput = false;
-        }, 100)
+            isDestroyed = true;
+            // Wait destroy is finished before start processing input
+            delay(() => {
+                engine.stopProcessingInput = false;
+            })
         }
   })
 </script>

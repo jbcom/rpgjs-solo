@@ -3,6 +3,7 @@ import {
   isInstanceOf,
   isString,
   PlayerCtor,
+  Skill,
 } from "@rpgjs/common";
 import { SkillLog } from "../logs";
 import { RpgPlayer } from "./Player";
@@ -319,8 +320,11 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
         throw SkillLog.alreadyLearned(skillData);
       }
 
+      const skillInstance = new Skill(skillData);
+      skillInstance.id.set(skillId);
+
       // Add to skills list
-      (this as any).skills().push(skillData);
+      (this as any).skills().push(skillInstance);
       
       // Call onLearn hook
       this["execMethod"]("onLearn", [this], skillData);

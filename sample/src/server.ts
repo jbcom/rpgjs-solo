@@ -162,7 +162,7 @@ export function Event() {
     },
     async onAction(player: RpgPlayer) {
       player.gold = 100;
-      player.showText("Hello", {
+      await player.showText("Hello", {
         face: {
           id: 'facesetId',
           expression: 'happy'
@@ -171,6 +171,22 @@ export function Event() {
       })
       this.setGraphic("monster")
       player.setVariable('questCompleted', true);
+      player.gold = 1000;
+      await player.callShop({
+        items: [BasicSword, HeavyHammer, EnemyClaw, BasicShield],
+        message: "Hey !",
+        face: {
+          id: 'facesetId',
+          expression: 'happy'
+        }
+      })
+      await player.showText("Thanks you !", {
+        face: {
+          id: 'facesetId',
+          expression: 'happy'
+        },
+        talkWith: this
+      })
     },
   };
 }
@@ -228,14 +244,7 @@ export default createServer({
             player.param[ATK] = 20;
             player.param[PDEF] = 10;
             
-            // Equip player with weapon and armor
-            player.addItem(HeavyHammer);
-            player.addItem(BasicPotion);
-            player.addItem(BasicArmor);
-            player.addItem(BasicHelmet);
-            player.addItem(FireArmor);
-            player.addItem(BasicShield);
-            player.addItem(BasicSword);
+            
             player.learnSkill(fireSkill);
             
             console.log("Player equipped with:", player.equipments().map(e => e.name()));
@@ -283,8 +292,7 @@ export default createServer({
             //     { id: 'save', label: 'Save' },
             //   ]
             //  })
-            player.gold = 1000;
-            player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
+           if (input.action == 'escape')player.callMainMenu()
            // player.hp -= 100;
             // const map = player.getCurrentMap()
             // const event =map?.getEventBy(event => event.name() === "EV-1")

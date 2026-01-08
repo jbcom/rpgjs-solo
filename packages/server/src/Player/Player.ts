@@ -19,7 +19,7 @@ import { MockConnection } from "@signe/room";
 import { IMoveManager, WithMoveManager } from "./MoveManager";
 import { IGoldManager, WithGoldManager } from "./GoldManager";
 import { WithVariableManager, type IVariableManager } from "./VariableManager";
-import { createStatesSnapshot, load, sync, type } from "@signe/sync";
+import { createStatesSnapshotDeep, load, sync, type } from "@signe/sync";
 import { computed, signal } from "@signe/reactive";
 import {
   IParameterManager,
@@ -415,7 +415,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   }
 
   snapshot() {
-    return createStatesSnapshot(this);
+    return createStatesSnapshotDeep(this);
   }
 
   async applySnapshot(snapshot: string | object) {

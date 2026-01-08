@@ -89,10 +89,10 @@ export class MenuGui extends Gui {
         })
         const menuEquips = items.filter((item) => item.type === 'weapon' || item.type === 'armor')
         const skills = (player.skills?.() || []).map((skill) => ({
-            id: skill?.id ?? skill?.name,
-            name: skill?.name ?? skill?.id ?? 'Skill',
-            description: skill?.description ?? '',
-            spCost: skill?.spCost ?? 0
+            id: skill?.id() ?? skill?.name(),
+            name: skill?.name() ?? skill?.id() ?? 'Skill',
+            description: skill?.description() ?? '',
+            spCost: skill?.spCost() ?? 0
         }))
         const saveLoad = this.buildSaveLoad(options)
 

@@ -12,10 +12,10 @@ interface ItemData {
 
 export class Item {
     @id() id = signal('');
-    @sync() name = signal('');
-    @sync() description = signal('');
-    @sync() price = signal(0);
-    @sync() quantity = signal(1);
+    name = signal('');
+    description = signal('');
+    price = signal(0);
+    quantity = signal(1);
 
     onAdd: (player: RpgCommonPlayer) => void = () => {};
 
