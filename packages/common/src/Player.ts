@@ -1,6 +1,6 @@
 import { signal } from "@signe/reactive";
 import { connected, id, persist, sync, users } from "@signe/sync";
-import { Item } from "./database";
+import { Item, Skill } from "./database";
 import { Constructor } from "./Utils";
 
 export enum Control {
@@ -93,7 +93,7 @@ export abstract class RpgCommonPlayer {
   @sync(Item) items = signal<Item[]>([]);
   @sync() equipments = signal<any[]>([]);
   @sync() states = signal<any[]>([]);
-  @sync() skills = signal<any[]>([]);
+  @sync(Skill) skills = signal<Skill[]>([]);
   @sync() _effects = signal<any[]>([]);
   @sync() _through = signal(false);
   @sync() _throughOtherPlayer = signal(true);

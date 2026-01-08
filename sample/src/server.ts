@@ -105,6 +105,20 @@ const BasicPotion = {
   icon: 'potion',
 };
 
+const fireSkill = {
+  id: 'fire-skill',
+  name: 'Fire Skill',
+  description: 'A fire skill',
+  spCost: 10,
+  hitRate: 1,
+  power: 50,
+  coefficient: { [ATK]: 0, [PDEF]: 0 },
+  _type: 'skill' as const,
+  onUse(player: RpgPlayer) {
+    console.log('Fire spell cast!');
+  }
+};
+
 export function Event() {
   return {
     name: "EV-1",
@@ -219,6 +233,7 @@ export default createServer({
             player.addItem(FireArmor);
             player.addItem(BasicShield);
             player.addItem(BasicSword);
+            player.learnSkill(fireSkill);
             
             console.log("Player equipped with:", player.equipments().map(e => e.name()));
           },
