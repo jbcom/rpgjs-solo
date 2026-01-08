@@ -9,7 +9,7 @@
                 @for ((item,displayIndex) of displaySlots) {
                     <div
                         class="rpg-ui-save-load-slot"
-                        class={{active: selectedSlot() === displayIndex, empty: !item.slot, auto: item.kind === "auto", readonly: item.readonly}}
+                        class={{active: selectedSlot() === displayIndex}}
                         tabindex={displayIndex}
                         data-slot-index={displayIndex}
                         click={selectSlot(displayIndex)}
@@ -51,14 +51,10 @@
     const defaultSlots = () => Array.from({ length: DEFAULT_SLOTS }, () => null);
     const localSlots = signal(defaultSlots());
 
-    const { mode, onFinish, showAutoSlot, autoSlotIndex, autoSlotLabel } = defineProps({
-        showAutoSlot: false,
-        autoSlotIndex: 0,
-        autoSlotLabel: "Auto Save"
-    });
+    const { data, onFinish } = defineProps();
 
-    const title = computed(() => mode() === "save" ? "Save Game" : "Load Game");
-    const subtitle = computed(() => mode() === "save"
+    const title = computed(() => data().mode === "save" ? "Save Game" : "Load Game");
+    const subtitle = computed(() => data().mode === "save"
         ? "Choose a slot to overwrite or create."
         : "Select a slot to load your progress."
     );
@@ -73,16 +69,16 @@
             label: `Slot ${index + 1}`,
             readonly: false
         }));
-        if (!showAutoSlot) return items;
-        const index = typeof autoSlotIndex === "number" ? autoSlotIndex : 0;
+        if (!data().showAutoSlot) return items;
+        const index = typeof data().autoSlotIndex === "number" ? data().autoSlotIndex : 0;
         const autoSlot = slots[index] ?? null;
-        const readonly = mode() === "save";
+        const readonly = data().mode === "save";
         return [
             {
                 kind: "auto",
                 slot: autoSlot,
                 slotIndex: index,
-                label: autoSlotLabel || "Auto Save",
+                label: data().autoSlotLabel || "Auto Save",
                 readonly
             },
             ...items
@@ -92,7 +88,7 @@
 
     const canSelect = (item) => {
         if (item.readonly) return false;
-        if (mode() === "load" && !item.slot) return false;
+        if (data().mode === "load" && !item.slot) return false;
         return true;
     };
 
@@ -148,7 +144,7 @@
         const item = list[displayIndex];
         if (!item) return;
         if (!canSelect(item)) return;
-        const action = mode() === "save" ? "save" : "load";
+        const action = data().mode === "save" ? "save" : "load";
         if (action === "save") {
             await saveClient.saveSlot(item.slotIndex);
             await refreshSlots();

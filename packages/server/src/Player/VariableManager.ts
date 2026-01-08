@@ -1,4 +1,6 @@
 import { Constructor, PlayerCtor } from "@rpgjs/common";
+import { signal } from "@signe/reactive";
+import { type } from "@signe/sync";
 
 /**
  * Variable Manager Mixin
@@ -25,30 +27,31 @@ import { Constructor, PlayerCtor } from "@rpgjs/common";
  */
 export function WithVariableManager<TBase extends PlayerCtor>(Base: TBase) {
   return class extends Base {
-    variables: Map<string, any> = new Map();
+    variables = type(signal<Record<string, any>>({}) as any, 'variables', { persist: true }, this as any);
 
     setVariable(key: string, val: any): void {
-      this.variables.set(key, val);
+      this.variables()[key] = val;
     }
 
     getVariable<U = any>(key: string): U | undefined {
-      return this.variables.get(key);
+      return this.variables()[key];
     }
 
     removeVariable(key: string): boolean {
-      return this.variables.delete(key);
+      delete this.variables()[key];
+      return true;
     }
 
     hasVariable(key: string): boolean {
-      return this.variables.has(key);
+      return key in this.variables();
     }
 
     getVariableKeys(): string[] {
-      return Array.from(this.variables.keys());
+      return Object.keys(this.variables());
     }
 
     clearVariables(): void {
-      this.variables.clear();
+      this.variables.set({});
     }
   } as unknown as TBase;
 }

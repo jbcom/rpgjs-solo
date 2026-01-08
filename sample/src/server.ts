@@ -114,9 +114,9 @@ const fireSkill = {
   power: 50,
   coefficient: { [ATK]: 0, [PDEF]: 0 },
   _type: 'skill' as const,
-  onUse(player: RpgPlayer) {
-    console.log('Fire spell cast!');
-  }
+  // onUse(player: RpgPlayer) {
+  //   console.log('Fire spell cast!');
+  // }
 };
 
 export function Event() {
@@ -272,7 +272,13 @@ export default createServer({
            
            //  player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
              // player.hp -= 100;
-             player.callMainMenu()
+             player.callMainMenu({
+              menus: [
+                { id: 'items', label: 'Items' },
+                { id: 'equip', label: 'Equip' },
+                { id: 'save', label: 'Save' },
+              ]
+             })
            // player.hp -= 100;
             // const map = player.getCurrentMap()
             // const event =map?.getEventBy(event => event.name() === "EV-1")

@@ -17,20 +17,12 @@
 
   const {
     onFinish,
-    duration,
-    color,
-    fadeIn
-  } = defineProps({
-    duration: {
-      default: 1000
-    },
-    color: {
-      default: 'black'
-    },
-    fadeIn: {
-      default: true
-    }
-  });
+    data
+  } = defineProps();
+
+  const fadeIn = computed(() => data().fadeIn);
+  const duration = computed(() => data().duration);
+  const color = computed(() => data().color || 'black');
 
   const engine = inject(RpgClientEngine);
 

@@ -80,11 +80,7 @@
                 <div class="rpg-ui-main-menu-overlay-backdrop"></div>
                 <div class="rpg-ui-main-menu-overlay-content">
                     <SaveLoadComponent
-                        mode="save"
-                        slots={saveLoadSlots}
-                        showAutoSlot={saveLoadData().showAutoSlot}
-                        autoSlotIndex={saveLoadData().autoSlotIndex}
-                        autoSlotLabel={saveLoadData().autoSlotLabel}
+                        data={saveLoadData}
                         onFinish={closeSaveOverlay}
                     />
                 </div>
