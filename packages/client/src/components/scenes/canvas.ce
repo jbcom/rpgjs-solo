@@ -23,6 +23,7 @@
   import { RpgClientEngine } from "../../RpgClientEngine";
   import SceneMap from './draw-map.ce'
   import { RpgGui } from "../../Gui/Gui";
+  import { delay } from "@rpgjs/common";
 
   const engine = inject(RpgClientEngine);
   const guiService = inject(RpgGui);
@@ -40,7 +41,9 @@
   })
 
   const onGuiFinish = (gui, data) => {
-    guiService.guiClose(gui.name, data)
+    delay(() => {
+      guiService.guiClose(gui.name, data)
+    })
   }
 
   const onGuiInteraction = (gui, name, data) => {

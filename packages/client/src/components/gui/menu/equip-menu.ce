@@ -3,7 +3,7 @@
         <div class="rpg-ui-menu-panel-header">Equip</div>
         <div class="rpg-ui-menu-panel-body">
             <div class="rpg-ui-menu-panel-list rpg-ui-menu">
-                <Navigation tabindex={selectedSlot} controls={controls}>
+                <Navigation tabindex={selectedSlot} controls={slotControls}>
                     @for ((slot,index) of slotList) {
                         <div
                             class="rpg-ui-menu-item rpg-ui-menu-row"
@@ -70,7 +70,7 @@
                             <div class="rpg-ui-equip-modal-empty">No items available</div>
                         }
                         @else {
-                            <Navigation tabindex={selectedDialogItem} controls={controls}>
+                            <Navigation tabindex={selectedDialogItem} controls={dialogControls}>
                                 @for ((entry,index) of dialogItems) {
                                     <div
                                         class="rpg-ui-menu-item rpg-ui-menu-row"
@@ -389,18 +389,14 @@
         }
     }
 
-    const controls = signal({
+    const dialogControls = signal({
         up: {
             repeat: true,
             bind: keyboardControls.up,
             throttle: 150,
             keyDown() {
-                if (dialogOpen()) {
-                    if (!dialogItems().length) return;
-                    navDialog.next(-1);
-                    return;
-                }
-                navSlots.next(-1);
+                if (!dialogItems().length) return;
+                navDialog.next(-1);
             }
         },
         down: {
@@ -408,12 +404,8 @@
             bind: keyboardControls.down,
             throttle: 150,
             keyDown() {
-                if (dialogOpen()) {
-                    if (!dialogItems().length) return;
-                    navDialog.next(1);
-                    return;
-                }
-                navSlots.next(1);
+                if (!dialogItems().length) return;
+                navDialog.next(1);
             }
         },
         left: {
@@ -421,7 +413,6 @@
             bind: keyboardControls.left,
             throttle: 150,
             keyDown() {
-                if (!dialogOpen()) return;
                 const tabs = dialogTabs();
                 if (!tabs.length) return;
                 selectedDialogTab.update((value) => (value - 1 + tabs.length) % tabs.length);
@@ -433,7 +424,6 @@
             bind: keyboardControls.right,
             throttle: 150,
             keyDown() {
-                if (!dialogOpen()) return;
                 const tabs = dialogTabs();
                 if (!tabs.length) return;
                 selectedDialogTab.update((value) => (value + 1) % tabs.length);
@@ -443,21 +433,51 @@
         action: {
             bind: keyboardControls.action,
             keyDown() {
-                if (dialogOpen()) {
-                    if (!dialogItems().length) return;
-                    commitSelection(selectedDialogItem());
-                    return;
-                }
+                if (!dialogItems().length) return;
+                commitSelection(selectedDialogItem());
+            }
+        },
+        escape: {
+            bind: keyboardControls.escape,
+            keyDown() {
+                closeDialog();
+            }
+        },
+        gamepad: {
+            enabled: true
+        }
+    });
+
+    const slotControls = signal({
+        up: {
+            repeat: true,
+            bind: keyboardControls.up,
+            throttle: 150,
+            keyDown() {
+                if (dialogOpen()) return;
+                navSlots.next(-1);
+            }
+        },
+        down: {
+            repeat: true,
+            bind: keyboardControls.down,
+            throttle: 150,
+            keyDown() {
+                if (dialogOpen()) return;
+                navSlots.next(1);
+            }
+        },
+        action: {
+            bind: keyboardControls.action,
+            keyDown() {
+                if (dialogOpen()) return;
                 openDialog();
             }
         },
         escape: {
             bind: keyboardControls.escape,
             keyDown() {
-                if (dialogOpen()) {
-                    closeDialog();
-                    return;
-                }
+                if (dialogOpen()) return;
                 if (onBack) onBack();
             }
         },

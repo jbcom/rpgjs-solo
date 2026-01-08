@@ -154,6 +154,8 @@
         }
         setTimeout(() => {
             if (onFinish) onFinish();
+            gui.hide(PrebuiltGui.Save);
+            gui.hide(PrebuiltGui.TitleScreen);
         }, 50);
 
     };

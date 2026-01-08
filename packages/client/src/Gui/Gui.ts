@@ -3,7 +3,7 @@ import { signal, Signal, WritableSignal } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "../services/AbstractSocket";
 import { DialogboxComponent, ShopComponent, SaveLoadComponent, MainMenuComponent, NotificationComponent, TitleScreenComponent, GameoverComponent } from "../components/gui";
 import { combineLatest, Subscription } from "rxjs";
-import { PrebuiltGui } from "@rpgjs/common";
+import { delay, PrebuiltGui } from "@rpgjs/common";
 
 interface GuiOptions {
   name?: string;
@@ -478,18 +478,6 @@ export class RpgGui {
   }
 
   /**
-   * Handle CanvasEngine component display logic
-   * 
-   * @param id - GUI component ID
-   * @param data - Component data
-   * @param dependencies - Runtime dependencies
-   * @param guiInstance - GUI instance
-   */
-  private _handleCanvasComponentDisplay(id: string, data: any, dependencies: Signal[], guiInstance: GuiInstance) {
-    
-  }
-
-  /**
    * Hide a GUI component
    * 
    * Hides the GUI and cleans up any active subscriptions.
@@ -515,7 +503,7 @@ export class RpgGui {
       guiInstance.subscription = undefined;
     }
 
-    guiInstance.display.set(false);
+    guiInstance.display.set(false)
     
     // Check if it's a Vue component and notify VueGui
     const isVueComponent = this.extraGuis.some(gui => gui.name === id);

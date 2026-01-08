@@ -100,6 +100,7 @@
     import OptionsMenu from "./options-menu.ce";
     import ExitMenu from "./exit-menu.ce";
     import { getEntityProp } from "../../../utils/getEntityProp";
+    import { delay } from "@rpgjs/common";
 
     const engine = inject(RpgClientEngine);
     const currentPlayer = engine.scene.currentPlayer;
@@ -187,12 +188,16 @@
     };
 
     const goBack = () => {
-        view.set("menu");
+        delay(() => {
+            view.set("menu");
+        });
     };
 
     const closeSaveOverlay = () => {
-        saveOverlay.set(false);
-        view.set("menu");
+        delay(() => {
+            saveOverlay.set(false);
+            view.set("menu");
+        });
     };
 
     const confirmExit = () => {
@@ -272,7 +277,7 @@
                     goBack();
                     return;
                 }
-                if (onFinish) onFinish();
+                onFinish()
             }
         },
         gamepad: {
@@ -282,9 +287,9 @@
 
     mount((element) => {
         return () => {
-            setTimeout(() => {
+            delay(() => {
                 engine.stopProcessingInput = false;
-            }, 100)
+            });
         }
     });
 </script>

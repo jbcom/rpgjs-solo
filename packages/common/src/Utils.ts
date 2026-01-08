@@ -1,5 +1,9 @@
 export type Constructor<T = {}> = new (...args: any[]) => T;
 
+export function delay(cb: () => void, ms: number = 50): void {
+  setTimeout(cb, ms);
+}
+
 export function random(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1) + min);
 }

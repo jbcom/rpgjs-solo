@@ -75,6 +75,7 @@
     import { signal, computed, createTabindexNavigator, effect } from "canvasengine";
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
+    import { delay } from "@rpgjs/common";
 
     const engine = inject(RpgClientEngine);
     const keyboardControls = engine.globalConfig.keyboardControls;
@@ -166,14 +167,18 @@
     const confirmUse = () => {
         const item = confirmItem();
         if (!item) return;
-        if (onInteraction) onInteraction("useItem", { id: item.id });
-        confirmOpen.set(false);
-        confirmItem.set(null);
+        delay(() => {
+            if (onInteraction) onInteraction("useItem", { id: item.id });
+            confirmOpen.set(false);
+            confirmItem.set(null);
+        });
     };
 
     const cancelConfirm = () => {
-        confirmOpen.set(false);
-        confirmItem.set(null);
+        delay(() => {
+            confirmOpen.set(false);
+            confirmItem.set(null);
+        });
     };
 
     function confirmSelect(index) {

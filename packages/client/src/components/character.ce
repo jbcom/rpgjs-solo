@@ -326,9 +326,14 @@
       keyDown() {
         if (canControls()) {
           client.processAction({ action: 'action' })
-           // particleName.set('hit') 
-          // emitParticleTrigger.start()
-          // object.flash('red')
+        }
+      },
+    },
+    escape: {
+      bind: keyboardControls.escape,
+      keyDown() {
+        if (canControls()) {
+          client.processAction({ action: 'escape' })
         }
       },
     },
