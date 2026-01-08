@@ -105,7 +105,7 @@ export function WithGuiManager<TBase extends PlayerCtor>(
      * @returns {void}
      * @memberof GuiManager
      */
-    callShop(items: any[]) {
+    callShop(items: any[] | { items: any[]; sell?: Record<string, number> | Array<{ id: string; multiplier: number }>; sellMultiplier?: number }) {
       const gui = new ShopGui(<any>this);
       this._gui[gui.id] = gui;
       return gui.open(items);
@@ -454,7 +454,7 @@ export interface IGuiManager {
    * @memberof GuiManager
    */
   callGameover(options?: GameoverGuiOptions): Promise<GameoverGuiSelection | null>;
-  callShop(items: any[]): void;
+  callShop(items: any[] | { items: any[]; sell?: Record<string, number> | Array<{ id: string; multiplier: number }>; sellMultiplier?: number }): void;
   gui(guiId: string): Gui;
   getGui(guiId: string): Gui;
   removeGui(guiId: string, data?: any): void;

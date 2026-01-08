@@ -51,7 +51,7 @@
                                     class={{active: selectedTab() === index}} 
                                     tabindex={index} 
                                     click={selectTab(index)}
-                                >{{ tab }}</div>
+                                >{{ tab.label }}</div>
                             }
                         </div>
                     </Navigation>
@@ -59,11 +59,18 @@
                     <div class="rpg-shop-content">
                         <div class="rpg-shop-grid">
                             <Navigation tabindex={selectedItem} controls={itemControls}>     
-                                @for ((item,index) of items) { 
+                                @for ((item,index) of filteredItems) { 
                                     <div class="rpg-shop-card" class={{disabled: isItemDisabled(item)}} tabindex={index} click={selectItem(index)}>
-                                        <div class="rpg-shop-card-icon">🗡️</div>
+                                        <div class="rpg-shop-card-icon">
+                                            @if (item.icon) {
+                                                <DOMSprite sheet={iconSheet(item.icon)} playing="default" />
+                                            }
+                                        </div>
                                         <div class="rpg-shop-card-name">{{ item.name }}</div>
                                         <div class="rpg-shop-card-price">{{ item.price }} G</div>
+                                        @if (item.quantity !== undefined) {
+                                            <div class="rpg-shop-card-qty">x{{ item.quantity }}</div>
+                                        }
                                         @if (item.equipped) {
                                             <div class="rpg-shop-card-tag">Equipped</div>
                                         }
@@ -74,31 +81,42 @@
 
                         <div class="rpg-shop-details">
                             <div class="rpg-shop-details-header">
-                                <div class="rpg-shop-details-icon">⚔️</div>
-                                <h2 style="margin: 0;">{{ currentItem().name }}</h2>
-                                <p style="color: #ffd700; font-weight: bold; margin: 8px 0;">{{ currentItem().price }} G</p>
-                            </div>
-                            @if (currentItem().equipped) {
-                                <div class="rpg-shop-equipped">Already equipped</div>
-                            }
-                            <div class="rpg-shop-details-desc">
-                                {{ currentItem().description }}
-                            </div>
-                            @if (displayStats().length > 0) {
-                                <div class="rpg-shop-stats">
-                                    @for ((stat,index) of displayStats) {
-                                        <div class="rpg-shop-stat" class={{positive: stat.delta > 0, negative: stat.delta < 0}}>
-                                            <div class="rpg-shop-stat-key">{{ stat.label }}</div>
-                                            <div class="rpg-shop-stat-value">
-                                                {{ stat.delta > 0 ? '+' : '' }}{{ stat.delta }}
-                                            </div>
-                                            @if (stat.current !== undefined) {
-                                                <div class="rpg-shop-stat-current">{{ stat.current }} → {{ stat.next }}</div>
-                                            }
-                                        </div>
+                                <div class="rpg-shop-details-icon">
+                                    @if (currentItem()?.icon) {
+                                        <DOMSprite sheet={iconSheet(currentItem()?.icon)} playing="default" />
                                     }
                                 </div>
-                            }
+                                <h2 style="margin: 0;">{{ currentItem()?.name || "" }}</h2>
+                                <p style="color: #ffd700; font-weight: bold; margin: 8px 0;">{{ currentItem()?.price ?? 0 }} G</p>
+                                @if (currentItem()?.quantity !== undefined) {
+                                    <div class="rpg-shop-details-qty">Qty: x{{ currentItem()?.quantity }}</div>
+                                }
+                            </div>
+                            <div>
+                                @if (currentItem()?.equipped) {
+                                    <div class="rpg-shop-equipped">Already equipped</div>
+                                }
+                            </div>
+                            <div class="rpg-shop-details-desc">
+                                {{ currentItem()?.description || "" }}
+                            </div>
+                            <div>
+                                @if (displayStats().length > 0) {
+                                    <div class="rpg-shop-stats">
+                                        @for ((stat,index) of displayStats) {
+                                            <div class="rpg-shop-stat" class={{positive: stat.delta > 0, negative: stat.delta < 0}}>
+                                                <div class="rpg-shop-stat-key">{{ stat.label }}</div>
+                                                <div class="rpg-shop-stat-value">
+                                                    {{ stat.delta > 0 ? '+' : '' }}{{ stat.delta }}
+                                                </div>
+                                                @if (stat.current !== undefined) {
+                                                    <div class="rpg-shop-stat-current">{{ stat.current }} → {{ stat.next }}</div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
                             <button class="rpg-shop-btn" click={backToMode()}>Back</button>
                         </div>
                     </div>
@@ -108,7 +126,10 @@
                     <div class="rpg-shop-modal">
                         <div class="rpg-shop-modal-card">
                             <div class="rpg-shop-modal-title">{{ actionLabel }}</div>
-                            <div class="rpg-shop-modal-item">{{ currentItem().name }}</div>
+                            <div class="rpg-shop-modal-item">{{ currentItem()?.name || "" }}</div>
+                            @if (currentItem()?.quantity !== undefined) {
+                                <div class="rpg-shop-modal-qty">Available: x{{ currentItem()?.quantity }}</div>
+                            }
                             <div class="rpg-shop-quantity">
                                 <div class="rpg-shop-quantity-label">Quantity</div>
                                 <div class="rpg-shop-quantity-controls">
@@ -136,13 +157,17 @@
     </DOMContainer>
 
 <script>
-    import { mount, signal, computed, createTabindexNavigator } from "canvasengine";
+    import { mount, signal, computed, createTabindexNavigator, effect } from "canvasengine";
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
 
     const engine = inject(RpgClientEngine)
     const currentPlayer = engine.scene.currentPlayer
     const keyboardControls = engine.globalConfig.keyboardControls
+    const iconSheet = (iconId) => ({
+        definition: engine.getSpriteSheet(iconId),
+        playing: "default"
+    })
 
     const selectedItem = signal(0)
     const selectedTab = signal(0)
@@ -151,28 +176,48 @@
     const selectedModeIndex = signal(0)
     const quantity = signal(1)
     const quantityDialogOpen = signal(false)
-    const tabs = ['Weapons', 'Armor', 'Potions', 'Materials']
+    const tabs = [
+        { id: 'item', label: 'Items' },
+        { id: 'weapon', label: 'Weapons' },
+        { id: 'armor', label: 'Armor' }
+    ]
 
     const { data, onInteraction , onFinish } = defineProps()
 
-    const items = computed(() => data().items)
-    const currentItem = computed(() => items()[selectedItem()])
+    console.log(data())
+
+    const resolveProp = (value) => typeof value === "function" ? value() : value
+    const guiData = computed(() => resolveProp(data) || {})
+    const buyItems = computed(() => guiData().items || [])
+    const sellItems = computed(() => guiData().sellItems || [])
+    const activeItems = computed(() => tradeMode() === 'buy' ? buyItems() : sellItems())
+    const filteredItems = computed(() => {
+        const tab = tabs[selectedTab()]
+        const items = activeItems()
+        if (!tab) return []
+        return items.filter((item) => item?.type === tab.id)
+    })
+    const currentItem = computed(() => filteredItems()[selectedItem()])
     const gold = computed(() => currentPlayer()._gold())
-    const actionLabel = computed(() => tradeMode() === 'buy' ? items()[selectedItem()].name : 'Sell')
+    const actionLabel = computed(() => tradeMode() === 'buy' ? 'Buy' : 'Sell')
     const maxQuantity = computed(() => {
-        if (tradeMode() !== 'buy') return Infinity
-        const price = currentItem()?.price || 0
+        const item = currentItem()
+        if (!item) return 0
+        const price = item?.price || 0
         if (price <= 0) return 0
+        if (tradeMode() === 'sell') {
+            const qty = item?.quantity ?? 0
+            return Math.max(0, qty)
+        }
         return Math.max(1, Math.floor(gold() / price))
     })
     const totalPrice = computed(() => {
         const price = currentItem()?.price || 0
-        const unitPrice = tradeMode() === 'sell' ? price / 2 : price
-        return unitPrice * quantity()
+        return price * quantity()
     })
     const displayStats = computed(() => {
         const stats = currentItem()?.stats || {}
-        const params = data().playerParams || {}
+        const params = guiData().playerParams || {}
         const order = ['atk', 'def', 'pdef', 'sdef', 'str', 'dex', 'int', 'agi', 'maxHp', 'maxSp']
         const labels = {
             atk: 'ATK',
@@ -206,7 +251,7 @@
         }
         return list
     })
-    const nav = createTabindexNavigator(selectedItem, { count: () => items.length }, 'wrap')
+    const nav = createTabindexNavigator(selectedItem, { count: () => filteredItems().length }, 'wrap')
     const navTab = createTabindexNavigator(selectedTab, { count: () => tabs.length }, 'wrap')
     const navMode = createTabindexNavigator(selectedModeIndex, { count: () => 2 }, 'wrap')
 
@@ -214,7 +259,7 @@
        return function() {
         selectedItem.set(index)
         quantity.set(1)
-        if (!isItemDisabled(items[index])) {
+        if (!isItemDisabled(filteredItems()[index])) {
             quantityDialogOpen.set(true)
         }
        }
@@ -223,6 +268,7 @@
     function selectTab(index) {
         return function() {
             selectedTab.set(index)
+            selectedItem.set(0)
         }
     }
 
@@ -230,14 +276,20 @@
         return function() {
             tradeMode.set(mode)
             selectedModeIndex.set(mode === 'buy' ? 0 : 1)
+            selectedItem.set(0)
+            quantity.set(1)
             tradeView.set('items')
         }
     }
 
     function isItemDisabled(item) {
-        if (tradeMode() !== 'buy') return false
+        if (!item) return true
         const price = item?.price || 0
         if (price <= 0) return true
+        if (tradeMode() === 'sell') {
+            const qty = item?.quantity ?? 0
+            return qty <= 0
+        }
         return gold() < price
     }
 
@@ -266,15 +318,23 @@
 
     function confirmTrade() {
         return function() {
-            if (tradeMode() === 'buy' && isItemDisabled(currentItem())) {
+            const item = currentItem()
+            if (!item || isItemDisabled(item)) {
                 quantityDialogOpen.set(false)
                 return
             }
             const action = tradeMode() === 'buy' ? 'buyItem' : 'sellItem'
-            onInteraction(action, { id: currentItem().id, nb: quantity() })
+            onInteraction(action, { id: item.id, nb: quantity() })
             quantityDialogOpen.set(false)
         }
     }
+
+    effect(() => {
+        const count = filteredItems().length
+        if (selectedItem() >= count) {
+            selectedItem.set(Math.max(0, count - 1))
+        }
+    })
 
     const modeControls = signal({
         left: {
@@ -298,6 +358,8 @@
             keyDown() {
                 const mode = selectedModeIndex() === 0 ? 'buy' : 'sell'
                 tradeMode.set(mode)
+                selectedItem.set(0)
+                quantity.set(1)
                 tradeView.set('items')
             }
         },
@@ -341,12 +403,18 @@
             bind: keyboardControls.action,
             keyDown() {
                 if (quantityDialogOpen()) {
+                    const item = currentItem()
+                    if (!item || isItemDisabled(item)) {
+                        quantityDialogOpen.set(false)
+                        return
+                    }
                     const action = tradeMode() === 'buy' ? 'buyItem' : 'sellItem'
-                    onInteraction(action, { id: currentItem().id, nb: quantity() })
+                    onInteraction(action, { id: item.id, nb: quantity() })
                     quantityDialogOpen.set(false)
                     return
                 }
-                if (!isItemDisabled(currentItem())) {
+                const item = currentItem()
+                if (!isItemDisabled(item)) {
                     quantityDialogOpen.set(true)
                 }
             }
