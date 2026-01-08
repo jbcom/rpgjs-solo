@@ -3,12 +3,12 @@
         <div class="rpg-ui-menu-panel-header">Skills</div>
         <div class="rpg-ui-menu-panel-body rpg-ui-menu-panel-body-stacked">
             <div class="rpg-ui-menu-panel-details rpg-ui-panel">
-                @if (currentSkill()) {
+                @if (currentSkill) {
                     <div class="rpg-ui-menu-panel-hero">
                         <div class="rpg-ui-menu-panel-hero-icon">✨</div>
                         <div>
-                            <div class="rpg-ui-menu-panel-details-title">{currentSkill().name}</div>
-                            <div class="rpg-ui-menu-panel-details-desc">{currentSkill().description || ""}</div>
+                            <div class="rpg-ui-menu-panel-details-title">{currentSkill()?.name}</div>
+                            <div class="rpg-ui-menu-panel-details-desc">{currentSkill()?.description || ""}</div>
                         </div>
                     </div>
                 }
@@ -41,10 +41,11 @@
     const keyboardControls = engine.globalConfig.keyboardControls;
 
     const selectedSkill = signal(0);
-    const { skills, onBack } = defineProps();
+    const { data, onBack } = defineProps();
+    const skills = computed(() => data().skills);
 
-    const nav = createTabindexNavigator(selectedSkill, { count: () => skills.length }, "wrap");
-    const currentSkill = computed(() => skills[selectedSkill()]);
+    const nav = createTabindexNavigator(selectedSkill, { count: () => skills().length }, "wrap");
+    const currentSkill = computed(() => skills()[selectedSkill()]);
 
     function selectSkill(index) {
         return function() {

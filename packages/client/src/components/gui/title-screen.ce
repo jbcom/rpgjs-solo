@@ -36,7 +36,7 @@
     const guiService = inject(RpgGui);
     const keyboardControls = engine.globalConfig.keyboardControls;
 
-    const { entries, title, subtitle, version, saveLoad, localActions, onInteraction } = defineProps({
+    const { data, onInteraction } = defineProps({
         entries: {
             default: () => []
         },
@@ -47,6 +47,8 @@
             default: false
         }
     });
+
+    const { entries, title, subtitle, version, saveLoad, localActions } = data();
 
     const defaultEntries = [
         { id: "start", label: "Start" },

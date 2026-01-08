@@ -55,4 +55,12 @@ export class Gui {
         }
         this._close(data)
     }
+
+    update(data?, { clientActionId }: { clientActionId?: string } = {}) {
+        this.player.emit('gui.update', {
+            guiId: this.id,
+            data,
+            clientActionId
+        })
+    }
 }

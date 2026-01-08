@@ -34,7 +34,8 @@ const guiMenu = [{
   items: [
     { text: "Engine Injection", link: "/gui/engine-injection" },
     { text: "Dialog Box", link: "/gui/dialog-box" },
-    { text: "Vue Integration", link: "/gui/vue-integration" }
+    { text: "Vue Integration", link: "/gui/vue-integration" },
+    { text: "Optimistic Actions", link: "/gui/optimistic-actions" }
   ]
 }]
 

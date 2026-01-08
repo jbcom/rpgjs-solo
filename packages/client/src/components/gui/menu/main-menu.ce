@@ -59,13 +59,13 @@
                     </div>
                 }
                 @if (view() === "items") {
-                    <ItemsMenu items={items} onInteraction={onInteraction} onBack={goBack} />
+                    <ItemsMenu data={data} onInteraction={onInteraction} onBack={goBack} />
                 }
                 @if (view() === "skills") {
-                    <SkillsMenu skills={skills} onBack={goBack} />
+                    <SkillsMenu data={data} onBack={goBack} />
                 }
                 @if (view() === "equip") {
-                    <EquipMenu items={equips} onInteraction={onInteraction} onBack={goBack} />
+                    <EquipMenu data={data} onInteraction={onInteraction} onBack={goBack} />
                 }
                 @if (view() === "options") {
                     <OptionsMenu onBack={goBack} />
@@ -109,7 +109,8 @@
     const currentPlayer = engine.scene.currentPlayer;
     const keyboardControls = engine.globalConfig.keyboardControls;
 
-    const { menus, items, skills, equips, saveLoad, onFinish, onInteraction } = defineProps();
+    const { data, onFinish, onInteraction } = defineProps();
+    const { menus, items, skills, equips, saveLoad } = data();
 
     const defaultMenus = [
         { id: "items", label: "Items" },

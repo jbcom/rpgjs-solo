@@ -41,8 +41,76 @@ interface GuiInstance {
   attachToSprite?: boolean;
 }
 
+interface GuiAction {
+  guiId: string;
+  name: string;
+  data: any;
+  clientActionId: string;
+}
+
+type OptimisticReducer = (data: any, action: GuiAction) => any;
+
 const throwError = (id: string) => {
   throw `The GUI named ${id} is non-existent. Please add the component in the gui property of the decorator @RpgClient`;
+};
+
+const updateItemQuantity = (items: any[], id: string) => {
+  const index = items.findIndex((item) => item?.id === id);
+  if (index === -1) return items;
+  const item = items[index];
+  if (item?.usable === false) return items;
+  if (item?.consumable === false) return items;
+  const quantity = typeof item?.quantity === "number" ? item.quantity : 1;
+  const nextQuantity = Math.max(0, quantity - 1);
+  if (nextQuantity === quantity) return items;
+  if (nextQuantity <= 0) {
+    return items.filter((_, idx) => idx !== index);
+  }
+  const nextItems = items.slice();
+  nextItems[index] = { ...item, quantity: nextQuantity };
+  return nextItems;
+};
+
+const updateEquippedFlag = (items: any[], id: string, equip: boolean) => {
+  const index = items.findIndex((item) => item?.id === id);
+  if (index === -1) return items;
+  const item = items[index];
+  if (item?.equipped === equip) return items;
+  const nextItems = items.slice();
+  nextItems[index] = { ...item, equipped: equip };
+  return nextItems;
+};
+
+const mainMenuOptimisticReducer: OptimisticReducer = (data, action) => {
+  if (!data || typeof data !== "object") return data;
+  if (action.name === "useItem") {
+    if (!Array.isArray(data.items)) return data;
+    const id = action.data?.id;
+    if (!id) return data;
+    const nextItems = updateItemQuantity(data.items, id);
+    if (nextItems === data.items) return data;
+    return { ...data, items: nextItems };
+  }
+  if (action.name === "equipItem") {
+    const id = action.data?.id;
+    if (!id || typeof action.data?.equip !== "boolean") return data;
+    const equip = action.data.equip;
+    let nextItems = data.items;
+    let nextEquips = data.equips;
+    if (Array.isArray(data.items)) {
+      nextItems = updateEquippedFlag(data.items, id, equip);
+    }
+    if (Array.isArray(data.equips)) {
+      nextEquips = updateEquippedFlag(data.equips, id, equip);
+    }
+    if (nextItems === data.items && nextEquips === data.equips) return data;
+    return {
+      ...data,
+      ...(nextItems !== data.items ? { items: nextItems } : {}),
+      ...(nextEquips !== data.equips ? { equips: nextEquips } : {})
+    };
+  }
+  return data;
 };
 
 export class RpgGui {
@@ -50,6 +118,8 @@ export class RpgGui {
   gui = signal<Record<string, GuiInstance>>({});
   extraGuis: GuiInstance[] = [];
   private vueGuiInstance: any = null; // Reference to VueGui instance
+  private optimisticReducers = new Map<string, OptimisticReducer[]>();
+  private pendingActions = new Map<string, GuiAction[]>();
   /**
    * Signal tracking which player IDs should display attached GUIs
    * Key: player ID, Value: boolean (true = show, false = hide)
@@ -87,15 +157,22 @@ export class RpgGui {
       name: PrebuiltGui.Gameover,
       component: GameoverComponent,
     });
+
+    this.registerOptimisticReducer(PrebuiltGui.MainMenu, mainMenuOptimisticReducer);
   }
 
   async _initialize() {
     this.webSocket.on("gui.open", (data: { guiId: string; data: any }) => {
+      this.clearPendingActions(data.guiId);
       this.display(data.guiId, data.data);
     });
 
     this.webSocket.on("gui.exit", (guiId: string) => {
       this.hide(guiId);
+    });
+
+    this.webSocket.on("gui.update", (payload: { guiId: string; data: any; clientActionId?: string }) => {
+      this.applyServerUpdate(payload.guiId, payload.data, payload.clientActionId);
     });
 
     /**
@@ -169,10 +246,18 @@ export class RpgGui {
   }
 
   guiInteraction(guiId: string, name: string, data: any) {
+    const clientActionId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+    const actionData = { ...(data || {}), clientActionId };
+    this.applyOptimisticAction({
+      guiId,
+      name,
+      data: actionData,
+      clientActionId
+    });
     this.webSocket.emit("gui.interaction", {
       guiId,
       name,
-      data,
+      data: actionData,
     });
   }
 
@@ -250,6 +335,11 @@ export class RpgGui {
     if (guiInstance.autoDisplay && typeof gui.component === 'function') {
       this.display(guiId, gui.data);
     }
+  }
+
+  registerOptimisticReducer(guiId: string, reducer: OptimisticReducer) {
+    const existing = this.optimisticReducers.get(guiId) || [];
+    this.optimisticReducers.set(guiId, existing.concat(reducer));
   }
 
   /**
@@ -431,6 +521,66 @@ export class RpgGui {
     const isVueComponent = this.extraGuis.some(gui => gui.name === id);
     if (isVueComponent) {
       this._notifyVueGui(id, false);
+    }
+  }
+
+  private isVueComponent(id: string) {
+    return this.extraGuis.some(gui => gui.name === id);
+  }
+
+  private clearPendingActions(guiId: string) {
+    this.pendingActions.delete(guiId);
+  }
+
+  private applyReducers(guiId: string, data: any, actions: GuiAction[]) {
+    const reducers = this.optimisticReducers.get(guiId);
+    if (!reducers || reducers.length === 0) return data;
+    let next = data;
+    for (const action of actions) {
+      for (const reducer of reducers) {
+        const updated = reducer(next, action);
+        if (updated !== undefined && updated !== null && updated !== next) {
+          next = updated;
+        }
+      }
+    }
+    return next;
+  }
+
+  private applyOptimisticAction(action: GuiAction) {
+    const guiInstance = this.get(action.guiId);
+    if (!guiInstance) return;
+    const reducers = this.optimisticReducers.get(action.guiId);
+    if (!reducers || reducers.length === 0) return;
+    const currentData = guiInstance.data();
+    const nextData = this.applyReducers(action.guiId, currentData, [action]);
+    if (nextData === currentData) return;
+    guiInstance.data.set(nextData);
+    const pending = this.pendingActions.get(action.guiId) || [];
+    pending.push(action);
+    this.pendingActions.set(action.guiId, pending);
+    if (this.isVueComponent(action.guiId)) {
+      this._notifyVueGui(action.guiId, guiInstance.display(), nextData);
+    }
+  }
+
+  private applyServerUpdate(guiId: string, data: any, clientActionId?: string) {
+    const guiInstance = this.get(guiId);
+    if (!guiInstance) return;
+    let pending = this.pendingActions.get(guiId) || [];
+    if (clientActionId) {
+      pending = pending.filter(action => action.clientActionId !== clientActionId);
+    } else {
+      pending = [];
+    }
+    let nextData = data;
+    if (pending.length) {
+      nextData = this.applyReducers(guiId, nextData, pending);
+    }
+    guiInstance.data.set(nextData);
+    this.pendingActions.set(guiId, pending);
+    if (this.isVueComponent(guiId)) {
+      this._notifyVueGui(guiId, guiInstance.display(), nextData);
     }
   }
 }

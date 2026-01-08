@@ -129,13 +129,10 @@
     const selectedDialogItem = signal(0);
     const selectedDialogTab = signal(0);
     const dialogOpen = signal(false);
-    const { items, slots, onInteraction, onBack } = defineProps({
-        slots: {
-            default: () => []
-        }
-    });
+    const { data, onInteraction, onBack } = defineProps();
 
-    console.log(items)
+    const items = computed(() => data().items);
+    const slots = computed(() => data().slots);
 
     const defaultSlots = [
         { id: "weapon", label: "Weapon", types: ["weapon"] },

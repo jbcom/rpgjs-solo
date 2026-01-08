@@ -2,19 +2,20 @@
     <div class="rpg-ui-menu-panel rpg-ui-panel">
         <div class="rpg-ui-menu-panel-header">Items</div>
         <div class="rpg-ui-menu-panel-body rpg-ui-menu-panel-body-stacked">
-            <div class="rpg-ui-menu-panel-details rpg-ui-panel">
-                @if (currentItem) {
+            @if (currentItem) {
+                <div class="rpg-ui-menu-panel-details rpg-ui-panel">
                     <div class="rpg-ui-menu-panel-hero">
                         <div class="rpg-ui-menu-panel-hero-icon">
                             <DOMSprite sheet={iconSheet(currentItem()?.icon)} playing="default" />
                         </div>
                         <div>
-                            <div class="rpg-ui-menu-panel-details-title">{currentItem().name}</div>
-                            <div class="rpg-ui-menu-panel-details-desc">{currentItem().description || ""}</div>
+                            <div class="rpg-ui-menu-panel-details-title">{currentItem()?.name}</div>
+                            <div class="rpg-ui-menu-panel-details-desc">{currentItem()?.description || ""}</div>
                         </div>
                     </div>
-                }
-            </div>
+                </div>
+            }
+            
             <div class="rpg-ui-menu-panel-list rpg-ui-menu rpg-ui-menu-panel-list-full">
                 <div class="rpg-ui-menu-tabs">
                     @for ((tab,tabIndex) of tabs) {
@@ -51,7 +52,7 @@
             <div class="rpg-ui-menu-confirm">
                 <div class="rpg-ui-menu-confirm-card">
                     <div class="rpg-ui-menu-confirm-title">Use {confirmItem()?.name}?</div>
-                    <Navigation tabindex={selectedConfirm} controls={controls}>
+                    <Navigation tabindex={selectedConfirm} controls={confirmControls}>
                         <div class="rpg-ui-menu-confirm-actions">
                             @for ((option,index) of confirmOptions) {
                                 <button
@@ -71,7 +72,7 @@
 </DOMContainer>
 
 <script>
-    import { signal, computed, createTabindexNavigator } from "canvasengine";
+    import { signal, computed, createTabindexNavigator, effect } from "canvasengine";
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
 
@@ -83,7 +84,10 @@
     const selectedConfirm = signal(0);
     const confirmOpen = signal(false);
     const confirmItem = signal(null);
-    const { items, onInteraction, onBack } = defineProps();
+
+    const { data, onInteraction, onBack } = defineProps();
+
+    const items = computed(() => data().items);
 
     const tabs = [
         { id: "item", label: "Items" },
@@ -91,10 +95,17 @@
         { id: "armor", label: "Armor" }
     ];
 
+    const resolveProp = (value) => typeof value === "function" ? value() : value;
+    const safeItems = computed(() => {
+        const value = resolveProp(items);
+        return Array.isArray(value) ? value : [];
+    });
+
     const filteredItems = computed(() => {
+        const items = safeItems();
         const tab = tabs[selectedTab()];
         if (!tab) return [];
-        return items.filter((item) => item.type === tab.id);
+        return items.filter((item) => item.type === tab.id && (item.quantity ?? 1) > 0);
     });
 
     const confirmOptions = [
@@ -108,6 +119,17 @@
     const iconSheet = (iconId) => ({
         definition: engine.getSpriteSheet(iconId)
     });
+
+    const clampSelection = () => {
+        const count = filteredItems().length;
+        if (count === 0) {
+            selectedItem.set(0);
+            return;
+        }
+        if (selectedItem() >= count) {
+            selectedItem.set(count - 1);
+        }
+    };
 
     function selectItem(index) {
         return function() {
@@ -165,6 +187,41 @@
         }
     }
 
+    const confirmControls = signal({
+        left: {
+            repeat: true,
+            bind: keyboardControls.left,
+            throttle: 150,
+            keyDown() {
+                if (!confirmOpen()) return;
+                navConfirm.next(-1);
+            }
+        },
+        right: {
+            repeat: true,
+            bind: keyboardControls.right,
+            throttle: 150,
+            keyDown() {
+                if (!confirmOpen()) return;
+                navConfirm.next(1);
+            }
+        },
+        action: {
+            bind: keyboardControls.action,
+            keyDown() {
+                if (!confirmOpen()) return;
+                confirmSelect(selectedConfirm())();
+            }
+        },
+        escape: {
+            bind: keyboardControls.escape,
+            keyDown() {
+                if (!confirmOpen()) return;
+                cancelConfirm();
+            }
+        }
+    });
+
     const controls = signal({
         up: {
             repeat: true,
@@ -172,7 +229,6 @@
             throttle: 150,
             keyDown() {
                 if (confirmOpen()) {
-                    navConfirm.next(-1);
                     return;
                 }
                 nav.next(-1);
@@ -184,7 +240,6 @@
             throttle: 150,
             keyDown() {
                 if (confirmOpen()) {
-                    navConfirm.next(-1);
                     return;
                 }
                 selectedTab.update((value) => (value - 1 + tabs.length) % tabs.length);
@@ -197,7 +252,6 @@
             throttle: 150,
             keyDown() {
                 if (confirmOpen()) {
-                    navConfirm.next(1);
                     return;
                 }
                 selectedTab.update((value) => (value + 1) % tabs.length);
@@ -210,7 +264,6 @@
             throttle: 150,
             keyDown() {
                 if (confirmOpen()) {
-                    navConfirm.next(1);
                     return;
                 }
                 nav.next(1);
@@ -240,4 +293,6 @@
             enabled: true
         }
     });
+
+    clampSelection();
 </script>

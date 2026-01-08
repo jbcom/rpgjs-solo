@@ -7,7 +7,7 @@
   @for (gui of guiList) {
       <Container display="flex">
         @if (gui.display) {
-          <gui.component ...gui.data() dependencies={gui.dependencies} onFinish={(data) => {
+          <gui.component data={gui.data} dependencies={gui.dependencies} onFinish={(data) => {
             onGuiFinish(gui, data)
           }} onInteraction={(name, data) => {
             onGuiInteraction(gui, name, data)

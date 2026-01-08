@@ -23,11 +23,26 @@ export interface MenuGuiOptions {
 }
 
 export class MenuGui extends Gui {
+    private menuOptions: MenuGuiOptions = {}
+
     constructor(player: RpgPlayer) {
         super(PrebuiltGui.MainMenu, player)
     }
 
-    open(options: MenuGuiOptions = {}) {
+    private buildSaveLoad(options: MenuGuiOptions) {
+        const autoSave = resolveAutoSaveStrategy()
+        const canSave = autoSave.canSave ? autoSave.canSave(this.player, { reason: "manual", source: "menu" }) : true
+        const autoSlotIndex = options.saveAutoSlotIndex ?? autoSave.getDefaultSlot?.(this.player, { reason: "auto", source: "menu" }) ?? 0
+        return {
+            mode: 'save',
+            canSave,
+            showAutoSlot: options.saveShowAutoSlot === true,
+            autoSlotIndex,
+            autoSlotLabel: options.saveAutoSlotLabel
+        }
+    }
+
+    private buildMenuData(options: MenuGuiOptions) {
         const disabledSet = new Set(options.disabled || [])
         const defaultMenus: MenuEntry[] = [
             { id: 'items', label: 'Items' },
@@ -79,8 +94,21 @@ export class MenuGui extends Gui {
             description: skill?.description ?? '',
             spCost: skill?.spCost ?? 0
         }))
+        const saveLoad = this.buildSaveLoad(options)
 
-        this.on('useItem', ({ id }) => {
+        return { menus, items, equips: menuEquips, skills, saveLoad }
+    }
+
+    private refreshMenu(clientActionId?: string) {
+        const data = this.buildMenuData(this.menuOptions)
+        this.update(data, { clientActionId })
+    }
+
+    open(options: MenuGuiOptions = {}) {
+        this.menuOptions = options
+        const data = this.buildMenuData(options)
+
+        this.on('useItem', ({ id, clientActionId }) => {
             try {
                 this.player.useItem(id)
                 this.player.syncChanges()
@@ -88,14 +116,20 @@ export class MenuGui extends Gui {
             catch (err: any) {
                 this.player.showNotification(err.msg)
             }
+            finally {
+                this.refreshMenu(clientActionId)
+            }
         })
-        this.on('equipItem', ({ id, equip }) => {
+        this.on('equipItem', ({ id, equip, clientActionId }) => {
             try {
                 this.player.equip(id, equip)
                 this.player.syncChanges()
             }
             catch (err: any) {
                 this.player.showNotification(err.msg)
+            }
+            finally {
+                this.refreshMenu(clientActionId)
             }
         })
         this.on('openSave', async () => {
@@ -110,17 +144,7 @@ export class MenuGui extends Gui {
         this.on('exit', () => {
             this.close('exit')
         })
-        const autoSave = resolveAutoSaveStrategy();
-        const canSave = autoSave.canSave ? autoSave.canSave(this.player, { reason: "manual", source: "menu" }) : true;
-        const autoSlotIndex = options.saveAutoSlotIndex ?? autoSave.getDefaultSlot?.(this.player, { reason: "auto", source: "menu" }) ?? 0;
-        const saveLoad = {
-            mode: 'save',
-            canSave,
-            showAutoSlot: options.saveShowAutoSlot === true,
-            autoSlotIndex,
-            autoSlotLabel: options.saveAutoSlotLabel
-        };
-        return super.open({ menus, items, equips: menuEquips, skills, saveLoad }, {
+        return super.open(data, {
             waitingAction: true,
             blockPlayerInput: true
         })

@@ -3,11 +3,13 @@ import { Gui } from './Gui'
 import { RpgPlayer } from '../Player/Player'
 
 export class ShopGui extends Gui {
+    private itemsInput: any[] = []
+
     constructor(player: RpgPlayer) {
         super(PrebuiltGui.Shop, player)
     }
 
-    open(items: any[]) {
+    private buildShopData() {
         const player = this.player as any
         const databaseById = player.databaseById?.bind(player)
         const equippedIds = new Set(
@@ -35,7 +37,7 @@ export class ShopGui extends Gui {
             return undefined
         }
 
-        items = items.map(item => {
+        const items = this.itemsInput.map(item => {
             const rawId = typeof item === 'string' ? item : item?.id ?? item?.name ?? item?.id
             const data = databaseById(rawId)
             const atk = getStatValue(data, 'atk')
@@ -58,23 +60,40 @@ export class ShopGui extends Gui {
                 equipped: rawId ? equippedIds.has(rawId) : false
             }
         })
-        this.on('buyItem', ({ id, nb }) => {
+        return { items, playerParams }
+    }
+
+    private refreshShop(clientActionId?: string) {
+        this.update(this.buildShopData(), { clientActionId })
+    }
+
+    open(items: any[]) {
+        this.itemsInput = items
+        this.on('buyItem', ({ id, nb, clientActionId }) => {
             try {
                 this.player.buyItem(id, nb)
+                this.player.syncChanges()
             }
             catch (err) {
                 console.log(err)
             }
+            finally {
+                this.refreshShop(clientActionId)
+            }
         })
-        this.on('sellItem', ({ id, nb }) => {
+        this.on('sellItem', ({ id, nb, clientActionId }) => {
             try {
                 this.player.sellItem(id, nb)
+                this.player.syncChanges()
             }
             catch (err) {
                 console.log(err)
             }
+            finally {
+                this.refreshShop(clientActionId)
+            }
         })
-        return super.open({ items, playerParams }, {
+        return super.open(this.buildShopData(), {
             waitingAction: true,
             blockPlayerInput: true
         })
