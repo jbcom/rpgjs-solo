@@ -127,6 +127,7 @@ export function Event() {
       this.setGraphic("hero");
       this.speed.set(4)
       this.teleport({ x: 100, y: 200 })
+      this.name.set("John Doe");
       
       this.through = false;
       // this.infiniteMoveRoute([
@@ -165,9 +166,11 @@ export function Event() {
         face: {
           id: 'facesetId',
           expression: 'happy'
-        }
+        },
+        talkWith: this
       })
       this.setGraphic("monster")
+      player.setVariable('questCompleted', true);
     },
   };
 }
@@ -272,6 +275,7 @@ export default createServer({
            
            //  player.callShop([BasicSword, HeavyHammer, EnemyClaw, BasicShield])
              // player.hp -= 100;
+             console.log(input)
              player.callMainMenu({
               menus: [
                 { id: 'items', label: 'Items' },

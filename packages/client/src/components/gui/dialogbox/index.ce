@@ -58,21 +58,13 @@
     let isDestroyed = false;
 
     const {
-        message,
-        choices,
+        data,
         onFinish,
-        onInteraction,
-        face,
-        speaker,
-        position,
-        typewriterEffect,
-        autoClose,
-        fullWidth
-    } = defineProps({
-        fullWidth: {
-            default: false
-        }
-    });
+        onInteraction
+    } = defineProps();
+
+    const { message, choices, face, speaker, position, typewriterEffect, autoClose } = data();
+    const fullWidth = computed(() => data().fullWidth || false);
 
     const resolveProp = (value) => typeof value === "function" ? value() : value;
 
@@ -208,13 +200,13 @@
 
     mount((element) => {
     const dialogbox = element
-    return () => {
-      dialogbox.directives.controls.onDestroy()
-      isDestroyed = true;
-      // Wait destroy is finished before start processing input
-      setTimeout(() => {
-        engine.stopProcessingInput = false;
-      }, 100)
-    }
+        return () => {
+        dialogbox.directives.controls.onDestroy()
+        isDestroyed = true;
+        // Wait destroy is finished before start processing input
+        setTimeout(() => {
+            engine.stopProcessingInput = false;
+        }, 100)
+        }
   })
 </script>

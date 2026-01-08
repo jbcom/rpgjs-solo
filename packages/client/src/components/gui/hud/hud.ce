@@ -29,10 +29,11 @@
 
     const engine = inject(RpgClientEngine)
     const currentPlayer = engine.scene.currentPlayer
-    const { faceset } = defineProps();
+    const { data } = defineProps();
+    const { faceset } = data();
 
     const resolveProp = (value) => typeof value === "function" ? value() : value;
-    const face = computed(() => resolveProp(faceset));
+    const face = computed(() => resolveProp(data().faceset));
 
     const hasFace = computed(() => {
         const value = face();

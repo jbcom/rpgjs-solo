@@ -90,7 +90,7 @@
 </DOMContainer>
 
 <script>
-    import { signal, computed, effect } from "canvasengine";
+    import { signal, computed, effect, mount } from "canvasengine";
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
     import SaveLoadComponent from "../save-load.ce";
@@ -277,6 +277,14 @@
         },
         gamepad: {
             enabled: true
+        }
+    });
+
+    mount((element) => {
+        return () => {
+            setTimeout(() => {
+                engine.stopProcessingInput = false;
+            }, 100)
         }
     });
 </script>

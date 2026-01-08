@@ -152,8 +152,9 @@
         if (action === "load") {
             await saveClient.loadSlot(item.slotIndex);
         }
-        gui.hide(PrebuiltGui.Save);
-        gui.hide(PrebuiltGui.MainMenu);
+        setTimeout(() => {
+            if (onFinish) onFinish();
+        }, 50);
 
     };
 
@@ -199,10 +200,7 @@
         }
     });
 
-    mount(() => {
+    mount((element) => {
         refreshSlots();
-        return () => {
-            engine.stopProcessingInput = false;
-        }
     });
 </script>
