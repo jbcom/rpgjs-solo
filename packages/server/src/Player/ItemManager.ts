@@ -205,63 +205,140 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
         return isInstanceOf(it, itemClass);
       });
     }
-    addItem(item: ItemClass | ItemObject | string, nb: number = 1): Item {
+
+    private _getItemMap(required: boolean = true) {
       // Use this.map directly to support both RpgMap and LobbyRoom
-      // If no map, player is in Lobby
-      const map = (this as any).getCurrentMap() || (this as any).map;
-      if (!map || !map.database) {
+      const map = (this as any).getCurrentMap?.() || (this as any).map;
+      if (required && (!map || !map.database)) {
         throw new Error('Player must be on a map to add items');
       }
+      return map;
+    }
 
+    private _resolveItemInput(
+      item: ItemClass | ItemObject | string,
+      map: any,
+      databaseByIdOverride?: (id: string) => any
+    ) {
       let itemId: string;
       let data: any;
       let itemInstance: any = null;
 
-      // Handle string: retrieve from database
       if (isString(item)) {
         itemId = item as string;
-        data = (this as any).databaseById(itemId);
-      }
-      // Handle class: create instance and add to database if needed
-      else if (typeof item === 'function' || (item as any).prototype) {
+        data = databaseByIdOverride
+          ? databaseByIdOverride(itemId)
+          : (this as any).databaseById(itemId);
+      } else if (typeof item === 'function' || (item as any).prototype) {
         itemId = (item as any).name;
-        
-        // Check if already in database
+
         const existingData = map.database()[itemId];
         if (existingData) {
-          // Use existing data from database
           data = existingData;
         } else {
-          // Add the class to the database (it will be retrieved later via databaseById)
           map.addInDatabase(itemId, item as ItemClass);
-          // Use the class as data (it will be used to create Item instance)
           data = item as ItemClass;
         }
-        
-        // Create instance of the class for hooks
+
         itemInstance = new (item as ItemClass)();
-      }
-      // Handle object: use directly and add to database if needed
-      else {
+      } else {
         const itemObj = item as ItemObject;
         itemId = itemObj.id || `item-${Date.now()}`;
-        
-        // Check if already in database
+
         const existingData = map.database()[itemId];
         if (existingData) {
-          // Merge with existing data and force update
           data = { ...existingData, ...itemObj };
-          // Update database with merged data (force overwrite)
           map.addInDatabase(itemId, data, { force: true });
         } else {
-          // Add the object to the database
           map.addInDatabase(itemId, itemObj);
-          // Use object directly as data
           data = itemObj;
         }
-        
+
         itemInstance = itemObj;
       }
+
+      return { itemId, data, itemInstance };
+    }
+
+    private _createItemInstance(
+      itemId: string,
+      data: any,
+      nb: number,
+      itemInstance: any
+    ): Item {
+      const instance = new Item(data);
+      instance.id.set(itemId);
+      instance.quantity.set(nb);
+
+      if (itemInstance) {
+        (instance as any)._itemInstance = itemInstance;
+        if (itemInstance.onAdd) {
+          instance.onAdd = itemInstance.onAdd.bind(itemInstance);
+        }
+      }
+
+      return instance;
+    }
+
+    /**
+     * Create an item instance without inventory changes or hook execution.
+     */
+    createItemInstance(item: ItemClass | ItemObject | string, nb: number = 1) {
+      const map = this._getItemMap();
+      const { itemId, data, itemInstance } = this._resolveItemInput(item, map);
+      const instance = this._createItemInstance(itemId, data, nb, itemInstance);
+      return { itemId, data, itemInstance, instance };
+    }
+
+    /**
+     * Resolve item snapshot entries into Item instances without side effects.
+     */
+    resolveItemsSnapshot(snapshot: { items?: any[] }, mapOverride?: any) {
+      if (!snapshot || !Array.isArray(snapshot.items)) {
+        return snapshot;
+      }
+
+      const map = mapOverride ?? this._getItemMap(false);
+      if (!map || !map.database) {
+        return snapshot;
+      }
+
+      const databaseByIdOverride = (id: string) => {
+        const data = map.database()[id];
+        if (!data) {
+          throw new Error(
+            `The ID=${id} data is not found in the database. Add the data in the property "database"`
+          );
+        }
+        return data;
+      };
+
+      const items = snapshot.items.map((entry: any) => {
+        const itemId = isString(entry) ? entry : entry?.id;
+        if (!itemId) {
+          return entry;
+        }
+
+        const nb =
+          !isString(entry) && typeof entry?.nb === 'number'
+            ? entry.nb
+            : !isString(entry) && typeof entry?.quantity === 'number'
+              ? entry.quantity
+              : 1;
+
+        const { data, itemInstance } = this._resolveItemInput(
+          itemId,
+          map,
+          databaseByIdOverride
+        );
+        return this._createItemInstance(itemId, data, nb, itemInstance);
+      });
+
+      return { ...snapshot, items };
+    }
+    addItem(item: ItemClass | ItemObject | string, nb: number = 1): Item {
+      const map = this._getItemMap();
+      const { itemId, data, itemInstance } = this._resolveItemInput(item, map);
 
       // Find existing item in inventory
       const existingItem = (this as any).items().find((it: Item) => it.id() == itemId);
@@ -293,20 +370,7 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
         }
       } else {
         // Create new item instance
-        instance = new Item(data);
-        instance.id.set(itemId);
-        instance.quantity.set(nb);
-
-        // Attach hooks from class instance or object
-        if (itemInstance) {
-          // Store the original instance for hook execution
-          (instance as any)._itemInstance = itemInstance;
-          
-          // Attach onAdd hook directly for immediate use
-          if (itemInstance.onAdd) {
-            instance.onAdd = itemInstance.onAdd.bind(itemInstance);
-          }
-        };
+        instance = this._createItemInstance(itemId, data, nb, itemInstance);
         (this as any).items().push(instance);
       }
 

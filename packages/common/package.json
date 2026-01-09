@@ -17,9 +17,9 @@
   "description": "",
   "dependencies": {
     "@rpgjs/physic": "workspace:*",
-    "@signe/di": "^2.8.1",
-    "@signe/reactive": "^2.8.1",
-    "@signe/sync": "^2.8.1",
+    "@signe/di": "^2.8.2",
+    "@signe/reactive": "^2.8.2",
+    "@signe/sync": "^2.8.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

@@ -7,6 +7,7 @@ import { signal } from "@signe/reactive";
 import { RpgPlayer } from "../Player/Player";
 import { BaseRoom } from "./BaseRoom";
 import { buildSaveSlotMeta, resolveSaveStorageStrategy } from "../services/save";
+import { lastValueFrom } from "rxjs";
 
 @Room({
   path: "lobby-{id}",
@@ -23,7 +24,7 @@ export class LobbyRoom extends BaseRoom {
     }
   }
 
-  onJoin(player: RpgPlayer, conn: MockConnection) {
+  async onJoin(player: RpgPlayer, conn: MockConnection) {
     player.map = this;
     player.context = context;
     player.conn = conn;

@@ -5,6 +5,7 @@ import { Hooks, ModulesToken } from "@rpgjs/common";
 import { Action } from "@signe/room";
 import { RpgPlayer } from "../Player/Player";
 import { resolveSaveStorageStrategy } from "../services/save";
+import { lastValueFrom } from "rxjs";
 
 /**
  * Base class for rooms that need database functionality
@@ -44,6 +45,11 @@ export abstract class BaseRoom {
    * ```
    */
   database = signal({});
+
+
+  async onStart() {
+    await lastValueFrom(this.hooks.callHooks("server-databaseHooks-load", this))
+  }
 
   /**
    * Add data to the room's database
@@ -141,6 +147,21 @@ export abstract class BaseRoom {
    */
     get hooks() {
       return inject<Hooks>(ModulesToken, context);
+    }
+
+    /**
+     * Resolve complex snapshot entries (e.g. inventory items) before load.
+     */
+    async onSessionRestore({ userSnapshot, user }: { userSnapshot: any; user?: RpgPlayer }) {
+      if (!userSnapshot || !Array.isArray(userSnapshot.items)) {
+        return userSnapshot;
+      }
+
+      if (user && typeof (user as any).resolveItemsSnapshot === 'function') {
+        return (user as any).resolveItemsSnapshot(userSnapshot, this);
+      }
+
+      return userSnapshot;
     }
 
     @Action('save.list')

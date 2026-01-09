@@ -420,9 +420,10 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
   async applySnapshot(snapshot: string | object) {
     const data = typeof snapshot === "string" ? JSON.parse(snapshot) : snapshot;
-    const dataLoaded = load(this, data);
-    await lastValueFrom(this.hooks.callHooks("server-player-onLoad", this, dataLoaded));
-    return dataLoaded;
+    const resolvedSnapshot = (this as any).resolveItemsSnapshot?.(data) ?? data;
+    load(this, resolvedSnapshot);
+    await lastValueFrom(this.hooks.callHooks("server-player-onLoad", this, resolvedSnapshot));
+    return resolvedSnapshot;
   }
 
   async save(slot: SaveSlotIndex = "auto", meta: SaveSlotMeta = {}, context: SaveRequestContext = {}) {

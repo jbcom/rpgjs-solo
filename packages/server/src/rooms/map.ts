@@ -238,6 +238,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
   }
 
+  onStart() {
+    return BaseRoom.prototype.onStart.call(this)
+  }
+
   /**
    * Setup collision detection between players, events, and shapes
    * 
@@ -583,6 +587,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   get hooks() {
     return BaseRoom.prototype.hooks;
+  }
+
+  async onSessionRestore(payload: { userSnapshot: any; user?: RpgPlayer }) {
+    return await BaseRoom.prototype.onSessionRestore.call(this, payload);
   }
 
   /**

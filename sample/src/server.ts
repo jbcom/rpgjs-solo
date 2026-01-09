@@ -227,8 +227,7 @@ export default createServer({
             });
           },
           onLoad: (player: RpgPlayer, data: any) => {
-            console.log("load");
-            console.log(data);
+            console.log("load", player.items());
           },
           onSave: (player: RpgPlayer, data: any) => {
             console.log("save");

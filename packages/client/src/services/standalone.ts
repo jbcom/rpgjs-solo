@@ -24,6 +24,7 @@ class BridgeWebsocket extends AbstractWebsocket {
       this.room = new ServerIo(roomId, this.rooms);
       const server = new this.server(this.room)
       await server.onStart();
+      await server.subRoom.onStart()
       this.context.set('server', server)
       return server
     },
@@ -41,6 +42,7 @@ class BridgeWebsocket extends AbstractWebsocket {
   async connection(listeners?: (data: any) => void) {
     this.serverInstance = new this.server(this.room);
     await this.serverInstance.onStart();
+    await this.serverInstance.subRoom.onStart()
     this.context.set('server', this.serverInstance)
     return this._connection(listeners)
   }
