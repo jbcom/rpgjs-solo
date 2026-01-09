@@ -190,7 +190,12 @@
 
     const nav = createTabindexNavigator(selectedItem, { count: () => listEntries().length }, "wrap");
 
-    const playerParams = computed(() => currentPlayer()?._param?.() || {});
+    const playerParams = computed(() => {
+        const menuData = data();
+        if (menuData?.playerStats) return menuData.playerStats;
+        if (menuData?.playerParams) return menuData.playerParams;
+        return currentPlayer()?._param?.() || {};
+    });
     const statOrder = ["atk", "def", "pdef", "sdef", "str", "dex", "int", "agi", "maxHp", "maxSp"];
     const statLabels = {
         atk: "ATK",

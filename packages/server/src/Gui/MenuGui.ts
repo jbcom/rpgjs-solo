@@ -65,6 +65,7 @@ export class MenuGui extends Gui {
         )
 
         const buildStats = () => {
+            const params = player.param || {}
             const statKeys = [
                 'str',
                 'dex',
@@ -75,11 +76,11 @@ export class MenuGui extends Gui {
             ]
             const stats: Record<string, number> = {}
             statKeys.forEach((key) => {
-                stats[key] = player.param[key]
+                stats[key] = params[key] ?? 0
             })
-            stats.pdef = player.pdef
-            stats.sdef = player.sdef
-            stats.atk = player.atk
+            stats.pdef = player.pdef ?? params.pdef ?? 0
+            stats.sdef = player.sdef ?? params.sdef ?? 0
+            stats.atk = player.atk ?? params.atk ?? 0
             return stats
         }
 

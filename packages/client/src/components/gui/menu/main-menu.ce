@@ -224,15 +224,17 @@
         return `${Math.max(0, Math.min(100, (exp() / max) * 100))}%`;
     });
 
-    const paramsList = [
-        { label: "ATK", value: data().playerStats.atk },
-        { label: "PDEF", value: data().playerStats.pdef },
-        { label: "SDEF", value: data().playerStats.sdef },
-        { label: "STR", value: data().playerStats.str },
-        { label: "DEX", value: data().playerStats.dex },
-        { label: "INT", value: data().playerStats.int },
-        { label: "AGI", value: data().playerStats.agi }
-    ]
+    const paramsList = computed(() => {
+        return [
+            { label: "ATK", value: data().playerStats.atk },
+            { label: "PDEF", value: data().playerStats.pdef },
+            { label: "SDEF", value: data().playerStats.sdef },
+            { label: "STR", value: data().playerStats.str },
+            { label: "DEX", value: data().playerStats.dex },
+            { label: "INT", value: data().playerStats.int },
+            { label: "AGI", value: data().playerStats.agi }
+        ]
+    }
 
     const menuControls = signal({
         up: {
