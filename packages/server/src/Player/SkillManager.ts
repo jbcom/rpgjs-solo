@@ -176,6 +176,134 @@ export interface SkillObject extends SkillHooks {
  */
 export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
   return class extends (Base as any) {
+    private _getSkillMap(required: boolean = true) {
+      // Use this.map directly to support both RpgMap and LobbyRoom
+      const map = (this as any).getCurrentMap?.() || (this as any).map;
+      if (required && (!map || !map.database)) {
+        throw new Error('Player must be on a map to learn skills');
+      }
+      return map;
+    }
+
+    private _resolveSkillInput(
+      skillInput: SkillClass | SkillObject | string,
+      map: any,
+      databaseByIdOverride?: (id: string) => any
+    ) {
+      let skillId = '';
+      let skillData: any;
+      let skillInstance: any = null;
+
+      if (isString(skillInput)) {
+        skillId = skillInput as string;
+        skillData = databaseByIdOverride
+          ? databaseByIdOverride(skillId)
+          : (this as any).databaseById(skillId);
+      } else if (typeof skillInput === 'function') {
+        const SkillClassCtor = skillInput as SkillClass;
+        skillId = (SkillClassCtor as any).id || SkillClassCtor.name;
+
+        const existingData = map?.database()?.[skillId];
+        if (existingData) {
+          skillData = existingData;
+        } else if (map) {
+          map.addInDatabase(skillId, SkillClassCtor);
+          skillData = SkillClassCtor;
+        } else {
+          skillData = SkillClassCtor;
+        }
+
+        skillInstance = new SkillClassCtor();
+        skillData = { ...skillData, ...skillInstance, id: skillId };
+      } else {
+        const skillObj = skillInput as SkillObject;
+        skillId = skillObj.id || `skill-${Date.now()}`;
+        skillObj.id = skillId;
+
+        const existingData = map?.database()?.[skillId];
+        if (existingData) {
+          skillData = { ...existingData, ...skillObj };
+          if (map) {
+            map.addInDatabase(skillId, skillData, { force: true });
+          }
+        } else if (map) {
+          map.addInDatabase(skillId, skillObj);
+          skillData = skillObj;
+        } else {
+          skillData = skillObj;
+        }
+
+        skillInstance = skillObj;
+      }
+
+      return { skillId, skillData, skillInstance };
+    }
+
+    private _createSkillInstance(
+      skillId: string,
+      skillData: any,
+      skillInstance: any
+    ) {
+      const instance = new Skill(skillData);
+      instance.id.set(skillId);
+
+      if (skillInstance) {
+        (instance as any)._skillInstance = skillInstance;
+      }
+
+      return instance;
+    }
+
+    /**
+     * Create a skill instance without learning side effects.
+     */
+    createSkillInstance(skillInput: SkillClass | SkillObject | string) {
+      const map = this._getSkillMap();
+      const { skillId, skillData, skillInstance } = this._resolveSkillInput(skillInput, map);
+      const instance = this._createSkillInstance(skillId, skillData, skillInstance);
+      return { skillId, skillData, skillInstance, instance };
+    }
+
+    /**
+     * Resolve skill snapshot entries into Skill instances without side effects.
+     */
+    resolveSkillsSnapshot(snapshot: { skills?: any[] }, mapOverride?: any) {
+      if (!snapshot || !Array.isArray(snapshot.skills)) {
+        return snapshot;
+      }
+
+      const map = mapOverride ?? this._getSkillMap(false);
+      if (!map || !map.database) {
+        return snapshot;
+      }
+
+      const databaseByIdOverride = (id: string) => {
+        const data = map.database()[id];
+        if (!data) {
+          throw new Error(
+            `The ID=${id} data is not found in the database. Add the data in the property "database"`
+          );
+        }
+        return data;
+      };
+
+      const skills = snapshot.skills.map((entry: any) => {
+        const skillId = isString(entry) ? entry : entry?.id;
+        if (!skillId) {
+          return entry;
+        }
+
+        const { skillData, skillInstance } = this._resolveSkillInput(
+          skillId,
+          map,
+          databaseByIdOverride
+        );
+        return this._createSkillInstance(skillId, skillData, skillInstance);
+      });
+
+      return { ...snapshot, skills };
+    }
+
     /**
      * Find the index of a skill in the skills array
      * 
@@ -257,77 +385,21 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
      * ```
      */
     learnSkill(skillInput: SkillClass | SkillObject | string): any {
-      // Get the map for database operations
-      const map = (this as any).getCurrentMap() || (this as any).map;
-      
-      let skillId = '';
-      let skillData: any;
-
-      // Handle string: retrieve from database
-      if (isString(skillInput)) {
-        skillId = skillInput as string;
-        skillData = (this as any).databaseById(skillId);
-      }
-      // Handle class: create instance and add to database if needed
-      else if (typeof skillInput === 'function') {
-        const SkillClassCtor = skillInput as SkillClass;
-        skillId = (SkillClassCtor as any).id || SkillClassCtor.name;
-        
-        // Check if already in database
-        const existingData = map?.database()?.[skillId];
-        if (existingData) {
-          skillData = existingData;
-        } else if (map) {
-          // Add the class to the database
-          map.addInDatabase(skillId, SkillClassCtor);
-          skillData = SkillClassCtor;
-        } else {
-          skillData = SkillClassCtor;
-        }
-        
-        // Create instance of the class for hooks
-        const skillInstance = new SkillClassCtor();
-        // Merge instance properties with class static properties
-        skillData = { ...skillData, ...skillInstance, id: skillId };
-      }
-      // Handle object: use directly and add to database if needed
-      else {
-        const skillObj = skillInput as SkillObject;
-        skillId = skillObj.id || `skill-${Date.now()}`;
-        
-        // Ensure the object has an id
-        skillObj.id = skillId;
-        
-        // Check if already in database
-        const existingData = map?.database()?.[skillId];
-        if (existingData) {
-          // Merge with existing data
-          skillData = { ...existingData, ...skillObj };
-          if (map) {
-            map.addInDatabase(skillId, skillData, { force: true });
-          }
-        } else if (map) {
-          // Add the object to the database
-          map.addInDatabase(skillId, skillObj);
-          skillData = skillObj;
-        } else {
-          skillData = skillObj;
-        }
-      }
+      const map = this._getSkillMap();
+      const { skillId, skillData, skillInstance } = this._resolveSkillInput(skillInput, map);
 
       // Check if already learned
       if (this.getSkill(skillId)) {
         throw SkillLog.alreadyLearned(skillData);
       }
 
-      const skillInstance = new Skill(skillData);
-      skillInstance.id.set(skillId);
+      const instance = this._createSkillInstance(skillId, skillData, skillInstance);
 
-      // Add to skills list
-      (this as any).skills().push(skillInstance);
+      (this as any).skills().push(instance);
       
       // Call onLearn hook
-      this["execMethod"]("onLearn", [this], skillData);
+      const hookTarget = (instance as any)._skillInstance || instance;
+      this["execMethod"]("onLearn", [this], hookTarget);
       
       return skillData;
     }
@@ -370,7 +442,8 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
       (this as any).skills().splice(index, 1);
       
       // Call onForget hook
-      this["execMethod"]("onForget", [this], skillData);
+      const hookTarget = (skillData as any)?._skillInstance || skillData;
+      this["execMethod"]("onForget", [this], hookTarget);
       
       return skillData;
     }
@@ -427,7 +500,8 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
       // Check hit rate
       const hitRate = skill.hitRate ?? 1;
       if (Math.random() > hitRate) {
-        this["execMethod"]("onUseFailed", [this, otherPlayer], skill);
+        const hookTarget = (skill as any)?._skillInstance || skill;
+        this["execMethod"]("onUseFailed", [this, otherPlayer], hookTarget);
         throw SkillLog.chanceToUseFailed(skill);
       }
       
@@ -441,7 +515,8 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
       }
       
       // Call onUse hook
-      this["execMethod"]("onUse", [this, otherPlayer], skill);
+      const hookTarget = (skill as any)?._skillInstance || skill;
+      this["execMethod"]("onUse", [this, otherPlayer], hookTarget);
       
       return skill;
     }

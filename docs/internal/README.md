@@ -1,0 +1,10 @@
+---
+title: Internal Architecture
+---
+
+# Internal Architecture
+
+These documents are for internal development only. They describe server-side architecture and implementation details that are not part of the public framework API.
+
+- `docs/internal/snapshots.md`
+- `docs/internal/maps.md`

@@ -153,15 +153,20 @@ export abstract class BaseRoom {
      * Resolve complex snapshot entries (e.g. inventory items) before load.
      */
     async onSessionRestore({ userSnapshot, user }: { userSnapshot: any; user?: RpgPlayer }) {
-      if (!userSnapshot || !Array.isArray(userSnapshot.items)) {
+      if (!userSnapshot) {
         return userSnapshot;
       }
 
+      let resolvedSnapshot = userSnapshot;
       if (user && typeof (user as any).resolveItemsSnapshot === 'function') {
-        return (user as any).resolveItemsSnapshot(userSnapshot, this);
+        resolvedSnapshot = (user as any).resolveItemsSnapshot(resolvedSnapshot, this);
       }
 
-      return userSnapshot;
+      if (user && typeof (user as any).resolveSkillsSnapshot === 'function') {
+        resolvedSnapshot = (user as any).resolveSkillsSnapshot(resolvedSnapshot, this);
+      }
+
+      return resolvedSnapshot;
     }
 
     @Action('save.list')

@@ -215,6 +215,7 @@ export default createServer({
           'basic-armor': BasicArmor,
           'basic-helmet': BasicHelmet,
           'fire-armor': FireArmor,
+          'fire-skill': fireSkill,
         },
         player: {
           props: {
