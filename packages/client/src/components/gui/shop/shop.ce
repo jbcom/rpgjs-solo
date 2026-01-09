@@ -5,7 +5,12 @@
                     <div>
                         @if (hasFace) {
                             <div class="rpg-shop-merchant-avatar">
-                                <DOMSprite sheet={faceSheet(face().id, face().expression)} />  
+                                <DOMSprite 
+                                    sheet={faceSheet(face().id, face().expression)} 
+                                    width="50px"
+                                    height="50px"
+                                    objectFit="contain"
+                                />  
                             </div>
                         }
                     </div>
@@ -68,7 +73,13 @@
                                     <div class="rpg-shop-card" class={{disabled: isItemDisabled(item), selected: selectedItem() === index}} tabindex={index} click={selectItem(index)}>
                                         <div class="rpg-shop-card-icon">
                                             @if (item.icon) {
-                                                <DOMSprite sheet={iconSheet(item.icon)} playing="default" />
+                                                <DOMSprite 
+                                                    sheet={iconSheet(item.icon)} 
+                                                    playing="default" 
+                                                    width="48px"
+                                                    height="48px"
+                                                    objectFit="contain"
+                                                />
                                             }
                                         </div>
                                         <div class="rpg-shop-card-name">{{ item.name }}</div>
@@ -87,9 +98,13 @@
                         <div class="rpg-shop-details">
                             <div class="rpg-shop-details-header">
                                 <div class="rpg-shop-details-icon">
-                                    @if (currentItem()?.icon) {
-                                        <DOMSprite sheet={iconSheet(currentItem()?.icon)} playing="default" />
-                                    }
+                                    <DOMSprite 
+                                        sheet={iconSheet(currentItem()?.icon)} 
+                                        playing="default" 
+                                        width="80px"
+                                        height="80px"
+                                        objectFit="contain"
+                                    />
                                 </div>
                                 <h2 style="margin: 0;">{{ currentItem()?.name || "" }}</h2>
                                 <p style="color: #ffd700; font-weight: bold; margin: 8px 0;">{{ currentItem()?.price ?? 0 }} {{ goldTerm }}</p>

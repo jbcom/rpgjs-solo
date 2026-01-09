@@ -37,7 +37,7 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@canvasengine/compiler": "2.0.0-beta.49",
+    "@canvasengine/compiler": "2.0.0-beta.50",
     "vite": "^7.3.1",
     "vite-plugin-dts": "^4.5.4",
     "vitest": "^4.0.16"

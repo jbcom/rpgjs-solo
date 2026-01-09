@@ -6,7 +6,13 @@
                 <div class="rpg-ui-menu-panel-details rpg-ui-panel">
                     <div class="rpg-ui-menu-panel-hero">
                         <div class="rpg-ui-menu-panel-hero-icon">
-                            <DOMSprite sheet={iconSheet(detailsItem()?.icon)} playing="default" />
+                            <DOMSprite 
+                                sheet={iconSheet(detailsItem()?.icon)} 
+                                playing="default" 
+                                width="48px"
+                                height="48px"
+                                objectFit="contain"
+                            />
                         </div>
                         <div>
                             <div class="rpg-ui-menu-panel-details-title">
@@ -60,7 +66,13 @@
                             <div class="rpg-ui-menu-row-main">
                                 <div class="rpg-ui-menu-row-icon">
                                     @if (entry?.icon) {
-                                        <DOMSprite sheet={iconSheet(entry.icon)} playing="default" />
+                                        <DOMSprite 
+                                            sheet={iconSheet(entry.icon)} 
+                                            playing="default" 
+                                            width="28px"
+                                            height="28px"
+                                            objectFit="contain"
+                                        />
                                     }
                                 </div>
                                 <span>{entry.name}</span>
