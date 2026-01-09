@@ -336,6 +336,61 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
 
       return { ...snapshot, items };
     }
+
+    /**
+     * Resolve equipment snapshot entries into Item instances without side effects.
+     */
+    resolveEquipmentsSnapshot(snapshot: { equipments?: any[]; items?: any[] }, mapOverride?: any) {
+      if (!snapshot || !Array.isArray(snapshot.equipments)) {
+        return snapshot;
+      }
+
+      const map = mapOverride ?? this._getItemMap(false);
+      if (!map || !map.database) {
+        return snapshot;
+      }
+
+      const databaseByIdOverride = (id: string) => {
+        const data = map.database()[id];
+        if (!data) {
+          throw new Error(
+            `The ID=${id} data is not found in the database. Add the data in the property "database"`
+          );
+        }
+        return data;
+      };
+
+      const resolvedItems = Array.isArray(snapshot.items) ? snapshot.items : [];
+      const getItemId = (entry: any) => {
+        if (isString(entry)) return entry;
+        if (typeof entry?.id === 'function') return entry.id();
+        return entry?.id;
+      };
+
+      const equipments = snapshot.equipments.map((entry: any) => {
+        const itemId = getItemId(entry);
+        if (!itemId) {
+          return entry;
+        }
+
+        const existing = resolvedItems.find((item: any) => {
+          const existingId = getItemId(item);
+          return existingId === itemId;
+        });
+        if (existing) {
+          return existing;
+        }
+
+        const { data, itemInstance } = this._resolveItemInput(
+          itemId,
+          map,
+          databaseByIdOverride
+        );
+        return this._createItemInstance(itemId, data, 1, itemInstance);
+      });
+
+      return { ...snapshot, equipments };
+    }
     addItem(item: ItemClass | ItemObject | string, nb: number = 1): Item {
       const map = this._getItemMap();
       const { itemId, data, itemInstance } = this._resolveItemInput(item, map);

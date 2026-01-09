@@ -166,6 +166,18 @@ export abstract class BaseRoom {
         resolvedSnapshot = (user as any).resolveSkillsSnapshot(resolvedSnapshot, this);
       }
 
+      if (user && typeof (user as any).resolveStatesSnapshot === 'function') {
+        resolvedSnapshot = (user as any).resolveStatesSnapshot(resolvedSnapshot, this);
+      }
+
+      if (user && typeof (user as any).resolveClassSnapshot === 'function') {
+        resolvedSnapshot = (user as any).resolveClassSnapshot(resolvedSnapshot, this);
+      }
+
+      if (user && typeof (user as any).resolveEquipmentsSnapshot === 'function') {
+        resolvedSnapshot = (user as any).resolveEquipmentsSnapshot(resolvedSnapshot, this);
+      }
+
       return resolvedSnapshot;
     }
 

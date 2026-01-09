@@ -421,13 +421,25 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   async applySnapshot(snapshot: string | object) {
     const data = typeof snapshot === "string" ? JSON.parse(snapshot) : snapshot;
     const withItems = (this as any).resolveItemsSnapshot?.(data) ?? data;
-    const resolvedSnapshot = (this as any).resolveSkillsSnapshot?.(withItems) ?? withItems;
+    const withSkills = (this as any).resolveSkillsSnapshot?.(withItems) ?? withItems;
+    const withStates = (this as any).resolveStatesSnapshot?.(withSkills) ?? withSkills;
+    const withClass = (this as any).resolveClassSnapshot?.(withStates) ?? withStates;
+    const resolvedSnapshot = (this as any).resolveEquipmentsSnapshot?.(withClass) ?? withClass;
     load(this, resolvedSnapshot);
     if (Array.isArray(resolvedSnapshot.items)) {
       this.items.set(resolvedSnapshot.items);
     }
     if (Array.isArray(resolvedSnapshot.skills)) {
       this.skills.set(resolvedSnapshot.skills);
+    }
+    if (Array.isArray(resolvedSnapshot.states)) {
+      this.states.set(resolvedSnapshot.states);
+    }
+    if (resolvedSnapshot._class != null && this._class?.set) {
+      this._class.set(resolvedSnapshot._class);
+    }
+    if (Array.isArray(resolvedSnapshot.equipments)) {
+      this.equipments.set(resolvedSnapshot.equipments);
     }
     await lastValueFrom(this.hooks.callHooks("server-player-onLoad", this, resolvedSnapshot));
     return resolvedSnapshot;

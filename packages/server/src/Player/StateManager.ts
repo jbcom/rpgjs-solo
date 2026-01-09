@@ -46,6 +46,75 @@ export function WithStateManager<TBase extends PlayerCtor>(Base: TBase) {
   return class extends Base {
     _statesEfficiency = signal<any[]>([]);
 
+    private _getStateMap(required: boolean = true) {
+      // Use this.map directly to support both RpgMap and LobbyRoom
+      const map = (this as any).getCurrentMap?.() || (this as any).map;
+      if (required && (!map || !map.database)) {
+        throw new Error('Player must be on a map to resolve states');
+      }
+      return map;
+    }
+
+    private _resolveStateInput(
+      stateInput: StateClass | string,
+      databaseByIdOverride?: (id: string) => any
+    ) {
+      if (isString(stateInput)) {
+        return databaseByIdOverride
+          ? databaseByIdOverride(stateInput)
+          : (this as any).databaseById(stateInput);
+      }
+      return stateInput;
+    }
+
+    private _createStateInstance(stateClass: StateClass) {
+      return new (stateClass as StateClass)();
+    }
+
+    /**
+     * Create a state instance without side effects.
+     */
+    createStateInstance(stateInput: StateClass | string) {
+      const stateClass = this._resolveStateInput(stateInput);
+      const instance = this._createStateInstance(stateClass as StateClass);
+      return { stateClass, instance };
+    }
+
+    /**
+     * Resolve state snapshot entries into state instances without side effects.
+     */
+    resolveStatesSnapshot(snapshot: { states?: any[] }, mapOverride?: any) {
+      if (!snapshot || !Array.isArray(snapshot.states)) {
+        return snapshot;
+      }
+
+      const map = mapOverride ?? this._getStateMap(false);
+      if (!map || !map.database) {
+        return snapshot;
+      }
+
+      const databaseByIdOverride = (id: string) => {
+        const data = map.database()[id];
+        if (!data) {
+          throw new Error(
+            `The ID=${id} data is not found in the database. Add the data in the property "database"`
+          );
+        }
+        return data;
+      };
+
+      const states = snapshot.states.map((entry: any) => {
+        const stateId = isString(entry) ? entry : entry?.id;
+        if (!stateId) {
+          return entry;
+        }
+        const stateClass = this._resolveStateInput(stateId, databaseByIdOverride);
+        return this._createStateInstance(stateClass as StateClass);
+      });
+
+      return { ...snapshot, states };
+    }
+
     get statesDefense(): { rate: number; state: any }[] {
       return (this as any).getFeature("statesDefense", "state");
     }
@@ -94,7 +163,7 @@ export function WithStateManager<TBase extends PlayerCtor>(Base: TBase) {
           throw StateLog.addFailed(stateClass);
         }
         //const efficiency = this.findStateEfficiency(stateClass)
-        const instance = new (stateClass as StateClass)();
+        const instance = this._createStateInstance(stateClass as StateClass);
         this.states().push(instance);
         this.applyStates(<any>this, instance);
         return instance;

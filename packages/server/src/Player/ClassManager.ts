@@ -36,9 +36,64 @@ interface PlayerWithMixins extends RpgCommonPlayer {
  */
 export function WithClassManager<TBase extends PlayerCtor>(Base: TBase) {
   return class extends Base {
+    private _resolveClassInput(classInput: ClassClass | string, databaseByIdOverride?: (id: string) => any) {
+      if (isString(classInput)) {
+        return databaseByIdOverride
+          ? databaseByIdOverride(classInput)
+          : (this as any).databaseById(classInput);
+      }
+      return classInput;
+    }
+
+    private _createClassInstance(classInput: ClassClass | string) {
+      const classClass = this._resolveClassInput(classInput);
+      const instance = new (classClass as ClassClass)();
+      return { classClass, instance };
+    }
+
+    /**
+     * Create a class instance without side effects.
+     */
+    createClassInstance(classInput: ClassClass | string) {
+      return this._createClassInstance(classInput);
+    }
+
+    /**
+     * Resolve class snapshot entry into a class instance without side effects.
+     */
+    resolveClassSnapshot(snapshot: { _class?: any }, mapOverride?: any) {
+      if (!snapshot || snapshot._class == null) {
+        return snapshot;
+      }
+
+      const map = mapOverride ?? ((this as any).getCurrentMap?.() || (this as any).map);
+      if (!map || !map.database) {
+        return snapshot;
+      }
+
+      const databaseByIdOverride = (id: string) => {
+        const data = map.database()[id];
+        if (!data) {
+          throw new Error(
+            `The ID=${id} data is not found in the database. Add the data in the property "database"`
+          );
+        }
+        return data;
+      };
+
+      const classId = isString(snapshot._class) ? snapshot._class : snapshot._class?.id;
+      if (!classId) {
+        return snapshot;
+      }
+
+      const classClass = this._resolveClassInput(classId, databaseByIdOverride);
+      const { instance } = this._createClassInstance(classClass as ClassClass);
+      return { ...snapshot, _class: instance };
+    }
+
     setClass(_class: ClassClass | string) {
-      if (isString(_class)) _class = (this as any).databaseById(_class);
-      const classInstance = new (_class as ClassClass)();
+      const { instance } = this._createClassInstance(_class);
+      const classInstance = instance;
       (this as any)["execMethod"]("onSet", [this], classInstance);
       return classInstance;
     }

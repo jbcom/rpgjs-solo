@@ -14,7 +14,7 @@ Current flow:
 
 1. `createStatesSnapshotDeep(player)` returns lightweight data.
 2. `BaseRoom.onSessionRestore()` resolves IDs into instances using the room database.
-3. `RpgPlayer.applySnapshot()` resolves and applies the snapshot via `load()`, then explicitly resets `items` and `skills` with hydrated instances.
+3. `RpgPlayer.applySnapshot()` resolves and applies the snapshot via `load()`, then explicitly resets `items`, `skills`, `states`, `_class`, and `equipments` with hydrated instances.
 
 Key file references:
 
@@ -35,6 +35,8 @@ Key file references:
 
 - `packages/server/src/Player/ItemManager.ts`
 - `packages/server/src/Player/SkillManager.ts`
+- `packages/server/src/Player/StateManager.ts`
+- `packages/server/src/Player/ClassManager.ts`
 
 ## Timing Note
 
