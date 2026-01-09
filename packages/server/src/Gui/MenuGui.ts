@@ -63,6 +63,26 @@ export class MenuGui extends Gui {
         const equippedIds = new Set(
             (player.equipments?.() || []).map((it) => it?.id?.() ?? it?.id ?? it?.name)
         )
+
+        const buildStats = () => {
+            const statKeys = [
+                'str',
+                'dex',
+                'int',
+                'agi',
+                'maxHp',
+                'maxSp'
+            ]
+            const stats: Record<string, number> = {}
+            statKeys.forEach((key) => {
+                stats[key] = player.param[key]
+            })
+            stats.pdef = player.pdef
+            stats.sdef = player.sdef
+            stats.atk = player.atk
+            return stats
+        }
+
         const items = (player.items?.() || []).map((item) => {
             const id = item.id()
             const data = databaseById ? databaseById(id) : {}
@@ -80,7 +100,9 @@ export class MenuGui extends Gui {
                 description: item.description(),
                 quantity: item.quantity(),
                 icon: data?.icon ?? (item as any)?.icon,
-                stats: data?.stats ?? data?.params ?? (item as any)?.stats ?? (item as any)?.params,
+                atk: item.atk(),
+                pdef: item.pdef(),
+                sdef: item.sdef(),
                 consumable: isConsumable,
                 type,
                 usable,
@@ -96,7 +118,7 @@ export class MenuGui extends Gui {
         }))
         const saveLoad = this.buildSaveLoad(options)
 
-        return { menus, items, equips: menuEquips, skills, saveLoad }
+        return { menus, items, equips: menuEquips, skills, saveLoad, playerStats: buildStats() }
     }
 
     private refreshMenu(clientActionId?: string) {

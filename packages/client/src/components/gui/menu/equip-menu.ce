@@ -1,118 +1,76 @@
 <DOMContainer width="100%" height="100%">
     <div class="rpg-ui-menu-panel rpg-ui-panel">
         <div class="rpg-ui-menu-panel-header">Equip</div>
-        <div class="rpg-ui-menu-panel-body">
-            <div class="rpg-ui-menu-panel-list rpg-ui-menu">
-                <Navigation tabindex={selectedSlot} controls={slotControls}>
-                    @for ((slot,index) of slotList) {
+        <div class="rpg-ui-menu-panel-body rpg-ui-menu-panel-body-stacked">
+            <div>
+                <div class="rpg-ui-menu-panel-details rpg-ui-panel">
+                    <div class="rpg-ui-menu-panel-hero">
+                        <div class="rpg-ui-menu-panel-hero-icon">
+                            <DOMSprite sheet={iconSheet(detailsItem()?.icon)} playing="default" />
+                        </div>
+                        <div>
+                            <div class="rpg-ui-menu-panel-details-title">
+                                {detailsItem()?.name || currentSlot()?.label || "Equip"}
+                            </div>
+                            <div class="rpg-ui-menu-panel-details-desc">
+                                {detailsItem()?.description || ""}
+                            </div>
+                            @if (displayStats().length > 0) {
+                                <div class="rpg-ui-equip-stats">
+                                    @for ((stat,index) of displayStats) {
+                                        <div class="rpg-ui-equip-stat" class={{positive: stat.delta > 0, negative: stat.delta < 0}}>
+                                            <div class="rpg-ui-equip-stat-key">{stat.label}</div>
+                                            <div class="rpg-ui-equip-stat-value">
+                                                {stat.delta > 0 ? "+" : ""}{stat.delta}
+                                            </div>
+                                            @if (stat.current) {
+                                                <div class="rpg-ui-equip-stat-current">{stat.current} -> {stat.next}</div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            <div class="rpg-ui-menu-panel-details-meta">
+                                <span>{equippedText()}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rpg-ui-menu-panel-list rpg-ui-menu rpg-ui-menu-panel-list-full">
+                <div class="rpg-ui-menu-tabs">
+                    @for ((tab,tabIndex) of slotList) {
+                        <div
+                            class="rpg-ui-menu-tab"
+                            class={{active: selectedTab() === tabIndex}}
+                            tabindex={tabIndex}
+                            click={selectTab(tabIndex)}
+                        >{tab.label}</div>
+                    }
+                </div>
+                <Navigation tabindex={selectedItem} controls={controls}>
+                    @for ((entry,index) of listEntries) {
                         <div
                             class="rpg-ui-menu-item rpg-ui-menu-row"
-                            data-selected={selectedSlot() === index ? "true" : "false"}
+                            data-selected={selectedItem() === index ? "true" : "false"}
                             tabindex={index}
-                            click={selectSlot(index)}
+                            click={selectItem(index)}
                         >
-                            <span>{slot.label}</span>
-                            <span class="rpg-ui-menu-row-end">{equippedLabel(slot) || "Empty"}</span>
+                            <div class="rpg-ui-menu-row-main">
+                                <div class="rpg-ui-menu-row-icon">
+                                    @if (entry?.icon) {
+                                        <DOMSprite sheet={iconSheet(entry.icon)} playing="default" />
+                                    }
+                                </div>
+                                <span>{entry.name}</span>
+                            </div>
+                            <span class="rpg-ui-menu-row-end">{entry.tag || ""}</span>
                         </div>
                     }
                 </Navigation>
             </div>
-            <div class="rpg-ui-menu-panel-details rpg-ui-panel">
-                @if (currentSlot) {
-                    <div class="rpg-ui-menu-panel-hero">
-                        <div class="rpg-ui-menu-panel-hero-icon">
-                            <DOMSprite sheet={iconSheet(currentEquippedItem()?.icon)} playing="default" />
-                        </div>
-                        <div>
-                            <div class="rpg-ui-menu-panel-details-title">
-                                {currentEquippedItem()?.name || currentSlot().label}
-                            </div>
-                            <div class="rpg-ui-menu-panel-details-desc">
-                                {currentEquippedItem()?.description || "No equipment"}
-                            </div>
-                        </div>
-                    </div>
-                    @if (currentEquippedItemAvailable) {
-                        <div class="rpg-ui-menu-panel-details-meta">
-                            <span>Type: {currentEquippedItem()?.type || "-"}</span>
-                            <span>Status: Equipped</span>
-                        </div>
-                    }
-                    @if (currentStatsAvailable) {
-                        <div class="rpg-ui-equip-stats">
-                            @for ((stat,index) of currentStats) {
-                                <div class="rpg-ui-equip-stat">
-                                    <div class="rpg-ui-equip-stat-key">{stat.label}</div>
-                                    <div class="rpg-ui-equip-stat-value">{stat.delta > 0 ? "+" : ""}{stat.delta}</div>
-                                </div>
-                            }
-                        </div>
-                    }
-                    <div class="rpg-ui-equip-hint">Press Action to change</div>
-                }
-            </div>
         </div>
-        @if (dialogOpen) {
-            <div class="rpg-ui-equip-modal">
-                <div class="rpg-ui-equip-modal-card">
-                    <div class="rpg-ui-equip-modal-list rpg-ui-menu">
-                        <div class="rpg-ui-menu-tabs">
-                            @for ((tab,tabIndex) of dialogTabs) {
-                                <div
-                                    class="rpg-ui-menu-tab"
-                                    class={{active: selectedDialogTab() === tabIndex}}
-                                    tabindex={tabIndex}
-                                    click={selectDialogTab(tabIndex)}
-                                >{tab.label}</div>
-                            }
-                        </div>
-                        @if (dialogItemsEmpty) {
-                            <div class="rpg-ui-equip-modal-empty">No items available</div>
-                        }
-                        @else {
-                            <Navigation tabindex={selectedDialogItem} controls={dialogControls}>
-                                @for ((entry,index) of dialogItems) {
-                                    <div
-                                        class="rpg-ui-menu-item rpg-ui-menu-row"
-                                        class={{disabled: entry.kind === "empty"}}
-                                        data-selected={selectedDialogItem() === index ? "true" : "false"}
-                                        tabindex={index}
-                                        click={selectDialogItem(index)}
-                                    >
-                                        <span>{entry?.name || ""}</span>
-                                        <span class="rpg-ui-menu-row-end">{entry.tag || ""}</span>
-                                    </div>
-                                }
-                            </Navigation>
-                        }
-                    </div>
-                    <div class="rpg-ui-equip-modal-details">
-                        <div class="rpg-ui-menu-panel-hero">
-                            <div class="rpg-ui-menu-panel-hero-icon">
-                                <DOMSprite sheet={iconSheet(dialogItem()?.icon)} playing="default" />
-                            </div>
-                            <div>
-                                <div class="rpg-ui-menu-panel-details-title">{dialogItem()?.name || ""}</div>
-                                <div class="rpg-ui-menu-panel-details-desc">{dialogItem()?.description || ""}</div>
-                            </div>
-                        </div>
-                        @if (dialogStatsAvailable) {
-                            <div class="rpg-ui-equip-stats">
-                                @for ((stat,index) of dialogStats) {
-                                    <div class="rpg-ui-equip-stat" class={{positive: stat.delta > 0, negative: stat.delta < 0}}>
-                                        <div class="rpg-ui-equip-stat-key">{stat.label}</div>
-                                        <div class="rpg-ui-equip-stat-value">{stat.delta > 0 ? "+" : ""}{stat.delta}</div>
-                                        @if (stat.current !== undefined) {
-                                            <div class="rpg-ui-equip-stat-current">{stat.current} -> {stat.next}</div>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-        }
     </div>
 </DOMContainer>
 
@@ -125,13 +83,11 @@
     const keyboardControls = engine.globalConfig.keyboardControls;
     const currentPlayer = engine.scene.currentPlayer;
 
-    const selectedSlot = signal(0);
-    const selectedDialogItem = signal(0);
-    const selectedDialogTab = signal(0);
-    const dialogOpen = signal(false);
+    const selectedTab = signal(0);
+    const selectedItem = signal(0);
     const { data, onInteraction, onBack } = defineProps();
 
-    const items = computed(() => data().items);
+    const equips = computed(() => data().equips ?? data().items);
     const slots = computed(() => data().slots);
 
     const defaultSlots = [
@@ -139,8 +95,8 @@
         { id: "armor", label: "Armor", types: ["armor"] }
     ];
     const resolveProp = (value) => typeof value === "function" ? value() : value;
-    const safeItems = computed(() => {
-        const list = resolveProp(items);
+    const safeEquips = computed(() => {
+        const list = resolveProp(equips);
         return Array.isArray(list) ? list : [];
     });
     const slotList = computed(() => {
@@ -149,11 +105,7 @@
         return defaultSlots;
     });
 
-    const navSlots = createTabindexNavigator(selectedSlot, { count: () => slotList().length }, "wrap");
-    const navDialog = createTabindexNavigator(selectedDialogItem, { count: () => dialogItems().length }, "wrap");
-    const currentSlot = computed(() => slotList()[selectedSlot()]);
-    const dialogTabs = computed(() => slotList());
-    const currentDialogTab = computed(() => dialogTabs()[selectedDialogTab()]);
+    const currentSlot = computed(() => slotList()[selectedTab()]);
 
     const equippedIds = computed(() => {
         const equipped = currentPlayer().equipments?.() || [];
@@ -163,7 +115,7 @@
 
     effect(() => {
         const next = {};
-        safeItems().forEach((item) => {
+        safeEquips().forEach((item) => {
             if (item?.id && typeof item.equipped === "boolean") {
                 next[item.id] = item.equipped;
             }
@@ -193,54 +145,50 @@
         const slot = currentSlot();
         if (!slot) return [];
         const types = new Set(slotTypes(slot));
-        return safeItems().filter((item) => item && types.has(item.type));
-    });
-
-    const dialogSlotItems = computed(() => {
-        const slot = currentDialogTab();
-        if (!slot) return [];
-        const types = new Set(slotTypes(slot));
-        return safeItems().filter((item) => item && types.has(item.type));
+        return safeEquips().filter((item) => item && types.has(item.type));
     });
 
     const currentEquippedItem = computed(() => {
         const list = slotItems();
         return list.find((item) => itemEquipped(item)) || null;
     });
-    const currentEquippedItemAvailable = computed(() => !!currentEquippedItem());
 
-    const dialogEquippedItem = computed(() => {
-        const list = dialogSlotItems();
-        return list.find((item) => itemEquipped(item)) || null;
-    });
-
-    const equippedLabel = (slot) => {
-        const types = new Set(slotTypes(slot));
-        const match = safeItems().find((item) => types.has(item.type) && itemEquipped(item));
-        return match ? match.name : "";
-    };
-
-    const dialogItems = computed(() => {
-        const list = dialogSlotItems().map((item) => ({
+    const listEntries = computed(() => {
+        const items = slotItems().map((item) => ({
             ...item,
             kind: "item",
             tag: itemEquipped(item) ? "Equipped" : ""
         }));
-        const equipped = dialogEquippedItem();
-        if (equipped) {
-            list.unshift({
+        const equipped = currentEquippedItem();
+        if (!equipped) return items;
+        return [
+            {
                 id: "__unequip__",
                 name: "Unequip",
                 description: "Remove the current equipment",
                 kind: "unequip",
                 tag: ""
-            });
-        }
-        return list;
+            },
+            ...items
+        ];
     });
 
-    const dialogItem = computed(() => dialogItems()[selectedDialogItem()]);
-    const dialogItemAvailable = computed(() => !!dialogItem());
+    const currentEntry = computed(() => listEntries()[selectedItem()]);
+    const detailsItem = computed(() => {
+        const entry = currentEntry();
+        if (entry?.kind === "item") return entry;
+        return currentEquippedItem();
+    });
+
+    const equippedText = computed(() => {
+        const slot = currentSlot();
+        if (!slot) return "";
+        const equipped = currentEquippedItem();
+        return equipped ? `${slot.label}: ${equipped.name}` : `${slot.label}: Empty`;
+    });
+    const listEmpty = computed(() => listEntries().length === 0);
+
+    const nav = createTabindexNavigator(selectedItem, { count: () => listEntries().length }, "wrap");
 
     const playerParams = computed(() => currentPlayer()?._param?.() || {});
     const statOrder = ["atk", "def", "pdef", "sdef", "str", "dex", "int", "agi", "maxHp", "maxSp"];
@@ -269,7 +217,7 @@
         return direct;
     };
 
-    const buildStatsList = (deltaStats, includeCurrent = true) => {
+    const buildStatsList = (deltaStats) => {
         const params = playerParams() || {};
         const orderedKeys = statOrder.filter((key) => deltaStats[key] !== undefined);
         const extraKeys = Object.keys(deltaStats).filter((key) => !statOrder.includes(key));
@@ -278,9 +226,9 @@
         for (const key of keys) {
             const delta = deltaStats[key];
             if (delta === undefined || delta === 0) continue;
-            let current = includeCurrent ? params[key] : undefined;
-            if (includeCurrent && current === undefined && key === "def") current = params.pdef;
-            const next = includeCurrent && current !== undefined ? current + delta : undefined;
+            let current = params[key];
+            if (current === undefined && key === "def") current = params.pdef;
+            const next = current !== undefined ? current + delta : undefined;
             list.push({
                 key,
                 label: statLabels[key] || key.toUpperCase(),
@@ -292,45 +240,38 @@
         return list;
     };
 
-    const currentStats = computed(() => {
+    const displayStats = computed(() => {
+        const entry = currentEntry();
         const equipped = currentEquippedItem();
-        if (!equipped) return [];
-        const stats = getItemStats(equipped);
-        return buildStatsList(stats, false);
+        if (!entry) return [];
+        if (entry.kind === "unequip") {
+           
+            if (!equipped) return [];
+            const stats = getItemStats(equipped);
+            const delta = {};
+            Object.keys(stats).forEach((key) => {
+                delta[key] = -stats[key];
+            });
+            return buildStatsList(delta);
+        }
+        if (entry.kind === "item") {
+            const equippedStats = getItemStats(equipped);
+            const nextStats = getItemStats(entry);
+            const delta = {};
+            const keys = new Set([...Object.keys(nextStats), ...Object.keys(equippedStats)]);
+            keys.forEach((key) => {
+                delta[key] = (nextStats[key] || 0) - (equippedStats[key] || 0);
+            });
+            return buildStatsList(delta);
+        }
+        return [];
     });
-    const currentStatsAvailable = computed(() => currentEquippedItem() && currentStats().length > 0);
-    const dialogItemsEmpty = computed(() => dialogItems().length === 0);
-
-    const dialogStats = computed(() => {
-        const entry = dialogItem();
-        if (!entry || entry.kind !== "item") return [];
-        const equipped = dialogEquippedItem();
-        const equippedStats = getItemStats(equipped);
-        const nextStats = getItemStats(entry);
-        const delta = {};
-        const keys = new Set([...Object.keys(nextStats), ...Object.keys(equippedStats)]);
-        keys.forEach((key) => {
-            delta[key] = (nextStats[key] || 0) - (equippedStats[key] || 0);
-        });
-        return buildStatsList(delta, true);
-    });
-    const dialogStatsAvailable = computed(() => dialogStats().length > 0);
-
-    const openDialog = () => {
-        dialogOpen.set(true);
-        selectedDialogTab.set(selectedSlot());
-        selectedDialogItem.set(0);
-    };
-
-    const closeDialog = () => {
-        dialogOpen.set(false);
-    };
 
     const applyEquipState = (slot, itemId, equip) => {
         const types = slotTypes(slot);
         const next = { ...equippedOverrides() };
         if (types.length) {
-            safeItems().forEach((item) => {
+            safeEquips().forEach((item) => {
                 if (!item) return;
                 if (types.includes(item.type)) {
                     next[item.id] = false;
@@ -344,30 +285,35 @@
     };
 
     const commitSelection = (index) => {
-        const entry = dialogItems()[index];
-        if (!entry || entry.kind === "empty") return;
+        const entry = listEntries()[index];
+        if (!entry) return;
         if (entry.kind === "unequip") {
-            const equipped = dialogEquippedItem();
+            const equipped = currentEquippedItem();
             if (equipped && onInteraction) {
                 onInteraction("equipItem", { id: equipped.id, equip: false });
             }
-            applyEquipState(currentDialogTab(), equipped?.id, false);
-            closeDialog();
+            applyEquipState(currentSlot(), equipped?.id, false);
             return;
         }
         if (entry.kind === "item" && onInteraction) {
             if (!itemEquipped(entry)) {
                 onInteraction("equipItem", { id: entry.id, equip: true });
             }
-            applyEquipState(currentDialogTab(), entry.id, true);
-            closeDialog();
+            applyEquipState(currentSlot(), entry.id, true);
         }
     };
 
-    function selectDialogTab(index) {
+    function selectTab(index) {
         return function() {
-            selectedDialogTab.set(index);
-            selectedDialogItem.set(0);
+            selectedTab.set(index);
+            selectedItem.set(0);
+        }
+    }
+
+    function selectItem(index) {
+        return function() {
+            selectedItem.set(index);
+            commitSelection(index);
         }
     }
 
@@ -375,37 +321,14 @@
         definition: engine.getSpriteSheet(iconId)
     });
 
-    function selectSlot(index) {
-        return function() {
-            selectedSlot.set(index);
-            openDialog();
-        }
-    }
-
-    function selectDialogItem(index) {
-        return function() {
-            selectedDialogItem.set(index);
-            commitSelection(index);
-        }
-    }
-
-    const dialogControls = signal({
+    const controls = signal({
         up: {
             repeat: true,
             bind: keyboardControls.up,
             throttle: 150,
             keyDown() {
-                if (!dialogItems().length) return;
-                navDialog.next(-1);
-            }
-        },
-        down: {
-            repeat: true,
-            bind: keyboardControls.down,
-            throttle: 150,
-            keyDown() {
-                if (!dialogItems().length) return;
-                navDialog.next(1);
+                if (!listEntries().length) return;
+                nav.next(-1);
             }
         },
         left: {
@@ -413,10 +336,10 @@
             bind: keyboardControls.left,
             throttle: 150,
             keyDown() {
-                const tabs = dialogTabs();
+                const tabs = slotList();
                 if (!tabs.length) return;
-                selectedDialogTab.update((value) => (value - 1 + tabs.length) % tabs.length);
-                selectedDialogItem.set(0);
+                selectedTab.update((value) => (value - 1 + tabs.length) % tabs.length);
+                selectedItem.set(0);
             }
         },
         right: {
@@ -424,38 +347,10 @@
             bind: keyboardControls.right,
             throttle: 150,
             keyDown() {
-                const tabs = dialogTabs();
+                const tabs = slotList();
                 if (!tabs.length) return;
-                selectedDialogTab.update((value) => (value + 1) % tabs.length);
-                selectedDialogItem.set(0);
-            }
-        },
-        action: {
-            bind: keyboardControls.action,
-            keyDown() {
-                if (!dialogItems().length) return;
-                commitSelection(selectedDialogItem());
-            }
-        },
-        escape: {
-            bind: keyboardControls.escape,
-            keyDown() {
-                closeDialog();
-            }
-        },
-        gamepad: {
-            enabled: true
-        }
-    });
-
-    const slotControls = signal({
-        up: {
-            repeat: true,
-            bind: keyboardControls.up,
-            throttle: 150,
-            keyDown() {
-                if (dialogOpen()) return;
-                navSlots.next(-1);
+                selectedTab.update((value) => (value + 1) % tabs.length);
+                selectedItem.set(0);
             }
         },
         down: {
@@ -463,26 +358,36 @@
             bind: keyboardControls.down,
             throttle: 150,
             keyDown() {
-                if (dialogOpen()) return;
-                navSlots.next(1);
+                if (!listEntries().length) return;
+                nav.next(1);
             }
         },
         action: {
             bind: keyboardControls.action,
             keyDown() {
-                if (dialogOpen()) return;
-                openDialog();
+                if (!listEntries().length) return;
+                commitSelection(selectedItem());
             }
         },
         escape: {
             bind: keyboardControls.escape,
             keyDown() {
-                if (dialogOpen()) return;
                 if (onBack) onBack();
             }
         },
         gamepad: {
             enabled: true
+        }
+    });
+
+    effect(() => {
+        const count = listEntries().length;
+        if (!count) {
+            selectedItem.set(0);
+            return;
+        }
+        if (selectedItem() >= count) {
+            selectedItem.set(count - 1);
         }
     });
 </script>

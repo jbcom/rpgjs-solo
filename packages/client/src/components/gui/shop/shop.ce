@@ -458,6 +458,7 @@
             bind: keyboardControls.left,
             throttle: 150,
             keyDown() {
+                if (quantityDialogOpen()) return
                 navTab.next(-1)
             }
         },
@@ -466,6 +467,7 @@
             bind: keyboardControls.right,
             throttle: 150,
             keyDown() {
+                if (quantityDialogOpen()) return
                 navTab.next(1)
             }
         },

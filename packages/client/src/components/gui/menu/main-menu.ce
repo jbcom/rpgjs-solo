@@ -52,7 +52,7 @@
                             @for ((param,index) of paramsList) {
                                 <div class="rpg-ui-main-menu-param">
                                     <span>{param.label}</span>
-                                    <span>{param.value()}</span>
+                                    <span>{param.value}</span>
                                 </div>
                             }
                         </div>
@@ -224,21 +224,15 @@
         return `${Math.max(0, Math.min(100, (exp() / max) * 100))}%`;
     });
 
-    const paramValue = (key) => {
-        const valueSignal = getEntityProp(currentPlayer, `params.${key}`);
-        return computed(() => valueSignal() ?? 0);
-    };
-
     const paramsList = [
-        { label: "ATK", value: paramValue("atk") },
-        { label: "DEF", value: paramValue("def") },
-        { label: "PDEF", value: paramValue("pdef") },
-        { label: "SDEF", value: paramValue("sdef") },
-        { label: "STR", value: paramValue("str") },
-        { label: "DEX", value: paramValue("dex") },
-        { label: "INT", value: paramValue("int") },
-        { label: "AGI", value: paramValue("agi") }
-    ];
+        { label: "ATK", value: data().playerStats.atk },
+        { label: "PDEF", value: data().playerStats.pdef },
+        { label: "SDEF", value: data().playerStats.sdef },
+        { label: "STR", value: data().playerStats.str },
+        { label: "DEX", value: data().playerStats.dex },
+        { label: "INT", value: data().playerStats.int },
+        { label: "AGI", value: data().playerStats.agi }
+    ]
 
     const menuControls = signal({
         up: {
