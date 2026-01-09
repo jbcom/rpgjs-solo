@@ -437,6 +437,12 @@ export class RpgGui {
     }
   }
 
+  isDisplaying(id: string): boolean {
+    const guiInstance = this.get(id);
+    if (!guiInstance) return false;
+    return guiInstance.display();
+  }
+
   /**
    * Handle Vue component display logic
    * 

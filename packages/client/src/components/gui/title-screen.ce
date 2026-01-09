@@ -136,6 +136,7 @@
             bind: keyboardControls.up,
             throttle: 150,
             keyDown() {
+                if (guiService.isDisplaying(PrebuiltGui.Save)) return;
                 moveSelection(-1);
             }
         },
@@ -144,12 +145,14 @@
             bind: keyboardControls.down,
             throttle: 150,
             keyDown() {
+                if (guiService.isDisplaying(PrebuiltGui.Save)) return;
                 moveSelection(1);
             }
         },
         action: {
             bind: keyboardControls.action,
             keyDown() {
+                if (guiService.isDisplaying(PrebuiltGui.Save)) return;
                 triggerSelect(selectedEntry());
             }
         },
