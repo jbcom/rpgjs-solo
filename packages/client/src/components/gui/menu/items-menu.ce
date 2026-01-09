@@ -2,19 +2,21 @@
     <div class="rpg-ui-menu-panel rpg-ui-panel">
         <div class="rpg-ui-menu-panel-header">Items</div>
         <div class="rpg-ui-menu-panel-body rpg-ui-menu-panel-body-stacked">
-            @if (currentItem) {
-                <div class="rpg-ui-menu-panel-details rpg-ui-panel">
-                    <div class="rpg-ui-menu-panel-hero">
-                        <div class="rpg-ui-menu-panel-hero-icon">
-                            <DOMSprite sheet={iconSheet(currentItem()?.icon)} playing="default" />
-                        </div>
-                        <div>
-                            <div class="rpg-ui-menu-panel-details-title">{currentItem()?.name}</div>
-                            <div class="rpg-ui-menu-panel-details-desc">{currentItem()?.description || ""}</div>
+            <div>
+                @if (currentItem) {
+                    <div class="rpg-ui-menu-panel-details rpg-ui-panel">
+                        <div class="rpg-ui-menu-panel-hero">
+                            <div class="rpg-ui-menu-panel-hero-icon">
+                                <DOMSprite sheet={iconSheet(currentItem()?.icon)} playing="default" />
+                            </div>
+                            <div>
+                                <div class="rpg-ui-menu-panel-details-title">{currentItem()?.name}</div>
+                                <div class="rpg-ui-menu-panel-details-desc">{currentItem()?.description || ""}</div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            }
+                }
+            </div>
             
             <div class="rpg-ui-menu-panel-list rpg-ui-menu rpg-ui-menu-panel-list-full">
                 <div class="rpg-ui-menu-tabs">

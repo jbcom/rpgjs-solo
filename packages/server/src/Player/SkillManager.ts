@@ -327,7 +327,7 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
       }
 
       return (this as any).skills().findIndex((skill: any) => {
-        const skillId = skill.id || skill.name || '';
+        const skillId = skill.id() || skill.name() || '';
         return skillId === searchId;
       });
     }
@@ -348,9 +348,9 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
      * }
      * ```
      */
-    getSkill(skillInput: SkillClass | SkillObject | string): any | null {
+    getSkill(skillInput: SkillClass | SkillObject | string): Skill | null {
       const index = this._getSkillIndex(skillInput);
-      return (this as any).skills()[index] ?? null;
+      return (this as any).skills()[index] as Skill ?? null;
     }
 
     /**
