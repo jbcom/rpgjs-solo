@@ -1,7 +1,14 @@
 import { isString, PlayerCtor } from "@rpgjs/common";
 import { signal, computed, WritableSignal, ComputedSignal } from "@signe/reactive";
 import { MAXHP, MAXSP } from "@rpgjs/common";
-import { sync, type } from "@signe/sync";
+import { type } from "@signe/sync";
+
+export type ExpCurve = {
+  basis: number;
+  extra: number;
+  accelerationA: number;
+  accelerationB: number;
+};
 
 /**
  * Interface for Parameter Manager functionality
@@ -53,12 +60,7 @@ export interface IParameterManager {
    * ```
    * @memberof ParameterManager
    * */
-  expCurve: { 
-    basis: number,
-    extra: number,
-    accelerationA: number
-    accelerationB: number
-  };
+  expCurve: ExpCurve;
 
   /** 
    * Changes the health points
@@ -393,12 +395,12 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
      * console.log(player.param[MAXHP]); // Updated value
      * ```
      */
-    private _paramsModifierSignal = signal<{
+    private _paramsModifierSignal = type(signal<{
         [key: string]: {
             value?: number,
             rate?: number
         }
-    }>({})
+    }>({}) as any, '_paramsModifierSignal', { persist: true }, this as any)
 
     /**
      * Signal for base parameters configuration
@@ -406,12 +408,12 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
      * Stores the start and end values for each parameter's level curve.
      * Changes to this signal trigger recalculation of all parameter values.
      */
-    private _parametersSignal = signal<{
+    private _parametersSignal = type(signal<{
         [key: string]: {
             start: number,
             end: number
         }
-    }>({})
+    }>({}) as any, '_parametersSignal', { persist: true }, this as any)
 
     /**
      * Computed signal for all parameter values
@@ -548,11 +550,14 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      * @memberof ParameterManager
      * */
-    public expCurve: { 
-        basis: number,
-        extra: number,
-        accelerationA: number
-        accelerationB: number
+    public _expCurveSignal = type(signal<string>('') as any, '_expCurveSignal', { persist: true }, this as any)
+
+    get expCurve(): ExpCurve { 
+        return JSON.parse(this._expCurveSignal())
+    }
+
+    set expCurve(val: ExpCurve) {
+        this._expCurveSignal.set(JSON.stringify(val)) 
     }
     
     /** 

@@ -35,6 +35,7 @@ export class LobbyRoom extends BaseRoom {
   async guiInteraction(player: RpgPlayer, value: { guiId: string, name: string, data: any }) {
     const id = value.data.id
     if (id === 'start') {
+      player.onGameStart();
       this.hooks.callHooks("server-player-onStart", player).subscribe();
     }
   }

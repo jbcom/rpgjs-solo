@@ -241,6 +241,19 @@ export default createServer({
             wood: Number
           },
           onStart: (player: RpgPlayer) => {
+            player.addParameter(MAXHP, {
+              start: 100,
+              end: 103,
+            });
+            player.expCurve = {
+              basis: 30,
+              extra: 10,
+              accelerationA: 30,
+              accelerationB: 30
+            };
+
+            console.log("start", player.expCurve);
+            
             player.changeMap("center-map", {
               x: 200,
               y: 150,
@@ -254,8 +267,8 @@ export default createServer({
             console.log(data);
           },
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
-            console.log("join map");
             player.setGraphic("hero");
+            console.log("join map", player.expCurve, player.param);
             
             // Configure player stats
             //player.hp = 200;

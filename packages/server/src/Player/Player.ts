@@ -186,21 +186,6 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
   constructor() {
     super();
-    // Use type assertion to access mixin properties
-    (this as any).expCurve = {
-      basis: 30,
-      extra: 20,
-      accelerationA: 30,
-      accelerationB: 30
-    };
-
-    (this as any).addParameter(MAXHP, MAXHP_CURVE);
-    (this as any).addParameter(MAXSP, MAXSP_CURVE);
-    (this as any).addParameter(STR, STR_CURVE);
-    (this as any).addParameter(INT, INT_CURVE);
-    (this as any).addParameter(DEX, DEX_CURVE);
-    (this as any).addParameter(AGI, AGI_CURVE);
-    (this as any).allRecovery();
 
     let lastEmitted: { x: number; y: number } | null = null;
     let pendingUpdate: { x: number; y: number } | null = null;
@@ -236,6 +221,24 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
   _onInit() {
     this.hooks.callHooks("server-playerProps-load", this).subscribe();
+  }
+
+  onGameStart() {
+    // Use type assertion to access mixin properties
+    (this as any).expCurve = {
+      basis: 30,
+      extra: 20,
+      accelerationA: 30,
+      accelerationB: 30
+    };
+
+    ;(this as any).addParameter(MAXHP, MAXHP_CURVE);
+    (this as any).addParameter(MAXSP, MAXSP_CURVE);
+    (this as any).addParameter(STR, STR_CURVE);
+    (this as any).addParameter(INT, INT_CURVE);
+    (this as any).addParameter(DEX, DEX_CURVE);
+    (this as any).addParameter(AGI, AGI_CURVE);
+    (this as any).allRecovery();
   }
 
   get hooks() {
@@ -415,7 +418,12 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   }
 
   snapshot() {
-    return createStatesSnapshotDeep(this);
+    const snapshot = createStatesSnapshotDeep(this);
+    const expCurve = (this as any).expCurve;
+    if (expCurve) {
+      snapshot.expCurve = { ...expCurve };
+    }
+    return snapshot;
   }
 
   async applySnapshot(snapshot: string | object) {
@@ -426,6 +434,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     const withClass = (this as any).resolveClassSnapshot?.(withStates) ?? withStates;
     const resolvedSnapshot = (this as any).resolveEquipmentsSnapshot?.(withClass) ?? withClass;
     load(this, resolvedSnapshot);
+    if (resolvedSnapshot.expCurve) {
+      (this as any).expCurve = resolvedSnapshot.expCurve;
+    }
     if (Array.isArray(resolvedSnapshot.items)) {
       this.items.set(resolvedSnapshot.items);
     }
