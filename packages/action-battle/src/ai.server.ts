@@ -867,7 +867,7 @@ export class BattleAi {
     if (!this.target) return;
 
     this.faceTarget();
-    this.event.setAnimation('attack', 1);
+    this.event.setGraphicAnimation('attack', 1);
 
     // Use skill if available
     if (this.attackSkill) {
@@ -1066,7 +1066,7 @@ export class BattleAi {
 
     this.chargingAttack = true;
     this.faceTarget();
-    this.event.setAnimation('attack', 2);
+    this.event.setGraphicAnimation('attack', 2);
 
     setTimeout(() => {
       if (!this.target || this.state !== AiState.Combat) {
@@ -1093,7 +1093,7 @@ export class BattleAi {
    * Perform zone attack (360 degrees)
    */
   private performZoneAttack() {
-    this.event.setAnimation('attack', 1);
+    this.event.setGraphicAnimation('attack', 1);
 
     const eventX = this.event.x();
     const eventY = this.event.y();

@@ -601,7 +601,7 @@ import {
 
 // Custom attack with hooks
 function customAttack(player: RpgPlayer) {
-  player.setAnimation('attack', 1);
+  player.setGraphicAnimation('attack', 1);
   
   const direction = player.getDirection();
   const hitboxConfig = DEFAULT_PLAYER_ATTACK_HITBOXES[direction] || DEFAULT_PLAYER_ATTACK_HITBOXES.default;

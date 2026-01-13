@@ -1,5 +1,5 @@
 import { RpgEvent, RpgPlayer, type RpgServer } from "@rpgjs/server";
-import { defineModule } from "@rpgjs/common";
+import { Control, defineModule } from "@rpgjs/common";
 import { BattleAi, HitResult, ApplyHitHooks, DEFAULT_KNOCKBACK } from "./ai.server";
 
 /**
@@ -148,9 +148,9 @@ export default defineModule<RpgServer>({
      * @param input - Input data containing pressed keys
      */
     onInput(player: RpgPlayer, input: any) {
-      if (input.action) {
+      if (input.action == Control.Action) {
         // Trigger attack animation
-        player.setAnimation('attack', 1);
+        player.setGraphicAnimation('attack', 1);
 
         // Get player position
         const playerX = player.x();

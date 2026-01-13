@@ -1269,6 +1269,12 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 }
 
 export class RpgEvent extends RpgPlayer {
+
+  constructor() {
+    super();
+    this.onGameStart()
+  }
+
   override async execMethod(methodName: string, methodData: any[] = [], instance = this) {
     await lastValueFrom(this.hooks
       .callHooks(`server-event-${methodName}`, instance, ...methodData));

@@ -1055,13 +1055,13 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       
       if (isMoving && intensity > LOW_INTENSITY_THRESHOLD) {
         if (hasSetAnimation) {
-          owner.setAnimation("walk");
+          owner.setGraphicAnimation("walk");
         } else if (ownerHasAnimationName) {
           animationNameSignal.set("walk");
         }
       } else if (!isMoving) {
         if (hasSetAnimation) {
-          owner.setAnimation("stand");
+          owner.setGraphicAnimation("stand");
         } else if (ownerHasAnimationName) {
           animationNameSignal.set("stand");
         }

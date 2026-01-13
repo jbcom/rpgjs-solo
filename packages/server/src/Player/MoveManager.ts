@@ -925,8 +925,8 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
         this.getActiveMovements().some(s => s instanceof Knockback || s instanceof AdditiveKnockback);
 
       const setAnimationName = (name: string): void => {
-        if (typeof selfAny.setAnimation === 'function') {
-          selfAny.setAnimation(name);
+        if (typeof selfAny.setGraphicAnimation === 'function') {
+          selfAny.setGraphicAnimation(name);
           return;
         }
         const animSignal = selfAny.animationName;

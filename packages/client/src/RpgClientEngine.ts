@@ -296,7 +296,6 @@ export class RpgClientEngine<T = any> {
     });
 
      this.webSocket.on("setAnimation", (data) => {    
-      console.log(data);
       const { animationName, nbTimes, object, graphic } = data;
        const player = this.sceneMap.getObjectById(object);
        if (graphic !== undefined) {
