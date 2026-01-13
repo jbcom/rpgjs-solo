@@ -1,4 +1,4 @@
-<Container sound={backgroundMusic} shake={shakeConfig}>
+<Container sound={backgroundMusic} shake={shakeConfig} freeze={engine.gamePause}>
   <Container sound={backgroundAmbientSound} />
 
   <sceneComponent() data={map().data} params={map().params} />

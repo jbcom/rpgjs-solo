@@ -58,6 +58,7 @@ export class RpgClientEngine<T = any> {
   mapShakeTrigger = trigger();
 
   controlsReady = signal(undefined); 
+  gamePause = signal(false);
 
   private predictionEnabled = false;
   private prediction?: PredictionController<Direction>;

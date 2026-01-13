@@ -282,9 +282,11 @@
     });
 
     mount((element) => {
+        engine.gamePause.set(true);
         return () => {
             delay(() => {
                 engine.stopProcessingInput = false;
+                engine.gamePause.set(false);
             });
         }
     });

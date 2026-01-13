@@ -3,7 +3,7 @@ import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
 import { Direction } from "@rpgjs/common";
-import { provideActionBattle, BattleAi, EnemyType } from "@rpgjs/action-battle/server";
+import { provideActionBattle, BattleAi, EnemyType, AttackPattern } from "@rpgjs/action-battle/server";
 import { provideSaveStorage } from "@rpgjs/server";
 
 /**
@@ -125,7 +125,7 @@ export function Event() {
     mode: EventMode.Scenario,
     onInit() {
       this.setGraphic("hero");
-      this.speed.set(4)
+      this.speed.set(2)
       this.teleport({ x: 100, y: 200 })
       this.name.set("John Doe");
       
@@ -151,11 +151,30 @@ export function Event() {
       this.equip(EnemyClaw.id);
       
       // Initialize AI behavior
-      // this.battleAi = new BattleAi(this, {
-      //   enemyType: EnemyType.Aggressive,
-      //   visionRange: 150,
-      //   attackRange: 50,
-      // });
+      this.battleAi = new BattleAi(this, {
+        enemyType: EnemyType.Defensive,
+        visionRange: 150,
+        attackRange: 50,
+        attackCooldown: 900,
+        dodgeChance: 0.35,
+        dodgeCooldown: 2000,
+        fleeThreshold: 0.2,
+        attackPatterns: [
+          AttackPattern.Melee,
+          AttackPattern.Combo,
+          AttackPattern.DashAttack,
+          AttackPattern.Charged
+        ],
+        moveToCooldown: 450,
+        retreatCooldown: 700,
+        behavior: {
+          baseScore: 55,
+          updateInterval: 450,
+          minStateDuration: 700,
+          assaultThreshold: 70,
+          retreatThreshold: 30
+        }
+      });
     },
     onPlayerTouch(player: RpgPlayer) {
      console.log("touch");
@@ -195,7 +214,7 @@ export default createServer({
   providers: [
   //  provideTiledMap(),
     provideMain(),
-   // provideActionBattle(),
+   provideActionBattle(),
 
 
     provideSaveStorage(new LocalStorageSaveStorageStrategy({ key: "save" })),

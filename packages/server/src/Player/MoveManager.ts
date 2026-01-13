@@ -744,7 +744,8 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * Move toward a target player or position using AI pathfinding
      * 
      * Uses the `SeekAvoid` strategy to navigate toward the target while avoiding obstacles.
-     * The movement speed is based on the player's current `speed` property, scaled appropriately.
+     * The movement speed is based on the player's current `speed` and `frequency` settings,
+     * scaled appropriately.
      * 
      * @param target - Target player or position `{ x, y }` to move toward
      * 
@@ -764,10 +765,14 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       const playerId = (this as unknown as PlayerWithMixins).id;
       const engine = map.physic;
 
-      // Calculate maxSpeed based on player's speed
+      // Calculate maxSpeed based on player's speed and frequency
       // Original values: 180 for player target, 80 for position target (with default speed=4)
       // Factor: 45 for player (180/4), 20 for position (80/4)
       const playerSpeed = (this as any).speed();
+      const rawFrequency = (this as any).frequency;
+      const playerFrequency = typeof rawFrequency === 'function' ? rawFrequency() : rawFrequency;
+      const frequencyScale = playerFrequency > 0 ? Frequency.High / playerFrequency : 1;
+      const normalizedFrequencyScale = Number.isFinite(frequencyScale) && frequencyScale > 0 ? frequencyScale : 1;
 
       // Remove ALL movement strategies that could interfere with SeekAvoid
       // This includes SeekAvoid, Dash, Knockback, and LinearRepulsion
@@ -789,7 +794,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
           return body;
         };
         // Factor 45: with speed=4 gives 180 (original value)
-        const maxSpeed = playerSpeed * 45;
+        const maxSpeed = playerSpeed * 45 * normalizedFrequencyScale;
         map.moveManager.add(
           playerId,
           new SeekAvoid(engine, targetProvider, maxSpeed, 140, 80, 48)
@@ -804,7 +809,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       staticTarget.freeze();
 
       // Factor 20: with speed=4 gives 80 (original value)
-      const maxSpeed = playerSpeed * 20;
+      const maxSpeed = playerSpeed * 20 * normalizedFrequencyScale;
       map.moveManager.add(
         playerId,
         new SeekAvoid(engine, () => staticTarget, maxSpeed, 140, 80, 48)
@@ -1948,4 +1953,3 @@ export interface IMoveManager {
    */
   replayRoutes(): void;
 }
-

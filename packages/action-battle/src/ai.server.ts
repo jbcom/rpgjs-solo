@@ -285,6 +285,21 @@ export class BattleAi {
   // Direction hysteresis to prevent animation flickering
   private lastFacingDirection: string | null = null;
 
+  // Behavior gauge (0-100)
+  private behaviorScore: number = 50;
+  private behaviorMode: 'assault' | 'tactical' | 'retreat' = 'tactical';
+  private behaviorLastUpdate: number = 0;
+  private behaviorUpdateInterval: number = 400;
+  private behaviorAssaultThreshold: number = 65;
+  private behaviorRetreatThreshold: number = 35;
+  private behaviorMinStateDuration: number = 600;
+  private behaviorEnabled: boolean = false;
+
+  // Movement throttling
+  private moveToCooldown: number = 400;
+  private lastMoveToTime: number = 0;
+  private retreatCooldown: number = 600;
+  private lastRetreatTime: number = 0;
 
   /**
    * Create a new Battle AI Controller
@@ -324,6 +339,15 @@ export class BattleAi {
       attackPatterns?: AttackPattern[];
       patrolWaypoints?: Array<{ x: number; y: number }>;
       groupBehavior?: boolean;
+      moveToCooldown?: number;
+      retreatCooldown?: number;
+      behavior?: {
+        baseScore?: number;
+        updateInterval?: number;
+        minStateDuration?: number;
+        assaultThreshold?: number;
+        retreatThreshold?: number;
+      };
       /** Callback called when the AI is defeated */
       onDefeated?: (event: RpgEvent) => void;
     } = {}
@@ -354,6 +378,33 @@ export class BattleAi {
 
     // Initialize defeat callback
     this.onDefeatedCallback = options.onDefeated;
+
+    // Behavior gauge settings
+    if (options.behavior) {
+      this.behaviorEnabled = true;
+      if (options.behavior.baseScore !== undefined) {
+        this.behaviorScore = options.behavior.baseScore;
+      }
+      if (options.behavior.updateInterval !== undefined) {
+        this.behaviorUpdateInterval = options.behavior.updateInterval;
+      }
+      if (options.behavior.minStateDuration !== undefined) {
+        this.behaviorMinStateDuration = options.behavior.minStateDuration;
+      }
+      if (options.behavior.assaultThreshold !== undefined) {
+        this.behaviorAssaultThreshold = options.behavior.assaultThreshold;
+      }
+      if (options.behavior.retreatThreshold !== undefined) {
+        this.behaviorRetreatThreshold = options.behavior.retreatThreshold;
+      }
+    }
+
+    if (options.moveToCooldown !== undefined) {
+      this.moveToCooldown = options.moveToCooldown;
+    }
+    if (options.retreatCooldown !== undefined) {
+      this.retreatCooldown = options.retreatCooldown;
+    }
 
     // Setup AI systems
     this.setupVision();
@@ -531,6 +582,11 @@ export class BattleAi {
       this.attackCooldown = 800 * berserkerModifier;
     }
 
+    // Update behavior gauge and state decision
+    if (this.behaviorEnabled) {
+      this.updateBehavior(currentTime);
+    }
+
     // State-specific behavior
     switch (this.state) {
       case AiState.Idle:
@@ -625,8 +681,24 @@ export class BattleAi {
       return;
     }
 
+    if (this.behaviorEnabled) {
+      if (this.behaviorMode === 'tactical') {
+        this.handleTacticalMovement(distance);
+      } else if (this.behaviorMode === 'assault') {
+        this.handleAssaultMovement(distance);
+      } else if (this.behaviorMode === 'retreat') {
+        this.isMovingToTarget = false;
+        this.fleeFromTarget();
+        return;
+      }
+    }
+
     // Movement based on enemy type
-    if (this.enemyType === EnemyType.Ranged) {
+    if (this.behaviorEnabled && this.behaviorMode === 'assault') {
+      // Assault mode already handled movement
+    } else if (this.behaviorEnabled && this.behaviorMode === 'tactical') {
+      // Tactical mode already handled movement
+    } else if (this.enemyType === EnemyType.Ranged) {
       if (distance < this.attackRange * 0.6) {
         this.debugLog('movement', `Retreating (dist=${distance.toFixed(1)}, minRange=${(this.attackRange * 0.6).toFixed(1)})`);
         this.isMovingToTarget = false;
@@ -635,7 +707,7 @@ export class BattleAi {
         if (!this.isMovingToTarget) {
           this.debugLog('movement', `Moving to target (dist=${distance.toFixed(1)}, attackRange=${this.attackRange})`);
           this.isMovingToTarget = true;
-          this.event.moveTo(this.target);
+          this.requestMoveTo(this.target);
         }
       } else {
         if (this.isMovingToTarget) {
@@ -649,7 +721,7 @@ export class BattleAi {
         if (!this.isMovingToTarget) {
           this.debugLog('movement', `Moving to target (dist=${distance.toFixed(1)}, attackRange=${this.attackRange})`);
           this.isMovingToTarget = true;
-          this.event.moveTo(this.target);
+          this.requestMoveTo(this.target);
         }
       } else {
         if (this.isMovingToTarget) {
@@ -1202,7 +1274,7 @@ export class BattleAi {
       y: () => this.event.y() + (dy / dist) * 200
     };
 
-    this.event.moveTo(fleeTarget as any);
+    this.requestMoveTo(fleeTarget as any);
   }
 
   /**
@@ -1210,6 +1282,10 @@ export class BattleAi {
    */
   private retreatFromTarget() {
     if (!this.target) return;
+    const currentTime = Date.now();
+    if (currentTime - this.lastRetreatTime < this.retreatCooldown) {
+      return;
+    }
 
     const dx = this.event.x() - this.target.x();
     const dy = this.event.y() - this.target.y();
@@ -1218,6 +1294,7 @@ export class BattleAi {
     if (dist === 0) return;
 
     this.event.dash({ x: dx / dist, y: dy / dist }, 8, 200);
+    this.lastRetreatTime = currentTime;
   }
 
   /**
@@ -1239,7 +1316,7 @@ export class BattleAi {
     if (this.patrolWaypoints.length === 0) return;
 
     const waypoint = this.patrolWaypoints[this.currentPatrolIndex];
-    this.event.moveTo({ x: () => waypoint.x, y: () => waypoint.y } as any);
+    this.requestMoveTo({ x: () => waypoint.x, y: () => waypoint.y } as any);
   }
 
   /**
@@ -1311,7 +1388,7 @@ export class BattleAi {
     );
 
     if (distanceToFormation > 20) {
-      this.event.moveTo({ x: () => formationX, y: () => formationY } as any);
+      this.requestMoveTo({ x: () => formationX, y: () => formationY } as any);
     }
   }
 
@@ -1407,6 +1484,120 @@ export class BattleAi {
     const dx = entity1.x() - entity2.x();
     const dy = entity1.y() - entity2.y();
     return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  private updateBehavior(currentTime: number) {
+    if (currentTime - this.behaviorLastUpdate < this.behaviorUpdateInterval) {
+      return;
+    }
+    this.behaviorLastUpdate = currentTime;
+
+    let score = this.behaviorScore;
+    const maxHp = this.event.param[MAXHP];
+    if (maxHp) {
+      const hpPercent = this.event.hp / maxHp;
+      score += (hpPercent - 0.5) * 40;
+    }
+
+    if (this.recentDamageTaken > 0) {
+      score -= Math.min(30, this.recentDamageTaken * 0.5);
+    }
+
+    if (this.target) {
+      const distance = this.getDistance(this.event, this.target);
+      if (distance <= this.attackRange) {
+        score += 10;
+      } else if (distance > this.visionRange) {
+        score -= 10;
+      }
+    }
+
+    if (this.groupBehavior && this.nearbyEnemies.length > 0) {
+      score += Math.min(15, this.nearbyEnemies.length * 5);
+    }
+
+    score = Math.max(0, Math.min(100, score));
+    this.behaviorScore = score;
+
+    const previousMode = this.behaviorMode;
+    if (score >= this.behaviorAssaultThreshold) {
+      this.behaviorMode = 'assault';
+    } else if (score <= this.behaviorRetreatThreshold) {
+      this.behaviorMode = 'retreat';
+    } else {
+      this.behaviorMode = 'tactical';
+    }
+
+    if (previousMode !== this.behaviorMode) {
+      this.debugLog('state', `Behavior mode: ${previousMode} -> ${this.behaviorMode} (score=${score.toFixed(0)})`);
+    }
+
+    if (this.behaviorMode === 'retreat' && this.state === AiState.Combat) {
+      if (currentTime - this.stateStartTime >= this.behaviorMinStateDuration) {
+        this.isMovingToTarget = false;
+        this.changeState(AiState.Flee);
+      }
+    } else if (this.behaviorMode === 'assault' && this.state === AiState.Flee) {
+      if (currentTime - this.stateStartTime >= this.behaviorMinStateDuration) {
+        this.changeState(AiState.Combat);
+      }
+    }
+  }
+
+  private handleTacticalMovement(distance: number) {
+    if (!this.target) return;
+    const minRange = this.attackRange * 0.7;
+    const maxRange = this.attackRange * 1.2;
+
+    if (distance < minRange) {
+      this.debugLog('movement', `Tactical retreat (dist=${distance.toFixed(1)}, minRange=${minRange.toFixed(1)})`);
+      this.isMovingToTarget = false;
+      this.retreatFromTarget();
+      return;
+    }
+
+    if (distance > maxRange) {
+      if (!this.isMovingToTarget) {
+        this.debugLog('movement', `Tactical approach (dist=${distance.toFixed(1)}, maxRange=${maxRange.toFixed(1)})`);
+        this.isMovingToTarget = true;
+        this.requestMoveTo(this.target);
+      }
+      return;
+    }
+
+    if (this.isMovingToTarget) {
+      this.debugLog('movement', `Tactical hold (dist=${distance.toFixed(1)})`);
+      this.isMovingToTarget = false;
+      this.event.stopMoveTo();
+    }
+  }
+
+  private handleAssaultMovement(distance: number) {
+    if (!this.target) return;
+    if (distance > this.attackRange) {
+      if (!this.isMovingToTarget) {
+        this.debugLog('movement', `Assault approach (dist=${distance.toFixed(1)}, attackRange=${this.attackRange})`);
+        this.isMovingToTarget = true;
+        this.requestMoveTo(this.target);
+      }
+      return;
+    }
+
+    if (this.isMovingToTarget) {
+      this.debugLog('movement', `Assault hold (dist=${distance.toFixed(1)})`);
+      this.isMovingToTarget = false;
+      this.event.stopMoveTo();
+    }
+  }
+
+  private requestMoveTo(target: any): boolean {
+    const currentTime = Date.now();
+    if (currentTime - this.lastMoveToTime < this.moveToCooldown) {
+      return false;
+    }
+    this.event.moveTo(target as any);
+    this.lastMoveToTime = currentTime;
+    return true;
   }
 
   // Public getters
