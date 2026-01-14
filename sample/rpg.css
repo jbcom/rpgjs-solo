@@ -126,7 +126,6 @@ body {
 .rpg-avatar-face > * {
     display: block;
     position: absolute;
-    transform: translate(-42%, -45%) scale(0.35);
 }
 
 .rpg-avatar-level {

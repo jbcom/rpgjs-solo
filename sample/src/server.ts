@@ -180,32 +180,37 @@ export function Event() {
      console.log("touch");
     },
     async onAction(player: RpgPlayer) {
-      player.gold = 100;
-      await player.showText("Hello", {
-        face: {
-          id: 'facesetId',
-          expression: 'happy'
-        },
-        talkWith: this
-      })
-      this.setGraphic("monster")
-      player.setVariable('questCompleted', true);
-      player.gold = 1000;
-      await player.callShop({
-        items: [BasicSword, HeavyHammer, EnemyClaw, BasicShield],
-        message: "Hey !",
-        face: {
-          id: 'facesetId',
-          expression: 'happy'
-        }
-      })
-      await player.showText("Thanks you !", {
-        face: {
-          id: 'facesetId',
-          expression: 'happy'
-        },
-        talkWith: this
-      })
+      // player.gold = 100;
+      // await player.showText("Hello", {
+      //   face: {
+      //     id: 'facesetId',
+      //     expression: 'happy'
+      //   },
+      //   talkWith: this
+      // })
+      // this.setGraphic("monster")
+      // player.setVariable('questCompleted', true);
+      // player.gold = 1000;
+      // await player.callShop({
+      //   items: [BasicSword, HeavyHammer, EnemyClaw, BasicShield],
+      //   message: "Hey !",
+      //   face: {
+      //     id: 'facesetId',
+      //     expression: 'happy'
+      //   }
+      // })
+      // await player.showText("Thanks you !", {
+      //   face: {
+      //     id: 'facesetId',
+      //     expression: 'happy'
+      //   },
+      //   talkWith: this
+      // })
+      this.frequency = 100;
+      this.moveRoutes([
+        Move.tileRight(2),
+        Move.tileDown(2)
+      ])
     },
   };
 }

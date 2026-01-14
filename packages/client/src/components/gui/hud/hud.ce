@@ -3,7 +3,12 @@
         <div class="rpg-avatar">
             @if (hasFace()) {
                 <div class="rpg-avatar-face">
-                    <DOMSprite sheet={faceSheet(face())} />
+                    <DOMSprite 
+                        sheet={faceSheet(face())} 
+                        width={64} 
+                        height={64} 
+                        objectFit="contain" 
+                    />
                 </div>
             }
             <div class="rpg-avatar-level">{{ level() }}</div>

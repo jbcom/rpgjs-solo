@@ -1183,6 +1183,9 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
           private readonly onStuck?: MoveRoutesOptions['onStuck'];
           private readonly stuckTimeout: number;
           private readonly stuckThreshold: number;
+          private remainingDistance = 0;
+          private segmentDirection: Direction | null = null;
+          private segmentStep = 0;
 
           // Frequency wait state
           private waitingForFrequency = false;
@@ -1224,6 +1227,9 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             // Reset frequency wait state when processing a new route
             this.waitingForFrequency = false;
             this.frequencyWaitStartTime = 0;
+            this.remainingDistance = 0;
+            this.segmentDirection = null;
+            this.segmentStep = 0;
 
             // Check if we've completed all routes
             if (this.routeIndex >= this.routes.length) {
@@ -1328,52 +1334,15 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                   }
                 }
 
-                // Calculate target top-left position
-                let targetTopLeftX = currentTopLeftX;
-                let targetTopLeftY = currentTopLeftY;
-
-                switch (moveDirection) {
-                  case Direction.Right:
-                  case 'right' as any:
-                    targetTopLeftX = currentTopLeftX + distance;
-                    break;
-                  case Direction.Left:
-                  case 'left' as any:
-                    targetTopLeftX = currentTopLeftX - distance;
-                    break;
-                  case Direction.Down:
-                  case 'down' as any:
-                    targetTopLeftY = currentTopLeftY + distance;
-                    break;
-                  case Direction.Up:
-                  case 'up' as any:
-                    targetTopLeftY = currentTopLeftY - distance;
-                    break;
-                }
-
-                // Convert target top-left to center position for physics engine
-                // Get entity to access hitbox dimensions
-                const entity = map.physic.getEntityByUUID(this.player.id);
-                if (!entity) {
-                  this.finished = true;
-                  this.onComplete(false);
-                  return;
-                }
-
-                // Get hitbox dimensions for conversion
-                const hitbox = this.player.hitbox();
-                const hitboxWidth = hitbox?.w ?? 32;
-                const hitboxHeight = hitbox?.h ?? 32;
-
-                // Convert top-left to center: center = topLeft + (size / 2)
-                const targetX = targetTopLeftX + hitboxWidth / 2;
-                const targetY = targetTopLeftY + hitboxHeight / 2;
-
-                this.currentTarget = { x: targetX, y: targetY }; // Center position for physics engine
-                this.currentTargetTopLeft = { x: targetTopLeftX, y: targetTopLeftY }; // Top-left position for player.x() comparison
-                this.currentDirection = { x: 0, y: 0 };
+                // Prepare segmented movement (per tile)
+                this.remainingDistance = distance;
+                this.segmentDirection = moveDirection;
+                this.segmentStep = this.getTileStepDistance(playerSpeed);
+                this.setNextSegmentTarget(currentTopLeftX, currentTopLeftY);
                 
-                this.debugLog(`MOVE direction=${moveDirection} from=(${currentTopLeftX.toFixed(1)}, ${currentTopLeftY.toFixed(1)}) to=(${targetTopLeftX.toFixed(1)}, ${targetTopLeftY.toFixed(1)}) dist=${distance.toFixed(1)}`);
+                if (this.currentTargetTopLeft) {
+                  this.debugLog(`MOVE direction=${moveDirection} from=(${currentTopLeftX.toFixed(1)}, ${currentTopLeftY.toFixed(1)}) to=(${this.currentTargetTopLeft.x.toFixed(1)}, ${this.currentTargetTopLeft.y.toFixed(1)}) dist=${distance.toFixed(1)}`);
+                }
                 
                 // Reset stuck detection when starting a new movement
                 this.lastPosition = null;
@@ -1420,7 +1389,13 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
               if (frequencyMs > 0 && Date.now() - this.frequencyWaitStartTime >= frequencyMs * this.ratioFrequency) {
                 this.waitingForFrequency = false;
-                this.processNextRoute();
+                if (this.remainingDistance > 0) {
+                  const currentTopLeftX = this.player.x();
+                  const currentTopLeftY = this.player.y();
+                  this.setNextSegmentTarget(currentTopLeftX, currentTopLeftY);
+                } else {
+                  this.processNextRoute();
+                }
               }
               return;
             }
@@ -1478,12 +1453,16 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 this.lastDistanceToTarget = null;
                 this.stuckCheckInitialized = false;
 
-                // Wait for frequency before processing next route
+                // Wait for frequency before processing next route or segment
                 if (!this.finished) {
                   const playerFrequency = this.player.frequency;
                   if (playerFrequency && playerFrequency > 0) {
                     this.waitingForFrequency = true;
                     this.frequencyWaitStartTime = Date.now();
+                  } else if (this.remainingDistance > 0) {
+                    const nextTopLeftX = this.player.x();
+                    const nextTopLeftY = this.player.y();
+                    this.setNextSegmentTarget(nextTopLeftX, nextTopLeftY);
                   } else {
                     // No frequency delay, process immediately
                     this.processNextRoute();
@@ -1510,12 +1489,16 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 this.lastDistanceToTarget = null;
                 this.stuckCheckInitialized = false;
 
-                // Wait for frequency before processing next route
+                // Wait for frequency before processing next route or segment
                 if (!this.finished) {
                   const playerFrequency = player.frequency;
                   if (playerFrequency && playerFrequency > 0) {
                     this.waitingForFrequency = true;
                     this.frequencyWaitStartTime = Date.now();
+                  } else if (this.remainingDistance > 0) {
+                    const nextTopLeftX = this.player.x();
+                    const nextTopLeftY = this.player.y();
+                    this.setNextSegmentTarget(nextTopLeftX, nextTopLeftY);
                   } else {
                     // No frequency delay, process immediately
                     this.processNextRoute();
@@ -1628,6 +1611,10 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 if (playerFrequency && playerFrequency > 0) {
                   this.waitingForFrequency = true;
                   this.frequencyWaitStartTime = Date.now();
+                } else if (this.remainingDistance > 0) {
+                  const nextTopLeftX = this.player.x();
+                  const nextTopLeftY = this.player.y();
+                  this.setNextSegmentTarget(nextTopLeftX, nextTopLeftY);
                 } else {
                   // No frequency delay, process immediately
                   this.processNextRoute();
@@ -1656,6 +1643,69 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
           onFinished(): void {
             this.onComplete(true);
+          }
+
+          private getTileStepDistance(playerSpeed: number): number {
+            if (!Number.isFinite(playerSpeed) || playerSpeed <= 0) {
+              return this.tileSize;
+            }
+            const stepsPerTile = Math.max(1, Math.floor(this.tileSize / playerSpeed));
+            return stepsPerTile * playerSpeed;
+          }
+
+          private setNextSegmentTarget(currentTopLeftX: number, currentTopLeftY: number): void {
+            if (!this.segmentDirection || this.remainingDistance <= 0) {
+              return;
+            }
+
+            const map = this.player.getCurrentMap() as any;
+            if (!map) {
+              this.finished = true;
+              this.onComplete(false);
+              return;
+            }
+
+            const entity = map.physic.getEntityByUUID(this.player.id);
+            if (!entity) {
+              this.finished = true;
+              this.onComplete(false);
+              return;
+            }
+
+            const segmentDistance = Math.min(this.segmentStep || this.remainingDistance, this.remainingDistance);
+            let targetTopLeftX = currentTopLeftX;
+            let targetTopLeftY = currentTopLeftY;
+
+            switch (this.segmentDirection) {
+              case Direction.Right:
+              case 'right' as any:
+                targetTopLeftX = currentTopLeftX + segmentDistance;
+                break;
+              case Direction.Left:
+              case 'left' as any:
+                targetTopLeftX = currentTopLeftX - segmentDistance;
+                break;
+              case Direction.Down:
+              case 'down' as any:
+                targetTopLeftY = currentTopLeftY + segmentDistance;
+                break;
+              case Direction.Up:
+              case 'up' as any:
+                targetTopLeftY = currentTopLeftY - segmentDistance;
+                break;
+            }
+
+            const hitbox = this.player.hitbox();
+            const hitboxWidth = hitbox?.w ?? 32;
+            const hitboxHeight = hitbox?.h ?? 32;
+
+            const targetX = targetTopLeftX + hitboxWidth / 2;
+            const targetY = targetTopLeftY + hitboxHeight / 2;
+
+            this.currentTarget = { x: targetX, y: targetY };
+            this.currentTargetTopLeft = { x: targetTopLeftX, y: targetTopLeftY };
+            this.currentDirection = { x: 0, y: 0 };
+            this.remainingDistance -= segmentDistance;
           }
         }
 

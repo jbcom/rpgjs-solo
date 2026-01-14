@@ -188,21 +188,21 @@ export default {
             id: "fade",
             component: FadeComponent,
           },
-          // {
-          //   id: "hud",
-          //   component: HudComponent,
-          //   autoDisplay: true,
-          //   dependencies: () => {
-          //     const engine = inject(RpgClientEngine)
-          //     return [engine.scene.currentPlayer]
-          //   },
-          //   data: {
-          //     faceset: {
-          //       id: 'facesetId',
-          //       expression: 'happy'
-          //     }
-          //   }
-          // }
+          {
+            id: "hud",
+            component: HudComponent,
+            autoDisplay: true,
+            dependencies: () => {
+              const engine = inject(RpgClientEngine)
+              return [engine.scene.currentPlayer]
+            },
+            data: {
+              faceset: {
+                id: 'facesetId',
+                expression: 'happy'
+              }
+            }
+          }
         ],
         componentAnimations: [
           {
