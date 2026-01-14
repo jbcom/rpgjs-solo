@@ -260,6 +260,10 @@ export default createServer({
             };
 
             player.exp = 1000
+
+            player.paramsModifier = {
+              [MAXHP]: { value: 100 }
+            };
             
             player.changeMap("center-map", {
               x: 200,
@@ -276,7 +280,9 @@ export default createServer({
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             player.setGraphic("hero");
             console.log("join map", player.expCurve, player.param);
+
             
+          
             // Configure player stats
             //player.hp = 200;
             //player.param[MAXHP] = 200;
