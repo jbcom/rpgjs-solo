@@ -581,15 +581,19 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
     }
 
     equip(
-      itemClass: ItemClass | string,
-      equip: boolean = true
+      itemId: string,
+      equip: boolean | 'auto' = true
     ): void {
-      const itemId = isString(itemClass) ? itemClass : (itemClass as any).name;
-      const inventory: Item = this.getItem(itemClass);
+      const autoAdd = equip === 'auto';
+      const equipState = equip === 'auto' ? true : equip;
+      const data = (this as any).databaseById(itemId);
+      let inventory: Item = this.getItem(itemId);
+      if (!inventory && autoAdd) {
+        inventory = this.addItem(itemId, 1);
+      }
       if (!inventory) {
         throw ItemLog.notInInventory(itemId);
       }
-      const data = (this as any).databaseById(itemId);
       if (data._type == "item") {
         throw ItemLog.invalidToEquiped(itemId);
       }
@@ -607,11 +611,11 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
 
       const item = inventory;
 
-      if ((item as any).equipped && equip) {
+      if ((item as any).equipped && equipState) {
         throw ItemLog.isAlreadyEquiped(itemId);
       }
-      (item as any).equipped = equip;
-      if (!equip) {
+      (item as any).equipped = equipState;
+      if (!equipState) {
         const index = this.equipments().findIndex((it) => it.id() == item.id());
         this.equipments().splice(index, 1);
       } else {
@@ -619,7 +623,7 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       }
       // Call onEquip hook - use stored instance if available
       const hookTarget = (item as any)._itemInstance || item;
-      this["execMethod"]("onEquip", [this, equip], hookTarget);
+      this["execMethod"]("onEquip", [this, equipState], hookTarget);
     }
   } as unknown as TBase;
 }
@@ -852,12 +856,13 @@ export interface IItemManager {
   /**
    * Equips a weapon or armor on a player
    * 
-   * Think first to add the item in the inventory with the `addItem()` method before equipping the item.
+   * Think first to add the item in the inventory with the `addItem()` method before equipping the item,
+   * or pass `"auto"` to add the item if it is missing and equip it.
    * 
    * The `onEquip()` method is called on the ItemClass when the item is equipped or unequipped.
    * 
-   * @param itemClass - Item class or string identifier. If string, it's the item ID
-   * @param equip - Equip the item if `true`, unequip if `false` (default: `true`)
+   * @param itemId - Item identifier to resolve from the database
+   * @param equip - Equip the item if `true`, unequip if `false`, or `"auto"` to add then equip (default: `true`)
    * @throws {Object} ItemLog.notInInventory - If the item is not in the inventory
    *   - `id`: `ITEM_NOT_INVENTORY`
    *   - `msg`: Error message
@@ -870,19 +875,17 @@ export interface IItemManager {
    * 
    * @example
    * ```ts
-   * import Sword from 'your-database/sword'
-   * 
    * try {
-   *   player.addItem(Sword)
-   *   player.equip(Sword)
+   *   player.addItem('sword')
+   *   player.equip('sword')
    *   // Later, unequip it
-   *   player.equip(Sword, false)
+   *   player.equip('sword', false)
    * } catch (err) {
    *   console.log(err)
    * }
    * ```
    */
-  equip(itemClass: ItemClass | string, equip?: boolean): void;
+  equip(itemId: string, equip?: boolean | 'auto'): void;
 
   /**
    * Get the player's attack (sum of items equipped)

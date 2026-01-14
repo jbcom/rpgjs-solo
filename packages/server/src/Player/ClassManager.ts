@@ -6,8 +6,8 @@ type ActorClass = any;
 interface PlayerWithMixins extends RpgCommonPlayer {
   databaseById(id: string): any;
   addParameter(name: string, { start, end }: { start: number, end: number }): void;
-  addItem(item: any): void;
-  equip(item: any, equip: boolean): void;
+  addItem(item: any): any;
+  equip(itemId: string, equip?: boolean | 'auto'): void;
 }
 
 /**
@@ -108,8 +108,11 @@ export function WithClassManager<TBase extends PlayerCtor>(Base: TBase) {
         (this as any).addParameter(param, actor.parameters[param]);
       }
       for (let item of actor.startingEquipment) {
-        (this as any).addItem(item);
-        (this as any).equip(item, true);
+        const inventory = (this as any).addItem(item);
+        const itemId = inventory?.id?.();
+        if (itemId) {
+          (this as any).equip(itemId, true);
+        }
       }
       if (actor.class) this.setClass(actor.class);
       (this as any)["execMethod"]("onSet", [this], actor);

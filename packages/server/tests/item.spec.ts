@@ -385,6 +385,24 @@ describe("Item Management - Equipment", () => {
     expect((item as any).equipped).toBe(true);
   });
 
+  test("should auto add and equip item", () => {
+    player.equip("TestSword", "auto");
+    const item = player.getItem("TestSword");
+    expect(item).toBeDefined();
+    expect(item?.quantity()).toBe(1);
+    expect((item as any).equipped).toBe(true);
+    expect(player.equipments().some((eq) => eq.id() === "TestSword")).toBe(
+      true
+    );
+  });
+
+  test("should not add duplicate when auto equipping existing item", () => {
+    player.addItem("TestSword", 2);
+    player.equip("TestSword", "auto");
+    const item = player.getItem("TestSword");
+    expect(item?.quantity()).toBe(2);
+  });
+
   test("should throw error when equipping non-existent item", () => {
     expect(() => {
       player.equip("TestSword", true);

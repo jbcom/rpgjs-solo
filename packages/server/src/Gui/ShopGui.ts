@@ -3,9 +3,10 @@ import { Gui } from './Gui'
 import { RpgPlayer } from '../Player/Player'
 
 export type ShopSellList = Record<string, number> | Array<{ id: string; multiplier: number }>
+export type ShopItemInput = string | { id?: string; [key: string]: any }
 
 export interface ShopGuiOptions {
-    items: any[]
+    items: ShopItemInput[]
     sell?: ShopSellList
     sellMultiplier?: number
     message?: string
@@ -16,7 +17,7 @@ export interface ShopGuiOptions {
 }
 
 export class ShopGui extends Gui {
-    private itemsInput: any[] = []
+    private itemsInput: ShopItemInput[] = []
     private sellMultipliers: Record<string, number> = {}
     private baseSellMultiplier = 0.5
     private messageInput?: string
@@ -65,7 +66,7 @@ export class ShopGui extends Gui {
             return undefined
         }
 
-        const buildItemData = (item, overrides: { price?: number; quantity?: number } = {}) => {
+        const buildItemData = (item: ShopItemInput, overrides: { price?: number; quantity?: number } = {}) => {
             const rawId = typeof item === 'string'
                 ? item
                 : (typeof item?.id === 'function' ? item.id() : (item?.id ?? item?.name))
