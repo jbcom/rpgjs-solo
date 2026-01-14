@@ -1,6 +1,6 @@
 {
   "name": "@rpgjs/client",
-  "version": "5.0.0-alpha.32",
+  "version": "5.0.0-alpha.33",
   "description": "RPGJS is a framework for creating RPG/MMORPG games",
   "main": "dist/index.js",
   "types": "./dist/index.d.ts",
@@ -30,9 +30,9 @@
     "@rpgjs/client": "workspace:*",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/server": "workspace:*",
-    "@signe/di": "^2.8.2",
-    "@signe/room": "^2.8.2",
-    "@signe/sync": "^2.8.2",
+    "@signe/di": "^2.8.3",
+    "@signe/room": "^2.8.3",
+    "@signe/sync": "^2.8.3",
     "pixi-filters": "^6.1.5",
     "rxjs": "^7.8.2"
   },
@@ -40,7 +40,7 @@
     "@canvasengine/compiler": "2.0.0-beta.50",
     "vite": "^7.3.1",
     "vite-plugin-dts": "^4.5.4",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.17"
   },
   "type": "module"
 }

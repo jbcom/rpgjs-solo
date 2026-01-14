@@ -1,6 +1,6 @@
 {
   "name": "@rpgjs/server",
-  "version": "5.0.0-alpha.32",
+  "version": "5.0.0-alpha.33",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "publishConfig": {
@@ -20,10 +20,10 @@
     "@rpgjs/physic": "workspace:*",
     "@rpgjs/testing": "workspace:*",
     "@rpgjs/database": "^4.3.0",
-    "@signe/di": "^2.8.2",
-    "@signe/reactive": "^2.8.2",
-    "@signe/room": "^2.8.2",
-    "@signe/sync": "^2.8.2",
+    "@signe/di": "^2.8.3",
+    "@signe/reactive": "^2.8.3",
+    "@signe/room": "^2.8.3",
+    "@signe/sync": "^2.8.3",
     "rxjs": "^7.8.2",
     "zod": "^4.3.5"
   },
