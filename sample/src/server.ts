@@ -173,7 +173,7 @@ export function Event() {
           minStateDuration: 700,
           assaultThreshold: 70,
           retreatThreshold: 30
-        }
+        },
       });
     },
     onPlayerTouch(player: RpgPlayer) {

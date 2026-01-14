@@ -95,7 +95,7 @@ new BattleAi(event, {
     assaultThreshold: 70,
     retreatThreshold: 30
   },
-  onDefeated(event) {
+  onDefeated(event, attacker) {
     // drop loot, spawn effects, etc.
   }
 });
@@ -110,6 +110,7 @@ new BattleAi(event, {
 - `groupBehavior`: Makes nearby AIs form a loose ring around the target.
 - `moveToCooldown` / `retreatCooldown`: Throttles `moveTo` and retreat dashes to avoid spam.
 - `behavior`: Enables the behavior gauge (see below). If omitted, the AI uses the classic logic.
+- `onDefeated`: Called with the defeated event and the player who landed the killing blow (if available).
 
 ## Behavior gauge (optional)
 

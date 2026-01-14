@@ -280,7 +280,7 @@ export class BattleAi {
   private isMovingToTarget: boolean = false;
 
   // Callback when AI is defeated
-  private onDefeatedCallback?: (event: RpgEvent) => void;
+  private onDefeatedCallback?: (event: RpgEvent, attacker?: RpgPlayer) => void;
 
   // Direction hysteresis to prevent animation flickering
   private lastFacingDirection: string | null = null;
@@ -349,7 +349,7 @@ export class BattleAi {
         retreatThreshold?: number;
       };
       /** Callback called when the AI is defeated */
-      onDefeated?: (event: RpgEvent) => void;
+      onDefeated?: (event: RpgEvent, attacker?: RpgPlayer) => void;
     } = {}
   ) {
     event.battleAi = this;
@@ -1454,7 +1454,7 @@ export class BattleAi {
     // Check death
     if (this.event.hp <= 0) {
       this.debugLog('damage', 'Defeated!');
-      this.kill();
+      this.kill(attacker);
       return true;
     }
 
@@ -1467,10 +1467,10 @@ export class BattleAi {
    * Stops all movements, cleans up resources, calls the onDefeated hook,
    * and removes the event from the map.
    */
-  private kill() {
+  private kill(attacker?: RpgPlayer) {
     // Call onDefeated hook before cleanup
     if (this.onDefeatedCallback) {
-      this.onDefeatedCallback(this.event);
+      this.onDefeatedCallback(this.event, attacker);
     }
     
     this.destroy();

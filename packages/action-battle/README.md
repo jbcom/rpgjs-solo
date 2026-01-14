@@ -157,8 +157,9 @@ new BattleAi(event, {
   groupBehavior: true,
   
   // Callback when AI is defeated
-  onDefeated: (event) => {
-    console.log(`${event.name()} was defeated!`);
+  onDefeated: (event, attacker) => {
+    const name = attacker?.name?.() ?? "Unknown";
+    console.log(`${event.name()} was defeated by ${name}!`);
   }
 });
 ```
@@ -645,7 +646,7 @@ console.log(`Player knockback force: ${force}`);
 
 ## onDefeated Hook
 
-The `onDefeated` callback is triggered when an AI enemy is killed. Use it to:
+The `onDefeated` callback is triggered when an AI enemy is killed. It receives the defeated event and the player who landed the killing blow (if available). Use it to:
 - Award experience, gold, or items to the player
 - Spawn loot drops
 - Trigger events or cutscenes
@@ -657,8 +658,9 @@ The `onDefeated` callback is triggered when an AI enemy is killed. Use it to:
 ```typescript
 new BattleAi(this, {
   enemyType: EnemyType.Aggressive,
-  onDefeated: (event) => {
-    console.log(`${event.name()} was defeated!`);
+  onDefeated: (event, attacker) => {
+    const name = attacker?.name?.() ?? "Unknown";
+    console.log(`${event.name()} was defeated by ${name}!`);
   }
 });
 ```
@@ -677,23 +679,19 @@ function Goblin() {
       
       new BattleAi(this, {
         enemyType: EnemyType.Aggressive,
-        onDefeated: (event) => {
-          // Find the player who killed this enemy
-          const map = event.getCurrentMap();
-          const players = map?.getPlayersIn() || [];
+        onDefeated: (event, attacker) => {
+          if (!attacker) return;
+
+          // Award gold
+          attacker.gold += 25;
           
-          players.forEach(player => {
-            // Award gold
-            player.gold += 25;
-            
-            // Award experience
-            player.exp += 50;
-            
-            // Random loot drop
-            if (Math.random() < 0.3) {
-              player.addItem(HealthPotion);
-            }
-          });
+          // Award experience
+          attacker.exp += 50;
+          
+          // Random loot drop
+          if (Math.random() < 0.3) {
+            attacker.addItem(HealthPotion);
+          }
         }
       });
     }
@@ -705,7 +703,7 @@ function Goblin() {
 
 ```typescript
 new BattleAi(this, {
-  onDefeated: (event) => {
+  onDefeated: (event, attacker) => {
     const map = event.getCurrentMap();
     if (!map) return;
     
@@ -725,7 +723,7 @@ new BattleAi(this, {
 let killCount = 0;
 
 new BattleAi(this, {
-  onDefeated: (event) => {
+  onDefeated: (event, attacker) => {
     killCount++;
     
     // Check quest progress
@@ -749,7 +747,7 @@ function DragonBoss() {
       
       new BattleAi(this, {
         enemyType: EnemyType.Tank,
-        onDefeated: (event) => {
+        onDefeated: (event, attacker) => {
           const map = event.getCurrentMap();
           
           // Announce victory
