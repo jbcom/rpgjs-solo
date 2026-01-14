@@ -127,14 +127,20 @@ export function provideServerModules(modules: RpgServerModule[]): FactoryProvide
           }
         };
       }
-      if (module.database && typeof module.database === 'object') {
-        const database = {...module.database};
+      if (module.database) {
+        const database = module.database;
         module = {
           ...module,
           databaseHooks: {
-            load: (engine: RpgMap) => {
-              for (const key in database) {
-                engine.addInDatabase(key, database[key]);
+            load: async (engine: RpgMap) => {
+              const data = typeof database === 'function'
+                ? await database(engine)
+                : database;
+              if (!data || typeof data !== 'object') {
+                return;
+              }
+              for (const key in data) {
+                engine.addInDatabase(key, data[key]);
               }
             },
           }

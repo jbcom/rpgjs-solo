@@ -696,10 +696,10 @@ export interface RpgServer {
      * })
      * ``` 
      * 
-     * @prop { { [dataName]: data } } [database]
+     * @prop { { [dataName]: data } | (engine: RpgMap) => { [dataName]: data } | Promise<{ [dataName]: data }> } [database]
      * @memberof RpgServer
      * */
-    database?: object | any[],
+    database?: object | any[] | ((engine: RpgMap) => object | any[] | Promise<object | any[]>),
 
     /** 
      * Array of all maps. Each element can be either a class (decorated with `@MapData` or not) or a `MapOptions` object

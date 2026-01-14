@@ -119,7 +119,7 @@ export class MenuGui extends Gui {
         }))
         const saveLoad = this.buildSaveLoad(options)
 
-        return { menus, items, equips: menuEquips, skills, saveLoad, playerStats: buildStats() }
+        return { menus, items, equips: menuEquips, skills, saveLoad, playerStats: buildStats(), expForNextlevel: player.expForNextlevel }
     }
 
     private refreshMenu(clientActionId?: string) {

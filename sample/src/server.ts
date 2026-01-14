@@ -151,30 +151,30 @@ export function Event() {
       this.equip(EnemyClaw.id);
       
       // Initialize AI behavior
-      this.battleAi = new BattleAi(this, {
-        enemyType: EnemyType.Defensive,
-        visionRange: 150,
-        attackRange: 50,
-        attackCooldown: 900,
-        dodgeChance: 0.35,
-        dodgeCooldown: 2000,
-        fleeThreshold: 0.2,
-        attackPatterns: [
-          AttackPattern.Melee,
-          AttackPattern.Combo,
-          AttackPattern.DashAttack,
-          AttackPattern.Charged
-        ],
-        moveToCooldown: 450,
-        retreatCooldown: 700,
-        behavior: {
-          baseScore: 55,
-          updateInterval: 450,
-          minStateDuration: 700,
-          assaultThreshold: 70,
-          retreatThreshold: 30
-        }
-      });
+      // this.battleAi = new BattleAi(this, {
+      //   enemyType: EnemyType.Defensive,
+      //   visionRange: 150,
+      //   attackRange: 50,
+      //   attackCooldown: 900,
+      //   dodgeChance: 0.35,
+      //   dodgeCooldown: 2000,
+      //   fleeThreshold: 0.2,
+      //   attackPatterns: [
+      //     AttackPattern.Melee,
+      //     AttackPattern.Combo,
+      //     AttackPattern.DashAttack,
+      //     AttackPattern.Charged
+      //   ],
+      //   moveToCooldown: 450,
+      //   retreatCooldown: 700,
+      //   behavior: {
+      //     baseScore: 55,
+      //     updateInterval: 450,
+      //     minStateDuration: 700,
+      //     assaultThreshold: 70,
+      //     retreatThreshold: 30
+      //   }
+      // });
     },
     onPlayerTouch(player: RpgPlayer) {
      console.log("touch");
@@ -226,15 +226,17 @@ export default createServer({
     provideServerModules([
       {
         // Register weapons and armor in database
-        database: {
-          'basic-sword': BasicSword,
-          'heavy-hammer': HeavyHammer,
-          'enemy-claw': EnemyClaw,
-          'basic-shield': BasicShield,
-          'basic-armor': BasicArmor,
-          'basic-helmet': BasicHelmet,
-          'fire-armor': FireArmor,
-          'fire-skill': fireSkill,
+        database: async () => {
+          return {
+            'basic-sword': BasicSword,
+            'heavy-hammer': HeavyHammer,
+            'enemy-claw': EnemyClaw,
+            'basic-shield': BasicShield,
+            'basic-armor': BasicArmor,
+            'basic-helmet': BasicHelmet,
+            'fire-armor': FireArmor,
+            'fire-skill': fireSkill,
+          }
         },
         player: {
           props: {
@@ -252,7 +254,7 @@ export default createServer({
               accelerationB: 30
             };
 
-            console.log("start", player.expCurve);
+            player.exp = 1000
             
             player.changeMap("center-map", {
               x: 200,

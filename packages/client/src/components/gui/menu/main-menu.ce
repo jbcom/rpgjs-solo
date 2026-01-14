@@ -41,7 +41,7 @@
                                 </div>
                             </div>
                             <div class="rpg-ui-main-menu-status-block" style={{gridColumn: "span 2"}}>
-                                <div class="rpg-ui-main-menu-status-label">EXP {exp()}</div>
+                                <div class="rpg-ui-main-menu-status-label">EXP {exp()}/{expForNextlevel()}</div>
                                 <div class="rpg-ui-main-menu-status-bar">
                                     <div class="rpg-ui-main-menu-status-bar-fill exp" style={{width: expPercent}}></div>
                                 </div>
@@ -211,6 +211,7 @@
     const level = getEntityProp(currentPlayer, "level");
     const exp = getEntityProp(currentPlayer, "exp");
     const gold = getEntityProp(currentPlayer, "gold");
+    const expForNextlevel = computed(() => data().expForNextlevel || 0);
     const hpPercent = computed(() => {
         const max = hpMax() || 1;
         return `${Math.max(0, Math.min(100, (hp() / max) * 100))}%`;
@@ -220,7 +221,7 @@
         return `${Math.max(0, Math.min(100, (sp() / max) * 100))}%`;
     });
     const expPercent = computed(() => {
-        const max = exp() || 1;
+        const max = expForNextlevel() || 1;
         return `${Math.max(0, Math.min(100, (exp() / max) * 100))}%`;
     });
 

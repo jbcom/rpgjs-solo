@@ -691,7 +691,6 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
     get level(): number {
         return this._level()
     }
-
      /** 
      * ```ts
      * console.log(player.expForNextlevel) // 150
