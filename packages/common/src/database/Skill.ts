@@ -13,7 +13,7 @@ export interface SkillData {
 
 export class Skill {
     @id() id = signal('');
-    name = signal('');
+    @sync() name = signal('');
     description = signal('');
     spCost = signal(0);
     hitRate = signal(0);

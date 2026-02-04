@@ -1,0 +1,99 @@
+<Container>
+  @if (shouldRender) {
+    <Graphics draw={drawGrid} />
+  }
+</Container>
+
+<script>
+  import { computed } from "canvasengine";
+  import { inject } from "@rpgjs/client";
+  import { RpgClientEngine } from "@rpgjs/client";
+  import { actionBattleTargetingState, actionBattleUiOptions } from "../ui/state";
+  import { parseAoeMask } from "../targeting";
+
+  const { object } = defineProps();
+  const engine = inject(RpgClientEngine);
+
+  const isCurrentPlayer = computed(() => {
+    if (!object?.id) return false;
+    const idValue = typeof object.id === "function" ? object.id() : object.id;
+    return idValue === engine.playerId;
+  });
+  const uiOptions = computed(() => actionBattleUiOptions());
+  const targetingState = computed(() => actionBattleTargetingState());
+
+  const shouldRender = computed(() => {
+    if (!isCurrentPlayer()) return false;
+    if (!uiOptions().targeting?.enabled) return false;
+    return targetingState().active;
+  });
+
+  const getTileSize = () => {
+    const uiTile = uiOptions().targeting?.tileSize;
+    if (uiTile?.width && uiTile?.height) return uiTile;
+    const hitbox = object.hitbox?.() || { w: 32, h: 32 };
+    return { width: hitbox.w || 32, height: hitbox.h || 32 };
+  };
+
+  const getOriginTile = () => {
+    const hitbox = object.hitbox?.() || { w: 32, h: 32 };
+    const tileSize = getTileSize();
+    const x = Math.floor((object.x() + hitbox.w / 2) / tileSize.width);
+    const y = Math.floor((object.y() + hitbox.h / 2) / tileSize.height);
+    return { x, y };
+  };
+
+  const toColor = (value, fallback) => {
+    if (typeof value === "number") return value;
+    return fallback;
+  };
+
+  const drawGrid = (g) => {
+    const state = targetingState();
+    if (!state.active) return;
+
+    const tileSize = getTileSize();
+    const origin = getOriginTile();
+    const target = {
+      x: origin.x + state.offset.x,
+      y: origin.y + state.offset.y
+    };
+
+    const mask = parseAoeMask(state.aoeMask);
+    const colors = uiOptions().targeting?.colors || {};
+    const areaColor = toColor(colors.area, 0x2f9ef7);
+    const edgeColor = toColor(colors.edge, 0x1b6a98);
+    const cursorColor = toColor(colors.cursor, 0xffd166);
+
+    const showGrid = uiOptions().targeting?.showGrid !== false;
+    const playerX = object.x();
+    const playerY = object.y();
+
+    g.clear();
+
+    mask.cells.forEach((cell) => {
+      const tileX = target.x + cell.dx;
+      const tileY = target.y + cell.dy;
+      const worldX = tileX * tileSize.width;
+      const worldY = tileY * tileSize.height;
+      const relX = worldX - playerX;
+      const relY = worldY - playerY;
+
+      g.rect(relX, relY, tileSize.width, tileSize.height);
+      g.fill({ color: areaColor, alpha: 0.35 });
+
+      if (showGrid) {
+        g.rect(relX, relY, tileSize.width, tileSize.height);
+        g.stroke({ color: edgeColor, alpha: 0.9, width: 1 });
+      }
+    });
+
+    const cursorWorldX = target.x * tileSize.width;
+    const cursorWorldY = target.y * tileSize.height;
+    const cursorRelX = cursorWorldX - playerX;
+    const cursorRelY = cursorWorldY - playerY;
+
+    g.rect(cursorRelX, cursorRelY, tileSize.width, tileSize.height);
+    g.stroke({ color: cursorColor, alpha: 1, width: 2 });
+  };
+</script>

@@ -780,3 +780,93 @@ Automatic feedback:
 - **Damage Numbers**: Floating damage text
 - **Attack Animation**: Triggers `attack` animation
 - **Knockback**: Entities pushed back based on weapon `knockbackForce`
+
+## Action Bar + AoE Targeting (client + server)
+
+The action-battle package includes optional GUI components for an A-RPG action bar
+and AoE skill targeting. They are disabled by default and are configured via
+`provideActionBattle()`.
+
+### Enable the Action Bar
+
+```ts
+import { provideActionBattle } from "@rpgjs/action-battle";
+
+export default provideActionBattle({
+  ui: {
+    actionBar: {
+      enabled: true,
+      autoOpen: true,
+      mode: "both" // "items" | "skills" | "both"
+    }
+  }
+});
+```
+
+You can open/close it manually on the server:
+
+```ts
+import { openActionBattleActionBar } from "@rpgjs/action-battle/server";
+
+openActionBattleActionBar(player);
+```
+
+### Skill Range + AoE Mask (ASCII)
+
+Define range and AoE mask on the skill data (custom fields). The range uses
+Manhattan distance, and the mask is centered on the target tile.
+
+```ts
+@Skill({
+  name: "Nova",
+  spCost: 12,
+  // Custom fields used by action-battle
+  range: 3,
+  aoeMask: [
+    ".#.",
+    "###",
+    ".#."
+  ]
+})
+export class Nova {}
+```
+
+### Targeting Options
+
+```ts
+export default provideActionBattle({
+  ui: {
+    actionBar: {
+      enabled: true,
+      autoOpen: false
+    },
+    targeting: {
+      enabled: true,
+      showGrid: true,
+      colors: {
+        area: 0x2f9ef7,
+        edge: 0x1b6a98,
+        cursor: 0xffd166
+      }
+    }
+  },
+  targeting: {
+    affects: "events", // "events" | "players" | "both"
+    allowEmptyTarget: true
+  }
+});
+```
+
+### Custom Targeting Resolver (optional)
+
+If you prefer to compute targeting from your own skill schema, use `getTargeting`:
+
+```ts
+export default provideActionBattle({
+  skills: {
+    getTargeting(skill) {
+      return skill?.targeting;
+    }
+  }
+});
+```

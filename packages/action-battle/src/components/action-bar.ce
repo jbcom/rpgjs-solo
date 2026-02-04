@@ -1,0 +1,321 @@
+<DOMContainer width="100%" height="100%" class="action-battle-actionbar-root" controls={controls}>
+  <div class="action-battle-actionbar">
+    <div class="action-battle-actionbar-row">
+      @if (showSkills) {
+        <div class="action-battle-actionbar-group action-battle-actionbar-group-skills">
+          @for ((skill, index) of skillSlots) {
+            <div
+              class="action-battle-actionbar-slot"
+              data-selected={selectedSkillIndex() === index ? "true" : "false"}
+              data-disabled={!skill || !skill.usable}
+              tabindex={skill ? index : -1}
+              click={skill ? onSelectSkill(index) : undefined}
+            >
+              @if (skill?.icon) {
+                <DOMSprite sheet={iconSheet(skill.icon)} width="28px" height="28px" objectFit="contain" />
+              } @else if (skill) {
+                <span class="action-battle-actionbar-text">{skill.name}</span>
+              }
+              @if (skill?.spCost) {
+                <span class="action-battle-actionbar-cost">SP {skill.spCost}</span>
+              }
+            </div>
+          }
+        </div>
+      }
+      @if (showItems) {
+        <div class="action-battle-actionbar-group action-battle-actionbar-group-items">
+          @for ((item, index) of itemSlots) {
+            <div
+              class="action-battle-actionbar-slot"
+              data-selected={selectedItemIndex() === index ? "true" : "false"}
+              data-disabled={!item || !item.usable}
+              tabindex={item ? index : -1}
+              click={item ? onSelectItem(index) : undefined}
+            >
+              @if (item?.icon) {
+                <DOMSprite sheet={iconSheet(item.icon)} width="28px" height="28px" objectFit="contain" />
+              } @else if (item) {
+                <span class="action-battle-actionbar-text">{item.name}</span>
+              }
+              @if (item) {
+                <span class="action-battle-actionbar-count">x{item.quantity()}</span>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
+</DOMContainer>
+
+<style>
+  .action-battle-actionbar-root {
+    pointer-events: none;
+  }
+
+  .action-battle-actionbar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 12px;
+    pointer-events: auto;
+  }
+
+  .action-battle-actionbar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .action-battle-actionbar-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .action-battle-actionbar-group-items {
+    margin-left: auto;
+  }
+
+  .action-battle-actionbar-slot {
+    position: relative;
+    min-width: 44px;
+    height: 44px;
+    padding: 6px;
+    border-radius: 10px;
+    background: rgba(18, 18, 22, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .action-battle-actionbar-slot[data-selected="true"] {
+    border-color: rgba(255, 209, 102, 0.8);
+    box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.2);
+  }
+
+  .action-battle-actionbar-slot[data-disabled="true"] {
+    opacity: 0.45;
+  }
+
+  .action-battle-actionbar-text {
+    font-size: 11px;
+    text-align: center;
+  }
+
+  .action-battle-actionbar-count,
+  .action-battle-actionbar-cost {
+    position: absolute;
+    bottom: -4px;
+    right: 6px;
+    font-size: 10px;
+    opacity: 0.75;
+  }
+</style>
+
+<script>
+  import { signal, computed, effect } from "canvasengine";
+  import { inject } from "@rpgjs/client";
+  import { RpgClientEngine } from "@rpgjs/client";
+  import {
+    actionBattleTargetingState,
+    actionBattleUiOptions,
+    startTargeting,
+    stopTargeting,
+    moveTargetingOffset
+  } from "../ui/state";
+
+  const engine = inject(RpgClientEngine);
+  const keyboardControls = engine.globalConfig.keyboardControls;
+  const { data, onInteraction, onBack } = defineProps();
+  const currentPlayer = engine.getCurrentPlayer()
+
+  const selectedItemIndex = signal(-1);
+  const selectedSkillIndex = signal(-1);
+
+  const fillSlots = (entries, size) => {
+    const slots = entries.slice(0, size);
+    while (slots.length < size) {
+      slots.push(null);
+    }
+    return slots;
+  };
+
+  const skillSlots = computed(() => fillSlots(currentPlayer.skills(), 3));
+  const itemSlots = computed(() => fillSlots(currentPlayer.items(), 2));
+
+  const uiOptions = computed(() => actionBattleUiOptions());
+  const showItems = computed(() => {
+    const mode = uiOptions().actionBar?.mode || "both";
+    return mode === "items" || mode === "both";
+  });
+  const showSkills = computed(() => {
+    const mode = uiOptions().actionBar?.mode || "both";
+    return mode === "skills" || mode === "both";
+  });
+
+  const isTargeting = computed(() => actionBattleTargetingState().active);
+
+  const iconSheet = (iconId) => ({
+    definition: engine.getSpriteSheet(iconId),
+    playing: "default"
+  });
+
+  const selectItem = (index) => {
+    const item = itemSlots()[index];
+    if (!item || !item.usable) return;
+    if (onInteraction) onInteraction("useItem", { id: item.id });
+  };
+
+  const selectSkill = (index) => {
+    const skill = skillSlots()[index];
+    if (!skill || !skill.usable) return;
+    const range = skill.range ?? 0;
+    if (range > 0 || skill.aoeMask) {
+      startTargeting(skill);
+      return;
+    }
+    if (onInteraction) onInteraction("useSkill", { id: skill.id });
+  };
+
+  const onSelectItem = (index) => () => {
+    selectedItemIndex.set(index);
+    selectItem(index);
+  };
+
+  const onSelectSkill = (index) => () => {
+    selectedSkillIndex.set(index);
+    selectSkill(index);
+  };
+
+  const getPlayerTile = () => {
+    const player = engine.scene.getCurrentPlayer();
+    if (!player) return null;
+    const hitbox = player.hitbox?.() || { w: 32, h: 32 };
+    const tileWidth = hitbox.w || 32;
+    const tileHeight = hitbox.h || 32;
+    const x = Math.floor((player.x() + hitbox.w / 2) / tileWidth);
+    const y = Math.floor((player.y() + hitbox.h / 2) / tileHeight);
+    return { x, y };
+  };
+
+  const confirmTargeting = () => {
+    const state = actionBattleTargetingState();
+    if (!state.skill) return;
+    const origin = getPlayerTile();
+    if (!origin) return;
+    const target = {
+      x: origin.x + state.offset.x,
+      y: origin.y + state.offset.y
+    };
+    if (onInteraction) {
+      onInteraction("useSkill", {
+        id: state.skill.id,
+        target
+      });
+    }
+    stopTargeting();
+  };
+
+  const resolveKeyBind = (key) => {
+    if (!key) return null;
+    if (typeof key === "string" && keyboardControls?.[key]) {
+      return keyboardControls[key];
+    }
+    return key;
+  };
+
+  const buildControls = () => {
+    const skillControls = {};
+    if (showSkills()) {
+      skillSlots().forEach((skill, index) => {
+        const bind = resolveKeyBind(skill?.key);
+        if (!bind) return;
+        skillControls[`skill-${index}`] = {
+          bind,
+          keyDown() {
+            if (isTargeting()) return;
+            selectedSkillIndex.set(index);
+            selectSkill(index);
+          }
+        };
+      });
+    }
+    return {
+      left: {
+        repeat: true,
+        bind: keyboardControls.left,
+        throttle: 150,
+        keyDown() {
+          if (isTargeting()) {
+            moveTargetingOffset(-1, 0);
+          }
+        }
+      },
+      right: {
+        repeat: true,
+        bind: keyboardControls.right,
+        throttle: 150,
+        keyDown() {
+          if (isTargeting()) {
+            moveTargetingOffset(1, 0);
+          }
+        }
+      },
+      up: {
+        repeat: true,
+        bind: keyboardControls.up,
+        throttle: 150,
+        keyDown() {
+          if (isTargeting()) {
+            moveTargetingOffset(0, -1);
+          }
+        }
+      },
+      down: {
+        repeat: true,
+        bind: keyboardControls.down,
+        throttle: 150,
+        keyDown() {
+          if (isTargeting()) {
+            moveTargetingOffset(0, 1);
+          }
+        }
+      },
+      action: {
+        bind: keyboardControls.action,
+        keyDown() {
+          if (isTargeting()) {
+            confirmTargeting();
+          }
+        }
+      },
+      escape: {
+        bind: keyboardControls.escape,
+        keyDown() {
+          if (isTargeting()) {
+            stopTargeting();
+            return;
+          }
+          if (onBack) onBack();
+        }
+      },
+      ...skillControls,
+      gamepad: {
+        enabled: true
+      }
+    };
+  };
+
+  const controls = signal(buildControls());
+
+  effect(() => {
+    controls.set(buildControls());
+  });
+</script>

@@ -265,6 +265,8 @@ export default createServer({
             player.paramsModifier = {
               [MAXHP]: { value: 100 }
             };
+
+            player.learnSkill(fireSkill);
             
             player.changeMap("center-map", {
               x: 200,

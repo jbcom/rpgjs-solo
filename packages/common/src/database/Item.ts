@@ -15,7 +15,7 @@ interface ItemData {
 
 export class Item {
     @id() id = signal('');
-    name = signal('');
+    @sync() name = signal('');
     description = signal('');
     price = signal(0);
     atk = signal(0);

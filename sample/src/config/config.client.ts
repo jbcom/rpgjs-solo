@@ -58,7 +58,15 @@ export default {
     provideVueGui(),
     provideClientGlobalConfig(),
     provideMain(),
-    provideActionBattle(),
+    provideActionBattle({
+      ui: {
+        actionBar: {
+          enabled: true,
+          autoOpen: false,
+          mode: "both" // "items" | "skills" | "both"
+        }
+      }
+    }),
     provideClientModules([
       withMobile(),
       {
