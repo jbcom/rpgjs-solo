@@ -266,7 +266,9 @@ export default createServer({
               [MAXHP]: { value: 100 }
             };
 
-            player.learnSkill(fireSkill);
+            if (!player.getSkill(fireSkill)) {
+              player.learnSkill(fireSkill);
+            }
             
             player.changeMap("center-map", {
               x: 200,
@@ -296,7 +298,9 @@ export default createServer({
             player.param[PDEF] = 10;
             
             
-            player.learnSkill(fireSkill);
+            if (!player.getSkill(fireSkill)) {
+              player.learnSkill(fireSkill);
+            }
             
             console.log("Player equipped with:", player.equipments().map(e => e.name()));
           },

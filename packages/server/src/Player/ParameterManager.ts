@@ -10,6 +10,32 @@ export type ExpCurve = {
   accelerationB: number;
 };
 
+const DEFAULT_EXP_CURVE: ExpCurve = {
+  basis: 30,
+  extra: 20,
+  accelerationA: 30,
+  accelerationB: 30
+};
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toValidNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeExpCurve(value: unknown): ExpCurve {
+  if (!isObject(value)) return DEFAULT_EXP_CURVE;
+
+  return {
+    basis: toValidNumber(value.basis, DEFAULT_EXP_CURVE.basis),
+    extra: toValidNumber(value.extra, DEFAULT_EXP_CURVE.extra),
+    accelerationA: toValidNumber(value.accelerationA, DEFAULT_EXP_CURVE.accelerationA),
+    accelerationB: toValidNumber(value.accelerationB, DEFAULT_EXP_CURVE.accelerationB)
+  };
+}
+
 /**
  * Interface for Parameter Manager functionality
  * 
@@ -549,10 +575,18 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      * @memberof ParameterManager
      * */
-    public _expCurveSignal = type(signal<string>('') as any, '_expCurveSignal', { persist: true }, this as any)
+    public _expCurveSignal = type(signal<string>(JSON.stringify(DEFAULT_EXP_CURVE)) as any, '_expCurveSignal', { persist: true }, this as any)
 
     get expCurve(): ExpCurve { 
-        return JSON.parse(this._expCurveSignal())
+        const raw = this._expCurveSignal()
+        if (!raw) return DEFAULT_EXP_CURVE
+
+        try {
+            return normalizeExpCurve(JSON.parse(raw))
+        }
+        catch {
+            return DEFAULT_EXP_CURVE
+        }
     }
 
     set expCurve(val: ExpCurve) {

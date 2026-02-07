@@ -83,6 +83,8 @@ export { ProjectileType } from './movement/strategies/ProjectileMovement';
 export {
   PredictionController,
   type PredictionControllerConfig,
+  type PredictionHistoryEntry,
+  type PredictionAckResult,
   type PredictionState,
 } from './network/PredictionController';
 export {

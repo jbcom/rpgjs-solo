@@ -6,7 +6,7 @@ import { generateShortUUID, sync, type, users } from "@signe/sync";
 import { signal } from "@signe/reactive";
 import { inject } from "@signe/di";
 import { context } from "../core/context";;
-import { finalize, lastValueFrom, throttleTime } from "rxjs";
+import { finalize, lastValueFrom } from "rxjs";
 import { Subject } from "rxjs";
 import { BehaviorSubject } from "rxjs";
 import { COEFFICIENT_ELEMENTS, DAMAGE_CRITICAL, DAMAGE_PHYSIC, DAMAGE_SKILL } from "../presets";
@@ -15,6 +15,15 @@ import { EntityState } from "@rpgjs/physic";
 import { MapOptions } from "../decorators/map";
 import { BaseRoom } from "./BaseRoom";
 import { buildSaveSlotMeta, resolveSaveStorageStrategy } from "../services/save";
+import { Log } from "../logs/log";
+
+function isRpgLog(error: unknown): error is Log {
+  return error instanceof Log
+    || (typeof error === "object"
+      && error !== null
+      && "id" in error
+      && (error as any).name === "RpgLog");
+}
 
 /**
  * Interface for input controls configuration
@@ -288,8 +297,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     // Helper function to check if entities have different z (height)
     const hasDifferentZ = (entityA: any, entityB: any): boolean => {
-      const zA = entityA.owner.z();
-      const zB = entityB.owner.z();
+      const zA = entityA.owner?.z();
+      const zB = entityB.owner?.z();
       return zA !== zB;
     };
 
@@ -453,10 +462,12 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       // Add ack info: last processed frame and authoritative position
       if (player) {
         const lastFramePositions = player._lastFramePositions;
+        const bodyPos = this.getBodyPosition(player.id, "top-left");
         obj.ack = {
-          frame: lastFramePositions?.frame ?? player.pendingInputs.length,
-          x: lastFramePositions?.position?.x ?? player.x(),
-          y: lastFramePositions?.position?.y ?? player.y(),
+          frame: lastFramePositions?.frame ?? 0,
+          serverTick: lastFramePositions?.serverTick ?? this.getTick(),
+          x: lastFramePositions?.position?.x ?? bodyPos?.x ?? player.x(),
+          y: lastFramePositions?.position?.y ?? bodyPos?.y ?? player.y(),
           direction: lastFramePositions?.position?.direction ?? player.direction(),
         };
       }
@@ -510,26 +521,41 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
     player.context = context;
     player.conn = conn;
+    player.pendingInputs = [];
+    player.lastProcessedInputTs = 0;
+    player._lastFramePositions = null;
     player._onInit()
     this.dataIsReady$.pipe(
-      finalize(async () => {
-        // Check if we should stop all sounds before playing new ones
-        if ((this as any).stopAllSoundsBeforeJoin) {
-          player.stopAllSounds();
-        }
+      finalize(() => {
+        // Avoid unhandled promise rejections from async hook execution.
+        void (async () => {
+          try {
+            // Check if we should stop all sounds before playing new ones
+            if ((this as any).stopAllSoundsBeforeJoin) {
+              player.stopAllSounds();
+            }
 
-        this.sounds.forEach(sound => player.playSound(sound, { loop: true }));
+            this.sounds.forEach(sound => player.playSound(sound, { loop: true }));
 
-        // Execute global map hooks (from RpgServer.map)
-        await lastValueFrom(this.hooks.callHooks("server-map-onJoin", player, this));
+            // Execute global map hooks (from RpgServer.map)
+            await lastValueFrom(this.hooks.callHooks("server-map-onJoin", player, this));
 
-        // // Execute map-specific hooks (from @MapData or MapOptions)
-        if (typeof (this as any)._onJoin === 'function') {
-          await (this as any)._onJoin(player);
-        }
+            // // Execute map-specific hooks (from @MapData or MapOptions)
+            if (typeof (this as any)._onJoin === 'function') {
+              await (this as any)._onJoin(player);
+            }
 
-        // Execute player hooks
-        await lastValueFrom(this.hooks.callHooks("server-player-onJoinMap", player, this));
+            // Execute player hooks
+            await lastValueFrom(this.hooks.callHooks("server-player-onJoinMap", player, this));
+          }
+          catch (error) {
+            if (isRpgLog(error)) {
+              console.warn(`[RpgLog:${error.id}] ${error.message}`);
+              return;
+            }
+            console.error("[RPGJS] Error during map onJoin hooks:", error);
+          }
+        })();
       })
     ).subscribe();
   }
@@ -569,6 +595,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     // Execute player hooks
     await lastValueFrom(this.hooks.callHooks("server-player-onLeaveMap", player, this));
     player.pendingInputs = [];
+    player.lastProcessedInputTs = 0;
+    player._lastFramePositions = null;
   }
 
   /**
@@ -696,19 +724,39 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   @Action('move')
   async onInput(player: RpgPlayer, input: any) {
-    if (typeof input?.frame === 'number') {
-      // Check if we already have this frame to avoid duplicates
-      const existingInput = player.pendingInputs.find(pending => pending.frame === input.frame);
-      if (existingInput) {
-        return; // Skip duplicate frame
-      }
-
-      player.pendingInputs.push({
-        input: input.input,
-        frame: input.frame,
-        timestamp: input.timestamp || Date.now(),
-      });
+    if (typeof input?.frame !== 'number') {
+      return;
     }
+    if (!input?.input) {
+      return;
+    }
+
+    const lastAckedFrame = player._lastFramePositions?.frame ?? 0;
+    if (input.frame <= lastAckedFrame) {
+      return;
+    }
+
+    // Check if we already have this frame to avoid duplicates
+    const existingInput = player.pendingInputs.find((pending) => pending.frame === input.frame);
+    if (existingInput) {
+      return;
+    }
+
+    player.pendingInputs.push({
+      input: input.input,
+      frame: input.frame,
+      tick: typeof input.tick === "number" ? input.tick : undefined,
+      timestamp: input.timestamp || Date.now(),
+    });
+  }
+
+  @Action("ping")
+  onPing(player: RpgPlayer, payload: { clientTime?: number; clientFrame?: number }) {
+    player.emit("pong", {
+      serverTick: this.getTick(),
+      clientTime: typeof payload?.clientTime === "number" ? payload.clientTime : Date.now(),
+      clientFrame: typeof payload?.clientFrame === "number" ? payload.clientFrame : 0,
+    });
   }
 
   @Action('save.save')
@@ -958,7 +1006,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     const config = { ...defaultControls, ...controls };
     let lastProcessedTime = player.lastProcessedInputTs || 0;
-    let lastProcessedFrame = 0;
+    let lastProcessedFrame = player._lastFramePositions?.frame ?? 0;
 
     // Sort inputs by frame number to ensure proper order
     player.pendingInputs.sort((a, b) => (a.frame || 0) - (b.frame || 0));
@@ -1009,6 +1057,19 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         processedInputs.push(input.input);
         hasProcessedInputs = true;
         lastProcessedTime = input.timestamp || Date.now();
+
+        const bodyPos = this.getBodyPosition(player.id, "top-left");
+        const ackX = bodyPos?.x ?? player.x();
+        const ackY = bodyPos?.y ?? player.y();
+        player._lastFramePositions = {
+          frame: input.frame,
+          position: {
+            x: Math.round(ackX),
+            y: Math.round(ackY),
+            direction: player.direction(),
+          },
+          serverTick: this.getTick(),
+        };
       }
 
       // Update tracking variables
@@ -1060,19 +1121,17 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       this._inputLoopSubscription.unsubscribe();
     }
 
-    this._inputLoopSubscription = this.tick$.pipe(
-      throttleTime(50) // Throttle to 50ms for input processing
-    ).subscribe(async ({ timestamp }) => {
+    this._inputLoopSubscription = this.tick$.subscribe(() => {
       for (const player of this.getPlayers()) {
-        if (player.pendingInputs.length > 0) {
-          const anyPlayer = player as any;
-          if (!anyPlayer._isProcessingInputs) {
-            anyPlayer._isProcessingInputs = true;
-            await this.processInput(player.id).finally(() => {
-              anyPlayer._isProcessingInputs = false;
-            });
-          }
+        const anyPlayer = player as any;
+        const shouldProcess = player.pendingInputs.length > 0 || (player.lastProcessedInputTs || 0) > 0;
+        if (!shouldProcess || anyPlayer._isProcessingInputs) {
+          continue;
         }
+        anyPlayer._isProcessingInputs = true;
+        void this.processInput(player.id).finally(() => {
+          anyPlayer._isProcessingInputs = false;
+        });
       }
     });
   }

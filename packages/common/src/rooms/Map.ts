@@ -273,16 +273,21 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   loadPhysic() {
     this.clearPhysic();
 
+    const mapData = this.data?.();
+    const mapWidth = typeof mapData?.width === "number" ? mapData.width : 0;
+    const mapHeight = typeof mapData?.height === "number" ? mapData.height : 0;
     const hitboxes: Array<
       | { id?: string; x: number; y: number; width: number; height: number }
       | { id?: string; points: number[][] }
-    > = this.data()?.hitboxes ?? [];
+    > = Array.isArray(mapData?.hitboxes) ? mapData.hitboxes : [];
 
-    const gap = 100;
-    this.addStaticHitbox('map-width-left', -gap, 0, gap, this.data().height);
-    this.addStaticHitbox('map-width-right', this.data().width, 0, gap, this.data().height);
-    this.addStaticHitbox('map-height-top', 0, -gap, this.data().width, gap);
-    this.addStaticHitbox('map-height-bottom', 0, this.data().height, this.data().width, gap);
+    if (mapWidth > 0 && mapHeight > 0) {
+      const gap = 100;
+      this.addStaticHitbox('map-width-left', -gap, 0, gap, mapHeight);
+      this.addStaticHitbox('map-width-right', mapWidth, 0, gap, mapHeight);
+      this.addStaticHitbox('map-height-top', 0, -gap, mapWidth, gap);
+      this.addStaticHitbox('map-height-bottom', 0, mapHeight, mapWidth, gap);
+    }
 
     for (let staticHitbox of hitboxes) {
       if ('x' in staticHitbox) {
@@ -302,10 +307,22 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         } else if (type === "remove") {
           this.removeHitbox(key);
         } else if (type === "update") {
+          player.id = player.id ?? key;
+          if (!this.getBody(key)) {
+            this.createCharacterHitbox(player, "hero");
+            return;
+          }
           if (this.isPhysicsSyncingSignals) {
             return;
           }
           this.updateCharacterHitbox(player);
+        }
+        else if (type == 'reset') {
+          for (let id in player) {
+            const _player = player[id]
+            _player.id = _player.id ?? id;
+            this.createCharacterHitbox(_player, "hero");
+          }
         }
       },
     );
@@ -324,9 +341,45 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         }
         this.removeHitbox(key);
       } else if (type === "update") {
+        event.id = event.id ?? key;
+        if (!this.getBody(key)) {
+          this.createCharacterHitbox(event, "npc", {
+            mass: 100,
+          });
+          return;
+        }
         this.updateCharacterHitbox(event);
+      } else if (type === "reset") {
+        for (const id in event) {
+          const _event = event[id];
+          if (!_event) continue;
+          _event.id = _event.id ?? id;
+          this.createCharacterHitbox(_event, "npc", {
+            mass: 100,
+          });
+        }
       }
     });
+
+    // Hydrate physics world with already-loaded scene objects.
+    // This covers cases where sync state is present before subscriptions are attached.
+    const players = this.players();
+    for (const id in players) {
+      const player = players[id];
+      if (!player) continue;
+      player.id = player.id ?? id;
+      this.createCharacterHitbox(player, "hero");
+    }
+
+    const events = this.events();
+    for (const id in events) {
+      const event = events[id];
+      if (!event) continue;
+      event.id = event.id ?? id;
+      this.createCharacterHitbox(event, "npc", {
+        mass: 100,
+      });
+    }
 
     // S'abonner au ticker automatique seulement si autoTickEnabled est true
     if (this.autoTickEnabled) {
@@ -557,6 +610,11 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     options?: { isStatic?: boolean; mass?: number },
   ): void {
     if (!owner?.id) {
+      return;
+    }
+    const existingEntity = this.physic.getEntityByUUID(owner.id);
+    if (existingEntity) {
+      this.updateCharacterHitbox(owner);
       return;
     }
 

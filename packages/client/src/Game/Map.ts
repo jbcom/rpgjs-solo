@@ -11,15 +11,23 @@ export class RpgClientMap extends RpgCommonMap<any> {
   @users(RpgClientPlayer) players = signal<Record<string, RpgClientPlayer>>({});
   @sync(RpgClientEvent) events = signal<Record<string, RpgClientEvent>>({});
   currentPlayer = computed(() => this.players()[this.engine.playerIdSignal()!])
+  private manualClientPhysicsTick = false;
+  private readonly isTestEnvironment: boolean;
 
   constructor() {
     super();
     // Détecter l'environnement de test
-    const isTest = (typeof process !== 'undefined' && process.env?.TEST === 'true') 
+    const isTest = (typeof process !== 'undefined' && process.env?.TEST === 'true')
       || (typeof window !== 'undefined' && (window as any).__RPGJS_TEST__ === true);
+    this.isTestEnvironment = isTest;
     if (isTest) {
       this.autoTickEnabled = false;
     }
+  }
+
+  configureClientPrediction(enabled: boolean): void {
+    this.manualClientPhysicsTick = enabled;
+    this.autoTickEnabled = enabled ? false : !this.isTestEnvironment;
   }
 
   getCurrentPlayer() {
@@ -37,6 +45,13 @@ export class RpgClientMap extends RpgCommonMap<any> {
     );
     this.events.set({})
     this.clearPhysic()
+  }
+
+  stepClientPhysics(deltaMs: number): number {
+    if (!this.manualClientPhysicsTick) {
+      return 0;
+    }
+    return this.nextTick(deltaMs);
   }
 
   stepPredictionTick(): void {

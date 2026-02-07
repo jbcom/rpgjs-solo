@@ -13,12 +13,20 @@ export interface PredictionControllerConfig<DirectionType = unknown> {
   setAuthoritativeState: (state: PredictionState<DirectionType>) => void;
 }
 
-interface PredictionHistoryEntry<DirectionType> {
+export interface PredictionHistoryEntry<DirectionType> {
   frame: number;
   tick: number;
   timestamp: number;
   direction: DirectionType;
   state?: PredictionState<DirectionType>;
+}
+
+export interface PredictionAckResult<DirectionType = unknown> {
+  acknowledgedFrame: number;
+  acknowledgedTick: number;
+  state?: PredictionState<DirectionType>;
+  pendingInputs: PredictionHistoryEntry<DirectionType>[];
+  needsReconciliation: boolean;
 }
 
 /**
@@ -83,24 +91,49 @@ export class PredictionController<DirectionType = unknown> {
       serverTick?: number;
       state?: PredictionState<DirectionType>;
     },
-  ): void {
+  ): PredictionAckResult<DirectionType> {
     if (typeof ack.frame !== "number") {
-      return;
+      const result: PredictionAckResult<DirectionType> = {
+        acknowledgedFrame: this.lastAckFrame,
+        acknowledgedTick: this.lastAckTick,
+        pendingInputs: [...this.history],
+        needsReconciliation: false,
+      };
+      if (ack.state) {
+        result.state = ack.state;
+      }
+      return result;
     }
     this.lastAckFrame = Math.max(this.lastAckFrame, ack.frame);
     if (typeof ack.serverTick === "number") {
       this.lastAckTick = Math.max(this.lastAckTick, ack.serverTick);
     }
     this.history = this.history.filter((entry) => entry.frame > this.lastAckFrame);
-    if (ack.state && !this.hasPendingInputs()) {
-      this.applySnapshot(ack.state);
-      this.pendingSnapshot = null;
-      return;
+
+    let needsReconciliation = false;
+    if (ack.state) {
+      const current = this.config.getCurrentState();
+      const dx = current.x - ack.state.x;
+      const dy = current.y - ack.state.y;
+      const distance = Math.hypot(dx, dy);
+      needsReconciliation = distance > this.correctionThreshold;
     }
-    if (this.pendingSnapshot && !this.hasPendingInputs()) {
+
+    if (!needsReconciliation && this.pendingSnapshot && !this.hasPendingInputs()) {
       this.applySnapshot(this.pendingSnapshot);
       this.pendingSnapshot = null;
     }
+
+    const result: PredictionAckResult<DirectionType> = {
+      acknowledgedFrame: this.lastAckFrame,
+      acknowledgedTick: this.lastAckTick,
+      pendingInputs: [...this.history],
+      needsReconciliation,
+    };
+    if (ack.state) {
+      result.state = ack.state;
+    }
+    return result;
   }
 
   cleanup(now: number): void {
@@ -128,4 +161,3 @@ export class PredictionController<DirectionType = unknown> {
     this.history = [];
   }
 }
-

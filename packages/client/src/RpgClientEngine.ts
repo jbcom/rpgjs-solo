@@ -18,6 +18,7 @@ import * as PIXI from "pixi.js";
 import { PrebuiltComponentAnimations } from "./components/animations";
 import {
   PredictionController,
+  type PredictionHistoryEntry,
   type PredictionState,
 } from "@rpgjs/common";
 import { NotificationManager } from "./Gui/NotificationManager";
@@ -64,6 +65,8 @@ export class RpgClientEngine<T = any> {
   private prediction?: PredictionController<Direction>;
   private readonly SERVER_CORRECTION_THRESHOLD = 30;
   private inputFrameCounter = 0;
+  private pendingPredictionFrames: number[] = [];
+  private lastClientPhysicsStepAt = 0;
   private frameOffset = 0;
   // Ping/Pong for RTT measurement
   private rtt: number = 0; // Round-trip time in ms
@@ -156,6 +159,8 @@ export class RpgClientEngine<T = any> {
 
   async start() {
     this.sceneMap = new RpgClientMap()
+    this.sceneMap.configureClientPrediction(this.predictionEnabled);
+    this.sceneMap.loadPhysic();
     this.selector = document.body.querySelector("#rpg") as HTMLElement;
 
     const bootstrapOptions = (this.globalConfig as any)?.bootstrapCanvasOptions;
@@ -200,6 +205,8 @@ export class RpgClientEngine<T = any> {
     window.addEventListener('resize', this.resizeHandler);
 
     const tickSubscription = this.tick.subscribe((tick) => {
+      this.stepClientPhysicsTick();
+      this.flushPendingPredictedStates();
       this.hooks.callHooks("client-engine-onStep", this, tick).subscribe();
 
       // Clean up old prediction states and input history every 60 ticks (approximately every second at 60fps)
@@ -216,7 +223,30 @@ export class RpgClientEngine<T = any> {
       saveClient.initialize(this.webSocket);
       this.initListeners()
       this.guiService._initialize()
+      this.startPingPong();
     });
+  }
+
+  private prepareSyncPayload(data: any): any {
+    const payload = { ...(data ?? {}) };
+    delete payload.ack;
+    delete payload.timestamp;
+
+    const myId = this.playerIdSignal();
+    const players = payload.players;
+    if (myId && players && players[myId]) {
+      const localPatch = { ...players[myId] };
+      delete localPatch.x;
+      delete localPatch.y;
+      delete localPatch.direction;
+      delete localPatch._frames;
+      payload.players = {
+        ...players,
+        [myId]: localPatch,
+      };
+    }
+
+    return payload;
   }
 
   private initListeners() {
@@ -229,16 +259,23 @@ export class RpgClientEngine<T = any> {
 
       if (this.sceneResetQueued) {
         this.sceneMap.reset();
+        this.sceneMap.loadPhysic();
         this.sceneResetQueued = false;
       }
 
       // Apply client-side prediction filtering and server reconciliation
       this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: data }).subscribe();
 
-      load(this.sceneMap, data, true);
+      const ack = data?.ack;
+      const payload = this.prepareSyncPayload(data);
+      load(this.sceneMap, payload, true);
 
-      for (const playerId in data.players ?? {}) {
-        const player = data.players[playerId]
+      if (ack && typeof ack.frame === "number") {
+        this.applyServerAck(ack);
+      }
+
+      for (const playerId in payload.players ?? {}) {
+        const player = payload.players[playerId]
         if (!player._param) continue
         for (const param in player._param) {
          this.sceneMap.players()[playerId]._param()[param] = player._param[param]
@@ -246,12 +283,12 @@ export class RpgClientEngine<T = any> {
       }
       
       // Check if players and events are present in sync data
-      const players = data.players || this.sceneMap.players();
+      const players = payload.players || this.sceneMap.players();
       if (players && Object.keys(players).length > 0) {
         this.playersReceived$.next(true);
       }
       
-      const events = data.events || this.sceneMap.events();
+      const events = payload.events || this.sceneMap.events();
       if (events !== undefined) {
         this.eventsReceived$.next(true);
       }
@@ -345,6 +382,7 @@ export class RpgClientEngine<T = any> {
     this.webSocket.on('open', () => {
       this.hooks.callHooks("client-engine-onConnected", this, this.socket).subscribe();
       // Start ping/pong for synchronization
+      this.startPingPong();
     })
 
     this.webSocket.on('close', () => {
@@ -478,6 +516,7 @@ export class RpgClientEngine<T = any> {
     
     // Signal that map loading is completed (this should be last to ensure other checks are done)
     this.mapLoadCompleted$.next(true);
+    this.sceneMap.configureClientPrediction(this.predictionEnabled);
     this.sceneMap.loadPhysic()
   }
 
@@ -1075,7 +1114,21 @@ export class RpgClientEngine<T = any> {
       frame = ++this.inputFrameCounter;
       tick = this.getPhysicsTick();
     }
+    this.inputFrameCounter = frame;
     this.hooks.callHooks("client-engine-onInput", this, { input, playerId: this.playerId }).subscribe();
+
+    const currentPlayer = this.sceneMap.getCurrentPlayer();
+    const bodyReady = this.ensureCurrentPlayerBody();
+    if (currentPlayer && bodyReady) {
+      currentPlayer.changeDirection(input);
+      (this.sceneMap as any).movePlayer(currentPlayer, input); 
+      if (this.predictionEnabled && this.prediction) {
+        this.pendingPredictionFrames.push(frame);
+        if (this.pendingPredictionFrames.length > 240) {
+          this.pendingPredictionFrames = this.pendingPredictionFrames.slice(-240);
+        }
+      }
+    }
 
     this.webSocket.emit('move', {
       input,
@@ -1083,14 +1136,7 @@ export class RpgClientEngine<T = any> {
       frame,
       tick,
     });
-
-    const currentPlayer = this.sceneMap.getCurrentPlayer();
-    if (currentPlayer) {
-      (this.sceneMap as any).moveBody(currentPlayer, input);
-    }
     this.lastInputTime = Date.now();
-    const myId = this.playerIdSignal();
-
   }
 
   processAction({ action }: { action: number }) {
@@ -1117,6 +1163,53 @@ export class RpgClientEngine<T = any> {
 
   private getPhysicsTick(): number {
     return this.sceneMap?.getTick?.() ?? 0;
+  }
+
+  private ensureCurrentPlayerBody(): boolean {
+    const player = this.sceneMap?.getCurrentPlayer();
+    const myId = this.playerIdSignal();
+    if (!player || !myId) {
+      return false;
+    }
+    if (!player.id) {
+      player.id = myId;
+    }
+    if (this.sceneMap.getBody(myId)) {
+      return true;
+    }
+    try {
+      this.sceneMap.loadPhysic();
+    } catch (error) {
+      console.error("[RPGJS] Unable to initialize client physics before input:", error);
+      return false;
+    }
+    return !!this.sceneMap.getBody(myId);
+  }
+
+  private stepClientPhysicsTick(): void {
+    if (!this.predictionEnabled || !this.sceneMap) {
+      return;
+    }
+    const now = Date.now();
+    if (this.lastClientPhysicsStepAt === 0) {
+      this.lastClientPhysicsStepAt = now;
+    }
+    const deltaMs = Math.max(1, Math.min(100, now - this.lastClientPhysicsStepAt));
+    this.lastClientPhysicsStepAt = now;
+    this.sceneMap.stepClientPhysics(deltaMs);
+  }
+
+  private flushPendingPredictedStates(): void {
+    if (!this.predictionEnabled || !this.prediction || this.pendingPredictionFrames.length === 0) {
+      return;
+    }
+    const state = this.getLocalPlayerState();
+    while (this.pendingPredictionFrames.length > 0) {
+      const frame = this.pendingPredictionFrames.shift();
+      if (typeof frame === "number") {
+        this.prediction.attachPredictedState(frame, state);
+      }
+    }
   }
 
   private getLocalPlayerState(): PredictionState<Direction> {
@@ -1151,8 +1244,10 @@ export class RpgClientEngine<T = any> {
   private initializePredictionController(): void {
     if (!this.predictionEnabled) {
       this.prediction = undefined;
+      this.sceneMap?.configureClientPrediction?.(false);
       return;
     }
+    this.sceneMap?.configureClientPrediction?.(true);
     this.prediction = new PredictionController<Direction>({
       correctionThreshold: (this.globalConfig as any)?.prediction?.correctionThreshold ?? this.SERVER_CORRECTION_THRESHOLD,
       historyTtlMs: (this.globalConfig as any)?.prediction?.historyTtlMs ?? 2000,
@@ -1222,6 +1317,8 @@ export class RpgClientEngine<T = any> {
     this.initializePredictionController();
     this.frameOffset = 0;
     this.inputFrameCounter = 0;
+    this.pendingPredictionFrames = [];
+    this.lastClientPhysicsStepAt = 0;
   }
 
   /**
@@ -1292,7 +1389,7 @@ export class RpgClientEngine<T = any> {
 
   private applyServerAck(ack: { frame: number; serverTick?: number; x?: number; y?: number; direction?: Direction }) {
     if (this.predictionEnabled && this.prediction) {
-      this.prediction.applyServerAck({
+      const result = this.prediction.applyServerAck({
         frame: ack.frame,
         serverTick: ack.serverTick,
         state:
@@ -1300,6 +1397,9 @@ export class RpgClientEngine<T = any> {
             ? { x: ack.x, y: ack.y, direction: ack.direction }
             : undefined,
       });
+      if (result.state && result.needsReconciliation) {
+        this.reconcilePrediction(result.state, result.pendingInputs);
+      }
       return;
     }
 
@@ -1322,6 +1422,32 @@ export class RpgClientEngine<T = any> {
     player.y.set(Math.round(ack.y));
     if (ack.direction) {
       player.changeDirection(ack.direction);
+    }
+  }
+
+  private reconcilePrediction(
+    authoritativeState: PredictionState<Direction>,
+    pendingInputs: PredictionHistoryEntry<Direction>[],
+  ): void {
+    const player = this.getCurrentPlayer();
+    if (!player) {
+      return;
+    }
+
+    (this.sceneMap as any).stopMovement(player);
+    this.applyAuthoritativeState(authoritativeState);
+
+    if (!pendingInputs.length) {
+      return;
+    }
+
+    // Keep replay bounded to avoid expensive catch-up in extreme packet loss scenarios.
+    const replayInputs = pendingInputs.slice(-120);
+    for (const entry of replayInputs) {
+      if (!entry?.direction) continue;
+      this.sceneMap.movePlayer(player, entry.direction);
+      this.sceneMap.stepPredictionTick();
+      this.prediction?.attachPredictedState(entry.frame, this.getLocalPlayerState());
     }
   }
 
