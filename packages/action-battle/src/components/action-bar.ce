@@ -1,50 +1,33 @@
 <DOMContainer width="100%" height="100%" class="action-battle-actionbar-root" controls={controls}>
   <div class="action-battle-actionbar">
-    <div class="action-battle-actionbar-row">
-      @if (showSkills) {
-        <div class="action-battle-actionbar-group action-battle-actionbar-group-skills">
-          @for ((skill, index) of skillSlots) {
-            <div
-              class="action-battle-actionbar-slot"
-              data-selected={selectedSkillIndex() === index ? "true" : "false"}
-              data-disabled={!skill || !skill.usable}
-              tabindex={skill ? index : -1}
-              click={skill ? onSelectSkill(index) : undefined}
-            >
-              @if (skill?.icon) {
-                <DOMSprite sheet={iconSheet(skill.icon)} width="28px" height="28px" objectFit="contain" />
-              } @else if (skill) {
-                <span class="action-battle-actionbar-text">{skill.name}</span>
-              }
-              @if (skill?.spCost) {
-                <span class="action-battle-actionbar-cost">SP {skill.spCost}</span>
-              }
-            </div>
-          }
-        </div>
-      }
-      @if (showItems) {
-        <div class="action-battle-actionbar-group action-battle-actionbar-group-items">
-          @for ((item, index) of itemSlots) {
-            <div
-              class="action-battle-actionbar-slot"
-              data-selected={selectedItemIndex() === index ? "true" : "false"}
-              data-disabled={!item || !item.usable}
-              tabindex={item ? index : -1}
-              click={item ? onSelectItem(index) : undefined}
-            >
-              @if (item?.icon) {
-                <DOMSprite sheet={iconSheet(item.icon)} width="28px" height="28px" objectFit="contain" />
-              } @else if (item) {
-                <span class="action-battle-actionbar-text">{item.name}</span>
-              }
-              @if (item) {
-                <span class="action-battle-actionbar-count">x{item.quantity()}</span>
-              }
-            </div>
-          }
-        </div>
-      }
+    <div class="rpg-ui-hotbar action-battle-actionbar-plate">
+      <div class="rpg-ui-hotbar-track action-battle-actionbar-track">
+        @for ((slot, index) of actionBarSlots) {
+          <div
+            class="rpg-ui-hotbar-slot action-battle-actionbar-slot"
+            data-selected={selectedSlotIndex() === index ? "true" : "false"}
+            data-disabled={isSlotDisabled(slot) ? "true" : "false"}
+            data-empty={hasSlotEntry(slot) ? "false" : "true"}
+            data-type={slot.type}
+            tabindex={hasSlotEntry(slot) ? index : -1}
+            click={hasSlotEntry(slot) ? onSelectSlot(index) : undefined}
+          >
+            <span class="rpg-ui-hotbar-key action-battle-actionbar-key">{slot.label}</span>
+            @if (slot.type === "skill" && slot.skill?.icon) {
+              <DOMSprite sheet={iconSheet(slot.skill.icon)} width="60px" height="60px" scale={2} objectFit="contain" />
+            } @else if (slot.type === "item" && slot.item?.icon) {
+              <DOMSprite sheet={iconSheet(slot.item.icon)} width="60px" height="60px" scale={2} objectFit="contain" />
+            } @else if (slot.type === "skill" && slot.skill) {
+              <span class="rpg-ui-hotbar-text action-battle-actionbar-text">{slot.skill.name}</span>
+            } @else if (slot.type === "item" && slot.item) {
+              <span class="rpg-ui-hotbar-text action-battle-actionbar-text">{slot.item.name}</span>
+            }
+            @if (slot.type === "item" && slot.item) {
+              <span class="rpg-ui-hotbar-count action-battle-actionbar-count">x{getItemQuantity(slot.item)}</span>
+            }
+          </div>
+        }
+      </div>
     </div>
   </div>
 </DOMContainer>
@@ -56,66 +39,21 @@
 
   .action-battle-actionbar {
     position: absolute;
-    left: 0;
-    right: 0;
+    left: 12px;
+    right: 12px;
     bottom: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 0 12px;
     pointer-events: auto;
-  }
-
-  .action-battle-actionbar-row {
     display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .action-battle-actionbar-group {
-    display: flex;
-    gap: 8px;
-    flex-wrap: nowrap;
-  }
-
-  .action-battle-actionbar-group-items {
-    margin-left: auto;
-  }
-
-  .action-battle-actionbar-slot {
-    position: relative;
-    min-width: 44px;
-    height: 44px;
-    padding: 6px;
-    border-radius: 10px;
-    background: rgba(18, 18, 22, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    display: flex;
-    align-items: center;
     justify-content: center;
   }
 
-  .action-battle-actionbar-slot[data-selected="true"] {
-    border-color: rgba(255, 209, 102, 0.8);
-    box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.2);
+  .action-battle-actionbar-plate {
+    width: min(760px, 100%);
+    --rpg-ui-hotbar-size: clamp(38px, 8vw, 52px);
   }
 
-  .action-battle-actionbar-slot[data-disabled="true"] {
-    opacity: 0.45;
-  }
-
-  .action-battle-actionbar-text {
-    font-size: 11px;
-    text-align: center;
-  }
-
-  .action-battle-actionbar-count,
-  .action-battle-actionbar-cost {
-    position: absolute;
-    bottom: -4px;
-    right: 6px;
-    font-size: 10px;
-    opacity: 0.75;
+  .action-battle-actionbar-track {
+    --rpg-ui-hotbar-slots: 10;
   }
 </style>
 
@@ -134,21 +72,23 @@
   const engine = inject(RpgClientEngine);
   const keyboardControls = engine.globalConfig.keyboardControls;
   const { data, onInteraction, onBack } = defineProps();
-  const currentPlayer = engine.getCurrentPlayer()
+  const currentPlayer = engine.getCurrentPlayer();
+  const ACTION_BAR_SIZE = 10;
+  const SLOT_LABELS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
+  const SLOT_CONFIG_KEYS = [
+    "hotbar1",
+    "hotbar2",
+    "hotbar3",
+    "hotbar4",
+    "hotbar5",
+    "hotbar6",
+    "hotbar7",
+    "hotbar8",
+    "hotbar9",
+    "hotbar0"
+  ];
 
-  const selectedItemIndex = signal(-1);
-  const selectedSkillIndex = signal(-1);
-
-  const fillSlots = (entries, size) => {
-    const slots = entries.slice(0, size);
-    while (slots.length < size) {
-      slots.push(null);
-    }
-    return slots;
-  };
-
-  const skillSlots = computed(() => fillSlots(currentPlayer.skills(), 3));
-  const itemSlots = computed(() => fillSlots(currentPlayer.items(), 2));
+  const selectedSlotIndex = signal(-1);
 
   const uiOptions = computed(() => actionBattleUiOptions());
   const showItems = computed(() => {
@@ -167,14 +107,65 @@
     playing: "default"
   });
 
-  const selectItem = (index) => {
-    const item = itemSlots()[index];
+  const actionBarSlots = computed(() => {
+    const entries = [];
+    if (showSkills()) {
+      currentPlayer.skills().forEach((skill, index) => {
+        entries.push({
+          type: "skill",
+          skill,
+          item: null,
+          sourceIndex: index
+        });
+      });
+    }
+    if (showItems()) {
+      currentPlayer.items().forEach((item, index) => {
+        entries.push({
+          type: "item",
+          skill: null,
+          item,
+          sourceIndex: index
+        });
+      });
+    }
+    const slots = entries
+      .slice(0, ACTION_BAR_SIZE)
+      .map((entry, index) => ({
+        ...entry,
+        label: SLOT_LABELS[index]
+      }));
+    while (slots.length < ACTION_BAR_SIZE) {
+      slots.push({
+        type: "empty",
+        skill: null,
+        item: null,
+        sourceIndex: -1,
+        label: SLOT_LABELS[slots.length]
+      });
+    }
+    return slots;
+  });
+
+  const hasSlotEntry = (slot) => slot.type === "skill" || slot.type === "item";
+  const isSlotDisabled = (slot) => {
+    if (!hasSlotEntry(slot)) return true;
+    const entry = slot.type === "skill" ? slot.skill : slot.item;
+    return !entry || !entry.usable;
+  };
+
+  const getItemQuantity = (item) => {
+    if (!item) return 0;
+    if (typeof item.quantity === "function") return item.quantity();
+    return item.quantity || 0;
+  };
+
+  const selectItem = (item) => {
     if (!item || !item.usable) return;
     if (onInteraction) onInteraction("useItem", { id: item.id });
   };
 
-  const selectSkill = (index) => {
-    const skill = skillSlots()[index];
+  const selectSkill = (skill) => {
     if (!skill || !skill.usable) return;
     const range = skill.range ?? 0;
     if (range > 0 || skill.aoeMask) {
@@ -184,14 +175,19 @@
     if (onInteraction) onInteraction("useSkill", { id: skill.id });
   };
 
-  const onSelectItem = (index) => () => {
-    selectedItemIndex.set(index);
-    selectItem(index);
+  const selectSlot = (index) => {
+    const slot = actionBarSlots()[index];
+    if (!slot || !hasSlotEntry(slot)) return;
+    if (slot.type === "skill") {
+      selectSkill(slot.skill);
+      return;
+    }
+    selectItem(slot.item);
   };
 
-  const onSelectSkill = (index) => () => {
-    selectedSkillIndex.set(index);
-    selectSkill(index);
+  const onSelectSlot = (index) => () => {
+    selectedSlotIndex.set(index);
+    selectSlot(index);
   };
 
   const getPlayerTile = () => {
@@ -231,22 +227,34 @@
     return key;
   };
 
+  const slotBind = (index) => keyboardControls?.[SLOT_CONFIG_KEYS[index]] || SLOT_LABELS[index];
+
   const buildControls = () => {
-    const skillControls = {};
-    if (showSkills()) {
-      skillSlots().forEach((skill, index) => {
-        const bind = resolveKeyBind(skill?.key);
-        if (!bind) return;
-        skillControls[`skill-${index}`] = {
-          bind,
+    const hotbarControls = {};
+    actionBarSlots().forEach((slot, index) => {
+      if (!hasSlotEntry(slot)) return;
+      const bind = slotBind(index);
+      hotbarControls[`slot-${index}`] = {
+        bind,
+        keyDown() {
+          if (isTargeting()) return;
+          selectedSlotIndex.set(index);
+          selectSlot(index);
+        }
+      };
+      if (slot.type === "skill") {
+        const skillBind = resolveKeyBind(slot.skill?.key);
+        if (!skillBind || skillBind === bind) return;
+        hotbarControls[`skill-${index}`] = {
+          bind: skillBind,
           keyDown() {
             if (isTargeting()) return;
-            selectedSkillIndex.set(index);
-            selectSkill(index);
+            selectedSlotIndex.set(index);
+            selectSlot(index);
           }
         };
-      });
-    }
+      }
+    });
     return {
       left: {
         repeat: true,
@@ -306,7 +314,7 @@
           if (onBack) onBack();
         }
       },
-      ...skillControls,
+      ...hotbarControls,
       gamepad: {
         enabled: true
       }

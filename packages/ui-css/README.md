@@ -77,6 +77,12 @@ pnpm add @rpgjs/ui-css
 - `.rpg-ui-character-card-stats` - Stats section in card
 - `.rpg-ui-character-card-section` - Card section divider
 - `.rpg-ui-character-card-section-title` - Section title
+- `.rpg-ui-hotbar` - Action bar plate container
+- `.rpg-ui-hotbar-track` - Slot grid wrapper
+- `.rpg-ui-hotbar-slot` - Individual action/item slot
+- `.rpg-ui-hotbar-key` - Keyboard hint label (1-0, etc.)
+- `.rpg-ui-hotbar-count` - Stack quantity (items)
+- `.rpg-ui-hotbar-text` - Fallback text label for slot content
 
 ### Variants & States
 
@@ -237,6 +243,27 @@ All styling is controlled via CSS custom properties:
     <div class="rpg-ui-inventory-slot-icon">🧪</div>
     <span class="rpg-ui-inventory-slot-quantity">15</span>
     <div class="rpg-ui-inventory-slot-rarity" data-rarity="uncommon"></div>
+  </div>
+</div>
+```
+
+### Hotbar / Action Bar
+
+```html
+<div class="rpg-ui-hotbar" style="--rpg-ui-hotbar-slots: 10;">
+  <div class="rpg-ui-hotbar-track">
+    <div class="rpg-ui-hotbar-slot" data-selected="true" data-empty="false" data-type="skill">
+      <span class="rpg-ui-hotbar-key">1</span>
+      <span class="rpg-ui-hotbar-text">Slash</span>
+    </div>
+    <div class="rpg-ui-hotbar-slot" data-empty="false" data-type="item">
+      <span class="rpg-ui-hotbar-key">2</span>
+      <span class="rpg-ui-hotbar-text">Potion</span>
+      <span class="rpg-ui-hotbar-count">x3</span>
+    </div>
+    <div class="rpg-ui-hotbar-slot" data-empty="true">
+      <span class="rpg-ui-hotbar-key">3</span>
+    </div>
   </div>
 </div>
 ```

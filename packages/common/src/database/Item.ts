@@ -10,6 +10,7 @@ interface ItemData {
     atk: number;
     pdef: number;
     sdef: number;
+    icon: string
     onAdd: (player: RpgCommonPlayer) => void;
 }
 
@@ -21,6 +22,7 @@ export class Item {
     atk = signal(0);
     pdef = signal(0);
     sdef = signal(0);
+    @sync() icon = signal('')
     @sync() quantity = signal(1);
 
     onAdd: (player: RpgCommonPlayer) => void = () => {};
@@ -32,6 +34,7 @@ export class Item {
         this.atk.set(data?.atk ?? 0);
         this.pdef.set(data?.pdef ?? 0);
         this.sdef.set(data?.sdef ?? 0);
+        this.icon.set(data?.icon ?? '')
         this.onAdd = data?.onAdd?.bind(this) ?? (() => {});
     }
 }

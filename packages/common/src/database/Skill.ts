@@ -9,13 +9,15 @@ export interface SkillData {
     hitRate: number;
     power: number;
     coefficient: Record<string, number>;
+    icon: string
 }
 
 export class Skill {
     @id() id = signal('');
     @sync() name = signal('');
     description = signal('');
-    spCost = signal(0);
+    @sync() spCost = signal(0);
+    @sync() icon = signal('')
     hitRate = signal(0);
     power = signal(0);
     coefficient = signal({});
@@ -28,5 +30,6 @@ export class Skill {
         this.hitRate.set(data?.hitRate ?? 0);
         this.power.set(data?.power ?? 0);
         this.coefficient.set(data?.coefficient ?? {});
+        this.icon.set(data?.icon ?? '')
     }
 }
