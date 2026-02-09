@@ -57,4 +57,43 @@ describe("PredictionController", () => {
     expect(ack.needsReconciliation).toBe(true);
     expect(ack.pendingInputs).toHaveLength(0);
   });
+
+  it("re-evaluates reconciliation when server tick advances on the same frame", () => {
+    let tick = 1;
+    let current: PredictionState<string> = { x: 52, y: 100, direction: "right" };
+
+    const controller = new PredictionController<string>({
+      correctionThreshold: 5,
+      getPhysicsTick: () => tick,
+      getCurrentState: () => current,
+      setAuthoritativeState: (state) => {
+        current = state;
+      },
+    });
+
+    const input = controller.recordInput("right", Date.now());
+    controller.attachPredictedState(input.frame, current);
+
+    const firstAck = controller.applyServerAck({
+      frame: input.frame,
+      serverTick: 100,
+      state: { x: 52, y: 100, direction: "right" },
+    });
+
+    expect(firstAck.needsReconciliation).toBe(false);
+    expect(firstAck.acknowledgedTick).toBe(100);
+
+    current = { x: 30, y: 100, direction: "right" };
+    tick += 1;
+
+    const secondAck = controller.applyServerAck({
+      frame: input.frame,
+      serverTick: 101,
+      state: { x: 52, y: 100, direction: "right" },
+    });
+
+    expect(secondAck.needsReconciliation).toBe(true);
+    expect(secondAck.acknowledgedFrame).toBe(input.frame);
+    expect(secondAck.acknowledgedTick).toBe(101);
+  });
 });

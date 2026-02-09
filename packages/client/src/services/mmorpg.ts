@@ -9,6 +9,8 @@ import { provideSaveClient } from "./save";
 
 interface MmorpgOptions {
     host?: string;
+    connectionId?: string;
+    connectionIdScope?: "local" | "session" | "ephemeral";
 }
 
 class BridgeWebsocket extends AbstractWebsocket {
@@ -18,9 +20,34 @@ class BridgeWebsocket extends AbstractWebsocket {
 
   constructor(protected context: Context, private options: MmorpgOptions = {}) {
     super(context);
-    const id = localStorage.getItem("rpgjs-user-id") || crypto.randomUUID()
-    localStorage.setItem("rpgjs-user-id", id)
-    this.privateId = id
+    this.privateId = this.resolveConnectionId();
+  }
+
+  private resolveConnectionId(): string {
+    if (this.options.connectionId) {
+      return this.options.connectionId;
+    }
+
+    const scope = this.options.connectionIdScope ?? "local";
+    const key = "rpgjs-user-id";
+
+    if (scope === "ephemeral") {
+      return crypto.randomUUID();
+    }
+
+    const storage =
+      scope === "session"
+        ? window.sessionStorage
+        : window.localStorage;
+
+    const existing = storage.getItem(key);
+    if (existing) {
+      return existing;
+    }
+
+    const id = crypto.randomUUID();
+    storage.setItem(key, id);
+    return id;
   }
 
   async connection(listeners?: (data: any) => void) {

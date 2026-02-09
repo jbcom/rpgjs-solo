@@ -66,7 +66,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
       .subscribe(() => {
         const frame = this.frames.shift();
         if (frame) {
-          if (!frame.x || !frame.y) return;
+          if (typeof frame.x !== "number" || typeof frame.y !== "number") return;
           this.engine.scene.setBodyPosition(
             this.id,
             frame.x,

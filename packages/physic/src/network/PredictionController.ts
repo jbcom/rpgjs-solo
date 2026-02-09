@@ -46,8 +46,8 @@ export class PredictionController<DirectionType = unknown> {
 
   constructor(private readonly config: PredictionControllerConfig<DirectionType>) {
     this.correctionThreshold = config.correctionThreshold ?? 5;
-    this.historyTtlMs = config.historyTtlMs ?? 2000;
-    this.maxHistoryEntries = config.maxHistoryEntries ?? 200;
+    this.historyTtlMs = config.historyTtlMs ?? 10000;
+    this.maxHistoryEntries = config.maxHistoryEntries ?? 1200;
   }
 
   recordInput(direction: DirectionType, timestamp: number): { frame: number; tick: number } {
@@ -67,6 +67,10 @@ export class PredictionController<DirectionType = unknown> {
 
   hasPendingInputs(): boolean {
     return this.history.length > 0;
+  }
+
+  getPendingInputs(): PredictionHistoryEntry<DirectionType>[] {
+    return [...this.history];
   }
 
   queueServerSnapshot(snapshot: PredictionState<DirectionType>): void {
@@ -104,20 +108,40 @@ export class PredictionController<DirectionType = unknown> {
       }
       return result;
     }
-    this.lastAckFrame = Math.max(this.lastAckFrame, ack.frame);
-    if (typeof ack.serverTick === "number") {
-      this.lastAckTick = Math.max(this.lastAckTick, ack.serverTick);
+    if (ack.frame < this.lastAckFrame) {
+      const result: PredictionAckResult<DirectionType> = {
+        acknowledgedFrame: this.lastAckFrame,
+        acknowledgedTick: this.lastAckTick,
+        pendingInputs: [...this.history],
+        needsReconciliation: false,
+      };
+      if (ack.state) {
+        result.state = ack.state;
+      }
+      return result;
     }
-    this.history = this.history.filter((entry) => entry.frame > this.lastAckFrame);
+
+    const nextAckFrame = Math.max(this.lastAckFrame, ack.frame);
+    const nextAckTick =
+      typeof ack.serverTick === "number"
+        ? Math.max(this.lastAckTick, ack.serverTick)
+        : this.lastAckTick;
 
     let needsReconciliation = false;
     if (ack.state) {
-      const current = this.config.getCurrentState();
-      const dx = current.x - ack.state.x;
-      const dy = current.y - ack.state.y;
+      const acknowledgedEntry = this.history.find(
+        (entry) => entry.frame === nextAckFrame && !!entry.state,
+      );
+      const comparisonState = acknowledgedEntry?.state ?? this.config.getCurrentState();
+      const dx = comparisonState.x - ack.state.x;
+      const dy = comparisonState.y - ack.state.y;
       const distance = Math.hypot(dx, dy);
       needsReconciliation = distance > this.correctionThreshold;
     }
+
+    this.lastAckFrame = nextAckFrame;
+    this.lastAckTick = nextAckTick;
+    this.history = this.history.filter((entry) => entry.frame > this.lastAckFrame);
 
     if (!needsReconciliation && this.pendingSnapshot && !this.hasPendingInputs()) {
       this.applySnapshot(this.pendingSnapshot);

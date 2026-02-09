@@ -39,6 +39,8 @@ export interface Controls {
   minTimeBetweenInputs?: number;
   /** Whether to enable anti-cheat validation */
   enableAntiCheat?: boolean;
+  /** Maximum number of queued inputs processed per server tick */
+  maxInputsPerTick?: number;
 }
 
 /**
@@ -459,16 +461,25 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     if (packet && typeof packet === 'object') {
       obj.timestamp = Date.now();
 
-      // Add ack info: last processed frame and authoritative position
+      // Add ack info: last processed frame and authoritative position.
+      // When the sync payload already contains this player's coordinates,
+      // prefer them to keep ack state aligned with the snapshot sent to the client.
       if (player) {
-        const lastFramePositions = player._lastFramePositions;
+        const value = packet.value && typeof packet.value === "object" ? packet.value : undefined;
+        const packetPlayers = value?.players && typeof value.players === "object" ? value.players : undefined;
+        const playerSnapshot = packetPlayers?.[player.id];
         const bodyPos = this.getBodyPosition(player.id, "top-left");
+        const ackX =
+          typeof playerSnapshot?.x === "number" ? playerSnapshot.x : bodyPos?.x ?? player.x();
+        const ackY =
+          typeof playerSnapshot?.y === "number" ? playerSnapshot.y : bodyPos?.y ?? player.y();
+        const lastFramePositions = player._lastFramePositions;
         obj.ack = {
           frame: lastFramePositions?.frame ?? 0,
-          serverTick: lastFramePositions?.serverTick ?? this.getTick(),
-          x: lastFramePositions?.position?.x ?? bodyPos?.x ?? player.x(),
-          y: lastFramePositions?.position?.y ?? bodyPos?.y ?? player.y(),
-          direction: lastFramePositions?.position?.direction ?? player.direction(),
+          serverTick: this.getTick(),
+          x: Math.round(ackX),
+          y: Math.round(ackY),
+          direction: playerSnapshot?.direction ?? player.direction(),
         };
       }
     }
@@ -724,30 +735,72 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   @Action('move')
   async onInput(player: RpgPlayer, input: any) {
-    if (typeof input?.frame !== 'number') {
-      return;
-    }
-    if (!input?.input) {
-      return;
-    }
-
     const lastAckedFrame = player._lastFramePositions?.frame ?? 0;
-    if (input.frame <= lastAckedFrame) {
+    const now = Date.now();
+    const candidates: Array<{
+      input: any;
+      frame: number;
+      tick?: number;
+      timestamp: number;
+      clientState?: { x: number; y: number; direction?: Direction };
+    }> = [];
+
+    const enqueueCandidate = (entry: any) => {
+      if (typeof entry?.frame !== "number") {
+        return;
+      }
+      if (!entry?.input) {
+        return;
+      }
+      const candidate: {
+        input: any;
+        frame: number;
+        tick?: number;
+        timestamp: number;
+        clientState?: { x: number; y: number; direction?: Direction };
+      } = {
+        input: entry.input,
+        frame: entry.frame,
+        tick: typeof entry.tick === "number" ? entry.tick : undefined,
+        timestamp: typeof entry.timestamp === "number" ? entry.timestamp : now,
+      };
+      if (typeof entry.x === "number" && typeof entry.y === "number") {
+        candidate.clientState = {
+          x: entry.x,
+          y: entry.y,
+          direction: entry.direction,
+        };
+      }
+      candidates.push(candidate);
+    };
+
+    for (const trajectoryEntry of Array.isArray(input?.trajectory) ? input.trajectory : []) {
+      enqueueCandidate(trajectoryEntry);
+    }
+
+    enqueueCandidate(input);
+
+    if (candidates.length === 0) {
       return;
     }
 
-    // Check if we already have this frame to avoid duplicates
-    const existingInput = player.pendingInputs.find((pending) => pending.frame === input.frame);
-    if (existingInput) {
-      return;
-    }
+    candidates.sort((a, b) => a.frame - b.frame);
+    const existingFrames = new Set<number>(
+      player.pendingInputs
+        .map((pending: any) => pending?.frame)
+        .filter((frame: any): frame is number => typeof frame === "number"),
+    );
 
-    player.pendingInputs.push({
-      input: input.input,
-      frame: input.frame,
-      tick: typeof input.tick === "number" ? input.tick : undefined,
-      timestamp: input.timestamp || Date.now(),
-    });
+    for (const candidate of candidates) {
+      if (candidate.frame <= lastAckedFrame) {
+        continue;
+      }
+      if (existingFrames.has(candidate.frame)) {
+        continue;
+      }
+      player.pendingInputs.push(candidate);
+      existingFrames.add(candidate.frame);
+    }
   }
 
   @Action("ping")
@@ -946,10 +999,11 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   /**
    * Process pending inputs for a player with anti-cheat validation
    * 
-   * This method processes all pending inputs for a player while performing
+   * This method processes pending inputs for a player while performing
    * anti-cheat validation to prevent time manipulation and frame skipping.
    * It validates the time deltas between inputs and ensures they are within
-   * acceptable ranges.
+   * acceptable ranges. To preserve movement itinerary under network bursts,
+   * the number of inputs processed per call is capped.
    * 
    * ## Architecture
    * 
@@ -1001,7 +1055,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       maxTimeDelta: 1000, // 1 second max between inputs
       maxFrameDelta: 10,  // Max 10 frames skipped
       minTimeBetweenInputs: 16, // ~60fps minimum
-      enableAntiCheat: false
+      enableAntiCheat: false,
+      maxInputsPerTick: 1,
     };
 
     const config = { ...defaultControls, ...controls };
@@ -1012,9 +1067,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     player.pendingInputs.sort((a, b) => (a.frame || 0) - (b.frame || 0));
 
     let hasProcessedInputs = false;
+    let processedThisTick = 0;
 
-    // Process all pending inputs
-    while (player.pendingInputs.length > 0) {
+    // Process pending inputs progressively to preserve itinerary under latency.
+    while (player.pendingInputs.length > 0 && processedThisTick < config.maxInputsPerTick) {
       const input = player.pendingInputs.shift();
 
       if (!input || typeof input.frame !== 'number') {
@@ -1057,16 +1113,23 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         processedInputs.push(input.input);
         hasProcessedInputs = true;
         lastProcessedTime = input.timestamp || Date.now();
+        processedThisTick += 1;
 
         const bodyPos = this.getBodyPosition(player.id, "top-left");
-        const ackX = bodyPos?.x ?? player.x();
-        const ackY = bodyPos?.y ?? player.y();
+        const ackX =
+          typeof input.clientState?.x === "number"
+            ? input.clientState.x
+            : bodyPos?.x ?? player.x();
+        const ackY =
+          typeof input.clientState?.y === "number"
+            ? input.clientState.y
+            : bodyPos?.y ?? player.y();
         player._lastFramePositions = {
           frame: input.frame,
           position: {
             x: Math.round(ackX),
             y: Math.round(ackY),
-            direction: player.direction(),
+            direction: input.clientState?.direction ?? player.direction(),
           },
           serverTick: this.getTick(),
         };

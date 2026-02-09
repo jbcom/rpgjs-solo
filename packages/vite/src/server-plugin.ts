@@ -42,10 +42,12 @@ class PartyConnection {
   private messageQueue: Array<{ message: string; timestamp: number; sequence: number }> = [];
   private isProcessingQueue: boolean = false;
   private sequenceCounter: number = 0;
-  private lastSendTime: number = 0;
-  private outgoingFlushTimeout: any = null;
-  private incomingQueue: string[] = [];
-  private incomingFlushTimeout: any = null;
+  private incomingQueue: Array<{
+    message: string;
+    timestamp: number;
+    processor: (messages: string[]) => Promise<void>;
+  }> = [];
+  private isProcessingIncomingQueue: boolean = false;
   public static packetLossRate: number = parseFloat(process.env.RPGJS_PACKET_LOSS_RATE || '0.1');
   public static packetLossEnabled: boolean = process.env.RPGJS_ENABLE_PACKET_LOSS === 'true';
   public static packetLossFilter: string = process.env.RPGJS_PACKET_LOSS_FILTER || '';
@@ -100,25 +102,12 @@ class PartyConnection {
   }
 
   /**
-   * Processes the outgoing queue with TCP-like batching.
-   * 
-   * - If latency is enabled, schedule a single flush after latencyMs to batch messages.
-   * - At flush, send all queued messages in order, applying bandwidth delays per message.
+   * Processes the outgoing queue in order.
+   *
+   * Each message receives its own fixed latency (if enabled), while preserving
+   * original spacing and order.
    */
   private async processMessageQueue(): Promise<void> {
-    if (this.messageQueue.length === 0) return;
-
-    const shouldBatchWithLatency = PartyConnection.latencyEnabled && PartyConnection.latencyMs > 0;
-
-    if (shouldBatchWithLatency) {
-      if (this.outgoingFlushTimeout) return; // Already scheduled
-      this.outgoingFlushTimeout = setTimeout(async () => {
-        this.outgoingFlushTimeout = null;
-        await this.flushSendQueue();
-      }, PartyConnection.latencyMs);
-      return;
-    }
-
     await this.flushSendQueue();
   }
 
@@ -131,6 +120,11 @@ class PartyConnection {
 
     while (this.messageQueue.length > 0) {
       const queueItem = this.messageQueue.shift()!;
+
+      // Apply fixed one-way latency per message (not batched bursts).
+      if (this.shouldApplyLatency(queueItem.message)) {
+        await this.waitUntil(queueItem.timestamp + PartyConnection.latencyMs);
+      }
 
       // Bandwidth simulation per message
       if (PartyConnection.bandwidthEnabled && PartyConnection.bandwidthKbps > 0) {
@@ -148,6 +142,24 @@ class PartyConnection {
     }
 
     this.isProcessingQueue = false;
+  }
+
+  private shouldApplyLatency(message: string): boolean {
+    if (!PartyConnection.latencyEnabled || PartyConnection.latencyMs <= 0) {
+      return false;
+    }
+    if (!PartyConnection.latencyFilter) {
+      return true;
+    }
+    return message.includes(PartyConnection.latencyFilter);
+  }
+
+  private async waitUntil(targetTimestamp: number): Promise<void> {
+    const delayMs = targetTimestamp - Date.now();
+    if (delayMs <= 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
   /**
@@ -180,9 +192,9 @@ class PartyConnection {
 
   /**
    * Buffers incoming messages to simulate TCP latency on reception.
-   * 
-   * All messages that arrive within the latency window are flushed together,
-   * preserving order. The provided processor is called with the ordered batch.
+   *
+   * Messages are processed in strict order. Each message keeps its own fixed
+   * latency delay relative to the moment it arrived.
    *
    * @param {string} message - Raw incoming message
    * @param {(messages: string[]) => Promise<void>} processor - Async batch processor
@@ -193,19 +205,33 @@ class PartyConnection {
    * })
    */
   bufferIncoming(message: string, processor: (messages: string[]) => Promise<void>): void {
-    this.incomingQueue.push(message);
-    const latencyMs = PartyConnection.latencyEnabled && PartyConnection.latencyMs > 0 ? PartyConnection.latencyMs : 0;
-    if (this.incomingFlushTimeout) return;
-    this.incomingFlushTimeout = setTimeout(async () => {
-      const batch = this.incomingQueue;
-      this.incomingQueue = [];
-      this.incomingFlushTimeout = null;
-      try {
-        await processor(batch);
-      } catch (err) {
-        console.error('Error processing incoming batch:', err);
+    this.incomingQueue.push({
+      message,
+      timestamp: Date.now(),
+      processor,
+    });
+    if (!this.isProcessingIncomingQueue) {
+      void this.processIncomingQueue();
+    }
+  }
+
+  private async processIncomingQueue(): Promise<void> {
+    if (this.isProcessingIncomingQueue) {
+      return;
+    }
+    this.isProcessingIncomingQueue = true;
+    while (this.incomingQueue.length > 0) {
+      const item = this.incomingQueue.shift()!;
+      if (this.shouldApplyLatency(item.message)) {
+        await this.waitUntil(item.timestamp + PartyConnection.latencyMs);
       }
-    }, latencyMs);
+      try {
+        await item.processor([item.message]);
+      } catch (err) {
+        console.error('Error processing incoming message:', err);
+      }
+    }
+    this.isProcessingIncomingQueue = false;
   }
 
   /**

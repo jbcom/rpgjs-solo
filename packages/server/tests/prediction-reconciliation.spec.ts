@@ -84,4 +84,99 @@ describe("Prediction + Reconciliation Server Protocol", () => {
       }),
     );
   });
+
+  test("should align ack position with the synced local player payload when available", () => {
+    player._lastFramePositions = {
+      frame: 21,
+      position: {
+        x: 0,
+        y: 0,
+        direction: Direction.Down,
+      },
+      serverTick: 1,
+    };
+
+    const intercepted = serverMap.interceptorPacket(
+      player,
+      {
+        type: "sync",
+        value: {
+          players: {
+            [player.id]: {
+              x: 321,
+              y: 45,
+              direction: Direction.Left,
+            },
+          },
+        },
+      },
+      player.conn,
+    );
+
+    expect(intercepted?.value?.ack).toEqual(
+      expect.objectContaining({
+        frame: 21,
+        x: 321,
+        y: 45,
+        direction: Direction.Left,
+        serverTick: serverMap.getTick(),
+      }),
+    );
+  });
+
+  test("should queue trajectory frames and replay them progressively on server ticks", async () => {
+    const baseTs = Date.now();
+    await serverMap.onInput(player, {
+      input: Direction.Right,
+      frame: 3,
+      tick: 3,
+      timestamp: baseTs + 32,
+      trajectory: [
+        {
+          input: Direction.Right,
+          frame: 1,
+          tick: 1,
+          timestamp: baseTs,
+          x: 101,
+          y: 100,
+          direction: Direction.Right,
+        },
+        {
+          input: Direction.Right,
+          frame: 2,
+          tick: 2,
+          timestamp: baseTs + 16,
+          x: 102,
+          y: 100,
+          direction: Direction.Right,
+        },
+        {
+          input: Direction.Right,
+          frame: 3,
+          tick: 3,
+          timestamp: baseTs + 32,
+          x: 103,
+          y: 100,
+          direction: Direction.Right,
+        },
+      ],
+    });
+
+    expect(player.pendingInputs.map((entry: any) => entry.frame)).toEqual([1, 2, 3]);
+
+    await serverMap.processInput(player.id);
+    expect(player._lastFramePositions?.frame).toBe(1);
+    expect(player._lastFramePositions?.position?.x).toBe(101);
+    expect(player.pendingInputs.map((entry: any) => entry.frame)).toEqual([2, 3]);
+
+    await serverMap.processInput(player.id);
+    expect(player._lastFramePositions?.frame).toBe(2);
+    expect(player._lastFramePositions?.position?.x).toBe(102);
+    expect(player.pendingInputs.map((entry: any) => entry.frame)).toEqual([3]);
+
+    await serverMap.processInput(player.id);
+    expect(player._lastFramePositions?.frame).toBe(3);
+    expect(player._lastFramePositions?.position?.x).toBe(103);
+    expect(player.pendingInputs).toHaveLength(0);
+  });
 });

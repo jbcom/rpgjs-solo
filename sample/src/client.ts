@@ -4,6 +4,7 @@ import { mergeConfig } from "@signe/di";
 
 startGame(
   mergeConfig(configClient, {
-    providers: [provideMmorpg()],
+    // Use one player id per browser tab to simplify multi-tab latency testing.
+    providers: [provideMmorpg({ connectionIdScope: "session" })],
   }) 
 );
