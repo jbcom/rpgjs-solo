@@ -249,7 +249,9 @@ export class RpgClientEngine<T = any> {
 
     const myId = this.playerIdSignal();
     const players = payload.players;
-    if (myId && players && players[myId]) {
+    const shouldMaskLocalPosition =
+      this.predictionEnabled && !!this.prediction?.hasPendingInputs();
+    if (shouldMaskLocalPosition && myId && players && players[myId]) {
       const localPatch = { ...players[myId] };
       delete localPatch.x;
       delete localPatch.y;
@@ -293,7 +295,7 @@ export class RpgClientEngine<T = any> {
         // Signal that player ID was received
         this.playerIdReceived$.next(true);
       }
-
+   
       if (this.sceneResetQueued) {
         this.sceneMap.reset();
         this.sceneMap.loadPhysic();
@@ -357,7 +359,8 @@ export class RpgClientEngine<T = any> {
       this.sceneResetQueued = true;
       // Reset camera follow to default (follow current player) when changing maps
       this.cameraFollowTargetId.set(null);
-      this.loadScene(data.mapId);
+      const transferToken = typeof data?.transferToken === "string" ? data.transferToken : undefined;
+      this.loadScene(data.mapId, transferToken);
     });
 
     this.webSocket.on("showComponentAnimation", (data) => {
@@ -509,7 +512,7 @@ export class RpgClientEngine<T = any> {
     });
   }
 
-  private async loadScene(mapId: string) {
+  private async loadScene(mapId: string, transferToken?: string) {
     await lastValueFrom(this.hooks.callHooks("client-sceneMap-onBeforeLoading", this.sceneMap));
 
     // Clear client prediction states when changing maps
@@ -529,7 +532,10 @@ export class RpgClientEngine<T = any> {
     // Setup RxJS observable to wait for all conditions
     this.setupOnAfterLoadingObserver();
 
-    this.webSocket.updateProperties({ room: mapId })
+    this.webSocket.updateProperties({
+      room: mapId,
+      query: transferToken ? { transferToken } : undefined,
+    })
     await this.webSocket.reconnect(() => {
       const saveClient = inject(SaveClientService);
       saveClient.initialize(this.webSocket);

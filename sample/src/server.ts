@@ -271,8 +271,8 @@ export default createServer({
             }
             
             player.changeMap("center-map", {
-              x: 200,
-              y: 150,
+              x: 100,
+              y: 100,
             });
           },
           onConnected: (player: RpgPlayer) => {

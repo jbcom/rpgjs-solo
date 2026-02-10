@@ -1,4 +1,4 @@
-import { AbstractWebsocket, WebSocketToken } from "./AbstractSocket";
+import { AbstractWebsocket, SocketUpdateProperties, WebSocketToken } from "./AbstractSocket";
 import { ClientIo, ServerIo } from "@signe/room";
 import { Context } from "@signe/di";
 import { RpgClientEngine } from "../RpgClientEngine";
@@ -107,7 +107,7 @@ class BridgeWebsocket extends AbstractWebsocket {
    * await websocket.reconnect()
    * ```
    */
-  updateProperties({ room }: { room: any }) {
+  updateProperties(_params: SocketUpdateProperties) {
     // empty
   }
 
@@ -128,7 +128,7 @@ class BridgeWebsocket extends AbstractWebsocket {
    * })
    * ```
    */
-  async reconnect(listeners?: (data: any) => void) {
+  async reconnect(listeners?: (data: any) => void): Promise<void> {
     await this._connection((socket) => {
       listeners?.(socket)
     })

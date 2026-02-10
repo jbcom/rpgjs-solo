@@ -710,27 +710,82 @@ export function serverPlugin(
       // HTTP request interception for /parties/* routes
       server.middlewares.use("/parties", async (req, res, next) => {
         try {
-          // For now, pass to the next middleware
-          // The RPG-JS server handles its own routes via @signe/room
-          console.log(`RPG-JS HTTP request: ${req.method} ${req.url}`);
+          const host = req.headers.host || "localhost";
+          const incomingUrl = req.url || "/";
+          const parsedUrl = new URL(incomingUrl, `http://${host}`);
+          const normalizedPath = parsedUrl.pathname.startsWith("/parties")
+            ? parsedUrl.pathname
+            : `/parties${parsedUrl.pathname.startsWith("/") ? parsedUrl.pathname : `/${parsedUrl.pathname}`}`;
+          const pathParts = normalizedPath.split("/").filter(Boolean);
 
-          // Create a basic response for test routes
-          if (req.url?.includes("/test")) {
-            res.statusCode = 200;
-            res.setHeader("Content-Type", "application/json");
-            res.end(
-              JSON.stringify({
-                message: "RPG-JS server is running",
-                timestamp: new Date().toISOString(),
-              })
-            );
+          if (pathParts[0] !== "parties" || pathParts[1] !== "main" || pathParts.length < 4) {
+            next();
             return;
           }
 
-          next();
+          const roomId = pathParts[2];
+          const requestPath = `/${pathParts.slice(3).join("/")}`;
+          const { room, rpgServer } = await ensureRoomAndServer(roomId);
+          room.context.parties = buildPartiesContext();
+
+          const bodyText = await new Promise<string>((resolve, reject) => {
+            const chunks: Buffer[] = [];
+            req.on("data", (chunk: Buffer | string) => {
+              chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+            });
+            req.on("end", () => {
+              resolve(Buffer.concat(chunks).toString("utf8"));
+            });
+            req.on("error", reject);
+          });
+
+          const requestHeaders = new Headers();
+          Object.entries(req.headers).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+              if (value[0] !== undefined) requestHeaders.set(key, value[0]);
+              return;
+            }
+            if (typeof value === "string") {
+              requestHeaders.set(key, value);
+            }
+          });
+
+          const requestLike = {
+            url: `http://${host}/parties/main/${roomId}${requestPath}${parsedUrl.search}`,
+            method: (req.method || "GET").toUpperCase(),
+            headers: requestHeaders,
+            json: async () => {
+              if (!bodyText) return undefined as any;
+              return JSON.parse(bodyText);
+            },
+            text: async () => bodyText,
+          } as any;
+
+          const result = await (rpgServer as any).onRequest(requestLike);
+
+          if (result instanceof Response) {
+            res.statusCode = result.status;
+            result.headers.forEach((value, key) => {
+              res.setHeader(key, value);
+            });
+            res.end(await result.text());
+            return;
+          }
+
+          if (typeof result === "string") {
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "text/plain");
+            res.end(result);
+            return;
+          }
+
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify(result ?? {}));
         } catch (error) {
           console.error("Error handling RPG-JS request:", error);
           res.statusCode = 500;
+          res.setHeader("Content-Type", "application/json");
           res.end(JSON.stringify({ error: "Internal server error" }));
         }
       });

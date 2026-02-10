@@ -187,7 +187,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   constructor() {
     super();
 
-    let lastEmitted: { x: number; y: number } | null = null;
+    const initialX = typeof this.x === "function" ? Number(this.x()) || 0 : 0;
+    const initialY = typeof this.y === "function" ? Number(this.y()) || 0 : 0;
+    let lastEmitted: { x: number; y: number } | null = { x: initialX, y: initialY };
     let pendingUpdate: { x: number; y: number } | null = null;
     let updateScheduled = false;
 
@@ -303,12 +305,13 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     if (canChange.some(v => v === false)) return false;
 
     if (positions && typeof positions === 'object') {
-      this.teleport(positions)
+      await this.teleport(positions)
     }
-    await room?.$sessionTransfer(this.conn, realMapId);
+    const transferToken = await room?.$sessionTransfer(this.conn, realMapId);
     this.emit("changeMap", {
       mapId: realMapId,
       positions,
+      transferToken: typeof transferToken === 'string' ? transferToken : undefined,
     });
     return true;
   }

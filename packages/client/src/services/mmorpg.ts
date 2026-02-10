@@ -2,7 +2,7 @@ import { Context } from "@signe/di";
 import { connectionRoom } from "@signe/sync/client";
 import { RpgGui } from "../Gui/Gui";
 import { RpgClientEngine } from "../RpgClientEngine";
-import { AbstractWebsocket, WebSocketToken } from "./AbstractSocket";
+import { AbstractWebsocket, SocketUpdateProperties, WebSocketToken } from "./AbstractSocket";
 import { UpdateMapService, UpdateMapToken } from "@rpgjs/common";
 import { provideKeyboardControls } from "./keyboardControls";
 import { provideSaveClient } from "./save";
@@ -17,6 +17,7 @@ class BridgeWebsocket extends AbstractWebsocket {
   private socket: any;
   private privateId: string;
   private pendingOn: Array<{ event: string; callback: (data: any) => void }> = [];
+  private targetRoom = "lobby-1";
 
   constructor(protected context: Context, private options: MmorpgOptions = {}) {
     super(context);
@@ -56,9 +57,10 @@ class BridgeWebsocket extends AbstractWebsocket {
         
     }
     const instance = new Room()
+    const host = this.options.host || window.location.host;
     this.socket = await connectionRoom({
-        host: this.options.host || window.location.host,
-        room: "lobby-1",
+        host,
+        room: this.targetRoom,
         id: this.privateId
     }, instance)
 
@@ -84,16 +86,55 @@ class BridgeWebsocket extends AbstractWebsocket {
     this.socket.emit(event, data);
   }
 
-  updateProperties({ room }: { room: any }) {
+  updateProperties({ room, host, query }: SocketUpdateProperties) {
+    if (!this.socket?.conn) return;
+    this.targetRoom = room;
     this.socket.conn.updateProperties({
-      room: room,
+      room,
       id: this.privateId,
-      host: this.options.host
+      host: host || this.options.host || window.location.host,
+      query,
     })
   }
 
-  async reconnect(listeners?: (data: any) => void) {
-   this.socket.conn.reconnect()
+  private waitForNextOpen(conn: any, timeoutMs = 10000): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let timeoutId: number | undefined;
+      const onOpen = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = () => {
+        cleanup();
+        reject(new Error("WebSocket reconnect failed"));
+      };
+      const cleanup = () => {
+        conn.removeEventListener("open", onOpen);
+        conn.removeEventListener("error", onError);
+        if (timeoutId !== undefined) {
+          window.clearTimeout(timeoutId);
+        }
+      };
+
+      conn.addEventListener("open", onOpen);
+      conn.addEventListener("error", onError);
+      timeoutId = window.setTimeout(() => {
+        cleanup();
+        reject(new Error("WebSocket reconnect timeout"));
+      }, timeoutMs);
+    });
+  }
+
+  async reconnect(_listeners?: (data: any) => void): Promise<void> {
+    if (!this.socket?.conn) return;
+    const conn = this.socket.conn;
+    const opened = this.waitForNextOpen(conn);
+    conn.reconnect();
+    await opened;
+  }
+
+  getCurrentRoom(): string {
+    return this.targetRoom || this.socket?.conn?.room || "lobby-1";
   }
 }
 
@@ -103,7 +144,34 @@ class UpdateMapStandaloneService extends UpdateMapService {
   }
 
   async update(map: any) {
-    // nothing
+    const websocket = this.context.get(WebSocketToken) as BridgeWebsocket | undefined;
+    const mapId = typeof map?.id === "string" ? map.id : undefined;
+    const roomFromMap = mapId
+      ? (mapId.startsWith("map-") ? mapId : `map-${mapId}`)
+      : undefined;
+    const room = roomFromMap || websocket?.getCurrentRoom?.() || "lobby-1";
+    if (!room.startsWith("map-")) {
+      return;
+    }
+    const configuredHost = this.options.host || window.location.host;
+    const baseUrl = /^https?:\/\//.test(configuredHost)
+      ? configuredHost
+      : `${window.location.protocol}//${configuredHost}`;
+
+    try {
+      const response = await fetch(`${baseUrl}/parties/main/${room}/map/update`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(map),
+      });
+      if (!response.ok) {
+        console.warn(`[RPGJS] Failed to sync map payload for room "${room}" (${response.status}).`);
+      }
+    } catch (error) {
+      console.warn(`[RPGJS] Unable to sync map payload for room "${room}":`, error);
+    }
   }
 }
 
