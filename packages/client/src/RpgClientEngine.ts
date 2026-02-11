@@ -295,7 +295,7 @@ export class RpgClientEngine<T = any> {
         // Signal that player ID was received
         this.playerIdReceived$.next(true);
       }
-   
+
       if (this.sceneResetQueued) {
         this.sceneMap.reset();
         this.sceneMap.loadPhysic();

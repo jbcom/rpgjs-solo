@@ -8,3 +8,4 @@ These documents are for internal development only. They describe server-side arc
 
 - `docs/internal/snapshots.md`
 - `docs/internal/maps.md`
+- `docs/internal/mmorpg-map-sync.md`

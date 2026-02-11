@@ -410,6 +410,47 @@ describe('Map WorldMapsManager Integration', () => {
     expect(worldX2).toBe(1074)
     expect(worldY2).toBe(100)
   })
+
+  test('should keep movement sync after returning to initial map', async () => {
+    player = await client.waitForMapChange('map1')
+
+    await player.changeMap('map2', { x: 50, y: 100 })
+    player = await client.waitForMapChange('map2')
+    expect(player.getCurrentMap()?.id).toBe('map2')
+
+    await player.changeMap('map1', { x: 100, y: 100 })
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap()
+    expect(map?.id).toBe('map1')
+
+    const beforeX = player.x()
+    await map?.movePlayer(player as any, Direction.Right)
+    map?.nextTick(16)
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    expect(player.x()).toBeGreaterThan(beforeX)
+  })
+
+  test('should keep restored player position after loadPhysic rebuild', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap()
+    expect(map).toBeDefined()
+
+    await player.teleport({ x: 0, y: 0 })
+    map?.loadPhysic()
+
+    // Simulate a late position restore (e.g. session transfer snapshot hydration).
+    player.x.set(100)
+    player.y.set(100)
+    await new Promise(resolve => setTimeout(resolve, 10))
+
+    const topLeft = map?.getBodyPosition(player.id, 'top-left')
+    expect(topLeft).toBeDefined()
+    expect(Math.round(topLeft!.x)).toBe(100)
+    expect(Math.round(topLeft!.y)).toBe(100)
+    expect(player.x()).toBe(100)
+    expect(player.y()).toBe(100)
+  })
 })
 
 /**
@@ -586,6 +627,47 @@ describe('Automatic Map Change on Border Touch', () => {
       player = await client.waitForMapChange('map4')
       expect(player.getCurrentMap()?.id).toBe('map4')
     }
+  })
+
+  test('should not immediately bounce back after returning from adjacent map', async () => {
+    player = await client.waitForMapChange('map1')
+    await player.autoChangeMap({ x: 513, y: 384 }, Direction.Right)
+
+    const hitbox = player.hitbox()
+    const marginTopDown = 16 // tileHeight / 2
+    const topBorderY = marginTopDown - 1
+
+    player.changeDirection(Direction.Up)
+    await player.teleport({ x: 512, y: topBorderY })
+    const movedUp = await player.autoChangeMap({ x: 512, y: topBorderY - 1 }, Direction.Up)
+    expect(movedUp).toBe(true)
+
+    player = await client.waitForMapChange('map4')
+    expect(player.getCurrentMap()?.id).toBe('map4')
+
+    const map4 = player.getCurrentMap()
+    const bottomBorderY = (map4?.heightPx ?? 768) - hitbox.h - marginTopDown + 1
+
+    player.changeDirection(Direction.Down)
+    await player.teleport({ x: 512, y: bottomBorderY })
+    // First downward move after return should be blocked to avoid ping-pong map swaps.
+    const firstDownAttempt = await player.autoChangeMap({ x: 512, y: bottomBorderY + 1 }, Direction.Down)
+    expect(firstDownAttempt).toBe(false)
+
+    // Move away from border to unlock transitions, then touch border again.
+    await player.teleport({ x: 512, y: 384 })
+    player.changeDirection(Direction.Up)
+    await player.autoChangeMap({ x: 512, y: 383 }, Direction.Up)
+
+    const mapAfterUnlock = player.getCurrentMap()
+    const downBorderY = (mapAfterUnlock?.heightPx ?? 768) - hitbox.h - marginTopDown + 1
+    await player.teleport({ x: 512, y: downBorderY })
+    player.changeDirection(Direction.Down)
+    const movedDown = await player.autoChangeMap({ x: 512, y: downBorderY + 1 }, Direction.Down)
+    expect(movedDown).toBe(true)
+
+    player = await client.waitForMapChange('map1')
+    expect(player.getCurrentMap()?.id).toBe('map1')
   })
 
   test('should not change map when player is not at border', async () => {

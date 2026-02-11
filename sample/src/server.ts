@@ -289,8 +289,6 @@ export default createServer({
             player.setGraphic("hero");
             console.log("join map", player.expCurve, player.param);
 
-            
-          
             // Configure player stats
             //player.hp = 200;
             //player.param[MAXHP] = 200;

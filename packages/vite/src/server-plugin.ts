@@ -507,12 +507,16 @@ async function importWebSocketServer(): Promise<any> {
 }
 
 async function updateMap(roomId: string, rpgServer: RpgServerEngine) {
+  if (!roomId.startsWith('map-')) {
+    return;
+  }
+
   try {
     const mapId = roomId.startsWith('map-') ? roomId.slice(4) : roomId;
     const defaultMapPayload = {
       id: mapId,
-      width: 1000,
-      height: 1000,
+      width: 0,
+      height: 0,
       events: [] as any[],
     };
 

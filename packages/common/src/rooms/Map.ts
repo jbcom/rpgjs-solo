@@ -10,7 +10,7 @@ import {
   AABB,
   createCollider,
 } from "@rpgjs/physic";
-import { Observable, share, Subject, Subscription } from "rxjs";
+import { combineLatest, Observable, share, Subject, Subscription } from "rxjs";
 import { MovementManager } from "../movement";
 import { WorldMapsManager, type RpgWorldMaps } from "./WorldMaps";
 
@@ -300,12 +300,25 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     this.playersSubscription = (this.players as any).observable.subscribe(
       ({ value: player, type, key }: any) => {
+        if (type === "remove") {
+          this.removeHitbox(key);
+          return;
+        }
+
+        if (type == 'reset') {
+          if (!player) return;
+          for (let id in player) {
+            const _player = player[id]
+            _player.id = _player.id ?? id;
+            this.createCharacterHitbox(_player, "hero");
+          }
+          return;
+        }
+
         if (!player) return;
         if (type === "add") {
           player.id = key;
           this.createCharacterHitbox(player, "hero");
-        } else if (type === "remove") {
-          this.removeHitbox(key);
         } else if (type === "update") {
           player.id = player.id ?? key;
           if (!this.getBody(key)) {
@@ -316,13 +329,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
             return;
           }
           this.updateCharacterHitbox(player);
-        }
-        else if (type == 'reset') {
-          for (let id in player) {
-            const _player = player[id]
-            _player.id = _player.id ?? id;
-            this.createCharacterHitbox(_player, "hero");
-          }
         }
       },
     );
@@ -397,7 +403,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     let nextX = currentX;
     let nextY = currentY;
-
+    
     switch (direction) {
       case Direction.Left:
         nextX = currentX - speed;
@@ -614,6 +620,9 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     }
     const existingEntity = this.physic.getEntityByUUID(owner.id);
     if (existingEntity) {
+      // Rebind owner when the player instance is restored/replaced (e.g. map transfer).
+      // Position sync callbacks read entity.owner at runtime.
+      (existingEntity as any).owner = owner;
       this.updateCharacterHitbox(owner);
       return;
     }
@@ -635,6 +644,13 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
   private updateCharacterHitbox(owner: any): void {
     if (!owner?.id) return;
+    const entity = this.physic.getEntityByUUID(owner.id);
+    if (!entity) return;
+
+    // Rebind owner on every update to keep physics callbacks attached to the
+    // current player instance after room/session transfers.
+    (entity as any).owner = owner;
+
     const hitbox = typeof owner.hitbox === "function" ? owner.hitbox() : owner.hitbox;
     const width = hitbox?.w ?? 32;
     const height = hitbox?.h ?? 32;
@@ -1127,12 +1143,17 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       // If moving with high intensity, keep current animation (e.g., already running)
     });
 
-    // Register position sync handler to update owner.x and owner.y
-    // Store the hitbox dimensions at creation time to ensure consistent conversion
-    const entityWidth = width;
-    const entityHeight = height;
+    // Register position sync handler to update owner.x and owner.y.
+    // Read owner dynamically from entity to avoid stale references after map transfer.
     
     entity.onPositionChange(({ x, y }) => {
+      const currentOwner = (entity as any).owner;
+      if (!currentOwner) {
+        return;
+      }
+
+      const entityWidth = entity.width || width;
+      const entityHeight = entity.height || height;
       // Calculate top-left from center using the original hitbox dimensions
       // This ensures consistency: center = topLeft + (size / 2)
       // Therefore: topLeft = center - (size / 2)
@@ -1140,17 +1161,16 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       const topLeftY = y - entityHeight / 2;
       let changed = false;
 
-
-      if (typeof owner.x === "function" && typeof owner.x.set === "function") {
-        owner.x.set(Math.round(topLeftX));
+      if (typeof currentOwner.x === "function" && typeof currentOwner.x.set === "function") {
+        currentOwner.x.set(Math.round(topLeftX));
         changed = true;
       }
-      if (typeof owner.y === "function" && typeof owner.y.set === "function") {
-        owner.y.set(Math.round(topLeftY));
+      if (typeof currentOwner.y === "function" && typeof currentOwner.y.set === "function") {
+        currentOwner.y.set(Math.round(topLeftY));
         changed = true;
       }
       if (changed) {
-        owner.applyFrames?.();
+        currentOwner.applyFrames?.();
       }
     });
 
@@ -1268,7 +1288,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     if (!entity) {
       return false;
     }
-
     this.physic.removeEntity(entity);
     return true;
   }

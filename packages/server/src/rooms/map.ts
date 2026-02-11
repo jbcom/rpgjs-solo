@@ -62,6 +62,9 @@ const MapUpdateSchema = z.object({
   height: z.number(),
 });
 
+const SAFE_MAP_WIDTH = 1000;
+const SAFE_MAP_HEIGHT = 1000;
+
 /**
  * Interface representing hook methods available for map events
  * 
@@ -251,6 +254,31 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   onStart() {
     return BaseRoom.prototype.onStart.call(this)
+  }
+
+  private isPositiveNumber(value: unknown): value is number {
+    return typeof value === "number" && Number.isFinite(value) && value > 0;
+  }
+
+  private resolveTrustedMapDimensions(map: any): void {
+    const normalizedId = typeof map?.id === "string"
+      ? map.id.replace(/^map-/, "")
+      : "";
+    const worldMapInfo = normalizedId
+      ? this.worldMapsManager?.getMapInfo(normalizedId)
+      : null;
+
+    if (!this.isPositiveNumber(map?.width)) {
+      map.width = this.isPositiveNumber(worldMapInfo?.width)
+        ? worldMapInfo.width
+        : SAFE_MAP_WIDTH;
+    }
+
+    if (!this.isPositiveNumber(map?.height)) {
+      map.height = this.isPositiveNumber(worldMapInfo?.height)
+        ? worldMapInfo.height
+        : SAFE_MAP_HEIGHT;
+    }
   }
 
   /**
@@ -541,6 +569,18 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         // Avoid unhandled promise rejections from async hook execution.
         void (async () => {
           try {
+            const hitbox = typeof player.hitbox === 'function' ? player.hitbox() : player.hitbox;
+            const width = hitbox?.w ?? 32;
+            const height = hitbox?.h ?? 32;
+            const body = this.getBody(player.id) as any;
+            if (body) {
+              // Ensure physics callbacks target the current player instance
+              // after session transfer/map return.
+              body.owner = player;
+            }
+            // Keep physics body aligned with restored snapshot coordinates on map join.
+            this.updateHitbox(player.id, player.x(), player.y(), width, height);
+
             // Check if we should stop all sounds before playing new ones
             if ((this as any).stopAllSoundsBeforeJoin) {
               player.stopAllSounds();
@@ -872,6 +912,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     await lastValueFrom(this.hooks.callHooks("server-maps-load", this))
     await lastValueFrom(this.hooks.callHooks("server-worldMaps-load", this))
     await lastValueFrom(this.hooks.callHooks("server-databaseHooks-load", this))
+
+    this.resolveTrustedMapDimensions(map)
+    this.data.set(map)
 
     map.events = map.events ?? []
 

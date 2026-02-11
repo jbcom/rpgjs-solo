@@ -254,6 +254,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
   setMap(map: RpgMap) {
     this.map = map;
+    // Prevent immediate ping-pong map transfers when spawning near a border.
+    this.touchSide = true;
   }
 
   applyFrames() {
@@ -324,17 +326,34 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
         const direction = this.getDirection()
         const marginLeftRight = map.tileWidth / 2
         const marginTopDown = map.tileHeight / 2
+        const hitbox = this.hitbox()
+        const currentX = this.x()
+        const currentY = this.y()
+        const nearBorder =
+          currentX < marginLeftRight ||
+          currentX > map.widthPx - hitbox.w - marginLeftRight ||
+          currentY < marginTopDown ||
+          currentY > map.heightPx - hitbox.h - marginTopDown
 
-        const changeMap = async (adjacent, to) => {
-            if (this.touchSide) {
+        if (this.touchSide) {
+            if (nearBorder) {
                 return false
             }
-            this.touchSide = true
+            this.touchSide = false
+        }
+
+        const changeMap = async (adjacent, to) => {
             const [nextMap] = worldMaps.getAdjacentMaps(map, adjacent)
-            if (!nextMap) return false
+            if (!nextMap) {
+                return false
+            }
             const id = nextMap.id as string
             const nextMapInfo = worldMaps.getMapInfo(id)
-            return !!(await this.changeMap(id, to(nextMapInfo)))
+            const changed = !!(await this.changeMap(id, to(nextMapInfo)))
+            if (changed) {
+                this.touchSide = true
+            }
+            return changed
         }
 
         if (nextPosition.x < marginLeftRight && direction == Direction.Left) {

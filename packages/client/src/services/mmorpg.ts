@@ -139,39 +139,14 @@ class BridgeWebsocket extends AbstractWebsocket {
 }
 
 class UpdateMapStandaloneService extends UpdateMapService {
-  constructor(protected context: Context, private options: MmorpgOptions) {
+  constructor(protected context: Context, private _options: MmorpgOptions) {
     super(context);
   }
 
-  async update(map: any) {
-    const websocket = this.context.get(WebSocketToken) as BridgeWebsocket | undefined;
-    const mapId = typeof map?.id === "string" ? map.id : undefined;
-    const roomFromMap = mapId
-      ? (mapId.startsWith("map-") ? mapId : `map-${mapId}`)
-      : undefined;
-    const room = roomFromMap || websocket?.getCurrentRoom?.() || "lobby-1";
-    if (!room.startsWith("map-")) {
-      return;
-    }
-    const configuredHost = this.options.host || window.location.host;
-    const baseUrl = /^https?:\/\//.test(configuredHost)
-      ? configuredHost
-      : `${window.location.protocol}//${configuredHost}`;
-
-    try {
-      const response = await fetch(`${baseUrl}/parties/main/${room}/map/update`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(map),
-      });
-      if (!response.ok) {
-        console.warn(`[RPGJS] Failed to sync map payload for room "${room}" (${response.status}).`);
-      }
-    } catch (error) {
-      console.warn(`[RPGJS] Unable to sync map payload for room "${room}":`, error);
-    }
+  async update(_map: any) {
+    // In MMORPG mode, clients are untrusted and must not push map definitions.
+    // Map bootstrap/update is handled server-side by @rpgjs/vite.
+    return;
   }
 }
 
