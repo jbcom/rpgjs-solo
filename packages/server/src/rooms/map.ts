@@ -1,6 +1,6 @@
 import { Action, MockConnection, Request, Room, RoomMethods, RoomOnJoin } from "@signe/room";
 import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, Direction, RpgCommonPlayer, RpgShape, findModules } from "@rpgjs/common";
-import { WorldMapsManager, type WorldMapConfig } from "@rpgjs/common";
+import { WorldMapsManager, type WeatherState, type WorldMapConfig } from "@rpgjs/common";
 import { RpgPlayer, RpgEvent } from "../Player/Player";
 import { generateShortUUID, sync, type, users } from "@signe/sync";
 import { signal } from "@signe/reactive";
@@ -107,6 +107,10 @@ export type EventPosOption = {
    * - An object with hook methods
    */
   event: EventConstructor | (EventHooks & Record<string, any>)
+}
+
+interface WeatherSetOptions {
+  sync?: boolean;
 }
 
 @Room({
@@ -219,6 +223,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * with custom formulas when the map is loaded.
    */
   damageFormulas: any = {}
+  private _weatherState: WeatherState | null = null;
   /** Internal: Map of shapes by name */
   private _shapes: Map<string, RpgShape> = new Map();
   /** Internal: Map of shape entity UUIDs to RpgShape instances */
@@ -587,6 +592,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
             }
 
             this.sounds.forEach(sound => player.playSound(sound, { loop: true }));
+            player.emit("weatherState", this.getWeather());
 
             // Execute global map hooks (from RpgServer.map)
             await lastValueFrom(this.hooks.callHooks("server-map-onJoin", player, this));
@@ -917,9 +923,13 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this.data.set(map)
 
     map.events = map.events ?? []
+    let initialWeather: WeatherState | null | undefined = this.globalConfig?.weather;
 
     if (map.id) {
       const mapFound = this.maps.find(m => m.id === map.id)
+      if (typeof mapFound?.weather !== "undefined") {
+        initialWeather = mapFound.weather;
+      }
       if (mapFound?.events) {
         map.events = [
           ...mapFound.events,
@@ -949,6 +959,12 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       if (mapFound?.stopAllSoundsBeforeJoin !== undefined) {
         (this as any).stopAllSoundsBeforeJoin = mapFound.stopAllSoundsBeforeJoin;
       }
+    }
+
+    if (typeof initialWeather !== "undefined") {
+      this.setWeather(initialWeather);
+    } else {
+      this.clearWeather();
     }
 
     await lastValueFrom(this.hooks.callHooks("server-map-onBeforeUpdate", map, this))
@@ -1779,6 +1795,71 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       graphic,
       animationName,
     })
+  }
+
+  private cloneWeatherState(weather: WeatherState | null): WeatherState | null {
+    if (!weather) {
+      return null;
+    }
+    return {
+      ...weather,
+      params: weather.params ? { ...weather.params } : undefined,
+    };
+  }
+
+  /**
+   * Get the current map weather state.
+   */
+  getWeather(): WeatherState | null {
+    return this.cloneWeatherState(this._weatherState);
+  }
+
+  /**
+   * Set the full weather state for this map.
+   *
+   * When `sync` is true (default), all connected clients receive the new weather.
+   */
+  setWeather(next: WeatherState | null, options: WeatherSetOptions = {}): WeatherState | null {
+    const sync = options.sync !== false;
+    if (next && !next.effect) {
+      throw new Error("setWeather: 'effect' is required when weather is not null.");
+    }
+    this._weatherState = this.cloneWeatherState(next);
+    if (sync) {
+      this.$broadcast({
+        type: "weatherState",
+        value: this._weatherState,
+      });
+    }
+    return this.getWeather();
+  }
+
+  /**
+   * Patch the current weather state.
+   *
+   * Nested `params` values are merged.
+   */
+  patchWeather(patch: Partial<WeatherState>, options: WeatherSetOptions = {}): WeatherState | null {
+    const current = this._weatherState ?? null;
+    if (!current && !patch.effect) {
+      throw new Error("patchWeather: 'effect' is required when no weather is currently set.");
+    }
+    const next: WeatherState = {
+      ...(current ?? {}),
+      ...patch,
+      params: {
+        ...(current?.params ?? {}),
+        ...(patch.params ?? {}),
+      },
+    } as WeatherState;
+    return this.setWeather(next, options);
+  }
+
+  /**
+   * Clear weather for this map.
+   */
+  clearWeather(options: WeatherSetOptions = {}): void {
+    this.setWeather(null, options);
   }
 
   /**

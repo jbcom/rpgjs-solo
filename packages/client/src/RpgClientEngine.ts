@@ -423,6 +423,32 @@ export class RpgClientEngine<T = any> {
       });
     });
 
+    this.webSocket.on("weatherState", (data) => {
+      const raw = (data && typeof data === "object" && "value" in data)
+        ? (data as any).value
+        : data;
+
+      if (raw === null) {
+        this.sceneMap.weatherState.set(null);
+        return;
+      }
+
+      const validEffects = ["rain", "snow", "fog", "cloud"];
+      if (!raw || !validEffects.includes((raw as any).effect)) {
+        return;
+      }
+
+      this.sceneMap.weatherState.set({
+        effect: (raw as any).effect,
+        preset: (raw as any).preset,
+        params: (raw as any).params,
+        transitionMs: (raw as any).transitionMs,
+        durationMs: (raw as any).durationMs,
+        startedAt: (raw as any).startedAt,
+        seed: (raw as any).seed,
+      });
+    });
+
     this.webSocket.on('open', () => {
       this.hooks.callHooks("client-engine-onConnected", this, this.socket).subscribe();
       // Start ping/pong for synchronization

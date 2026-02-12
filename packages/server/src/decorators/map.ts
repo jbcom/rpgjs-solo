@@ -1,3 +1,5 @@
+import type { WeatherState } from "@rpgjs/common";
+
 export interface MapOptions {
     /** 
      * Map identifier. Allows to go to the map (for example with player.changeMap())
@@ -96,6 +98,28 @@ export interface MapOptions {
      * @memberof MapData
      * */
     sounds?: string[]
+
+    /**
+     * Initial weather state for this map.
+     *
+     * This value is applied when the map is loaded and can later be updated
+     * at runtime with `map.setWeather()` from server logic.
+     *
+     * ```ts
+     * @MapData({
+     *   id: 'forest',
+     *   file: require('./tmx/forest.tmx'),
+     *   weather: {
+     *     effect: 'fog',
+     *     preset: 'rpgForestFog',
+     *     params: { density: 1.2, height: 0.75 },
+     *     transitionMs: 1200
+     *   }
+     * })
+     * class ForestMap extends RpgMap {}
+     * ```
+     */
+    weather?: WeatherState | null
 
     /** 
      * Whether to stop all sounds before playing the map sounds when a player joins.
@@ -278,6 +302,7 @@ export function MapData(options: MapOptions) {
         target.prototype.file = options.file
         target.prototype.id = options.id
         target.prototype.sounds = options.sounds
+        target.prototype.weather = options.weather
         target.prototype.lowMemory = options.lowMemory
         target.prototype.stopAllSoundsBeforeJoin = options.stopAllSoundsBeforeJoin
 

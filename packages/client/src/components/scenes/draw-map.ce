@@ -10,6 +10,10 @@
       }
     </Container>
   }
+
+  @if (weatherProps) {
+    <Weather ...weatherProps() />
+  }
 </Container>
 
 <script>
@@ -17,6 +21,7 @@
     import { effect, signal, computed, mount, on, tick } from 'canvasengine'
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
+    import { Weather } from '@canvasengine/presets'
 
     const engine = inject(RpgClientEngine);
     const componentAnimations = engine.componentAnimations
@@ -25,6 +30,7 @@
     const sceneParams = map()?.params
     const mapParams = map()?.params
     const animations = engine.sceneMap.animations
+    const weather = engine.sceneMap.weather
     const backgroundMusic = { src: mapParams?.backgroundMusic, autoplay: true, loop: true }
     const backgroundAmbientSound = { src: mapParams?.backgroundAmbientSound, autoplay: true, loop: true }
 
@@ -45,4 +51,34 @@
       frequency: 10,
       direction: 'both'
     }
+
+    const weatherProps = computed(() => {
+      const state = weather?.()
+      if (!state) {
+        return null
+      }
+      const validEffects = ['rain', 'snow', 'fog', 'cloud']
+      if (!validEffects.includes(state.effect)) {
+        return null
+      }
+      const params = state.params ?? {}
+      return {
+        effect: state.effect,
+        speed: params.speed,
+        windDirection: params.windDirection,
+        windStrength: params.windStrength,
+        density: params.density,
+        maxDrops: params.maxDrops,
+        height: params.height,
+        scale: params.scale,
+        sunIntensity: params.sunIntensity,
+        sunAngle: params.sunAngle,
+        raySpread: params.raySpread,
+        rayTwinkle: params.rayTwinkle,
+        rayTwinkleSpeed: params.rayTwinkleSpeed,
+        zIndex: params.zIndex ?? 1000,
+        alpha: params.alpha,
+        blendMode: params.blendMode,
+      }
+    })
 </script>

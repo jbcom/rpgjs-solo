@@ -1,4 +1,4 @@
-import { RpgCommonMap } from "@rpgjs/common";
+import { RpgCommonMap, type WeatherState } from "@rpgjs/common";
 import { sync, users } from "@signe/sync";
 import { RpgClientPlayer } from "./Player";
 import { Signal, signal, computed, effect } from "canvasengine";
@@ -11,6 +11,13 @@ export class RpgClientMap extends RpgCommonMap<any> {
   @users(RpgClientPlayer) players = signal<Record<string, RpgClientPlayer>>({});
   @sync(RpgClientEvent) events = signal<Record<string, RpgClientEvent>>({});
   currentPlayer = computed(() => this.players()[this.engine.playerIdSignal()!])
+  weatherState = signal<WeatherState | null>(null);
+  localWeatherOverride = signal<WeatherState | null>(null);
+  weather = computed<WeatherState | null>(() => {
+    const local = this.localWeatherOverride() 
+    const state = this.weatherState()
+    return local ?? state
+  });
   private manualClientPhysicsTick = false;
   private readonly isTestEnvironment: boolean;
 
@@ -44,7 +51,21 @@ export class RpgClientMap extends RpgCommonMap<any> {
       currentPlayerId && currentPlayer ? { [currentPlayerId]: currentPlayer } : {}
     );
     this.events.set({})
+    this.weatherState.set(null);
+    this.localWeatherOverride.set(null);
     this.clearPhysic()
+  }
+
+  getWeather(): WeatherState | null {
+    return this.weather();
+  }
+
+  setLocalWeather(next: WeatherState | null): void {
+    this.localWeatherOverride.set(next);
+  }
+
+  clearLocalWeather(): void {
+    this.localWeatherOverride.set(null);
   }
 
   stepClientPhysics(deltaMs: number): number {

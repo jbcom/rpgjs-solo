@@ -1,5 +1,5 @@
 <Canvas width={engine.width} height={engine.height}>
-  <Viewport worldWidth worldHeight clamp>
+  <Viewport worldWidth worldHeight clamp sortableChildren={true}>
     @if (sceneData) {
       <SceneMap />
     }

@@ -345,7 +345,20 @@ export default createServer({
             //     { id: 'save', label: 'Save' },
             //   ]
             //  })
-           if (input.action == 'escape')player.callMainMenu()
+           if (input.action == 'escape') {
+            const map = player.getCurrentMap()
+            map.setWeather({
+              effect: 'rain',
+              preset: 'steadyRain',
+              params: {
+                density: 220,
+                speed: 0.7,
+                windStrength: 0.25
+              },
+              transitionMs: 900,
+              startedAt: Date.now()
+            })
+           }
            // player.hp -= 100;
             // const map = player.getCurrentMap()
             // const event =map?.getEventBy(event => event.name() === "EV-1")

@@ -97,6 +97,7 @@ export function provideServerModules(modules: RpgServerModule[]): FactoryProvide
                     type: MapClass.type,
                     name: MapClass.prototype?.name,
                     sounds: MapClass.prototype?.sounds,
+                    weather: MapClass.prototype?.weather,
                     lowMemory: MapClass.prototype?.lowMemory,
                     stopAllSoundsBeforeJoin: MapClass.prototype?.stopAllSoundsBeforeJoin,
                     events: MapClass.prototype?._events,
