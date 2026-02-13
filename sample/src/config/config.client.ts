@@ -61,7 +61,7 @@ export default {
     provideActionBattle({
       ui: {
         actionBar: {
-          enabled: true,
+          enabled: false,
           autoOpen: false,
           mode: "both" // "items" | "skills" | "both"
         }

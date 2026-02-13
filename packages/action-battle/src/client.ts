@@ -40,8 +40,10 @@ export const createActionBattleClient = (
     },
     sceneMap: {
       onAfterLoading() {
-        const gui = inject(RpgGui)
-        gui.display('action-battle-action-bar')
+        if (actionBarEnabled && normalized.ui?.actionBar?.autoOpen) {
+          const gui = inject(RpgGui)
+          gui.display('action-battle-action-bar')
+        }
       }
     }
   });
