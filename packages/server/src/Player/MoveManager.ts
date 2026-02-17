@@ -820,8 +820,18 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return;
 
-      const playerId = (this as unknown as PlayerWithMixins).id;
-      const strategies = this.getActiveMovements();
+      let strategies: MovementStrategy[] = [];
+      try {
+        strategies = this.getActiveMovements();
+      }
+      catch (error) {
+        // Teardown race: entity can be removed while AI still clears movements.
+        const message = (error as Error | undefined)?.message ?? "";
+        if (message.includes("unable to resolve entity")) {
+          return;
+        }
+        throw error;
+      }
       const toRemove = strategies.filter(s => s instanceof SeekAvoid || s instanceof LinearRepulsion);
       
       if (toRemove.length > 0) {

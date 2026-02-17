@@ -1210,7 +1210,35 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       const eventsMap = this.events();
       const isSelfPlayer = !!playersMap[self.uuid];
       const isOtherPlayer = !!playersMap[other.uuid];
+      const isSelfEvent = !!eventsMap[self.uuid];
       const isOtherEvent = !!eventsMap[other.uuid];
+      const readScenarioOwnerId = (owner: any): string | undefined => {
+        const scenarioOwnerId = owner?._scenarioOwnerId ?? owner?.scenarioOwnerId;
+        return typeof scenarioOwnerId === "string" && scenarioOwnerId.length > 0
+          ? scenarioOwnerId
+          : undefined;
+      };
+      const selfScenarioOwnerId = readScenarioOwnerId(selfOwner);
+      const otherScenarioOwnerId = readScenarioOwnerId(otherOwner);
+
+      // Scenario events are isolated per player:
+      // they only collide with their owner and scenario events of the same owner.
+      if (selfScenarioOwnerId) {
+        if (isOtherPlayer && other.uuid !== selfScenarioOwnerId) {
+          return false;
+        }
+        if (isOtherEvent && otherScenarioOwnerId !== selfScenarioOwnerId) {
+          return false;
+        }
+      }
+      if (otherScenarioOwnerId) {
+        if (isSelfPlayer && self.uuid !== otherScenarioOwnerId) {
+          return false;
+        }
+        if (isSelfEvent && selfScenarioOwnerId !== otherScenarioOwnerId) {
+          return false;
+        }
+      }
 
       // throughOtherPlayer only applies when SELF is a player and OTHER is also a player
       // (players passing through other players)

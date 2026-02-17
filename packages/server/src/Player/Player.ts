@@ -657,9 +657,12 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     const map = this.getCurrentMap();
     if (!map) return;
     const { events } = map;
+    const visibleMapEvents = Object.values(events?.() ?? {}).filter((event: any) =>
+      map.isEventVisibleForPlayer?.(event, this) ?? true
+    );
     const arrayEvents: any[] = [
       ...Object.values(this.events()),
-      ...Object.values(events?.() ?? {}),
+      ...visibleMapEvents,
     ];
     for (let event of arrayEvents) {
       if (event.onChanges) event.onChanges(this);
@@ -810,7 +813,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
             const event = map.getEvent<RpgEvent>(entity.uuid);
             const player = map.getPlayer(entity.uuid);
 
-            if (event) {
+            if (event && (!map.isEventVisibleForPlayer || map.isEventVisibleForPlayer(event, this))) {
               event.execMethod("onInShape", [shape, this]);
               // Track that this event is in the shape
               if ((event as any)._inShapes) {
@@ -831,7 +834,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
             const event = map.getEvent<RpgEvent>(entity.uuid);
             const player = map.getPlayer(entity.uuid);
 
-            if (event) {
+            if (event && (!map.isEventVisibleForPlayer || map.isEventVisibleForPlayer(event, this))) {
               event.execMethod("onOutShape", [shape, this]);
               // Remove from tracking
               if ((event as any)._inShapes) {

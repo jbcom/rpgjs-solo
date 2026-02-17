@@ -13,6 +13,7 @@ import { COEFFICIENT_ELEMENTS, DAMAGE_CRITICAL, DAMAGE_PHYSIC, DAMAGE_SKILL } fr
 import { z } from "zod";
 import { EntityState } from "@rpgjs/physic";
 import { MapOptions } from "../decorators/map";
+import { EventMode } from "../decorators/event";
 import { BaseRoom } from "./BaseRoom";
 import { buildSaveSlotMeta, resolveSaveStorageStrategy } from "../services/save";
 import { Log } from "../logs/log";
@@ -98,9 +99,13 @@ export type EventPosOption = {
   id?: string,
 
   /** X position of the event on the map */
-  x: number,
+  x?: number,
   /** Y position of the event on the map */
-  y: number,
+  y?: number,
+  /** Event mode override */
+  mode?: EventMode | "shared" | "scenario",
+  /** Owner player id when mode is scenario */
+  scenarioOwnerId?: string,
   /** 
    * Event definition - can be either:
    * - A class that extends RpgPlayer
@@ -108,6 +113,11 @@ export type EventPosOption = {
    */
   event: EventConstructor | (EventHooks & Record<string, any>)
 }
+
+type CreateDynamicEventOptions = {
+  mode?: EventMode | "shared" | "scenario";
+  scenarioOwnerId?: string;
+};
 
 interface WeatherSetOptions {
   sync?: boolean;
@@ -232,6 +242,14 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   private _inputLoopSubscription?: any;
   /** Enable/disable automatic tick processing (useful for unit tests) */
   private _autoTickEnabled: boolean = true;
+  /** Runtime templates for scenario events to instantiate per player */
+  private _scenarioEventTemplates: EventPosOption[] = [];
+  /** Runtime registry of event mode by id */
+  private _eventModeById: Map<string, EventMode> = new Map();
+  /** Runtime registry of scenario owner by event id */
+  private _eventOwnerById: Map<string, string> = new Map();
+  /** Runtime registry of spawned scenario event ids by player id */
+  private _scenarioEventIdsByPlayer: Map<string, Set<string>> = new Map();
 
   autoSync: boolean = true;
 
@@ -284,6 +302,172 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         ? worldMapInfo.height
         : SAFE_MAP_HEIGHT;
     }
+  }
+
+  private normalizeEventMode(mode: unknown): EventMode {
+    return mode === EventMode.Scenario || mode === "scenario"
+      ? EventMode.Scenario
+      : EventMode.Shared;
+  }
+
+  private resolveEventMode(eventObj: any): EventMode {
+    if (!eventObj) return EventMode.Shared;
+
+    if (eventObj.mode !== undefined) {
+      return this.normalizeEventMode(eventObj.mode);
+    }
+
+    const eventDef = eventObj.event ?? eventObj;
+    if (eventDef?.mode !== undefined) {
+      return this.normalizeEventMode(eventDef.mode);
+    }
+
+    if (typeof eventDef === "function") {
+      const staticMode = (eventDef as any).mode;
+      const prototypeMode = (eventDef as any).prototype?.mode;
+      if (staticMode !== undefined) {
+        return this.normalizeEventMode(staticMode);
+      }
+      if (prototypeMode !== undefined) {
+        return this.normalizeEventMode(prototypeMode);
+      }
+    }
+
+    return EventMode.Shared;
+  }
+
+  private resolveScenarioOwnerId(eventObj: any): string | undefined {
+    if (!eventObj) return undefined;
+    const ownerId = eventObj.scenarioOwnerId
+      ?? eventObj._scenarioOwnerId
+      ?? eventObj.event?.scenarioOwnerId
+      ?? eventObj.event?._scenarioOwnerId;
+    return typeof ownerId === "string" && ownerId.length > 0 ? ownerId : undefined;
+  }
+
+  private normalizeEventObject(eventObj: EventPosOption | any): EventPosOption {
+    if (eventObj && typeof eventObj === "object" && "event" in eventObj) {
+      return eventObj as EventPosOption;
+    }
+    return {
+      event: eventObj as any,
+    };
+  }
+
+  private cloneEventTemplate(eventObj: EventPosOption): EventPosOption {
+    const clone: EventPosOption = { ...eventObj };
+    if (clone.event && typeof clone.event === "object") {
+      clone.event = { ...(clone.event as Record<string, any>) } as any;
+    }
+    return clone;
+  }
+
+  private buildRuntimeEventId(baseId: string | undefined, mode: EventMode, scenarioOwnerId?: string): string {
+    const fallbackId = baseId || generateShortUUID();
+    if (mode !== EventMode.Scenario || !scenarioOwnerId) {
+      return fallbackId;
+    }
+
+    const scopedId = `${fallbackId}::${scenarioOwnerId}`;
+    if (!this.events()[scopedId]) {
+      return scopedId;
+    }
+    return `${scopedId}::${generateShortUUID()}`;
+  }
+
+  private setEventRuntimeMetadata(eventId: string, mode: EventMode, scenarioOwnerId?: string): void {
+    this._eventModeById.set(eventId, mode);
+    if (mode === EventMode.Scenario && scenarioOwnerId) {
+      this._eventOwnerById.set(eventId, scenarioOwnerId);
+      const ids = this._scenarioEventIdsByPlayer.get(scenarioOwnerId) ?? new Set<string>();
+      ids.add(eventId);
+      this._scenarioEventIdsByPlayer.set(scenarioOwnerId, ids);
+      return;
+    }
+    this._eventOwnerById.delete(eventId);
+  }
+
+  private clearEventRuntimeMetadata(eventId: string): void {
+    this._eventModeById.delete(eventId);
+    const ownerId = this._eventOwnerById.get(eventId);
+    if (ownerId) {
+      const ids = this._scenarioEventIdsByPlayer.get(ownerId);
+      if (ids) {
+        ids.delete(eventId);
+        if (ids.size === 0) {
+          this._scenarioEventIdsByPlayer.delete(ownerId);
+        }
+      }
+    }
+    this._eventOwnerById.delete(eventId);
+  }
+
+  private getEventModeById(eventId: string): EventMode {
+    const runtimeMode = this._eventModeById.get(eventId);
+    if (runtimeMode) {
+      return runtimeMode;
+    }
+    const event = this.getEvent(eventId) as any;
+    return this.normalizeEventMode(event?.mode);
+  }
+
+  private getScenarioOwnerIdByEventId(eventId: string): string | undefined {
+    const runtimeOwnerId = this._eventOwnerById.get(eventId);
+    if (runtimeOwnerId) {
+      return runtimeOwnerId;
+    }
+    const event = this.getEvent(eventId) as any;
+    const ownerId = event?._scenarioOwnerId ?? event?.scenarioOwnerId;
+    return typeof ownerId === "string" && ownerId.length > 0 ? ownerId : undefined;
+  }
+
+  isEventVisibleForPlayer(eventOrId: string | RpgEvent, playerOrId: string | RpgPlayer): boolean {
+    const playerId = typeof playerOrId === "string" ? playerOrId : playerOrId?.id;
+    if (!playerId) {
+      return false;
+    }
+    const eventId = typeof eventOrId === "string" ? eventOrId : eventOrId?.id;
+    if (!eventId) {
+      return false;
+    }
+    const mode = this.getEventModeById(eventId);
+    if (mode === EventMode.Shared) {
+      return true;
+    }
+    const ownerId = this.getScenarioOwnerIdByEventId(eventId);
+    return ownerId === playerId;
+  }
+
+  private async spawnScenarioEventsForPlayer(player: RpgPlayer): Promise<void> {
+    if (!player?.id || this._scenarioEventTemplates.length === 0) {
+      return;
+    }
+    this.removeScenarioEventsForPlayer(player.id);
+    for (const template of this._scenarioEventTemplates) {
+      const clone = this.cloneEventTemplate(template);
+      await this.createDynamicEvent(clone, { mode: EventMode.Scenario, scenarioOwnerId: player.id });
+    }
+  }
+
+  private removeScenarioEventsForPlayer(playerId: string): void {
+    const ids = this._scenarioEventIdsByPlayer.get(playerId);
+    if (!ids || ids.size === 0) {
+      return;
+    }
+    for (const eventId of [...ids]) {
+      const event = this.getEvent(eventId) as any;
+      if (event && typeof event.remove === "function") {
+        try {
+          event.remove();
+          continue;
+        }
+        catch {
+          // Fallback to direct map removal when the event lifecycle is already partially torn down.
+        }
+      }
+      this.removeEvent(eventId);
+    }
+    this._scenarioEventIdsByPlayer.delete(playerId);
   }
 
   /**
@@ -399,7 +583,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       const eventId = player.id === entityA.uuid ? entityB.uuid : entityA.uuid;
       const event = this.getEvent(eventId);
 
-      if (event) {
+      if (event && this.isEventVisibleForPlayer(eventId, player)) {
         // Mark this collision as processed
         activeCollisions.add(collisionKey);
 
@@ -485,6 +669,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   interceptorPacket(player: RpgPlayer, packet: any, conn: MockConnection) {
     let obj: any = {}
+    let packetValue = packet?.value;
 
     if (!player) {
       return null
@@ -517,6 +702,20 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       }
     }
 
+    if (packetValue && typeof packetValue === "object" && packetValue.events && typeof packetValue.events === "object") {
+      const eventEntries = Object.entries(packetValue.events);
+      const filteredEntries = eventEntries.filter(([eventId]) => this.isEventVisibleForPlayer(eventId, player));
+      if (filteredEntries.length !== eventEntries.length) {
+        packetValue = { ...packetValue };
+        if (filteredEntries.length === 0) {
+          delete (packetValue as any).events;
+        }
+        else {
+          (packetValue as any).events = Object.fromEntries(filteredEntries);
+        }
+      }
+    }
+
     if (typeof packet.value == 'string') {
       return packet
     }
@@ -524,7 +723,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     return {
       ...packet,
       value: {
-        ...packet.value,
+        ...packetValue,
         ...obj
       }
     };
@@ -585,6 +784,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
             }
             // Keep physics body aligned with restored snapshot coordinates on map join.
             this.updateHitbox(player.id, player.x(), player.y(), width, height);
+            await this.spawnScenarioEventsForPlayer(player);
 
             // Check if we should stop all sounds before playing new ones
             if ((this as any).stopAllSoundsBeforeJoin) {
@@ -651,6 +851,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     // Execute player hooks
     await lastValueFrom(this.hooks.callHooks("server-player-onLeaveMap", player, this));
+    this.removeScenarioEventsForPlayer(player.id);
     player.pendingInputs = [];
     player.lastProcessedInputTs = 0;
     player._lastFramePositions = null;
@@ -748,10 +949,12 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   onAction(player: RpgPlayer, action: any) {
     // Get collisions using the helper method from RpgCommonMap
     const collisions = (this as any).getCollisions(player.id);
-    const events: (RpgEvent | undefined)[] = collisions.map(id => this.getEvent(id))
+    const events = collisions
+      .map(id => this.getEvent(id))
+      .filter((event): event is RpgEvent => !!event && this.isEventVisibleForPlayer(event, player));
     if (events.length > 0) {
       events.forEach(event => {
-        event?.execMethod('onAction', [player, action]);
+        event.execMethod('onAction', [player, action]);
       });
     }
     player.execMethod('onInput', [action]);
@@ -969,10 +1172,25 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     await lastValueFrom(this.hooks.callHooks("server-map-onBeforeUpdate", map, this))
 
+    this._scenarioEventTemplates = [];
+    this._eventModeById.clear();
+    this._eventOwnerById.clear();
+    this._scenarioEventIdsByPlayer.clear();
+
     this.loadPhysic()
 
     for (let event of map.events ?? []) {
-      await this.createDynamicEvent(event);
+      const normalizedEvent = this.normalizeEventObject(event);
+      const mode = this.resolveEventMode(normalizedEvent);
+      if (mode === EventMode.Scenario) {
+        this._scenarioEventTemplates.push(this.cloneEventTemplate(normalizedEvent));
+        continue;
+      }
+      await this.createDynamicEvent(normalizedEvent, { mode: EventMode.Shared });
+    }
+
+    for (const player of this.getPlayers()) {
+      await this.spawnScenarioEventsForPlayer(player);
     }
 
     this.dataIsReady$.complete()
@@ -1482,28 +1700,36 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    *   }
    * });
    */
-  async createDynamicEvent(eventObj: EventPosOption) {
-
-    if (!eventObj.event) {
-      // @ts-ignore
-      eventObj = {
-        event: eventObj
-      }
-    }
+  async createDynamicEvent(eventObj: EventPosOption, options: CreateDynamicEventOptions = {}): Promise<string | undefined> {
+    eventObj = this.normalizeEventObject(eventObj);
 
     const value = await lastValueFrom(this.hooks.callHooks("server-event-onBeforeCreated", eventObj, this));
     value.filter(v => v).forEach(v => {
-      eventObj = v
-    })
+      eventObj = v;
+    });
 
-    const { x, y, event } = eventObj;
+    const event = eventObj.event;
+    const x = typeof eventObj.x === "number" ? eventObj.x : 0;
+    const y = typeof eventObj.y === "number" ? eventObj.y : 0;
 
-    let id = eventObj.id || generateShortUUID()
+    const requestedMode = options.mode ?? this.resolveEventMode(eventObj);
+    const mode = this.normalizeEventMode(requestedMode);
+    const ownerFromData = options.scenarioOwnerId ?? this.resolveScenarioOwnerId(eventObj);
+    const scenarioOwnerId = mode === EventMode.Scenario ? ownerFromData : undefined;
+    const effectiveMode = mode === EventMode.Scenario && scenarioOwnerId
+      ? EventMode.Scenario
+      : EventMode.Shared;
+
+    if (mode === EventMode.Scenario && !scenarioOwnerId) {
+      console.warn("Scenario event created without owner id. Falling back to shared mode.");
+    }
+
+    const id = this.buildRuntimeEventId(eventObj.id, effectiveMode, scenarioOwnerId);
     let eventInstance: RpgPlayer;
 
     if (this.events()[id]) {
       console.warn(`Event ${id} already exists on map`);
-      return;
+      return undefined;
     }
 
     // Check if event is a constructor function (class)
@@ -1541,7 +1767,17 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       }
 
       eventInstance = new DynamicEvent();
-      if (event.name) eventInstance.name.set(event.name);
+      if ((event as any).name) eventInstance.name.set((event as any).name);
+    }
+
+    (eventInstance as any).mode = effectiveMode;
+    if (effectiveMode === EventMode.Scenario && scenarioOwnerId) {
+      (eventInstance as any)._scenarioOwnerId = scenarioOwnerId;
+      (eventInstance as any).scenarioOwnerId = scenarioOwnerId;
+    }
+    else {
+      delete (eventInstance as any)._scenarioOwnerId;
+      delete (eventInstance as any).scenarioOwnerId;
     }
 
     eventInstance.map = this;
@@ -1550,8 +1786,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     await eventInstance.teleport({ x, y });
 
     this.events()[id] = eventInstance;
+    this.setEventRuntimeMetadata(id, effectiveMode, scenarioOwnerId);
 
-    await eventInstance.execMethod('onInit')
+    await eventInstance.execMethod('onInit');
+    return id;
   }
 
   /**
@@ -1642,6 +1880,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     return Object.values(this.events())
   }
 
+  getEventsForPlayer(playerOrId: string | RpgPlayer): RpgEvent[] {
+    return this.getEvents().filter(event => this.isEventVisibleForPlayer(event, playerOrId));
+  }
+
   /**
    * Get the first event that matches a condition
    * 
@@ -1714,6 +1956,22 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   removeEvent(eventId: string) {
+    const event = this.getEvent(eventId) as any;
+    if (event) {
+      try {
+        event.stopMoveTo?.();
+      }
+      catch {
+        // Ignore teardown race: the physics entity may already be gone.
+      }
+      try {
+        event.breakRoutes?.(true);
+      }
+      catch {
+        // Ignore teardown race in route manager.
+      }
+    }
+    this.clearEventRuntimeMetadata(eventId);
     delete this.events()[eventId]
   }
 

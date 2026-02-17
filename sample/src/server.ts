@@ -151,35 +151,36 @@ export function Event() {
       this.equip(EnemyClaw.id);
       
       // Initialize AI behavior
-      this.battleAi = new BattleAi(this, {
-        enemyType: EnemyType.Defensive,
-        visionRange: 150,
-        attackRange: 50,
-        attackCooldown: 900,
-        dodgeChance: 0.35,
-        dodgeCooldown: 2000,
-        fleeThreshold: 0.2,
-        attackPatterns: [
-          AttackPattern.Melee,
-          AttackPattern.Combo,
-          AttackPattern.DashAttack,
-          AttackPattern.Charged
-        ],
-        moveToCooldown: 450,
-        retreatCooldown: 700,
-        behavior: {
-          baseScore: 55,
-          updateInterval: 450,
-          minStateDuration: 700,
-          assaultThreshold: 70,
-          retreatThreshold: 30
-        },
-      });
+      // this.battleAi = new BattleAi(this, {
+      //   enemyType: EnemyType.Defensive,
+      //   visionRange: 150,
+      //   attackRange: 50,
+      //   attackCooldown: 900,
+      //   dodgeChance: 0.35,
+      //   dodgeCooldown: 2000,
+      //   fleeThreshold: 0.2,
+      //   attackPatterns: [
+      //     AttackPattern.Melee,
+      //     AttackPattern.Combo,
+      //     AttackPattern.DashAttack,
+      //     AttackPattern.Charged
+      //   ],
+      //   moveToCooldown: 450,
+      //   retreatCooldown: 700,
+      //   behavior: {
+      //     baseScore: 55,
+      //     updateInterval: 450,
+      //     minStateDuration: 700,
+      //     assaultThreshold: 70,
+      //     retreatThreshold: 30
+      //   },
+      // });
     },
     onPlayerTouch(player: RpgPlayer) {
      console.log("touch");
     },
     async onAction(player: RpgPlayer) {
+      this.remove()
       // player.gold = 100;
       // await player.showText("Hello", {
       //   face: {
@@ -206,11 +207,11 @@ export function Event() {
       //   },
       //   talkWith: this
       // })
-      this.frequency = 100;
-      this.moveRoutes([
-        Move.tileRight(2),
-        Move.tileDown(2)
-      ])
+      // this.frequency = 100;
+      // this.moveRoutes([
+      //   Move.tileRight(2),
+      //   Move.tileDown(2)
+      // ])
     },
   };
 }
