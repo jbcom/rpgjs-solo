@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",
-    "preview": "vitepress preview"
+    "preview": "vitepress preview",
+    "deploy": "npm run build && npx wrangler deploy",
+    "deploy:dry": "npm run build && npx wrangler deploy --dry-run"
   },
   "keywords": [],
   "author": "",
