@@ -4,8 +4,13 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { resolveTemplateDir } from '../utils/fs.js'
 
-function cloneRepository(url, destination) {
-  return new Promise((resolve, reject) => {
+type TemplateSourceOptions = {
+  templateName?: string
+  templateUrl?: string
+}
+
+function cloneRepository(url: string, destination: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     const child = spawn('git', ['clone', '--depth', '1', url, destination], {
       stdio: ['ignore', 'inherit', 'pipe'],
       shell: process.platform === 'win32'
@@ -29,7 +34,7 @@ function cloneRepository(url, destination) {
   })
 }
 
-export async function resolveTemplateSource(options = {}) {
+export async function resolveTemplateSource(options: TemplateSourceOptions = {}) {
   if (!options.templateUrl) {
     return {
       templateDir: resolveTemplateDir(options.templateName || 'base'),

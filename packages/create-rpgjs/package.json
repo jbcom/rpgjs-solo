@@ -1,6 +1,6 @@
 {
   "name": "create-rpgjs",
-  "version": "5.0.0-alpha.37",
+  "version": "5.0.0-alpha.38",
   "description": "Official CLI to scaffold RPGJS projects",
   "type": "module",
   "bin": {

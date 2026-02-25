@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process'
 
-export function runCommand(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
+type RunCommandOptions = Parameters<typeof spawn>[2]
+
+export function runCommand(command: string, args: string[], options: RunCommandOptions = {}): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: 'inherit',
       shell: process.platform === 'win32',
