@@ -1,6 +1,6 @@
 {
   "name": "rpgjs",
-  "version": "5.0.0-alpha.36",
+  "version": "5.0.0-alpha.37",
   "scripts": {
     "build": "tsx bin/build.ts",
     "dev": "tsx bin/dev.ts",
@@ -27,6 +27,7 @@
     "javascript",
     "typescript"
   ],
+  "packageManager": "pnpm@10.25.0",
   "private": true,
   "type": "module",
   "devDependencies": {
