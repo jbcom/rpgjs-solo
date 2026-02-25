@@ -1,0 +1,268 @@
+@if (isEnabled) {
+    <Mesh
+        geometry={LIGHT_SPOT_GEOMETRY}
+        shader={lightShader}
+        x={centerX}
+        y={centerY}
+        zIndex={resolvedZIndex}
+        blendMode="add"
+        roundPixels={false}
+    />
+}
+
+<script>
+import { tick, signal } from "canvasengine"
+import { Geometry, GlProgram, Shader, UniformGroup } from "pixi.js"
+
+const {
+    enabled,
+    x,
+    y,
+    radius,
+    intensity,
+    flicker,
+    flickerSpeed,
+    style,
+    zIndex
+} = defineProps({
+    enabled: {
+        type: Boolean,
+        default: false
+    },
+    x: {
+        type: Number,
+        default: 0
+    },
+    y: {
+        type: Number,
+        default: 0
+    },
+    radius: {
+        type: Number,
+        default: 50
+    },
+    intensity: {
+        type: Number,
+        default: 0.95
+    },
+    flicker: {
+        type: Boolean,
+        default: true
+    },
+    flickerSpeed: {
+        type: Number,
+        default: 13
+    },
+    style: {
+        type: String,
+        default: "normal"
+    },
+    zIndex: {
+        type: Number,
+        default: 0
+    }
+})
+
+const toFiniteNumber = (value, fallback = 0) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) return fallback
+    return value
+}
+
+const readProp = (value) => (typeof value === "function" ? value() : value)
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
+
+const normalizeStyle = (value) => {
+    if (value === "soft" || value === "normal" || value === "intense") {
+        return value
+    }
+    return "normal"
+}
+
+const LIGHT_STYLE_PRESETS = {
+    soft: {
+        radiusScale: 1.65,
+        coreSharpness: 2.4,
+        haloStrength: 0.52,
+        softness: 0.35,
+        noiseAmount: 0.08,
+        color: [0.99, 0.84, 0.58],
+        pulseAmplitude: 0.08,
+        waveSpeed: 1.9
+    },
+    normal: {
+        radiusScale: 2.02,
+        coreSharpness: 2,
+        haloStrength: 0.74,
+        softness: 0.55,
+        noiseAmount: 0.14,
+        color: [1, 0.79, 0.4],
+        pulseAmplitude: 0.14,
+        waveSpeed: 2.45
+    },
+    intense: {
+        radiusScale: 2.35,
+        coreSharpness: 1.75,
+        haloStrength: 0.9,
+        softness: 0.72,
+        noiseAmount: 0.22,
+        color: [1, 0.74, 0.3],
+        pulseAmplitude: 0.2,
+        waveSpeed: 3.2
+    }
+}
+
+const isEnabled = Boolean(readProp(enabled))
+const centerX = Math.round(toFiniteNumber(readProp(x), 0))
+const centerY = Math.round(toFiniteNumber(readProp(y), 0))
+const resolvedZIndex = Math.round(toFiniteNumber(readProp(zIndex), 0))
+const resolvedRadius = clamp(toFiniteNumber(readProp(radius), 50), 4, 2048)
+const resolvedIntensity = clamp(toFiniteNumber(readProp(intensity), 0.95), 0, 1)
+const hasFlicker = typeof readProp(flicker) === "boolean" ? readProp(flicker) : true
+const resolvedFlickerSpeed = clamp(toFiniteNumber(readProp(flickerSpeed), 13), 1, 60)
+const stylePreset = LIGHT_STYLE_PRESETS[normalizeStyle(readProp(style))] || LIGHT_STYLE_PRESETS.normal
+
+const LIGHT_SPOT_GEOMETRY = new Geometry({
+    attributes: {
+        aPosition: {
+            buffer: new Float32Array([
+                -1, -1,
+                1, -1,
+                1, 1,
+                -1, 1
+            ]),
+            size: 2
+        },
+        aUV: {
+            buffer: new Float32Array([
+                0, 1,
+                1, 1,
+                1, 0,
+                0, 0
+            ]),
+            size: 2
+        }
+    },
+    indexBuffer: new Uint16Array([0, 1, 2, 0, 2, 3])
+})
+
+const LIGHT_SPOT_PROGRAM = GlProgram.from({
+    name: "studio-light-spot",
+    vertex: `
+        in vec2 aPosition;
+        in vec2 aUV;
+
+        uniform mat3 uProjectionMatrix;
+        uniform mat3 uWorldTransformMatrix;
+        uniform mat3 uTransformMatrix;
+        uniform vec4 uWorldColorAlpha;
+        uniform vec4 uColor;
+
+        uniform float uRadius;
+
+        out vec2 vUV;
+        out vec4 vWorldColor;
+
+        void main(void) {
+            vec2 position = aPosition * uRadius;
+            mat3 mvp = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;
+            gl_Position = vec4((mvp * vec3(position, 1.0)).xy, 0.0, 1.0);
+            vUV = aUV;
+            vWorldColor = uWorldColorAlpha * uColor;
+        }
+    `,
+    fragment: `
+        in vec2 vUV;
+        in vec4 vWorldColor;
+
+        uniform float uIntensity;
+        uniform float uPulse;
+        uniform float uTime;
+        uniform float uCoreSharpness;
+        uniform float uHaloStrength;
+        uniform float uSoftness;
+        uniform float uNoiseAmount;
+        uniform vec3 uColorRgb;
+
+        out vec4 finalColor;
+
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        }
+
+        void main(void) {
+            vec2 centered = (vUV - 0.5) * 2.0;
+            float dist = length(centered);
+            if (dist > 1.0) {
+                discard;
+            }
+
+            float radial = clamp(1.0 - dist, 0.0, 1.0);
+            float core = pow(radial, uCoreSharpness);
+            float halo = pow(radial, 1.1 + uSoftness) * uHaloStrength;
+
+            float ripple = 0.96 + (sin((dist * 18.0) - (uTime * 2.8)) * 0.05);
+            float noise = hash(centered * (20.0 + (uTime * 0.35)) + vec2(uTime * 0.41, -uTime * 0.27));
+            float flicker = 1.0 + ((noise - 0.5) * uNoiseAmount);
+
+            float lightValue = (core + halo) * ripple * flicker * uIntensity * uPulse;
+            float edgeFade = smoothstep(1.0, 0.0, dist);
+            float alpha = clamp(lightValue * edgeFade, 0.0, 1.0) * vWorldColor.a;
+            if (alpha <= 0.001) {
+                discard;
+            }
+
+            vec3 warm = mix(uColorRgb * 0.62, vec3(1.0, 0.95, 0.82), clamp(core * 1.15, 0.0, 1.0));
+            finalColor = vec4(warm * alpha * vWorldColor.rgb, alpha);
+        }
+    `
+})
+
+const lightUniforms = new UniformGroup({
+    uRadius: { value: resolvedRadius * stylePreset.radiusScale, type: "f32" },
+    uIntensity: { value: resolvedIntensity, type: "f32" },
+    uPulse: { value: 1, type: "f32" },
+    uTime: { value: 0, type: "f32" },
+    uCoreSharpness: { value: stylePreset.coreSharpness, type: "f32" },
+    uHaloStrength: { value: stylePreset.haloStrength, type: "f32" },
+    uSoftness: { value: stylePreset.softness, type: "f32" },
+    uNoiseAmount: { value: hasFlicker ? stylePreset.noiseAmount : 0, type: "f32" },
+    uColorRgb: { value: new Float32Array(stylePreset.color), type: "vec3<f32>" }
+})
+
+const lightShader = new Shader({
+    glProgram: LIGHT_SPOT_PROGRAM,
+    resources: {
+        lightUniforms
+    }
+})
+
+const pulsePhase = signal(0)
+const noiseState = signal(1)
+
+tick(({ deltaTime }) => {
+    if (!isEnabled) {
+        return
+    }
+
+    const safeDelta = clamp(toFiniteNumber(deltaTime, 16.67), 0, 120)
+    const flickerRatio = hasFlicker ? clamp(resolvedFlickerSpeed / 12, 0.5, 5) : 0.65
+    const nextPhase = pulsePhase() + ((safeDelta / 1000) * flickerRatio * stylePreset.waveSpeed)
+    pulsePhase.set(nextPhase)
+
+    if (hasFlicker) {
+        const targetNoise = 0.84 + (Math.random() * 0.24)
+        noiseState.set(noiseState() + ((targetNoise - noiseState()) * 0.22))
+    }
+    else {
+        noiseState.set(noiseState() + ((1 - noiseState()) * 0.08))
+    }
+
+    const pulseWave = 1 + (Math.sin(nextPhase * Math.PI * 2) * stylePreset.pulseAmplitude)
+    const pulse = clamp(pulseWave * noiseState(), 0.72, 1.32)
+
+    lightUniforms.uniforms.uPulse = pulse
+    lightUniforms.uniforms.uTime = nextPhase
+    lightUniforms.update()
+})
+</script>

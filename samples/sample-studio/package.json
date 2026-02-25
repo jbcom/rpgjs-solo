@@ -1,0 +1,35 @@
+{
+  "name": "sample-studio",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@canvasengine/compiler": "2.0.0-beta.53",
+    "@rpgjs/testing": "workspace:*",
+    "@rpgjs/vite": "workspace:*",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@canvasengine/presets": "2.0.0-beta.53",
+    "@rpgjs/action-battle": "workspace:*",
+    "@rpgjs/client": "workspace:*",
+    "@rpgjs/common": "workspace:*",
+    "@rpgjs/server": "workspace:*",
+    "@rpgjs/tiledmap": "workspace:*",
+    "@rpgjs/ui-css": "workspace:*",
+    "@rpgjs/studio": "workspace:*",
+    "@signe/di": "^2.8.3",
+    "canvasengine": "2.0.0-beta.53",
+    "pixi.js": "8.16.0",
+    "vite-plugin-dts": "^4.5.4"
+  },
+  "type": "module"
+}

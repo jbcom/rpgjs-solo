@@ -1,0 +1,240 @@
+<Container scale>
+    <TiledMap map />
+    <Container>
+        @for (obj of elementsAlwaysLow) {
+            <ElementMap ...obj image={getElementImage(obj)} /> 
+        }
+    </Container>
+    <EventLayerComponent>
+      @for (obj of elementsLow) {
+          <ElementMap ...obj image={getElementImage(obj)} /> 
+      }
+    </EventLayerComponent>
+    
+    @for (obj of elementsHigh) {
+        <ElementMap ...obj image={getElementImage(obj)} /> 
+    }
+</Container>
+
+  <script>
+    import { computed, effect } from 'canvasengine'
+    import { TiledMap, Weather } from "@canvasengine/presets";
+    import { EventLayerComponent, RpgClientEngine, inject } from "@rpgjs/client";
+    import ElementMap from './element-map.ce'
+    import { assetsUrl } from "../constants";
+
+    const { data } = defineProps()
+
+     const engine = inject(RpgClientEngine);
+
+    const tilesetImage = computed(() => {
+      const params = data().params
+      if (!params?.tileset?.fileName) return ''
+      return `${assetsUrl}/${params.tileset.fileName}`
+    })
+
+    const terrainImage = computed(() => {
+      const params = data().params
+      if (!params?.baseTerrain?.fileName) return ''
+      return `${assetsUrl}/${params.baseTerrain.fileName}`
+    })
+
+    const normalizeTilesets = (tilesets) => {
+      if (!tilesets) return []
+      if (Array.isArray(tilesets)) return tilesets
+      if (tilesets.items && Array.isArray(tilesets.items)) return tilesets.items
+      return []
+    }
+
+    const parseArrayData = (value) => {
+      if (Array.isArray(value)) return value
+      if (typeof value === 'string' && value.trim()) {
+        try {
+          const parsed = JSON.parse(value)
+          return Array.isArray(parsed) ? parsed : []
+        }
+        catch (_error) {
+          return []
+        }
+      }
+      return []
+    }
+
+    const resolveTilesetId = (value) => {
+      if (!value) return ''
+      if (typeof value === 'string' || typeof value === 'number') return String(value)
+      return String(value?._id || value?.id || '')
+    }
+
+    const getTerrainTilesets = () => {
+      const params = data().params || {}
+      return normalizeTilesets(params.terrainTilesets || params.terrainTileset || params.terrain || params.tilesets?.terrain)
+    }
+
+    const getElementTilesets = () => {
+      const params = data().params || {}
+      return normalizeTilesets(params.elementTilesets || params.tilesets || params.elementsTilesets)
+    }
+
+    const tilesetImageById = computed(() => {
+      const params = data().params || {}
+      const map = new Map()
+      const elementTilesets = getElementTilesets()
+      elementTilesets.forEach((tileset) => {
+        const id = tileset?.id || tileset?._id
+        const fileName = tileset?.fileName || tileset?.image
+        if (id && fileName) {
+          map.set(String(id), `${assetsUrl}/${fileName}`)
+        }
+      })
+      if (params?.tileset?.fileName) {
+        const fallbackId = params?.tileset?._id || params?.tileset?.id || 'default'
+        map.set(String(fallbackId), `${assetsUrl}/${params.tileset.fileName}`)
+      }
+      return map
+    })
+
+    const getElementImage = (obj) => {
+      if (obj?.image) return obj.image
+      const tilesetId = obj?.tilesetId ? String(obj.tilesetId) : null
+      if (tilesetId && tilesetImageById().has(tilesetId)) {
+        return tilesetImageById().get(tilesetId)
+      }
+      return tilesetImage()
+    }
+
+    const map = computed(() => {
+      const params = data().params
+      const terrain = parseArrayData(data().terrain)
+
+      if (!params) {
+        return null
+      }
+
+      const configuredTerrainTilesets = getTerrainTilesets()
+      const terrainTilesets = configuredTerrainTilesets.length > 0
+        ? configuredTerrainTilesets
+        : (params.primaryTerrainTileset
+          ? [params.primaryTerrainTileset]
+          : (params.baseTerrain ? [params.baseTerrain] : []))
+      const primaryTerrainId = resolveTilesetId(params.primaryTerrainTileset) || resolveTilesetId(params.baseTerrain)
+      const primaryTerrainTileset = (primaryTerrainId
+        ? terrainTilesets.find((tileset) => resolveTilesetId(tileset) === primaryTerrainId)
+        : null) || terrainTilesets[0] || params.baseTerrain || null
+      const baseTerrainMeta = primaryTerrainTileset?.metadata || params.baseTerrain?.metadata || {}
+      const fallbackTileWidth = baseTerrainMeta.tilewidth || 48
+      const fallbackTileHeight = baseTerrainMeta.tileheight || 48
+      const tileWidth = primaryTerrainTileset?.metadata?.tilewidth || fallbackTileWidth
+      const tileHeight = primaryTerrainTileset?.metadata?.tileheight || fallbackTileHeight
+      const currentTerrainImage = terrainImage()
+
+      const terrainGrid = Array.isArray(terrain) && Array.isArray(terrain[0]) ? terrain : null
+      const terrainFlat = Array.isArray(terrain) && !Array.isArray(terrain[0]) ? terrain : null
+
+      const tilesetsForMap = primaryTerrainTileset ? [primaryTerrainTileset] : []
+
+      let gidOffset = 1
+      const tiledTilesets = tilesetsForMap.map((tileset) => {
+        const meta = tileset?.metadata || {}
+        const columns = meta.columns || Math.floor((meta.imagewidth || 1) / tileWidth) || 1
+        const tilecount = meta.tilecount || columns * Math.floor((meta.imageheight || tileHeight) / tileHeight)
+        const firstgid = gidOffset
+        gidOffset += tilecount || 0
+        const imageSource = tileset?.fileName ? `${assetsUrl}/${tileset.fileName}` : currentTerrainImage
+        return {
+          firstgid,
+          name: tileset?.name || 'Tileset',
+          image: {
+            source: imageSource,
+            width: meta.imagewidth || columns * tileWidth,
+            height: meta.imageheight || tileHeight * Math.ceil((tilecount || 1) / columns)
+          },
+          tilewidth: meta.tilewidth || tileWidth,
+          tileheight: meta.tileheight || tileHeight,
+          tilecount: tilecount || 1,
+          columns
+        }
+      })
+
+      const width = params.width || 50
+      const height = params.height || 50
+
+      const buildLayerData = () => {
+        const size = width * height
+        const dataLayer = new Array(size).fill(0)
+
+        if (terrainGrid) {
+          const firstgid = tiledTilesets[0]?.firstgid || 1
+          for (let y = 0; y < height; y += 1) {
+            for (let x = 0; x < width; x += 1) {
+              const tile = terrainGrid?.[y]?.[x]
+              if (tile === null || tile === undefined || tile < 0) continue
+              dataLayer[y * width + x] = firstgid + Number(tile)
+            }
+          }
+          return dataLayer
+        }
+
+        if (terrainFlat) {
+          const firstgid = tiledTilesets[0]?.firstgid || 1
+          for (let i = 0; i < size; i += 1) {
+            const tile = terrainFlat[i]
+            if (tile === null || tile === undefined || tile < 0) continue
+            dataLayer[i] = firstgid + Number(tile)
+          }
+          return dataLayer
+        }
+
+        return dataLayer
+      }
+
+      return {
+        type: 'map',
+        version: 1.9,
+        tiledversion: '1.9.2',
+        orientation: 'orthogonal',
+        renderorder: 'right-down',
+        width: params.width || 50,
+        height: params.height || 50,
+        tilewidth: tileWidth,
+        tileheight: tileHeight,
+        infinite: false,
+        nextlayerid: 5,
+        nextobjectid: 14,
+        tilesets: tiledTilesets,
+        layers: [
+          {
+            id: 1,
+            name: 'Terrain Layer',
+            type: 'tilelayer',
+            tilewidth: tileWidth,
+            tileheight: tileHeight,
+            width,
+            height,
+            data: buildLayerData()
+          }
+        ]
+      }
+    })
+
+    const scale = computed(() => {
+      const params = data().params
+      return params?.scale || 1
+    })
+
+    const elementsAlwaysLow = computed(() => data().elementsAlwaysLow || [])
+    const elementsLow = computed(() => {
+      return data().elementsLow || []
+    })
+    const elementsHigh = computed(() => data().elementsHigh || [])
+
+    const players = computed(() => engine.sceneMap.players)
+    const events = computed(() => engine.sceneMap.events)
+
+    effect(() => {
+      const weather = data().params?.weather
+      if (weather) {
+         engine.sceneMap.setLocalWeather(weather);
+      }
+    })
+  </script>

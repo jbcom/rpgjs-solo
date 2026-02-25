@@ -1,0 +1,47 @@
+<Container>
+    <Sprite image={data().fullImage} scale />
+    <EventLayerComponent>
+      @for (obj of middleLayer) {
+          <ElementMap ...obj image={data().gridImage} scale /> 
+      }
+    </EventLayerComponent>
+</Container>
+
+@if (weatherOptions()) {
+  <Container positionType="absolute" top={0} left={0} width="100%" height="100%" pointerEvents="none">
+    <Weather
+      effect={weatherOptions().effect}
+      density={weatherOptions().density}
+      speed={weatherOptions().speed}
+      windDirection={weatherOptions().windDirection}
+      windStrength={weatherOptions().windStrength}
+      maxDrops={weatherOptions().maxDrops}
+      scale={weatherOptions().scale}
+    />
+  </Container>
+}
+  
+  <script>
+    import { computed } from 'canvasengine'
+    import { EventLayerComponent, RpgClientEngine, inject } from "@rpgjs/client";
+    import ElementMap from './element-map.ce'
+    import { Weather } from '@canvasengine/presets'
+    import { toCanvasWeatherOptions } from '@common/weather';
+
+    const { data } = defineProps()
+    
+    const middleLayer = computed(() => data().data)
+
+    const engine = inject(RpgClientEngine);
+    const weatherOptions = computed(() => {
+      const sceneMapWeather = (engine.sceneMap as any).weather;
+      if (typeof sceneMapWeather !== 'function') {
+        return null;
+      }
+      const effectiveWeather = sceneMapWeather();
+      if (!effectiveWeather) {
+        return null;
+      }
+      return toCanvasWeatherOptions(effectiveWeather);
+    })
+  </script>

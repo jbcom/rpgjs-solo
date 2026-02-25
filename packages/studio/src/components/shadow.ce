@@ -1,0 +1,31 @@
+@if (displayShadow) {
+    <Ellipse 
+        x={shadow().x} 
+        y={shadow().y} 
+        width={shadow().width} 
+        height={shadow().height} 
+        color="black" 
+        blur={10} 
+        alpha={0.5}
+    />
+}
+
+<script>
+    import { computed, effect, signal } from "canvasengine";
+
+    const { object } = defineProps();
+    const displayShadow = signal(false);
+
+    effect(() => {
+        displayShadow.set(!!object.graphics()[0]);
+    })
+
+    const hitbox = object.hitbox;
+    const widthShadow = 20;
+    const shadow = computed(() => ({
+        x: hitbox().w / 2 + 8,
+        y: hitbox().h - 5,
+        width: hitbox().w,
+        height: hitbox().h / 2,
+    }))
+</script>

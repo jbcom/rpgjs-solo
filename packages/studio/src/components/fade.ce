@@ -1,0 +1,65 @@
+<Container positionType="absolute" top={0} left={0} right={0} bottom={0} alpha={opacity}>
+    <Rect
+      x={0} 
+      y={0} 
+      width={width}
+      height={height}
+      color="black"
+    />
+    <Container justifyContent="center"  alignItems="center" x={width()/2}  height="100%">
+      <Loading />
+    </Container>
+</Container>
+
+
+  <script>
+    import { animatedSignal, mount, computed, signal, on, effect } from "canvasengine";
+    import { inject, RpgClientEngine, RpgGui } from "@rpgjs/client";
+    import { Loading } from '@canvasengine/presets'
+  
+    const {
+      onFinish,
+      data
+    } = defineProps();
+
+    const duration = computed(() => data().duration)
+    const color = computed(() => data().color)
+    const fadeIn = computed(() => data().fadeIn)
+    const fadeTrigger = data().fadeTrigger
+  
+    const engine = inject(RpgClientEngine);
+    const gui = inject(RpgGui);
+  
+    const width = signal(0)
+    const height = signal(0)
+
+    let loader = null;
+  
+    // Animation: fade in from transparent to opaque, or fade out from opaque to transparent
+    const opacity = animatedSignal(fadeIn() ? 0 : 1, {
+      duration: duration(),
+      onComplete: () => {
+        if (onFinish) {
+          onFinish();
+        }
+        gui.hide('fade')
+      }
+    });
+
+    on(fadeTrigger, () => {
+      if (loader) {
+        loader.onComplete(() => {
+          opacity.set(fadeIn() ? 1 : 0);
+        })
+      }
+    });
+  
+    mount((element) => {
+      loader = element.props.context?.globalLoader
+      effect(() => {
+        width.set(element.props.context.canvasSize().width)
+        height.set(element.props.context.canvasSize().height)
+      })
+    });
+  </script>
+  
