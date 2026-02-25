@@ -2,7 +2,7 @@ import server from "./server";
 import client from "./client";
 import { createModule } from "@rpgjs/common";
 import { provideLoadMap } from "@rpgjs/client";
-import { loadMap } from "./map-loader";
+import loadMap from "./map-loader";
 import { configureStudioGameRuntime } from "./data-provider";
 
 export interface StudioGameModuleConfig {
@@ -23,6 +23,6 @@ export function provideStudioGame(config: StudioGameModuleConfig = {}) {
       server,
       client,
     },
-    provideLoadMap(loadMap),
+    provideLoadMap?.(loadMap),
   ]);
 }

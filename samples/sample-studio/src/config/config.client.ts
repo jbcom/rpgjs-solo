@@ -1,13 +1,14 @@
 import { provideGlobalConfig, Presets } from "@rpgjs/client";
 import { provideClientModules } from "@rpgjs/client";
 import { configCommon } from "./config.common";
-import { provideTiledMap } from "@rpgjs/tiledmap/client";
 import { provideActionBattle } from "@rpgjs/action-battle/client";
+import { provideStudioGame } from "@rpgjs/studio/client";
 
 export const configClient = {
   providers: [
-    provideTiledMap({
-      basePath: '/map',
+    provideStudioGame({
+      projectId: '8398a00a-8a9b-41d5-aae3-77786643b790',
+      apiBaseUrl: 'http://localhost:4200/api'
     }),
     provideActionBattle({
       ui: {
@@ -27,8 +28,6 @@ export const configClient = {
       }
     }),
     ...configCommon.providers,
-    provideClientModules([
-      { }
-    ]),
+    provideClientModules([]),
   ],
 };

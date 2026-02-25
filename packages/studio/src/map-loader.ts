@@ -674,3 +674,5 @@ export const loadMap = async (mapId: string) => {
     }
   };
 };
+
+export default loadMap;

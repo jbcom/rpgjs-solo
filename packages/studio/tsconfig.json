@@ -1,10 +1,14 @@
 {
     "compilerOptions": {
+      "baseUrl": ".",
+      "paths": {
+        "@common/*": ["runtime/*"]
+      },
       "target": "ES2020",
       "lib": ["dom", "esnext"],
       "module": "ES2020",
       "outDir": "./lib",
-      "rootDir": "./src",
+      "rootDir": ".",
       "strict": true,
       "sourceMap": true,
       "strictNullChecks": true,
@@ -25,6 +29,8 @@
     },
     "include": [
         "src",
-        "node_modules/canvasengine/*"
-, "../common/src/database"    ],
+        "runtime",
+        "node_modules/canvasengine/*",
+        "../common/src/database"
+    ],
   }

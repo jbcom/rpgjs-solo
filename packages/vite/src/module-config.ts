@@ -1,6 +1,8 @@
 import { defineConfig, build } from "vite";
 import canvasengine from "@canvasengine/compiler";
 import dts from "vite-plugin-dts";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { directivePlugin, removeImportsPlugin } from "./index";
 
 /**
@@ -22,6 +24,14 @@ import { directivePlugin, removeImportsPlugin } from "./index";
  */
 function createBuildConfig({ side, watch }: { side: 'client' | 'server', watch: boolean }) {
   const isClient = side === 'client';
+  const runtimeDir = resolve(process.cwd(), "runtime");
+  const resolveOptions = existsSync(runtimeDir)
+    ? {
+        alias: {
+          "@common": runtimeDir,
+        },
+      }
+    : undefined;
   
   const plugins = isClient 
     ? [
@@ -36,6 +46,7 @@ function createBuildConfig({ side, watch }: { side: 'client' | 'server', watch: 
 
   return {
     configFile: false as const, // Prevent using this config file
+    resolve: resolveOptions,
     plugins: [
       ...plugins,
       dts({ 
@@ -57,7 +68,9 @@ function createBuildConfig({ side, watch }: { side: 'client' | 'server', watch: 
       rollupOptions: {
         external: [
           /@rpgjs/,
+          /@signestack/,
           "canvasengine",
+          "pixi.js",
           "esbuild",
           "@canvasengine/presets",
           "rxjs",

@@ -1,0 +1,289 @@
+import { FromSchema } from "json-schema-to-ts";
+
+export const databaseSchema = {
+    type: "object",
+    properties: {
+        name: {
+            type: "string",
+            title: "Name",
+            format: { layout: "basic" },
+        },
+        description: {
+            type: "string",
+            title: "Description",
+            format: { layout: "basic", type: "textarea" },
+        },
+    },
+} as any;
+
+export const itemSchema = {
+    type: "object",
+    properties: {
+        name: {
+            type: "string",
+            title: "Name",
+            format: { layout: "basic" },
+        },
+        description: {
+            type: "string",
+            title: "Description",
+            format: { name: "textarea" },
+        },
+        icon: {
+            type: "string",
+            title: "Icon",
+            description: "Media icon associated with this item",
+            format: {
+                name: "media",
+                type: "icon",
+                buttonLabel: "Select Icon",
+                useUpload: {
+                    accept: "image/*",
+                }
+            } as any,
+        },
+        itemType: {
+            type: "string",
+            title: "Item Type",
+            enum: ["item", "weapon", "armor"],
+            description: "The type of item",
+            default: "item",
+            format: { layout: "properties" },
+        },
+        price: {
+            type: "number",
+            title: "Price",
+            description: "The price of the item. If the item is not for sale, set the price to 0.",
+            default: 0,
+            format: { layout: "properties" },
+        }
+    },
+    required: ["name", "itemType"],
+    allOf: [
+        {
+            if: {
+                properties: { itemType: { const: "weapon" } }
+            },
+            then: {
+                properties: {
+                    atk: {
+                        type: "number",
+                        title: "Attack Power",
+                        description: "The attack power of the weapon",
+                        default: 0,
+                        format: { layout: "specific" },
+                    },
+                    element: {
+                        type: "string",
+                        title: "Element",
+                        description: "The element type of the weapon",
+                        enum: ["none", "fire", "water", "earth", "wind", "light", "dark"],
+                        default: "none",
+                        format: { layout: "specific" },
+                    },
+                    weaponType: {
+                        type: "string",
+                        title: "Weapon Type",
+                        description: "The type of weapon",
+                        enum: ["sword", "axe", "spear", "bow", "staff", "dagger"],
+                        default: "sword",
+                        format: { layout: "specific" },
+                    },
+                },
+                required: ["attack"],
+            },
+            else: {
+                if: {
+                    properties: { itemType: { const: "armor" } }
+                },
+                then: {
+                    properties: {
+                        pdef: {
+                            type: "number",
+                            title: "Defense",
+                            description: "The defense value of the armor",
+                            default: 0,
+                            format: { layout: "specific" },
+                        },
+                        armorType: {
+                            type: "string",
+                            title: "Armor Type",
+                            description: "The type of armor",
+                            enum: ["helmet", "chest", "gloves", "boots", "shield"],
+                            default: "chest",
+                            format: { layout: "specific" },
+                        },
+                        
+                    },
+                    required: ["defense"],
+                }
+            },
+        },
+    ],
+} as any;
+
+export const stateSchema = {
+    type: "object",
+    properties: {
+        name: {
+            type: "string",
+            title: "Name",
+            format: { layout: "basic" },
+        },
+        description: {
+            type: "string",
+            title: "Description",
+            format: { layout: "basic", type: "textarea" },
+        },
+        icon: {
+            type: "string",
+            title: "Icon",
+            description: "The icon identifier for the state",
+            format: { layout: "basic" },
+        },
+        duration: {
+            type: "number",
+            title: "Duration",
+            description: "Duration in turns (0 = permanent)",
+            default: 0,
+            format: { layout: "basic" },
+        },
+        effects: {
+            type: "object",
+            title: "Effects",
+            format: { layout: "effects" },
+            properties: {
+                attack: { type: "number", default: 0 },
+                defense: { type: "number", default: 0 },
+                magic: { type: "number", default: 0 },
+                speed: { type: "number", default: 0 },
+                hp: { type: "number", default: 0 },
+                mp: { type: "number", default: 0 },
+            },
+        },
+        elementResistance: {
+            type: "object",
+            title: "Element Resistance",
+            format: { layout: "resistance" },
+            properties: {
+                fire: { type: "number", default: 0 },
+                water: { type: "number", default: 0 },
+                earth: { type: "number", default: 0 },
+                wind: { type: "number", default: 0 },
+                light: { type: "number", default: 0 },
+                dark: { type: "number", default: 0 },
+            },
+        },
+        removable: {
+            type: "boolean",
+            title: "Removable",
+            description: "Whether the state can be removed by items or skills",
+            default: true,
+            format: { layout: "basic" },
+        },
+    },
+    required: ["name"],
+} as any;
+
+export const skillSchema = {
+    type: "object",
+    properties: {
+        name: {
+            type: "string",
+            title: "Name",
+            format: { layout: "basic" },
+        },
+        description: {
+            type: "string",
+            title: "Description",
+            format: { layout: "basic", type: "textarea" },
+        },
+        icon: {
+            type: "string",
+            title: "Icon",
+            description: "The icon identifier for the skill",
+            format: { layout: "basic" },
+        },
+        mpCost: {
+            type: "number",
+            title: "MP Cost",
+            description: "The MP cost to use this skill",
+            default: 0,
+            format: { layout: "combat" },
+        },
+        power: {
+            type: "number",
+            title: "Power",
+            description: "The power of the skill",
+            default: 0,
+            format: { layout: "combat" },
+        },
+        element: {
+            type: "string",
+            title: "Element",
+            description: "The element type of the skill",
+            enum: ["none", "fire", "water", "earth", "wind", "light", "dark"],
+            default: "none",
+            format: { layout: "combat" },
+        },
+        skillType: {
+            type: "string",
+            title: "Skill Type",
+            description: "The type of skill",
+            enum: ["physical", "magical", "support", "healing"],
+            default: "physical",
+            format: { layout: "combat" },
+        },
+        target: {
+            type: "string",
+            title: "Target",
+            description: "The target of the skill",
+            enum: ["single", "all", "self", "ally", "enemy"],
+            default: "single",
+            format: { layout: "target" },
+        },
+        range: {
+            type: "number",
+            title: "Range",
+            description: "The range of the skill (0 = melee)",
+            default: 0,
+            format: { layout: "target" },
+        },
+        successRate: {
+            type: "number",
+            title: "Success Rate",
+            description: "The success rate percentage (0-100)",
+            default: 100,
+            minimum: 0,
+            maximum: 100,
+            format: { layout: "target" },
+        },
+    },
+    required: ["name", "mpCost", "power"],
+} as any;
+
+export const variableSchema = {
+    type: "object",
+    properties: {
+        name: {
+            type: "string",
+            title: "Name",
+          
+        },
+        description: {
+            type: "string",
+            title: "Description",
+            format: {  type: "textarea" },
+        }
+    },
+} as any;
+
+export type Database = FromSchema<typeof databaseSchema>;
+export type Item = FromSchema<typeof itemSchema>;
+export type ItemData = Item & { _id: string };
+export type State = FromSchema<typeof stateSchema>;
+export type StateData = State & { _id: string };
+export type Skill = FromSchema<typeof skillSchema>;
+export type SkillData = Skill & { _id: string };
+export type Variable = FromSchema<typeof variableSchema>;
+export type VariableData = Variable & { _id: string };

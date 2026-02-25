@@ -15,31 +15,21 @@ import { assignParams } from "./assign-params";
 import { normalizeWeatherState } from "@common/weather";
 import { getGameDataProvider } from "./data-provider";
 
-// TODO
-const urlParams = new URLSearchParams(window.location.search);
-const gameParam = urlParams.get("game");
-
-
-const startGame = (player: RpgPlayer) => {
-  const gameConfig = window.gameConfig;
-  const heroConfig = gameConfig.hero
-  assignParams(player, heroConfig);
-}
 
 let cacheDatabase: any = null
 
 export default defineModule<RpgServer>({
   player: {
     onStart: (player: RpgPlayer) => {
-      startGame(player);
+     // startGame(player);
       player.changeMap('simplemap')
     },
     onConnected: (player: RpgPlayer) => {
-      if (!gameParam) {
-        startGame(player);
-        player.allRecovery()
-        player.changeMap('simplemap')
-      }
+      // if (!gameParam) {
+      //   //startGame(player);
+      //   player.allRecovery()
+      //   player.changeMap('simplemap')
+      // }
     },
     onJoinMap: (player: RpgPlayer, map: RpgMap) => {
       const startMapId = map.globalConfig.startMapId;
