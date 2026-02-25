@@ -76,18 +76,9 @@ let runtimeConfig: StudioGameRuntimeConfig = {
   projectId: null,
 };
 
-const readGameParamFromUrl = (): string | null => {
-  if (typeof window === 'undefined') return null;
-  const params = new URLSearchParams(window.location.search);
-  const value = params.get('game');
-  return value ? value.trim() : null;
-};
-
 const resolveRuntimeModeFromConfig = (): GameRuntimeMode => {
   const hasProjectId = Boolean(runtimeConfig.projectId && runtimeConfig.projectId.trim().length > 0);
   if (hasProjectId) return 'online';
-  const urlGameParam = readGameParamFromUrl();
-  if (urlGameParam) return 'online';
   return 'offline';
 };
 

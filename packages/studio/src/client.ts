@@ -38,6 +38,40 @@ interface RpgClientEngineWithConfig extends RpgClientEngine {
 
 const fadeTrigger = trigger();
 
+const resolveMediaId = (value: unknown): string | null => {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "object") {
+    const candidate = value as Record<string, unknown>;
+    const id = candidate.id ?? candidate._id ?? candidate.mediaId;
+    if (typeof id === "string" && id.trim().length > 0) {
+      return id;
+    }
+  }
+  return null;
+};
+
+const resolveHeroMediaSpritesheet = async (value: unknown): Promise<any | null> => {
+  if (!value) return null;
+
+  if (typeof value === "string") {
+    return resolveSpritesheet(value);
+  }
+
+  if (typeof value === "object") {
+    const media = value as Record<string, any>;
+    const mediaId = resolveMediaId(media) ?? undefined;
+
+    if (!media.fileName && mediaId) {
+      return resolveSpritesheet(mediaId);
+    }
+
+    return createSpriteSheetObject(media, mediaId);
+  }
+
+  return null;
+};
+
 export default (config: StudioGameModuleConfig) => {
   return defineModule<RpgClient>({
     engine: {
@@ -78,26 +112,23 @@ export default (config: StudioGameModuleConfig) => {
           startMapId: response.startMapId || engine.globalConfig?.startMapId,
         };
 
-        const mediaData = [];
+        const heroMediaRefs = [
+          engine.globalConfig.hero?.graphic,
+          engine.globalConfig.hero?.faceset,
+        ].filter(Boolean);
 
-        if (engine.globalConfig.hero?.graphic) {
-          mediaData.push(engine.globalConfig.hero.graphic);
-        }
-
-        if (engine.globalConfig.hero?.faceset) {
-          mediaData.push(engine.globalConfig.hero.faceset);
-        }
-
-        // Load all spritesheets in parallel
-        await Promise.all(
-          mediaData.map(async (media) => {
-            engine.addSpriteSheet(
-              await createSpriteSheetObject(media, media.id),
-            );
-          }),
+        // Load hero spritesheets from either direct media objects or media IDs.
+        const heroSpritesheets = await Promise.all(
+          heroMediaRefs.map((mediaRef) => resolveHeroMediaSpritesheet(mediaRef)),
         );
 
-        if (gameParam) {
+        heroSpritesheets
+          .filter((value) => value && typeof value === "object")
+          .forEach((spritesheet) => {
+            engine.addSpriteSheet(spritesheet);
+          });
+
+        if (config.displayTitleScreen !== false) {
           gui.display("rpg-title-screen", {
             title: response.name,
             subtitle: response.subtitle,
@@ -132,7 +163,7 @@ export default (config: StudioGameModuleConfig) => {
         fadeTrigger.start();
         gui.display("hud", {
           faceset: {
-            id: engine.globalConfig?.hero.faceset?.id,
+            id: resolveMediaId(engine.globalConfig?.hero?.faceset),
             expression: "happy",
           },
         });

@@ -13,3 +13,4 @@ packages/**/browser
 vitest.config.ts.timestamp*
 docs/.vitepress/cache
 .cursor/debug.log
+public

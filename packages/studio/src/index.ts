@@ -15,21 +15,29 @@ export interface StudioGameModuleConfig {
   baseUrl?: string;
   assetsUrl?: string;
   apiUrl?: string;
+  displayTitleScreen?: boolean;
 }
 
 export function provideStudioGame(config: StudioGameModuleConfig = {}) {
+  const hasProjectId = Boolean(config.projectId && config.projectId.trim().length > 0);
+
+  const resolvedBaseUrl = config.baseUrl ?? "https://rpgjs.studio";
+  const resolvedApiUrl = config.apiUrl ?? `${resolvedBaseUrl}/api`;
+  const resolvedAssetsUrl = config.assetsUrl
+    ?? (hasProjectId ? "https://assets.rpgjs.studio" : "/assets");
+
   configureStudioConstants({
     isProduction: config.isProduction,
     isPreprod: config.isPreprod,
-    baseUrl: config.baseUrl,
-    assetsUrl: config.assetsUrl,
-    apiUrl: config.apiUrl,
+    baseUrl: resolvedBaseUrl,
+    assetsUrl: resolvedAssetsUrl,
+    apiUrl: resolvedApiUrl,
   });
 
   configureStudioGameRuntime({
     projectId: config.projectId ?? null,
-    apiBaseUrl: config.apiBaseUrl,
-    bundleBasePath: config.bundleBasePath,
+    apiBaseUrl: config.apiBaseUrl ?? resolvedApiUrl,
+    bundleBasePath: config.bundleBasePath ?? "/game-data",
   });
 
   return createModule("StudioGame", [
