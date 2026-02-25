@@ -1,6 +1,6 @@
 {
   "name": "@rpgjs/tiledmap",
-  "version": "5.0.0-alpha.38",
+  "version": "5.0.0-alpha.39",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
