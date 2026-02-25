@@ -8,7 +8,9 @@ export const configClient = {
   providers: [
     provideStudioGame({
       projectId: '8398a00a-8a9b-41d5-aae3-77786643b790',
-      apiBaseUrl: 'http://localhost:4200/api'
+      apiBaseUrl: 'http://localhost:4200/api',
+      bundleBasePath: 'http://localhost:4200/bundles',
+      assetsUrl: "http://localhost:4200/api/uploads",
     }),
     provideActionBattle({
       ui: {

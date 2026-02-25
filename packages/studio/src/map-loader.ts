@@ -47,35 +47,11 @@ let firstMapLoaded = false;
 
 export const loadMap = async (mapId: string) => {
   const client = inject(RpgClientEngine) as RpgClientEngineWithConfig;
-  const urlParams = new URLSearchParams(window.location.search);
-  const mapIdFromUrl = urlParams.get("map");
-  const gameParam = urlParams.get("game");
-  
-  // Determine the final map ID to load
-  let finalMapId: string | undefined;
-  
+
+  let finalMapId = mapId;
   if (!firstMapLoaded) {
-    // First map load: prioritize URL parameters
-    if (mapIdFromUrl) {
-      finalMapId = mapIdFromUrl;
-    } else if (gameParam !== null && client.globalConfig?.startMapId) {
-      // If ?game is present, use startMapId from project config
-      finalMapId = client.globalConfig.startMapId;
-    } else if (mapId) {
-      finalMapId = mapId;
-    }
-  } else {
-    // Subsequent map loads: use the provided mapId
-    finalMapId = mapId;
-  }
-  
-  // Fallback: if still no mapId, try startMapId from config
-  if (!finalMapId && client.globalConfig?.startMapId) {
-    finalMapId = client.globalConfig.startMapId;
-  }
-  
-  if (!finalMapId) {
-    throw new Error('No map ID available to load');
+    finalMapId = client.globalConfig.startMapId ?? mapId;
+    firstMapLoaded = true
   }
 
   const mapResponse = await getGameDataProvider().getMap(finalMapId);

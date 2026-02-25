@@ -3,10 +3,10 @@ import { HttpGameDataProvider } from './http-game-data-provider';
 import { LocalBundleGameDataProvider } from './local-bundle-game-data-provider';
 import type { GameDataProvider, GameRuntimeMode, ProviderConfig } from './types';
 
-const defaultConfig: ProviderConfig = {
+const getDefaultConfig = (): ProviderConfig => ({
   apiBaseUrl: apiUrl,
   bundleBasePath: '/game-data',
-};
+});
 
 class AutoFallbackGameDataProvider implements GameDataProvider {
   readonly kind = 'auto-fallback' as const;
@@ -92,6 +92,7 @@ const resolveRuntimeModeFromConfig = (): GameRuntimeMode => {
 };
 
 const resolveProviderConfig = (): ProviderConfig => {
+  const defaultConfig = getDefaultConfig();
   return {
     apiBaseUrl: runtimeConfig.apiBaseUrl || defaultConfig.apiBaseUrl,
     bundleBasePath: runtimeConfig.bundleBasePath || defaultConfig.bundleBasePath,
@@ -100,7 +101,7 @@ const resolveProviderConfig = (): ProviderConfig => {
 
 export const createGameDataProvider = (
   mode: GameRuntimeMode,
-  config: ProviderConfig = defaultConfig
+  config: ProviderConfig = getDefaultConfig()
 ): GameDataProvider => {
   const httpProvider = new HttpGameDataProvider(config);
   const localProvider = new LocalBundleGameDataProvider(config);
