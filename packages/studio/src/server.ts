@@ -25,6 +25,108 @@ const startGame = (player: RpgPlayer) => {
 };
 
 const databaseCacheByProjectId = new Map<string, any>();
+const eventsCacheByBundlePath = new Map<string, Promise<any[]>>();
+
+const ensureLeadingSlash = (value: string): string => {
+  if (!value) return "/game-data";
+  return value.startsWith("/") ? value : `/${value}`;
+};
+
+const normalizeBundlePath = (value?: string): string => {
+  const normalized = ensureLeadingSlash(value || "/game-data");
+  return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+};
+
+const parseArrayValue = (value: unknown): any[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const fetchBundleEvents = async (): Promise<any[]> => {
+  const basePath = normalizeBundlePath(getStudioGameRuntimeConfig().bundleBasePath);
+  if (!eventsCacheByBundlePath.has(basePath)) {
+    const promise = fetch(`${basePath}/events.json`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`events.json read failed (${response.status})`);
+        }
+        return response.json();
+      })
+      .then((value) => (Array.isArray(value) ? value : []))
+      .catch(() => []);
+    eventsCacheByBundlePath.set(basePath, promise);
+  }
+  return eventsCacheByBundlePath.get(basePath)!;
+};
+
+const resolveMapEventReferences = async (events: unknown): Promise<any[]> => {
+  const list = parseArrayValue(events);
+  if (list.length === 0) return [];
+
+  const hasEventIdReference = list.some(
+    (entry) =>
+      entry &&
+      typeof entry === "object" &&
+      typeof (entry as Record<string, unknown>).eventId === "string",
+  );
+
+  if (!hasEventIdReference) {
+    return list;
+  }
+
+  const bundleEvents = await fetchBundleEvents();
+  if (bundleEvents.length === 0) {
+    return list;
+  }
+
+  const byId = new Map<string, any>();
+  bundleEvents.forEach((entry) => {
+    const ids = [
+      entry?.eventId,
+      entry?.id,
+      entry?._id,
+    ]
+      .filter((value): value is string => typeof value === "string" && value.length > 0);
+    ids.forEach((id) => byId.set(id, entry));
+  });
+
+  return list.map((entry) => {
+    if (!entry || typeof entry !== "object") return entry;
+
+    const candidate = entry as Record<string, unknown>;
+    const refId = typeof candidate.eventId === "string" ? candidate.eventId : "";
+    if (!refId) return entry;
+
+    const resolved = byId.get(refId);
+    if (!resolved) return entry;
+
+    const x = typeof candidate.x === "number" ? candidate.x : resolved?.position?.x;
+    const y = typeof candidate.y === "number" ? candidate.y : resolved?.position?.y;
+
+    return {
+      ...resolved,
+      ...candidate,
+      eventId: refId,
+      id: resolved.id ?? resolved._id ?? refId,
+      _id: resolved._id ?? resolved.id ?? refId,
+      x,
+      y,
+      position: {
+        ...(resolved.position || {}),
+        ...(typeof x === "number" ? { x } : {}),
+        ...(typeof y === "number" ? { y } : {}),
+      },
+    };
+  });
+};
 
 export default (_config?: unknown) => {
   return defineModule<RpgServer>({
@@ -86,6 +188,20 @@ export default (_config?: unknown) => {
     map: {
       async onBeforeUpdate(mapData: any, map) {
         const mapExtended = map as RpgMapExtended;
+        const resolvedEvents = await resolveMapEventReferences(
+          mapData?.events ?? mapData?.data?.events,
+        );
+        const resolvedEventsById = new Map<string, any>();
+        resolvedEvents.forEach((entry) => {
+          const id = String(entry?.eventId ?? entry?.id ?? entry?._id ?? "");
+          if (id) resolvedEventsById.set(id, entry);
+        });
+        (mapExtended as any).__resolvedEventsById = resolvedEventsById;
+
+        mapData.events = resolvedEvents;
+        if (mapData?.data) {
+          mapData.data.events = resolvedEvents;
+        }
         mapExtended.startPosition = mapData.data.start;
         mapExtended.scale = mapData.data.params.scale || 1;
         const normalizedInitialWeather = normalizeWeatherState(
@@ -113,6 +229,39 @@ export default (_config?: unknown) => {
       onBeforeCreated({ event: object }, map: RpgMap) {
         const mapExtended = map as RpgMapExtended;
 
+        const objectRefId = String(object?.eventId ?? object?.id ?? object?._id ?? "");
+        const hasDetailedEventData =
+          Boolean(object?.triggers && Array.isArray(object.triggers)) ||
+          Boolean(object?.params && typeof object.params === "object");
+
+        if (!hasDetailedEventData && objectRefId) {
+          const resolved = (mapExtended as any).__resolvedEventsById?.get?.(objectRefId);
+          if (resolved) {
+            const x =
+              typeof object?.x === "number"
+                ? object.x
+                : typeof resolved?.x === "number"
+                  ? resolved.x
+                  : resolved?.position?.x;
+            const y =
+              typeof object?.y === "number"
+                ? object.y
+                : typeof resolved?.y === "number"
+                  ? resolved.y
+                  : resolved?.position?.y;
+
+            object = {
+              ...resolved,
+              ...object,
+              eventId: objectRefId,
+              id: resolved.id ?? resolved._id ?? objectRefId,
+              _id: resolved._id ?? resolved.id ?? objectRefId,
+              x,
+              y,
+            };
+          }
+        }
+
         const params = object.params;
         const scale = mapExtended.scale;
         const eventType =
@@ -131,9 +280,10 @@ export default (_config?: unknown) => {
           ) {
             for (let i = object.triggers.length - 1; i >= 0; i--) {
               const trigger = object.triggers[i];
+              const isEnabled = trigger?.enabled !== false;
               if (
                 matchesPageConditions(trigger.conditions, { player, event }) &&
-                trigger.enabled
+                isEnabled
               ) {
                 return { trigger, index: i };
               }
@@ -145,7 +295,18 @@ export default (_config?: unknown) => {
             player: RpgPlayer | null,
             event: RpgEvent,
           ) {
-            const resolved = eventObj.resolveActiveTrigger(player, event);
+            let resolved = eventObj.resolveActiveTrigger(player, event);
+            if (!resolved && !player) {
+              const fallbackIndex = object.triggers.findIndex(
+                (trigger: any) => trigger?.enabled !== false,
+              );
+              if (fallbackIndex >= 0) {
+                resolved = {
+                  trigger: object.triggers[fallbackIndex],
+                  index: fallbackIndex,
+                };
+              }
+            }
             if (!resolved) return null;
             if (eventObj.__activeTriggerIndex !== resolved.index) {
               eventObj.__activeTriggerIndex = resolved.index;
@@ -293,7 +454,7 @@ export default (_config?: unknown) => {
           event: eventObj,
           x: object.x * mapExtended.scale,
           y: object.y * mapExtended.scale,
-          id: object.eventId,
+          id: object.eventId || object.id || object._id,
         };
       },
     },

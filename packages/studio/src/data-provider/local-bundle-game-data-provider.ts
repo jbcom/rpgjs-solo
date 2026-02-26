@@ -14,6 +14,22 @@ const normalizeMediaId = (mediaId: string): string => {
   return mediaId.startsWith('#') ? mediaId.slice(1) : mediaId;
 };
 
+const isMatchingMediaIdentifier = (item: any, identifier: string): boolean => {
+  if (!item || !identifier) return false;
+  const normalizedIdentifier = identifier.startsWith('/') ? identifier.slice(1) : identifier;
+  const candidates = [
+    item.id,
+    item._id,
+    item.fileName,
+    item.localFileName,
+    item.originalName,
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .map((value) => (value.startsWith('/') ? value.slice(1) : value));
+
+  return candidates.includes(normalizedIdentifier);
+};
+
 const fetchJson = async (url: string, label: string): Promise<any> => {
   const response = await fetch(url);
   if (!response.ok) {
@@ -120,8 +136,19 @@ export class LocalBundleGameDataProvider implements GameDataProvider {
         };
       }
 
+      const byIdentifierInById = Object.values(byId).find((item) =>
+        isMatchingMediaIdentifier(item, normalizedId)
+      );
+      if (byIdentifierInById) {
+        return {
+          ...byIdentifierInById,
+          id: byIdentifierInById.id ?? byIdentifierInById._id ?? normalizedId,
+        };
+      }
+
       if (Array.isArray(index.items)) {
         const found = index.items.find((item) => {
+          if (isMatchingMediaIdentifier(item, normalizedId)) return true;
           const itemId = item?.id ?? item?._id;
           return itemId === normalizedId || itemId === `#${normalizedId}`;
         });

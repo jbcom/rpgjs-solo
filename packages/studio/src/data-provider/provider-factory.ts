@@ -2,6 +2,7 @@ import { apiUrl } from '../constants';
 import { HttpGameDataProvider } from './http-game-data-provider';
 import { LocalBundleGameDataProvider } from './local-bundle-game-data-provider';
 import type { GameDataProvider, GameRuntimeMode, ProviderConfig } from './types';
+import { resolveRuntimeModeOrNull } from './runtime-mode';
 
 const getDefaultConfig = (): ProviderConfig => ({
   apiBaseUrl: apiUrl,
@@ -19,7 +20,11 @@ class AutoFallbackGameDataProvider implements GameDataProvider {
   async getProject(query: { projectId?: string | null; mapId?: string | null }): Promise<any> {
     try {
       const localValue = await this.local.getProject(query);
-      if (localValue && !localValue.__placeholder) {
+      if (
+        localValue &&
+        !localValue.__placeholder &&
+        (!query.projectId || !localValue._id || String(localValue._id) === String(query.projectId))
+      ) {
         return localValue;
       }
     } catch (error) {
@@ -68,6 +73,7 @@ class AutoFallbackGameDataProvider implements GameDataProvider {
 let providerInstance: GameDataProvider | null = null;
 type StudioGameRuntimeConfig = {
   projectId: string | null;
+  runtimeMode?: GameRuntimeMode;
   apiBaseUrl?: string;
   bundleBasePath?: string;
 };
@@ -77,8 +83,17 @@ let runtimeConfig: StudioGameRuntimeConfig = {
 };
 
 const resolveRuntimeModeFromConfig = (): GameRuntimeMode => {
+  if (runtimeConfig.runtimeMode) {
+    return runtimeConfig.runtimeMode;
+  }
+
+  const runtimeMode = resolveRuntimeModeOrNull();
+  if (runtimeMode) {
+    return runtimeMode;
+  }
+
   const hasProjectId = Boolean(runtimeConfig.projectId && runtimeConfig.projectId.trim().length > 0);
-  if (hasProjectId) return 'online';
+  if (hasProjectId) return 'auto';
   return 'offline';
 };
 

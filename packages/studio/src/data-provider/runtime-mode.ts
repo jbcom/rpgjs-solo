@@ -37,6 +37,10 @@ const readQueryMode = (): GameRuntimeMode | null => {
   return null;
 };
 
+export const resolveRuntimeModeOrNull = (): GameRuntimeMode | null => {
+  return readQueryMode() ?? readWindowConfigMode() ?? readEnvMode() ?? null;
+};
+
 export const resolveRuntimeMode = (): GameRuntimeMode => {
-  return readQueryMode() ?? readWindowConfigMode() ?? readEnvMode() ?? 'online';
+  return resolveRuntimeModeOrNull() ?? 'online';
 };

@@ -4,7 +4,7 @@ import MapComponent from "./components/draw-map.ce";
 import MapComponentV2 from "./components/draw-map-v2.ce";
 import { inject, RpgClientEngine } from "@rpgjs/client";
 import { createSpriteSheetObject, resolveAssetSource } from "./spritesheet-utils";
-import { getGameDataProvider } from "./data-provider";
+import { getGameDataProvider, getStudioGameRuntimeConfig } from "./data-provider";
 
 // Type definitions for better type safety
 interface GlobalConfig {
@@ -44,6 +44,105 @@ interface TilesetElementsIndex {
 }
 
 let firstMapLoaded = false;
+const eventsCacheByBundlePath = new Map<string, Promise<any[]>>();
+
+const ensureLeadingSlash = (value: string): string => {
+  if (!value) return "/game-data";
+  return value.startsWith("/") ? value : `/${value}`;
+};
+
+const normalizeBundlePath = (value?: string): string => {
+  const normalized = ensureLeadingSlash(value || "/game-data");
+  return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+};
+
+const fetchBundleEvents = async (): Promise<any[]> => {
+  const basePath = normalizeBundlePath(getStudioGameRuntimeConfig().bundleBasePath);
+  if (!eventsCacheByBundlePath.has(basePath)) {
+    const promise = fetch(`${basePath}/events.json`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`events.json read failed (${response.status})`);
+        }
+        return response.json();
+      })
+      .then((value) => (Array.isArray(value) ? value : []))
+      .catch(() => []);
+
+    eventsCacheByBundlePath.set(basePath, promise);
+  }
+  return eventsCacheByBundlePath.get(basePath)!;
+};
+
+const resolveMapEventReferences = async (events: unknown): Promise<any[]> => {
+  if (!Array.isArray(events) || events.length === 0) return [];
+
+  const hasEventIdReference = events.some(
+    (entry) =>
+      entry &&
+      typeof entry === "object" &&
+      typeof (entry as Record<string, unknown>).eventId === "string"
+  );
+
+  if (!hasEventIdReference) {
+    return events as any[];
+  }
+
+  const bundledEvents = await fetchBundleEvents();
+  if (bundledEvents.length === 0) {
+    return events as any[];
+  }
+
+  const eventsById = new Map<string, any>();
+  bundledEvents.forEach((entry) => {
+    const ids = [
+      entry?.eventId,
+      entry?.id,
+      entry?._id,
+    ]
+      .filter((value): value is string => typeof value === "string" && value.length > 0);
+    ids.forEach((id) => eventsById.set(id, entry));
+  });
+
+  return events.map((entry) => {
+    if (!entry || typeof entry !== "object") return entry;
+    const candidate = entry as Record<string, unknown>;
+    const refId = typeof candidate.eventId === "string" ? candidate.eventId : "";
+    if (!refId) return entry;
+
+    const resolved = eventsById.get(refId);
+    if (!resolved) return entry;
+
+    const x = typeof candidate.x === "number" ? candidate.x : undefined;
+    const y = typeof candidate.y === "number" ? candidate.y : undefined;
+    const positionX =
+      x ?? (typeof resolved?.position?.x === "number" ? resolved.position.x : undefined);
+    const positionY =
+      y ?? (typeof resolved?.position?.y === "number" ? resolved.position.y : undefined);
+
+    return {
+      ...resolved,
+      ...candidate,
+      eventId:
+        refId ||
+        String(
+          resolved.eventId ??
+            resolved._id ??
+            resolved.id ??
+            ''
+        ),
+      id: resolved.id ?? resolved._id ?? refId,
+      _id: resolved._id ?? resolved.id ?? refId,
+      x: positionX ?? resolved.x,
+      y: positionY ?? resolved.y,
+      position: {
+        ...(resolved.position || {}),
+        ...(x !== undefined ? { x } : {}),
+        ...(y !== undefined ? { y } : {}),
+      },
+    };
+  });
+};
 
 export const loadMap = async (mapId: string) => {
   const client = inject(RpgClientEngine) as RpgClientEngineWithConfig;
@@ -55,9 +154,71 @@ export const loadMap = async (mapId: string) => {
   }
 
   const mapResponse = await getGameDataProvider().getMap(finalMapId);
+  const resolvedMapEvents = await resolveMapEventReferences(mapResponse.events);
   
   const params = mapResponse.params ?? {};
   const isV2 = mapResponse.creationDetails?.version === 'v2';
+
+  const parseJsonValue = (value: unknown): unknown => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    if (!trimmed || (trimmed[0] !== '[' && trimmed[0] !== '{')) return value;
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return value;
+    }
+  };
+
+  const normalizeMediaList = (value: unknown): any[] => {
+    const parsedValue = parseJsonValue(value);
+    if (!parsedValue) return [];
+    if (Array.isArray(parsedValue)) return parsedValue;
+    return [parsedValue];
+  };
+
+  const resolveMediaReference = async (value: unknown): Promise<any> => {
+    const parsedValue = parseJsonValue(value);
+    if (parsedValue === undefined || parsedValue === null) return parsedValue;
+    if (typeof parsedValue === 'object') return parsedValue;
+    if (typeof parsedValue !== 'string') return parsedValue;
+
+    const raw = parsedValue.trim();
+    if (!raw) return parsedValue;
+
+    const candidateIds = Array.from(
+      new Set([
+        raw,
+        raw.startsWith('#') ? raw.slice(1) : raw,
+      ].filter(Boolean))
+    );
+
+    for (const candidateId of candidateIds) {
+      try {
+        const media = await getGameDataProvider().getMedia(candidateId);
+        if (media && !media.__placeholder) {
+          return media;
+        }
+      } catch {
+        // Keep original string reference if no media is found.
+      }
+    }
+
+    return parsedValue;
+  };
+
+  const resolveMediaList = async (value: unknown): Promise<any[]> => {
+    const values = normalizeMediaList(value);
+    return Promise.all(values.map((entry) => resolveMediaReference(entry)));
+  };
+
+  params.tileset = await resolveMediaReference(params.tileset);
+  params.primaryElementTileset = await resolveMediaReference(params.primaryElementTileset);
+  params.baseTerrain = await resolveMediaReference(params.baseTerrain);
+  params.primaryTerrainTileset = await resolveMediaReference(params.primaryTerrainTileset);
+  params.elementTilesets = await resolveMediaList(params.elementTilesets);
+  params.terrainTilesets = await resolveMediaList(params.terrainTilesets);
+
   if (params.backgroundMusic && typeof params.backgroundMusic === "string") {
     params.backgroundMusic = resolveAssetSource(params.backgroundMusic);
   }
@@ -92,7 +253,7 @@ export const loadMap = async (mapId: string) => {
     gridImage: resolveAssetSource(mapResponse.gridImage),
     data: mapDataValue,
     hitboxes: mergedHitboxes,
-    events: mapResponse.events ?? [],
+    events: resolvedMapEvents,
     params,
   };
 
@@ -110,9 +271,7 @@ export const loadMap = async (mapId: string) => {
    * ```
    */
   const normalizeTilesets = (value: any): any[] => {
-    if (!value) return []
-    if (Array.isArray(value)) return value
-    return [value]
+    return normalizeMediaList(value)
   }
 
   const toFiniteNumber = (value: unknown): number | null => {
@@ -494,7 +653,14 @@ export const loadMap = async (mapId: string) => {
   const elementsLow = isV2 ? JSON.parse(map.elementsLow ?? '[]') : []
   const elementsHigh = isV2 ? JSON.parse(map.elementsHigh ?? '[]') : []
   
-  const fallbackElementTilesetId = String(map.params.primaryElementTileset || primaryElementTileset?._id || primaryElementTileset?.id || '')
+  const fallbackElementTilesetId = String(
+    map.params.primaryElementTileset?._id ||
+      map.params.primaryElementTileset?.id ||
+      map.params.primaryElementTileset ||
+      primaryElementTileset?._id ||
+      primaryElementTileset?.id ||
+      ''
+  )
   const mergedElementsAlwaysLow = mergeElementsWithTilesets(tilesetsById, elementsAlwaysLow, 0, fallbackElementTilesetId)
   const mergedElementsLow = mergeElementsWithTilesets(tilesetsById, elementsLow, 1, fallbackElementTilesetId)
   const mergedElementsHigh = mergeElementsWithTilesets(tilesetsById, elementsHigh, 2, fallbackElementTilesetId)

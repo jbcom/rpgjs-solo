@@ -5,9 +5,11 @@ import { provideLoadMap } from "@rpgjs/client";
 import loadMap from "./map-loader";
 import { configureStudioGameRuntime } from "./data-provider";
 import { configureStudioConstants } from "./constants";
+import type { GameRuntimeMode } from "./data-provider/types";
 
 export interface StudioGameModuleConfig {
   projectId?: string | null;
+  runtimeMode?: GameRuntimeMode;
   apiBaseUrl?: string;
   bundleBasePath?: string;
   isProduction?: boolean;
@@ -36,6 +38,7 @@ export function provideStudioGame(config: StudioGameModuleConfig = {}) {
 
   configureStudioGameRuntime({
     projectId: config.projectId ?? null,
+    runtimeMode: config.runtimeMode,
     apiBaseUrl: config.apiBaseUrl ?? resolvedApiUrl,
     bundleBasePath: config.bundleBasePath ?? "/game-data",
   });
