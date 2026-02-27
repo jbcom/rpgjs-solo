@@ -46,6 +46,57 @@ interface TilesetElementsIndex {
 let firstMapLoaded = false;
 const eventsCacheByBundlePath = new Map<string, Promise<any[]>>();
 
+const toIdentifierString = (value: unknown): string => {
+  if (typeof value === "string" || typeof value === "number") {
+    let result = String(value).trim();
+    if (!result) return "";
+
+    // Common serialized id formats.
+    const objectIdMatch =
+      result.match(/^ObjectId\("([^"]+)"\)$/) || result.match(/^ObjectId\('([^']+)'\)$/);
+    if (objectIdMatch?.[1]) {
+      result = objectIdMatch[1];
+    }
+
+    if (result.startsWith("#")) {
+      result = result.slice(1);
+    }
+
+    if (!result || result === "[object Object]") return "";
+    return result;
+  }
+
+  if (!value || typeof value !== "object") return "";
+
+  const record = value as Record<string, unknown>;
+  const fromKnownKeys = [
+    record.$oid,
+    record.oid,
+    record._id,
+    record.id,
+    record.value,
+    record.uuid,
+  ];
+
+  for (const candidate of fromKnownKeys) {
+    const normalized = toIdentifierString(candidate);
+    if (normalized) return normalized;
+  }
+
+  return "";
+};
+
+const extractMediaReferenceId = (value: unknown): string => {
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  return (
+    toIdentifierString(record._id) ||
+    toIdentifierString(record.id) ||
+    toIdentifierString(record.mediaId) ||
+    toIdentifierString(record.referenceId)
+  );
+};
+
 const ensureLeadingSlash = (value: string): string => {
   if (!value) return "/game-data";
   return value.startsWith("/") ? value : `/${value}`;
@@ -181,13 +232,45 @@ export const loadMap = async (mapId: string) => {
     const parsedValue = parseJsonValue(value);
     if (!parsedValue) return [];
     if (Array.isArray(parsedValue)) return parsedValue;
+    if (typeof parsedValue === 'object') {
+      const record = parsedValue as Record<string, unknown>;
+      if (Array.isArray(record.items)) return record.items;
+      if (Array.isArray(record.data)) return record.data;
+      if (Array.isArray(record.values)) return record.values;
+    }
     return [parsedValue];
   };
 
   const resolveMediaReference = async (value: unknown): Promise<any> => {
     const parsedValue = parseJsonValue(value);
     if (parsedValue === undefined || parsedValue === null) return parsedValue;
-    if (typeof parsedValue === 'object') return parsedValue;
+    if (typeof parsedValue === 'object') {
+      const referenceId = extractMediaReferenceId(parsedValue);
+      if (!referenceId) return parsedValue;
+      const candidateIds = Array.from(
+        new Set([
+          referenceId,
+          referenceId.startsWith('#') ? referenceId.slice(1) : referenceId,
+        ].filter(Boolean))
+      );
+
+      // In online mode the map payload may contain lightweight media refs;
+      // hydrate them to ensure metadata-driven rendering works (multi-tileset, draw rules, hitboxes).
+      for (const candidateId of candidateIds) {
+        try {
+          const media = await getGameDataProvider().getMedia(candidateId);
+          if (media && !media.__placeholder) {
+            return {
+              ...parsedValue,
+              ...media,
+            };
+          }
+        } catch {
+          // Try next candidate id.
+        }
+      }
+      return parsedValue;
+    }
     if (typeof parsedValue !== 'string') return parsedValue;
 
     const raw = parsedValue.trim();
@@ -487,7 +570,8 @@ export const loadMap = async (mapId: string) => {
 
     const mergedElements: any[] = []
     elementsData.forEach((element) => {
-      const tilesetId = String(element.tilesetId || fallbackTilesetId || '')
+      const tilesetId =
+        toIdentifierString(element?.tilesetId) || toIdentifierString(fallbackTilesetId) || ''
       const tileset = tilesetsById.get(tilesetId)
       if (!tileset) return
 
@@ -572,7 +656,8 @@ export const loadMap = async (mapId: string) => {
 
   // Process each element in the map
   elementsData.forEach((element, index) => {
-    const tilesetId = String(element.tilesetId || fallbackTilesetId || '')
+    const tilesetId =
+      toIdentifierString(element?.tilesetId) || toIdentifierString(fallbackTilesetId) || ''
     const tileset = tilesetsById.get(tilesetId)
     if (!tileset) return
     const entry = resolveTilesetElement(tileset, element.id)
@@ -650,7 +735,7 @@ export const loadMap = async (mapId: string) => {
   const resolvedElementTilesets = elementTilesets.length > 0 ? elementTilesets : (primaryElementTileset ? [primaryElementTileset] : [])
   const tilesetsById = new Map<string, TilesetElementsIndex>()
   resolvedElementTilesets.forEach((tileset: any) => {
-    const tilesetId = String(tileset?._id || tileset?.id || '')
+    const tilesetId = toIdentifierString(tileset?._id || tileset?.id)
     if (!tilesetId) return
     tilesetsById.set(tilesetId, buildTilesetElementsMap(tileset))
   })
@@ -660,14 +745,13 @@ export const loadMap = async (mapId: string) => {
   const elementsLow = isV2 ? JSON.parse(map.elementsLow ?? '[]') : []
   const elementsHigh = isV2 ? JSON.parse(map.elementsHigh ?? '[]') : []
   
-  const fallbackElementTilesetId = String(
-    map.params.primaryElementTileset?._id ||
-      map.params.primaryElementTileset?.id ||
-      map.params.primaryElementTileset ||
-      primaryElementTileset?._id ||
-      primaryElementTileset?.id ||
-      ''
-  )
+  const fallbackElementTilesetId =
+    toIdentifierString(map.params.primaryElementTileset?._id) ||
+    toIdentifierString(map.params.primaryElementTileset?.id) ||
+    toIdentifierString(map.params.primaryElementTileset) ||
+    toIdentifierString(primaryElementTileset?._id) ||
+    toIdentifierString(primaryElementTileset?.id) ||
+    ''
   const mergedElementsAlwaysLow = mergeElementsWithTilesets(tilesetsById, elementsAlwaysLow, 0, fallbackElementTilesetId)
   const mergedElementsLow = mergeElementsWithTilesets(tilesetsById, elementsLow, 1, fallbackElementTilesetId)
   const mergedElementsHigh = mergeElementsWithTilesets(tilesetsById, elementsHigh, 2, fallbackElementTilesetId)
@@ -765,9 +849,7 @@ export const loadMap = async (mapId: string) => {
     ? (typeof map.terrainByTileset === 'string' ? JSON.parse(map.terrainByTileset ?? '[]') : (map.terrainByTileset || []))
     : []
   const resolveTilesetId = (value: any): string => {
-    if (!value) return ''
-    if (typeof value === 'string') return value
-    return String(value?._id || value?.id || '')
+    return toIdentifierString(value)
   }
 
   if (map.params.baseTerrain && map.params.baseTerrain.metadata && map.params.baseTerrain.metadata.wangsets) {

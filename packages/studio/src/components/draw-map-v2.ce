@@ -60,10 +60,25 @@
       return []
     }
 
+    const normalizeIdentifier = (value) => {
+      if (value === null || value === undefined) return ''
+      let result = String(value).trim()
+      if (!result) return ''
+      const objectIdMatch =
+        result.match(/^ObjectId\("([^"]+)"\)$/) || result.match(/^ObjectId\('([^']+)'\)$/)
+      if (objectIdMatch?.[1]) {
+        result = objectIdMatch[1]
+      }
+      if (result.startsWith('#')) {
+        result = result.slice(1)
+      }
+      return result
+    }
+
     const resolveTilesetId = (value) => {
       if (!value) return ''
-      if (typeof value === 'string' || typeof value === 'number') return String(value)
-      return String(value?._id || value?.id || '')
+      if (typeof value === 'string' || typeof value === 'number') return normalizeIdentifier(value)
+      return normalizeIdentifier(value?._id || value?.id)
     }
 
     const getTerrainTilesets = () => {
@@ -81,22 +96,22 @@
       const map = new Map()
       const elementTilesets = getElementTilesets()
       elementTilesets.forEach((tileset) => {
-        const id = tileset?.id || tileset?._id
+        const id = resolveTilesetId(tileset)
         const fileName = tileset?.fileName || tileset?.image
         if (id && fileName) {
-          map.set(String(id), `${assetsUrl}/${fileName}`)
+          map.set(id, `${assetsUrl}/${fileName}`)
         }
       })
       if (params?.tileset?.fileName) {
-        const fallbackId = params?.tileset?._id || params?.tileset?.id || 'default'
-        map.set(String(fallbackId), `${assetsUrl}/${params.tileset.fileName}`)
+        const fallbackId = resolveTilesetId(params?.tileset) || 'default'
+        map.set(fallbackId, `${assetsUrl}/${params.tileset.fileName}`)
       }
       return map
     })
 
     const getElementImage = (obj) => {
       if (obj?.image) return obj.image
-      const tilesetId = obj?.tilesetId ? String(obj.tilesetId) : null
+      const tilesetId = resolveTilesetId(obj?.tilesetId)
       if (tilesetId && tilesetImageById().has(tilesetId)) {
         return tilesetImageById().get(tilesetId)
       }
@@ -130,7 +145,6 @@
 
       const terrainGrid = Array.isArray(terrain) && Array.isArray(terrain[0]) ? terrain : null
       const terrainFlat = Array.isArray(terrain) && !Array.isArray(terrain[0]) ? terrain : null
-
       const tilesetsForMap = primaryTerrainTileset ? [primaryTerrainTileset] : []
 
       let gidOffset = 1
