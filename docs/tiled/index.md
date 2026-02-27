@@ -104,11 +104,12 @@ src/
 
 ### Automatic Collision Detection
 
-TiledMap automatically detects collision tiles and creates hitboxes:
+TiledMap automatically detects collision tiles and applies tile rules to physics:
 
 - Set the `collision` property to `true` on tiles in Tiled Map Editor
-- Collision hitboxes are automatically generated on the server
-- No additional code required for basic collision detection
+- Collision rules are attached to entities through physics extension hooks
+- The same collision logic is used on server authority and client prediction
+- No additional code required for basic tile blocking
 
 ### Event Integration
 
@@ -129,3 +130,12 @@ Place events in Tiled using point objects:
   ]
 }
 ```
+
+## Physics Hooks Integration
+
+The tiled module now uses shared physics hooks:
+
+- Server: `map.onPhysicsInit`, `map.onPhysicsEntityAdd`, `map.onPhysicsEntityRemove`, `map.onPhysicsReset`
+- Client: `sceneMap.onPhysicsInit`, `sceneMap.onPhysicsEntityAdd`, `sceneMap.onPhysicsEntityRemove`, `sceneMap.onPhysicsReset`
+
+This gives consistent tile collision behavior for both client prediction and server validation.

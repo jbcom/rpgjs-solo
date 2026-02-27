@@ -56,6 +56,7 @@ const hooksMenu = [{
   collapsed: false,
   items: [
     { text: "Client Engine Hooks", link: "/hooks/client-engine-hooks" },
+    { text: "Client Physics Hooks", link: "/hooks/client-physics-hooks" },
     { text: "Client Scene Hooks", link: "/hooks/client-scene-hooks" },
     { text: "Client Sprite Hooks", link: "/hooks/client-sprite-hooks" }
   ]
@@ -65,6 +66,7 @@ const hooksMenu = [{
   collapsed: false,
   items: [
     { text: "Server Engine Hooks", link: "/hooks/server-engine-hooks" },
+    { text: "Server Map Hooks", link: "/hooks/server-map-hooks" },
     { text: "Server Event Hooks", link: "/hooks/server-event-hooks" },
     { text: "Server Player Hooks", link: "/hooks/server-player-hooks" }
   ]

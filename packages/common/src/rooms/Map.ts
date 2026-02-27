@@ -14,7 +14,17 @@ import { combineLatest, Observable, share, Subject, Subscription } from "rxjs";
 import { MovementManager } from "../movement";
 import { WorldMapsManager, type RpgWorldMaps } from "./WorldMaps";
 
-type CharacterKind = "hero" | "npc" | "generic";
+export type PhysicsEntityKind = "hero" | "npc" | "generic";
+
+export interface MapPhysicsInitContext {
+  mapData: any;
+}
+
+export interface MapPhysicsEntityContext {
+  owner: any;
+  entity: Entity;
+  kind: PhysicsEntityKind;
+}
 
 interface ZoneOptions {
   x?: number;
@@ -250,6 +260,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     // Reset movement manager
     this.moveManager.clearAll();
+    this.emitPhysicsReset();
 
     this.physicsAccumulatorMs = 0;
   }
@@ -262,6 +273,14 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     // Remove all entities from physics engine
     const entities = this.physic.getEntities();
     for (const entity of entities) {
+      const owner = (entity as any).owner;
+      if (owner) {
+        this.emitPhysicsEntityRemove({
+          owner,
+          entity,
+          kind: this.resolvePhysicsEntityKind(owner, entity.uuid),
+        });
+      }
       this.physic.removeEntity(entity);
     }
 
@@ -298,10 +317,12 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
     }
 
+    this.emitPhysicsInit({ mapData });
+
     this.playersSubscription = (this.players as any).observable.subscribe(
       ({ value: player, type, key }: any) => {
         if (type === "remove") {
-          this.removeHitbox(key);
+          this.removeHitbox(key, player, "hero");
           return;
         }
 
@@ -345,7 +366,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         if (eventObj && typeof (eventObj as any)._movementUnsubscribe === 'function') {
           (eventObj as any)._movementUnsubscribe();
         }
-        this.removeHitbox(key);
+        this.removeHitbox(key, event, "npc");
       } else if (type === "update") {
         event.id = event.id ?? key;
         if (!this.getBody(key)) {
@@ -612,7 +633,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
   private createCharacterHitbox(
     owner: any,
-    kind: CharacterKind,
+    kind: PhysicsEntityKind,
     options?: { isStatic?: boolean; mass?: number },
   ): void {
     if (!owner?.id) {
@@ -640,6 +661,14 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       isStatic: options?.isStatic,
       mass: options?.mass,
     });
+    const entity = this.getBody(owner.id);
+    if (entity) {
+      this.emitPhysicsEntityAdd({
+        owner,
+        entity,
+        kind,
+      });
+    }
   }
 
   private updateCharacterHitbox(owner: any): void {
@@ -687,6 +716,35 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     }
     return false;
   }
+
+  private resolvePhysicsEntityKind(owner: any, id?: string): PhysicsEntityKind {
+    if (typeof owner?.isEvent === "function") {
+      try {
+        if (owner.isEvent()) {
+          return "npc";
+        }
+      } catch {
+        // Ignore owner inspection errors and fallback below
+      }
+    }
+
+    const ownerId = typeof owner?.id === "string" ? owner.id : id;
+    if (ownerId && this.players()?.[ownerId]) {
+      return "hero";
+    }
+    if (ownerId && this.events()?.[ownerId]) {
+      return "npc";
+    }
+    return "generic";
+  }
+
+  protected emitPhysicsInit(_context: MapPhysicsInitContext): void {}
+
+  protected emitPhysicsEntityAdd(_context: MapPhysicsEntityContext): void {}
+
+  protected emitPhysicsEntityRemove(_context: MapPhysicsEntityContext): void {}
+
+  protected emitPhysicsReset(): void {}
 
   protected withPhysicsSync<T>(run: () => T): T {
     this.physicsSyncDepth += 1;
@@ -1038,7 +1096,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   private addCharacter(options: {
     owner: any;
     radius?: number;
-    kind?: CharacterKind;
+    kind?: PhysicsEntityKind;
     collidesWithCharacters?: boolean;
     maxSpeed?: number;
     isStatic?: boolean;
@@ -1311,10 +1369,18 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    * Remove a hitbox from the physics world
    * @private
    */
-  private removeHitbox(id: string): boolean {
+  private removeHitbox(id: string, owner?: any, kind?: PhysicsEntityKind): boolean {
     const entity = this.physic.getEntityByUUID(id);
     if (!entity) {
       return false;
+    }
+    const resolvedOwner = owner ?? (entity as any).owner;
+    if (resolvedOwner) {
+      this.emitPhysicsEntityRemove({
+        owner: resolvedOwner,
+        entity,
+        kind: kind ?? this.resolvePhysicsEntityKind(resolvedOwner, id),
+      });
     }
     this.physic.removeEntity(entity);
     return true;

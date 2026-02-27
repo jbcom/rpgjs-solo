@@ -2,6 +2,7 @@ import { ComponentFunction, Signal } from 'canvasengine'
 import { RpgClientEngine } from './RpgClientEngine'
 import { Loader, Container } from 'pixi.js'
 import { RpgClientObject } from './Game/Object'
+import { type MapPhysicsEntityContext, type MapPhysicsInitContext } from '@rpgjs/common'
 
 type RpgClass<T = any> = new (...args: any[]) => T
 type RpgComponent = RpgClientObject
@@ -197,6 +198,41 @@ export interface RpgSceneMapHooks extends RpgSceneHooks<SceneMap> {
      * @memberof RpgSceneHooks
      */
     onMapLoading?: (scene: SceneMap, loader: Loader) => any
+
+    /**
+     * Called when client physics has been initialized for the current map.
+     *
+     * Use this hook to initialize shared physics extensions based on map data
+     * (for example, tile-based collision rules used by client prediction).
+     *
+     * @prop { (scene: SceneMap, context: MapPhysicsInitContext) => any } [onPhysicsInit]
+     * @memberof RpgSceneMapHooks
+     */
+    onPhysicsInit?: (scene: SceneMap, context: MapPhysicsInitContext) => any
+
+    /**
+     * Called when a character physics body is added to the map.
+     *
+     * @prop { (scene: SceneMap, context: MapPhysicsEntityContext) => any } [onPhysicsEntityAdd]
+     * @memberof RpgSceneMapHooks
+     */
+    onPhysicsEntityAdd?: (scene: SceneMap, context: MapPhysicsEntityContext) => any
+
+    /**
+     * Called when a character physics body is removed from the map.
+     *
+     * @prop { (scene: SceneMap, context: MapPhysicsEntityContext) => any } [onPhysicsEntityRemove]
+     * @memberof RpgSceneMapHooks
+     */
+    onPhysicsEntityRemove?: (scene: SceneMap, context: MapPhysicsEntityContext) => any
+
+    /**
+     * Called when the physics world is reset (e.g. before a map physics reload).
+     *
+     * @prop { (scene: SceneMap) => any } [onPhysicsReset]
+     * @memberof RpgSceneMapHooks
+     */
+    onPhysicsReset?: (scene: SceneMap) => any
 }
 
 export interface RpgClient {

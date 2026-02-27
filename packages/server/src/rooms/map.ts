@@ -1,5 +1,18 @@
 import { Action, MockConnection, Request, Room, RoomMethods, RoomOnJoin } from "@signe/room";
-import { Hooks, IceMovement, ModulesToken, ProjectileMovement, ProjectileType, RpgCommonMap, Direction, RpgCommonPlayer, RpgShape, findModules } from "@rpgjs/common";
+import {
+  Hooks,
+  IceMovement,
+  ModulesToken,
+  ProjectileMovement,
+  ProjectileType,
+  RpgCommonMap,
+  Direction,
+  RpgCommonPlayer,
+  RpgShape,
+  findModules,
+  type MapPhysicsInitContext,
+  type MapPhysicsEntityContext,
+} from "@rpgjs/common";
 import { WorldMapsManager, type WeatherState, type WorldMapConfig } from "@rpgjs/common";
 import { RpgPlayer, RpgEvent } from "../Player/Player";
 import { generateShortUUID, sync, type, users } from "@signe/sync";
@@ -277,6 +290,22 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   onStart() {
     return BaseRoom.prototype.onStart.call(this)
+  }
+
+  protected emitPhysicsInit(context: MapPhysicsInitContext): void {
+    this.hooks.callHooks("server-map-onPhysicsInit", this, context).subscribe();
+  }
+
+  protected emitPhysicsEntityAdd(context: MapPhysicsEntityContext): void {
+    this.hooks.callHooks("server-map-onPhysicsEntityAdd", this, context).subscribe();
+  }
+
+  protected emitPhysicsEntityRemove(context: MapPhysicsEntityContext): void {
+    this.hooks.callHooks("server-map-onPhysicsEntityRemove", this, context).subscribe();
+  }
+
+  protected emitPhysicsReset(): void {
+    this.hooks.callHooks("server-map-onPhysicsReset", this).subscribe();
   }
 
   private isPositiveNumber(value: unknown): value is number {

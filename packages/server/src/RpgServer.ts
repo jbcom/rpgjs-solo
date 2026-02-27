@@ -2,7 +2,7 @@ import { MapOptions } from "./decorators/map"
 import { RpgPlayer } from "./Player/Player"
 import { type RpgMap } from "./rooms/map"
 import { RpgServerEngine } from "./RpgServerEngine"
-import { WorldMapConfig, RpgShape } from "@rpgjs/common"
+import { WorldMapConfig, RpgShape, type MapPhysicsInitContext, type MapPhysicsEntityContext } from "@rpgjs/common"
 import { RpgEvent } from "./Player/Player"
 
 type RpgClassMap<T> = new () => T
@@ -579,6 +579,48 @@ export interface RpgMapHooks {
      * ```
      */
     onLeave?: (player: RpgPlayer, map: RpgMap) => any
+
+    /**
+     * Called when the map physics world is initialized.
+     *
+     * This hook runs each time `loadPhysic()` prepares the physics world, after static
+     * map hitboxes are created and before dynamic player/event bodies are hydrated.
+     *
+     * @param {RpgMap} map - The map instance
+     * @param {MapPhysicsInitContext} context - Physics initialization context
+     * @returns {any}
+     * @memberof RpgMapHooks
+     */
+    onPhysicsInit?: (map: RpgMap, context: MapPhysicsInitContext) => any
+
+    /**
+     * Called when a dynamic character physics body is added to the map.
+     *
+     * @param {RpgMap} map - The map instance
+     * @param {MapPhysicsEntityContext} context - Added entity context
+     * @returns {any}
+     * @memberof RpgMapHooks
+     */
+    onPhysicsEntityAdd?: (map: RpgMap, context: MapPhysicsEntityContext) => any
+
+    /**
+     * Called when a dynamic character physics body is removed from the map.
+     *
+     * @param {RpgMap} map - The map instance
+     * @param {MapPhysicsEntityContext} context - Removed entity context
+     * @returns {any}
+     * @memberof RpgMapHooks
+     */
+    onPhysicsEntityRemove?: (map: RpgMap, context: MapPhysicsEntityContext) => any
+
+    /**
+     * Called when the map physics world is reset (before reload).
+     *
+     * @param {RpgMap} map - The map instance
+     * @returns {any}
+     * @memberof RpgMapHooks
+     */
+    onPhysicsReset?: (map: RpgMap) => any
 }
 
 export interface RpgServer {

@@ -1411,6 +1411,10 @@ export class RpgClientEngine<T = any> {
     return this.sceneMap.getCurrentPlayer()
   }
 
+  emitSceneMapHook(hookName: string, ...args: any[]): void {
+    this.hooks.callHooks(`client-sceneMap-${hookName}`, ...args).subscribe();
+  }
+
   /**
    * Setup RxJS observer to wait for all conditions before calling onAfterLoading hook
    * 

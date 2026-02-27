@@ -1,4 +1,9 @@
-import { RpgCommonMap, type WeatherState } from "@rpgjs/common";
+import {
+  RpgCommonMap,
+  type WeatherState,
+  type MapPhysicsInitContext,
+  type MapPhysicsEntityContext,
+} from "@rpgjs/common";
 import { sync, users } from "@signe/sync";
 import { RpgClientPlayer } from "./Player";
 import { Signal, signal, computed, effect } from "canvasengine";
@@ -77,5 +82,21 @@ export class RpgClientMap extends RpgCommonMap<any> {
 
   stepPredictionTick(): void {
     this.forceSingleTick();
+  }
+
+  protected emitPhysicsInit(context: MapPhysicsInitContext): void {
+    this.engine?.emitSceneMapHook?.("onPhysicsInit", this, context);
+  }
+
+  protected emitPhysicsEntityAdd(context: MapPhysicsEntityContext): void {
+    this.engine?.emitSceneMapHook?.("onPhysicsEntityAdd", this, context);
+  }
+
+  protected emitPhysicsEntityRemove(context: MapPhysicsEntityContext): void {
+    this.engine?.emitSceneMapHook?.("onPhysicsEntityRemove", this, context);
+  }
+
+  protected emitPhysicsReset(): void {
+    this.engine?.emitSceneMapHook?.("onPhysicsReset", this);
   }
 }
