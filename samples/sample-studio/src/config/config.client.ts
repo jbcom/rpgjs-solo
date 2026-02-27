@@ -6,7 +6,7 @@ import { provideStudioGame } from "@rpgjs/studio/client";
 
 export const configClient = {
   providers: [
-    provideStudioGame(),
+    provideStudioGame( ),
     provideActionBattle({
       ui: {
         actionBar: {

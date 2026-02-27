@@ -109,7 +109,7 @@ export default (config: StudioGameModuleConfig) => {
           ...engine.globalConfig,
           ...response,
           projectId: response._id || engine.globalConfig?.projectId,
-          startMapId: response.startMapId || engine.globalConfig?.startMapId,
+          startMapId: config.startMapId !== undefined ? config.startMapId : (response.startMapId || engine.globalConfig?.startMapId),
         };
 
         const heroMediaRefs = [

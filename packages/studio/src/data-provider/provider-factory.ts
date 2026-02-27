@@ -93,7 +93,7 @@ const resolveRuntimeModeFromConfig = (): GameRuntimeMode => {
   }
 
   const hasProjectId = Boolean(runtimeConfig.projectId && runtimeConfig.projectId.trim().length > 0);
-  if (hasProjectId) return 'auto';
+  if (hasProjectId) return 'online';
   return 'offline';
 };
 

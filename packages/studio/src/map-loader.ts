@@ -74,8 +74,12 @@ const fetchBundleEvents = async (): Promise<any[]> => {
   return eventsCacheByBundlePath.get(basePath)!;
 };
 
-const resolveMapEventReferences = async (events: unknown): Promise<any[]> => {
+const resolveMapEventReferences = async (
+  events: unknown,
+  options: { useLocalBundleEvents: boolean }
+): Promise<any[]> => {
   if (!Array.isArray(events) || events.length === 0) return [];
+  if (!options.useLocalBundleEvents) return events as any[];
 
   const hasEventIdReference = events.some(
     (entry) =>
@@ -146,6 +150,7 @@ const resolveMapEventReferences = async (events: unknown): Promise<any[]> => {
 
 export const loadMap = async (mapId: string) => {
   const client = inject(RpgClientEngine) as RpgClientEngineWithConfig;
+  const hasProjectId = Boolean(client.globalConfig.projectId && client.globalConfig.projectId.trim().length > 0);
 
   let finalMapId = mapId;
   if (!firstMapLoaded) {
@@ -154,7 +159,9 @@ export const loadMap = async (mapId: string) => {
   }
 
   const mapResponse = await getGameDataProvider().getMap(finalMapId);
-  const resolvedMapEvents = await resolveMapEventReferences(mapResponse.events);
+  const resolvedMapEvents = await resolveMapEventReferences(mapResponse.events, {
+    useLocalBundleEvents: !hasProjectId,
+  });
   
   const params = mapResponse.params ?? {};
   const isV2 = mapResponse.creationDetails?.version === 'v2';

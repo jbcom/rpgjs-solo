@@ -18,6 +18,7 @@ export interface StudioGameModuleConfig {
   assetsUrl?: string;
   apiUrl?: string;
   displayTitleScreen?: boolean;
+  startMapId?: string;
 }
 
 export function provideStudioGame(config: StudioGameModuleConfig = {}) {
