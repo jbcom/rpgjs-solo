@@ -1,6 +1,6 @@
 {
   "name": "@rpgjs/common",
-  "version": "5.0.0-alpha.41",
+  "version": "5.0.0-alpha.42",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "publishConfig": {
