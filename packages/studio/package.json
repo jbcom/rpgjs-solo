@@ -1,8 +1,8 @@
 {
     "name": "@rpgjs/studio",
     "version": "5.0.0-alpha.40",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
+    "main": "dist/client/index.js",
+    "types": "dist/src/index.d.ts",
     "scripts": {
       "dev": "vite build --watch",
       "build": "vite build"
@@ -10,19 +10,23 @@
     "exports": {
       ".": {
         "import": "./dist/client/index.js",
-        "types": "./dist/index.d.ts"
+        "types": "./dist/src/index.d.ts"
+      },
+      "./runtime": {
+        "import": "./dist/runtime/index.js",
+        "types": "./dist/runtime/index.d.ts"
       },
       "./runtime/*": {
-        "import": "./runtime/*.ts",
-        "types": "./runtime/*.ts"
+        "import": "./dist/runtime/*.js",
+        "types": "./dist/runtime/*.d.ts"
       },
       "./client": {
         "import": "./dist/client/index.js",
-        "types": "./dist/index.d.ts"
+        "types": "./dist/src/index.d.ts"
       },
       "./server": {
         "import": "./dist/server/index.js",
-        "types": "./dist/server.d.ts"
+        "types": "./dist/src/server.d.ts"
       }
     },
     "keywords": [],
@@ -41,6 +45,9 @@
     "publishConfig": {
       "access": "public"
     },
+    "files": [
+      "dist"
+    ],
     "devDependencies": {
       "@canvasengine/compiler": "^2.0.0-beta.52",
       "pixi.js": "^8.16.0",
