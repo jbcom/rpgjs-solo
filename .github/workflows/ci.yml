@@ -94,3 +94,36 @@ jobs:
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  starter_repo_update_dependencies:
+      needs: build_and_publish
+      if: github.ref == 'refs/heads/v5'
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout the starter repository
+          run: git clone --branch v5-studio --single-branch https://github.com/rpgjs/starter starter
+
+        - name: Install npm-check-updates globally
+          run: npm i npm-check-updates -g
+
+        - name: Run ncu to update dependencies
+          run: |
+            cd starter/package
+            ncu -u
+
+        - name: Update package lock
+          run: |
+            cd starter/package
+            npm i --package-lock-only
+
+        - name: Deploy to external repository
+          uses: cpina/github-action-push-to-another-repository@main
+          env:
+            API_TOKEN_GITHUB: ${{ secrets.GH_ACCESS_TOKEN }}
+          with:
+            source-directory: starter/
+            destination-github-username: rpgjs
+            destination-repository-name: starter
+            user-email: "${{ github.actor}}@users.noreply.github.com"
+            commit-message: update package dependencies to latest RPGJS version
+            target-branch: v5-studio
