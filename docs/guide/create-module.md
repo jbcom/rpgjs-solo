@@ -1,3 +1,8 @@
+---
+title: "Creating Modules in RPGJS"
+description: "Guide for Creating Modules in RPGJS in RPGJS."
+---
+
 # Creating Modules in RPGJS
 
 This guide explains how to create and structure modules in RPGJS using `defineModule` and `createModule`.

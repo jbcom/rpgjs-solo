@@ -1,3 +1,8 @@
+---
+title: "Server Engine Hooks"
+description: "Guide for Server Engine Hooks in RPGJS."
+---
+
 # Server Engine Hooks
 
 Server engine hooks allow you to listen to server-level events and customize server behavior. These hooks are defined in the `engine` property of your server module.

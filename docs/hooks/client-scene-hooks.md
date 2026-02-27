@@ -1,3 +1,8 @@
+---
+title: "Client Scene Hooks"
+description: "Guide for Client Scene Hooks in RPGJS."
+---
+
 # Client Scene Hooks
 
 Scene hooks allow you to customize the behavior of scenes (maps) on the client side. These hooks are defined in the `scenes` property of your client module.

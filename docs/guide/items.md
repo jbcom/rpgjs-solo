@@ -1,3 +1,8 @@
+---
+title: "Items System"
+description: "Guide for Items System in RPGJS."
+---
+
 # Items System
 
 The items system in RPGJS allows you to manage player inventory, equipment, and item usage. You can add items to players in three different ways: using string IDs, item classes, or item objects.

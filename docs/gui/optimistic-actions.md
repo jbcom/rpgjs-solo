@@ -1,3 +1,8 @@
+---
+title: "Optimistic GUI Actions"
+description: "Guide for Optimistic GUI Actions in RPGJS."
+---
+
 # Optimistic GUI Actions
 
 This architecture makes GUI actions feel instant on the client, while still reconciling with server state.

@@ -1,3 +1,8 @@
+---
+title: "Latency Simulation"
+description: "Guide for Latency Simulation in RPGJS."
+---
+
 # Latency Simulation
 
 RPG-JS provides built-in latency simulation capabilities to test how your game behaves under various network conditions. This feature allows you to simulate realistic network delays between the server and clients.

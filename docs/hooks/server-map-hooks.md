@@ -1,3 +1,8 @@
+---
+title: "Server Map Hooks"
+description: "Guide for Server Map Hooks in RPGJS."
+---
+
 # Server Map Hooks
 
 Map hooks are global hooks that apply to all maps.

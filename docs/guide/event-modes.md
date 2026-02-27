@@ -1,3 +1,8 @@
+---
+title: "Event Modes: Shared vs Scenario"
+description: "Guide for Event Modes: Shared vs Scenario in RPGJS."
+---
+
 # Event Modes: Shared vs Scenario
 
 Events can run in two different modes:

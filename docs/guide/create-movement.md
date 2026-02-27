@@ -1,3 +1,8 @@
+---
+title: "Movement System Guide"
+description: "Guide for Movement System Guide in RPGJS."
+---
+
 # Movement System Guide
 
 The RPGJS movement system provides a flexible and extensible way to handle entity movement in your game. This guide covers how to use the built-in movement strategies and how to create custom ones.

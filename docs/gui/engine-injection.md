@@ -1,3 +1,8 @@
+---
+title: "Engine Injection in .ce Files"
+description: "Guide for Engine Injection in .ce Files in RPGJS."
+---
+
 # Engine Injection in .ce Files
 
 This guide explains how to access the RPG-JS client engine and retrieve events and players data within Canvas Engine (`.ce`) component files.

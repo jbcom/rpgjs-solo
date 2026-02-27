@@ -1,3 +1,8 @@
+---
+title: "Sounds Guide"
+description: "Guide for Sounds Guide in RPGJS."
+---
+
 # Sounds Guide
 
 This guide explains how to work with sounds in RPG-JS, including static sound configuration, playing sounds from the server, and dynamic sound resolution.

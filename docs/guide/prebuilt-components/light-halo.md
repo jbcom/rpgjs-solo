@@ -1,3 +1,8 @@
+---
+title: "Light Halo Component"
+description: "Guide for Light Halo Component in RPGJS."
+---
+
 # Light Halo Component
 
 The Light Halo component creates a beautiful animated light effect that pulses and moves around sprites. It's perfect for adding atmospheric lighting effects, magical auras, or ambient glow to characters and objects in your game.

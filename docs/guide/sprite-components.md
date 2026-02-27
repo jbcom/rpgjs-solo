@@ -1,3 +1,8 @@
+---
+title: "Sprite Components Guide"
+description: "Guide for Sprite Components Guide in RPGJS."
+---
+
 # Sprite Components Guide
 
 This guide explains how to use sprite components to add visual elements behind or in front of sprites in RPGJS.

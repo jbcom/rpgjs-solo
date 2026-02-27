@@ -1,3 +1,8 @@
+---
+title: "Prebuilt Components"
+description: "Guide for Prebuilt Components in RPGJS."
+---
+
 # Prebuilt Components
 
 RPGJS includes a collection of prebuilt sprite components that you can use directly in your game. These components are ready to use out of the box and can be customized through props to match your game's aesthetic.

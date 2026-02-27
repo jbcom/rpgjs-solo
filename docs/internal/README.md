@@ -1,5 +1,6 @@
 ---
 title: Internal Architecture
+description: Internal architecture notes for RPGJS development.
 ---
 
 # Internal Architecture

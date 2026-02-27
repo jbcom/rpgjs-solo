@@ -1,3 +1,8 @@
+---
+title: "Weather"
+description: "Guide for Weather in RPGJS."
+---
+
 # Weather
 
 Manage map weather from the server while keeping a client-side override for local effects.

@@ -1,3 +1,8 @@
+---
+title: "Client Sprite Hooks"
+description: "Guide for Client Sprite Hooks in RPGJS."
+---
+
 # Client Sprite Hooks
 
 Sprite hooks allow you to customize the behavior of sprites (players and events) on the client side. These hooks are defined in the `sprite` property of your client module.

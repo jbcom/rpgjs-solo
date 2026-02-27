@@ -1,3 +1,8 @@
+---
+title: "Create Shape"
+description: "Guide for Create Shape in RPGJS."
+---
+
 # Create Shape
 
 ## Why ?

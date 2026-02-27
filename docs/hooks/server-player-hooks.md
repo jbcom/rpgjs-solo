@@ -1,3 +1,8 @@
+---
+title: "Server Player Hooks"
+description: "Guide for Server Player Hooks in RPGJS."
+---
+
 # Server Player Hooks
 
 Player hooks allow you to listen to player-specific events and customize player behavior on the server side. These hooks are defined in the `player` property of your server module.

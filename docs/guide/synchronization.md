@@ -1,3 +1,8 @@
+---
+title: "Synchronization between Server and Client"
+description: "Guide for Synchronization between Server and Client in RPGJS."
+---
+
 # Synchronization between Server and Client
 
 In RPGJS, synchronization between the server and the client is a crucial aspect to ensure a consistent and immersive gameplay experience. This readme will guide you through the process of synchronizing data between the server and the client, utilizing schemas and hooks provided by RPGJS.
@@ -61,7 +66,8 @@ export const player: RpgPlayerHooks = {
 
 With these steps, you've successfully added a custom property named `wood` to the player entity and ensured its synchronization with the client. The use of signals (`.set()` method) enables reactivity, which is essential for automatic synchronization. Any changes you make to this property will be automatically sent to the client, maintaining a consistent game state for all players.
 
-::: tip Save Custom Props
+<Tip>
+**Save custom props**
 In addition to synchronization, RPGJS provides a mechanism to save snapshots of player data, including custom properties, to databases.
 
 ```ts
@@ -89,9 +95,10 @@ export const player: RpgPlayerHooks = {
 };
 ```
 
-:::
+</Tip>
 
-::: tip Save Custom Props but not synchronized with the client
+<Tip>
+**Save custom props but not synchronized with the client**
 
 ```ts
 import { RpgPlayerHooks, RpgPlayer } from "@rpgjs/server";
@@ -120,9 +127,10 @@ export const player: RpgPlayerHooks = {
 The custom property `secret` could be used for various purposes in your game. It might hold sensitive information that shouldn't be shared with the client, such as a player's authentication token, API keys, or any other private data.
 
 By configuring the property with `$syncWithClient: false`, you can control what data is sent to the client and what remains hidden on the server. This enables you to strike a balance between synchronization and data security.
-:::
+</Tip>
 
-::: tip Synchronize with client but do not register
+<Tip>
+**Synchronize with client but do not register**
 
 ```ts
 import { RpgPlayerHooks, RpgPlayer } from "@rpgjs/server";
@@ -151,7 +159,7 @@ export const player: RpgPlayerHooks = {
 The `$permanent` configuration allows you to control whether a custom property should be persisted and stored as part of the player's data or not. This can be useful for temporary properties, session-specific information, or data that doesn't need to be preserved beyond the current session.
 
 For instance, you might use the non-permanent property to temporarily store a player's chat message before sending it to other players or logging it for debugging purposes. Since the property is not saved permanently, it won't clutter the saved data with transient information.
-:::
+</Tip>
 
 ## Retrieving Synchronization on Client Side
 

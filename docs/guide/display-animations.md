@@ -1,3 +1,8 @@
+---
+title: "Display Animations"
+description: "Guide for Display Animations in RPGJS."
+---
+
 # Display Animations
 
 This guide explains how to display animations in RPG-JS. There are two main types of animations you can create and display:

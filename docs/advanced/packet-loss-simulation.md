@@ -1,3 +1,8 @@
+---
+title: "Packet Loss Simulation"
+description: "Guide for Packet Loss Simulation in RPGJS."
+---
+
 # Packet Loss Simulation
 
 The RPG-JS Vite plugin includes a built-in packet loss simulation feature that allows you to test how your game behaves under poor network conditions.

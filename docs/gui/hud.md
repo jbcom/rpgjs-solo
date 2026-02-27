@@ -1,3 +1,8 @@
+---
+title: "HUD"
+description: "Guide for HUD in RPGJS."
+---
+
 # HUD
 
 The HUD (heads-up display) is a built-in GUI component that shows the player's

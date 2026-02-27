@@ -1,3 +1,8 @@
+---
+title: "Server Event Hooks"
+description: "Guide for Server Event Hooks in RPGJS."
+---
+
 # Server Event Hooks
 
 Event hooks allow you to customize the behavior of events on the server side. These hooks are defined in the `event` property of your server module and apply to all events in your game.

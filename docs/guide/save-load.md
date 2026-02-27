@@ -1,3 +1,8 @@
+---
+title: "Save/Load Strategy (Client-Driven)"
+description: "Guide for Save/Load Strategy (Client-Driven) in RPGJS."
+---
+
 # Save/Load Strategy (Client-Driven)
 
 This guide explains how to use the client-driven save/load flow introduced for RPGJS.

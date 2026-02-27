@@ -1,3 +1,8 @@
+---
+title: "Battle AI System"
+description: "Guide for Battle AI System in RPGJS."
+---
+
 # Battle AI System
 
 The RPGJS Battle AI system lets events behave like enemies: detect players, move, attack, and react to damage. This guide covers setup and usage with the current `BattleAi` API.

@@ -1,5 +1,6 @@
 ---
 title: MMORPG Map Sync And Trust Model
+description: Internal trust model and synchronization rules for MMORPG maps.
 ---
 
 # MMORPG Map Sync And Trust Model

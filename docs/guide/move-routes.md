@@ -1,3 +1,8 @@
+---
+title: "Move Routes"
+description: "Guide for Move Routes in RPGJS."
+---
+
 # Move Routes
 
 The `moveRoutes` method allows you to give a character (player or event) a sequence of movement instructions to follow. This is useful for creating patrol paths, scripted movements, or complex movement patterns.

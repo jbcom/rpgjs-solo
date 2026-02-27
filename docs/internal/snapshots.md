@@ -1,5 +1,6 @@
 ---
 title: Snapshot Architecture
+description: Internal snapshot hydration and instance creation architecture.
 ---
 
 # Snapshot Architecture

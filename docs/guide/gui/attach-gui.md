@@ -1,3 +1,8 @@
+---
+title: "Attach GUI to Sprites Guide"
+description: "Guide for Attach GUI to Sprites Guide in RPGJS."
+---
+
 # Attach GUI to Sprites Guide
 
 This guide explains how to use the `attachToSprite` option to attach GUI components directly to sprites in the game world.

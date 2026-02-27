@@ -1,3 +1,8 @@
+---
+title: "Get Started"
+description: "Guide for Get Started in RPGJS."
+---
+
 # Get Started
 
 ## What is RPGJS?
@@ -47,13 +52,14 @@ Go to `http://localhost:5173`
 
 > To change the port: `PORT=4000 RPG_TYPE=rpg npm run dev`
 
-::: tip For Windows
+<Tip>
+**For Windows**
 To use the environment variables, it is different from Linux
 
 So use the package cross-env
 
-```
+```bash
 npm install --save-dev cross-env
 npx cross-env RPG_TYPE=rpg npm run dev
 ```
-:::
+</Tip>

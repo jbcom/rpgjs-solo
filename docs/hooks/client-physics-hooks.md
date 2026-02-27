@@ -1,3 +1,8 @@
+---
+title: "Client Physics Hooks"
+description: "Guide for Client Physics Hooks in RPGJS."
+---
+
 # Client Physics Hooks
 
 Client physics hooks let you extend client-side physics (including client prediction) from `sceneMap`.

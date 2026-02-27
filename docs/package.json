@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "vitepress dev",
-    "build": "vitepress build",
-    "preview": "vitepress preview",
-    "deploy": "npm run build && npx wrangler deploy",
-    "deploy:dry": "npm run build && npx wrangler deploy --dry-run"
+    "dev": "mint dev",
+    "build": "mint build",
+    "preview": "mint dev",
+    "broken-links": "mint broken-links",
+    "validate": "mint validate"
   },
   "keywords": [],
   "author": "",

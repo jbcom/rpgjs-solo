@@ -1,3 +1,8 @@
+---
+title: "Spritesheets Guide"
+description: "Guide for Spritesheets Guide in RPGJS."
+---
+
 # Spritesheets Guide
 
 This guide explains how to work with spritesheets in RPG-JS, including static spritesheets and dynamic spritesheet resolution.

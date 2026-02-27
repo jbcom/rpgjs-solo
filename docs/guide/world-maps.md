@@ -1,5 +1,6 @@
 ---
 title: World Maps API
+description: "Guide for title in RPGJS."
 ---
 
 ## Map ↔ World attachment helpers

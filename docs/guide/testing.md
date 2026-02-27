@@ -1,3 +1,8 @@
+---
+title: "Testing with @rpgjs/testing"
+description: "Guide for Testing with @rpgjs/testing in RPGJS."
+---
+
 # Testing with @rpgjs/testing
 
 The `@rpgjs/testing` package provides utilities to test your RPGJS modules and game logic in a controlled environment. It sets up both server and client instances, allowing you to test player interactions, server hooks, and game mechanics.

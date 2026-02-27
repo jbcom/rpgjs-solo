@@ -1,3 +1,8 @@
+---
+title: "Dialog Box"
+description: "Guide for Dialog Box in RPGJS."
+---
+
 # Dialog Box
 
 The dialog box system in RPG.js allows you to display text messages and choices to players. It provides a built-in GUI component that handles text display, typewriter effects, and choice selection.

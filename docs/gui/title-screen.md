@@ -1,3 +1,8 @@
+---
+title: "Title Screen"
+description: "Guide for Title Screen in RPGJS."
+---
+
 # Title Screen
 
 The "title screen" GUI provides a start screen with an action list (for example: Start, Load, etc.).

@@ -1,5 +1,6 @@
 ---
 title: Event Modes Architecture
+description: Internal implementation details of shared and scenario event modes.
 ---
 
 # Event Modes Architecture
@@ -102,4 +103,3 @@ Both are guarded to tolerate race conditions where physics entities are already 
 - Scenario events must never be visible outside their owner.
 - Scenario events from different owners must not block each other in physics.
 - Cleanup must remove runtime metadata and event instances together.
-

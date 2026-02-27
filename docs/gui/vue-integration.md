@@ -1,3 +1,8 @@
+---
+title: "Vue.js 3 Integration with RPGJS GUI System"
+description: "Guide for Vue.js 3 Integration with RPGJS GUI System in RPGJS."
+---
+
 # Vue.js 3 Integration with RPGJS GUI System
 
 ## Overview

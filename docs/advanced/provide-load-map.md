@@ -1,3 +1,8 @@
+---
+title: "provideLoadMap"
+description: "Guide for provideLoadMap in RPGJS."
+---
+
 # provideLoadMap
 
 The `provideLoadMap` function allows you to customize how maps are loaded and displayed on the client side. It enables you to provide a custom map component and define how map data is processed before rendering.

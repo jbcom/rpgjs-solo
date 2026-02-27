@@ -1,5 +1,6 @@
 ---
 title: Map Architecture
+description: Internal map architecture and cross-room transfer model in RPGJS.
 ---
 
 # Map Architecture

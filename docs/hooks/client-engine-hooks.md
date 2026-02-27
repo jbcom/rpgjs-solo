@@ -1,3 +1,8 @@
+---
+title: "Client Engine Hooks"
+description: "Guide for Client Engine Hooks in RPGJS."
+---
+
 # Client Engine Hooks
 
 Client engine hooks allow you to listen to client-side events and customize client behavior. These hooks are defined in the `engine` property of your client module.
