@@ -74,6 +74,16 @@ const MapUpdateSchema = z.object({
   width: z.number(),
   /** Height of the map in pixels (required) */
   height: z.number(),
+  /** Map events to spawn (optional) */
+  events: z.array(z.any()).optional(),
+  /** Optional static hitboxes (custom maps) */
+  hitboxes: z.array(z.any()).optional(),
+  /** Parsed tiled map payload (optional) */
+  parsedMap: z.any().optional(),
+  /** Raw map source payload (optional) */
+  data: z.any().optional(),
+  /** Optional map params payload */
+  params: z.any().optional(),
 });
 
 const SAFE_MAP_WIDTH = 1000;

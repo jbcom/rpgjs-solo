@@ -506,19 +506,237 @@ async function importWebSocketServer(): Promise<any> {
   }
 }
 
-async function updateMap(roomId: string, rpgServer: RpgServerEngine) {
+function normalizeRoomMapId(roomId: string): string {
+  return roomId.startsWith("map-") ? roomId.slice(4) : roomId;
+}
+
+function toBasePathPrefix(basePath: string): string {
+  const trimmed = basePath.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
+function extractFileLikeMapDefinition(maps: any[], mapId: string): any | null {
+  for (const mapDef of maps) {
+    if (typeof mapDef === "object" && mapDef) {
+      const candidateId = typeof mapDef.id === "string" ? mapDef.id.replace(/^map-/, "") : "";
+      if (candidateId === mapId) {
+        return mapDef;
+      }
+      continue;
+    }
+    if (typeof mapDef === "string") {
+      const fileName = mapDef.split("/").pop()?.replace(/\.tmx$/i, "");
+      if (fileName === mapId) {
+        return { id: mapId, file: mapDef };
+      }
+    }
+  }
+  return null;
+}
+
+async function fetchTextByUrl(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+    return await response.text();
+  } catch {
+    return null;
+  }
+}
+
+async function readTextByFilePath(pathLike: string): Promise<string | null> {
+  let readFileFn: ((path: string, encoding: "utf8") => Promise<string>) | null = null;
+  let isAbsoluteFn: ((path: string) => boolean) | null = null;
+  let joinFn: ((...paths: string[]) => string) | null = null;
+
+  try {
+    const fsModule = await import("node:fs/promises");
+    const pathModule = await import("node:path");
+    readFileFn = fsModule.readFile as (path: string, encoding: "utf8") => Promise<string>;
+    isAbsoluteFn = pathModule.isAbsolute as (path: string) => boolean;
+    joinFn = pathModule.join as (...paths: string[]) => string;
+  } catch {
+    return null;
+  }
+
+  if (!readFileFn || !isAbsoluteFn || !joinFn) {
+    return null;
+  }
+
+  const candidates = isAbsoluteFn(pathLike)
+    ? [pathLike]
+    : [pathLike, joinFn(process.cwd(), pathLike)];
+
+  for (const candidate of candidates) {
+    try {
+      return await readFileFn(candidate, "utf8");
+    } catch {
+      // Try next candidate
+    }
+  }
+  return null;
+}
+
+async function resolveMapDocument(
+  mapId: string,
+  mapDefinition: any,
+  host?: string,
+): Promise<{ xml: string; sourceUrl?: string }> {
+  if (typeof mapDefinition?.data === "string" && mapDefinition.data.includes("<map")) {
+    return { xml: mapDefinition.data };
+  }
+
+  if (typeof mapDefinition?.file === "string") {
+    const file = mapDefinition.file.trim();
+    if (file.includes("<map")) {
+      return { xml: file };
+    }
+    if (/^https?:\/\//i.test(file)) {
+      const xml = await fetchTextByUrl(file);
+      if (xml) {
+        return { xml, sourceUrl: file };
+      }
+    }
+    if (file.startsWith("/") && host) {
+      const sourceUrl = `http://${host}${file}`;
+      const xml = await fetchTextByUrl(sourceUrl);
+      if (xml) {
+        return { xml, sourceUrl };
+      }
+    }
+    const xmlFromFile = await readTextByFilePath(file);
+    if (xmlFromFile) {
+      return { xml: xmlFromFile };
+    }
+  }
+
+  if (host) {
+    const envBasePath = process.env.RPGJS_TILED_BASE_PATH;
+    const basePathCandidates = [
+      envBasePath,
+      "map",
+      "data",
+      "assets/data",
+      "assets/map",
+    ].filter((value): value is string => !!value);
+
+    for (const basePath of basePathCandidates) {
+      const prefix = toBasePathPrefix(basePath);
+      const sourceUrl = `http://${host}${prefix}/${mapId}.tmx`;
+      const xml = await fetchTextByUrl(sourceUrl);
+      if (xml) {
+        return { xml, sourceUrl };
+      }
+    }
+  }
+
+  return { xml: "" };
+}
+
+async function enrichMapWithParsedTiledData(payload: any, host?: string): Promise<void> {
+  if (payload?.parsedMap || typeof payload?.id !== "string") {
+    return;
+  }
+
+  const maps = Array.isArray(payload.__maps) ? payload.__maps : [];
+  const mapDefinition = extractFileLikeMapDefinition(maps, payload.id);
+  const mapDoc = await resolveMapDocument(payload.id, mapDefinition, host);
+  if (!mapDoc.xml) {
+    return;
+  }
+
+  try {
+    const tiledModuleName = "@canvasengine/tiled";
+    const tiledModule = await import(/* @vite-ignore */ tiledModuleName);
+    const TiledParser = tiledModule?.TiledParser;
+    if (!TiledParser) {
+      return;
+    }
+
+    const mapParser = new TiledParser(mapDoc.xml);
+    const parsedMap = mapParser.parseMap();
+
+    const tilesets = Array.isArray(parsedMap?.tilesets) ? parsedMap.tilesets : [];
+    const mergedTilesets: any[] = [];
+
+    for (const tileset of tilesets) {
+      if (!tileset?.source) {
+        mergedTilesets.push(tileset);
+        continue;
+      }
+
+      let tilesetUrl: string | undefined;
+      if (mapDoc.sourceUrl) {
+        try {
+          tilesetUrl = new URL(tileset.source, mapDoc.sourceUrl).toString();
+        } catch {
+          tilesetUrl = undefined;
+        }
+      } else if (host) {
+        const prefix = toBasePathPrefix(process.env.RPGJS_TILED_BASE_PATH || "map");
+        const candidatePath = tileset.source.startsWith("/")
+          ? tileset.source
+          : `${prefix}/${tileset.source}`.replace(/\/{2,}/g, "/");
+        tilesetUrl = `http://${host}${candidatePath.startsWith("/") ? candidatePath : `/${candidatePath}`}`;
+      }
+
+      const tilesetRaw = tilesetUrl
+        ? await fetchTextByUrl(tilesetUrl)
+        : await readTextByFilePath(tileset.source);
+      if (!tilesetRaw) {
+        mergedTilesets.push(tileset);
+        continue;
+      }
+
+      try {
+        const tilesetParser = new TiledParser(tilesetRaw);
+        const parsedTileset = tilesetParser.parseTileset();
+        mergedTilesets.push({
+          ...tileset,
+          ...parsedTileset,
+        });
+      } catch {
+        mergedTilesets.push(tileset);
+      }
+    }
+
+    parsedMap.tilesets = mergedTilesets;
+
+    payload.data = mapDoc.xml;
+    payload.parsedMap = parsedMap;
+    if (typeof parsedMap?.width === "number" && typeof parsedMap?.tilewidth === "number") {
+      payload.width = parsedMap.width * parsedMap.tilewidth;
+    }
+    if (typeof parsedMap?.height === "number" && typeof parsedMap?.tileheight === "number") {
+      payload.height = parsedMap.height * parsedMap.tileheight;
+    }
+  } catch {
+    // Keep fallback payload when tiled parser is unavailable.
+  }
+}
+
+async function updateMap(roomId: string, rpgServer: RpgServerEngine, host?: string) {
   if (!roomId.startsWith('map-')) {
     return;
   }
 
   try {
-    const mapId = roomId.startsWith('map-') ? roomId.slice(4) : roomId;
-    const defaultMapPayload = {
+    const mapId = normalizeRoomMapId(roomId);
+    const serverMaps = Array.isArray((rpgServer as any)?.maps) ? (rpgServer as any).maps : [];
+    const defaultMapPayload: any = {
       id: mapId,
       width: 0,
       height: 0,
       events: [] as any[],
+      __maps: serverMaps,
     };
+    await enrichMapWithParsedTiledData(defaultMapPayload, host);
+    delete defaultMapPayload.__maps;
 
     const req = {
       url: `http://localhost/parties/main/${roomId}/map/update`,
@@ -569,9 +787,14 @@ export function serverPlugin(
   let wsServer: WSServer | null = null;
   let rooms: Map<string, Room> = new Map();
   let servers: Map<string, RpgServerEngine> = new Map();
+  let lastKnownHost = "";
 
   // Ensure a room and its server instance exist for a given roomId
-  async function ensureRoomAndServer(roomId: string) {
+  async function ensureRoomAndServer(roomId: string, host?: string) {
+    if (host) {
+      lastKnownHost = host;
+    }
+
     let room = rooms.get(roomId);
     if (!room) {
       room = new Room(roomId);
@@ -592,7 +815,7 @@ export function serverPlugin(
         }
       }
 
-      await updateMap(roomId, rpgServer);
+      await updateMap(roomId, rpgServer, host || lastKnownHost);
     }
     
     // Make sure parties context is available on the room
@@ -605,7 +828,7 @@ export function serverPlugin(
     return {
       main: {
         get: async (targetRoomId: string) => {
-          const { rpgServer } = await ensureRoomAndServer(targetRoomId);
+          const { rpgServer } = await ensureRoomAndServer(targetRoomId, lastKnownHost);
           return {
             fetch: async (path: string, init?: { method?: string; body?: any; headers?: Record<string, string> }) => {
               try {
@@ -729,7 +952,7 @@ export function serverPlugin(
 
           const roomId = pathParts[2];
           const requestPath = `/${pathParts.slice(3).join("/")}`;
-          const { room, rpgServer } = await ensureRoomAndServer(roomId);
+          const { room, rpgServer } = await ensureRoomAndServer(roomId, host);
           room.context.parties = buildPartiesContext();
 
           const bodyText = await new Promise<string>((resolve, reject) => {
@@ -824,7 +1047,7 @@ export function serverPlugin(
                     );
 
                     // Get or create the room and its server
-                    const ensured = await ensureRoomAndServer(roomName);
+                    const ensured = await ensureRoomAndServer(roomName, request.headers.host || lastKnownHost);
                     const room = ensured.room;
                     const rpgServer = ensured.rpgServer;
                     // Inject a compatible parties context for cross-room calls

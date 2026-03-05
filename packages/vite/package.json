@@ -17,6 +17,7 @@
     "access": "public"
   },
   "dependencies": {
+    "@canvasengine/tiled": "2.0.0-beta.53",
     "@canvasengine/compiler": "2.0.0-beta.53",
     "@hono/vite-dev-server": "^0.25.0",
     "@rpgjs/server": "workspace:*",
