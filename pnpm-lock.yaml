@@ -183,6 +183,9 @@ importers:
 
   packages/server:
     dependencies:
+      '@canvasengine/tiled':
+        specifier: 2.0.0-beta.54
+        version: 2.0.0-beta.54
       '@rpgjs/common':
         specifier: workspace:*
         version: link:../common

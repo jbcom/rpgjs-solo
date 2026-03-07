@@ -30,6 +30,7 @@ import { EventMode } from "../decorators/event";
 import { BaseRoom } from "./BaseRoom";
 import { buildSaveSlotMeta, resolveSaveStorageStrategy } from "../services/save";
 import { Log } from "../logs/log";
+import { isMapUpdateAuthorized, MAP_UPDATE_TOKEN_ENV, MAP_UPDATE_TOKEN_HEADER } from "../node/map";
 
 function isRpgLog(error: unknown): error is Log {
   return error instanceof Log
@@ -1146,6 +1147,18 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     method: "POST"
   }, MapUpdateSchema as any)
   async updateMap(request: Request) {
+    if (!isMapUpdateAuthorized(request.headers)) {
+      return new Response(JSON.stringify({
+        error: "Unauthorized map update",
+        message: `Provide ${MAP_UPDATE_TOKEN_HEADER} or Authorization: Bearer <token> to call /map/update when ${MAP_UPDATE_TOKEN_ENV} is set.`,
+      }), {
+        status: 401,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    }
+
     const map = await request.json()
     this.data.set(map)
     this.globalConfig = map.config

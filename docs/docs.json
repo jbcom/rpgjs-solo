@@ -68,6 +68,7 @@
         "group": "Advanced",
         "pages": [
           "advanced/provide-load-map",
+          "advanced/node-server-production",
           "advanced/latency-simulation",
           "advanced/packet-loss-simulation",
           "tiled/index"

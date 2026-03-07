@@ -33,9 +33,14 @@ Allowing arbitrary clients to push this data is a security risk.
 - `UpdateMapService.update()` in MMORPG is intentionally a no-op.
 - Gameplay clients cannot push `/map/update`.
 - Authoritative map updates must come from a trusted backend source:
-  - server bootstrap
+  - server bootstrap with `RPGJS_MAP_UPDATE_TOKEN`
   - admin tooling
   - editor pipeline with authentication/authorization
+
+When `RPGJS_MAP_UPDATE_TOKEN` is set, `/map/update` only accepts trusted requests that send:
+
+- `x-rpgjs-map-update-token: <token>`
+- or `Authorization: Bearer <token>`
 
 ## MMORPG Dev With Vite
 

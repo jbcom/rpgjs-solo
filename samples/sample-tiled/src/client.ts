@@ -4,6 +4,6 @@ import { mergeConfig } from "@signe/di";
 
 startGame(
   mergeConfig(configClient, {
-    providers: [provideMmorpg({})],
+    providers: [provideMmorpg({ connectionIdScope: "ephemeral" })],
   }) 
 );

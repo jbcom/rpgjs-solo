@@ -60,7 +60,8 @@ export const packages = (type: "build" | "dev") => {
     // Core packages (no dependencies)
     {
       name: "vite",
-      buildScript
+      buildScript,
+      dependencies: createDependencies(packagesPath, ['server']),
     },
     {
       name: "physic",

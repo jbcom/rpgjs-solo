@@ -3,6 +3,16 @@
   "version": "5.0.0-alpha.42",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./node": {
+      "import": "./dist/node/index.js",
+      "types": "./dist/node/index.d.ts"
+    }
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -16,6 +26,7 @@
   "license": "MIT",
   "description": "",
   "dependencies": {
+    "@canvasengine/tiled": "2.0.0-beta.54",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/physic": "workspace:*",
     "@rpgjs/testing": "workspace:*",
