@@ -59,11 +59,6 @@ export const packages = (type: "build" | "dev") => {
   return [
     // Core packages (no dependencies)
     {
-      name: "vite",
-      buildScript,
-      dependencies: createDependencies(packagesPath, ['server']),
-    },
-    {
       name: "physic",
       buildScript,
     },
@@ -87,7 +82,11 @@ export const packages = (type: "build" | "dev") => {
       buildScript,
       dependencies: createDependencies(packagesPath, ['common']),
     },
-
+    {
+      name: "vite",
+      buildScript,
+      dependencies: createDependencies(packagesPath, ['server']),
+    },
     {
       name: "testing",
       buildScript,
