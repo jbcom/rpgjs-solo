@@ -12,7 +12,16 @@ export default defineConfig({
       buildOutputPath: 'assets/data'    // Build output directory
     }),
     ...rpgjs({
-      server: startServer
+      server: startServer,
+      entryPoints: {
+        mmorpg: {
+          client: './src/client.ts',
+          server: './src/server.ts',
+          adapters: {
+            express: './src/entries/express.ts',
+          },
+        },
+      },
     })
   ], 
 });

@@ -7,6 +7,8 @@ description: "Run RPGJS without Vite in production, secure map updates, and moun
 
 `@rpgjs/server/node` lets you run the RPGJS server runtime without Vite.
 
+If you want to structure an MMORPG project with a framework-agnostic `src/server.ts` plus host-specific entries such as Express, read [/advanced/mmorpg-entries](/advanced/mmorpg-entries) first.
+
 Use it when you want to mount the server in your own Node stack:
 
 - Express

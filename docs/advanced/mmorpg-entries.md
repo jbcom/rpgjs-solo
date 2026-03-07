@@ -1,0 +1,215 @@
+---
+title: "MMORPG entries"
+description: "Organize client, server, and adapter entry points for an MMORPG project, with an Express example."
+---
+
+# MMORPG entries
+
+When `RPG_TYPE=mmorpg`, RPGJS now treats your project as a multi-entry application:
+
+- a browser client
+- a framework-agnostic server module
+- optional hosting adapters such as Express
+
+Use this layout when you want to keep your game server portable across:
+
+- Vite development
+- Express in production
+- another Node host such as Fastify or Hono
+- a custom deployment target later
+
+## Recommended structure
+
+Keep your game logic in `src/server.ts`, and put host-specific bootstraps in `src/entries`.
+
+```txt
+src/
+  client.ts
+  server.ts
+  standalone.ts
+  entries/
+    express.ts
+```
+
+Role of each file:
+
+- `src/client.ts`: browser entry for `mmorpg`
+- `src/server.ts`: RPGJS server module, without `express()`, `listen()`, or platform code
+- `src/entries/express.ts`: Node entry that mounts `src/server.ts` in Express
+- `src/standalone.ts`: browser entry for `RPG_TYPE=rpg`
+
+## Configure `rpgjs()`
+
+Declare the MMORPG entries explicitly in your Vite config.
+
+```ts
+import { defineConfig } from "vite"
+import { rpgjs, tiledMapFolderPlugin } from "@rpgjs/vite"
+import vue from "@vitejs/plugin-vue"
+import serverModule from "./src/server"
+
+export default defineConfig({
+  plugins: [
+    vue(),
+    tiledMapFolderPlugin({
+      sourceFolder: "./src/tiled",
+      publicPath: "/map",
+      buildOutputPath: "assets/data",
+    }),
+    ...rpgjs({
+      server: serverModule,
+      entryPoints: {
+        rpg: "./src/standalone.ts",
+        mmorpg: {
+          client: "./src/client.ts",
+          server: "./src/server.ts",
+          adapters: {
+            express: "./src/entries/express.ts",
+          },
+        },
+      },
+    }),
+  ],
+})
+```
+
+## Keep `src/server.ts` agnostic
+
+`src/server.ts` should export your RPGJS server module and nothing else.
+
+It should not:
+
+- create an HTTP server
+- call `listen()`
+- import Express directly
+- depend on a specific host runtime
+
+Example:
+
+```ts
+import { createServer } from "@rpgjs/server"
+import { provideMain } from "./modules/main"
+
+export default createServer({
+  providers: [
+    provideMain(),
+  ],
+})
+```
+
+This file is the canonical server entry for your game. Vite development can use it directly, and production adapters can import it without duplicating game setup.
+
+## Express adapter example
+
+Put your Express bootstrap in `src/entries/express.ts`.
+
+```ts
+import express from "express"
+import { createServer } from "node:http"
+import { dirname, join, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
+import { WebSocketServer } from "ws"
+import { createRpgServerTransport } from "@rpgjs/server/node"
+import serverModule from "../server"
+
+const app = express()
+const httpServer = createServer(app)
+const wsServer = new WebSocketServer({ noServer: true })
+const transport = createRpgServerTransport(serverModule)
+const currentDir = dirname(fileURLToPath(import.meta.url))
+const clientDistDir = resolve(currentDir, "../client")
+const clientIndexFile = join(clientDistDir, "index.html")
+
+app.use("/parties", async (req, res, next) => {
+  await transport.handleNodeRequest(req, res, next, {
+    mountedPath: "/parties",
+  })
+})
+
+app.use(express.static(clientDistDir))
+
+app.get(/.*/, (_req, res) => {
+  res.sendFile(clientIndexFile)
+})
+
+httpServer.on("upgrade", (request, socket, head) => {
+  void transport.handleUpgrade(wsServer, request, socket, head)
+})
+
+httpServer.listen(3000)
+```
+
+This adapter is responsible for:
+
+- serving the built client from `dist/client`
+- forwarding HTTP requests under `/parties`
+- forwarding WebSocket upgrades to the RPGJS transport
+
+## Build output
+
+Run the MMORPG build with:
+
+```bash
+RPG_TYPE=mmorpg vite build
+```
+
+RPGJS produces two output folders:
+
+```txt
+dist/
+  client/
+    index.html
+    assets/
+  server/
+    server.js
+    express.js
+```
+
+Meaning of each output:
+
+- `dist/client`: browser assets
+- `dist/server/server.js`: built version of your agnostic `src/server.ts`
+- `dist/server/express.js`: built version of your Express adapter
+
+Start the built Express server with:
+
+```bash
+node dist/server/express.js
+```
+
+## Development flow
+
+During development, Vite still uses the server module you pass to `rpgjs({ server })`.
+
+That means:
+
+- `src/server.ts` stays the single source of truth for your game server
+- your adapter files are only needed when you want a specific production host
+- you do not need a separate `server-dev.ts`
+
+## Add another host later
+
+To support another runtime, keep `src/server.ts` unchanged and add another adapter file:
+
+- `src/entries/fastify.ts`
+- `src/entries/hono.ts`
+- `src/entries/custom.ts`
+
+Then declare it in `entryPoints.mmorpg.adapters`.
+
+```ts
+mmorpg: {
+  client: "./src/client.ts",
+  server: "./src/server.ts",
+  adapters: {
+    express: "./src/entries/express.ts",
+    fastify: "./src/entries/fastify.ts",
+  },
+}
+```
+
+The build will emit one file per adapter in `dist/server`.
+
+## Related pages
+
+- For the Node transport API and protected map updates, see [/advanced/node-server-production](/advanced/node-server-production)
