@@ -2,14 +2,17 @@ import { MapClass } from "@canvasengine/tiled";
 
 type AnyMap = {
   tiled?: MapClass;
-  physic?: {
-    getEntityByUUID(id: string): any;
-  };
-  _blockedTiles?: Set<string>;
-  _tiledTileWidth?: number;
-  _tiledTileHeight?: number;
-  _tiledCollisionUnsubscribers?: Map<string, () => void>;
 };
+
+type RectHitbox = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+const TILED_HITBOX_ID_PREFIX = "__tiled_collision__:";
 
 export function prepareTiledPhysicsData(mapData: any, map: AnyMap): void {
   if (!mapData?.parsedMap) {
@@ -19,13 +22,10 @@ export function prepareTiledPhysicsData(mapData: any, map: AnyMap): void {
   const tiledMap = new MapClass(mapData.parsedMap);
   map.tiled = tiledMap;
 
-  mapData.hitboxes = mapData.hitboxes || [];
+  const tiledHitboxes = collectBlockedTileHitboxes(tiledMap);
+  mapData.hitboxes = mergeTiledHitboxes(mapData.hitboxes, tiledHitboxes);
   mapData.width = tiledMap.widthPx;
   mapData.height = tiledMap.heightPx;
-
-  map._tiledTileWidth = tiledMap.tilewidth;
-  map._tiledTileHeight = tiledMap.tileheight;
-  map._blockedTiles = collectBlockedTiles(tiledMap);
 }
 
 export function applyTiledPointEvents(mapData: any): void {
@@ -54,70 +54,8 @@ export function applyTiledPointEvents(mapData: any): void {
   }
 }
 
-export function attachTiledCollisionToEntity(owner: any, map: AnyMap): void {
-  if (!owner?.id || !map?._blockedTiles) {
-    return;
-  }
-
-  const entity = map.physic?.getEntityByUUID(owner.id);
-  if (!entity || typeof entity.canEnterTile !== "function") {
-    return;
-  }
-
-  const unsubscribers = ensureUnsubscribers(map);
-  const previousUnsubscribe = unsubscribers.get(owner.id);
-  if (previousUnsubscribe) {
-    previousUnsubscribe();
-    unsubscribers.delete(owner.id);
-  }
-
-  const blockedTiles = map._blockedTiles;
-  const tiledTileWidth = map._tiledTileWidth ?? 32;
-  const tiledTileHeight = map._tiledTileHeight ?? 32;
-  const physicsTileWidth = 32;
-  const physicsTileHeight = 32;
-
-  const unsubscribe = entity.canEnterTile(({ x, y }) => {
-    const tiledX = Math.floor((x * physicsTileWidth) / tiledTileWidth);
-    const tiledY = Math.floor((y * physicsTileHeight) / tiledTileHeight);
-    return !blockedTiles.has(`${tiledX},${tiledY}`);
-  });
-
-  unsubscribers.set(owner.id, unsubscribe);
-}
-
-export function detachTiledCollisionFromEntity(owner: any, map: AnyMap): void {
-  if (!owner?.id) {
-    return;
-  }
-  const unsubscribers = map._tiledCollisionUnsubscribers;
-  if (!unsubscribers) {
-    return;
-  }
-  const unsubscribe = unsubscribers.get(owner.id);
-  if (!unsubscribe) {
-    return;
-  }
-  unsubscribe();
-  unsubscribers.delete(owner.id);
-}
-
-export function resetTiledCollisionHandlers(map: AnyMap): void {
-  const unsubscribers = map._tiledCollisionUnsubscribers;
-  if (unsubscribers) {
-    for (const unsubscribe of unsubscribers.values()) {
-      unsubscribe();
-    }
-    unsubscribers.clear();
-  }
-
-  map._blockedTiles = undefined;
-  map._tiledTileWidth = undefined;
-  map._tiledTileHeight = undefined;
-}
-
-function collectBlockedTiles(tiledMap: MapClass): Set<string> {
-  const blockedTiles = new Set<string>();
+function collectBlockedTileHitboxes(tiledMap: MapClass): RectHitbox[] {
+  const hitboxes: RectHitbox[] = [];
   const mapWidth = tiledMap.width;
   const mapHeight = tiledMap.height;
   const tileWidth = tiledMap.tilewidth;
@@ -129,15 +67,32 @@ function collectBlockedTiles(tiledMap: MapClass): Set<string> {
         populateTiles: true,
       });
       if (tileInfo.hasCollision) {
-        blockedTiles.add(`${x},${y}`);
+        hitboxes.push({
+          id: createTiledHitboxId(x, y),
+          x: x * tileWidth,
+          y: y * tileHeight,
+          width: tileWidth,
+          height: tileHeight,
+        });
       }
     }
   }
 
-  return blockedTiles;
+  return hitboxes;
 }
 
-function ensureUnsubscribers(map: AnyMap): Map<string, () => void> {
-  map._tiledCollisionUnsubscribers = map._tiledCollisionUnsubscribers || new Map();
-  return map._tiledCollisionUnsubscribers;
+function mergeTiledHitboxes(existingHitboxes: any, tiledHitboxes: RectHitbox[]): any[] {
+  const preservedHitboxes = Array.isArray(existingHitboxes)
+    ? existingHitboxes.filter((hitbox) => !isGeneratedTiledHitbox(hitbox))
+    : [];
+
+  return [...preservedHitboxes, ...tiledHitboxes];
+}
+
+function isGeneratedTiledHitbox(hitbox: any): boolean {
+  return typeof hitbox?.id === "string" && hitbox.id.startsWith(TILED_HITBOX_ID_PREFIX);
+}
+
+function createTiledHitboxId(x: number, y: number): string {
+  return `${TILED_HITBOX_ID_PREFIX}${x},${y}`;
 }

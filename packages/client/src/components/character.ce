@@ -11,7 +11,7 @@
         sheet={sheet(graphicObj)} 
         direction 
         tint 
-        hitbox 
+        hitbox
         flash={flashConfig}
       />
     }
