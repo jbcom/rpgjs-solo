@@ -4,6 +4,7 @@ import { createModule } from "@rpgjs/common";
 import { provideLoadMap } from "@rpgjs/client";
 import { TiledParser } from "@canvasengine/tiled";
 import Tiled from "./tiled.ce";
+import { prepareTiledPhysicsData } from "./physics";
 
 export function provideTiledMap(options: {
   basePath: string;
@@ -35,7 +36,7 @@ export function provideTiledMap(options: {
       }
       parsedMap.tilesets = tilesets;
 
-      const obj = {
+      const obj: any = {
         data: mapData,
         component: Tiled,
         parsedMap,
@@ -44,6 +45,9 @@ export function provideTiledMap(options: {
           basePath: options.basePath,
         },
       };
+
+      // Populate dimensions and static hitboxes before the first loadPhysic() call.
+      prepareTiledPhysicsData(obj, obj);
 
       if (options.onLoadMap) {
         await options.onLoadMap(map);

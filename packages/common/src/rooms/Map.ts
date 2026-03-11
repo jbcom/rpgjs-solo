@@ -281,6 +281,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
           kind: this.resolvePhysicsEntityKind(owner, entity.uuid),
         });
       }
+      this.unbindCharacterSignalSync(entity);
       this.physic.removeEntity(entity);
     }
 
@@ -644,6 +645,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       // Rebind owner when the player instance is restored/replaced (e.g. map transfer).
       // Position sync callbacks read entity.owner at runtime.
       (existingEntity as any).owner = owner;
+      this.bindCharacterSignalSync(existingEntity, owner);
       this.updateCharacterHitbox(owner);
       return;
     }
@@ -679,6 +681,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     // Rebind owner on every update to keep physics callbacks attached to the
     // current player instance after room/session transfers.
     (entity as any).owner = owner;
+    this.bindCharacterSignalSync(entity, owner);
 
     const hitbox = typeof owner.hitbox === "function" ? owner.hitbox() : owner.hitbox;
     const width = hitbox?.w ?? 32;
@@ -701,6 +704,60 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       return source;
     }
     return fallback;
+  }
+
+  private bindCharacterSignalSync(entity: Entity, owner: any): void {
+    const entityAny = entity as any;
+    if (
+      entityAny.__rpgSignalSyncOwner === owner &&
+      typeof entityAny.__rpgSignalSyncUnsubscribe === "function"
+    ) {
+      return;
+    }
+
+    this.unbindCharacterSignalSync(entity);
+    entityAny.__rpgSignalSyncOwner = owner;
+
+    const subscriptions: Subscription[] = [];
+    entityAny.__rpgSignalSyncUnsubscribe = () => {
+      subscriptions.forEach((subscription) => subscription.unsubscribe());
+      delete entityAny.__rpgSignalSyncUnsubscribe;
+      delete entityAny.__rpgSignalSyncOwner;
+    };
+
+    const syncFromSignals = () => {
+      if (this.isPhysicsSyncingSignals) {
+        return;
+      }
+      const currentOwner = entityAny.owner;
+      if (!currentOwner?.id || currentOwner.id !== entity.uuid) {
+        return;
+      }
+      this.updateCharacterHitbox(currentOwner);
+    };
+
+    const subscribeSignal = (signalLike: any) => {
+      const observable = signalLike?.observable;
+      if (!observable || typeof observable.subscribe !== "function") {
+        return;
+      }
+      subscriptions.push(observable.subscribe(() => syncFromSignals()));
+    };
+
+    subscribeSignal(owner.x);
+    subscribeSignal(owner.y);
+    subscribeSignal(owner.hitbox);
+    subscribeSignal(owner._through);
+  }
+
+  private unbindCharacterSignalSync(entity: Entity): void {
+    const entityAny = entity as any;
+    const unsubscribe = entityAny.__rpgSignalSyncUnsubscribe;
+    if (typeof unsubscribe === "function") {
+      unsubscribe();
+      return;
+    }
+    delete entityAny.__rpgSignalSyncOwner;
   }
 
   private shouldDisableCharacterCollisions(owner: any): boolean {
@@ -1152,6 +1209,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     // Store owner reference directly on entity for syncing positions
     (entity as any).owner = owner;
+    this.bindCharacterSignalSync(entity, owner);
 
     entity.onDirectionChange(({ cardinalDirection }) => {
       // hack to prevent direction in client side
@@ -1219,14 +1277,16 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       const topLeftY = y - entityHeight / 2;
       let changed = false;
 
-      if (typeof currentOwner.x === "function" && typeof currentOwner.x.set === "function") {
-        currentOwner.x.set(Math.round(topLeftX));
-        changed = true;
-      }
-      if (typeof currentOwner.y === "function" && typeof currentOwner.y.set === "function") {
-        currentOwner.y.set(Math.round(topLeftY));
-        changed = true;
-      }
+      this.withPhysicsSync(() => {
+        if (typeof currentOwner.x === "function" && typeof currentOwner.x.set === "function") {
+          currentOwner.x.set(Math.round(topLeftX));
+          changed = true;
+        }
+        if (typeof currentOwner.y === "function" && typeof currentOwner.y.set === "function") {
+          currentOwner.y.set(Math.round(topLeftY));
+          changed = true;
+        }
+      });
       if (changed) {
         currentOwner.applyFrames?.();
       }
@@ -1374,6 +1434,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     if (!entity) {
       return false;
     }
+    this.unbindCharacterSignalSync(entity);
     const resolvedOwner = owner ?? (entity as any).owner;
     if (resolvedOwner) {
       this.emitPhysicsEntityRemove({

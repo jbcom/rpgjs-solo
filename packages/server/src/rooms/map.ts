@@ -797,6 +797,20 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   onJoin(player: RpgPlayer, conn: MockConnection) {
+    const alignPlayerBodyWithSignals = () => {
+      const hitbox = typeof player.hitbox === 'function' ? player.hitbox() : player.hitbox;
+      const width = hitbox?.w ?? 32;
+      const height = hitbox?.h ?? 32;
+      const body = this.getBody(player.id) as any;
+      if (body) {
+        // Ensure physics callbacks target the current player instance
+        // after session transfer/map return.
+        body.owner = player;
+      }
+      // Keep physics body aligned with restored snapshot coordinates on map join.
+      this.updateHitbox(player.id, player.x(), player.y(), width, height);
+    };
+
     if (player.setMap) {
       player.setMap(this);
     } else {
@@ -808,22 +822,13 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     player.lastProcessedInputTs = 0;
     player._lastFramePositions = null;
     player._onInit()
+    alignPlayerBodyWithSignals();
     this.dataIsReady$.pipe(
       finalize(() => {
         // Avoid unhandled promise rejections from async hook execution.
         void (async () => {
           try {
-            const hitbox = typeof player.hitbox === 'function' ? player.hitbox() : player.hitbox;
-            const width = hitbox?.w ?? 32;
-            const height = hitbox?.h ?? 32;
-            const body = this.getBody(player.id) as any;
-            if (body) {
-              // Ensure physics callbacks target the current player instance
-              // after session transfer/map return.
-              body.owner = player;
-            }
-            // Keep physics body aligned with restored snapshot coordinates on map join.
-            this.updateHitbox(player.id, player.x(), player.y(), width, height);
+            alignPlayerBodyWithSignals();
             await this.spawnScenarioEventsForPlayer(player);
 
             // Check if we should stop all sounds before playing new ones
