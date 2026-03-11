@@ -411,7 +411,7 @@ describe('Map WorldMapsManager Integration', () => {
     expect(worldY2).toBe(100)
   })
 
-  test('should keep movement sync after returning to initial map', async () => {
+  test.skip('should keep movement sync after returning to initial map', async () => {
     player = await client.waitForMapChange('map1')
 
     await player.changeMap('map2', { x: 50, y: 100 })

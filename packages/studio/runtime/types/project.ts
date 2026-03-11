@@ -3,6 +3,8 @@ type ParamCurve = {
   end: number;
 };
 
+type ParamValue = ParamCurve | number;
+
 export type ProjectBasic = {
   initialLevel?: number;
   finalLevel?: number;
@@ -12,7 +14,7 @@ export type ProjectBasic = {
     accelerationA: number;
     accelerationB: number;
   };
-  parameters?: Record<string, ParamCurve>;
+  parameters?: Record<string, ParamValue>;
   startingInventory?: Array<{
     itemId?: string;
     amount: number;

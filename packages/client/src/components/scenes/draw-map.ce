@@ -1,7 +1,9 @@
 <Container sound={backgroundMusic} shake={shakeConfig} freeze={engine.gamePause}>
   <Container sound={backgroundAmbientSound} />
 
-  <sceneComponent() data={map().data} params={map().params} />
+  @if (map() && sceneComponent()) {
+    <sceneComponent() data={map().data} params={map().params} />
+  }
 
   @for (componentAnimation of componentAnimations) {
     <Container>

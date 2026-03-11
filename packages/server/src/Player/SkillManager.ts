@@ -176,6 +176,48 @@ export interface SkillObject extends SkillHooks {
  */
 export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
   return class extends (Base as any) {
+    private _getSkillSnapshot(skillData: any) {
+      if (!skillData) return null;
+
+      const snapshot = {
+        ...((skillData as any)._skillData || skillData),
+      };
+
+      const reactiveKeys = [
+        "id",
+        "name",
+        "description",
+        "spCost",
+        "icon",
+        "hitRate",
+        "power",
+        "coefficient",
+      ];
+
+      for (const key of reactiveKeys) {
+        const value = (skillData as any)[key];
+        if (typeof value === "function") {
+          if (key === "hitRate" && !(key in snapshot)) {
+            continue;
+          }
+          snapshot[key] = value();
+        } else if (value !== undefined) {
+          snapshot[key] = value;
+        }
+      }
+
+      if ((skillData as any)._skillInstance) {
+        snapshot._skillInstance = (skillData as any)._skillInstance;
+      }
+
+      return snapshot;
+    }
+
+    private _getLearnedSkillEntry(skillInput: SkillClass | SkillObject | string): Skill | null {
+      const index = this._getSkillIndex(skillInput);
+      return index >= 0 ? ((this as any).skills()[index] as Skill) : null;
+    }
+
     private _getSkillMap(required: boolean = true) {
       // Use this.map directly to support both RpgMap and LobbyRoom
       const map = (this as any).getCurrentMap?.() || (this as any).map;
@@ -246,6 +288,10 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
     ) {
       const instance = new Skill(skillData);
       instance.id.set(skillId);
+      (instance as any)._skillData = {
+        ...skillData,
+        id: skillId,
+      };
 
       if (skillInstance) {
         (instance as any)._skillInstance = skillInstance;
@@ -349,8 +395,8 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
      * ```
      */
     getSkill(skillInput: SkillClass | SkillObject | string): Skill | null {
-      const index = this._getSkillIndex(skillInput);
-      return (this as any).skills()[index] as Skill ?? null;
+      const skill = this._getLearnedSkillEntry(skillInput);
+      return this._getSkillSnapshot(skill) as Skill | null;
     }
 
     /**
@@ -389,7 +435,7 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
       const { skillId, skillData, skillInstance } = this._resolveSkillInput(skillInput, map);
 
       // Check if already learned
-      if (this.getSkill(skillId)) {
+      if (this._getLearnedSkillEntry(skillId)) {
         throw SkillLog.alreadyLearned(skillData);
       }
 
@@ -438,11 +484,15 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
         throw SkillLog.notLearned(skillData);
       }
       
-      const skillData = (this as any).skills()[index];
+      const skillEntry = (this as any).skills()[index];
+      const skillData = this._getSkillSnapshot(skillEntry);
       (this as any).skills().splice(index, 1);
       
       // Call onForget hook
-      const hookTarget = (skillData as any)?._skillInstance || skillData;
+      const hookTarget =
+        (skillEntry as any)?._skillInstance ||
+        (skillEntry as any)?._skillData ||
+        skillData;
       this["execMethod"]("onForget", [this], hookTarget);
       
       return skillData;
@@ -475,7 +525,8 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
      * ```
      */
     useSkill(skillInput: SkillClass | SkillObject | string, otherPlayer?: RpgPlayer | RpgPlayer[]): any {
-      const skill = this.getSkill(skillInput);
+      const skillEntry = this._getLearnedSkillEntry(skillInput);
+      const skill = this._getSkillSnapshot(skillEntry);
       
       // Check for skill restriction effect
       if ((this as any).hasEffect(Effect.CAN_NOT_SKILL)) {
@@ -488,7 +539,7 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
       }
       
       // Check SP cost
-      const spCost = skill.spCost || 0;
+      const spCost = typeof skill.spCost === "number" ? skill.spCost : 0;
       if (spCost > (this as any).sp) {
         throw SkillLog.notEnoughSp(skill, spCost, (this as any).sp);
       }
@@ -498,9 +549,12 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
       (this as any).sp -= spCost / costMultiplier;
       
       // Check hit rate
-      const hitRate = skill.hitRate ?? 1;
+      const hitRate = typeof skill.hitRate === "number" ? skill.hitRate : 1;
       if (Math.random() > hitRate) {
-        const hookTarget = (skill as any)?._skillInstance || skill;
+        const hookTarget =
+          (skillEntry as any)?._skillInstance ||
+          (skillEntry as any)?._skillData ||
+          skill;
         this["execMethod"]("onUseFailed", [this, otherPlayer], hookTarget);
         throw SkillLog.chanceToUseFailed(skill);
       }
@@ -515,7 +569,10 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
       }
       
       // Call onUse hook
-      const hookTarget = (skill as any)?._skillInstance || skill;
+      const hookTarget =
+        (skillEntry as any)?._skillInstance ||
+        (skillEntry as any)?._skillData ||
+        skill;
       this["execMethod"]("onUse", [this, otherPlayer], hookTarget);
       
       return skill;

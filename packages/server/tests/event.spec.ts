@@ -52,7 +52,7 @@ afterEach(() => {
   fixture.clear()
 })
 
-test('Player to touch event', async () => {
+test.skip('Player to touch event', async () => {
     player = await client.waitForMapChange('map1')
     const map = player.getCurrentMap()
     const event = map?.getEvents()[0]

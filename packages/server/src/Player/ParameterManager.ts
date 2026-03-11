@@ -10,6 +10,13 @@ export type ExpCurve = {
   accelerationB: number;
 };
 
+export type ParameterCurve = {
+  start: number;
+  end: number;
+};
+
+export type ParameterValue = number | ParameterCurve;
+
 const DEFAULT_EXP_CURVE: ExpCurve = {
   basis: 30,
   extra: 20,
@@ -33,6 +40,31 @@ function normalizeExpCurve(value: unknown): ExpCurve {
     extra: toValidNumber(value.extra, DEFAULT_EXP_CURVE.extra),
     accelerationA: toValidNumber(value.accelerationA, DEFAULT_EXP_CURVE.accelerationA),
     accelerationB: toValidNumber(value.accelerationB, DEFAULT_EXP_CURVE.accelerationB)
+  };
+}
+
+function normalizeParameterCurve(value: unknown): ParameterCurve {
+  if (typeof value === "number") {
+    const normalized = toValidNumber(value, 0);
+    return {
+      start: normalized,
+      end: normalized
+    };
+  }
+
+  if (!isObject(value)) {
+    return {
+      start: 0,
+      end: 0
+    };
+  }
+
+  const start = toValidNumber(value.start, 0);
+  const end = toValidNumber(value.end, start);
+
+  return {
+    start,
+    end
   };
 }
 
@@ -268,6 +300,16 @@ export interface IParameterManager {
   parameters: { [key: string]: { start: number, end: number } };
 
   /**
+   * Set a parameter with either a fixed value or a level curve
+   *
+   * A numeric value is stored as a fixed parameter where `start === end`.
+   *
+   * @param name - Parameter name
+   * @param value - Fixed value or parameter curve
+   */
+  setParameter(name: string, value: ParameterValue): void;
+
+  /**
    * Get the value of a specific parameter by name
    * 
    * @deprecated Use `player.param[name]` instead for better reactivity
@@ -440,6 +482,8 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
             end: number
         }
     }>({}) as any, '_parametersSignal', { persist: true }, this as any)
+
+    private _paramProxy: { [key: string]: number } | null = null
 
     /**
      * Computed signal for all parameter values
@@ -755,7 +799,46 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
      * @memberof ParameterManager
      * */
     get param() {
-        return this._param()
+        if (!this._paramProxy) {
+            this._paramProxy = new Proxy({}, {
+                get: (_target, property) => {
+                    if (typeof property !== 'string') {
+                        return undefined
+                    }
+                    return this._param()[property]
+                },
+                set: (_target, property, value) => {
+                    if (typeof property !== 'string') {
+                        return false
+                    }
+                    this.setParameter(property, value as ParameterValue)
+                    return true
+                },
+                has: (_target, property) => {
+                    if (typeof property !== 'string') {
+                        return false
+                    }
+                    return property in this._param()
+                },
+                ownKeys: () => Reflect.ownKeys(this._param()),
+                getOwnPropertyDescriptor: (_target, property) => {
+                    if (typeof property !== 'string') {
+                        return undefined
+                    }
+                    const parameters = this._param()
+                    if (!(property in parameters)) {
+                        return undefined
+                    }
+                    return {
+                        configurable: true,
+                        enumerable: true,
+                        writable: true,
+                        value: parameters[property]
+                    }
+                }
+            }) as { [key: string]: number }
+        }
+        return this._paramProxy
     }
 
     get paramsModifier() {
@@ -833,7 +916,17 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
     }
 
     set parameters(val) {
-        this._parametersSignal.set(val)
+        const normalizedParameters = {}
+        for (const [name, parameterValue] of Object.entries(val || {})) {
+            normalizedParameters[name] = normalizeParameterCurve(parameterValue)
+        }
+        this._parametersSignal.set(normalizedParameters)
+        if (MAXHP in normalizedParameters && this.hp > this.param[MAXHP]) {
+            this.hp = this.param[MAXHP]
+        }
+        if (MAXSP in normalizedParameters && this.sp > this.param[MAXSP]) {
+            this.sp = this.param[MAXSP]
+        }
     }
 
     private _expForLevel(level: number): number {
@@ -874,11 +967,12 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
      * @returns {void}
      * @memberof ParameterManager
      * */
-    addParameter(name: string, { start, end }: { start: number, end: number }): void {
+    setParameter(name: string, value: ParameterValue): void {
+        const normalizedValue = normalizeParameterCurve(value)
         this._parametersSignal.mutate(parameters => {
             parameters[name] = {
-                start,
-                end
+                start: normalizedValue.start,
+                end: normalizedValue.end
             }
         })
         const maxHp = this.param[MAXHP]
@@ -889,6 +983,10 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
         else if (name == MAXSP && this.sp > maxSp) {
             this.sp = maxSp
         }
+    }
+
+    addParameter(name: string, { start, end }: { start: number, end: number }): void {
+        this.setParameter(name, { start, end })
     }
 
     /** 

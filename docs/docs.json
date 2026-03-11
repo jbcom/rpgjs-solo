@@ -8,81 +8,110 @@
     "dark": "#1559ac"
   },
   "navigation": {
-    "groups": [
+    "tabs": [
       {
-        "group": "Getting Started",
-        "pages": [
-          "index",
-          "guide/get-started",
-          "guide/create-module",
-          "guide/testing"
+        "tab": "Guide",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "index",
+              "guide/get-started",
+              "guide/create-module",
+              "guide/testing"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guide/create-shape",
+              "guide/create-movement",
+              "guide/display-animations",
+              "guide/event-modes",
+              "guide/items",
+              "guide/move-routes",
+              "guide/save-load",
+              "guide/sounds",
+              "guide/sprite-components",
+              "guide/spritesheets",
+              "guide/synchronization",
+              "guide/weather",
+              "guide/world-maps",
+              "guide/battle-ai",
+              "guide/prebuilt-components/index",
+              "guide/prebuilt-components/light-halo",
+              "guide/gui/attach-gui"
+            ]
+          },
+          {
+            "group": "GUI",
+            "pages": [
+              "gui/title-screen",
+              "gui/dialog-box",
+              "gui/hud",
+              "gui/engine-injection",
+              "gui/optimistic-actions",
+              "gui/vue-integration"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/provide-load-map",
+              "advanced/mmorpg-entries",
+              "advanced/node-server-production",
+              "advanced/latency-simulation",
+              "advanced/packet-loss-simulation",
+              "tiled/index"
+            ]
+          }
         ]
       },
       {
-        "group": "Guides",
-        "pages": [
-          "guide/create-shape",
-          "guide/create-movement",
-          "guide/display-animations",
-          "guide/event-modes",
-          "guide/items",
-          "guide/move-routes",
-          "guide/save-load",
-          "guide/sounds",
-          "guide/sprite-components",
-          "guide/spritesheets",
-          "guide/synchronization",
-          "guide/weather",
-          "guide/world-maps",
-          "guide/battle-ai",
-          "guide/prebuilt-components/index",
-          "guide/prebuilt-components/light-halo",
-          "guide/gui/attach-gui"
+        "tab": "API",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/index"
+            ]
+          },
+          {
+            "group": "Hooks",
+            "pages": [
+              "hooks/client-engine-hooks",
+              "hooks/client-physics-hooks",
+              "hooks/client-scene-hooks",
+              "hooks/client-sprite-hooks",
+              "hooks/server-engine-hooks",
+              "hooks/server-event-hooks",
+              "hooks/server-map-hooks",
+              "hooks/server-player-hooks"
+            ]
+          }
         ]
       },
       {
-        "group": "GUI",
-        "pages": [
-          "gui/title-screen",
-          "gui/dialog-box",
-          "gui/hud",
-          "gui/engine-injection",
-          "gui/optimistic-actions",
-          "gui/vue-integration"
-        ]
-      },
-      {
-        "group": "Hooks",
-        "pages": [
-          "hooks/client-engine-hooks",
-          "hooks/client-physics-hooks",
-          "hooks/client-scene-hooks",
-          "hooks/client-sprite-hooks",
-          "hooks/server-engine-hooks",
-          "hooks/server-event-hooks",
-          "hooks/server-map-hooks",
-          "hooks/server-player-hooks"
-        ]
-      },
-      {
-        "group": "Advanced",
-        "pages": [
-          "advanced/provide-load-map",
-          "advanced/mmorpg-entries",
-          "advanced/node-server-production",
-          "advanced/latency-simulation",
-          "advanced/packet-loss-simulation",
-          "tiled/index"
-        ]
-      },
-      {
-        "group": "Internal",
-        "pages": [
-          "internal/README",
-          "internal/maps",
-          "internal/mmorpg-map-sync",
-          "internal/event-modes-architecture",
-          "internal/snapshots"
+        "tab": "Studio",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "studio/index",
+              "studio/blocks-runtime"
+            ]
+          },
+          {
+            "group": "Internal",
+            "expanded": false,
+            "pages": [
+              "internal/README",
+              "internal/maps",
+              "internal/mmorpg-map-sync",
+              "internal/event-modes-architecture",
+              "internal/snapshots"
+            ]
+          }
         ]
       }
     ]

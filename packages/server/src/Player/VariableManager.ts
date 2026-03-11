@@ -30,7 +30,9 @@ export function WithVariableManager<TBase extends PlayerCtor>(Base: TBase) {
     variables = type(signal<Record<string, any>>({}) as any, 'variables', { persist: true }, this as any);
 
     setVariable(key: string, val: any): void {
-      this.variables()[key] = val;
+      this.variables.mutate((variables) => {
+        variables[key] = val;
+      });
     }
 
     getVariable<U = any>(key: string): U | undefined {
@@ -38,7 +40,13 @@ export function WithVariableManager<TBase extends PlayerCtor>(Base: TBase) {
     }
 
     removeVariable(key: string): boolean {
-      delete this.variables()[key];
+      const variables = this.variables();
+      if (!(key in variables)) {
+        return false;
+      }
+      this.variables.mutate((draft) => {
+        delete draft[key];
+      });
       return true;
     }
 

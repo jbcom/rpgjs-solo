@@ -13,7 +13,7 @@ export function assignParams(player: RpgPlayer, config: ProjectBasic) {
 
   if (config.parameters) {
     for (const paramName in config.parameters) {
-      player.addParameter(paramName, config.parameters[paramName]);
+      player.setParameter(paramName, config.parameters[paramName]);
     }
   }
 

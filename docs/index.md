@@ -1,6 +1,6 @@
 ---
 title: "RPGJS v5"
-description: "Create your RPG or MMORPG in JavaScript with RPGJS guides and APIs."
+description: "Create your RPG or MMORPG in JavaScript with guides, API references, and Studio documentation."
 ---
 
 # RPGJS v5
@@ -8,6 +8,14 @@ description: "Create your RPG or MMORPG in JavaScript with RPGJS guides and APIs
 Create your RPG or MMORPG in JavaScript.
 
 RPGJS is a framework for building 2D RPG games with modern web technologies, including real-time multiplayer support.
+
+## Explore the docs
+
+The documentation is organized into three tabs:
+
+- **Guide** for setup, gameplay systems, GUI integration, and production workflows
+- **API** for hooks and extension points
+- **Studio** for editor runtime concepts and internal architecture
 
 ## Quick start
 
@@ -30,6 +38,8 @@ Open `http://localhost:5173`.
 ## Next steps
 
 - [Get started](/guide/get-started)
-- [World maps API](/guide/world-maps)
+- [API overview](/api/index)
+- [Studio overview](/studio/index)
+- [World maps guide](/guide/world-maps)
 - [Hooks reference](/hooks/client-engine-hooks)
 - [GitHub repository](https://github.com/RSamaium/RPG-JS)

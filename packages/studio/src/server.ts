@@ -4,6 +4,7 @@ import { BlockExecutionService } from "./block-executor";
 import { apiUrl } from "./constants";
 import { RATIO_MAP_X, RATIO_MAP_Y } from "@common/map";
 import { matchesPageConditions } from "@common/blocks";
+import type { ProjectBasic } from "@common/types/project";
 import {
   applyTriggerSettings,
   getEventTypeRuntime,
@@ -18,9 +19,61 @@ import {
   getStudioGameRuntimeConfig,
 } from "./data-provider";
 
-const startGame = (player: RpgPlayer) => {
-  const gameConfig = window.gameConfig;
-  const heroConfig = gameConfig.hero;
+const mergePlayerConfig = (
+  baseConfig: ProjectBasic = {},
+  overrideConfig?: Partial<ProjectBasic> | null,
+): ProjectBasic => {
+  if (!overrideConfig) {
+    return {
+      ...baseConfig,
+    };
+  }
+
+  return {
+    ...baseConfig,
+    ...overrideConfig,
+    expCurve: overrideConfig.expCurve ?? baseConfig.expCurve,
+    parameters: {
+      ...(baseConfig.parameters ?? {}),
+      ...(overrideConfig.parameters ?? {}),
+    },
+    startingInventory: overrideConfig.startingInventory ?? baseConfig.startingInventory,
+    startingEquipment: {
+      ...(baseConfig.startingEquipment ?? {}),
+      ...(overrideConfig.startingEquipment ?? {}),
+    },
+  };
+};
+
+const resolvePlayerConfig = async (player: RpgPlayer): Promise<ProjectBasic> => {
+  const gameConfig = window.gameConfig ?? {};
+  const baseHeroConfig = (gameConfig.hero ?? {}) as ProjectBasic;
+  const provider = getGameDataProvider();
+  const providerStartConfig = provider.getPlayerStartConfig;
+
+  if (!providerStartConfig) {
+    return baseHeroConfig;
+  }
+
+  try {
+    const configuredProjectId = getStudioGameRuntimeConfig().projectId?.trim() || null;
+    const overrideConfig = await providerStartConfig.call(provider, {
+      player,
+      heroConfig: baseHeroConfig,
+      gameConfig,
+      projectId: configuredProjectId || gameConfig?._id || null,
+      mapId: gameConfig?.startMapId || null,
+    });
+
+    return mergePlayerConfig(baseHeroConfig, overrideConfig);
+  } catch (error) {
+    console.error("[StudioGame] getPlayerStartConfig failed", error);
+    return baseHeroConfig;
+  }
+};
+
+const startGame = async (player: RpgPlayer) => {
+  const heroConfig = await resolvePlayerConfig(player);
   assignParams(player, heroConfig);
 };
 
@@ -131,9 +184,9 @@ const resolveMapEventReferences = async (events: unknown): Promise<any[]> => {
 export default (_config?: unknown) => {
   return defineModule<RpgServer>({
     player: {
-      onStart: (player: RpgPlayer) => {
-        startGame(player);
-        player.changeMap("simplemap");
+      onStart: async (player: RpgPlayer) => {
+        await startGame(player);
+        await player.changeMap("simplemap");
       },
       onJoinMap: (player: RpgPlayer, map: RpgMap) => {
         const startMapId = map.globalConfig.startMapId;
