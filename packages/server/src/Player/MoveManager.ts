@@ -1149,6 +1149,14 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
     moveRoutes(routes: Routes, options?: MoveRoutesOptions): Promise<boolean> {
       const player = this as unknown as PlayerWithMixins;
+      const selfAny = this as any;
+      const routeSequence = (selfAny.__moveRouteSequence__ ?? 0) + 1;
+      selfAny.__moveRouteSequence__ = routeSequence;
+
+      if (this._finishRoute) {
+        this._finishRoute(false);
+        this._finishRoute = null;
+      }
 
       // Break any existing route movement
       this.clearMovements();
@@ -1174,6 +1182,11 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
         // Flatten nested arrays
         // Note: We keep promises in the routes array and handle them in the strategy
         const finalRoutes = this.flattenRoutes(processedRoutes);
+
+        if (selfAny.__moveRouteSequence__ !== routeSequence) {
+          resolve(false);
+          return;
+        }
 
         // Create a movement strategy that handles all routes
         class RouteMovementStrategy implements MovementStrategy {
@@ -1441,6 +1454,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             // This ensures we match the test expectations which compare player.x()
             const currentTopLeftX = this.player.x();
             const currentTopLeftY = this.player.y()
+            const currentMap = this.player.getCurrentMap() as any;
 
             // Calculate direction and distance using top-left position if available
             let dx: number, dy: number, distance: number;
@@ -1448,9 +1462,12 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               dx = this.currentTargetTopLeft.x - currentTopLeftX;
               dy = this.currentTargetTopLeft.y - currentTopLeftY;
               distance = Math.hypot(dx, dy);
+              const arrivalThreshold = Math.max(this.tolerance, this.player.speed());
 
-              // Check if we've reached the target (using top-left position)
-              if (distance <= this.tolerance) {
+              // Snap to the target when the physics step overshoots the discrete route distance.
+              if (distance <= arrivalThreshold) {
+                currentMap?.setBodyPosition?.(this.player.id, this.currentTargetTopLeft.x, this.currentTargetTopLeft.y, "top-left");
+
                 // Target reached, wait for frequency before processing next route
                 this.debugLog(`TARGET reached at (${currentTopLeftX.toFixed(1)}, ${currentTopLeftY.toFixed(1)})`);
                 this.currentTarget = null;
@@ -1485,9 +1502,13 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               dx = this.currentTarget.x - currentPosition.x;
               dy = this.currentTarget.y - currentPosition.y;
               distance = Math.hypot(dx, dy);
+              const arrivalThreshold = Math.max(this.tolerance, this.player.speed());
 
               // Check if we've reached the target (using center position as fallback)
-              if (distance <= this.tolerance) {
+              if (distance <= arrivalThreshold) {
+                entity.position.set(this.currentTarget.x, this.currentTarget.y);
+                entity.notifyPositionChange?.();
+
                 // Target reached, wait for frequency before processing next route
                 this.currentTarget = null;
                 this.currentTargetTopLeft = null;
@@ -1603,7 +1624,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             }
 
             // Get speed scalar from map (default 50 if not found)
-            const map = this.player.getCurrentMap() as any;
+            const map = currentMap;
             const speedScalar = map?.speedScalar ?? 50;
 
             // Calculate direction and speed

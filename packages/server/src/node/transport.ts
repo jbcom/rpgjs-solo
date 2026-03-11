@@ -1,5 +1,9 @@
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import type { Duplex } from "node:stream";
+import { injector } from "@signe/di";
+import { context as serverContext } from "../core/context";
+import { setInject } from "../core/inject";
+import { provideServerModules } from "../module";
 import { PartyConnection } from "./connection";
 import { createMapUpdateHeaders, resolveMapUpdateToken, updateMap } from "./map";
 import { PartyRoom } from "./room";
@@ -209,6 +213,7 @@ function createConnectionContext(url: URL, headers: Headers, method?: string): a
 }
 
 export class RpgServerTransport {
+  private serverContextInitialized = false;
   private partiesPath: string;
   private readonly initializeMaps: boolean;
   private readonly mapUpdateToken: string;
@@ -225,6 +230,16 @@ export class RpgServerTransport {
     this.mapUpdateToken = resolveMapUpdateToken(options.mapUpdateToken);
     this.partiesPath = normalizePathPrefix(options.partiesPath || "/parties/main", "/parties/main");
     this.tiledBasePaths = options.tiledBasePaths;
+  }
+
+  private async ensureServerContext(): Promise<void> {
+    if (this.serverContextInitialized) {
+      return;
+    }
+
+    setInject(serverContext);
+    await injector(serverContext, [provideServerModules([])]);
+    this.serverContextInitialized = true;
   }
 
   getRoom(roomId: string): PartyRoom | undefined {
@@ -249,6 +264,7 @@ export class RpgServerTransport {
 
     let rpgServer = this.servers.get(roomId);
     if (!rpgServer) {
+      await this.ensureServerContext();
       rpgServer = new this.serverModule(room);
       this.servers.set(roomId, rpgServer);
       console.log(`Created new server instance for room: ${roomId}`);

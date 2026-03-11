@@ -408,24 +408,30 @@ export async function testing(
       return new Promise((resolve) => setTimeout(resolve, ms));
     },
     async waitUntil<T = any>(promise: Promise<T>): Promise<T> {
-      let tick = 0
-      let finish = false
-      return new Promise<T>((resolve: (value: T) => void, reject: (reason?: any) => void) => {
-          promise.then((value: T) => {  
-              finish = true
-              resolve(value)
-          }).catch(reject)
-          const timeout = () => {
-            setTimeout(() => {
-              if (!finish) {
-                  tick++
-                  nextTick(clientEngine, Date.now() + tick * 16)
-                  timeout()
-              }
-            }, 0)
-          }
-          timeout()
-      })
+      let settled = false;
+      let resolvedValue: T | undefined;
+      let rejectedError: unknown;
+
+      promise
+        .then((value: T) => {
+          settled = true;
+          resolvedValue = value;
+        })
+        .catch((error) => {
+          settled = true;
+          rejectedError = error;
+        });
+
+      while (!settled) {
+        await nextTick(clientEngine, Date.now());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      if (typeof rejectedError !== "undefined") {
+        throw rejectedError;
+      }
+
+      return resolvedValue as T;
     },
   };
 }
