@@ -5,6 +5,10 @@
     "build": "tsx bin/build.ts",
     "dev": "tsx bin/dev.ts",
     "clean": "tsx bin/clean.ts",
+    "docs:extract-api": "tsx bin/extract-jsdoc.ts",
+    "docs:client-api": "tsx bin/extract-jsdoc.ts extract --package @rpgjs/client-api --entry packages/client/src --output docs/.generated/client-api.json && tsx bin/extract-jsdoc.ts render --input docs/.generated/client-api.json --config docs/api/client.config.json --output docs/api/client",
+    "docs:map-api": "tsx bin/extract-jsdoc.ts extract --package @rpgjs/map-api --entry packages/server/src/rooms,packages/common/src/rooms --output docs/.generated/map-api.json && tsx bin/extract-jsdoc.ts render --input docs/.generated/map-api.json --config docs/api/map.config.json --output docs/api/map",
+    "docs:player-api": "tsx bin/extract-jsdoc.ts extract --package @rpgjs/server --entry packages/server/src --output docs/.generated/server-api.json && tsx bin/extract-jsdoc.ts render --input docs/.generated/server-api.json --config docs/api/player.config.json --output docs/api/player",
     "release": "bumpp package.json packages/*/package.json --all",
     "rpgjs:version": "tsx bin/version.ts",
     "rpgjs:publish": "pnpm -r publish --publish-branch v5 --no-git-checks --access public --force",
@@ -34,6 +38,8 @@
     "@changesets/cli": "^2.29.8",
     "@types/node": "^25.0.0",
     "jsdom": "^27.3.0",
+    "ts-morph": "^27.0.2",
+    "typescript": "^5.9.3",
     "vite": "^7.2.7",
     "vitest": "^4.0.15"
   }

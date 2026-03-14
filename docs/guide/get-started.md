@@ -1,65 +1,42 @@
 ---
-title: "Get Started"
-description: "Guide for Get Started in RPGJS."
+title: "Getting Started"
+description: "Understand what RPGJS gives you before building your first game."
 ---
 
-# Get Started
+# Getting Started
 
-## What is RPGJS?
+RPGJS is a TypeScript framework for building browser RPGs and MMORPGs with the same core architecture.
 
-RPGJS was created several years ago, with the aim of creating an RPG on the browser. For this, the framework uses HTML5 Canvas. However, it was not possible to make only RPG. Currently, the version of RPGJS allows you to create an RPG or an MMORPG at the same time.
+The default stack is:
 
-## Technology
+- TypeScript for game code
+- Vite for dev and build
+- CanvasEngine for rendering
+- RPGJS server and client packages for gameplay and networking
 
-- Typescript v5
-- ViteJS v7+ (for compilation)
-- NodeJS v24+ (for server)
-- CanvasEngine v2 (for rendering, based on PixiJS)
+## RPG or MMORPG
 
-## Compatibility
+With the same project structure, you can run:
 
-**Client-Side**
+- a standalone RPG with `provideRpg(startServer)`
+- an MMORPG with `provideMmorpg()`
 
-- Google Chrome
-- Firefox
-- Edge (only Webkit version)
-- Brave
+That is why the starter contains both `client.ts` and `standalone.ts`.
 
-> Warning, the game is not compatible with Internet Explorer.
+## Recommended learning path
 
-## Installation
+- [Quick Start](/guide/quick-start)
+- [Structure](/guide/structure)
+- [Create your first map](/guide/create-your-first-map)
+- [Create hero in map](/guide/create-hero-in-map)
+- [Create spritesheet](/guide/create-spritesheet)
+- [Create a world](/guide/create-world)
+- [Create an event](/guide/create-event)
+- [Create database](/guide/create-database)
+- [Create sounds](/guide/create-sounds)
 
-**For MMORPG**:
+## Browser support
 
-```bash
-npx degit rpgjs/starter my-rpg-game
-cd my-rpg-game
-npm install
-npm run dev
-```
+The client targets modern browsers such as Chrome, Firefox, Edge, and Brave.
 
-And open a browser on `http://localhost:5173`
-
- > To change the port: `PORT=4000 npm run dev`. Then, you can go to port 4000
-
-**For RPG**:
-
-The same line as above but start the development line with `RPG_TYPE` environment variable:
-
-`RPG_TYPE=rpg npm run dev`
-
-Go to `http://localhost:5173`
-
-> To change the port: `PORT=4000 RPG_TYPE=rpg npm run dev`
-
-<Tip>
-**For Windows**
-To use the environment variables, it is different from Linux
-
-So use the package cross-env
-
-```bash
-npm install --save-dev cross-env
-npx cross-env RPG_TYPE=rpg npm run dev
-```
-</Tip>
+Internet Explorer is not supported.

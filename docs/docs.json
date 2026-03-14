@@ -13,39 +13,54 @@
         "tab": "Guide",
         "groups": [
           {
-            "group": "Getting Started",
+            "group": "Quick Start",
             "pages": [
               "index",
+              "guide/quick-start",
               "guide/get-started",
-              "guide/create-module",
-              "guide/testing"
+              "guide/structure",
+              "guide/create-your-first-map",
+              "guide/create-hero-in-map",
+              "guide/create-spritesheet",
+              "guide/create-world",
+              "guide/create-event",
+              "guide/create-database",
+              "guide/create-sounds"
             ]
           },
           {
-            "group": "Guides",
+            "group": "Maps & Rendering",
             "pages": [
+              "tiled/index",
+              "advanced/provide-load-map",
               "guide/create-shape",
-              "guide/create-movement",
               "guide/display-animations",
+              "guide/spritesheets",
+              "guide/weather"
+            ]
+          },
+          {
+            "group": "Gameplay",
+            "pages": [
+              "guide/create-movement",
+              "guide/move-routes",
               "guide/event-modes",
               "guide/items",
-              "guide/move-routes",
               "guide/save-load",
               "guide/sounds",
-              "guide/sprite-components",
-              "guide/spritesheets",
               "guide/synchronization",
-              "guide/weather",
-              "guide/world-maps",
               "guide/battle-ai",
-              "guide/prebuilt-components/index",
-              "guide/prebuilt-components/light-halo",
-              "guide/gui/attach-gui"
+              "guide/testing",
+              "guide/create-module"
             ]
           },
           {
             "group": "GUI",
             "pages": [
+              "guide/sprite-components",
+              "guide/prebuilt-components/index",
+              "guide/prebuilt-components/light-halo",
+              "guide/gui/attach-gui",
               "gui/title-screen",
               "gui/dialog-box",
               "gui/hud",
@@ -57,12 +72,10 @@
           {
             "group": "Advanced",
             "pages": [
-              "advanced/provide-load-map",
               "advanced/mmorpg-entries",
               "advanced/node-server-production",
               "advanced/latency-simulation",
-              "advanced/packet-loss-simulation",
-              "tiled/index"
+              "advanced/packet-loss-simulation"
             ]
           }
         ]
@@ -74,6 +87,42 @@
             "group": "Overview",
             "pages": [
               "api/index"
+            ]
+          },
+          {
+            "group": "Player API",
+            "pages": [
+              "api/player/index",
+              "api/player/common-commands",
+              "api/player/components",
+              "api/player/parameter-commands",
+              "api/player/class-commands",
+              "api/player/gold-commands",
+              "api/player/state-commands",
+              "api/player/element-commands",
+              "api/player/item-commands",
+              "api/player/skill-commands",
+              "api/player/variable-commands",
+              "api/player/move-commands",
+              "api/player/gui-commands",
+              "api/player/effect-commands",
+              "api/player/battle-commands"
+            ]
+          },
+          {
+            "group": "Map API",
+            "pages": [
+              "api/map/index",
+              "api/map/rpg-map",
+              "api/map/world-maps",
+              "api/map/map-types"
+            ]
+          },
+          {
+            "group": "Client API",
+            "pages": [
+              "api/client/index",
+              "api/client/rpg-client-engine"
             ]
           },
           {
@@ -99,17 +148,6 @@
             "pages": [
               "studio/index",
               "studio/blocks-runtime"
-            ]
-          },
-          {
-            "group": "Internal",
-            "expanded": false,
-            "pages": [
-              "internal/README",
-              "internal/maps",
-              "internal/mmorpg-map-sync",
-              "internal/event-modes-architecture",
-              "internal/snapshots"
             ]
           }
         ]

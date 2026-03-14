@@ -20,7 +20,7 @@ The documentation is organized into three tabs:
 ## Quick start
 
 ```bash
-npx degit rpgjs/starter my-rpg-game
+npx degit rpgjs/starter#v5 my-rpg-game
 cd my-rpg-game
 npm install
 npm run dev
@@ -37,9 +37,11 @@ Open `http://localhost:5173`.
 
 ## Next steps
 
-- [Get started](/guide/get-started)
+- [Quick Start](/guide/quick-start)
+- [Getting Started](/guide/get-started)
+- [Structure](/guide/structure)
+- [Create your first map](/guide/create-your-first-map)
 - [API overview](/api/index)
 - [Studio overview](/studio/index)
-- [World maps guide](/guide/world-maps)
 - [Hooks reference](/hooks/client-engine-hooks)
 - [GitHub repository](https://github.com/RSamaium/RPG-JS)

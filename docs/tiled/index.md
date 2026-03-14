@@ -7,6 +7,12 @@ description: "Guide for Using TiledMap with RPG-JS in RPGJS."
 
 TiledMap integration allows you to use maps created with the [Tiled Map Editor](https://www.mapeditor.org/) in your RPG-JS games. This provides a visual way to design your game maps with layers, tilesets, collision detection, and interactive objects.
 
+<Info>
+Use `@rpgjs/tiledmap` when you want to build maps with Tiled Map Editor.
+
+If you want your own renderer or your own map format, use [Custom map rendering with provideLoadMap](/advanced/provide-load-map).
+</Info>
+
 ## Installation
 
 First, install the TiledMap package:

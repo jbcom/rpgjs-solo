@@ -7,7 +7,14 @@ packages/common/types
 docs/api/*
 docs/others/*
 !docs/api/readme.md
+!docs/api/player/
+!docs/api/player/*.md
+!docs/api/map/
+!docs/api/map/*.md
+!docs/api/client/
+!docs/api/client/*.md
 !docs/others/readme.md
+docs/.generated/
 cache
 packages/**/browser
 vitest.config.ts.timestamp*

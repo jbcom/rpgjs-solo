@@ -80,6 +80,7 @@ export interface IVariableManager {
    * 
    * @param key - The variable identifier
    * @param val - The value to store
+   * @memberof VariableManager
    */
   setVariable(key: string, val: any): void;
 

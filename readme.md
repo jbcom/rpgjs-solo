@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/github/commit-activity/m/RSamaium/RPG-JS" alt="Activity">
 </p>
 
-# RPG JS v5 [wip] : Create RPG and MMORPG in your browser
+# RPG JS v5 Beta : Create RPG and MMORPG in your browser
 
 RPG JS is a versatile TypeScript framework meticulously designed to empower developers in the creation of both traditional Role-Playing Games (RPGs) and immersive Massively Multiplayer Online Role-Playing Games (MMORPGs). Our primary objective is to offer a seamless development experience where your codebase remains consistent, regardless of the game's nature.
 
@@ -14,22 +14,12 @@ With RPG JS, we aspire to provide developers with a robust foundation that adapt
 ## WebSite and Documentation
 
 - Website: [https://rpgjs.dev](https://rpgjs.dev)
-- Documentation: [https://docs.rpgjs.dev](https://docs.rpgjs.dev)
-
-## Demo 
-
-[Demo](https://demo.rpgjs.dev)
-
-![Demo](/docs/demo.png)
-
-## Resources
-
-- Use LPC (Liberated Pixel Cup) Spritesheets: https://github.com/dominx99/rpgjs-tutorial#lpc-liberated-pixel-cup
+- Documentation: [https://v5.rpgjs.dev](https://docs.rpgjs.dev)
 
 ## Getting Started
 
 ```bash
-npx degit rpgjs/starter my-rpg-game
+npx degit rpgjs/starter#v5 my-rpg-game
 cd my-rpg-game
 npm install
 npm run dev
@@ -39,22 +29,29 @@ Then go to port localhost:3000
 
 ## Features
 
-| Feature                        | Description                                                                                         |
-|--------------------------------|-----------------------------------------------------------------------------------------------------|
-| 🌟 Create Events                | Build NPCs, monsters, and more to shape your game's storyline.                                      |
-| 🌎 Tiled Map Editor             | Craft intricate game worlds with multiple layers, shapes, and collisions.                         |
-| 🎨 Customize Your Hero          | Personalize your hero's appearance, animations, and attributes.                                      |
-| 🖥️ WebGL Rendering              | Enjoy high-performance game rendering with WebGL and PixiJS.                                        |
-| ⚙️ MMORPG Performance           | Optimize for multiple players with zone-based processing and client-side prediction.              |
-| 🚀 Designed for Scaling         | Utilize Agones and Kubernetes to scale your game for thousands of players.                         |
-| 📱 Cross-Platform Gaming        | Play on mobile, gamepad, or keyboard for versatile gaming experiences.                               |
-| 🌐 Using Vue.js for UI           | Leverage Vue.js for user interfaces, including dialog boxes and menus.                                |
-| 💻 Code with TypeScript         | Develop with TypeScript for enhanced code structure and clarity.                                    |
-| 📜 RPG-Focused API              | Simplify RPG development with an intuitive API for in-game actions.                                  |
-| 🔄 Same Code: MMORPG or RPG     | Create both MMORPGs and traditional RPGs using the same codebase.                                    |
-| 🧩 Modular                      | Expand functionality with ease through a modular design.                                            |
-| 🧪 Unit Tests                   | Ensure game stability and reliability with built-in unit testing.                                    |
-| 📦 And Other Plugins            | Enhance your game with additional features like chat, title screens, and more.                      |
+| Feature | Description |
+|---|---|
+| 🔄 One Codebase for RPG and MMORPG | Build a single-player RPG or a full MMORPG with the same architecture and gameplay code. |
+| 🚀 Scalability-First MMORPG Design | Each map can run on a different server. When a player moves to another map, the client disconnects from the current server and reconnects to the next one, enabling large-scale worlds and high player counts. |
+| 🗺️ Map-Agnostic Architecture | RPG JS does not lock you into one map format or renderer. You can build your own map pipeline, while official packages already support Tiled Map Editor. |
+| 📱 Cross-Platform Input | Support mobile controls, gamepads, and keyboard inputs for flexible play across devices. |
+| 🧩 CanvasEngine UI System | Build UI with CanvasEngine using graphical or DOM-based components, with Vue.js compatibility when needed. |
+| ⚡ Reactive by Nature | Core engine properties are reactive on both client and server, with signals and side effects built into the programming model. |
+| 🏗️ Dependency Injection | Override services and classes depending on the environment or the type of game, making the engine highly extensible. |
+| ⚙️ Vite-Powered Workflow | Development and build are based on Vite. Add the `rpgjs()` plugin and use a modern toolchain out of the box. |
+| 🧪 Vitest Testing | Write unit tests with Vitest to validate gameplay logic and keep your project stable over time. |
+| 💻 TypeScript-First | Develop with TypeScript for stronger structure, safer refactoring, and clearer game code. |
+| 🛡️ RPG-Focused Physics | Use a built-in physics library designed for RPG needs, including collisions, interactions, and map-aware movement. |
+| ⚔️ Action Battle System | The engine includes an action RPG combat system where an event can become an enemy. |
+| 🖼️ Built-In GUI Screens | Start faster with prebuilt interfaces such as title screen, game over, dialog box, HUD, main menu, shop, and save/load screens. |
+| 🎨 RPG UI Styling | Customize the provided CSS library made specifically for RPG interfaces. |
+| 💾 Agnostic Save System | Decide how data is saved and loaded: local storage, API calls, external services, or your own persistence layer. |
+| 🌐 Agnostic Server Stack | Use the backend you want behind RPG JS, including Express, Fastify, Cloudflare Workers, or custom server adapters. |
+| 🌍 Shared or Scenario Events | Use `shared` mode when the world state must be global, such as enemies, public switches, or moving NPCs. Use `scenario` mode when each player needs personal progression, such as private chests, puzzles, or solo cutscenes. |
+| 🏃 Advanced Movement Strategies | Add rich movement behaviors to characters: linear movement, dash, knockback, path following, oscillation, AI pathfinding, ice movement, and projectile movement. |
+| 🏢 RPGJS Studio Integration | Connect your game to the RPGJS Studio backend and extend your production workflow. |
+| 🔄 Live MMORPG Map Updates | In MMORPG mode, update maps and events through a request without restarting the server. |
+| 🌦️ World Effects and Atmosphere | Add weather, animations, day/night cycles, light halos, and other visual world effects. |
 
 ## Contribute to developments
 

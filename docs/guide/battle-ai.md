@@ -1,68 +1,272 @@
 ---
-title: "Battle AI System"
-description: "Guide for Battle AI System in RPGJS."
+title: "Action Battle System"
+description: "Use the real-time action battle AI system for RPGJS enemies."
 ---
 
-# Battle AI System
+# Action Battle System
 
-The RPGJS Battle AI system lets events behave like enemies: detect players, move, attack, and react to damage. This guide covers setup and usage with the current `BattleAi` API.
+Advanced real-time action combat AI system for RPGJS.
 
-## Overview
+The AI controller manages **behavior only**. All stats, HP, SP, skills, items, classes, and states are configured with the standard RPGJS API.
 
-What you get out of the box:
+## Features
 
-- Vision detection and target acquisition
-- Pathing toward a target
-- Automatic attacks (skills or hitboxes)
-- Hit reactions (damage, knockback, death cleanup)
-- Optional patrols and group behavior
+- State machine AI with `Idle`, `Alert`, `Combat`, `Flee`, and `Stunned`
+- Multiple enemy types: `Aggressive`, `Defensive`, `Ranged`, `Tank`, `Berserker`
+- Attack patterns: `Melee`, `Combo`, `Charged`, `Zone`, `DashAttack`
+- Skill support with standard RPGJS skills
+- Dodge and counter-attack behaviors
+- Group behavior and waypoint patrols
+- Knockback driven by weapon configuration
+- Hook system with `onBeforeHit` and `onAfterHit`
+
+## Installation
+
+```bash
+npm install @rpgjs/action-battle
+```
+
+## Quick Start
+
+```ts
+import { EventMode, ATK, PDEF, MAXHP } from "@rpgjs/server";
+import { provideActionBattle, BattleAi, EnemyType } from "@rpgjs/action-battle/server";
+
+function GoblinEnemy() {
+  return {
+    name: "Goblin",
+    mode: EventMode.Scenario,
+    onInit() {
+      this.setGraphic("goblin");
+
+      this.hp = 80;
+      this.param[MAXHP] = 80;
+      this.param[ATK] = 15;
+      this.param[PDEF] = 5;
+
+      new BattleAi(this, {
+        enemyType: EnemyType.Aggressive
+      });
+    }
+  };
+}
+```
 
 ## Enable the module
 
-Register the action battle module in your server providers:
+Register the module on the server:
 
 ```ts
+import { createServer } from "@rpgjs/server";
 import { provideActionBattle } from "@rpgjs/action-battle/server";
 
 export default createServer({
   providers: [
-    provideActionBattle(),
+    provideActionBattle()
   ]
 });
 ```
 
-This module wires the default player attack input and forwards vision hooks to AIs.
+## Configure stats with the standard RPGJS API
 
-## Create an AI event
+The AI uses the event's existing data.
 
-Attach `BattleAi` in your event `onInit`:
+### Health and resources
 
 ```ts
-import { BattleAi, EnemyType, AttackPattern } from "@rpgjs/action-battle/server";
-import { MAXHP, ATK, PDEF } from "@rpgjs/server";
+this.hp = 100;
+this.param[MAXHP] = 100;
+this.sp = 50;
+this.param[MAXSP] = 50;
+```
 
-export function Goblin() {
+### Parameters
+
+```ts
+import { ATK, PDEF, SDEF } from "@rpgjs/server";
+
+this.param[ATK] = 20;
+this.param[PDEF] = 10;
+this.param[SDEF] = 8;
+```
+
+### Skills
+
+```ts
+import { Fireball, Heal } from "./database/skills";
+
+this.learnSkill(Fireball);
+this.learnSkill(Heal);
+```
+
+### Items and equipment
+
+```ts
+import { Sword, Shield, Potion } from "./database/items";
+
+this.addItem(Potion, 3);
+this.equip(Sword);
+this.equip(Shield);
+```
+
+### Classes
+
+```ts
+import { WarriorClass } from "./database/classes";
+
+this.setClass(WarriorClass);
+```
+
+### States
+
+```ts
+import { PoisonState } from "./database/states";
+
+this.addState(PoisonState);
+```
+
+## AI configuration
+
+All AI options are optional:
+
+```ts
+new BattleAi(event, {
+  enemyType: EnemyType.Aggressive,
+  attackSkill: Fireball,
+  attackCooldown: 1000,
+  visionRange: 150,
+  attackRange: 60,
+  dodgeChance: 0.2,
+  dodgeCooldown: 2000,
+  fleeThreshold: 0.2,
+  attackPatterns: [
+    AttackPattern.Melee,
+    AttackPattern.Combo,
+    AttackPattern.DashAttack
+  ],
+  patrolWaypoints: [
+    { x: 100, y: 100 },
+    { x: 300, y: 100 }
+  ],
+  groupBehavior: true,
+  onDefeated: (event, attacker) => {
+    const name = attacker?.name?.() ?? "Unknown";
+    console.log(`${event.name()} was defeated by ${name}!`);
+  }
+});
+```
+
+## Enemy types
+
+Enemy types affect behavior, not stats:
+
+| Type | Attack Speed | Dodge | Behavior |
+|---|---|---|---|
+| Aggressive | Fast | Low | Rushes player |
+| Defensive | Slow | High | Counter-attacks |
+| Ranged | Medium | Medium | Keeps distance |
+| Tank | Slow | None | Stands ground |
+| Berserker | Variable | Low | Faster when hurt |
+
+## Attack patterns
+
+| Pattern | Description |
+|---|---|
+| Melee | Single attack |
+| Combo | 2-3 rapid attacks |
+| Charged | Wind-up, stronger attack |
+| Zone | 360° area attack |
+| DashAttack | Rush toward target then attack |
+
+## Use skills for attacks
+
+```ts
+import { Skill } from "@rpgjs/database";
+
+@Skill({
+  name: "Slash",
+  spCost: 5,
+  power: 25,
+  hitRate: 0.95
+})
+export class Slash {}
+
+onInit() {
+  this.hp = 100;
+  this.sp = 50;
+  this.learnSkill(Slash);
+
+  new BattleAi(this, {
+    attackSkill: Slash
+  });
+}
+```
+
+## Examples
+
+### Basic enemy
+
+```ts
+function Goblin() {
   return {
     name: "Goblin",
     onInit() {
       this.setGraphic("goblin");
+      this.hp = 50;
+      this.param[MAXHP] = 50;
+      this.param[ATK] = 10;
 
-      // Stats
-      this.hp = 120;
-      this.param[MAXHP] = 120;
+      new BattleAi(this);
+    }
+  };
+}
+```
+
+### Mage with skills
+
+```ts
+function DarkMage() {
+  return {
+    name: "Dark Mage",
+    onInit() {
+      this.setGraphic("mage");
+      this.hp = 60;
+      this.sp = 100;
+      this.param[MAXHP] = 60;
+      this.param[MAXSP] = 100;
+      this.param[ATK] = 25;
+
+      this.learnSkill(Fireball);
+
+      new BattleAi(this, {
+        enemyType: EnemyType.Ranged,
+        attackSkill: Fireball,
+        visionRange: 200
+      });
+    }
+  };
+}
+```
+
+### Patrol guard
+
+```ts
+function PatrolGuard() {
+  return {
+    name: "Guard",
+    onInit() {
+      this.setGraphic("guard");
+      this.hp = 80;
+      this.param[MAXHP] = 80;
       this.param[ATK] = 15;
-      this.param[PDEF] = 6;
 
-      // AI
-      this.battleAi = new BattleAi(this, {
-        enemyType: EnemyType.Aggressive,
-        visionRange: 160,
-        attackRange: 55,
-        attackCooldown: 800,
-        attackPatterns: [
-          AttackPattern.Melee,
-          AttackPattern.Combo,
-          AttackPattern.DashAttack
+      new BattleAi(this, {
+        enemyType: EnemyType.Defensive,
+        patrolWaypoints: [
+          { x: 100, y: 150 },
+          { x: 300, y: 150 },
+          { x: 300, y: 350 },
+          { x: 100, y: 350 }
         ]
       });
     }
@@ -70,95 +274,30 @@ export function Goblin() {
 }
 ```
 
-## BattleAi options
+## Player combat
 
-Use these options when creating the AI:
-
-```ts
-new BattleAi(event, {
-  enemyType: EnemyType.Aggressive,
-  visionRange: 150,
-  attackRange: 50,
-  attackCooldown: 900,
-  dodgeChance: 0.3,
-  dodgeCooldown: 2000,
-  fleeThreshold: 0.2,
-  attackSkill: FireSkill,
-  attackPatterns: [
-    AttackPattern.Melee,
-    AttackPattern.Combo,
-    AttackPattern.Charged
-  ],
-  patrolWaypoints: [{ x: 100, y: 120 }, { x: 160, y: 200 }],
-  groupBehavior: true,
-  moveToCooldown: 450,
-  retreatCooldown: 700,
-  behavior: {
-    baseScore: 55,
-    updateInterval: 450,
-    minStateDuration: 700,
-    assaultThreshold: 70,
-    retreatThreshold: 30
-  },
-  onDefeated(event, attacker) {
-    // drop loot, spawn effects, etc.
-  }
-});
-```
-
-### Notes on key options
-
-- `enemyType`: Applies default tuning for aggressive/defensive/ranged/tank/berserker.
-- `attackSkill`: If set, the AI uses this skill for melee/charged attacks; otherwise it uses hitboxes.
-- `attackPatterns`: Restricts which patterns the AI can pick.
-- `patrolWaypoints`: Enables patrol behavior while idle.
-- `groupBehavior`: Makes nearby AIs form a loose ring around the target.
-- `moveToCooldown` / `retreatCooldown`: Throttles `moveTo` and retreat dashes to avoid spam.
-- `behavior`: Enables the behavior gauge (see below). If omitted, the AI uses the classic logic.
-- `onDefeated`: Called with the defeated event and the player who landed the killing blow (if available).
-
-## Behavior gauge (optional)
-
-When `behavior` is set, the AI uses a score from 0–100 to switch between:
-
-- **assault**: closes distance and fights aggressively
-- **tactical**: keeps an optimal range and repositions
-- **retreat**: flees briefly, then may re-engage
-
-The score is influenced by HP percentage, recent damage, distance to target, and nearby allies. Thresholds and timings are configurable via the `behavior` object.
-
-## Player attacks vs AI
-
-The module already provides a default player attack handler. If you want a custom hit flow, use `applyPlayerHitToEvent`:
+The module handles player attacks via the `action` input:
 
 ```ts
-import { applyPlayerHitToEvent } from "@rpgjs/action-battle/server";
-
-const result = applyPlayerHitToEvent(player, event, {
-  onBeforeHit(hit) {
-    hit.knockbackForce *= 1.5;
-    return hit;
-  },
-  onAfterHit(hit) {
-    if (hit.defeated) {
-      player.gold += 10;
-    }
-  }
-});
+// Player presses action key -> attack animation + hitbox
+// Hitbox detects enemy -> applyPlayerHitToEvent(player, event)
+// Damage uses RPGJS formula: target.applyDamage(attacker)
 ```
 
-## Debugging
+## Knockback system
 
-Enable debug logs:
+Knockback force is driven by the equipped weapon's `knockbackForce` property:
 
 ```ts
-import { AiDebug } from "@rpgjs/action-battle/server";
-
-AiDebug.enabled = true;
-AiDebug.filterEventId = "goblin-1"; // optional
-AiDebug.categories = ["state", "movement", "attack"];
+const Warhammer = {
+  id: "warhammer",
+  name: "War Hammer",
+  atk: 30,
+  knockbackForce: 100,
+  _type: "weapon" as const
+};
 ```
 
-## Example in the sample server
+## Reference source
 
-See `sample/src/server.ts` for a full example with `BattleAi` configuration.
+This guide is based on the package documentation in [packages/action-battle/README.md](/home/samuel/www/RPG-JS/packages/action-battle/README.md).
