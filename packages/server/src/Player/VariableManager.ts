@@ -8,6 +8,11 @@ import { type } from "@signe/sync";
  * Provides variable management capabilities to any class. Variables are key-value
  * pairs that can store any type of data associated with the player, such as
  * quest progress, game flags, inventory state, and custom game data.
+ *
+ * Player variables have two main roles:
+ *
+ * 1. Persist player-specific state so it can be restored from saves.
+ * 2. Carry that state across maps and map servers through the player snapshot.
  * 
  * @param Base - The base class to extend with variable management
  * @returns Extended class with variable management methods
@@ -72,11 +77,19 @@ export function WithVariableManager<TBase extends PlayerCtor>(Base: TBase) {
  * of the VariableManager mixin.
  */
 export interface IVariableManager {
-  /** Map storing all player variables */
+  /**
+   * Map storing all player variables.
+   *
+   * These values belong to the player, are persisted, and travel with the
+   * player snapshot when switching maps or servers.
+   */
   variables: Map<string, any>;
 
   /**
-   * Assign a variable to the player
+   * Assign a variable to the player.
+   *
+   * Use player variables for quest flags, per-player event state, and any value
+   * that must survive saves and map transitions.
    * 
    * @param key - The variable identifier
    * @param val - The value to store

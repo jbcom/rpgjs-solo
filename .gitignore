@@ -11,6 +11,7 @@ docs/others/*
 !docs/api/player/*.md
 !docs/api/map/
 !docs/api/map/*.md
+!docs/api/*.config.json
 !docs/api/client/
 !docs/api/client/*.md
 !docs/others/readme.md

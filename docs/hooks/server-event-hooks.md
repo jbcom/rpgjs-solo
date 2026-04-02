@@ -30,7 +30,9 @@ export default defineModule({
 
 ### onInit
 
-**Description:** Called when an event is initialized on the map
+**Description:** Called when an event is initialized on the map.
+
+Use `onInit` for base event setup that does not depend on a change-detection cycle yet: initial graphic, movement route, speed, direction, attached shapes, or default metadata.
 
 **Parameters:**
 - `event: RpgEvent` - The event instance
@@ -169,7 +171,9 @@ const event: RpgEventHooks = {
 
 ### onChanges
 
-**Description:** Called when an event's properties change
+**Description:** Called during the change-detection cycle for a player.
+
+This hook is the reactive part of event design. When player state changes, especially player variables, RPGJS can re-run the cycle and call `onChanges(event, player)` so the event can recompute its state for that player. You can also force that cycle with `player.syncChanges()`.
 
 **Parameters:**
 - `event: RpgEvent` - The event instance
@@ -179,7 +183,31 @@ const event: RpgEventHooks = {
 ```ts
 const event: RpgEventHooks = {
     onChanges(event: RpgEvent, player: RpgPlayer) {
-        
+        const isOpened = player.getVariable('chest-opened')
+        event.setGraphic(isOpened ? 'chest-opened' : 'chest-closed')
     }
 }
 ```
+
+## Designing `onInit` and `onChanges` together
+
+In practice, these two hooks often share similar logic:
+
+- `onInit` sets a correct initial state when the event appears
+- `onChanges` keeps that state synchronized with player data later
+
+Typical example: a chest.
+
+```ts
+const event: RpgEventHooks = {
+    onInit(event: RpgEvent) {
+        event.setGraphic('chest-closed')
+    },
+    onChanges(event: RpgEvent, player: RpgPlayer) {
+        const isOpened = player.getVariable('chest-opened')
+        event.setGraphic(isOpened ? 'chest-opened' : 'chest-closed')
+    }
+}
+```
+
+Use player variables for this kind of state, because they persist with the player and travel with the player snapshot across saves and map transfers.

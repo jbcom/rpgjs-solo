@@ -1,0 +1,39 @@
+{
+  "title": "Map API",
+  "description": "Reference for RpgMap, map controls, and event hooks used by created events.",
+  "basePath": "api/map",
+  "index": {
+    "title": "Map API",
+    "description": "Reference for RpgMap, world map helpers, controls, and event hooks used by created events.",
+    "intro": "This reference is generated from the JSDoc comments in `packages/server/src/rooms/map.ts` and `packages/common/src/rooms/WorldMaps.ts`."
+  },
+  "sections": [
+    {
+      "title": "RpgMap",
+      "description": "Reference for the `RpgMap` class.",
+      "output": "rpg-map.md",
+      "ownerNames": ["RpgMap"],
+      "sourceFiles": ["packages/server/src/rooms/map.ts"]
+    },
+    {
+      "title": "World Maps",
+      "description": "Reference for world map helpers.",
+      "output": "world-maps.md",
+      "sourceFiles": ["packages/common/src/rooms/WorldMaps.ts"]
+    },
+    {
+      "title": "Map Types",
+      "description": "Supporting interfaces related to map controls.",
+      "output": "map-types.md",
+      "ownerNames": ["Controls"],
+      "sourceFiles": ["packages/server/src/rooms/map.ts"]
+    },
+    {
+      "title": "Event hooks",
+      "description": "Hooks for events created as plain objects, as shown in the create-event guide.",
+      "output": "hooks.md",
+      "ownerNames": ["EventHooks"],
+      "sourceFiles": ["packages/server/src/rooms/map.ts"]
+    }
+  ]
+}

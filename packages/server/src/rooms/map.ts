@@ -93,24 +93,42 @@ const SAFE_MAP_HEIGHT = 1000;
 /**
  * Interface representing hook methods available for map events
  * 
- * These hooks are triggered at specific moments during the event lifecycle
+ * These hooks are triggered at specific moments during the event lifecycle.
+ *
+ * `onInit()` is intended for base event setup when the event instance is created.
+ * At this stage, the event is not reacting to a specific player yet.
+ *
+ * `onChanges(player)` is reactive. It is called during the change-detection cycle,
+ * for example after player state changes such as variable updates or when
+ * `player.syncChanges()` is executed manually.
  */
 export interface EventHooks {
-  /** Called when the event is first initialized */
+  /**
+   * Called when the event is first initialized.
+   *
+   * Use this hook for default setup that does not depend on a player interaction,
+   * such as setting the initial graphic, speed, or movement route.
+   */
   onInit?: () => void;
-  /** Called when the event properties change */
+  /**
+   * Called during the change-detection cycle for the current player.
+   *
+   * Use this hook to recompute the event state from player data, especially
+   * player variables. This is useful for reactive visuals such as an opened
+   * chest, a hidden door, or a conditional NPC graphic.
+   */
   onChanges?: (player: RpgPlayer) => void;
   /** Called when a player performs an action on this event */
   onAction?: (player: RpgPlayer) => void;
   /** Called when a player touches this event */
   onPlayerTouch?: (player: RpgPlayer) => void;
-  /** Called when a player enters a shape */
+  /** Called when a player enters a shape attached to the event */
   onInShape?: (zone: RpgShape, player: RpgPlayer) => void;
-  /** Called when a player exits a shape */
+  /** Called when a player exits a shape attached to the event */
   onOutShape?: (zone: RpgShape, player: RpgPlayer) => void;
-  /** Called when a player is detected entering a shape */
+  /** Called when a player is detected entering a detection shape attached to the event */
   onDetectInShape?: (player: RpgPlayer, shape: RpgShape) => void;
-  /** Called when a player is detected exiting a shape */
+  /** Called when a player is detected exiting a detection shape attached to the event */
   onDetectOutShape?: (player: RpgPlayer, shape: RpgShape) => void;
 }
 

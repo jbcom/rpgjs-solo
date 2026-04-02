@@ -1,11 +1,11 @@
 ---
 title: "Map Types"
-description: "Supporting interfaces related to map controls and event hooks."
+description: "Supporting interfaces related to map controls."
 ---
 
 # Map Types
 
-Supporting interfaces related to map controls and event hooks.
+Supporting interfaces related to map controls.
 
 ## Members
 
@@ -14,14 +14,6 @@ Supporting interfaces related to map controls and event hooks.
 - [maxInputsPerTick](#maxinputspertick)
 - [maxTimeDelta](#maxtimedelta)
 - [minTimeBetweenInputs](#mintimebetweeninputs)
-- [onAction](#onaction)
-- [onChanges](#onchanges)
-- [onDetectInShape](#ondetectinshape)
-- [onDetectOutShape](#ondetectoutshape)
-- [onInit](#oninit)
-- [onInShape](#oninshape)
-- [onOutShape](#onoutshape)
-- [onPlayerTouch](#onplayertouch)
 
 ## enableAntiCheat
 
@@ -91,116 +83,4 @@ Minimum time between inputs in milliseconds
 
 ```ts
 minTimeBetweenInputs: number
-```
-
-## onAction
-
-Called when a player performs an action on this event
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `property`
-- Defined in: `EventHooks`
-
-### Signature
-
-```ts
-onAction: (player: RpgPlayer) => void
-```
-
-## onChanges
-
-Called when the event properties change
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `property`
-- Defined in: `EventHooks`
-
-### Signature
-
-```ts
-onChanges: (player: RpgPlayer) => void
-```
-
-## onDetectInShape
-
-Called when a player is detected entering a shape
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `property`
-- Defined in: `EventHooks`
-
-### Signature
-
-```ts
-onDetectInShape: (player: RpgPlayer, shape: RpgShape) => void
-```
-
-## onDetectOutShape
-
-Called when a player is detected exiting a shape
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `property`
-- Defined in: `EventHooks`
-
-### Signature
-
-```ts
-onDetectOutShape: (player: RpgPlayer, shape: RpgShape) => void
-```
-
-## onInit
-
-Called when the event is first initialized
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `property`
-- Defined in: `EventHooks`
-
-### Signature
-
-```ts
-onInit: () => void
-```
-
-## onInShape
-
-Called when a player enters a shape
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `property`
-- Defined in: `EventHooks`
-
-### Signature
-
-```ts
-onInShape: (zone: RpgShape, player: RpgPlayer) => void
-```
-
-## onOutShape
-
-Called when a player exits a shape
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `property`
-- Defined in: `EventHooks`
-
-### Signature
-
-```ts
-onOutShape: (zone: RpgShape, player: RpgPlayer) => void
-```
-
-## onPlayerTouch
-
-Called when a player touches this event
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `property`
-- Defined in: `EventHooks`
-
-### Signature
-
-```ts
-onPlayerTouch: (player: RpgPlayer) => void
 ```

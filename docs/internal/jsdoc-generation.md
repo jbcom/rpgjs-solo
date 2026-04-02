@@ -14,12 +14,13 @@ The generator has two responsibilities:
 1. Extract documented symbols from a TypeScript package.
 2. Render Markdown pages for Mintlify from a configuration file.
 
-The current first use case is the server-side `Player API`, but the CLI is generic enough to be reused for other packages later.
+The current use cases are the `Player API`, `Map API`, and `Client API`. The CLI is config-driven so it can be reused for other API surfaces later.
 
 ## Files involved
 
 - `bin/extract-jsdoc.ts`: generic extraction and rendering CLI
 - `docs/api/player.config.json`: rendering config for the Player API pages
+- `docs/api/map.config.json`: rendering config for the Map API pages
 - `docs/.generated/server-api.json`: intermediate generated JSON index
 - `docs/api/player/*.md`: generated Markdown pages
 
@@ -99,6 +100,8 @@ For Player API, the sections map to the manager files:
 - `GuiManager`
 - `MoveManager`
 - and the other Player managers
+
+For Map API, the config can also split entries from the same source file into separate pages. For example, `Controls` stays in `Map Types` while `EventHooks` is rendered in a dedicated `Hooks` page.
 
 ## Updating the Player API
 

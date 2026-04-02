@@ -20,9 +20,19 @@ export function ChestEvent() {
     x: 200,
     y: 120,
     onInit() {
-      this.setGraphic("chest");
+      this.setGraphic("chest-closed");
+    },
+    onChanges(player: RpgPlayer) {
+      const isOpened = player.getVariable("chest-1-opened");
+      this.setGraphic(isOpened ? "chest-opened" : "chest-closed");
     },
     async onAction(player: RpgPlayer) {
+      if (player.getVariable("chest-1-opened")) {
+        await player.showText("The chest is already open.");
+        return;
+      }
+
+      player.setVariable("chest-1-opened", true);
       await player.showText("You found a potion.");
     }
   };
@@ -48,11 +58,40 @@ export default defineModule<RpgServer>({
 });
 ```
 
-## Event hooks you will use first
+## Event hooks
 
-- `onInit()` to configure the event
-- `onAction(player)` when the player interacts
+The most common hooks are:
+
+- `onInit()` for base event setup when the instance is created
+- `onChanges(player)` for reactive updates based on player state
+- `onAction(player)` when the player interacts with the event
 - `onPlayerTouch(player)` when the player touches the event
+
+Other hooks are also available for shape-based behaviors:
+
+- `onInShape(zone, player)`
+- `onOutShape(zone, player)`
+- `onDetectInShape(player, shape)`
+- `onDetectOutShape(player, shape)`
+
+See the complete reference in [Event hooks for created events](/api/map/hooks).
+
+## `onInit()` vs `onChanges(player)`
+
+The most important distinction is `onChanges(player)`.
+
+`onInit()` runs when the event instance is created. Use it for default data that is not tied to a specific player interaction yet: a base graphic, speed, direction, or movement route.
+
+`onChanges(player)` runs during the change-detection cycle for that player. When player state changes, especially player variables, RPGJS re-runs this cycle and the event can react to it. You can also trigger it manually with `player.syncChanges()`.
+
+This means that some code can legitimately appear in both hooks:
+
+- `onInit()` gives the event a correct initial state
+- `onChanges(player)` keeps that state in sync when the player data changes
+
+For a chest, `onInit()` can set an initial graphic so the chest is immediately visible in the right state. Then `onChanges(player)` can recompute the same condition from a player variable and switch the graphic to opened or closed whenever that variable changes.
+
+Use player variables for this kind of per-player state. They are persisted with the player and are available again after a save, a reconnect, or a map change.
 
 ## Shared or scenario
 
@@ -66,4 +105,3 @@ See [Event modes](/guide/event-modes) for the full behavior.
 ## Next step
 
 Continue with [Create database](/guide/create-database).
-

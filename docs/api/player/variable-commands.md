@@ -1,11 +1,21 @@
 ---
 title: "Variable Commands"
-description: "Store and retrieve arbitrary player variables."
+description: "Store and retrieve player variables that persist across saves and map transfers."
 ---
 
 # Variable Commands
 
-Store and retrieve arbitrary player variables.
+Store and retrieve player variables.
+
+Player variables are not just generic temporary values.
+
+They are primarily used to:
+
+- persist player-specific state for saves
+- keep player state when moving from one map to another
+- transfer that state through the player snapshot, even if the next map is hosted on another server
+
+Use them for quest flags, chest states, dialogue progression, switches, and any per-player value that must survive reconnects and map changes.
 
 ## Members
 
@@ -117,7 +127,9 @@ true if a variable existed and has been removed, false otherwise
 
 ## setVariable
 
-Assign a variable to the player
+Assign a variable to the player.
+
+Use this for player state that must be persisted and restored later, such as quest progression or whether a personal chest has already been opened.
 
 - Source: `packages/server/src/Player/VariableManager.ts`
 - Kind: `method`
@@ -137,7 +149,9 @@ setVariable(key: string, val: any): void
 
 ## variables
 
-Map storing all player variables
+Map storing all player variables.
+
+These values belong to the player, are persisted, and travel with the player snapshot during map changes.
 
 - Source: `packages/server/src/Player/VariableManager.ts`
 - Kind: `property`
