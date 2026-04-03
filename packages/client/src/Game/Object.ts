@@ -9,14 +9,16 @@ const DYNAMIC_COMPONENTS = {
   text: TextComponent,
 }
 
+type Frame = { x: number; y: number; ts: number };
+
 export abstract class RpgClientObject extends RpgCommonPlayer {
-  abstract type: string;
+  abstract _type: string;
   emitParticleTrigger = trigger();
   particleName = signal("");
   animationCurrentIndex = signal(0);
   animationIsPlaying = signal(false);
   _param = signal({});
-  frames: { x: number; y: number; ts: number }[] = [];
+  frames: Frame[] = [];
   graphicsSignals = signal<any[]>([]);
   _component = {} // temporary component memory
   flashTrigger = trigger();
@@ -28,7 +30,10 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     this._frames.observable.subscribe(({ items }) => {
       if (!this.id) return;
       //if (this.id == this.engine.playerIdSignal()!) return;
-      this.frames = [...this.frames, ...items];
+      const nextFrames = items.flatMap((item): Frame[] =>
+        Array.isArray(item) ? item : [item]
+      );
+      this.frames = [...this.frames, ...nextFrames];
     });
 
     this.graphics.observable
@@ -77,10 +82,20 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
       });
   }
 
+  /**
+   * Access the shared client hook registry.
+   *
+   * @returns The hook service used to register and trigger client-side hooks.
+   */
   get hooks() {
     return inject<Hooks>(ModulesToken);
   }
 
+  /**
+   * Access the current client engine instance.
+   *
+   * @returns The active {@link RpgClientEngine} instance.
+   */
   get engine() {
     return inject(RpgClientEngine);
   }
@@ -286,16 +301,32 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     this.animationName.set(animationName);
   }
 
+  /**
+   * Display a registered component animation effect on this object.
+   *
+   * @param id - Identifier of the component animation to play.
+   * @param params - Parameters forwarded to the animation effect.
+   */
   showComponentAnimation(id: string, params: any) {
     const engine = inject(RpgClientEngine);
     engine.getComponentAnimation(id).displayEffect(params, this);
   }
   
+  /**
+   * Check whether this client object represents an event.
+   *
+   * @returns `true` if the object type is `event`, otherwise `false`.
+   */
   isEvent(): boolean {
-    return this.type === 'event';
+    return this._type === 'event';
   }
 
+  /**
+   * Check whether this client object represents a player.
+   *
+   * @returns `true` if the object type is `player`, otherwise `false`.
+   */
   isPlayer(): boolean {
-    return this.type === 'player';
+    return this._type === 'player';
   }
 }

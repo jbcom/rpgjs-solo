@@ -286,7 +286,7 @@
   const keyboardControls = client.globalConfig.keyboardControls;
 
   const visible = computed(() => {
-    if (object.type === 'event') {
+    if (object.isEvent()) {
       return true
     }
     return isConnected()
