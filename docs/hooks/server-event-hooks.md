@@ -94,7 +94,7 @@ const event: RpgEventHooks = {
 **Description:** Called before an event is created, allowing you to modify the event object or return a custom event configuration
 
 **Parameters:**
-- `object: any` - The raw event data from the map
+- `object: any` - The raw event data from the map, typically `{ id?, x?, y?, event }` for positioned events
 - `map: RpgMap` - The map instance where the event will be created
 
 **Returns:**

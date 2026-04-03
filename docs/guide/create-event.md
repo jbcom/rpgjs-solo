@@ -12,13 +12,10 @@ An event is any interactive object on the map: an NPC, a chest, a switch, an ene
 You can define an event as an object with hooks:
 
 ```ts
-import { RpgPlayer } from "@rpgjs/server";
+import { RpgPlayer, type EventDefinition } from "@rpgjs/server";
 
-export function ChestEvent() {
+export function ChestEvent(): EventDefinition {
   return {
-    id: "chest-1",
-    x: 200,
-    y: 120,
     onInit() {
       this.setGraphic("chest-closed");
     },
@@ -52,11 +49,21 @@ export default defineModule<RpgServer>({
   maps: [
     {
       id: "simplemap",
-      events: [ChestEvent()]
+      events: [
+        {
+          id: "chest-1",
+          x: 200,
+          y: 120,
+          event: ChestEvent()
+        }
+      ]
     }
   ]
 });
 ```
+
+`EventDefinition` only describes the event behavior. Map placement fields such as `id`, `x`, and `y` belong to the outer wrapper in `maps[].events`.
+Inside object-based hooks, `this` is typed as `RpgEvent`, so methods like `this.setGraphic()` are inferred correctly by TypeScript.
 
 ## Event hooks
 

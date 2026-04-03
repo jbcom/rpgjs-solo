@@ -1,4 +1,5 @@
 import type { WeatherState } from "@rpgjs/common";
+import type { MapEventDefinition, MapEventPlacement } from "../rooms/map";
 
 export interface MapOptions {
     /** 
@@ -62,11 +63,26 @@ export interface MapOptions {
     * ```ts
     * events: [{ event: NpcEvent, x: 10, y: 30 }]
     * ```
+    *
+    * For object-based events, put the hooks in the `event` property and keep map placement
+    * (`x`, `y`, `id`) at the wrapper level:
+    *
+    * ```ts
+    * events: [{
+    *   x: 200,
+    *   y: 120,
+    *   event: {
+    *     onInit() {
+    *       this.setGraphic('female')
+    *     }
+    *   }
+    * }]
+    * ```
     * 
-    * @prop {Class of RpgEvent[] | { event: Class RpgEvent, x: number, y: number }} [events]
+    * @prop {(MapEventDefinition | MapEventPlacement)[]} [events]
     * @memberof MapData
     * */
-    events?: { event: any, x: number, y: number }[] | any[],
+    events?: (MapEventDefinition | MapEventPlacement)[],
 
     /** 
      * The sounds that will be played when the map is open. Sounds must be defined on the client side. Then, put the name of the sound identifier

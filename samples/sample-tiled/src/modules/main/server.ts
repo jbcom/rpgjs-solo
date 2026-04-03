@@ -1,5 +1,5 @@
 import { defineModule } from "@rpgjs/common";
-import { RpgPlayer, RpgServer } from "@rpgjs/server";
+import { RpgServer } from "@rpgjs/server";
 import { player } from './player'
 import { Npc } from "./event";
 
@@ -8,7 +8,12 @@ export default defineModule<RpgServer>({
   maps: [
     {
       id: 'simplemap',
-      events: [Npc()]
+      events: [{
+        id: 'npc',
+        x: 100,
+        y: 160,
+        event: Npc()
+      }]
     }
   ]
 });

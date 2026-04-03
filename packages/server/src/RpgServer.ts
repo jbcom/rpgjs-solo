@@ -762,7 +762,7 @@ export interface RpgServer {
      * @MapData({
      *      id: 'map',
      *      file: '',
-     *      events: [{ event: Event() }]
+     *      events: [{ x: 100, y: 150, event: Event() }]
      * })
      * class SimpleMap {}
      * 

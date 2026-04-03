@@ -180,7 +180,7 @@ Creates a dynamic event on the map
 
 This method handles both class-based events and object-based events with hooks.
 For class-based events, it creates a new instance of the class.
-For object-based events, it creates a dynamic class that extends RpgPlayer and
+For object-based events, it creates a dynamic class that extends RpgEvent and
 implements the hook methods from the object.
 
 - Source: `packages/server/src/rooms/map.ts`
@@ -202,7 +202,7 @@ createDynamicEvent(eventObj: EventPosOption, options?: CreateDynamicEventOptions
 
 ```ts
 // Using a class-based event
-class MyEvent extends RpgPlayer {
+class MyEvent extends RpgEvent {
   onInit() {
     console.log('Event initialized');
   }

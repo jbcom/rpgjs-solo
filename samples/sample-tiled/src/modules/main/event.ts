@@ -1,10 +1,9 @@
-export function Npc() {
+import type { EventDefinition } from "@rpgjs/server";
+
+export function Npc(): EventDefinition {
     return {
-        id: "npc",
-        x: 200,
-        y: 120,
         onInit() {
             this.setGraphic("female");
-        }
+        },
     }
 }
