@@ -15,6 +15,16 @@ Verify the project first:
 rg -n '"@rpgjs|@rpgjs/' . --glob 'package.json'
 ```
 
+If no local project uses `@rpgjs/*`, read the quick start before doing anything else:
+
+```bash
+curl -fsSL https://v5.rpgjs.dev/guide/quick-start.md
+```
+
+Then install the project by following that page. Do not guess the setup from memory.
+
+After installation, verify again that the scaffold now contains `@rpgjs/*` packages.
+
 Fetch the RPGJS index:
 
 ```bash

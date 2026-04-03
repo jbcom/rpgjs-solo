@@ -1,0 +1,1 @@
+When an API is added on the client-side or server-side, be sure to update the documentation to explain how to use it.
