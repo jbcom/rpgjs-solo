@@ -8,12 +8,16 @@
     "build": "echo 'CSS package - no build needed'"
   },
   "exports": {
-    "./reset.css": "./src/reset.css",
-    "./tokens.css": "./src/tokens.css",
-    "./index.css": "./src/index.css",
-    "./theme-default.css": "./theme-default/theme.css"
+    "./reset.css": "./reset.css",
+    "./tokens.css": "./tokens.css",
+    "./index.css": "./index.css",
+    "./theme-default.css": "./theme-default.css"
   },
   "files": [
+    "index.css",
+    "reset.css",
+    "tokens.css",
+    "theme-default.css",
     "src/",
     "theme-default/"
   ],

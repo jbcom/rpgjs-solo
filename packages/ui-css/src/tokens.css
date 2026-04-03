@@ -1,49 +1,138 @@
 :root {
+  /* Scene */
+  --rpg-ui-bg: #0f172a;
+  --rpg-ui-body-bg: #050816;
+  --rpg-ui-body-background:
+    radial-gradient(circle at 18% 20%, rgba(56, 189, 248, 0.18) 0%, transparent 36%),
+    radial-gradient(circle at 82% 16%, rgba(244, 114, 182, 0.14) 0%, transparent 32%),
+    linear-gradient(180deg, #111827 0%, #050816 100%);
+  --rpg-ui-body-background-size: cover;
+  --rpg-ui-body-background-position: center;
+  --rpg-ui-body-background-attachment: fixed;
+
   /* Colors */
-  --rpg-ui-bg: #000;
-  --rpg-ui-surface: #111;
-  --rpg-ui-border: currentColor;
-  --rpg-ui-border-light: #444;
-  --rpg-ui-border-dark: #000;
-  --rpg-ui-text: #fff;
-  --rpg-ui-text-muted: #888;
-  --rpg-ui-accent: currentColor;
+  --rpg-ui-surface: rgba(15, 23, 42, 0.88);
+  --rpg-ui-surface-light: rgba(30, 41, 59, 0.82);
+  --rpg-ui-surface-overlay: rgba(15, 23, 42, 0.72);
+  --rpg-ui-surface-overlay-strong: rgba(15, 23, 42, 0.92);
+  --rpg-ui-border: rgba(148, 163, 184, 0.3);
+  --rpg-ui-border-light: rgba(255, 255, 255, 0.22);
+  --rpg-ui-border-dark: rgba(2, 6, 23, 0.78);
+  --rpg-ui-text: #f8fafc;
+  --rpg-ui-text-muted: rgba(226, 232, 240, 0.72);
+  --rpg-ui-accent: #38bdf8;
+  --rpg-ui-accent-hover: #7dd3fc;
+  --rpg-ui-accent-active: #0ea5e9;
   --rpg-ui-success: #22c55e;
   --rpg-ui-warning: #f59e0b;
   --rpg-ui-danger: #ef4444;
   --rpg-ui-info: #3b82f6;
+  --rpg-ui-mana: #60a5fa;
+  --rpg-ui-xp: #facc15;
 
   /* Gradients */
   --rpg-ui-gradient-surface: linear-gradient(180deg, var(--rpg-ui-surface) 0%, var(--rpg-ui-bg) 100%);
   --rpg-ui-gradient-accent: linear-gradient(180deg, var(--rpg-ui-accent) 0%, color-mix(in srgb, var(--rpg-ui-accent), black 20%) 100%);
   --rpg-ui-gradient-bar: linear-gradient(90deg, var(--rpg-ui-accent) 0%, color-mix(in srgb, var(--rpg-ui-accent), black 30%) 100%);
+  --rpg-ui-health-gradient: linear-gradient(90deg, #fb7185 0%, #e11d48 100%);
+  --rpg-ui-mana-gradient: linear-gradient(90deg, #60a5fa 0%, #2563eb 100%);
+  --rpg-ui-xp-gradient: linear-gradient(90deg, #facc15 0%, #f59e0b 100%);
+  --rpg-ui-fab-gradient: linear-gradient(135deg, #fb7185 0%, #b91c1c 100%);
 
   /* Shadows */
-  --rpg-ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --rpg-ui-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.6);
-  --rpg-ui-shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.8);
+  --rpg-ui-shadow: 0 8px 24px rgba(2, 6, 23, 0.32);
+  --rpg-ui-shadow-sm: 0 4px 12px rgba(2, 6, 23, 0.22);
+  --rpg-ui-shadow-md: 0 12px 30px rgba(2, 6, 23, 0.32);
+  --rpg-ui-shadow-lg: 0 24px 60px rgba(2, 6, 23, 0.45);
   --rpg-ui-shadow-glow: 0 0 20px var(--rpg-ui-accent);
-  --rpg-ui-shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+  --rpg-ui-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
   /* Typography */
   --rpg-ui-font: system-ui, sans-serif;
+  --rpg-ui-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --rpg-ui-font-size: 1rem;
   --rpg-ui-font-size-sm: 0.875rem;
   --rpg-ui-font-size-lg: 1.125rem;
-  --rpg-ui-font-weight: normal;
+  --rpg-ui-font-size-xl: 2rem;
+  --rpg-ui-font-weight: 500;
   --rpg-ui-font-weight-bold: 700;
-  --rpg-ui-text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  --rpg-ui-text-shadow: 0 2px 4px rgba(2, 6, 23, 0.42);
 
   /* Layout */
-  --rpg-ui-radius-sm: 0;
-  --rpg-ui-radius-md: 4px;
-  --rpg-ui-radius-lg: 8px;
+  --rpg-ui-radius-sm: 8px;
+  --rpg-ui-radius-md: 16px;
+  --rpg-ui-radius-lg: 24px;
+  --rpg-ui-radius-full: 9999px;
   --rpg-ui-border-width: 2px;
-  --rpg-ui-spacing: 0.5rem;
-  --rpg-ui-spacing-lg: 1rem;
+  --rpg-ui-spacing-sm: 0.5rem;
+  --rpg-ui-spacing: 0.75rem;
+  --rpg-ui-spacing-lg: 1.25rem;
+  --rpg-ui-spacing-xl: 2rem;
 
   /* Effects */
   --rpg-ui-bevel-light: var(--rpg-ui-border-light);
   --rpg-ui-bevel-dark: var(--rpg-ui-border-dark);
   --rpg-ui-border-double: 4px;
+  --rpg-ui-backdrop-blur: blur(16px);
+
+  /* HUD */
+  --rpg-ui-hud-top: 24px;
+  --rpg-ui-hud-left: 24px;
+  --rpg-ui-hud-gap: 16px;
+  --rpg-ui-hud-padding: 16px;
+  --rpg-ui-hud-background: rgba(2, 6, 23, 0.48);
+  --rpg-ui-hud-border: rgba(255, 255, 255, 0.12);
+  --rpg-ui-avatar-size: 64px;
+  --rpg-ui-avatar-background: rgba(15, 23, 42, 0.92);
+  --rpg-ui-avatar-border: rgba(255, 255, 255, 0.88);
+  --rpg-ui-avatar-border-width: 3px;
+  --rpg-ui-avatar-shadow: 0 0 10px rgba(2, 6, 23, 0.5);
+  --rpg-ui-avatar-content-transform: translate(-42%, -45%) scale(0.35);
+  --rpg-ui-avatar-level-bg: rgba(2, 6, 23, 0.9);
+  --rpg-ui-avatar-level-color: #facc15;
+  --rpg-ui-avatar-level-border: rgba(250, 204, 21, 0.8);
+  --rpg-ui-status-bars-width: 200px;
+  --rpg-ui-status-bar-height: 12px;
+  --rpg-ui-status-bar-background: rgba(2, 6, 23, 0.56);
+  --rpg-ui-status-bar-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+  --rpg-ui-status-bar-label-color: rgba(248, 250, 252, 0.92);
+
+  /* Dock / quick actions */
+  --rpg-ui-dock-bottom: 32px;
+  --rpg-ui-dock-left: 50%;
+  --rpg-ui-dock-translate-x: -50%;
+  --rpg-ui-dock-gap: 16px;
+  --rpg-ui-dock-padding: 16px 24px;
+  --rpg-ui-dock-slot-size: 64px;
+  --rpg-ui-dock-slot-bg: rgba(255, 255, 255, 0.05);
+  --rpg-ui-dock-slot-bg-hover: rgba(255, 255, 255, 0.14);
+  --rpg-ui-dock-slot-bg-active: color-mix(in srgb, var(--rpg-ui-accent), transparent 88%);
+  --rpg-ui-dock-slot-border: rgba(255, 255, 255, 0.12);
+  --rpg-ui-dock-slot-border-hover: rgba(255, 255, 255, 0.42);
+  --rpg-ui-dock-slot-shadow-hover: 0 10px 20px rgba(2, 6, 23, 0.28);
+
+  /* Floating action button */
+  --rpg-ui-fab-right: 48px;
+  --rpg-ui-fab-bottom: 48px;
+  --rpg-ui-fab-size: 80px;
+  --rpg-ui-fab-border: rgba(255, 255, 255, 0.2);
+  --rpg-ui-fab-shadow: 0 8px 24px rgba(185, 28, 28, 0.4);
+
+  /* Mini map */
+  --rpg-ui-minimap-top: 24px;
+  --rpg-ui-minimap-right: 24px;
+  --rpg-ui-minimap-size: 140px;
+  --rpg-ui-minimap-background: rgba(2, 6, 23, 0.86);
+  --rpg-ui-minimap-border: rgba(255, 255, 255, 0.12);
+  --rpg-ui-minimap-shadow: 0 8px 32px rgba(2, 6, 23, 0.45);
+
+  /* Shop */
+  --rpg-ui-shop-max-width: 1200px;
+  --rpg-ui-shop-card-background: rgba(255, 255, 255, 0.05);
+  --rpg-ui-shop-card-background-hover: rgba(255, 255, 255, 0.1);
+  --rpg-ui-shop-card-background-active: color-mix(in srgb, var(--rpg-ui-accent), transparent 88%);
+  --rpg-ui-shop-card-border: rgba(255, 255, 255, 0.1);
+  --rpg-ui-shop-card-border-active: var(--rpg-ui-accent);
+  --rpg-ui-shop-muted-border: rgba(255, 255, 255, 0.12);
+  --rpg-ui-shop-gold-color: #facc15;
 }

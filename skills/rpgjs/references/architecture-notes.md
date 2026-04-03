@@ -83,6 +83,33 @@ Use the Player API for operations such as:
 
 Before adding custom state outside the Player API, verify whether the existing player variable system already covers the need.
 
+## Synchronization And State
+
+Client-server synchronization should use player properties when the data represents real gameplay state.
+
+Use player `props` to define which properties are synchronized and how they behave.
+
+This is important because the synchronized property model also supports state continuity:
+
+- state can remain available across map transfers
+- state can survive snapshot-based transfers
+- state can be preserved in memory for restart or recovery scenarios
+- state can participate in save-oriented flows
+
+When defining a property, verify the documented options such as permanence and whether it should be synchronized to the client.
+
+For durable state, do not bypass `props` with unrelated storage paths unless there is a documented reason to do so.
+
+Use `player.emit(type, value)` only for ephemeral messages that should not become saved state.
+
+Use `player.on(key, cb)` to listen to data sent by the client when explicit socket-style communication is required.
+
+Keep the distinction strict:
+
+- `props` for state
+- `emit` for transient events or messages
+- `player.on(...)` for handling client-sent data
+
 ## Events And Collisions
 
 A map can contain both players and events.

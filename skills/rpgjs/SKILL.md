@@ -72,6 +72,52 @@ Then fetch the relevant Markdown pages referenced there. Do not invent CanvasEng
 
 If the task touches menus, HUDs, overlays, dialogs, title screens, or any file ending in `.ce`, load CanvasEngine docs first and then inspect nearby project components for local conventions.
 
+## GUI CSS Rule
+
+For GUI styling, rely on the RPGJS UI CSS library instead of inventing an unrelated CSS system.
+
+Fetch and read this documentation before changing GUI styles, classes, or layout rules:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/RSamaium/RPG-JS/refs/heads/v5/packages/ui-css/README.md
+```
+
+When the task affects GUI appearance, menus, HUDs, dialog boxes, notifications, shops, or title screens:
+
+- inspect the existing RPGJS UI CSS usage in the project
+- verify available classes, structure, and styling patterns against the UI CSS README
+- prefer extending the library’s conventions over custom one-off CSS
+
+## Physics Rule
+
+RPGJS relies on its dedicated RPG-oriented physics engine for collisions and related behavior.
+
+Fetch and read this documentation before changing collisions, movement constraints, hitboxes, map blocking, or other physics-adjacent gameplay behavior:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/RSamaium/RPG-JS/refs/heads/v5/packages/physic/README.md
+```
+
+Do not guess collision behavior from generic game-engine habits. Verify it against the physics library docs first.
+
+## Synchronization Rule
+
+Client-server synchronization must go through synchronized player properties when the data represents state.
+
+Fetch and read this guide before changing synchronized state, replicated player data, snapshot behavior, or cross-map persistence:
+
+```bash
+curl -fsSL https://v5.rpgjs.dev/guide/synchronization.md
+```
+
+Use player `props` for persistent state that must survive synchronization, snapshots, server restarts, or map transfers.
+
+Do not use ad hoc side channels for durable gameplay state when `props` is the correct model.
+
+Use `player.emit(type, value)` only for ephemeral messages that do not need to be saved as state.
+
+Use `player.on(key, cb)` to listen to client-sent socket data when that communication pattern is actually needed.
+
 ## Working Sequence
 
 Follow this order:
@@ -83,8 +129,11 @@ Follow this order:
 5. Fetch `https://v5.rpgjs.dev/llms.txt` with `curl` or equivalent.
 6. Fetch the specific RPGJS Markdown pages needed for the task.
 7. If `.ce` files are involved, fetch `https://canvasengine.net/llms.txt` and the relevant CanvasEngine Markdown pages too.
-8. Inspect the local codebase for conventions before editing.
-9. Implement changes and verify them with the project’s normal commands.
+8. If GUI styling is involved, fetch the RPGJS UI CSS README and use it as the CSS reference.
+9. If collisions or physics are involved, fetch the RPGJS physic README and use it as the physics reference.
+10. If synchronized state or networked player data is involved, fetch the synchronization guide and use `props` as the default state model.
+11. Inspect the local codebase for conventions before editing.
+12. Implement changes and verify them with the project’s normal commands.
 
 ## Installation Rule
 
@@ -127,6 +176,26 @@ When working on `.ce` components:
 - verify CanvasEngine syntax against fetched docs
 - inspect sibling `.ce` files for established patterns
 - preserve the existing component style unless the user asks for a broader refactor
+
+When working on GUI styles:
+
+- use the RPGJS UI CSS library as the default styling system
+- verify class names and structure against the UI CSS README
+- avoid replacing library conventions with ad hoc CSS unless the user explicitly asks for that
+
+When working on collisions or movement rules:
+
+- verify assumptions against the RPGJS physic README
+- treat the dedicated physics engine as the source of truth for collision behavior
+- avoid importing generic physics patterns that are not supported by the library
+
+When working on synchronized state:
+
+- use player `props` for state that must persist across maps, snapshots, or restarts
+- configure synchronization and permanence deliberately according to the documented options
+- use `player.emit(...)` only for ephemeral, non-persistent messages
+- use `player.on(...)` only for explicit client-to-server socket communication
+- avoid storing durable gameplay state in a custom path when synchronized props already solve the problem
 
 ## References
 

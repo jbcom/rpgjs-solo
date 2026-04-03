@@ -1,321 +1,253 @@
 # @rpgjs/ui-css
 
-A framework-agnostic CSS library for RPG UI components. Fully customizable via CSS custom properties.
+`@rpgjs/ui-css` is the shared CSS layer for RPGJS interfaces.
 
-## Installation
+It provides:
 
-```bash
-npm install @rpgjs/ui-css
-# or
-pnpm add @rpgjs/ui-css
-```
+- generic RPG UI primitives
+- a reusable HUD / dock / minimap / shop layer
+- a default theme you can use as-is or override with CSS variables
+
+## Entry Points
+
+- `@rpgjs/ui-css/index.css`
+  Includes `reset.css`, `tokens.css`, animations, primitives, HUD and shop styles.
+- `@rpgjs/ui-css/theme-default.css`
+  Opinionated default theme with a modern glass-RPG look.
+- `@rpgjs/ui-css/tokens.css`
+  Only the design tokens, useful if you want to build your own theme.
+- `@rpgjs/ui-css/reset.css`
+  Reset only.
 
 ## Usage
 
-### Basic Setup
+### With a bundler
+
+```css
+@import "@rpgjs/ui-css/index.css";
+@import "@rpgjs/ui-css/theme-default.css";
+```
+
+### From static HTML
 
 ```html
-<!DOCTYPE html>
-<html>
-<head>
-  <link rel="stylesheet" href="@rpgjs/ui-css/reset.css">
-  <link rel="stylesheet" href="@rpgjs/ui-css/index.css">
-  <link rel="stylesheet" href="@rpgjs/ui-css/theme-default.css">
-</head>
-<body>
-  <!-- Your RPG UI here -->
+<link rel="stylesheet" href="./node_modules/@rpgjs/ui-css/index.css">
+<link rel="stylesheet" href="./node_modules/@rpgjs/ui-css/theme-default.css">
+```
+
+If you use the default theme, load the default font too:
+
+```html
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap"
+>
+```
+
+### App shell
+
+Apply `rpg-ui-app` on `body` or on a wrapper to get the full-screen themed background:
+
+```html
+<body class="rpg-ui-app">
+  <div id="rpg"></div>
 </body>
+```
+
+## What Is Included
+
+### Core primitives
+
+- `.rpg-ui-panel`, `.rpg-ui-window`
+- `.rpg-ui-btn`
+- `.rpg-ui-menu`, `.rpg-ui-menu-item`, `.rpg-ui-menu-tab`
+- `.rpg-ui-dialog`
+- `.rpg-ui-bar`
+- `.rpg-ui-save-load`
+- `.rpg-ui-toast`, `.rpg-ui-notification`
+- `.rpg-ui-title-screen`
+- `.rpg-ui-gameover-screen`
+
+### Generic in-game layout
+
+- `.rpg-hud` / `.rpg-ui-hud`
+- `.rpg-avatar`, `.rpg-avatar-face`, `.rpg-avatar-level`
+- `.rpg-status-bars`, `.rpg-bar-container`, `.rpg-bar-fill`, `.rpg-bar-text`
+- `.glass-panel` / `.rpg-ui-glass-panel`
+- `.rpg-item-dock`, `.rpg-item-slot`, `.rpg-item-qty`
+- `.rpg-fab`
+- `.rpg-minimap`
+
+### Shop UI
+
+- `.rpg-shop-container`
+- `.rpg-shop-tabs`, `.rpg-shop-tab`
+- `.rpg-shop-card`, `.rpg-shop-card-icon`, `.rpg-shop-card-tag`
+- `.rpg-shop-details`
+- `.rpg-shop-modal`
+- `.rpg-shop-btn`
+
+## Minimal Example
+
+```html
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap"
+    >
+    <link rel="stylesheet" href="./node_modules/@rpgjs/ui-css/index.css">
+    <link rel="stylesheet" href="./node_modules/@rpgjs/ui-css/theme-default.css">
+  </head>
+  <body class="rpg-ui-app">
+    <div class="rpg-hud">
+      <div class="rpg-avatar">
+        🧙
+        <div class="rpg-avatar-level">42</div>
+      </div>
+
+      <div class="rpg-status-bars">
+        <div class="rpg-bar-container">
+          <span class="rpg-bar-text">HP 2450 / 3200</span>
+          <div class="rpg-bar-fill health" style="width: 76%"></div>
+        </div>
+        <div class="rpg-bar-container">
+          <span class="rpg-bar-text">SP 1200 / 2000</span>
+          <div class="rpg-bar-fill mana" style="width: 60%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rpg-item-dock glass-panel">
+      <div class="rpg-item-slot active">⚔️</div>
+      <div class="rpg-item-slot">🧪<span class="rpg-item-qty">5</span></div>
+      <div class="rpg-item-slot">🎒</div>
+    </div>
+
+    <div class="rpg-fab">⚔️</div>
+  </body>
 </html>
 ```
 
-### With Build Tools
-
-```javascript
-// In your CSS/SCSS
-@import '@rpgjs/ui-css/reset.css';
-@import '@rpgjs/ui-css/index.css';
-@import '@rpgjs/ui-css/theme-default.css';
-```
-
-## Components
-
-### Primitives
-
-#### Core Components
-- `.rpg-ui-panel` - Panel container with bevel effects and shadows
-- `.rpg-ui-btn` - Interactive button with hover and active states
-- `.rpg-ui-dialog` - Dialog box with speaker labels and portrait support
-- `.rpg-ui-bar` - Progress/health bar with gradient fills and animations
-- `.rpg-ui-bar-fill` - Fill element for bars
-- `.rpg-ui-bar-label` - Text overlay for bars
-- `.rpg-ui-menu` - Menu container with selection indicators
-- `.rpg-ui-menu-item` - Individual menu items with hover effects
-- `.rpg-ui-menu-header` - Menu header section
-
-#### RPG-Specific Components
-- `.rpg-ui-inventory` - Inventory grid container
-- `.rpg-ui-inventory-slot` - Individual inventory slot with rarity indicators
-- `.rpg-ui-inventory-slot-icon` - Icon container for inventory items
-- `.rpg-ui-inventory-slot-quantity` - Item quantity display
-- `.rpg-ui-inventory-slot-rarity` - Rarity color indicator (common, uncommon, rare, epic, legendary)
-- `.rpg-ui-stats` - Stats container
-- `.rpg-ui-stat` - Individual stat display
-- `.rpg-ui-stat-label` - Stat label text
-- `.rpg-ui-stat-value` - Stat value with change indicators
-- `.rpg-ui-stat-change` - Positive/negative stat change indicator
-- `.rpg-ui-stat-group` - Group of related stats
-- `.rpg-ui-stat-group-title` - Group title
-- `.rpg-ui-stat-grid` - Grid layout for stats
-- `.rpg-ui-stat-bar-container` - Container for stat with bar
-- `.rpg-ui-character-card` - Character profile card
-- `.rpg-ui-character-card-header` - Card header section
-- `.rpg-ui-character-card-avatar` - Character avatar/portrait
-- `.rpg-ui-character-card-info` - Character info section
-- `.rpg-ui-character-card-name` - Character name
-- `.rpg-ui-character-card-class` - Character class/race
-- `.rpg-ui-character-card-level` - Character level badge
-- `.rpg-ui-character-card-stats` - Stats section in card
-- `.rpg-ui-character-card-section` - Card section divider
-- `.rpg-ui-character-card-section-title` - Section title
-- `.rpg-ui-hotbar` - Action bar plate container
-- `.rpg-ui-hotbar-track` - Slot grid wrapper
-- `.rpg-ui-hotbar-slot` - Individual action/item slot
-- `.rpg-ui-hotbar-key` - Keyboard hint label (1-0, etc.)
-- `.rpg-ui-hotbar-count` - Stack quantity (items)
-- `.rpg-ui-hotbar-text` - Fallback text label for slot content
-
-### Variants & States
-
-#### Button Variants
-```html
-<button class="rpg-ui-btn" data-variant="primary">Primary</button>
-<button class="rpg-ui-btn" data-variant="success">Success</button>
-<button class="rpg-ui-btn" data-variant="warning">Warning</button>
-<button class="rpg-ui-btn" data-variant="danger">Danger</button>
-```
-
-#### Bar Types
-```html
-<div class="rpg-ui-bar" data-type="health">Health Bar</div>
-<div class="rpg-ui-bar" data-type="mana">Mana Bar</div>
-<div class="rpg-ui-bar" data-type="stamina">Stamina Bar</div>
-<div class="rpg-ui-bar" data-type="experience">Experience Bar</div>
-```
-
-#### Menu Selection
-```html
-<div class="rpg-ui-menu-item" data-selected="true">Selected Item</div>
-```
-
-#### Inventory Slot States
-```html
-<div class="rpg-ui-inventory-slot" data-selected="true">Selected Slot</div>
-<div class="rpg-ui-inventory-slot" data-locked="true">Locked Slot</div>
-<div class="rpg-ui-inventory-slot-rarity" data-rarity="legendary"></div>
-```
-
-## CSS Custom Properties (Tokens)
-
-All styling is controlled via CSS custom properties:
-
-```css
-:root {
-  /* Colors */
-  --rpg-ui-bg: #1c1917;
-  --rpg-ui-surface: #292524;
-  --rpg-ui-border: #d6b36a;
-  --rpg-ui-border-light: #fde047;
-  --rpg-ui-border-dark: #78350f;
-  --rpg-ui-text: #fef3c7;
-  --rpg-ui-text-muted: #a8a29e;
-  --rpg-ui-accent: #f59e0b;
-  --rpg-ui-success: #22c55e;
-  --rpg-ui-warning: #eab308;
-  --rpg-ui-danger: #dc2626;
-  --rpg-ui-info: #3b82f6;
-
-  /* Gradients */
-  --rpg-ui-gradient-surface: linear-gradient(180deg, var(--rpg-ui-surface), var(--rpg-ui-bg));
-  --rpg-ui-gradient-accent: linear-gradient(180deg, var(--rpg-ui-accent), color-mix(in srgb, var(--rpg-ui-accent), black 20%));
-  --rpg-ui-gradient-bar: linear-gradient(90deg, var(--rpg-ui-accent), color-mix(in srgb, var(--rpg-ui-accent), black 30%));
-
-  /* Shadows */
-  --rpg-ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --rpg-ui-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.6);
-  --rpg-ui-shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.8);
-  --rpg-ui-shadow-glow: 0 0 20px var(--rpg-ui-accent);
-  --rpg-ui-shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.5);
-
-  /* Typography */
-  --rpg-ui-font: "Cinzel", serif;
-  --rpg-ui-font-size: 1rem;
-  --rpg-ui-font-size-sm: 0.875rem;
-  --rpg-ui-font-size-lg: 1.125rem;
-  --rpg-ui-font-weight: 600;
-  --rpg-ui-font-weight-bold: 800;
-  --rpg-ui-text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
-
-  /* Layout */
-  --rpg-ui-radius-sm: 4px;
-  --rpg-ui-radius-md: 6px;
-  --rpg-ui-radius-lg: 10px;
-  --rpg-ui-border-width: 3px;
-  --rpg-ui-spacing: 0.75rem;
-  --rpg-ui-spacing-lg: 1.25rem;
-
-  /* Effects */
-  --rpg-ui-bevel-light: var(--rpg-ui-border-light);
-  --rpg-ui-bevel-dark: var(--rpg-ui-border-dark);
-  --rpg-ui-border-double: 4px;
-}
-```
-
-## Creating Custom Themes
-
-### Override Globally
-
-```css
-:root {
-  --rpg-ui-accent: hotpink;
-  --rpg-ui-font: "Arial", sans-serif;
-}
-```
-
-### Override Locally
-
-```css
-.my-custom-ui {
-  --rpg-ui-accent: hotpink;
-  --rpg-ui-radius-lg: 0;
-}
-```
-
-### Custom Theme File
-
-```css
-/* my-theme.css */
-:root {
-  --rpg-ui-bg: #2d1b69;
-  --rpg-ui-surface: #4c2a85;
-  --rpg-ui-border: #ff6b6b;
-  --rpg-ui-text: #ffffff;
-  --rpg-ui-accent: #ffd93d;
-  --rpg-ui-font: "MedievalSharp", cursive;
-}
-```
-
-## Example
-
-### Character Card with Stats
+## Shop Example
 
 ```html
-<div class="rpg-ui-character-card">
-  <div class="rpg-ui-character-card-header">
-    <div class="rpg-ui-character-card-avatar">🧙</div>
-    <div class="rpg-ui-character-card-info">
-      <div class="rpg-ui-character-card-name">Aelindor</div>
-      <div class="rpg-ui-character-card-class">Archmage <span class="rpg-ui-character-card-level">Lv. 47</span></div>
-    </div>
-  </div>
-  <div class="rpg-ui-character-card-stats">
-    <div class="rpg-ui-stat-bar-container">
-      <span class="rpg-ui-stat-label">HP</span>
-      <div class="rpg-ui-bar" data-type="health">
-        <div class="rpg-ui-bar-fill" style="width: 75%;"></div>
-        <span class="rpg-ui-bar-label">2450/3267</span>
+<div class="rpg-shop-container">
+  <div class="rpg-shop-header">
+    <div class="rpg-shop-merchant">
+      <div class="rpg-shop-merchant-avatar">🧝</div>
+      <div class="rpg-shop-merchant-info">
+        <p>Welcome to my shop.</p>
       </div>
-      <span class="rpg-ui-stat-value">75%</span>
+    </div>
+    <div class="rpg-shop-gold">1240 G</div>
+  </div>
+
+  <div class="rpg-shop-body">
+    <div class="rpg-shop-left">
+      <div class="rpg-shop-tabs">
+        <div class="rpg-shop-tab active">Weapons</div>
+        <div class="rpg-shop-tab">Armor</div>
+      </div>
+
+      <div class="rpg-shop-content">
+        <div class="rpg-shop-grid">
+          <div class="rpg-shop-card selected" tabindex="0">
+            <div class="rpg-shop-card-icon">🗡️</div>
+            <div class="rpg-shop-card-name">Crystal Blade</div>
+            <div class="rpg-shop-card-price">320 G</div>
+            <div class="rpg-shop-card-tag">Equipped</div>
+          </div>
+        </div>
+
+        <div class="rpg-shop-details">
+          <div class="rpg-shop-details-header">
+            <div class="rpg-shop-details-icon">🗡️</div>
+            <h2>Crystal Blade</h2>
+          </div>
+          <div class="rpg-shop-details-desc">
+            A light blade forged for fast melee attacks.
+          </div>
+          <button class="rpg-shop-btn">Buy</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 ```
 
-### Inventory System
+## Theming
 
-```html
-<div class="rpg-ui-inventory" style="display: grid; grid-template-columns: repeat(4, 64px);">
-  <div class="rpg-ui-inventory-slot" data-selected="true">
-    <div class="rpg-ui-inventory-slot-icon">⚔️</div>
-    <span class="rpg-ui-inventory-slot-quantity">1</span>
-    <div class="rpg-ui-inventory-slot-rarity" data-rarity="legendary"></div>
-  </div>
-  <div class="rpg-ui-inventory-slot">
-    <div class="rpg-ui-inventory-slot-icon">🧪</div>
-    <span class="rpg-ui-inventory-slot-quantity">15</span>
-    <div class="rpg-ui-inventory-slot-rarity" data-rarity="uncommon"></div>
-  </div>
-</div>
+`index.css` already ships with default tokens. If you import `theme-default.css`, those tokens are overridden by the default RPG theme.
+
+To customize the look, override the variables you need globally or locally.
+
+### Global override
+
+```css
+:root {
+  --rpg-ui-accent: #7c3aed;
+  --rpg-ui-accent-hover: #a78bfa;
+  --rpg-ui-body-background:
+    radial-gradient(circle at top, rgba(124, 58, 237, 0.35), transparent 38%),
+    linear-gradient(180deg, #120f1e 0%, #09070f 100%);
+  --rpg-ui-surface-overlay-strong: rgba(18, 12, 30, 0.88);
+}
 ```
 
-### Hotbar / Action Bar
+### Local override
 
-```html
-<div class="rpg-ui-hotbar" style="--rpg-ui-hotbar-slots: 10;">
-  <div class="rpg-ui-hotbar-track">
-    <div class="rpg-ui-hotbar-slot" data-selected="true" data-empty="false" data-type="skill">
-      <span class="rpg-ui-hotbar-key">1</span>
-      <span class="rpg-ui-hotbar-text">Slash</span>
-    </div>
-    <div class="rpg-ui-hotbar-slot" data-empty="false" data-type="item">
-      <span class="rpg-ui-hotbar-key">2</span>
-      <span class="rpg-ui-hotbar-text">Potion</span>
-      <span class="rpg-ui-hotbar-count">x3</span>
-    </div>
-    <div class="rpg-ui-hotbar-slot" data-empty="true">
-      <span class="rpg-ui-hotbar-key">3</span>
-    </div>
-  </div>
-</div>
+```css
+.my-combat-ui {
+  --rpg-ui-hud-top: 12px;
+  --rpg-ui-hud-left: 12px;
+  --rpg-ui-dock-bottom: 20px;
+  --rpg-ui-dock-slot-size: 72px;
+  --rpg-ui-fab-size: 92px;
+}
 ```
 
-### Dialog Box
+## Useful Tokens
 
-```html
-<div class="rpg-ui-dialog">
-  <div class="rpg-ui-dialog-speaker">Ancient Sage</div>
-  <div class="rpg-ui-dialog-content">
-    The ancient prophecy speaks of a hero who will wield the Crystal of Eternity.
-  </div>
-  <div class="rpg-ui-dialog-indicator"></div>
-</div>
-```
+### Scene
 
-### Stats Display
+- `--rpg-ui-body-bg`
+- `--rpg-ui-body-background`
+- `--rpg-ui-backdrop-blur`
 
-```html
-<div class="rpg-ui-stats">
-  <div class="rpg-ui-stat">
-    <span class="rpg-ui-stat-label">Strength</span>
-    <span class="rpg-ui-stat-value">85 <span class="rpg-ui-stat-change" data-type="positive">+5</span></span>
-  </div>
-  <div class="rpg-ui-stat">
-    <span class="rpg-ui-stat-label">Intelligence</span>
-    <span class="rpg-ui-stat-value">142 <span class="rpg-ui-stat-change" data-type="positive">+12</span></span>
-  </div>
-</div>
-```
+### Core colors
 
-## Architecture
+- `--rpg-ui-surface`
+- `--rpg-ui-surface-overlay`
+- `--rpg-ui-surface-overlay-strong`
+- `--rpg-ui-border`
+- `--rpg-ui-text`
+- `--rpg-ui-text-muted`
+- `--rpg-ui-accent`
+- `--rpg-ui-accent-hover`
+- `--rpg-ui-accent-active`
 
-- **CSS-only**: No JavaScript dependencies
-- **Framework-agnostic**: Works with any framework or plain HTML
-- **Token-based**: All styling via CSS custom properties
-- **Gaming-focused**: Designed for 2D RPG games with authentic UI elements
-- **RPG components**: Character cards, inventory, stats, dialog boxes, menus
-- **Visual effects**: Bevel edges, gradients, shadows, glow effects, animations
-- **Minimal defaults**: Default theme is optional
-- **Fully customizable**: Override tokens for complete theming
+### RPG bars
 
-## Features
+- `--rpg-ui-health-gradient`
+- `--rpg-ui-mana-gradient`
+- `--rpg-ui-xp-gradient`
 
-- 🎮 **Authentic RPG styling**: Medieval-themed default theme
-- ⚔️ **Character cards**: Complete character profile with stats and vitals
-- 📦 **Inventory system**: Slots with rarity indicators and selection states
-- 💪 **Stats display**: Individual stats with positive/negative change indicators
-- 💬 **Dialog boxes**: Speaker labels, portrait support, and navigation indicators
-- 📊 **Progress bars**: Health, mana, stamina, experience with gradient fills and animations
-- 🎨 **Button variants**: Primary, success, warning, danger with hover/active states
-- 📋 **Menu system**: Selection indicators, hover effects, and animations
-- 🎯 **Bevel effects**: 3D-style borders with light/dark edge highlighting
-- ✨ **Glow effects**: Subtle glows on hover and selection
-- 🔧 **Full customization**: Every aspect is configurable via CSS tokens
+### HUD / dock
+
+- `--rpg-ui-hud-top`
+- `--rpg-ui-hud-left`
+- `--rpg-ui-avatar-size`
+- `--rpg-ui-status-bars-width`
+- `--rpg-ui-dock-slot-size`
+- `--rpg-ui-fab-size`
+- `--rpg-ui-minimap-size`
+
+## Notes
+
+- If you want a completely different aesthetic, import only `index.css` and override the tokens yourself.
+- The default theme is intentionally more opinionated than the base primitives.
+- The RPGJS samples now consume this package directly instead of maintaining duplicated `rpg.css` files.
