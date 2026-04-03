@@ -8,6 +8,7 @@ export const player: RpgPlayerHooks = {
         })
         player.name.set('YourName')
         player.setGraphic('hero')
+        player.initializeDefaultStats()
     },
     onInput(player: RpgPlayer, { action }) {
         if (action == 'escape') {

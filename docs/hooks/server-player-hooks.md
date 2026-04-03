@@ -17,6 +17,9 @@ const player: RpgPlayerHooks = {
         console.log(`Player ${player.id} connected`)
         player.changeMap('spawn-map')
     },
+    onStart(player: RpgPlayer) {
+        console.log(`Player ${player.id} started the game`)
+    },
     onJoinMap(player: RpgPlayer, map: RpgMap) {
         console.log(`Player ${player.id} joined map ${map.id}`)
     }
@@ -64,6 +67,30 @@ const player: RpgPlayerHooks = {
 
 ## Available Hooks
 
+## Initializing Default Stats
+
+RPGJS can provide built-in default parameters for a player such as `maxHp`, `maxSp`,
+`str`, `int`, `dex`, and `agi`.
+
+Use `player.initializeDefaultStats()` when you want to:
+
+- apply the built-in default parameter curves
+- initialize HP/SP from those max values
+- ensure the client receives visible HP/SP and parameter values on first game load
+
+Typical usage:
+
+- call it in `onConnected()` if your game starts immediately
+- call it in `onStart()` if your game begins after a title screen or another GUI flow
+
+If your player data comes from your own database, a save slot, or a snapshot, do not
+call `player.initializeDefaultStats()` after hydration unless you intentionally want to
+overwrite those values. In that case, restore your data first and let that state be
+synchronized to the client.
+
+If you only want the built-in parameter curves without restoring HP/SP, use
+`player.applyDefaultParameters()`.
+
 ### onConnected
 
 **Description:** Called when a player connects to the server
@@ -75,6 +102,7 @@ const player: RpgPlayerHooks = {
 ```ts
 const player: RpgPlayerHooks = {
     onConnected(player: RpgPlayer) {
+        player.initializeDefaultStats()
         console.log(`Welcome ${player.name}!`)
         player.gold = 1000
         player.changeMap('tutorial-map')
@@ -108,6 +136,31 @@ const player: RpgPlayerHooks = {
         if (map.id === 'dark-forest') {
             player.addState('darkness')
         }
+    }
+}
+```
+
+### onStart
+
+**Description:** Called when the player starts the game from a GUI interaction
+
+This hook is executed after a GUI interaction when the GUI returns a `data.id` equal to `'start'`.
+This is typically used after a title screen or another start menu.
+
+**Parameters:**
+- `player: RpgPlayer` - The player instance
+
+**Example:**
+```ts
+const player: RpgPlayerHooks = {
+    async onConnected(player: RpgPlayer) {
+        await player.gui('rpg-title-screen').open()
+    },
+
+    onStart(player: RpgPlayer) {
+        player.initializeDefaultStats()
+        player.changeMap('starting-map')
+        player.showText('The adventure begins!')
     }
 }
 ```

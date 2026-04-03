@@ -225,7 +225,16 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     this.hooks.callHooks("server-playerProps-load", this).subscribe();
   }
 
-  onGameStart() {
+  /**
+   * Apply the built-in default parameter curves to this player.
+   *
+   * Use this when you want RPGJS to provide the initial parameter setup
+   * instead of restoring values from your own database or a saved snapshot.
+   *
+   * This method only defines the parameter curves and related defaults.
+   * It does not restore custom persisted data for you.
+   */
+  applyDefaultParameters() {
     // Use type assertion to access mixin properties
     (this as any).expCurve = {
       basis: 30,
@@ -240,6 +249,21 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     (this as any).addParameter(INT, INT_CURVE);
     (this as any).addParameter(DEX, DEX_CURVE);
     (this as any).addParameter(AGI, AGI_CURVE);
+  }
+
+  /**
+   * Initialize the built-in default player stats.
+   *
+   * This applies the default parameter curves and then restores HP/SP to their
+   * current maximum values so the client receives coherent bars on first load.
+   *
+   * Call this manually in `onConnected()` or `onStart()` when your game relies
+   * on the built-in defaults. Do not call it after loading a snapshot or
+   * hydrating player data from your own database unless you explicitly want to
+   * overwrite those values.
+   */
+  initializeDefaultStats() {
+    this.applyDefaultParameters();
     (this as any).allRecovery();
   }
 
@@ -1297,7 +1321,7 @@ export class RpgEvent extends RpgPlayer {
 
   constructor() {
     super();
-    this.onGameStart()
+    this.initializeDefaultStats()
   }
 
   override async execMethod(methodName: string, methodData: any[] = [], instance = this) {
