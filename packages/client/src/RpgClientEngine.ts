@@ -1,13 +1,11 @@
 import Canvas from "./components/scenes/canvas.ce";
 import { inject } from './core/inject'
-import { signal, bootstrapCanvas, KeyboardControls, Howl, trigger } from "canvasengine";
+import { signal, bootstrapCanvas, Howl, trigger } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { RpgSound } from "./Sound";
 import { RpgResource } from "./Resource";
 import { Hooks, ModulesToken, Direction } from "@rpgjs/common";
-
-type DirectionValue = "up" | "down" | "left" | "right";
 import { load } from "@signe/sync";
 import { RpgClientMap } from "./Game/Map"
 import { RpgGui } from "./Gui/Gui";

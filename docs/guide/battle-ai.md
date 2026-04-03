@@ -29,10 +29,10 @@ npm install @rpgjs/action-battle
 ## Quick Start
 
 ```ts
-import { EventMode, ATK, PDEF, MAXHP } from "@rpgjs/server";
+import { EventMode, ATK, PDEF, MAXHP, type EventDefinition } from "@rpgjs/server";
 import { provideActionBattle, BattleAi, EnemyType } from "@rpgjs/action-battle/server";
 
-function GoblinEnemy() {
+function GoblinEnemy(): EventDefinition {
   return {
     name: "Goblin",
     mode: EventMode.Scenario,
@@ -51,6 +51,10 @@ function GoblinEnemy() {
   };
 }
 ```
+
+When you build an object-based event for a map, type the factory as `EventDefinition`.
+The returned object only describes the event behavior. Placement data such as `id`, `x`, and `y`
+still belongs to the outer `maps[].events` wrapper.
 
 ## Enable the module
 
@@ -207,7 +211,9 @@ onInit() {
 ### Basic enemy
 
 ```ts
-function Goblin() {
+import { type EventDefinition, ATK, MAXHP } from "@rpgjs/server";
+
+function Goblin(): EventDefinition {
   return {
     name: "Goblin",
     onInit() {
@@ -225,7 +231,9 @@ function Goblin() {
 ### Mage with skills
 
 ```ts
-function DarkMage() {
+import { ATK, MAXHP, MAXSP, type EventDefinition } from "@rpgjs/server";
+
+function DarkMage(): EventDefinition {
   return {
     name: "Dark Mage",
     onInit() {
@@ -251,7 +259,9 @@ function DarkMage() {
 ### Patrol guard
 
 ```ts
-function PatrolGuard() {
+import { ATK, MAXHP, type EventDefinition } from "@rpgjs/server";
+
+function PatrolGuard(): EventDefinition {
   return {
     name: "Guard",
     onInit() {

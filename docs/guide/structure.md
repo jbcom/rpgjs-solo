@@ -99,6 +99,79 @@ export default {
 
 Put here everything the client always needs: map loading, global config, modules, spritesheets, sounds, and resolvers.
 
+### `provideClientGlobalConfig()`
+
+`provideClientGlobalConfig()` is the client-side place for shared global configuration.
+It can hold built-in options such as `keyboardControls`, and also any custom object you want
+to expose everywhere in the client through dependency injection.
+
+```ts
+import { provideClientGlobalConfig } from "@rpgjs/client";
+
+export default {
+  providers: [
+    provideClientGlobalConfig({
+      keyboardControls: {
+        up: "z",
+        down: "s",
+        left: "q",
+        right: "d",
+        action: "enter",
+        escape: "escape"
+      },
+      ui: {
+        locale: "fr",
+        showDamagePreview: true
+      },
+      api: {
+        baseUrl: "/api"
+      }
+    })
+  ]
+};
+```
+
+If you omit `keyboardControls`, RPGJS injects the default bindings automatically:
+
+```ts
+{
+  up: "up",
+  down: "down",
+  left: "left",
+  right: "right",
+  action: "space",
+  escape: "escape"
+}
+```
+
+You can retrieve this global config anywhere on the client with `inject(GlobalConfigToken)`:
+
+```ts
+import { inject } from "@signe/di";
+import { GlobalConfigToken } from "@rpgjs/client";
+
+const config = inject(GlobalConfigToken) as {
+  keyboardControls: {
+    up: string;
+    down: string;
+    left: string;
+    right: string;
+    action: string;
+    escape: string;
+  };
+  ui?: {
+    locale?: string;
+    showDamagePreview?: boolean;
+  };
+};
+
+console.log(config.keyboardControls.action);
+console.log(config.ui?.locale);
+```
+
+This is useful in client services, GUI components, or custom systems that need access to
+global input bindings or project-specific client configuration.
+
 ## `modules/main`
 
 The main module is usually where you declare your first server hooks and maps:

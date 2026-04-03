@@ -1,3 +1,5 @@
+![Header icon](/header.png)
+
 <p align="center">
   <img src="https://img.shields.io/npm/v/@rpgjs/server" alt="Version">
   <img src="https://img.shields.io/npm/dm/@rpgjs/server" alt="Downloads">
@@ -21,11 +23,22 @@ With RPG JS, we aspire to provide developers with a robust foundation that adapt
 ```bash
 npx degit rpgjs/starter#v5 my-rpg-game
 cd my-rpg-game
-npm install
+npm install --legacy-peer-deps
 npm run dev
 ```
 
 Then go to port localhost:3000
+
+If you use an AI coding assistant and want it to understand RPGJS v5 better, you can also install the RPGJS skill:
+
+```bash
+npx skills add https://github.com/RSamaium/RPG-JS#v5
+```
+
+> Note
+> RPGJS v5 is currently not compatible with RPGJS v4.
+> A migration path will be added later, along with ViteJS compatibility tools to help existing projects transition in the future.
+> In the meantime, you can use [RPGJS Studio](https://rpgjs.studio/), review the [RPGJS v4 codebase](https://github.com/RSamaium/RPG-JS/tree/v4), and read the [RPGJS v4 documentation](https://docs.rpgjs.dev/).
 
 ## Features
 
@@ -33,6 +46,7 @@ Then go to port localhost:3000
 |---|---|
 | 🔄 One Codebase for RPG and MMORPG | Build a single-player RPG or a full MMORPG with the same architecture and gameplay code. |
 | 🚀 Scalability-First MMORPG Design | Each map can run on a different server. When a player moves to another map, the client disconnects from the current server and reconnects to the next one, enabling large-scale worlds and high player counts. |
+| 🎯 Client-Side Prediction and Server Reconciliation | In MMORPG mode, player movement benefits from client-side prediction for responsiveness, while server reconciliation keeps the final state authoritative and synchronized. |
 | 🗺️ Map-Agnostic Architecture | RPG JS does not lock you into one map format or renderer. You can build your own map pipeline, while official packages already support Tiled Map Editor. |
 | 📱 Cross-Platform Input | Support mobile controls, gamepads, and keyboard inputs for flexible play across devices. |
 | 🧩 CanvasEngine UI System | Build UI with CanvasEngine using graphical or DOM-based components, with Vue.js compatibility when needed. |
