@@ -1,11 +1,11 @@
 ---
-title: "RpgClientEngine"
-description: "Core client-side engine API, including controls, assets, audio, camera, GUI effects, and sprite components."
+title: "Rpg Client Engine"
+description: "Reference for the `RpgClientEngine` class."
 ---
 
-# RpgClientEngine
+# Rpg Client Engine
 
-Core client-side engine API, including controls, assets, audio, camera, GUI effects, and sprite components.
+Reference for the `RpgClientEngine` class.
 
 ## Members
 

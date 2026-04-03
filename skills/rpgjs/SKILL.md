@@ -114,7 +114,7 @@ Use player `props` for persistent state that must survive synchronization, snaps
 
 Do not use ad hoc side channels for durable gameplay state when `props` is the correct model.
 
-Use `player.emit(type, value)` only for ephemeral messages that do not need to be saved as state.
+Use `map.broadcast(type, data)` for ephemeral messages that should be broadcast on the current map without becoming saved state.
 
 Use `player.on(key, cb)` to listen to client-sent socket data when that communication pattern is actually needed.
 
@@ -193,7 +193,7 @@ When working on synchronized state:
 
 - use player `props` for state that must persist across maps, snapshots, or restarts
 - configure synchronization and permanence deliberately according to the documented options
-- use `player.emit(...)` only for ephemeral, non-persistent messages
+- use `map.broadcast(...)` for ephemeral, non-persistent map-wide messages
 - use `player.on(...)` only for explicit client-to-server socket communication
 - avoid storing durable gameplay state in a custom path when synchronized props already solve the problem
 

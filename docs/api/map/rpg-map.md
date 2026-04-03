@@ -1,16 +1,17 @@
 ---
 title: "RpgMap"
-description: "Core server-side map API, including players, events, world management, shapes, sounds, and map updates."
+description: "Reference for the `RpgMap` class."
 ---
 
 # RpgMap
 
-Core server-side map API, including players, events, world management, shapes, sounds, and map updates.
+Reference for the `RpgMap` class.
 
 ## Members
 
 - [addInDatabase](#addindatabase)
 - [applySyncToClient](#applysynctoclient)
+- [broadcast](#broadcast)
 - [clear](#clear)
 - [clearWeather](#clearweather)
 - [createDynamicEvent](#createdynamicevent)
@@ -37,6 +38,8 @@ Core server-side map API, including players, events, world management, shapes, s
 - [hooks](#hooks)
 - [interceptorPacket](#interceptorpacket)
 - [maps](#maps)
+- [off](#off)
+- [on](#on)
 - [onAction](#onaction)
 - [onInput](#oninput)
 - [onJoin](#onjoin)
@@ -122,6 +125,48 @@ applySyncToClient()
 
 ```ts
 map.applySyncToClient();
+```
+
+## broadcast
+
+Broadcast a custom websocket event to all clients connected to this map.
+
+This is a convenience wrapper around `$broadcast({ type, value })`.
+On the client side, receive the event by injecting `WebSocketToken`
+and subscribing with `socket.on(type, cb)`.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+map.broadcast(type, value)
+```
+
+### Parameters
+
+- `type`: `string`
+- `value?`: `any`
+
+### Examples
+
+```ts
+map.broadcast("weather:warning", {
+  level: "storm",
+});
+```
+
+```ts
+import { inject } from "@rpgjs/client";
+import { WebSocketToken, type AbstractWebsocket } from "@rpgjs/client";
+
+const socket = inject<AbstractWebsocket>(WebSocketToken);
+
+socket.on("weather:warning", (payload) => {
+  console.log(payload.level);
+});
 ```
 
 ## clear
@@ -976,6 +1021,55 @@ It's populated when the map is loaded via `updateMap()`.
 
 ```ts
 maps: (MapOptions | any)[]
+```
+
+## off
+
+Remove all listeners for a custom client event on this map.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+map.off(type)
+```
+
+### Parameters
+
+- `type`: `string`
+
+## on
+
+Listen to custom websocket events sent by clients on this map.
+
+The callback receives the player who sent the event and the payload.
+This is useful for map-wide custom interactions that are not covered
+by built-in actions such as movement, GUI events, or the action button.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+map.on(type, cb)
+```
+
+### Parameters
+
+- `type`: `string`
+- `cb`: `(player: RpgPlayer, data: any) => void | Promise<void>`
+
+### Examples
+
+```ts
+map.on("chat:message", (player, data) => {
+  console.log(player.id, data.text);
+});
 ```
 
 ## onAction

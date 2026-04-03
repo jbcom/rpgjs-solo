@@ -9,14 +9,65 @@ Dialogs, menus, notifications, and custom GUI commands.
 
 ## Members
 
+- [Call custom GUI](#call-custom-gui)
 - [Call Game Over Menu](#call-game-over-menu)
 - [Call Main Menu](#call-main-menu)
+- [Call Shop Menu](#call-shop-menu)
+- [Close custom GUI](#close-custom-gui)
 - [Displays a notification](#displays-a-notification)
+- [Hide to GUI attached](#hide-to-gui-attached)
 - [Show Choices](#show-choices)
 - [Show Load](#show-load)
 - [Show Save](#show-save)
 - [Show Save/Load](#show-save-load)
 - [Show Text](#show-text)
+- [View to GUI attached](#view-to-gui-attached)
+- [WithGuiManager](#withguimanager)
+
+## Call custom GUI
+
+Call a custom Gui
+
+```ts
+// Calls a client-side component, created with VueJS, named "inn".
+const gui = player.gui('inn')
+
+ // You can wait for actions on the menu. It only works if the menu is open.
+gui.on('accept', () => {
+     player.allRecovery()
+})
+
+// The GUI is opened by passing recoverable data on the client side.
+gui.open({ hello: 'world' })
+```
+
+When opening the GUI, one can give options
+
+```ts
+await gui.open({ hello: 'world' }, {
+     waitingAction: true,
+     blockPlayerInput: true
+})
+// After the GUI is closed
+```
+
+- `blockPlayerInput`: while the GUI is open, the player can not move on the map
+- `waitingAction`: We explicitly wait until the GUI is closed for the promise to be resolved.
+
+- Source: `packages/server/src/Player/GuiManager.ts`
+- Kind: `method`
+- Member of: `GuiManager`
+- Defined in: `GuiManagerMixin`
+
+### Signature
+
+```ts
+player.gui(guiId)
+```
+
+### Parameters
+
+- `guiId`: `string`
 
 ## Call Game Over Menu
 
@@ -66,6 +117,51 @@ player.callMainMenu(options)
 
 - `options?`: `MenuGuiOptions`
 
+## Call Shop Menu
+
+Calls shop menu. Opens the GUI named `rpg-shop`
+
+- Source: `packages/server/src/Player/GuiManager.ts`
+- Kind: `method`
+- Member of: `GuiManager`
+- Defined in: `GuiManagerMixin`
+
+### Signature
+
+```ts
+player.callShop()
+```
+
+### Parameters
+
+- `items`: `any[] | {
+      items: any[]
+      sell?: Record<string, number> | Array<{ id: string; multiplier: number }>
+      sellMultiplier?: number
+      message?: string
+      face?: { id: string; expression?: string }
+    }`
+
+## Close custom GUI
+
+Closes the GUI and removes it from memory
+
+- Source: `packages/server/src/Player/GuiManager.ts`
+- Kind: `method`
+- Member of: `GuiManager`
+- Defined in: `GuiManagerMixin`
+
+### Signature
+
+```ts
+player.removeGui(guiId,data)
+```
+
+### Parameters
+
+- `guiId`: `string`
+- `data?`: `any`
+
 ## Displays a notification
 
 Displays a notification . Opens the GUI named `rpg-notification`
@@ -85,6 +181,38 @@ player.showNotification()
 
 - `message`: `string`
 - `options?`: `{ time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" }`
+
+## Hide to GUI attached
+
+Hide the GUI attached to the players
+
+- Source: `packages/server/src/Player/GuiManager.ts`
+- Kind: `method`
+- Member of: `GuiManager`
+- Defined in: `GuiManagerMixin`
+- Since: `3.0.0-beta.5`
+
+### Signature
+
+```ts
+player.hideAttachedGui(players?)
+```
+
+### Parameters
+
+- `players?`: `RpgPlayer[] | RpgPlayer`
+
+### Examples
+
+```ts
+player.hideAttachedGui()
+```
+```ts
+player.hideAttachedGui(aPlayer)
+```
+```ts
+player.hideAttachedGui([player1, player2])
+```
 
 ## Show Choices
 
@@ -284,3 +412,79 @@ player.showText(text,options)
 
 - `msg`: `string`
 - `options?`: `DialogOptions`
+
+## View to GUI attached
+
+Display the GUI attached to the players
+
+If you don't specify the players as parameters, it will display the GUI of the instance
+But you can specify which GUIs to display by specifying the players as the first parameter
+
+- Source: `packages/server/src/Player/GuiManager.ts`
+- Kind: `method`
+- Member of: `GuiManager`
+- Defined in: `GuiManagerMixin`
+- Since: `3.0.0-beta.5`
+
+### Signature
+
+```ts
+player.showAttachedGui(players?)
+```
+
+### Parameters
+
+- `players?`: `RpgPlayer[] | RpgPlayer`
+
+### Examples
+
+```ts
+player.showAttachedGui()
+```
+```ts
+player.showAttachedGui(aPlayer)
+```
+```ts
+player.showAttachedGui([player1, player2])
+```
+
+## WithGuiManager
+
+GUI Manager Mixin
+
+Provides graphical user interface management capabilities to any class. This mixin handles
+dialog boxes, menus, notifications, shops, and custom GUI components. It manages the
+complete GUI system including opening, closing, and data passing between client and server.
+
+- Source: `packages/server/src/Player/GuiManager.ts`
+- Kind: `function`
+
+### Signature
+
+```ts
+WithGuiManager(Base: TBase): new (...args: ConstructorParameters<TBase>) => InstanceType<TBase> &
+  IGuiManager
+```
+
+### Parameters
+
+- `Base`: `TBase`
+
+### Returns
+
+Extended class with GUI management methods
+
+### Examples
+
+```ts
+class MyPlayer extends WithGuiManager(BasePlayer) {
+  constructor() {
+    super();
+    // GUI system is automatically initialized
+  }
+}
+
+const player = new MyPlayer();
+await player.showText('Hello World!');
+player.callMainMenu();
+```

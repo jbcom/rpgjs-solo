@@ -11,11 +11,14 @@ Apply, remove, and inspect player states.
 
 - [addState](#addstate)
 - [applyStates](#applystates)
+- [createStateInstance](#createstateinstance)
 - [findStateEfficiency](#findstateefficiency)
 - [getState](#getstate)
 - [removeState](#removestate)
+- [resolveStatesSnapshot](#resolvestatessnapshot)
 - [statesDefense](#statesdefense)
 - [statesEfficiency](#statesefficiency)
+- [WithStateManager](#withstatemanager)
 
 ## addState
 
@@ -58,6 +61,23 @@ applyStates(player: RpgPlayer, states: { addStates?: Array<{ state: any; rate: n
 
 - `player`: `RpgPlayer`
 - `states`: `{ addStates?: Array<{ state: any; rate: number }>; removeStates?: Array<{ state: any; rate: number }> }`
+
+## createStateInstance
+
+Create a state instance without side effects.
+
+- Source: `packages/server/src/Player/StateManager.ts`
+- Kind: `method`
+
+### Signature
+
+```ts
+createStateInstance(stateInput: StateClass | string)
+```
+
+### Parameters
+
+- `stateInput`: `StateClass | string`
 
 ## findStateEfficiency
 
@@ -122,6 +142,24 @@ removeState(stateClass: StateClass | string, chance?: number): void
 - `stateClass`: `StateClass | string`
 - `chance?`: `number`
 
+## resolveStatesSnapshot
+
+Resolve state snapshot entries into state instances without side effects.
+
+- Source: `packages/server/src/Player/StateManager.ts`
+- Kind: `method`
+
+### Signature
+
+```ts
+resolveStatesSnapshot(snapshot: { states?: any[] }, mapOverride?: any)
+```
+
+### Parameters
+
+- `snapshot`: `{ states?: any[] }`
+- `mapOverride?`: `any`
+
 ## statesDefense
 
 Gets the defensive capabilities against various states from equipped items
@@ -157,3 +195,44 @@ statesEfficiency: any
 ### Returns
 
 Signal containing array of state efficiency objects
+
+## WithStateManager
+
+State Manager Mixin
+
+Provides state management capabilities to any class. This mixin handles
+player states (buffs/debuffs), state defense from equipment, and state
+efficiency modifiers. It manages the complete state system including
+application, removal, and resistance mechanics.
+
+- Source: `packages/server/src/Player/StateManager.ts`
+- Kind: `function`
+
+### Signature
+
+```ts
+WithStateManager(Base: TBase)
+```
+
+### Parameters
+
+- `Base`: `TBase`
+
+### Returns
+
+Extended class with state management methods
+
+### Examples
+
+```ts
+class MyPlayer extends WithStateManager(BasePlayer) {
+  constructor() {
+    super();
+    // State system is automatically initialized
+  }
+}
+
+const player = new MyPlayer();
+player.addState(Paralyze);
+console.log(player.getState(Paralyze));
+```

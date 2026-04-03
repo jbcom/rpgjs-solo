@@ -13,6 +13,7 @@ Element offense, defense, and coefficient helpers for players.
 - [elements](#elements)
 - [elementsDefense](#elementsdefense)
 - [elementsEfficiency](#elementsefficiency)
+- [WithElementManager](#withelementmanager)
 
 ## coefficientElements
 
@@ -128,3 +129,43 @@ elementsEfficiency: { rate: number; element: any }[]
 ### Returns
 
 Array of element efficiency objects with rate and element properties
+
+## WithElementManager
+
+Element Manager Mixin
+
+Provides elemental management capabilities to any class. This mixin handles
+elemental resistances, vulnerabilities, and attack elements. It manages both
+defensive capabilities (elementsDefense) and offensive elements from equipment,
+as well as player-specific elemental efficiency modifiers.
+
+- Source: `packages/server/src/Player/ElementManager.ts`
+- Kind: `function`
+
+### Signature
+
+```ts
+WithElementManager(Base: TBase)
+```
+
+### Parameters
+
+- `Base`: `TBase`
+
+### Returns
+
+Extended class with element management methods
+
+### Examples
+
+```ts
+class MyPlayer extends WithElementManager(BasePlayer) {
+  constructor() {
+    super();
+    this.elementsEfficiency = [{ rate: 0.5, element: 'fire' }];
+  }
+}
+
+const player = new MyPlayer();
+const fireResistance = player.elementsDefense.find(e => e.element === 'fire');
+```

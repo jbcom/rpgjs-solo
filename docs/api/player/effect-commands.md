@@ -11,6 +11,7 @@ Apply and inspect player effects.
 
 - [effects](#effects)
 - [hasEffect](#haseffect)
+- [WithEffectManager](#witheffectmanager)
 
 ## effects
 
@@ -81,4 +82,44 @@ if (isGuarding) {
 // Check for cost reduction
 const halfCost = player.hasEffect(Effect.HALF_SP_COST);
 const actualCost = skillCost / (halfCost ? 2 : 1);
+```
+
+## WithEffectManager
+
+Effect Manager Mixin
+
+Provides effect management capabilities to any class. This mixin handles
+player effects including restrictions, buffs, and debuffs. Effects can come
+from various sources like states, equipment, and temporary conditions.
+
+- Source: `packages/server/src/Player/EffectManager.ts`
+- Kind: `function`
+
+### Signature
+
+```ts
+WithEffectManager(Base: TBase)
+```
+
+### Parameters
+
+- `Base`: `TBase`
+
+### Returns
+
+Extended class with effect management methods
+
+### Examples
+
+```ts
+class MyPlayer extends WithEffectManager(BasePlayer) {
+  constructor() {
+    super();
+    // Effect system is automatically initialized
+  }
+}
+
+const player = new MyPlayer();
+player.effects = [Effect.GUARD];
+console.log(player.hasEffect(Effect.GUARD)); // true
 ```

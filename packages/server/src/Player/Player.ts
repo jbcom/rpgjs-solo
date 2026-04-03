@@ -102,6 +102,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   context?: Context;
   conn: MockConnection | null = null;
   touchSide: boolean = false; // Protection against map change loops
+  private _clientListeners = new Map<string, Set<(data: any) => void | Promise<void>>>();
 
   /**
    * Computed signal for world X position
@@ -221,6 +222,22 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       })
   }
 
+  private _getClientListenerBucket(key: string) {
+    let listeners = this._clientListeners.get(key);
+    if (!listeners) {
+      listeners = new Set();
+      this._clientListeners.set(key, listeners);
+    }
+    return listeners;
+  }
+
+  async _dispatchClientEvent(key: string, data: any) {
+    const listeners = [...(this._clientListeners.get(key) ?? [])];
+    for (const callback of listeners) {
+      await callback(data);
+    }
+  }
+
   _onInit() {
     this.hooks.callHooks("server-playerProps-load", this).subscribe();
   }
@@ -233,6 +250,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    *
    * This method only defines the parameter curves and related defaults.
    * It does not restore custom persisted data for you.
+   *
+   * @method player.applyDefaultParameters()
+   * @returns {void}
    */
   applyDefaultParameters() {
     // Use type assertion to access mixin properties
@@ -261,6 +281,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * on the built-in defaults. Do not call it after loading a snapshot or
    * hydrating player data from your own database unless you explicitly want to
    * overwrite those values.
+   *
+   * @method player.initializeDefaultStats()
+   * @returns {void}
    */
   initializeDefaultStats() {
     this.applyDefaultParameters();
@@ -454,6 +477,37 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     return this.map as T | null;
   }
 
+  /**
+   * Send a custom event to the current player's client.
+   *
+   * Use this to push arbitrary websocket payloads to one client only.
+   * On the client side, receive the event by injecting `WebSocketToken`
+   * and subscribing with `socket.on(...)`.
+   *
+   * @method player.emit(type, value)
+   * @param type - Custom event name sent to the client
+   * @param value - Payload sent with the event
+   * @returns {void}
+   *
+   * @example
+   * ```ts
+   * player.emit("inventory:updated", {
+   *   slots: player.items().length,
+   * });
+   * ```
+   *
+   * @example
+   * ```ts
+   * import { inject } from "@rpgjs/client";
+   * import { WebSocketToken, type AbstractWebsocket } from "@rpgjs/client";
+   *
+   * const socket = inject<AbstractWebsocket>(WebSocketToken);
+   *
+   * socket.on("inventory:updated", (payload) => {
+   *   console.log(payload.slots);
+   * });
+   * ```
+   */
   emit(type: string, value?: any) {
     const map = this.getCurrentMap();
     if (!map || !this.conn) return;
@@ -572,6 +626,87 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       const map = this.getCurrentMap();
       map?.showAnimation({ x: this.x(), y: this.y() }, graphic, animationName);
     }
+  }
+
+  /**
+   * Listen to custom data sent by the current player's client.
+   *
+   * This listens to websocket actions emitted from the client with
+   * `socket.emit(key, data)`. It is intended for custom client events
+   * that are not already handled by built-in server actions such as
+   * `move`, `action`, or GUI interactions.
+   *
+   * @title Listen to data from the client
+   * @method player.on(key, cb)
+   * @param key - Event name emitted by the client
+   * @param cb - Callback invoked with the payload sent by the client
+   * @returns {void}
+   * @since 3.0.0-beta.5
+   *
+   * @example
+   * ```ts
+   * player.on("chat:message", ({ text }) => {
+   *   console.log("Client says:", text);
+   * });
+   * ```
+   *
+   * @example
+   * ```ts
+   * import { inject } from "@rpgjs/client";
+   * import { WebSocketToken, type AbstractWebsocket } from "@rpgjs/client";
+   *
+   * const socket = inject<AbstractWebsocket>(WebSocketToken);
+   * socket.emit("chat:message", { text: "Hello server" });
+   * ```
+   */
+  on(key: string, cb: (data: any) => void | Promise<void>) {
+    this._getClientListenerBucket(key).add(cb);
+  }
+
+  /**
+   * Listen one time to custom data sent by the current player's client.
+   *
+   * After the first matching event is received, the listener is removed
+   * automatically.
+   *
+   * @title Listen one-time to data from the client
+   * @method player.once(key, cb)
+   * @param key - Event name emitted by the client
+   * @param cb - Callback invoked only once with the payload sent by the client
+   * @returns {void}
+   * @since 3.0.0-beta.5
+   *
+   * @example
+   * ```ts
+   * player.once("tutorial:ready", (payload) => {
+   *   console.log("Ready once:", payload.step);
+   * });
+   * ```
+   */
+  once(key: string, cb: (data: any) => void | Promise<void>) {
+    const onceCallback = async (data: any) => {
+      this._clientListeners.get(key)?.delete(onceCallback);
+      await cb(data);
+    };
+    this.on(key, onceCallback);
+  }
+
+  /**
+   * Remove all listeners for a custom client event on this player.
+   *
+   * @title Remove listeners of the client event
+   * @method player.off(key)
+   * @param key - Event name to clear
+   * @returns {void}
+   * @since 3.0.0-beta.5
+   *
+   * @example
+   * ```ts
+   * player.off("chat:message");
+   * ```
+   */
+  off(key: string) {
+    this._clientListeners.delete(key);
   }
 
    /**

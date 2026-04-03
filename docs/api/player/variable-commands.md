@@ -5,17 +5,7 @@ description: "Store and retrieve player variables that persist across saves and 
 
 # Variable Commands
 
-Store and retrieve player variables.
-
-Player variables are not just generic temporary values.
-
-They are primarily used to:
-
-- persist player-specific state for saves
-- keep player state when moving from one map to another
-- transfer that state through the player snapshot, even if the next map is hosted on another server
-
-Use them for quest flags, chest states, dialogue progression, switches, and any per-player value that must survive reconnects and map changes.
+Store and retrieve player variables that persist across saves and map transfers.
 
 ## Members
 
@@ -26,6 +16,7 @@ Use them for quest flags, chest states, dialogue progression, switches, and any 
 - [removeVariable](#removevariable)
 - [setVariable](#setvariable)
 - [variables](#variables)
+- [WithVariableManager](#withvariablemanager)
 
 ## clearVariables
 
@@ -129,7 +120,8 @@ true if a variable existed and has been removed, false otherwise
 
 Assign a variable to the player.
 
-Use this for player state that must be persisted and restored later, such as quest progression or whether a personal chest has already been opened.
+Use player variables for quest flags, per-player event state, and any value
+that must survive saves and map transitions.
 
 - Source: `packages/server/src/Player/VariableManager.ts`
 - Kind: `method`
@@ -151,7 +143,8 @@ setVariable(key: string, val: any): void
 
 Map storing all player variables.
 
-These values belong to the player, are persisted, and travel with the player snapshot during map changes.
+These values belong to the player, are persisted, and travel with the
+player snapshot when switching maps or servers.
 
 - Source: `packages/server/src/Player/VariableManager.ts`
 - Kind: `property`
@@ -161,4 +154,48 @@ These values belong to the player, are persisted, and travel with the player sna
 
 ```ts
 variables: Map<string, any>
+```
+
+## WithVariableManager
+
+Variable Manager Mixin
+
+Provides variable management capabilities to any class. Variables are key-value
+pairs that can store any type of data associated with the player, such as
+quest progress, game flags, inventory state, and custom game data.
+
+Player variables have two main roles:
+
+1. Persist player-specific state so it can be restored from saves.
+2. Carry that state across maps and map servers through the player snapshot.
+
+- Source: `packages/server/src/Player/VariableManager.ts`
+- Kind: `function`
+
+### Signature
+
+```ts
+WithVariableManager(Base: TBase)
+```
+
+### Parameters
+
+- `Base`: `TBase`
+
+### Returns
+
+Extended class with variable management methods
+
+### Examples
+
+```ts
+class MyPlayer extends WithVariableManager(BasePlayer) {
+  constructor() {
+    super();
+    // Variables are automatically initialized
+  }
+}
+
+const player = new MyPlayer();
+player.setVariable('questCompleted', true);
 ```

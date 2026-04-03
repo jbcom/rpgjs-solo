@@ -165,6 +165,59 @@ For instance, you might use the non-permanent property to temporarily store a pl
 
 Once you have set up synchronization on the server side, you need to retrieve and use this synchronized data on the client side.
 
+## Custom WebSocket Events
+
+Besides synchronized signals, you can also exchange custom websocket events between the server and the client.
+
+### Receive server events on the client
+
+Inject the websocket service with `WebSocketToken`, then subscribe with `on()`.
+
+```ts
+import { inject } from "@rpgjs/client";
+import { WebSocketToken, type AbstractWebsocket } from "@rpgjs/client";
+
+const socket = inject<AbstractWebsocket>(WebSocketToken);
+
+socket.on("weather:warning", (payload) => {
+  console.log("Weather warning:", payload.level);
+});
+```
+
+On the server, send the event with `player.emit()` for one player or `map.broadcast()` for the whole map.
+
+```ts
+player.emit("weather:warning", { level: "storm" });
+map.broadcast("weather:warning", { level: "storm" });
+```
+
+### Send client events to the server
+
+Emit custom websocket events from the client with the same injected socket.
+
+```ts
+import { inject } from "@rpgjs/client";
+import { WebSocketToken, type AbstractWebsocket } from "@rpgjs/client";
+
+const socket = inject<AbstractWebsocket>(WebSocketToken);
+
+socket.emit("chat:message", {
+  text: "Hello server",
+});
+```
+
+On the server, receive them with `player.on()` for one player or `map.on()` to listen at map level.
+
+```ts
+player.on("chat:message", ({ text }) => {
+  console.log("Player message:", text);
+});
+
+map.on("chat:message", (player, data) => {
+  console.log(player.id, data.text);
+});
+```
+
 ### Using the onInit Hook for Sprites
 
 The `onInit` hook is called when a sprite instance is created, but before the component is displayed. This is the perfect place to access synchronized properties and set up reactive data.

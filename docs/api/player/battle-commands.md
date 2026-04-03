@@ -10,6 +10,7 @@ Battle formulas and server-side battle helpers for players.
 ## Members
 
 - [applyDamage](#applydamage)
+- [getFormulas](#getformulas)
 
 ## applyDamage
 
@@ -63,5 +64,47 @@ if (result.guard) {
 }
 if (result.superGuard) {
   console.log('Attack was heavily reduced by super guard!');
+}
+```
+
+## getFormulas
+
+Get damage formulas from the current map
+
+Retrieves the damage calculation formulas defined in the current map's configuration.
+These formulas are used to calculate different types of damage including physical,
+magical, critical hits, and guard effects. The formulas provide flexibility in
+customizing the battle system's damage calculations.
+
+- Source: `packages/server/src/Player/BattleManager.ts`
+- Kind: `method`
+
+### Signature
+
+```ts
+getFormulas(name: string)
+```
+
+### Parameters
+
+- `name`: `string`
+
+### Returns
+
+The formula function or undefined if not found
+
+### Examples
+
+```ts
+// Get physical damage formula
+const physicFormula = player.getFormulas('damagePhysic');
+if (physicFormula) {
+  const damage = physicFormula(attackerParams, defenderParams);
+}
+
+// Get critical damage formula
+const criticalFormula = player.getFormulas('damageCritical');
+if (criticalFormula) {
+  const criticalDamage = criticalFormula(baseDamage, attackerParams, defenderParams);
 }
 ```

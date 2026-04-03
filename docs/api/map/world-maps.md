@@ -1,11 +1,11 @@
 ---
 title: "World Maps"
-description: "World map management helpers for configuring and querying connected maps."
+description: "Reference for world map helpers."
 ---
 
 # World Maps
 
-World map management helpers for configuring and querying connected maps.
+Reference for world map helpers.
 
 ## Members
 

@@ -9,17 +9,53 @@ Inventory, equipment, and item usage commands for players.
 
 ## Members
 
+- [_type](#type)
 - [addItem](#additem)
+- [addStates](#addstates)
 - [atk](#atk)
 - [buyItem](#buyitem)
+- [consumable](#consumable)
+- [createItemInstance](#createiteminstance)
+- [description](#description)
+- [elements](#elements)
 - [equip](#equip)
 - [getItem](#getitem)
 - [hasItem](#hasitem)
+- [hitRate](#hitrate)
+- [hpValue](#hpvalue)
+- [id](#id)
+- [mpValue](#mpvalue)
+- [name](#name)
+- [onAdd](#onadd)
+- [onEquip](#onequip)
+- [onRemove](#onremove)
+- [onUse](#onuse)
+- [onUseFailed](#onusefailed)
+- [paramsModifier](#paramsmodifier)
 - [pdef](#pdef)
+- [price](#price)
 - [removeItem](#removeitem)
+- [removeStates](#removestates)
+- [resolveEquipmentsSnapshot](#resolveequipmentssnapshot)
+- [resolveItemsSnapshot](#resolveitemssnapshot)
 - [sdef](#sdef)
 - [sellItem](#sellitem)
 - [useItem](#useitem)
+- [WithItemManager](#withitemmanager)
+
+## _type
+
+Item type (for equipment validation)
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+_type: 'item' | 'weapon' | 'armor'
+```
 
 ## addItem
 
@@ -71,6 +107,20 @@ player.addItem({
     console.log('Custom potion added!')
   }
 }, 2)
+```
+
+## addStates
+
+States to add when used
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+addStates: any[]
 ```
 
 ## atk
@@ -139,6 +189,66 @@ try {
     console.log('Item has no price!')
   }
 }
+```
+
+## consumable
+
+Whether the item is consumable
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+consumable: boolean
+```
+
+## createItemInstance
+
+Create an item instance without inventory changes or hook execution.
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `method`
+
+### Signature
+
+```ts
+createItemInstance(item: ItemClass | ItemObject | string, nb?: number)
+```
+
+### Parameters
+
+- `item`: `ItemClass | ItemObject | string`
+- `nb?`: `number`
+
+## description
+
+Item description
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+description: string
+```
+
+## elements
+
+Elemental properties
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+elements: any[]
 ```
 
 ## equip
@@ -245,6 +355,179 @@ player.addItem(Potion, 1)
 player.hasItem(Potion) // true
 ```
 
+## hitRate
+
+Chance to successfully use the item (0-1)
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+hitRate: number
+```
+
+## hpValue
+
+HP value restored when used
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+hpValue: number
+```
+
+## id
+
+Item identifier (required if not using class or string)
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+
+### Signature
+
+```ts
+id: string
+```
+
+## mpValue
+
+MP/SP value restored when used
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+mpValue: number
+```
+
+## name
+
+Item name
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+name: string
+```
+
+## onAdd
+
+Called when the item is added to the player's inventory
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemHooks`
+
+### Signature
+
+```ts
+onAdd: (player: RpgPlayer) => void | Promise<void>
+```
+
+### Parameters
+
+- `` - The player receiving the item
+
+## onEquip
+
+Called when the item is equipped or unequipped
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemHooks`
+
+### Signature
+
+```ts
+onEquip: (player: RpgPlayer, equip: boolean) => void | Promise<void>
+```
+
+### Parameters
+
+- `` - true if equipping, false if unequipping
+
+## onRemove
+
+Called when the item is removed from the inventory
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemHooks`
+
+### Signature
+
+```ts
+onRemove: (player: RpgPlayer) => void | Promise<void>
+```
+
+### Parameters
+
+- `` - The player losing the item
+
+## onUse
+
+Called when the item is successfully used
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemHooks`
+
+### Signature
+
+```ts
+onUse: (player: RpgPlayer) => void | Promise<void>
+```
+
+### Parameters
+
+- `` - The player using the item
+
+## onUseFailed
+
+Called when the item usage fails (e.g., chance roll failed)
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemHooks`
+
+### Signature
+
+```ts
+onUseFailed: (player: RpgPlayer) => void | Promise<void>
+```
+
+### Parameters
+
+- `` - The player attempting to use the item
+
+## paramsModifier
+
+Parameter modifiers
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+paramsModifier: Record<string, any>
+```
+
 ## pdef
 
 Get the player's physical defense (sum of items equipped)
@@ -269,6 +552,20 @@ Total physical defense value from equipped items
 
 ```ts
 console.log(player.pdef) // 80 (sum of all equipped armors physical defense)
+```
+
+## price
+
+Item price
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+price: number
 ```
 
 ## removeItem
@@ -310,6 +607,56 @@ try {
   console.log(err) // { id: 'ITEM_NOT_INVENTORY', msg: '...' }
 }
 ```
+
+## removeStates
+
+States to remove when used
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `property`
+- Defined in: `ItemData`
+
+### Signature
+
+```ts
+removeStates: any[]
+```
+
+## resolveEquipmentsSnapshot
+
+Resolve equipment snapshot entries into Item instances without side effects.
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `method`
+
+### Signature
+
+```ts
+resolveEquipmentsSnapshot(snapshot: { equipments?: any[]; items?: any[] }, mapOverride?: any)
+```
+
+### Parameters
+
+- `snapshot`: `{ equipments?: any[]; items?: any[] }`
+- `mapOverride?`: `any`
+
+## resolveItemsSnapshot
+
+Resolve item snapshot entries into Item instances without side effects.
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `method`
+
+### Signature
+
+```ts
+resolveItemsSnapshot(snapshot: { items?: any[] }, mapOverride?: any)
+```
+
+### Parameters
+
+- `snapshot`: `{ items?: any[] }`
+- `mapOverride?`: `any`
 
 ## sdef
 
@@ -425,4 +772,44 @@ try {
     console.log(err)
   }
 }
+```
+
+## WithItemManager
+
+Item Manager Mixin
+
+Provides comprehensive item management capabilities to any class. This mixin handles
+inventory management, item usage, equipment, buying/selling, and item effects.
+It manages the complete item system including restrictions, transactions, and equipment.
+
+- Source: `packages/server/src/Player/ItemManager.ts`
+- Kind: `function`
+
+### Signature
+
+```ts
+WithItemManager(Base: TBase)
+```
+
+### Parameters
+
+- `Base`: `TBase`
+
+### Returns
+
+Extended class with item management methods
+
+### Examples
+
+```ts
+class MyPlayer extends WithItemManager(BasePlayer) {
+  constructor() {
+    super();
+    // Item system is automatically initialized
+  }
+}
+
+const player = new MyPlayer();
+player.addItem('potion', 5);
+player.useItem('potion');
 ```

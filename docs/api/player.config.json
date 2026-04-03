@@ -1,0 +1,97 @@
+{
+  "title": "Player API",
+  "description": "Server-side Player API reference for RpgPlayer and its managers.",
+  "basePath": "api/player",
+  "index": {
+    "title": "Player API",
+    "description": "Server-side Player API reference for RpgPlayer and its managers.",
+    "intro": "This reference is generated from the JSDoc comments in `@rpgjs/server`. It groups the server-side Player API by manager so you can browse the available commands more easily."
+  },
+  "sections": [
+    {
+      "title": "Common Commands",
+      "description": "Core server-side player commands defined on the main Player class.",
+      "output": "common-commands.md",
+      "sourceFiles": ["packages/server/src/Player/Player.ts"],
+      "ownerNames": ["RpgPlayer"]
+    },
+    {
+      "title": "Components",
+      "description": "Component-based UI layout helpers and component utilities for players.",
+      "output": "components.md",
+      "sourceFiles": ["packages/server/src/Player/ComponentManager.ts"]
+    },
+    {
+      "title": "Parameter Commands",
+      "description": "Level, experience, HP, SP, and parameter management for players.",
+      "output": "parameter-commands.md",
+      "sourceFiles": ["packages/server/src/Player/ParameterManager.ts"]
+    },
+    {
+      "title": "Class Commands",
+      "description": "Assign and inspect player classes and class-driven behaviors.",
+      "output": "class-commands.md",
+      "sourceFiles": ["packages/server/src/Player/ClassManager.ts"]
+    },
+    {
+      "title": "Gold Commands",
+      "description": "Read and update player gold on the server side.",
+      "output": "gold-commands.md",
+      "sourceFiles": ["packages/server/src/Player/GoldManager.ts"]
+    },
+    {
+      "title": "State Commands",
+      "description": "Apply, remove, and inspect player states.",
+      "output": "state-commands.md",
+      "sourceFiles": ["packages/server/src/Player/StateManager.ts"]
+    },
+    {
+      "title": "Element Commands",
+      "description": "Element offense, defense, and coefficient helpers for players.",
+      "output": "element-commands.md",
+      "sourceFiles": ["packages/server/src/Player/ElementManager.ts"]
+    },
+    {
+      "title": "Item Commands",
+      "description": "Inventory, equipment, and item usage commands for players.",
+      "output": "item-commands.md",
+      "sourceFiles": ["packages/server/src/Player/ItemManager.ts"]
+    },
+    {
+      "title": "Skill Commands",
+      "description": "Learn, forget, and use skills from the server-side player API.",
+      "output": "skill-commands.md",
+      "sourceFiles": ["packages/server/src/Player/SkillManager.ts"]
+    },
+    {
+      "title": "Variable Commands",
+      "description": "Store and retrieve player variables that persist across saves and map transfers.",
+      "output": "variable-commands.md",
+      "sourceFiles": ["packages/server/src/Player/VariableManager.ts"]
+    },
+    {
+      "title": "Move Commands",
+      "description": "Movement APIs, movement strategies, and move route helpers.",
+      "output": "move-commands.md",
+      "sourceFiles": ["packages/server/src/Player/MoveManager.ts"]
+    },
+    {
+      "title": "GUI Commands",
+      "description": "Dialogs, menus, notifications, and custom GUI commands.",
+      "output": "gui-commands.md",
+      "sourceFiles": ["packages/server/src/Player/GuiManager.ts"]
+    },
+    {
+      "title": "Effect Commands",
+      "description": "Apply and inspect player effects.",
+      "output": "effect-commands.md",
+      "sourceFiles": ["packages/server/src/Player/EffectManager.ts"]
+    },
+    {
+      "title": "Battle Commands",
+      "description": "Battle formulas and server-side battle helpers for players.",
+      "output": "battle-commands.md",
+      "sourceFiles": ["packages/server/src/Player/BattleManager.ts"]
+    }
+  ]
+}

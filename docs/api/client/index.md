@@ -1,12 +1,12 @@
 ---
 title: "Client API"
-description: "Reference for the RPGJS client engine."
+description: "Reference for the client engine and client-side runtime helpers."
 ---
 
 # Client API
 
-This reference is generated from the JSDoc comments in `packages/client/src/RpgClientEngine.ts`.
+This reference is generated from the JSDoc comments in `@rpgjs/client`.
 
 ## Pages
 
-- [RpgClientEngine](/api/client/rpg-client-engine)
+- [Rpg Client Engine](/api/client/rpg-client-engine)

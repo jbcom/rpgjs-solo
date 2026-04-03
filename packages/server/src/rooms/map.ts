@@ -1,4 +1,4 @@
-import { Action, MockConnection, Request, Room, RoomMethods, RoomOnJoin } from "@signe/room";
+import { Action, MockConnection, Request, Room, RoomMethods, RoomOnJoin, UnhandledAction } from "@signe/room";
 import {
   Hooks,
   IceMovement,
@@ -195,6 +195,8 @@ interface WeatherSetOptions {
   path: "map-{id}"
 })
 export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
+  private _clientListeners = new Map<string, Set<(player: RpgPlayer, data: any) => void | Promise<void>>>();
+
   /** 
    * Synchronized signal containing all players currently on the map
    * 
@@ -964,6 +966,22 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     return BaseRoom.prototype.hooks;
   }
 
+  private _getClientListenerBucket(type: string) {
+    let listeners = this._clientListeners.get(type);
+    if (!listeners) {
+      listeners = new Set();
+      this._clientListeners.set(type, listeners);
+    }
+    return listeners;
+  }
+
+  private async _dispatchClientEvent(type: string, player: RpgPlayer, data: any) {
+    const listeners = [...(this._clientListeners.get(type) ?? [])];
+    for (const callback of listeners) {
+      await callback(player, data);
+    }
+  }
+
   async onSessionRestore(payload: { userSnapshot: any; user?: RpgPlayer }) {
     return await BaseRoom.prototype.onSessionRestore.call(this, payload);
   }
@@ -1163,6 +1181,85 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   @Action('save.list')
   async listSaveSlots(player: RpgPlayer, value: { requestId: string }) {
     return await BaseRoom.prototype.listSaveSlots(player, value);
+  }
+
+  /**
+   * Listen to custom websocket events sent by clients on this map.
+   *
+   * The callback receives the player who sent the event and the payload.
+   * This is useful for map-wide custom interactions that are not covered
+   * by built-in actions such as movement, GUI events, or the action button.
+   *
+   * @method map.on(type, cb)
+   * @param type - Custom event name emitted by clients
+   * @param cb - Callback invoked with the sending player and payload
+   * @returns {void}
+   *
+   * @example
+   * ```ts
+   * map.on("chat:message", (player, data) => {
+   *   console.log(player.id, data.text);
+   * });
+   * ```
+   */
+  on(type: string, cb: (player: RpgPlayer, data: any) => void | Promise<void>) {
+    this._getClientListenerBucket(type).add(cb);
+  }
+
+  /**
+   * Remove all listeners for a custom client event on this map.
+   *
+   * @method map.off(type)
+   * @param type - Custom event name to clear
+   * @returns {void}
+   */
+  off(type: string) {
+    this._clientListeners.delete(type);
+  }
+
+  /**
+   * Broadcast a custom websocket event to all clients connected to this map.
+   *
+   * This is a convenience wrapper around `$broadcast({ type, value })`.
+   * On the client side, receive the event by injecting `WebSocketToken`
+   * and subscribing with `socket.on(type, cb)`.
+   *
+   * @method map.broadcast(type, value)
+   * @param type - Custom event name sent to all clients on the map
+   * @param value - Payload sent with the event
+   * @returns {void}
+   *
+   * @example
+   * ```ts
+   * map.broadcast("weather:warning", {
+   *   level: "storm",
+   * });
+   * ```
+   *
+   * @example
+   * ```ts
+   * import { inject } from "@rpgjs/client";
+   * import { WebSocketToken, type AbstractWebsocket } from "@rpgjs/client";
+   *
+   * const socket = inject<AbstractWebsocket>(WebSocketToken);
+   *
+   * socket.on("weather:warning", (payload) => {
+   *   console.log(payload.level);
+   * });
+   * ```
+   */
+  broadcast(type: string, value?: any) {
+    this.$broadcast({
+      type,
+      value,
+    });
+  }
+
+  @UnhandledAction()
+  async _onUnhandledAction(player: RpgPlayer, message: { action: string; value: any }) {
+    if (!player) return;
+    await player._dispatchClientEvent(message.action, message.value);
+    await this._dispatchClientEvent(message.action, player, message.value);
   }
 
   /**

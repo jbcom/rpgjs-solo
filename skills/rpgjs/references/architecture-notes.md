@@ -100,14 +100,14 @@ When defining a property, verify the documented options such as permanence and w
 
 For durable state, do not bypass `props` with unrelated storage paths unless there is a documented reason to do so.
 
-Use `player.emit(type, value)` only for ephemeral messages that should not become saved state.
+Use `map.broadcast(type, data)` for ephemeral messages that should be sent to everyone on the current map without becoming saved state.
 
 Use `player.on(key, cb)` to listen to data sent by the client when explicit socket-style communication is required.
 
 Keep the distinction strict:
 
 - `props` for state
-- `emit` for transient events or messages
+- `map.broadcast(...)` for transient map-wide events or messages
 - `player.on(...)` for handling client-sent data
 
 ## Events And Collisions

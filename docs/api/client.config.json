@@ -1,0 +1,18 @@
+{
+  "title": "Client API",
+  "description": "Reference for the client engine and client-side runtime helpers.",
+  "basePath": "api/client",
+  "index": {
+    "title": "Client API",
+    "description": "Reference for the client engine and client-side runtime helpers.",
+    "intro": "This reference is generated from the JSDoc comments in `@rpgjs/client`."
+  },
+  "sections": [
+    {
+      "title": "Rpg Client Engine",
+      "description": "Reference for the `RpgClientEngine` class.",
+      "output": "rpg-client-engine.md",
+      "sourceFiles": ["packages/client/src/RpgClientEngine.ts"]
+    }
+  ]
+}
