@@ -7,6 +7,20 @@
     "light": "#59a5ff",
     "dark": "#1559ac"
   },
+  "redirects": [
+    {
+      "source": "/guide",
+      "destination": "/guide/index"
+    },
+    {
+      "source": "/api",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/studio",
+      "destination": "/studio/index"
+    }
+  ],
   "navigation": {
     "tabs": [
       {
@@ -15,7 +29,7 @@
           {
             "group": "Quick Start",
             "pages": [
-              "index",
+              "guide/index",
               "guide/quick-start",
               "guide/get-started",
               "guide/structure",
@@ -147,8 +161,7 @@
           {
             "group": "Overview",
             "pages": [
-              "studio/index",
-              "studio/blocks-runtime"
+              "studio/index"
             ]
           }
         ]

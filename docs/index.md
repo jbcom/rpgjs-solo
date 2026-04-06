@@ -15,7 +15,7 @@ The documentation is organized into three tabs:
 
 - **Guide** for setup, gameplay systems, GUI integration, and production workflows
 - **API** for hooks and extension points
-- **Studio** for editor runtime concepts and internal architecture
+- **Studio** for AI-assisted Studio workflows, skill installation, and authentication
 
 ## Quick start
 
