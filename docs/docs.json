@@ -86,9 +86,9 @@
         "groups": [
           {
             "group": "Overview",
-            "root": "api/index",
+            "root": "api",
             "pages": [
-              "api/index"
+              "api"
             ]
           },
           {

@@ -25,5 +25,5 @@ Use this section to learn RPGJS step by step, from project setup to gameplay sys
 
 ## Related pages
 
-- [API overview](/api/index)
+- [API overview](/api)
 - [Studio overview](/studio/index)

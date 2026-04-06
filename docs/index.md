@@ -41,7 +41,7 @@ Open `http://localhost:5173`.
 - [Getting Started](/guide/get-started)
 - [Structure](/guide/structure)
 - [Create your first map](/guide/create-your-first-map)
-- [API overview](/api/index)
+- [API overview](/api)
 - [Studio overview](/studio/index)
 - [Hooks reference](/hooks/client-engine-hooks)
 - [GitHub repository](https://github.com/RSamaium/RPG-JS)
