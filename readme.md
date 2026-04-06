@@ -16,7 +16,7 @@ With RPG JS, we aspire to provide developers with a robust foundation that adapt
 ## WebSite and Documentation
 
 - Website: [https://rpgjs.dev](https://rpgjs.dev)
-- Documentation: [https://v5.rpgjs.dev](https://docs.rpgjs.dev)
+- Documentation: [https://v5.rpgjs.dev](https://v5.rpgjs.dev)
 
 ## Getting Started
 
