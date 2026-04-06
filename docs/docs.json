@@ -7,20 +7,6 @@
     "light": "#59a5ff",
     "dark": "#1559ac"
   },
-  "redirects": [
-    {
-      "source": "/guide",
-      "destination": "/guide/index"
-    },
-    {
-      "source": "/api",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/studio",
-      "destination": "/studio/index"
-    }
-  ],
   "navigation": {
     "tabs": [
       {
@@ -28,8 +14,9 @@
         "groups": [
           {
             "group": "Quick Start",
+            "root": "index",
             "pages": [
-              "guide/index",
+              "index",
               "guide/quick-start",
               "guide/get-started",
               "guide/structure",
@@ -99,6 +86,7 @@
         "groups": [
           {
             "group": "Overview",
+            "root": "api/index",
             "pages": [
               "api/index"
             ]
@@ -160,6 +148,7 @@
         "groups": [
           {
             "group": "Overview",
+            "root": "studio/index",
             "pages": [
               "studio/index"
             ]
