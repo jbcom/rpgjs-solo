@@ -1,23 +1,11 @@
 ---
-title: "RPGJS v5"
-description: "Create your RPG or MMORPG in JavaScript with guides, API references, and Studio documentation."
+title: "Quick Start"
+description: "Create and run your first RPGJS project in a few minutes."
 ---
 
-# RPGJS v5
+# Quick Start
 
-Create your RPG or MMORPG in JavaScript.
-
-RPGJS is a framework for building 2D RPG games with modern web technologies, including real-time multiplayer support.
-
-## Explore the docs
-
-The documentation is organized into three tabs:
-
-- **Guide** for setup, gameplay systems, GUI integration, and production workflows
-- **API** for hooks and extension points
-- **Studio** for AI-assisted Studio workflows, skill installation, and authentication
-
-## Quick start
+Use the starter, install dependencies, and launch the dev server:
 
 ```bash
 npx degit rpgjs/starter#v5 my-rpg-game
@@ -28,20 +16,29 @@ npm run dev
 
 Open `http://localhost:5173`.
 
-## Highlights
+## Choose MMORPG or standalone RPG
 
-- Build RPG and MMORPG projects with the same framework.
-- Use CanvasEngine (PixiJS-based) for 2D rendering.
-- Import maps from Tiled.
-- Extend behavior with hooks and modules.
+By default, the starter runs in MMORPG mode.
+
+For standalone RPG mode, start the dev server with `RPG_TYPE=rpg`:
+
+```bash
+RPG_TYPE=rpg npm run dev
+```
+
+On Windows, use `cross-env`:
+
+```bash
+npm install --save-dev cross-env
+npx cross-env RPG_TYPE=rpg npm run dev
+```
 
 ## Next steps
 
-- [Quick Start](/guide/quick-start)
 - [Getting Started](/guide/get-started)
 - [Structure](/guide/structure)
 - [Create your first map](/guide/create-your-first-map)
+- [Create hero in map](/guide/create-hero-in-map)
 - [API overview](/api)
 - [Studio overview](/studio/index)
-- [Hooks reference](/hooks/client-engine-hooks)
 - [GitHub repository](https://github.com/RSamaium/RPG-JS)
