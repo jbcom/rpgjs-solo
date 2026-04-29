@@ -3,11 +3,12 @@ import { provideClientModules } from "@rpgjs/client";
 import { configCommon } from "./config.common";
 import { provideActionBattle } from "@rpgjs/action-battle/client";
 import { provideStudioGame } from "@rpgjs/studio/client";
+import { projectId } from "./config.common";
 
 export const configClient = {
   providers: [
     provideStudioGame({
-      projectId: '8398a00a-8a9b-41d5-aae3-77786643b790',
+      projectId,
       baseUrl: 'http://localhost:5173',
       assetsUrl: 'http://localhost:5173/api/uploads',
     }),

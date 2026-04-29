@@ -26,6 +26,20 @@ Current active types in this repo:
 -H "Content-Type: application/json"
 ```
 
+## Read one record by id
+
+When the user gives a database `_id`, retrieve that exact record with:
+
+```bash
+curl -sS "$BASE_URL/api/database/:type/:id" \
+  -H "x-api-key:$RPGSTUDIO_API_KEY" \
+  -H "Content-Type: application/json"
+```
+
+Replace `:type` with the collection path (`items`, `enemies`, or `variables`) and `:id` with the record `_id`.
+
+Before updating, deleting, or explaining the record content, read the current record first and use the returned payload as the source of truth. Do not infer field names or values from the id alone.
+
 ## Dependency resolution workflow
 
 Use this whenever another API needs an item or database ID:

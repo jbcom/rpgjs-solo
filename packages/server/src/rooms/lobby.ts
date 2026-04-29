@@ -36,7 +36,12 @@ export class LobbyRoom extends BaseRoom {
     const id = value.data.id
     if (id === 'start') {
       player.initializeDefaultStats();
-      this.hooks.callHooks("server-player-onStart", player).subscribe();
+      try {
+        await lastValueFrom(this.hooks.callHooks("server-player-onStart", player));
+      }
+      catch (error) {
+        console.error("[RPGJS] Error during player onStart hooks:", error);
+      }
     }
   }
 }

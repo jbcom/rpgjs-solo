@@ -96,6 +96,7 @@ curl -sS -X POST "$BASE_URL/..." \
 - Never call a project listing endpoint just to choose a project. The API key determines the project context.
 - When the user asks to create game objects, send the smallest valid payload first, then enrich it only if the task requires more fields.
 - Reuse IDs returned by the API instead of guessing them.
+- When the user provides a database `_id` for a read, update, or delete task, call `GET /api/database/:type/:id` first and inspect the existing record before deciding the payload or reporting the content.
 - If an endpoint shape is uncertain, inspect the response from a nearby `GET` endpoint first and adapt from that live payload.
 - Do not continue after an auth failure.
 - If a missing dependency would require AI media generation, always call the unified media generation endpoint with `action: "estimate"` first.

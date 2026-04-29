@@ -12,7 +12,6 @@ import {
   RpgMapExtended,
 } from "./event-type-runtime";
 import { normalizeEventType } from "@common/event-types";
-import { assignParams } from "./assign-params";
 import { normalizeWeatherState } from "@common/weather";
 import {
   getGameDataProvider,
@@ -72,9 +71,144 @@ const resolvePlayerConfig = async (player: RpgPlayer): Promise<ProjectBasic> => 
   }
 };
 
-const startGame = async (player: RpgPlayer) => {
+const startGame = async (player: RpgPlayer, map?: RpgMap) => {
   const heroConfig = await resolvePlayerConfig(player);
-  assignParams(player, heroConfig);
+  const startingItems = await ensureStartingItemsInDatabase(player, heroConfig, map);
+  assignPlayerStartParams(player, heroConfig, startingItems);
+};
+
+const applyStartGameOnce = async (player: RpgPlayer, map?: RpgMap) => {
+  const runtimePlayer = player as RpgPlayer & { __studioStartGameApplied?: boolean };
+  if (runtimePlayer.__studioStartGameApplied) return;
+  await startGame(player, map);
+  runtimePlayer.__studioStartGameApplied = true;
+};
+
+const normalizeDatabaseRecord = (record: any): { id: string; data: any } | null => {
+  if (!record || typeof record !== "object") return null;
+
+  const id = typeof record._id === "string" && record._id
+    ? record._id
+    : typeof record.id === "string" && record.id
+      ? record.id
+      : "";
+  if (!id) return null;
+
+  const data = {
+    ...record,
+    id,
+    _type: record._type ?? record.itemType,
+  };
+  delete data.itemType;
+  delete data._id;
+
+  return { id, data };
+};
+
+const collectStartingItemIds = (config: ProjectBasic): string[] => {
+  const ids = new Set<string>();
+
+  for (const item of config.startingInventory ?? []) {
+    if (item?.itemId) ids.add(item.itemId);
+  }
+
+  for (const itemId of Object.values(config.startingEquipment ?? {})) {
+    if (itemId) ids.add(itemId);
+  }
+
+  return [...ids];
+};
+
+const assignPlayerStartParams = (
+  player: RpgPlayer,
+  config: ProjectBasic,
+  startingItems: Record<string, any> = {},
+) => {
+  player.level = config.initialLevel ?? 1;
+  player.finalLevel = config.finalLevel ?? 99;
+  player.expCurve = config.expCurve ?? {
+    basis: 30,
+    extra: 20,
+    accelerationA: 30,
+    accelerationB: 30,
+  };
+
+  if (config.parameters) {
+    for (const paramName in config.parameters) {
+      player.setParameter(paramName, config.parameters[paramName]);
+    }
+  }
+
+  if (config.startingInventory) {
+    for (const item of config.startingInventory) {
+      if (!item.itemId) continue;
+      const itemData = startingItems[item.itemId];
+      if (!itemData) {
+        console.warn(`[StudioGame] starting inventory item ${item.itemId} was not found in the database`);
+        continue;
+      }
+      player.addItem(itemData, item.amount);
+    }
+  }
+
+  if (config.startingEquipment) {
+    for (const type in config.startingEquipment) {
+      const itemId = config.startingEquipment[type];
+      if (!itemId) continue;
+      const itemData = startingItems[itemId];
+      if (!itemData) {
+        console.warn(`[StudioGame] starting equipment item ${itemId} was not found in the database`);
+        continue;
+      }
+      if (!player.getItem(itemId)) {
+        player.addItem(itemData, 1);
+      }
+      player.equip(itemId, "auto");
+    }
+  }
+};
+
+const ensureStartingItemsInDatabase = async (
+  player: RpgPlayer,
+  config: ProjectBasic,
+  mapOverride?: RpgMap,
+): Promise<Record<string, any>> => {
+  const itemIds = collectStartingItemIds(config);
+  if (itemIds.length === 0) return {};
+
+  const map = mapOverride || (player as any).getCurrentMap?.() || (player as any).map;
+  if (!map?.database || !map?.addInDatabase) return {};
+
+  const database = map.database();
+  const missingIds = itemIds.filter((itemId) => !database[itemId]);
+  const startingItems = itemIds.reduce<Record<string, any>>((items, itemId) => {
+    if (database[itemId]) {
+      items[itemId] = database[itemId];
+    }
+    return items;
+  }, {});
+  if (missingIds.length === 0) return startingItems;
+
+  const gameConfig = window.gameConfig ?? {};
+  const configuredProjectId = getStudioGameRuntimeConfig().projectId?.trim() || null;
+  const projectId = configuredProjectId || gameConfig?._id || null;
+
+  try {
+    const records = await getGameDataProvider().getDatabase(projectId ?? undefined);
+    const missing = new Set(missingIds);
+
+    for (const record of records) {
+      const normalized = normalizeDatabaseRecord(record);
+      if (!normalized || !missing.has(normalized.id)) continue;
+      map.addInDatabase(normalized.id, normalized.data, { force: true });
+      startingItems[normalized.id] = normalized.data;
+      missing.delete(normalized.id);
+    }
+  } catch (error) {
+    console.error("[StudioGame] starting items database preload failed", error);
+  }
+
+  return startingItems;
 };
 
 const databaseCacheByProjectId = new Map<string, any>();
@@ -185,10 +319,9 @@ export default (_config?: unknown) => {
   return defineModule<RpgServer>({
     player: {
       onStart: async (player: RpgPlayer) => {
-        await startGame(player);
         await player.changeMap("simplemap");
       },
-      onJoinMap: (player: RpgPlayer, map: RpgMap) => {
+      onJoinMap: async (player: RpgPlayer, map: RpgMap) => {
         const startMapId = map.globalConfig.startMapId;
         const isStartMap = map.data().data._id === startMapId;
         const mapExtended = map as RpgMapExtended;
@@ -205,6 +338,8 @@ export default (_config?: unknown) => {
             y: (mapExtended.startPosition?.y ?? 0) * mapExtended.scale,
           });
         }
+
+        await applyStartGameOnce(player, map);
       },
       onInput: (player: RpgPlayer, input: { action: string }) => {
         if (input.action == "escape") {
