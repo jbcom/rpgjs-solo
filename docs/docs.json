@@ -7,6 +7,12 @@
     "light": "#59a5ff",
     "dark": "#1559ac"
   },
+  "redirects": [
+    {
+      "source": "/quickstart",
+      "destination": "/guide/quick-start"
+    }
+  ],
   "navigation": {
     "tabs": [
       {
