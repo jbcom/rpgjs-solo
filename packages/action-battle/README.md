@@ -524,6 +524,25 @@ export default provideActionBattle({
 });
 ```
 
+RPGJS Studio stores combat animations as spritesheet media ids. If
+`provideStudioGame()` is installed, `createStudioActionBattleAnimations()` can
+read the project animations attached to the player at runtime:
+
+```ts
+import { provideActionBattle } from "@rpgjs/action-battle/server";
+import { createStudioActionBattleAnimations } from "@rpgjs/studio/server";
+
+export default provideActionBattle({
+  animations: createStudioActionBattleAnimations()
+});
+```
+
+You can also pass a static Studio animation object to override the media ids
+manually.
+
+The Studio field `castSpell` is accepted as an alias for action-battle's
+`castSkill` animation key.
+
 For data-driven spritesheets, use resolver functions:
 
 ```ts

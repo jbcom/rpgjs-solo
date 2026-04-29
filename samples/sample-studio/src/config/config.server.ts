@@ -1,7 +1,7 @@
 import { LocalStorageSaveStorageStrategy, provideSaveStorage, provideServerModules } from "@rpgjs/server";
 import { configCommon, projectId } from "./config.common";
 import { provideActionBattle } from "@rpgjs/action-battle/server";
-import { provideStudioGame } from "@rpgjs/studio/server";
+import { createStudioActionBattleAnimations, provideStudioGame } from "@rpgjs/studio/server";
 
 export const configServer = {
   providers: [
@@ -13,6 +13,8 @@ export const configServer = {
     }),
     provideServerModules([]),
     provideSaveStorage(new LocalStorageSaveStorageStrategy({ key: "rpgjs-studio" })),
-    provideActionBattle()
+    provideActionBattle({
+      animations: createStudioActionBattleAnimations(),
+    })
   ],
 };

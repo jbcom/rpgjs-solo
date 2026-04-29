@@ -20,4 +20,11 @@ export type ProjectBasic = {
     amount: number;
   }>;
   startingEquipment?: Record<string, string>;
+  animations?: {
+    attack?: string;
+    hurt?: string;
+    die?: string;
+    castSkill?: string;
+    castSpell?: string;
+  };
 };

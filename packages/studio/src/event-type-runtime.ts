@@ -3,6 +3,7 @@ import { Move, RpgEvent, RpgMap, RpgPlayer } from "@rpgjs/server";
 import { EnemyType, BattleAi } from "@rpgjs/action-battle/server";
 import { normalizeEventType } from "@common/event-types";
 import { assignParams } from "./assign-params";
+import { createStudioActionBattleAnimations } from "./action-battle-animations";
 
 /**
  * Extended RpgMap interface with studio-specific properties
@@ -308,6 +309,7 @@ const enemyRuntime: EventTypeRuntime = {
           enemyType: EnemyType.Aggressive,
           visionRange: 150,
           attackRange: 50,
+          animations: createStudioActionBattleAnimations(enemy.animations),
           onDefeated: (event: RpgEvent) => {
             const map = event.getCurrentMap?.();
             if (map) {

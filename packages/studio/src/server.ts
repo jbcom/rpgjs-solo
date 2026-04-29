@@ -17,6 +17,11 @@ import {
   getGameDataProvider,
   getStudioGameRuntimeConfig,
 } from "./data-provider";
+export { createStudioActionBattleAnimations } from "./action-battle-animations";
+export type {
+  StudioCombatAnimationIds,
+  StudioCombatAnimationOptions,
+} from "./action-battle-animations";
 
 const mergePlayerConfig = (
   baseConfig: ProjectBasic = {},
@@ -40,6 +45,10 @@ const mergePlayerConfig = (
     startingEquipment: {
       ...(baseConfig.startingEquipment ?? {}),
       ...(overrideConfig.startingEquipment ?? {}),
+    },
+    animations: {
+      ...(baseConfig.animations ?? {}),
+      ...(overrideConfig.animations ?? {}),
     },
   };
 };
@@ -73,6 +82,8 @@ const resolvePlayerConfig = async (player: RpgPlayer): Promise<ProjectBasic> => 
 
 const startGame = async (player: RpgPlayer, map?: RpgMap) => {
   const heroConfig = await resolvePlayerConfig(player);
+  (player as any).studioCombatAnimations = heroConfig.animations ?? {};
+  (player as any).combatAnimations = heroConfig.animations ?? {};
   const startingItems = await ensureStartingItemsInDatabase(player, heroConfig, map);
   assignPlayerStartParams(player, heroConfig, startingItems);
 };

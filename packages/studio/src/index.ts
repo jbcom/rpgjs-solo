@@ -6,6 +6,11 @@ import loadMap from "./map-loader";
 import { configureStudioGameRuntime } from "./data-provider";
 import { configureStudioConstants } from "./constants";
 import type { GameRuntimeMode } from "./data-provider/types";
+export { createStudioActionBattleAnimations } from "./action-battle-animations";
+export type {
+  StudioCombatAnimationIds,
+  StudioCombatAnimationOptions,
+} from "./action-battle-animations";
 
 export interface StudioGameModuleConfig {
   projectId?: string | null;

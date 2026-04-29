@@ -25,6 +25,46 @@ const DEFAULT_ANIMATION_BY_KEY: Record<ActionBattleAnimationKey, string> = {
   hurt: "hurt",
   die: "die",
   castSkill: "skill",
+  castSpell: "skill",
+};
+
+const getConfiguredAnimation = (
+  key: ActionBattleAnimationKey,
+  animations?: ActionBattleAnimationOptions,
+) => {
+  if (!animations) {
+    return {
+      hasConfiguredAnimation: false,
+      configured: undefined,
+    };
+  }
+
+  const hasConfiguredAnimation = Object.prototype.hasOwnProperty.call(
+    animations,
+    key,
+  );
+  if (hasConfiguredAnimation) {
+    return {
+      hasConfiguredAnimation,
+      configured: animations[key],
+    };
+  }
+
+  if (key === "castSkill") {
+    const hasCastSpellAlias = Object.prototype.hasOwnProperty.call(
+      animations,
+      "castSpell",
+    );
+    return {
+      hasConfiguredAnimation: hasCastSpellAlias,
+      configured: animations.castSpell,
+    };
+  }
+
+  return {
+    hasConfiguredAnimation: false,
+    configured: undefined,
+  };
 };
 
 export function resolveActionBattleAnimation(
@@ -37,15 +77,14 @@ export function resolveActionBattleAnimation(
   const defaultAnimationName =
     defaults.animationName ?? DEFAULT_ANIMATION_BY_KEY[key];
   const defaultRepeat = defaults.repeat ?? 1;
-  const hasConfiguredAnimation = animations
-    ? Object.prototype.hasOwnProperty.call(animations, key)
-    : false;
+  const { hasConfiguredAnimation, configured: configuredAnimation } =
+    getConfiguredAnimation(key, animations);
   if (!hasConfiguredAnimation && key !== "attack") {
     return null;
   }
 
   const configured = hasConfiguredAnimation
-    ? animations?.[key]
+    ? configuredAnimation
     : defaultAnimationName;
   const result =
     typeof configured === "function"

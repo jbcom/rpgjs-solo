@@ -190,6 +190,28 @@ Use a string for a simple animation name, an object to temporarily switch
 graphics, or a resolver function for data-driven events. Return `null` or
 `undefined` from a resolver to skip the animation.
 
+When combat spritesheets come from RPGJS Studio media fields, convert the media
+ids with `createStudioActionBattleAnimations()`. Studio-generated combat
+spritesheets are played as a temporary graphic with the `walk` animation:
+
+```ts
+import { provideActionBattle } from "@rpgjs/action-battle/server";
+import { createStudioActionBattleAnimations } from "@rpgjs/studio/server";
+
+export default provideActionBattle({
+  animations: createStudioActionBattleAnimations()
+});
+```
+
+Without arguments, the helper reads the Studio project animations attached to
+the player at runtime by `provideStudioGame()`. You can still pass a static
+object when you want to override the media ids manually.
+
+For Studio enemies, the runtime reads `enemy.animations` automatically when an
+enemy is created from the Studio database. The supported Studio fields are
+`attack`, `hurt`, `die`, and `castSpell`. `castSkill` is also accepted when you
+configure action-battle directly.
+
 ## Enemy types
 
 Enemy types affect behavior, not stats:

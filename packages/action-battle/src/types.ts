@@ -8,7 +8,8 @@ export type ActionBattleAnimationKey =
   | "attack"
   | "hurt"
   | "die"
-  | "castSkill";
+  | "castSkill"
+  | "castSpell";
 
 export type ActionBattleAnimationResult =
   | string
