@@ -374,15 +374,16 @@ export class RpgClientEngine<T = any> {
       this.notificationManager.add(data);
     });
 
-     this.webSocket.on("setAnimation", (data) => {    
+    this.webSocket.on("setAnimation", (data) => {
       const { animationName, nbTimes, object, graphic } = data;
-       const player = this.sceneMap.getObjectById(object);
-       if (graphic !== undefined) {
-         player.setAnimation(animationName, graphic, nbTimes);
-       } else {
-         player.setAnimation(animationName, nbTimes);
-       }
-     })
+      const player = object ? this.sceneMap.getObjectById(object) : undefined;
+      if (!player) return;
+      if (graphic !== undefined) {
+        player.setAnimation(animationName, graphic, nbTimes);
+      } else {
+        player.setAnimation(animationName, nbTimes);
+      }
+    })
 
     this.webSocket.on("playSound", (data) => {
       const { soundId, volume, loop } = data;

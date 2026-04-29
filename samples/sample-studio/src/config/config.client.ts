@@ -7,7 +7,7 @@ import { provideStudioGame } from "@rpgjs/studio/client";
 export const configClient = {
   providers: [
     provideStudioGame({
-      projectId: '04424a49-79d4-4933-b869-077278e430f9',
+      projectId: '8398a00a-8a9b-41d5-aae3-77786643b790',
       baseUrl: 'http://localhost:5173',
       assetsUrl: 'http://localhost:5173/api/uploads',
     }),
