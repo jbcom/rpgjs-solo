@@ -37,12 +37,12 @@
     "access": "public"
   },
   "devDependencies": {
-    "@canvasengine/compiler": "^2.0.0-beta.44",
-    "vite": "^7.3.0",
+    "@canvasengine/compiler": "^2.0.0-beta.58",
+    "vite": "^8.0.10",
     "vite-plugin-dts": "^4.5.4"
   },
   "type": "module",
   "dependencies": {
-    "@canvasengine/tiled": "^2.0.0-beta.44"
+    "@canvasengine/tiled": "^2.0.0-beta.58"
   }
 }

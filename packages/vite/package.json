@@ -17,19 +17,19 @@
     "access": "public"
   },
   "dependencies": {
-    "@canvasengine/tiled": "2.0.0-beta.54",
-    "@canvasengine/compiler": "2.0.0-beta.54",
-    "@hono/vite-dev-server": "^0.25.0",
+    "@canvasengine/tiled": "2.0.0-beta.58",
+    "@canvasengine/compiler": "2.0.0-beta.58",
+    "@hono/vite-dev-server": "^0.25.3",
     "@rpgjs/server": "workspace:*",
-    "@types/node": "^25.3.5",
+    "@types/node": "^25.6.0",
     "acorn": "^8.16.0",
     "acorn-walk": "^8.3.5",
     "magic-string": "^0.30.21",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10",
     "vite-plugin-dts": "^4.5.4",
-    "vitest": "^4.0.18",
-    "ws": "^8.19.0"
+    "vitest": "^4.1.5",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1"

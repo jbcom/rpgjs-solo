@@ -26,7 +26,7 @@
   "license": "MIT",
   "description": "",
   "dependencies": {
-    "@canvasengine/tiled": "2.0.0-beta.56",
+    "@canvasengine/tiled": "2.0.0-beta.58",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/physic": "workspace:*",
     "@rpgjs/testing": "workspace:*",
@@ -39,7 +39,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "vite": "^8.0.3",
+    "vite": "^8.0.10",
     "vite-plugin-dts": "^4.5.4"
   },
   "type": "module"
