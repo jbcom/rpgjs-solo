@@ -22,6 +22,16 @@ export interface MenuGuiOptions {
     saveAutoSlotLabel?: string
 }
 
+function readReactiveValue(value: any, context?: any) {
+    return typeof value === 'function' ? value.call(context) : value
+}
+
+function readField(source: any, key: string, fallback?: any) {
+    const value = source?.[key]
+    const resolved = readReactiveValue(value, source)
+    return resolved ?? fallback
+}
+
 export class MenuGui extends Gui {
     private menuOptions: MenuGuiOptions = {}
 
@@ -61,7 +71,7 @@ export class MenuGui extends Gui {
         const player = this.player as any
         const databaseById = player.databaseById?.bind(player)
         const equippedIds = new Set(
-            (player.equipments?.() || []).map((it) => it?.id?.() ?? it?.id ?? it?.name)
+            (player.equipments?.() || []).map((it) => readField(it, 'id', readField(it, 'name')))
         )
 
         const buildStats = () => {
@@ -76,19 +86,19 @@ export class MenuGui extends Gui {
             ]
             const stats: Record<string, number> = {}
             statKeys.forEach((key) => {
-                stats[key] = params[key] ?? 0
+                stats[key] = readReactiveValue(params[key]) ?? 0
             })
-            stats.pdef = player.pdef ?? params.pdef ?? 0
-            stats.sdef = player.sdef ?? params.sdef ?? 0
-            stats.atk = player.atk ?? params.atk ?? 0
+            stats.pdef = readReactiveValue(player.pdef ?? params.pdef) ?? 0
+            stats.sdef = readReactiveValue(player.sdef ?? params.sdef) ?? 0
+            stats.atk = readReactiveValue(player.atk ?? params.atk) ?? 0
             return stats
         }
 
         const items = (player.items?.() || []).map((item) => {
-            const id = item.id()
+            const id = readField(item, 'id')
             const data = databaseById ? databaseById(id) : {}
-            const type = data?._type ?? 'item'
-            const consumable = data?.consumable
+            const type = readField(data, '_type', 'item')
+            const consumable = readField(data, 'consumable')
             const isConsumable = consumable !== undefined ? consumable : type === 'item'
             const usable = isConsumable === false
                 ? false
@@ -97,13 +107,13 @@ export class MenuGui extends Gui {
                     : true
             return {
                 id,
-                name: item.name(),
-                description: item.description(),
-                quantity: item.quantity(),
-                icon: data?.icon ?? (item as any)?.icon,
-                atk: item.atk(),
-                pdef: item.pdef(),
-                sdef: item.sdef(),
+                name: readField(item, 'name'),
+                description: readField(item, 'description'),
+                quantity: readField(item, 'quantity'),
+                icon: readField(data, 'icon', readField(item, 'icon')),
+                atk: readField(item, 'atk'),
+                pdef: readField(item, 'pdef'),
+                sdef: readField(item, 'sdef'),
                 consumable: isConsumable,
                 type,
                 usable,
@@ -112,14 +122,14 @@ export class MenuGui extends Gui {
         })
         const menuEquips = items.filter((item) => item.type === 'weapon' || item.type === 'armor')
         const skills = (player.skills?.() || []).map((skill) => ({
-            id: skill?.id() ?? skill?.name(),
-            name: skill?.name() ?? skill?.id() ?? 'Skill',
-            description: skill?.description() ?? '',
-            spCost: skill?.spCost() ?? 0
+            id: readField(skill, 'id', readField(skill, 'name')),
+            name: readField(skill, 'name', readField(skill, 'id', 'Skill')),
+            description: readField(skill, 'description', ''),
+            spCost: readField(skill, 'spCost', 0)
         }))
         const saveLoad = this.buildSaveLoad(options)
 
-        return { menus, items, equips: menuEquips, skills, saveLoad, playerStats: buildStats(), expForNextlevel: player.expForNextlevel }
+        return { menus, items, equips: menuEquips, skills, saveLoad, playerStats: buildStats(), expForNextlevel: readReactiveValue(player.expForNextlevel) }
     }
 
     private refreshMenu(clientActionId?: string) {
