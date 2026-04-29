@@ -116,7 +116,9 @@ curl -sS -X POST "$BASE_URL/..." \
 - Reuse IDs returned by the API instead of guessing them.
 - If an endpoint shape is uncertain, inspect the response from a nearby `GET` endpoint first and adapt from that live payload.
 - Do not continue after an auth failure.
-- If a missing dependency would require AI media generation, stop and ask the user whether to spend credits before calling a `/api/media/generate/...` endpoint.
+- If a missing dependency would require AI media generation, always call the unified media generation endpoint with `action: "estimate"` first.
+- After the estimate, report the required credits to the user and ask for confirmation before calling `action: "execute"`.
+- Never start an AI media generation directly without this estimate and confirmation step.
 - For `POST /api/maps/generate`, rely on `references/maps.md` for the AI map generation workflow and endpoint-specific failure behavior.
 - Summarize the exact records created, updated, or deleted in the final response.
 - When a task reveals stable project context such as `BASE_URL` or `projectId`, persist that context into `RPGSTUDIO.md` for future runs.
@@ -130,3 +132,8 @@ curl -sS -X POST "$BASE_URL/..." \
 - `event workflow block` task: read [references/blocks.md](./references/blocks.md)
 - `media` task: read [references/media.md](./references/media.md)
 - `settings` task: read [references/settings.md](./references/settings.md)
+
+## Current schema notes
+
+- Project settings and database enemies both support combat animation spritesheet media IDs under `animations`: `attack`, `hurt`, `die`, and `castSpell`.
+- The RPGJS starter runtime uses these spritesheets in action battle: attack actions, damage/hurt feedback, delayed death removal, and skill/cast usage can temporarily switch to the configured spritesheet.

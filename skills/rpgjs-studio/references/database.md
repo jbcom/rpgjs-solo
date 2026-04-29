@@ -128,11 +128,13 @@ Supported fields from `enemySchema`:
 - `parameters?: { maxHp, maxSp, str, agi, int, dex }`
 - `startingEquipment?: { weaponId?: string, armorId?: string }`
 - `startingInventory?: Array<{ itemId: string, amount: number }>`
+- `animations?: { attack?: string, hurt?: string, die?: string, castSpell?: string }`
 - `reward?: { exp?: number, gold?: number, items?: Array<{ itemId: string, amount: number, chance: number }> }`
 
 Notes:
 
 - `graphic` and `faceset` are media `_id`s. Search `/api/media?query=<search>` first.
+- `animations.attack`, `animations.hurt`, `animations.die`, and `animations.castSpell` are spritesheet media `_id`s. Search `/api/media?query=<search>` first.
 - `weaponId`, `armorId`, and `itemId` are item `_id`s. Search `/api/database/items?query=<search>` first.
 
 ### `POST /api/database/variables`

@@ -26,6 +26,7 @@ Useful fields from `projectSchema`:
 - `finalLevel?: number`
 - `expCurve?: { basis, extra, accelerationA, accelerationB }`
 - `parameters?: { maxHp, maxSp, str, agi, int, dex }`
+- `animations?: { attack?: string, hurt?: string, die?: string, castSpell?: string }`
 - `startMapId?: string`
 
 ## Dependency resolution workflow
@@ -33,6 +34,12 @@ Useful fields from `projectSchema`:
 ### Hero appearance
 
 - `hero.graphic` and `hero.faceset` are media `_id`s.
+- Search `/api/media?query=<search>` first.
+- If missing and generation is required, ask user permission before spending credits.
+
+### Hero animations
+
+- `animations.attack`, `animations.hurt`, `animations.die`, and `animations.castSpell` are spritesheet media `_id`s.
 - Search `/api/media?query=<search>` first.
 - If missing and generation is required, ask user permission before spending credits.
 
