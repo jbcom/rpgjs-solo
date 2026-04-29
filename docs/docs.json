@@ -156,7 +156,8 @@
             "group": "Overview",
             "root": "studio/index",
             "pages": [
-              "studio/index"
+              "studio/index",
+              "studio/game-integration"
             ]
           }
         ]
