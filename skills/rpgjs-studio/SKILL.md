@@ -13,8 +13,8 @@ Use this skill to execute content-management tasks against an RPGJS Studio insta
 - If `RPGSTUDIO.md` exists, treat it as local project context and read it first.
 - Use it to recover persistent values such as:
   - `BASE_URL`
-  - `projectId`
   - any other project-specific instructions relevant to API usage
+- Do not recover, request, or persist a `projectId`. The API key is scoped to the RPGJS Studio project, so work directly on the user's requested resource.
 - If `RPGSTUDIO.md` does not exist, continue normally.
 - Resolve `BASE_URL` from the user if provided.
 - Default `BASE_URL` to `https://rpgjs.studio` when the user did not specify another host.
@@ -54,19 +54,9 @@ Use `RPGSTUDIO.md` as a lightweight local memory file for the current project.
 Typical contents:
 
 - last used `BASE_URL`
-- current `projectId`
 - project-specific conventions or notes useful for future calls
 
-If `projectId` is still unknown after reading `RPGSTUDIO.md` and the current user request does not provide it:
-
-1. Call the projects listing endpoint first.
-2. Present a numbered list with:
-   - project title
-   - project identifier
-3. Stop the workflow there.
-4. Ask the user which project to select.
-5. Resume the actual task only after the user chooses a project.
-6. Persist the selected `projectId` in `RPGSTUDIO.md` so it does not need to be requested again later.
+Do not use `RPGSTUDIO.md` to select a project. The current `RPGSTUDIO_API_KEY` already identifies the target project, so proceed directly with the user's request.
 
 Never store secrets in this file.
 
@@ -81,14 +71,6 @@ Define the base command once and reuse it:
 ```bash
 BASE_URL="${BASE_URL:-https://rpgjs.studio}"
 curl -sS \
-  -H "x-api-key:$RPGSTUDIO_API_KEY" \
-  -H "Content-Type: application/json"
-```
-
-Use project listing when `projectId` is missing:
-
-```bash
-curl -sS "$BASE_URL/api/projects" \
   -H "x-api-key:$RPGSTUDIO_API_KEY" \
   -H "Content-Type: application/json"
 ```
@@ -111,7 +93,7 @@ curl -sS -X POST "$BASE_URL/..." \
   - Search database records with `/api/database/:type?query=<search>`.
   - If a matching dependency exists, reuse its returned `_id`.
   - If not found, create it first, then continue with the returned `_id`.
-- If `projectId` is missing, list projects, ask the user to choose one, and stop until they answer.
+- Never call a project listing endpoint just to choose a project. The API key determines the project context.
 - When the user asks to create game objects, send the smallest valid payload first, then enrich it only if the task requires more fields.
 - Reuse IDs returned by the API instead of guessing them.
 - If an endpoint shape is uncertain, inspect the response from a nearby `GET` endpoint first and adapt from that live payload.
@@ -121,7 +103,7 @@ curl -sS -X POST "$BASE_URL/..." \
 - Never start an AI media generation directly without this estimate and confirmation step.
 - For `POST /api/maps/generate`, rely on `references/maps.md` for the AI map generation workflow and endpoint-specific failure behavior.
 - Summarize the exact records created, updated, or deleted in the final response.
-- When a task reveals stable project context such as `BASE_URL` or `projectId`, persist that context into `RPGSTUDIO.md` for future runs.
+- When a task reveals stable project context such as `BASE_URL` or local conventions, persist that non-secret context into `RPGSTUDIO.md` for future runs.
 
 ## Common checks
 
