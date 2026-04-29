@@ -1,8 +1,40 @@
 import { MAXHP, RpgEvent, RpgPlayer } from "@rpgjs/server";
+import {
+  getActionBattleAnimationRemovalDelay,
+  playActionBattleAnimation,
+} from "./animations";
+import { getActionBattleOptions } from "./config";
+import type { ActionBattleAnimationOptions } from "./types";
 
 type RpgEventWithBattleAi = RpgEvent & {
   battleAi: BattleAi;
 };
+
+export interface BattleAiOptions {
+  enemyType?: EnemyType;
+  attackCooldown?: number;
+  visionRange?: number;
+  attackRange?: number;
+  dodgeChance?: number;
+  dodgeCooldown?: number;
+  fleeThreshold?: number;
+  attackSkill?: any;
+  attackPatterns?: AttackPattern[];
+  patrolWaypoints?: Array<{ x: number; y: number }>;
+  groupBehavior?: boolean;
+  moveToCooldown?: number;
+  retreatCooldown?: number;
+  behavior?: {
+    baseScore?: number;
+    updateInterval?: number;
+    minStateDuration?: number;
+    assaultThreshold?: number;
+    retreatThreshold?: number;
+  };
+  animations?: ActionBattleAnimationOptions;
+  /** Callback called when the AI is defeated */
+  onDefeated?: (event: RpgEvent, attacker?: RpgPlayer) => void;
+}
 
 /**
  * Hit result data returned after applying damage
@@ -258,6 +290,7 @@ export class BattleAi {
   // Attack configuration
   private attackSkill: any | null; // Skill to use for attacks
   private attackPatterns: AttackPattern[];
+  private animations?: ActionBattleAnimationOptions;
   private comboCount: number = 0;
   private comboMax: number = 3;
   private chargingAttack: boolean = false;
@@ -327,30 +360,7 @@ export class BattleAi {
    */
   constructor(
     event: RpgEventWithBattleAi,
-    options: {
-      enemyType?: EnemyType;
-      attackCooldown?: number;
-      visionRange?: number;
-      attackRange?: number;
-      dodgeChance?: number;
-      dodgeCooldown?: number;
-      fleeThreshold?: number;
-      attackSkill?: any;
-      attackPatterns?: AttackPattern[];
-      patrolWaypoints?: Array<{ x: number; y: number }>;
-      groupBehavior?: boolean;
-      moveToCooldown?: number;
-      retreatCooldown?: number;
-      behavior?: {
-        baseScore?: number;
-        updateInterval?: number;
-        minStateDuration?: number;
-        assaultThreshold?: number;
-        retreatThreshold?: number;
-      };
-      /** Callback called when the AI is defeated */
-      onDefeated?: (event: RpgEvent, attacker?: RpgPlayer) => void;
-    } = {}
+    options: BattleAiOptions = {}
   ) {
     event.battleAi = this;
     this.event = event;
@@ -361,6 +371,10 @@ export class BattleAi {
 
     // Store attack skill reference
     this.attackSkill = options.attackSkill || null;
+    this.animations = {
+      ...getActionBattleOptions().animations,
+      ...options.animations,
+    };
 
     // Initialize attack patterns
     this.attackPatterns = options.attackPatterns || [
@@ -867,11 +881,17 @@ export class BattleAi {
     if (!this.target) return;
 
     this.faceTarget();
-    this.event.setGraphicAnimation('attack', 1);
+    playActionBattleAnimation("attack", this.event, this.animations, {
+      target: this.target,
+    });
 
     // Use skill if available
     if (this.attackSkill) {
       try {
+        playActionBattleAnimation("castSkill", this.event, this.animations, {
+          skill: this.attackSkill,
+          target: this.target,
+        });
         this.event.useSkill(this.attackSkill, this.target);
       } catch (e) {
         // Skill failed (no SP, etc.) - fall back to basic attack
@@ -1066,7 +1086,15 @@ export class BattleAi {
 
     this.chargingAttack = true;
     this.faceTarget();
-    this.event.setGraphicAnimation('attack', 2);
+    playActionBattleAnimation(
+      "attack",
+      this.event,
+      this.animations,
+      {
+        target: this.target,
+      },
+      { repeat: 2 }
+    );
 
     setTimeout(() => {
       if (!this.target || this.state !== AiState.Combat) {
@@ -1077,6 +1105,10 @@ export class BattleAi {
       // Charged attacks can use a stronger skill or wider hitbox
       if (this.attackSkill) {
         try {
+          playActionBattleAnimation("castSkill", this.event, this.animations, {
+            skill: this.attackSkill,
+            target: this.target,
+          });
           this.event.useSkill(this.attackSkill, this.target);
         } catch (e) {
           this.performBasicHitbox();
@@ -1093,7 +1125,9 @@ export class BattleAi {
    * Perform zone attack (360 degrees)
    */
   private performZoneAttack() {
-    this.event.setGraphicAnimation('attack', 1);
+    playActionBattleAnimation("attack", this.event, this.animations, {
+      target: this.target ?? undefined,
+    });
 
     const eventX = this.event.x();
     const eventY = this.event.y();
@@ -1439,6 +1473,9 @@ export class BattleAi {
       cycles: 1
     });
     this.event.showHit(`-${damage}`);
+    playActionBattleAnimation("hurt", this.event, this.animations, {
+      attacker,
+    });
 
     // Track damage
     this.recentDamageTaken += damage;
@@ -1468,13 +1505,27 @@ export class BattleAi {
    * and removes the event from the map.
    */
   private kill(attacker?: RpgPlayer) {
+    const dieAnimation = playActionBattleAnimation(
+      "die",
+      this.event,
+      this.animations,
+      {
+        attacker,
+      }
+    );
+    const removeDelay = getActionBattleAnimationRemovalDelay(dieAnimation);
+
     // Call onDefeated hook before cleanup
     if (this.onDefeatedCallback) {
       this.onDefeatedCallback(this.event, attacker);
     }
     
     this.destroy();
-    this.event.remove();
+    if (removeDelay > 0) {
+      setTimeout(() => this.event.remove(), removeDelay);
+    } else {
+      this.event.remove();
+    }
   }
 
   /**

@@ -24,7 +24,11 @@ export const DEFAULT_ACTION_BATTLE_OPTIONS: ActionBattleOptions = {
     affects: "events",
     allowEmptyTarget: true,
   },
+  animations: {},
 };
+
+let currentActionBattleOptions: ActionBattleOptions =
+  DEFAULT_ACTION_BATTLE_OPTIONS;
 
 export function normalizeActionBattleOptions(
   options: ActionBattleOptions = {}
@@ -52,5 +56,17 @@ export function normalizeActionBattleOptions(
       ...DEFAULT_ACTION_BATTLE_OPTIONS.targeting,
       ...options.targeting,
     },
+    animations: {
+      ...DEFAULT_ACTION_BATTLE_OPTIONS.animations,
+      ...options.animations,
+    },
   };
+}
+
+export function setActionBattleOptions(options: ActionBattleOptions) {
+  currentActionBattleOptions = options;
+}
+
+export function getActionBattleOptions(): ActionBattleOptions {
+  return currentActionBattleOptions;
 }

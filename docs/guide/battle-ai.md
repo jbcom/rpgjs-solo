@@ -66,10 +66,17 @@ import { provideActionBattle } from "@rpgjs/action-battle/server";
 
 export default createServer({
   providers: [
-    provideActionBattle()
+    provideActionBattle({
+      animations: {
+        attack: "attack"
+      }
+    })
   ]
 });
 ```
+
+`animations` is optional. If you omit it, attacks keep using the default
+`attack` animation and no extra hurt, death, or skill-cast animation is played.
 
 ## Configure stats with the standard RPGJS API
 
@@ -153,12 +160,35 @@ new BattleAi(event, {
     { x: 300, y: 100 }
   ],
   groupBehavior: true,
+  animations: {
+    attack: {
+      animationName: "walk",
+      graphic: "goblin_attack",
+      repeat: 1
+    },
+    hurt: {
+      animationName: "walk",
+      graphic: "goblin_hurt",
+      repeat: 1
+    },
+    die: {
+      animationName: "walk",
+      graphic: "goblin_die",
+      repeat: 1,
+      delayMs: 700
+    }
+  },
   onDefeated: (event, attacker) => {
     const name = attacker?.name?.() ?? "Unknown";
     console.log(`${event.name()} was defeated by ${name}!`);
   }
 });
 ```
+
+Per-enemy `animations` override the global `provideActionBattle()` animations.
+Use a string for a simple animation name, an object to temporarily switch
+graphics, or a resolver function for data-driven events. Return `null` or
+`undefined` from a resolver to skip the animation.
 
 ## Enemy types
 

@@ -496,6 +496,100 @@ The module handles player attacks via the `action` input:
 // Knockback force is based on equipped weapon's knockbackForce property
 ```
 
+## Configurable Combat Animations
+
+By default, player and AI attacks keep using the existing `attack` animation:
+
+```ts
+player.setGraphicAnimation("attack", 1);
+```
+
+Use `animations` when your combat sprites are stored in separate graphics such
+as `hero_attack`, `hero_hurt`, or `hero_die`.
+
+```ts
+import { provideActionBattle } from "@rpgjs/action-battle/server";
+
+export default provideActionBattle({
+  animations: {
+    attack: "attack",
+    hurt: "hurt",
+    die: {
+      animationName: "die",
+      repeat: 1,
+      delayMs: 500
+    },
+    castSkill: "skill"
+  }
+});
+```
+
+For data-driven spritesheets, use resolver functions:
+
+```ts
+provideActionBattle({
+  animations: {
+    attack: (entity) => ({
+      animationName: "walk",
+      graphic: entity.combatAnimations?.attack,
+      repeat: 1
+    }),
+    hurt: (entity) => ({
+      animationName: "walk",
+      graphic: entity.combatAnimations?.hurt,
+      repeat: 1
+    }),
+    die: (entity) => ({
+      animationName: "walk",
+      graphic: entity.combatAnimations?.die,
+      repeat: 1,
+      waitEnd: true
+    }),
+    castSkill: (entity, context) => ({
+      animationName: "walk",
+      graphic: entity.combatAnimations?.castSkill,
+      repeat: 1
+    })
+  }
+});
+```
+
+When `graphic` is provided, action-battle calls:
+
+```ts
+entity.setGraphicAnimation(animationName, graphic, repeat);
+```
+
+Otherwise it calls:
+
+```ts
+entity.setGraphicAnimation(animationName, repeat);
+```
+
+Return `null` or `undefined` from a resolver to skip the animation. `BattleAi`
+can also override the global configuration per enemy:
+
+```ts
+new BattleAi(this, {
+  animations: {
+    attack: {
+      animationName: "walk",
+      graphic: "slime_attack",
+      repeat: 1
+    },
+    die: {
+      animationName: "walk",
+      graphic: "slime_die",
+      repeat: 1,
+      delayMs: 700
+    }
+  }
+});
+```
+
+`waitEnd: true` delays event removal for defeated AI with the default delay used
+by action-battle. Use `delayMs` when you need an exact duration.
+
 ## Knockback System
 
 Knockback force is determined by the equipped weapon's `knockbackForce` property.

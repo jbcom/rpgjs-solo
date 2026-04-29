@@ -6,8 +6,9 @@ import {
   ActionBattleActionBarSkill,
   ActionBattleOptions,
 } from "./types";
-import { normalizeActionBattleOptions } from "./config";
+import { normalizeActionBattleOptions, setActionBattleOptions } from "./config";
 import { manhattanDistance, parseAoeMask } from "./targeting";
+import { playActionBattleAnimation } from "./animations";
 
 export const ACTION_BATTLE_ACTION_BAR_GUI_ID = "action-battle-action-bar";
 
@@ -330,13 +331,21 @@ const handleActionBattleSkillUse = (
   target: { x: number; y: number } | undefined,
   options: ActionBattleOptions
 ) => {
+  const skillData = resolveSkillData(player, skillId);
+
   const map = player.getCurrentMap();
   if (!map) {
+    playActionBattleAnimation("castSkill", player, options.animations, {
+      skill: skillData,
+    });
     player.useSkill(skillId);
     return;
   }
   const targeting = resolveSkillTargeting(player, skillId, options);
   if (!targeting || !target) {
+    playActionBattleAnimation("castSkill", player, options.animations, {
+      skill: skillData,
+    });
     player.useSkill(skillId);
     return;
   }
@@ -383,6 +392,10 @@ const handleActionBattleSkillUse = (
     return;
   }
 
+  playActionBattleAnimation("castSkill", player, options.animations, {
+    skill: skillData,
+    target: targets[0],
+  });
   player.useSkill(skillId, targets as any);
 };
 
@@ -390,6 +403,7 @@ export const createActionBattleServer = (
   rawOptions: ActionBattleOptions = {}
 ) => {
   const options = normalizeActionBattleOptions(rawOptions);
+  setActionBattleOptions(options);
   return defineModule<RpgServer>({
     player: {
       /**
@@ -405,8 +419,7 @@ export const createActionBattleServer = (
        */
       onInput(player: RpgPlayer, input: any) {
         if (input.action == Control.Action) {
-          // Trigger attack animation
-          player.setGraphicAnimation("attack", 1);
+          playActionBattleAnimation("attack", player, options.animations);
 
           // Get player position
           const playerX = player.x();
