@@ -99,21 +99,26 @@ jobs:
       needs: build_and_publish
       if: github.ref == 'refs/heads/v5'
       runs-on: ubuntu-latest
+      strategy:
+        matrix:
+          starter_branch:
+            - v5-studio
+            - v5
       steps:
         - name: Checkout the starter repository
-          run: git clone --branch v5-studio --single-branch https://github.com/rpgjs/starter starter
+          run: git clone --branch ${{ matrix.starter_branch }} --single-branch https://github.com/rpgjs/starter starter
 
         - name: Install npm-check-updates globally
           run: npm i npm-check-updates -g
 
         - name: Run ncu to update dependencies
           run: |
-            cd starter/package
+            cd starter
             ncu -u
 
         - name: Update package lock
           run: |
-            cd starter/package
+            cd starter
             npm i --package-lock-only
 
         - name: Deploy to external repository
@@ -125,5 +130,5 @@ jobs:
             destination-github-username: rpgjs
             destination-repository-name: starter
             user-email: "${{ github.actor}}@users.noreply.github.com"
-            commit-message: update package dependencies to latest RPGJS version
-            target-branch: v5-studio
+            commit-message: update package dependencies to latest RPGJS version on ${{ matrix.starter_branch }}
+            target-branch: ${{ matrix.starter_branch }}
