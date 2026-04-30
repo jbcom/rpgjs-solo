@@ -22,6 +22,7 @@ import {
   normalizeStudioDatabaseRecord,
 } from "./database-normalizer";
 import { createStudioDefaultClass } from "./skills-to-learn";
+import { getStudioSkillChangeNotification } from "./skill-notification";
 export { createStudioActionBattleAnimations } from "./action-battle-animations";
 export type {
   StudioCombatAnimationIds,
@@ -184,6 +185,12 @@ const assignPlayerStartParams = (
       player.equip(itemId, "auto");
     }
   }
+};
+
+const notifySkillChange = (player: RpgPlayer, payload: any) => {
+  const notification = getStudioSkillChangeNotification(payload);
+
+  player.showNotification(notification.message, { type: notification.type });
 };
 
 const ensureStartingItemsInDatabase = async (
@@ -393,6 +400,9 @@ export default (_config?: unknown) => {
       },
       onLevelUp: async (player: RpgPlayer, nbLevel: number) => {
         player.showNotification(`You reached level ${player.level}`);
+      },
+      onSkillChange: async (player: RpgPlayer, payload: any) => {
+        notifySkillChange(player, payload);
       },
     },
     map: {

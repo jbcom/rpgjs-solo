@@ -92,6 +92,7 @@ const FreeSkill = {
 
 let player: RpgPlayer;
 let fixture: TestingFixture;
+const onSkillChangeSpy = vi.fn();
 
 // Define server module with skills in database
 const serverModule = defineModule({
@@ -113,6 +114,7 @@ const serverModule = defineModule({
     async onConnected(player) {
       await player.changeMap("test-map", { x: 100, y: 100 });
     },
+    onSkillChange: onSkillChangeSpy,
   },
 });
 
@@ -122,6 +124,7 @@ const clientModule = defineModule({
 });
 
 beforeEach(async () => {
+  onSkillChangeSpy.mockClear();
   const myModule = createModule("TestModule", [
     {
       server: serverModule,
@@ -521,6 +524,51 @@ describe("Skill Management - Hooks", () => {
     player.learnSkill(customSkill);
     player.forgetSkill("forget-hook-skill");
     expect(onForgetSpy).toHaveBeenCalledWith(player);
+  });
+
+  test("should call player onSkillChange hook when learning skill", () => {
+    const skill = player.learnSkill("fire");
+
+    expect(skill).toBe(FireSkill);
+    expect(onSkillChangeSpy).toHaveBeenCalledWith(
+      player,
+      expect.objectContaining({
+        action: "learn",
+        skill: FireSkill,
+        skillId: "fire",
+        source: "manual",
+      }),
+    );
+  });
+
+  test("should call player onSkillChange hook when forgetting skill", () => {
+    player.learnSkill("fire");
+    onSkillChangeSpy.mockClear();
+
+    player.forgetSkill("fire");
+
+    expect(onSkillChangeSpy).toHaveBeenCalledWith(
+      player,
+      expect.objectContaining({
+        action: "forget",
+        skillId: "fire",
+        source: "manual",
+      }),
+    );
+  });
+
+  test("should pass source and level to onSkillChange hook", () => {
+    player.learnSkill("fire", { source: "level", level: 3 });
+
+    expect(onSkillChangeSpy).toHaveBeenCalledWith(
+      player,
+      expect.objectContaining({
+        action: "learn",
+        skillId: "fire",
+        source: "level",
+        level: 3,
+      }),
+    );
   });
 
   test("should call onUse hook when using skill successfully", () => {

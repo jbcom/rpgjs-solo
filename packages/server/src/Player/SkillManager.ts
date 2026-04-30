@@ -12,7 +12,20 @@ import { Effect } from "./EffectManager";
 /**
  * Type for skill class constructor
  */
-type SkillClass = { new (...args: any[]): any };
+export type SkillClass = { new (...args: any[]): any };
+
+export type SkillChangeAction = "learn" | "forget";
+
+export interface SkillChangeOptions {
+  source?: "manual" | "level" | "class" | "studio" | string;
+  level?: number;
+}
+
+export interface SkillChangePayload extends SkillChangeOptions {
+  action: SkillChangeAction;
+  skill: SkillClass | SkillObject | string;
+  skillId: string;
+}
 
 /**
  * Interface defining the hooks that can be implemented on skill classes or objects
@@ -430,7 +443,10 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
      * });
      * ```
      */
-    learnSkill(skillInput: SkillClass | SkillObject | string): any {
+    learnSkill(
+      skillInput: SkillClass | SkillObject | string,
+      options: SkillChangeOptions = {},
+    ): any {
       const map = this._getSkillMap();
       const { skillId, skillData, skillInstance } = this._resolveSkillInput(skillInput, map);
 
@@ -446,6 +462,15 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
       // Call onLearn hook
       const hookTarget = (instance as any)._skillInstance || instance;
       this["execMethod"]("onLearn", [this], hookTarget);
+      this["execMethod"]("onSkillChange", [
+        {
+          action: "learn",
+          skill: skillData,
+          skillId,
+          source: options.source ?? "manual",
+          level: options.level,
+        },
+      ]);
       
       return skillData;
     }
@@ -466,7 +491,10 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
      * player.forgetSkill(FireSkill);
      * ```
      */
-    forgetSkill(skillInput: SkillClass | SkillObject | string): any {
+    forgetSkill(
+      skillInput: SkillClass | SkillObject | string,
+      options: SkillChangeOptions = {},
+    ): any {
       const index = this._getSkillIndex(skillInput);
       
       if (index === -1) {
@@ -494,6 +522,15 @@ export function WithSkillManager<TBase extends PlayerCtor>(Base: TBase): TBase {
         (skillEntry as any)?._skillData ||
         skillData;
       this["execMethod"]("onForget", [this], hookTarget);
+      this["execMethod"]("onSkillChange", [
+        {
+          action: "forget",
+          skill: skillData,
+          skillId: skillData?.id ?? String(skillInput),
+          source: options.source ?? "manual",
+          level: options.level,
+        },
+      ]);
       
       return skillData;
     }
@@ -607,7 +644,7 @@ export interface ISkillManager {
    * @returns The learned skill data
    * @throws SkillLog.alreadyLearned if the player already knows the skill
    */
-  learnSkill(skillInput: SkillClass | SkillObject | string): any;
+  learnSkill(skillInput: SkillClass | SkillObject | string, options?: SkillChangeOptions): any;
 
   /**
    * Forget a skill
@@ -616,7 +653,7 @@ export interface ISkillManager {
    * @returns The forgotten skill data
    * @throws SkillLog.notLearned if trying to forget a skill not learned
    */
-  forgetSkill(skillInput: SkillClass | SkillObject | string): any;
+  forgetSkill(skillInput: SkillClass | SkillObject | string, options?: SkillChangeOptions): any;
 
   /**
    * Use a skill

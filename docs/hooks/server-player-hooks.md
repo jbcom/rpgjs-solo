@@ -246,6 +246,29 @@ const player: RpgPlayerHooks = {
 }
 ```
 
+### onSkillChange
+
+**Description:** Called after a player learns or forgets a skill.
+
+**Parameters:**
+- `player: RpgPlayer` - The player instance
+- `payload.action: 'learn' | 'forget'` - Skill change type
+- `payload.skill` - Skill data
+- `payload.skillId: string` - Skill identifier
+- `payload.source?: string` - Change source, such as `manual`, `level`, or `studio`
+- `payload.level?: number` - Level that triggered the change, when available
+
+**Example:**
+```ts
+const player: RpgPlayerHooks = {
+    onSkillChange(player, payload) {
+        if (payload.action === 'learn') {
+            player.showNotification(`Learned ${payload.skillId}`)
+        }
+    }
+}
+```
+
 ### onDead
 
 **Description:** Called when a player's HP drops to 0

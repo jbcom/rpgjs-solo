@@ -95,6 +95,8 @@ The project can define hero skill progression with `skills` or `skillsToLearn`. 
 }
 ```
 
+Studio listens to the RPGJS `player.onSkillChange` hook and displays a notification when the hero learns or forgets a skill.
+
 Enemy records can also drive action-battle AI. Use `aiBehavior` on the enemy to set fields such as `enemyType`, `behaviorKey`, `visionRange`, `attackRange`, `attackCooldown`, `attackPatterns`, `groupBehavior`, or the nested behavior gauge options. If the enemy has `attackSkillId`, that skill is used for attacks; otherwise the first learned enemy skill is used.
 
 ## Auto mode

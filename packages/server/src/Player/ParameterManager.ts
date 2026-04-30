@@ -753,7 +753,10 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
             for (let i = this._level() ; i <= val; i++) {
                 for (let skill of currentClass.skillsToLearn as any[]) {
                     if (skill.level == i) {
-                        this['learnSkill'](skill.skill)
+                        this['learnSkill'](skill.skill, {
+                            source: skill.source ?? 'level',
+                            level: i
+                        })
                     }
                 }
             }

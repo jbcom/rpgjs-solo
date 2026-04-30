@@ -104,12 +104,14 @@ Removes a skill from the player's skill list.
 ### Signature
 
 ```ts
-forgetSkill(skillInput: SkillClass | SkillObject | string): any
+forgetSkill(skillInput: SkillClass | SkillObject | string, options?: SkillChangeOptions): any
 ```
 
 ### Parameters
 
 - `skillInput`: `SkillClass | SkillObject | string`
+- `options.source`: Optional source reported to `player.onSkillChange`. Defaults to `manual`.
+- `options.level`: Optional level reported to `player.onSkillChange`.
 
 ### Returns
 
@@ -134,12 +136,14 @@ Forget a skill
 ### Signature
 
 ```ts
-forgetSkill(skillInput: SkillClass | SkillObject | string): any
+forgetSkill(skillInput: SkillClass | SkillObject | string, options?: SkillChangeOptions): any
 ```
 
 ### Parameters
 
 - `skillInput`: `SkillClass | SkillObject | string`
+- `options.source`: Optional source reported to `player.onSkillChange`. Defaults to `manual`.
+- `options.level`: Optional level reported to `player.onSkillChange`.
 
 ### Returns
 
@@ -249,12 +253,14 @@ Adds a skill to the player's skill list. Supports three input formats:
 ### Signature
 
 ```ts
-learnSkill(skillInput: SkillClass | SkillObject | string): any
+learnSkill(skillInput: SkillClass | SkillObject | string, options?: SkillChangeOptions): any
 ```
 
 ### Parameters
 
 - `skillInput`: `SkillClass | SkillObject | string`
+- `options.source`: Optional source reported to `player.onSkillChange`. Defaults to `manual`.
+- `options.level`: Optional level reported to `player.onSkillChange`.
 
 ### Returns
 
@@ -296,12 +302,14 @@ Supports three input formats:
 ### Signature
 
 ```ts
-learnSkill(skillInput: SkillClass | SkillObject | string): any
+learnSkill(skillInput: SkillClass | SkillObject | string, options?: SkillChangeOptions): any
 ```
 
 ### Parameters
 
 - `skillInput`: `SkillClass | SkillObject | string`
+- `options.source`: Optional source reported to `player.onSkillChange`. Defaults to `manual`.
+- `options.level`: Optional level reported to `player.onSkillChange`.
 
 ### Returns
 

@@ -15,9 +15,9 @@ describe("Studio skillsToLearn", () => {
         { level: "bad", skillId: "skip" },
       ]),
     ).toEqual([
-      { level: 1, skill: "slash" },
-      { level: 1, skill: "guard" },
-      { level: 5, skill: "fire" },
+      { level: 1, skill: "slash", source: "studio" },
+      { level: 1, skill: "guard", source: "studio" },
+      { level: 5, skill: "fire", source: "studio" },
     ]);
   });
 
@@ -26,7 +26,7 @@ describe("Studio skillsToLearn", () => {
     expect(createStudioDefaultClass([{ level: 3, skillId: "ice" }])).toEqual({
       id: "studio-default-class",
       name: "Studio Default Class",
-      skillsToLearn: [{ level: 3, skill: "ice" }],
+      skillsToLearn: [{ level: 3, skill: "ice", source: "studio" }],
     });
   });
 });

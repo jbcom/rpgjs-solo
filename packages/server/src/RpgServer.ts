@@ -4,6 +4,7 @@ import { type RpgMap } from "./rooms/map"
 import { RpgServerEngine } from "./RpgServerEngine"
 import { WorldMapConfig, RpgShape, type MapPhysicsInitContext, type MapPhysicsEntityContext } from "@rpgjs/common"
 import { RpgEvent } from "./Player/Player"
+import type { SkillChangePayload } from "./Player/SkillManager"
 
 type RpgClassMap<T> = new () => T
 type RpgClassEvent<T> = RpgEvent
@@ -209,6 +210,14 @@ export interface RpgPlayerHooks {
     * @memberof RpgPlayerHooks
     */
     onLevelUp?: (player: RpgPlayer, nbLevel: number) => any
+
+    /**
+    *  When a player learns or forgets a skill
+    * 
+    * @prop { (player: RpgPlayer, payload: SkillChangePayload) => any } [onSkillChange]
+    * @memberof RpgPlayerHooks
+    */
+    onSkillChange?: (player: RpgPlayer, payload: SkillChangePayload) => any
 
     /**
     *  When the player's HP drops to 0

@@ -9,6 +9,7 @@ export type StudioSkillToLearnEntry = {
 export type StudioRuntimeSkillToLearn = {
   level: number;
   skill: string;
+  source: "studio";
 };
 
 const toLevel = (value: unknown): number | null => {
@@ -46,7 +47,7 @@ export const normalizeStudioSkillsToLearn = (
     const key = `${level}:${skill}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    skills.push({ level, skill });
+    skills.push({ level, skill, source: "studio" });
   }
 
   return skills.sort((a, b) => a.level - b.level);
