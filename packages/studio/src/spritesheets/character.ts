@@ -53,6 +53,9 @@ export const CharacterSpritesheet = (options: {
       },
       [Animation.Walk]: {
         animations: ({ direction }) => [anim(direction, options.framesWidth)],
+      },
+      [Animation.Attack]: {
+        animations: ({ direction }) => [anim(direction, options.framesWidth)],
       }
     },
   };

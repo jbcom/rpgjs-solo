@@ -55,7 +55,10 @@ const mergePlayerConfig = (
 
 const resolvePlayerConfig = async (player: RpgPlayer): Promise<ProjectBasic> => {
   const gameConfig = window.gameConfig ?? {};
-  const baseHeroConfig = (gameConfig.hero ?? {}) as ProjectBasic;
+  const baseHeroConfig = {
+    ...(gameConfig.hero ?? {}),
+    animations: gameConfig.animations ?? gameConfig.hero?.animations,
+  } as ProjectBasic;
   const provider = getGameDataProvider();
   const providerStartConfig = provider.getPlayerStartConfig;
 

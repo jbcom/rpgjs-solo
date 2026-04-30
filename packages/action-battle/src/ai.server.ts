@@ -4,10 +4,12 @@ import {
   playActionBattleAnimation,
 } from "./animations";
 import { getActionBattleOptions } from "./config";
+import { getActionBattleSystems } from "./core/context";
+import type { ActionBattleDamageResult } from "./core/contracts";
 import type { ActionBattleAnimationOptions } from "./types";
 
 type RpgEventWithBattleAi = RpgEvent & {
-  battleAi: BattleAi;
+  battleAi?: BattleAi;
 };
 
 export interface BattleAiOptions {
@@ -31,6 +33,7 @@ export interface BattleAiOptions {
     assaultThreshold?: number;
     retreatThreshold?: number;
   };
+  behaviorKey?: string;
   animations?: ActionBattleAnimationOptions;
   /** Callback called when the AI is defeated */
   onDefeated?: (event: RpgEvent, attacker?: RpgPlayer) => void;
@@ -131,7 +134,9 @@ export interface ApplyHitHooks {
  */
 export const AiDebug = {
   /** Enable/disable all AI debug logs */
-  enabled: (typeof process !== 'undefined' && process.env?.RPGJS_DEBUG_AI === '1') || false,
+  enabled:
+    ((globalThis as { process?: { env?: Record<string, string> } }).process
+      ?.env?.RPGJS_DEBUG_AI === "1") || false,
   
   /** Filter logs to a specific event ID (null = all events) */
   filterEventId: null as string | null,
@@ -275,17 +280,17 @@ export class BattleAi {
 
   // Enemy type and behavior
   private enemyType: EnemyType;
-  private attackCooldown: number;
-  private visionRange: number;
-  private attackRange: number;
+  private attackCooldown: number = 1000;
+  private visionRange: number = 150;
+  private attackRange: number = 60;
 
   // Dodge system
-  private dodgeChance: number;
-  private dodgeCooldown: number;
+  private dodgeChance: number = 0.2;
+  private dodgeCooldown: number = 2000;
   private lastDodgeTime: number = 0;
 
   // Flee threshold (HP percentage)
-  private fleeThreshold: number;
+  private fleeThreshold: number = 0.2;
 
   // Attack configuration
   private attackSkill: any | null; // Skill to use for attacks
@@ -333,6 +338,8 @@ export class BattleAi {
   private lastMoveToTime: number = 0;
   private retreatCooldown: number = 600;
   private lastRetreatTime: number = 0;
+  private timers: ReturnType<typeof setTimeout>[] = [];
+  private behaviorKey?: string;
 
   /**
    * Create a new Battle AI Controller
@@ -367,6 +374,7 @@ export class BattleAi {
 
     // Set enemy type and apply behavior modifiers
     this.enemyType = options.enemyType || EnemyType.Aggressive;
+    this.behaviorKey = options.behaviorKey ?? this.enemyType;
     this.applyEnemyTypeBehavior(options);
 
     // Store attack skill reference
@@ -423,7 +431,9 @@ export class BattleAi {
     // Setup AI systems
     this.setupVision();
     this.startAiBehaviorLoop();
-    this.changeState(AiState.Idle);
+    if (this.patrolWaypoints.length > 0) {
+      this.startPatrol();
+    }
 
     this.debugLog('init', `AI created (type=${this.enemyType}, visionRange=${this.visionRange}, attackRange=${this.attackRange})`);
   }
@@ -530,6 +540,9 @@ export class BattleAi {
    * Change AI state with validated transitions
    */
   private changeState(newState: AiState) {
+    if (newState === this.state) {
+      return;
+    }
     const validTransitions: Record<AiState, AiState[]> = {
       [AiState.Idle]: [AiState.Alert, AiState.Combat],
       [AiState.Alert]: [AiState.Idle, AiState.Combat],
@@ -601,6 +614,8 @@ export class BattleAi {
       this.updateBehavior(currentTime);
     }
 
+    this.applyCustomBehavior(currentTime);
+
     // State-specific behavior
     switch (this.state) {
       case AiState.Idle:
@@ -634,6 +649,7 @@ export class BattleAi {
 
       if (distance < 10) {
         this.currentPatrolIndex = (this.currentPatrolIndex + 1) % this.patrolWaypoints.length;
+        this.startPatrol();
       }
     }
   }
@@ -690,9 +706,10 @@ export class BattleAi {
     // Try dodge
     if (this.canDodge() && this.shouldDodge()) {
       this.debugLog('combat', 'Attempting dodge');
-      this.isMovingToTarget = false;
-      this.tryDodge();
-      return;
+      if (this.tryDodge()) {
+        this.isMovingToTarget = false;
+        return;
+      }
     }
 
     if (this.behaviorEnabled) {
@@ -1066,7 +1083,7 @@ export class BattleAi {
     this.performMeleeAttack();
 
     if (this.comboCount < this.comboMax) {
-      setTimeout(() => {
+      this.schedule(() => {
         if (this.target && this.state === AiState.Combat) {
           this.performComboAttack();
         } else {
@@ -1096,7 +1113,7 @@ export class BattleAi {
       { repeat: 2 }
     );
 
-    setTimeout(() => {
+    this.schedule(() => {
       if (!this.target || this.state !== AiState.Combat) {
         this.chargingAttack = false;
         return;
@@ -1176,7 +1193,7 @@ export class BattleAi {
     this.faceTarget();
     this.event.dash({ x: dirX, y: dirY }, 10, 200);
 
-    setTimeout(() => {
+    this.schedule(() => {
       if (!this.target || this.state !== AiState.Combat) return;
       this.performMeleeAttack();
     }, 200);
@@ -1241,24 +1258,24 @@ export class BattleAi {
   /**
    * Try to dodge
    */
-  private tryDodge() {
+  private tryDodge(): boolean {
     const currentTime = Date.now();
 
     if (currentTime - this.lastDodgeTime < this.dodgeCooldown) {
       this.debugLog('dodge', `Dodge on cooldown (${this.dodgeCooldown - (currentTime - this.lastDodgeTime)}ms remaining)`);
-      return;
+      return false;
     }
     if (Math.random() > this.dodgeChance) {
       this.debugLog('dodge', `Dodge roll failed (chance=${(this.dodgeChance * 100).toFixed(0)}%)`);
-      return;
+      return false;
     }
-    if (!this.target) return;
+    if (!this.target) return false;
 
     const dx = this.target.x() - this.event.x();
     const dy = this.target.y() - this.event.y();
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist === 0) return;
+    if (dist === 0) return false;
 
     // Perpendicular direction
     const dodgeDirX = -dy / dist;
@@ -1272,12 +1289,13 @@ export class BattleAi {
     // Counter-attack for defensive types
     if (this.enemyType === EnemyType.Defensive && Math.random() < 0.5) {
       this.debugLog('dodge', 'Counter-attack after dodge');
-      setTimeout(() => {
+      this.schedule(() => {
         if (this.target && this.state === AiState.Combat) {
           this.selectAndPerformAttack();
         }
       }, 400);
     }
+    return true;
   }
 
   private canDodge(): boolean {
@@ -1461,8 +1479,16 @@ export class BattleAi {
    */
   takeDamage(attacker: RpgPlayer): boolean {
     // Apply damage using RPGJS system
-    const { damage } = this.event.applyDamage(attacker);
+    const raw = this.event.applyDamage(attacker);
+    return this.handleDamage(attacker, {
+      damage: raw.damage ?? 0,
+      defeated: this.event.hp <= 0,
+      raw,
+    });
+  }
 
+  handleDamage(attacker: RpgPlayer, damageResult: ActionBattleDamageResult): boolean {
+    const damage = damageResult.damage;
     this.debugLog('damage', `Took ${damage} damage from ${attacker.id} (HP: ${this.event.hp}/${this.event.param[MAXHP] || '?'})`);
 
     // Visual feedback
@@ -1489,7 +1515,7 @@ export class BattleAi {
     }
 
     // Check death
-    if (this.event.hp <= 0) {
+    if (damageResult.defeated || this.event.hp <= 0) {
       this.debugLog('damage', 'Defeated!');
       this.kill(attacker);
       return true;
@@ -1522,7 +1548,7 @@ export class BattleAi {
     
     this.destroy();
     if (removeDelay > 0) {
-      setTimeout(() => this.event.remove(), removeDelay);
+      this.schedule(() => this.event.remove(), removeDelay);
     } else {
       this.event.remove();
     }
@@ -1595,6 +1621,36 @@ export class BattleAi {
     }
   }
 
+  private applyCustomBehavior(currentTime: number) {
+    if (!this.behaviorKey) return;
+    const behavior = getActionBattleSystems().ai.behaviors[this.behaviorKey];
+    if (!behavior) return;
+    const maxHp = this.event.param[MAXHP];
+    const decision = behavior({
+      event: this.event,
+      target: this.target,
+      state: this.state,
+      enemyType: this.enemyType,
+      distance: this.target ? this.getDistance(this.event, this.target) : null,
+      hpPercent: maxHp ? this.event.hp / maxHp : null,
+      now: currentTime,
+    });
+    if (!decision) return;
+    if (decision.attackCooldown !== undefined) {
+      this.attackCooldown = decision.attackCooldown;
+    }
+    if (decision.moveToCooldown !== undefined) {
+      this.moveToCooldown = decision.moveToCooldown;
+    }
+    if (decision.attackPatterns?.length) {
+      this.attackPatterns = decision.attackPatterns;
+    }
+    if (decision.mode) {
+      this.behaviorMode = decision.mode;
+      this.behaviorEnabled = true;
+    }
+  }
+
   private handleTacticalMovement(distance: number) {
     if (!this.target) return;
     const minRange = this.attackRange * 0.7;
@@ -1651,6 +1707,15 @@ export class BattleAi {
     return true;
   }
 
+  private schedule(callback: () => void, delay: number) {
+    const timer = setTimeout(() => {
+      this.timers = this.timers.filter((entry) => entry !== timer);
+      callback();
+    }, delay);
+    this.timers.push(timer);
+    return timer;
+  }
+
   // Public getters
   getHealth(): number { return this.event.hp; }
   getMaxHealth(): number { return this.event.param[MAXHP]; }
@@ -1668,5 +1733,7 @@ export class BattleAi {
     }
     this.target = null;
     this.nearbyEnemies = [];
+    this.timers.forEach((timer) => clearTimeout(timer));
+    this.timers = [];
   }
 }

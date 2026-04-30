@@ -21,10 +21,50 @@ export type {
   ActionBattleActionBarSkill,
   ActionBattleSkillTargeting,
   ActionBattleSkillTargetingResolver,
+  ActionBattleAttackOptions,
   ActionBattleUiOptions,
   ActionBattleUiActionBarOptions,
   ActionBattleUiTargetingOptions,
+  ActionBattleCombatOptions,
+  ActionBattleSystemOptions,
+  ActionBattleAiSystemOptions,
 } from "./types";
+export type {
+  ActionBattleAiBehavior,
+  ActionBattleAiContext,
+  ActionBattleAiDecision,
+  ActionBattleAttackContext,
+  ActionBattleCombatSystem,
+  ActionBattleDamageContext,
+  ActionBattleDamageResult,
+  ActionBattleDirection,
+  ActionBattleEntity,
+  ActionBattleHitContext,
+  ActionBattleHitHooks,
+  ActionBattleHitResult,
+  ActionBattleHitbox,
+  ActionBattleKnockbackContext,
+  ActionBattleKnockbackResult,
+  ActionBattleSystems,
+} from "./core/contracts";
+export {
+  DEFAULT_ZELDA_PLAYER_HITBOXES,
+  createDefaultPlayerHitboxResolver,
+  defaultCombatSystem,
+  defaultEnemyBehaviors,
+  defaultKnockbackResolver,
+  defaultRpgjsDamageResolver,
+} from "./core/defaults";
+export {
+  createActionBattleSystems,
+  getActionBattleSystems,
+} from "./core/context";
+export { applyActionBattleHit } from "./core/hit";
+export {
+  createActionEnemy,
+  type ActionBattleEnemyPreset,
+  type ActionBattleEnemyPresetMap,
+} from "./enemies/factory";
 
 // Server exports
 export {

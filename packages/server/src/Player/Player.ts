@@ -778,6 +778,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
           graphic,
           nbTimes: finalNbTimes,
           object: this.id,
+          restoreAnimationName: this.animationName(),
+          restoreGraphics: [...this.graphics()],
         },
       });
     }

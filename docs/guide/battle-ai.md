@@ -78,6 +78,96 @@ export default createServer({
 `animations` is optional. If you omit it, attacks keep using the default
 `attack` animation and no extra hurt, death, or skill-cast animation is played.
 
+Player attacks lock movement for `350ms` by default. This gives an A-RPG feel
+where the hero performs the attack in place before moving again.
+
+```ts
+provideActionBattle({
+  attack: {
+    lockMovement: true,
+    lockDurationMs: 350
+  }
+});
+```
+
+Set `lockMovement` to `false` if you want players to keep moving while
+attacking.
+
+## Plugin-first extension points
+
+Action battle is structured as replaceable systems. You can keep the default
+Zelda-like sword attack and only replace the pieces your game needs.
+
+```ts
+import { provideActionBattle } from "@rpgjs/action-battle/server";
+
+export default provideActionBattle({
+  attack: {
+    lockMovement: true,
+    lockDurationMs: 280,
+    hitboxes: {
+      right: { offsetX: 18, offsetY: -18, width: 42, height: 36 }
+    }
+  },
+  systems: {
+    combat: {
+      damage({ attacker, target, skill }) {
+        const raw = target.applyDamage(attacker, skill);
+        return {
+          damage: raw.damage,
+          defeated: target.hp <= 0,
+          raw
+        };
+      },
+      hooks: {
+        beforeHit(context) {
+          return context;
+        },
+        afterHit(result) {
+          console.log(`Damage: ${result.damage}`);
+        }
+      }
+    },
+    ai: {
+      behaviors: {
+        slime({ hpPercent }) {
+          return {
+            mode: hpPercent !== null && hpPercent < 0.25 ? "retreat" : "assault",
+            attackCooldown: 900
+          };
+        }
+      }
+    }
+  }
+});
+```
+
+The public extension contracts are exported from `@rpgjs/action-battle/server`:
+`ActionBattleCombatSystem`, `ActionBattleAiBehavior`,
+`ActionBattleHitHooks`, and `ActionBattleHitResult`.
+
+For data-driven enemies, use `createActionEnemy()`:
+
+```ts
+import { createActionEnemy, EnemyType } from "@rpgjs/action-battle/server";
+
+const enemyPresets = {
+  slime: {
+    enemyType: EnemyType.Aggressive,
+    behaviorKey: "slime",
+    stats(event) {
+      event.hp = 40;
+    }
+  }
+};
+
+createActionEnemy(this, "slime", enemyPresets);
+```
+
+When the action targets a normal event with no `BattleAi`, action-battle lets
+the event handle `onAction` without playing the player attack animation. Enemy
+events with `BattleAi` still trigger the A-RPG attack.
+
 ## Configure stats with the standard RPGJS API
 
 The AI uses the event's existing data.
@@ -192,7 +282,8 @@ graphics, or a resolver function for data-driven events. Return `null` or
 
 When combat spritesheets come from RPGJS Studio media fields, convert the media
 ids with `createStudioActionBattleAnimations()`. Studio-generated combat
-spritesheets are played as a temporary graphic with the `walk` animation:
+spritesheets are played with `setGraphicAnimation("attack", graphic, 1)` by
+default:
 
 ```ts
 import { provideActionBattle } from "@rpgjs/action-battle/server";
@@ -205,7 +296,8 @@ export default provideActionBattle({
 
 Without arguments, the helper reads the Studio project animations attached to
 the player at runtime by `provideStudioGame()`. You can still pass a static
-object when you want to override the media ids manually.
+object when you want to override the media ids manually. Animation values may be
+media ids or media objects returned by the Studio game API.
 
 For Studio enemies, the runtime reads `enemy.animations` automatically when an
 enemy is created from the Studio database. The supported Studio fields are

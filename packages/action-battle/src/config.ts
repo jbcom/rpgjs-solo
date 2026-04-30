@@ -24,6 +24,10 @@ export const DEFAULT_ACTION_BATTLE_OPTIONS: ActionBattleOptions = {
     affects: "events",
     allowEmptyTarget: true,
   },
+  attack: {
+    lockMovement: true,
+    lockDurationMs: 350,
+  },
   animations: {},
 };
 
@@ -56,9 +60,31 @@ export function normalizeActionBattleOptions(
       ...DEFAULT_ACTION_BATTLE_OPTIONS.targeting,
       ...options.targeting,
     },
+    attack: {
+      ...DEFAULT_ACTION_BATTLE_OPTIONS.attack,
+      ...options.attack,
+    },
     animations: {
       ...DEFAULT_ACTION_BATTLE_OPTIONS.animations,
       ...options.animations,
+    },
+    systems: {
+      combat: {
+        ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.combat,
+        ...options.systems?.combat,
+        hooks: {
+          ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.combat?.hooks,
+          ...options.systems?.combat?.hooks,
+        },
+      },
+      ai: {
+        ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.ai,
+        ...options.systems?.ai,
+        behaviors: {
+          ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.ai?.behaviors,
+          ...options.systems?.ai?.behaviors,
+        },
+      },
     },
   };
 }

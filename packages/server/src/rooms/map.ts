@@ -1091,6 +1091,13 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   @Action('move')
   async onInput(player: RpgPlayer, input: any) {
+    if (typeof player.canMove === "function" && !player.canMove()) {
+      player.pendingInputs = [];
+      player.lastProcessedInputTs = 0;
+      (this as any).stopMovement(player);
+      return;
+    }
+
     const lastAckedFrame = player._lastFramePositions?.frame ?? 0;
     const now = Date.now();
     const candidates: Array<{
@@ -1519,6 +1526,16 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     if (!player.isConnected()) {
       player.pendingInputs = [];
+      return {
+        player,
+        inputs: []
+      }
+    }
+
+    if (typeof player.canMove === "function" && !player.canMove()) {
+      player.pendingInputs = [];
+      player.lastProcessedInputTs = 0;
+      (this as any).stopMovement(player);
       return {
         player,
         inputs: []

@@ -72,7 +72,6 @@
   const engine = inject(RpgClientEngine);
   const keyboardControls = engine.globalConfig.keyboardControls;
   const { data, onInteraction, onBack } = defineProps();
-  const currentPlayer = engine.getCurrentPlayer();
   const ACTION_BAR_SIZE = 10;
   const SLOT_LABELS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
   const SLOT_CONFIG_KEYS = [
@@ -107,10 +106,13 @@
     playing: "default"
   });
 
+  const resolveProp = (value) => typeof value === "function" ? value() : value;
+  const actionBarData = computed(() => resolveProp(data) || { items: [], skills: [] });
+
   const actionBarSlots = computed(() => {
     const entries = [];
     if (showSkills()) {
-      currentPlayer.skills().forEach((skill, index) => {
+      (actionBarData().skills || []).forEach((skill, index) => {
         entries.push({
           type: "skill",
           skill,
@@ -120,7 +122,7 @@
       });
     }
     if (showItems()) {
-      currentPlayer.items().forEach((item, index) => {
+      (actionBarData().items || []).forEach((item, index) => {
         entries.push({
           type: "item",
           skill: null,

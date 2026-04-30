@@ -1,3 +1,10 @@
+import type {
+  ActionBattleAiBehavior,
+  ActionBattleCombatSystem,
+  ActionBattleHitHooks,
+  ActionBattleHitbox,
+} from "./core/contracts";
+
 export type ActionBattleAoeMask = string[] | string;
 
 export type ActionBattleActionBarMode = "items" | "skills" | "both";
@@ -92,11 +99,44 @@ export interface ActionBattleTargetingOptions {
   allowEmptyTarget?: boolean;
 }
 
+export interface ActionBattleAttackOptions {
+  lockMovement?: boolean;
+  lockDurationMs?: number;
+  hitboxes?: Partial<
+    Record<
+      "up" | "down" | "left" | "right" | "default",
+      { offsetX: number; offsetY: number; width: number; height: number }
+    >
+  >;
+  resolveHitboxes?: (context: {
+    player: any;
+    direction: string;
+    defaultHitboxes: ActionBattleHitbox[];
+  }) => ActionBattleHitbox[];
+}
+
+export interface ActionBattleCombatOptions {
+  damage?: ActionBattleCombatSystem["resolveDamage"];
+  knockback?: ActionBattleCombatSystem["resolveKnockback"];
+  hooks?: ActionBattleHitHooks;
+}
+
+export interface ActionBattleAiSystemOptions {
+  behaviors?: Record<string, ActionBattleAiBehavior>;
+}
+
+export interface ActionBattleSystemOptions {
+  combat?: ActionBattleCombatOptions;
+  ai?: ActionBattleAiSystemOptions;
+}
+
 export interface ActionBattleOptions {
   ui?: ActionBattleUiOptions;
   skills?: ActionBattleSkillOptions;
   targeting?: ActionBattleTargetingOptions;
+  attack?: ActionBattleAttackOptions;
   animations?: ActionBattleAnimationOptions;
+  systems?: ActionBattleSystemOptions;
 }
 
 export interface ActionBattleActionBarItem {

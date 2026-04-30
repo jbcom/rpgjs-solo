@@ -9,8 +9,13 @@ import {
 import { normalizeActionBattleOptions, setActionBattleOptions } from "./config";
 import { manhattanDistance, parseAoeMask } from "./targeting";
 import { playActionBattleAnimation } from "./animations";
+import { getActionBattleSystems, setActionBattleSystems } from "./core/context";
+import { applyActionBattleHit } from "./core/hit";
+import { DEFAULT_ZELDA_PLAYER_HITBOXES } from "./core/defaults";
+import type { ActionBattleHitbox } from "./core/contracts";
 
 export const ACTION_BATTLE_ACTION_BAR_GUI_ID = "action-battle-action-bar";
+const DEFAULT_ATTACK_LOCK_DURATION_MS = 350;
 
 /**
  * Default player attack hitboxes offsets for each direction
@@ -20,11 +25,111 @@ export const ACTION_BATTLE_ACTION_BAR_GUI_ID = "action-battle-action-bar";
  * when creating the moving hitbox.
  */
 export const DEFAULT_PLAYER_ATTACK_HITBOXES = {
-  up: { offsetX: -16, offsetY: -48, width: 32, height: 32 },
-  down: { offsetX: -16, offsetY: 16, width: 32, height: 32 },
-  left: { offsetX: -48, offsetY: -16, width: 32, height: 32 },
-  right: { offsetX: 16, offsetY: -16, width: 32, height: 32 },
-  default: { offsetX: 0, offsetY: -32, width: 32, height: 32 }
+  ...DEFAULT_ZELDA_PLAYER_HITBOXES,
+};
+
+const beginPlayerAttackLock = (
+  player: RpgPlayer,
+  map: ReturnType<RpgPlayer["getCurrentMap"]> | undefined,
+  durationMs: number
+): boolean => {
+  if (durationMs <= 0) return true;
+
+  const runtimePlayer = player as any;
+  const now = Date.now();
+  if (
+    typeof runtimePlayer.__actionBattleAttackLockedUntil === "number" &&
+    runtimePlayer.__actionBattleAttackLockedUntil > now
+  ) {
+    return false;
+  }
+
+  const lockId = (runtimePlayer.__actionBattleAttackLockId ?? 0) + 1;
+  runtimePlayer.__actionBattleAttackLockId = lockId;
+  runtimePlayer.__actionBattleAttackLockedUntil = now + durationMs;
+
+  const previousCanMove =
+    typeof player.canMove === "function" ? player.canMove() : true;
+  const previousDirectionFixed = player.directionFixed;
+
+  player.pendingInputs = [];
+  player.lastProcessedInputTs = 0;
+  (map as any)?.stopMovement?.(player);
+  player.canMove.set(false);
+  player.directionFixed = true;
+
+  setTimeout(() => {
+    if (runtimePlayer.__actionBattleAttackLockId !== lockId) return;
+    runtimePlayer.__actionBattleAttackLockedUntil = 0;
+    player.canMove.set(previousCanMove);
+    player.directionFixed = previousDirectionFixed;
+  }, durationMs);
+
+  return true;
+};
+
+const isBattleEvent = (event: RpgEvent) => !!(event as any).battleAi;
+
+const rectsOverlap = (
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number }
+) =>
+  a.x < b.x + b.width &&
+  a.x + a.width > b.x &&
+  a.y < b.y + b.height &&
+  a.y + a.height > b.y;
+
+const eventRect = (event: RpgEvent) => {
+  const hitbox =
+    typeof event.hitbox === "function" ? event.hitbox() : (event as any).hitbox;
+  return {
+    x: event.x(),
+    y: event.y(),
+    width: hitbox?.w ?? 32,
+    height: hitbox?.h ?? 32,
+  };
+};
+
+const getVisibleActionEvents = (
+  player: RpgPlayer,
+  map: ReturnType<RpgPlayer["getCurrentMap"]> | undefined,
+  hitboxes: Array<{ x: number; y: number; width: number; height: number }>
+) => {
+  if (!map) return [];
+
+  const eventsById = new Map<string, RpgEvent>();
+  const addEvent = (event: RpgEvent | undefined) => {
+    if (!event) return;
+    const isVisible =
+      typeof (map as any).isEventVisibleForPlayer === "function"
+        ? (map as any).isEventVisibleForPlayer(event, player)
+        : true;
+    if (!isVisible) return;
+    eventsById.set(event.id, event);
+  };
+
+  const collisions = (map as any).getCollisions?.(player.id);
+  if (Array.isArray(collisions)) {
+    collisions.forEach((id: string) => addEvent(map.getEvent(id)));
+  }
+
+  for (const event of map.getEvents()) {
+    const rect = eventRect(event);
+    if (hitboxes.some((hitbox) => rectsOverlap(hitbox, rect))) {
+      addEvent(event);
+    }
+  }
+
+  return Array.from(eventsById.values());
+};
+
+const isActionReservedForNormalEvent = (
+  player: RpgPlayer,
+  map: ReturnType<RpgPlayer["getCurrentMap"]> | undefined,
+  hitboxes: Array<{ x: number; y: number; width: number; height: number }>
+) => {
+  const events = getVisibleActionEvents(player, map, hitboxes);
+  return events.length > 0 && !events.some(isBattleEvent);
 };
 
 /**
@@ -98,51 +203,96 @@ export function applyPlayerHitToEvent(
   const ai = (target as any).battleAi as BattleAi;
   if (!ai) return undefined;
 
-  // Get knockback force from player's weapon
-  const knockbackForce = getPlayerWeaponKnockbackForce(player);
-
-  // Apply damage to AI
-  const defeated = ai.takeDamage(player);
-
-  // Calculate knockback direction (away from player)
-  const dx = target.x() - player.x();
-  const dy = target.y() - player.y();
-  const distance = Math.sqrt(dx * dx + dy * dy);
-
-  // Create hit result
-  let hitResult: HitResult = {
-    damage: 0, // Will be set by takeDamage internally
-    knockbackForce,
-    knockbackDuration: DEFAULT_KNOCKBACK.duration,
-    defeated,
-    attacker: player,
-    target
-  };
-
-  // Call onBeforeHit hook
-  if (hooks?.onBeforeHit) {
-    const modified = hooks.onBeforeHit(hitResult);
-    if (modified) {
-      hitResult = modified;
+  const systems = getActionBattleSystems();
+  const result = applyActionBattleHit(
+    {
+      ...systems.combat,
+      hooks: hooks
+        ? {
+            ...systems.combat.hooks,
+            beforeHit(context) {
+              const before = systems.combat.hooks?.beforeHit?.(context);
+              if (before === false) return false;
+              const nextContext = before || context;
+              const legacyResult = toLegacyHitResult(nextContext);
+              const modified = hooks.onBeforeHit?.(legacyResult);
+              if (!modified) return nextContext;
+              return {
+                ...nextContext,
+                damage: {
+                  damage: modified.damage,
+                  defeated: modified.defeated,
+                  raw: nextContext.damage?.raw,
+                },
+                knockback: {
+                  force: modified.knockbackForce,
+                  duration: modified.knockbackDuration,
+                  direction: nextContext.knockback?.direction,
+                },
+              };
+            },
+            afterHit(result) {
+              systems.combat.hooks?.afterHit?.(result);
+              hooks.onAfterHit?.(result as HitResult);
+            },
+          }
+        : systems.combat.hooks,
+    },
+    {
+      attacker: player,
+      target,
     }
+  );
+
+  if (!result.cancelled) {
+    ai.handleDamage(player, {
+      damage: result.damage,
+      defeated: result.defeated,
+      raw: result.rawDamage,
+    });
   }
 
-  // Apply knockback only if not defeated (entity still exists)
-  if (!hitResult.defeated && hitResult.knockbackForce > 0 && distance > 0) {
-    const knockbackDirection = {
-      x: dx / distance,
-      y: dy / distance
-    };
-    target.knockback(knockbackDirection, hitResult.knockbackForce, hitResult.knockbackDuration);
-  }
-
-  // Call onAfterHit hook
-  if (hooks?.onAfterHit) {
-    hooks.onAfterHit(hitResult);
-  }
-
-  return hitResult;
+  return result as HitResult;
 }
+
+const toLegacyHitResult = (context: any): HitResult => ({
+  damage: context.damage?.damage ?? 0,
+  knockbackForce: context.knockback?.force ?? getPlayerWeaponKnockbackForce(context.attacker),
+  knockbackDuration: context.knockback?.duration ?? DEFAULT_KNOCKBACK.duration,
+  defeated: context.damage?.defeated ?? false,
+  attacker: context.attacker,
+  target: context.target,
+});
+
+const resolvePlayerAttackHitboxes = (
+  player: RpgPlayer,
+  directionKey: string,
+  options: ActionBattleOptions
+): ActionBattleHitbox[] => {
+  const configuredHitboxes = {
+    ...DEFAULT_PLAYER_ATTACK_HITBOXES,
+    ...options.attack?.hitboxes,
+  };
+  const hitboxConfig =
+    configuredHitboxes[
+      directionKey as keyof typeof DEFAULT_PLAYER_ATTACK_HITBOXES
+    ] || configuredHitboxes.default;
+  const defaultHitboxes = [
+    {
+      x: player.x() + hitboxConfig.offsetX,
+      y: player.y() + hitboxConfig.offsetY,
+      width: hitboxConfig.width,
+      height: hitboxConfig.height,
+    },
+  ];
+  return (
+    options.attack?.resolveHitboxes?.({
+      player,
+      direction: directionKey,
+      defaultHitboxes,
+    }) ?? defaultHitboxes
+  );
+};
 
 const resolveSignal = (value: any) =>
   typeof value === "function" ? value() : value;
@@ -404,6 +554,7 @@ export const createActionBattleServer = (
 ) => {
   const options = normalizeActionBattleOptions(rawOptions);
   setActionBattleOptions(options);
+  setActionBattleSystems(options);
   return defineModule<RpgServer>({
     player: {
       /**
@@ -419,38 +570,34 @@ export const createActionBattleServer = (
        */
       onInput(player: RpgPlayer, input: any) {
         if (input.action == Control.Action) {
-          playActionBattleAnimation("attack", player, options.animations);
-
-          // Get player position
-          const playerX = player.x();
-          const playerY = player.y();
+          const map = player.getCurrentMap();
           const direction = player.getDirection();
 
           // Convert Direction enum to string key
           const directionKey = direction as string;
 
-          // Get hitbox configuration for the direction
-          const hitboxConfig =
-            DEFAULT_PLAYER_ATTACK_HITBOXES[
-              directionKey as keyof typeof DEFAULT_PLAYER_ATTACK_HITBOXES
-            ] || DEFAULT_PLAYER_ATTACK_HITBOXES.default;
+          const hitboxes = resolvePlayerAttackHitboxes(
+            player,
+            directionKey,
+            options
+          );
 
-          // Convert relative hitbox to absolute coordinates
-          const hitboxes: Array<{
-            x: number;
-            y: number;
-            width: number;
-            height: number;
-          }> = [
-            {
-              x: playerX + hitboxConfig.offsetX,
-              y: playerY + hitboxConfig.offsetY,
-              width: hitboxConfig.width,
-              height: hitboxConfig.height,
-            },
-          ];
+          if (isActionReservedForNormalEvent(player, map, hitboxes)) {
+            return;
+          }
 
-          const map = player.getCurrentMap();
+          const lockMovement = options.attack?.lockMovement !== false;
+          const lockDurationMs =
+            options.attack?.lockDurationMs ?? DEFAULT_ATTACK_LOCK_DURATION_MS;
+
+          if (
+            lockMovement &&
+            !beginPlayerAttackLock(player, map, Math.max(0, lockDurationMs))
+          ) {
+            return;
+          }
+
+          playActionBattleAnimation("attack", player, options.animations);
 
           map?.createMovingHitbox(hitboxes, { speed: 3 }).subscribe({
             next(hits) {

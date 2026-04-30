@@ -375,13 +375,24 @@ export class RpgClientEngine<T = any> {
     });
 
     this.webSocket.on("setAnimation", (data) => {
-      const { animationName, nbTimes, object, graphic } = data;
+      const {
+        animationName,
+        nbTimes,
+        object,
+        graphic,
+        restoreAnimationName,
+        restoreGraphics,
+      } = data;
       const player = object ? this.sceneMap.getObjectById(object) : undefined;
       if (!player) return;
+      const restoreOptions = {
+        restoreAnimationName,
+        restoreGraphics,
+      };
       if (graphic !== undefined) {
-        player.setAnimation(animationName, graphic, nbTimes);
+        player.setAnimation(animationName, graphic, nbTimes, restoreOptions);
       } else {
-        player.setAnimation(animationName, nbTimes);
+        player.setAnimation(animationName, nbTimes, restoreOptions);
       }
     })
 

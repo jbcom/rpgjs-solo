@@ -1,13 +1,28 @@
 export type StudioCombatAnimationIds = {
-  attack?: string;
-  hurt?: string;
-  die?: string;
-  castSkill?: string;
-  castSpell?: string;
+  attack?: StudioCombatAnimationRef;
+  hurt?: StudioCombatAnimationRef;
+  die?: StudioCombatAnimationRef;
+  castSkill?: StudioCombatAnimationRef;
+  castSpell?: StudioCombatAnimationRef;
 };
+
+export type StudioCombatAnimationRef =
+  | string
+  | {
+      id?: string;
+      _id?: string;
+      mediaId?: string;
+      fileName?: string;
+    }
+  | null
+  | undefined;
 
 export type StudioCombatAnimationOptions = {
   animationName?: string;
+  attackAnimationName?: string;
+  hurtAnimationName?: string;
+  dieAnimationName?: string;
+  castSkillAnimationName?: string;
   repeat?: number;
   dieDelayMs?: number;
 };
@@ -38,6 +53,14 @@ type ActionBattleAnimationResolver = (
 const hasGraphic = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
+const resolveGraphic = (value: StudioCombatAnimationRef): string | null => {
+  if (!value) return null;
+  if (typeof value === "string") {
+    return value.trim().length > 0 ? value : null;
+  }
+  return value.id || value._id || value.mediaId || value.fileName || null;
+};
+
 const resolveStudioAnimationsFromEntity = (
   entity: ActionBattleAnimationEntity,
 ): StudioCombatAnimationIds => {
@@ -55,10 +78,11 @@ const createAnimationResult = (
   repeat: number,
   delayMs?: number,
 ): ActionBattleAnimationResult => {
-  if (!hasGraphic(graphic)) return null;
+  const resolvedGraphic = resolveGraphic(graphic as StudioCombatAnimationRef);
+  if (!hasGraphic(resolvedGraphic)) return null;
   return {
     animationName,
-    graphic,
+    graphic: resolvedGraphic,
     repeat,
     ...(delayMs !== undefined ? { delayMs } : {}),
   };
@@ -67,7 +91,7 @@ const createAnimationResult = (
 /**
  * Convert RPGJS Studio combat animation media ids into action-battle animation
  * options. Studio generated combat spritesheets use the character spritesheet
- * preset, so the playable animation is usually `walk` on the temporary graphic.
+ * preset, and action animations are played with `setGraphicAnimation()`.
  *
  * Without a static `animations` object, the returned resolvers read
  * `entity.studioCombatAnimations`, `entity.combatAnimations`, or
@@ -78,7 +102,12 @@ export const createStudioActionBattleAnimations = (
   animations?: StudioCombatAnimationIds,
   options: StudioCombatAnimationOptions = {},
 ): ActionBattleAnimationOptions => {
-  const animationName = options.animationName ?? "walk";
+  const fallbackAnimationName = options.animationName ?? "attack";
+  const attackAnimationName = options.attackAnimationName ?? fallbackAnimationName;
+  const hurtAnimationName = options.hurtAnimationName ?? fallbackAnimationName;
+  const dieAnimationName = options.dieAnimationName ?? fallbackAnimationName;
+  const castSkillAnimationName =
+    options.castSkillAnimationName ?? fallbackAnimationName;
   const repeat = options.repeat ?? 1;
   const dieDelayMs = options.dieDelayMs ?? 500;
 
@@ -86,21 +115,21 @@ export const createStudioActionBattleAnimations = (
     return {
       attack: (entity) => {
         const current = resolveStudioAnimationsFromEntity(entity);
-        return createAnimationResult(current.attack, animationName, repeat);
+        return createAnimationResult(current.attack, attackAnimationName, repeat);
       },
       hurt: (entity) => {
         const current = resolveStudioAnimationsFromEntity(entity);
-        return createAnimationResult(current.hurt, animationName, repeat);
+        return createAnimationResult(current.hurt, hurtAnimationName, repeat);
       },
       die: (entity) => {
         const current = resolveStudioAnimationsFromEntity(entity);
-        return createAnimationResult(current.die, animationName, repeat, dieDelayMs);
+        return createAnimationResult(current.die, dieAnimationName, repeat, dieDelayMs);
       },
       castSkill: (entity) => {
         const current = resolveStudioAnimationsFromEntity(entity);
         return createAnimationResult(
           current.castSkill ?? current.castSpell,
-          animationName,
+          castSkillAnimationName,
           repeat,
         );
       },
@@ -109,35 +138,38 @@ export const createStudioActionBattleAnimations = (
 
   const result: ActionBattleAnimationOptions = {};
 
-  if (hasGraphic(animations.attack)) {
+  const attack = resolveGraphic(animations.attack);
+  if (hasGraphic(attack)) {
     result.attack = {
-      animationName,
-      graphic: animations.attack,
+      animationName: attackAnimationName,
+      graphic: attack,
       repeat,
     };
   }
 
-  if (hasGraphic(animations.hurt)) {
+  const hurt = resolveGraphic(animations.hurt);
+  if (hasGraphic(hurt)) {
     result.hurt = {
-      animationName,
-      graphic: animations.hurt,
+      animationName: hurtAnimationName,
+      graphic: hurt,
       repeat,
     };
   }
 
-  if (hasGraphic(animations.die)) {
+  const die = resolveGraphic(animations.die);
+  if (hasGraphic(die)) {
     result.die = {
-      animationName,
-      graphic: animations.die,
+      animationName: dieAnimationName,
+      graphic: die,
       repeat,
       delayMs: dieDelayMs,
     };
   }
 
-  const castSkill = animations.castSkill ?? animations.castSpell;
+  const castSkill = resolveGraphic(animations.castSkill ?? animations.castSpell);
   if (hasGraphic(castSkill)) {
     result.castSkill = {
-      animationName,
+      animationName: castSkillAnimationName,
       graphic: castSkill,
       repeat,
     };

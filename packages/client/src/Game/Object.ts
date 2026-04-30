@@ -1,6 +1,6 @@
 import { Hooks, ModulesToken, RpgCommonPlayer } from "@rpgjs/common";
 import { trigger, signal, effect } from "canvasengine";
-import { filter, from, map, Subscription, switchMap } from "rxjs";
+import { filter, from, map, of, Subscription, switchMap } from "rxjs";
 import { inject } from "../core/inject";
 import { RpgClientEngine } from "../RpgClientEngine";
 import TextComponent from "../components/dynamics/text.ce";
@@ -10,6 +10,11 @@ const DYNAMIC_COMPONENTS = {
 }
 
 type Frame = { x: number; y: number; ts: number };
+
+type AnimationRestoreOptions = {
+  restoreAnimationName?: string;
+  restoreGraphics?: any[];
+};
 
 export abstract class RpgClientObject extends RpgCommonPlayer {
   abstract _type: string;
@@ -22,6 +27,10 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   graphicsSignals = signal<any[]>([]);
   _component = {} // temporary component memory
   flashTrigger = trigger();
+  private animationRestoreState?: {
+    animationName: string;
+    graphics: any[];
+  };
 
   constructor() {
     super();
@@ -39,8 +48,10 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     this.graphics.observable
     .pipe(
       map(({ items }) => items),
-      filter(graphics => graphics.length > 0),
-      switchMap(graphics => from(Promise.all(graphics.map(graphic => this.engine.getSpriteSheet(graphic)))))
+      switchMap(graphics => {
+        if (graphics.length === 0) return of([]);
+        return from(Promise.all(graphics.map(graphic => this.engine.getSpriteSheet(graphic))));
+      })
     )
     .subscribe((sheets) => {  
       this.graphicsSignals.set(sheets);
@@ -101,6 +112,30 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   }
 
   private animationSubscription?: Subscription;
+  private animationResetTimeout?: ReturnType<typeof setTimeout>;
+
+  private clearAnimationControls() {
+    if (this.animationSubscription) {
+      this.animationSubscription.unsubscribe();
+      this.animationSubscription = undefined;
+    }
+    if (this.animationResetTimeout) {
+      clearTimeout(this.animationResetTimeout);
+      this.animationResetTimeout = undefined;
+    }
+  }
+
+  private finishTemporaryAnimation() {
+    const restoreState = this.animationRestoreState;
+    this.clearAnimationControls();
+    this.animationCurrentIndex.set(0);
+    if (restoreState) {
+      this.animationName.set(restoreState.animationName);
+      this.graphics.set([...restoreState.graphics]);
+    }
+    this.animationRestoreState = undefined;
+    this.animationIsPlaying.set(false);
+  }
 
   /**
    * Trigger a flash animation on this sprite
@@ -199,12 +234,13 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
    * ```
    */
   resetAnimationState() {
+    if (this.animationRestoreState) {
+      this.finishTemporaryAnimation();
+      return;
+    }
     this.animationIsPlaying.set(false);
     this.animationCurrentIndex.set(0);
-    if (this.animationSubscription) {
-      this.animationSubscription.unsubscribe();
-      this.animationSubscription = undefined;
-    }
+    this.clearAnimationControls();
   }
 
   /**
@@ -226,7 +262,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
    * player.setAnimation('spell');
    * ```
    */
-  setAnimation(animationName: string, nbTimes?: number): void;
+  setAnimation(animationName: string, nbTimes?: number, options?: AnimationRestoreOptions): void;
   /**
    * Set a custom animation with temporary graphic change
    *
@@ -244,29 +280,51 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
    * player.setAnimation('attack', 'hero_attack', 3);
    * ```
    */
-  setAnimation(animationName: string, graphic?: string | string[], nbTimes?: number): void;
-  setAnimation(animationName: string, graphicOrNbTimes?: string | string[] | number, nbTimes?: number): void {
-    if (this.animationIsPlaying()) return;
-    this.animationIsPlaying.set(true);
-    const previousAnimationName = this.animationName();
-    const previousGraphics = this.graphics();
-    this.animationCurrentIndex.set(0);
-
+  setAnimation(animationName: string, graphic?: string | string[], nbTimes?: number, options?: AnimationRestoreOptions): void;
+  setAnimation(
+    animationName: string,
+    graphicOrNbTimes?: string | string[] | number,
+    nbTimesOrOptions?: number | AnimationRestoreOptions,
+    options?: AnimationRestoreOptions
+  ): void {
     let graphic: string | string[] | undefined;
     let finalNbTimes: number = Infinity;
+    let restoreOptions: AnimationRestoreOptions | undefined = options;
 
     // Handle overloads
     if (typeof graphicOrNbTimes === 'number') {
       // setAnimation(animationName, nbTimes)
       finalNbTimes = graphicOrNbTimes;
+      restoreOptions = typeof nbTimesOrOptions === 'object' ? nbTimesOrOptions : options;
     } else if (graphicOrNbTimes !== undefined) {
       // setAnimation(animationName, graphic, nbTimes)
       graphic = graphicOrNbTimes;
-      finalNbTimes = nbTimes ?? Infinity;
+      if (typeof nbTimesOrOptions === 'number') {
+        finalNbTimes = nbTimesOrOptions;
+      } else {
+        finalNbTimes = Infinity;
+        restoreOptions = nbTimesOrOptions ?? options;
+      }
     } else {
       // setAnimation(animationName) - nbTimes remains Infinity
       finalNbTimes = Infinity;
     }
+
+    if (this.animationIsPlaying()) {
+      this.finishTemporaryAnimation();
+    }
+
+    this.animationIsPlaying.set(true);
+    const previousAnimationName =
+      restoreOptions?.restoreAnimationName ?? this.animationName();
+    const previousGraphics = restoreOptions?.restoreGraphics
+      ? [...restoreOptions.restoreGraphics]
+      : [...this.graphics()];
+    this.animationRestoreState = {
+      animationName: previousAnimationName,
+      graphics: previousGraphics,
+    };
+    this.animationCurrentIndex.set(0);
 
     // Temporarily change graphic if provided
     if (graphic !== undefined) {
@@ -277,27 +335,23 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
       }
     }
 
-    // Clean up any existing subscription
-    if (this.animationSubscription) {
-      this.animationSubscription.unsubscribe();
-    }
+    this.clearAnimationControls();
 
     this.animationSubscription =
       this.animationCurrentIndex.observable.subscribe((index) => {
         if (index >= finalNbTimes) {
-          this.animationCurrentIndex.set(0);
-          this.animationName.set(previousAnimationName);
-          // Reset graphic to previous value if it was changed
-          if (graphic !== undefined) {
-            this.graphics.set(previousGraphics);
-          }
-          this.animationIsPlaying.set(false);
-          if (this.animationSubscription) {
-            this.animationSubscription.unsubscribe();
-            this.animationSubscription = undefined;
-          }
+          this.finishTemporaryAnimation();
         }
       });
+
+    if (finalNbTimes !== Infinity) {
+      this.animationResetTimeout = setTimeout(() => {
+        if (this.animationIsPlaying()) {
+          this.finishTemporaryAnimation();
+        }
+      }, Math.max(1000, finalNbTimes * 1000));
+    }
+
     this.animationName.set(animationName);
   }
 

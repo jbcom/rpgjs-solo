@@ -1,6 +1,8 @@
 import { inject, PrebuiltComponentAnimations, RpgClient, RpgClientEngine, RpgGui } from "@rpgjs/client";
 import { defineModule } from "@rpgjs/common";
+// @ts-ignore CanvasEngine components are compiled by @canvasengine/compiler.
 import ActionBarComponent from "./components/action-bar.ce";
+// @ts-ignore CanvasEngine components are compiled by @canvasengine/compiler.
 import TargetingOverlayComponent from "./components/targeting-overlay.ce";
 import { setActionBattleOptions } from "./ui/state";
 import { ActionBattleOptions } from "./types";

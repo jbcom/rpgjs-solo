@@ -30,6 +30,7 @@ interface GlobalConfig {
     graphic?: any;
     faceset?: any;
   };
+  animations?: Record<string, any>;
 }
 
 interface RpgClientEngineWithConfig extends RpgClientEngine {
@@ -112,12 +113,17 @@ export default (config: StudioGameModuleConfig) => {
           startMapId: config.startMapId !== undefined ? config.startMapId : (response.startMapId || engine.globalConfig?.startMapId),
         };
 
+        const animationMediaRefs = Object.values(
+          engine.globalConfig.animations ?? {},
+        ).filter(Boolean);
+
         const heroMediaRefs = [
           engine.globalConfig.hero?.graphic,
           engine.globalConfig.hero?.faceset,
+          ...animationMediaRefs,
         ].filter(Boolean);
 
-        // Load hero spritesheets from either direct media objects or media IDs.
+        // Load hero and combat animation spritesheets from either direct media objects or media IDs.
         const heroSpritesheets = await Promise.all(
           heroMediaRefs.map((mediaRef) => resolveHeroMediaSpritesheet(mediaRef)),
         );

@@ -7,6 +7,7 @@ The AI controller manages **behavior only** - all stats (HP, ATK, skills, items,
 ## Features
 
 - **State Machine AI**: Enemies with dynamic behaviors (Idle, Alert, Combat, Flee, Stunned)
+- **Plugin-first architecture**: Replace damage, hitboxes, knockback, hooks, and AI behaviors independently
 - **Multiple Enemy Types**: Aggressive, Defensive, Ranged, Tank, Berserker
 - **Attack Patterns**: Melee, Combo, Charged, Zone, Dash Attack
 - **Skill Support**: AI can use any RPGJS skill
@@ -20,6 +21,90 @@ The AI controller manages **behavior only** - all stats (HP, ATK, skills, items,
 
 ```bash
 npm install @rpgjs/action-battle
+```
+
+## Plugin-First Customization
+
+`provideActionBattle()` ships with Zelda-like defaults, but each combat system
+can be replaced without rewriting the module.
+
+```ts
+import { provideActionBattle } from "@rpgjs/action-battle/server";
+
+export default provideActionBattle({
+  attack: {
+    lockMovement: true,
+    lockDurationMs: 280,
+    hitboxes: {
+      right: { offsetX: 18, offsetY: -18, width: 42, height: 36 }
+    }
+  },
+  systems: {
+    combat: {
+      damage({ attacker, target, skill }) {
+        const raw = target.applyDamage(attacker, skill);
+        return {
+          damage: raw.damage,
+          defeated: target.hp <= 0,
+          raw
+        };
+      },
+      knockback({ attacker, target }) {
+        const dx = target.x() - attacker.x();
+        const dy = target.y() - attacker.y();
+        const distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+        return {
+          force: 70,
+          duration: 220,
+          direction: { x: dx / distance, y: dy / distance }
+        };
+      },
+      hooks: {
+        beforeHit(context) {
+          // Return false to cancel a hit, or return a modified context.
+          return context;
+        },
+        afterHit(result) {
+          console.log(`Damage: ${result.damage}`);
+        }
+      }
+    },
+    ai: {
+      behaviors: {
+        slime({ hpPercent }) {
+          return {
+            mode: hpPercent !== null && hpPercent < 0.25 ? "retreat" : "assault",
+            attackCooldown: 900
+          };
+        }
+      }
+    }
+  }
+});
+```
+
+The main extension contracts are:
+
+- `ActionBattleCombatSystem`: resolves hitboxes, damage, knockback, and hooks.
+- `ActionBattleAiBehavior`: returns lightweight AI decisions from event state.
+- `ActionBattleHitHooks`: `beforeHit`, `afterDamage`, and `afterHit`.
+
+Use `createActionEnemy()` when you want data-driven enemy presets:
+
+```ts
+import { createActionEnemy, EnemyType } from "@rpgjs/action-battle/server";
+
+const enemyPresets = {
+  slime: {
+    enemyType: EnemyType.Aggressive,
+    behaviorKey: "slime",
+    stats(event) {
+      event.hp = 40;
+    }
+  }
+};
+
+createActionEnemy(this, "slime", enemyPresets);
 ```
 
 ## Quick Start
@@ -496,6 +581,24 @@ The module handles player attacks via the `action` input:
 // Knockback force is based on equipped weapon's knockbackForce property
 ```
 
+By default, the player is locked in place for `350ms` when attacking, similar
+to classic A-RPG combat where the attack resolves before movement resumes.
+
+```ts
+provideActionBattle({
+  attack: {
+    lockMovement: true,
+    lockDurationMs: 350
+  }
+});
+```
+
+Set `lockMovement` to `false` if your game should allow moving attacks.
+
+When the action targets a normal event with no `BattleAi`, action-battle lets
+the event handle `onAction` without playing the player attack animation. Enemy
+events with `BattleAi` still trigger the A-RPG attack.
+
 ## Configurable Combat Animations
 
 By default, player and AI attacks keep using the existing `attack` animation:
@@ -526,7 +629,9 @@ export default provideActionBattle({
 
 RPGJS Studio stores combat animations as spritesheet media ids. If
 `provideStudioGame()` is installed, `createStudioActionBattleAnimations()` can
-read the project animations attached to the player at runtime:
+read the project animations attached to the player at runtime. By default, the
+helper plays Studio attack spritesheets with
+`setGraphicAnimation("attack", graphic, 1)`:
 
 ```ts
 import { provideActionBattle } from "@rpgjs/action-battle/server";
@@ -538,7 +643,8 @@ export default provideActionBattle({
 ```
 
 You can also pass a static Studio animation object to override the media ids
-manually.
+manually. Animation values may be media ids or media objects returned by the
+Studio game API.
 
 The Studio field `castSpell` is accepted as an alias for action-battle's
 `castSkill` animation key.
