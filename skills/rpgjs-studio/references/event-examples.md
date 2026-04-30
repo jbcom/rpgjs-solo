@@ -265,6 +265,12 @@ This creates the reusable enemy entry in the database.
     "attackPatterns": ["melee", "combo", "dashAttack"],
     "groupBehavior": true
   },
+  "skills": [
+    {
+      "skillId": "BITE_SKILL_ID",
+      "level": 3
+    }
+  ],
   "reward": {
     "exp": 25,
     "gold": 12,

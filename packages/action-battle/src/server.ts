@@ -661,3 +661,13 @@ export const createActionBattleServer = (
 };
 
 export default createActionBattleServer();
+
+export {
+  AiDebug,
+  AiState,
+  AttackPattern,
+  BattleAi,
+  DEFAULT_KNOCKBACK,
+  EnemyType,
+} from "./ai.server";
+export type { ApplyHitHooks, BattleAiOptions, HitResult } from "./ai.server";

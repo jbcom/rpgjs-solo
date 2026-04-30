@@ -27,6 +27,7 @@ Useful fields from `projectSchema`:
 - `expCurve?: { basis, extra, accelerationA, accelerationB }`
 - `parameters?: { maxHp, maxSp, str, agi, int, dex }`
 - `animations?: { attack?: string, hurt?: string, die?: string, castSpell?: string }`
+- `skills?: Array<{ skillId: string, level: number }>`
 - `startMapId?: string`
 
 ## Dependency resolution workflow
@@ -54,6 +55,12 @@ Useful fields from `projectSchema`:
 - Each `startingInventory[].itemId` is an item `_id`.
 - Search `/api/database/items?query=<search>` first.
 - Create missing items before updating project settings.
+
+### Hero skills
+
+- Each `skills[].skillId` is a skill `_id`.
+- Search `/api/database/skills?query=<search>` first.
+- `skills[].level` is the minimum hero level required to acquire the skill.
 
 ## Example: update project settings
 

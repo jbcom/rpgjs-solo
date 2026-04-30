@@ -1,10 +1,48 @@
-import type { GameDataProvider, ProviderConfig, ProjectQuery } from './types';
+import type {
+  GameDataProvider,
+  PlayerStartConfigQuery,
+  ProviderConfig,
+  ProjectQuery,
+} from './types';
 
 const fetchJson = async (url: string, label: string): Promise<any> => {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`[HttpGameDataProvider] ${label} failed (${response.status}) for ${url}`);
   }
+  return response.json();
+};
+
+const getStudioApiKey = (): string | null => {
+  const apiKey = (globalThis as { process?: { env?: Record<string, string> } })
+    .process?.env?.RPGSTUDIO_API_KEY;
+  return typeof apiKey === 'string' && apiKey.trim() ? apiKey : null;
+};
+
+const fetchStudioProject = async (
+  apiBaseUrl: string,
+  projectId: string,
+): Promise<any> => {
+  const apiKey = getStudioApiKey();
+  if (!apiKey) return null;
+
+  const response = await fetch(`${apiBaseUrl}/projects/${projectId}`, {
+    headers: {
+      'x-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error('[HttpGameDataProvider] invalid RPGSTUDIO_API_KEY for project start config');
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `[HttpGameDataProvider] project start config failed (${response.status}) for ${projectId}`,
+    );
+  }
+
   return response.json();
 };
 
@@ -50,5 +88,10 @@ export class HttpGameDataProvider implements GameDataProvider {
     );
 
     return Array.isArray(value) ? value : [];
+  }
+
+  async getPlayerStartConfig(query: PlayerStartConfigQuery): Promise<any> {
+    if (!query.projectId) return null;
+    return fetchStudioProject(this.config.apiBaseUrl, query.projectId);
   }
 }

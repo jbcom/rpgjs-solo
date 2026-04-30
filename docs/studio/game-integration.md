@@ -82,6 +82,21 @@ provideStudioGame({
 });
 ```
 
+Offline database records are normalized before they are registered in RPGJS. Studio skill records are available to RPGJS skills automatically with their `spCost`, `hitRate`, `power`, and `coefficient` fields, and enemies can learn skills referenced by their `skills` array.
+
+The project can define hero skill progression with `skills` or `skillsToLearn`. At runtime, `provideStudioGame()` creates a default RPGJS class containing those entries, then RPGJS learns each skill when the configured level is reached:
+
+```json
+{
+  "skills": [
+    { "level": 1, "skillId": "slash-id" },
+    { "level": 5, "skillId": "fire-id" }
+  ]
+}
+```
+
+Enemy records can also drive action-battle AI. Use `aiBehavior` on the enemy to set fields such as `enemyType`, `behaviorKey`, `visionRange`, `attackRange`, `attackCooldown`, `attackPatterns`, `groupBehavior`, or the nested behavior gauge options. If the enemy has `attackSkillId`, that skill is used for attacks; otherwise the first learned enemy skill is used.
+
 ## Auto mode
 
 Use `"auto"` when the game should try the exported bundle first, then fall back to Studio if local data is missing:

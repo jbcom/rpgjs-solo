@@ -1,6 +1,11 @@
 import { show_text } from "@common/blocks/executors/show-text";
 import { Move, RpgEvent, RpgMap, RpgPlayer } from "@rpgjs/server";
-import { EnemyType, BattleAi } from "@rpgjs/action-battle/server";
+import {
+  AttackPattern,
+  BattleAi,
+  EnemyType,
+  type BattleAiOptions,
+} from "@rpgjs/action-battle/server";
 import { normalizeEventType } from "@common/event-types";
 import { assignParams } from "./assign-params";
 import { createStudioActionBattleAnimations } from "./action-battle-animations";
@@ -98,6 +103,168 @@ const resolveEnemyId = (trigger: any, fallbackParams: any, object: any) => {
     object?.typeData?.enemyId ||
     null
   );
+};
+
+const enemyTypes = new Set<string>(Object.values(EnemyType));
+const attackPatterns = new Set<string>(Object.values(AttackPattern));
+
+const toNumber = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+};
+
+const toBoolean = (value: unknown): boolean | undefined => {
+  return typeof value === "boolean" ? value : undefined;
+};
+
+const normalizeEnemyType = (value: unknown): EnemyType | undefined => {
+  if (typeof value !== "string") return undefined;
+  return enemyTypes.has(value) ? (value as EnemyType) : undefined;
+};
+
+const normalizeAttackPatterns = (value: unknown): AttackPattern[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const patterns = value.filter(
+    (pattern): pattern is AttackPattern =>
+      typeof pattern === "string" && attackPatterns.has(pattern),
+  );
+  return patterns.length > 0 ? patterns : undefined;
+};
+
+const pickNumericOption = (
+  source: any,
+  key: keyof BattleAiOptions,
+  options: BattleAiOptions,
+) => {
+  const value = toNumber(source?.[key]);
+  if (value !== undefined) {
+    (options as any)[key] = value;
+  }
+};
+
+const resolveEnemySkillIds = (enemy: any): string[] => {
+  const rawSkills = enemy?.skills ?? enemy?.skillIds ?? enemy?.attacks;
+  const ids = new Set<string>();
+
+  for (const id of [
+    enemy?.attackSkill,
+    enemy?.attackSkillId,
+    enemy?.aiBehavior?.attackSkill,
+    enemy?.aiBehavior?.attackSkillId,
+  ]) {
+    if (typeof id === "string" && id.trim()) {
+      ids.add(id);
+    }
+  }
+
+  if (!Array.isArray(rawSkills)) return [...ids];
+
+  for (const entry of rawSkills) {
+    const id =
+      typeof entry === "string"
+        ? entry
+        : entry?.skillId ?? entry?.id ?? entry?._id;
+    if (typeof id === "string" && id.trim()) {
+      ids.add(id);
+    }
+  }
+
+  return [...ids];
+};
+
+const learnEnemySkills = (event: RpgEvent, enemy: any): string | undefined => {
+  let firstSkillId: string | undefined;
+
+  for (const skillId of resolveEnemySkillIds(enemy)) {
+    try {
+      (event as any).learnSkill?.(skillId);
+      firstSkillId ??= skillId;
+    } catch (error) {
+      console.warn(`[StudioGame] enemy skill ${skillId} could not be learned`, error);
+    }
+  }
+
+  return firstSkillId;
+};
+
+const resolveEnemyBattleAiOptions = (
+  enemy: any,
+  fallbackAttackSkill?: string,
+): BattleAiOptions => {
+  const aiBehavior =
+    enemy?.aiBehavior && typeof enemy.aiBehavior === "object"
+      ? enemy.aiBehavior
+      : {};
+  const behaviorKey =
+    typeof enemy?.aiBehavior === "string"
+      ? enemy.aiBehavior
+      : enemy?.behaviorKey ?? aiBehavior.behaviorKey;
+  const options: BattleAiOptions = {
+    enemyType:
+      normalizeEnemyType(enemy?.enemyType) ??
+      normalizeEnemyType(enemy?.aiBehavior) ??
+      normalizeEnemyType(aiBehavior.enemyType) ??
+      EnemyType.Aggressive,
+    visionRange: 150,
+    attackRange: 50,
+    animations: createStudioActionBattleAnimations(enemy.animations),
+  };
+
+  if (typeof behaviorKey === "string" && behaviorKey.trim()) {
+    options.behaviorKey = behaviorKey;
+  }
+
+  const configuredAttackSkill =
+    enemy?.attackSkill ?? enemy?.attackSkillId ?? aiBehavior.attackSkill ?? aiBehavior.attackSkillId;
+  if (typeof configuredAttackSkill === "string" && configuredAttackSkill.trim()) {
+    options.attackSkill = configuredAttackSkill;
+  } else if (fallbackAttackSkill) {
+    options.attackSkill = fallbackAttackSkill;
+  }
+
+  const patterns = normalizeAttackPatterns(enemy?.attackPatterns ?? aiBehavior.attackPatterns);
+  if (patterns) {
+    options.attackPatterns = patterns;
+  }
+
+  for (const source of [enemy, aiBehavior]) {
+    pickNumericOption(source, "attackCooldown", options);
+    pickNumericOption(source, "visionRange", options);
+    pickNumericOption(source, "attackRange", options);
+    pickNumericOption(source, "dodgeChance", options);
+    pickNumericOption(source, "dodgeCooldown", options);
+    pickNumericOption(source, "fleeThreshold", options);
+    pickNumericOption(source, "moveToCooldown", options);
+    pickNumericOption(source, "retreatCooldown", options);
+
+    const groupBehavior = toBoolean(source?.groupBehavior);
+    if (groupBehavior !== undefined) {
+      options.groupBehavior = groupBehavior;
+    }
+  }
+
+  const behavior = enemy?.behavior ?? aiBehavior.behavior;
+  if (behavior && typeof behavior === "object") {
+    options.behavior = {};
+    for (const key of [
+      "baseScore",
+      "updateInterval",
+      "minStateDuration",
+      "assaultThreshold",
+      "retreatThreshold",
+    ] as const) {
+      const value = toNumber(behavior[key]);
+      if (value !== undefined) {
+        options.behavior[key] = value;
+      }
+    }
+  }
+
+  return options;
 };
 
 const applyEnemyGraphicSetting: TriggerSettingsApplier = ({
@@ -305,11 +472,9 @@ const enemyRuntime: EventTypeRuntime = {
       if (enemy) {
         assignParams(context.event, enemy);
         context.event.level = trigger?.typeData?.level ?? enemy.initialLevel ?? 1;
+        const attackSkill = learnEnemySkills(context.event, enemy);
         (context.event as any).battleAi = new BattleAi(context.event, {
-          enemyType: EnemyType.Aggressive,
-          visionRange: 150,
-          attackRange: 50,
-          animations: createStudioActionBattleAnimations(enemy.animations),
+          ...resolveEnemyBattleAiOptions(enemy, attackSkill),
           onDefeated: (event: RpgEvent) => {
             const map = event.getCurrentMap?.();
             if (map) {

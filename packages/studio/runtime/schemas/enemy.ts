@@ -1,6 +1,6 @@
 import { FromSchema } from "json-schema-to-ts";
 import { createAppearanceSchema, inventorySchemas, parameterSchemas } from "./character-config";
-import { itemSchema } from "./database";
+import { itemSchema, skillSchema } from "./database";
 import { characterSchema } from "./event";
 
 export const enemyRewardSchema = {
@@ -58,6 +58,68 @@ export const enemyRewardSchema = {
   },
 } as const;
 
+export const enemyAiBehaviorSchema = {
+  type: "object",
+  title: "AI Behavior",
+  format: {
+    layout: "ai",
+  } as any,
+  properties: {
+    enemyType: {
+      type: "string",
+      title: "Enemy Type",
+      enum: ["aggressive", "defensive", "ranged", "tank", "berserker"],
+      default: "aggressive",
+    },
+    behaviorKey: {
+      type: "string",
+      title: "Behavior Key",
+      description: "Optional key resolved by the action-battle AI behavior registry.",
+    },
+    visionRange: {
+      type: "number",
+      title: "Vision Range",
+      minimum: 0,
+      default: 150,
+    },
+    attackRange: {
+      type: "number",
+      title: "Attack Range",
+      minimum: 0,
+      default: 50,
+    },
+    attackCooldown: {
+      type: "number",
+      title: "Attack Cooldown",
+      minimum: 0,
+    },
+    attackPatterns: {
+      type: "array",
+      title: "Attack Patterns",
+      items: {
+        type: "string",
+        enum: ["melee", "combo", "charged", "zone", "dashAttack"],
+      },
+    },
+    groupBehavior: {
+      type: "boolean",
+      title: "Group Behavior",
+      default: false,
+    },
+    behavior: {
+      type: "object",
+      title: "Behavior Gauge",
+      properties: {
+        baseScore: { type: "number", title: "Base Score" },
+        updateInterval: { type: "number", title: "Update Interval" },
+        minStateDuration: { type: "number", title: "Min State Duration" },
+        assaultThreshold: { type: "number", title: "Assault Threshold" },
+        retreatThreshold: { type: "number", title: "Retreat Threshold" },
+      },
+    },
+  },
+} as const;
+
 export const enemySchema = {
   type: "object",
   properties: {
@@ -69,6 +131,37 @@ export const enemySchema = {
     ...characterSchema,
     ...parameterSchemas,
     ...inventorySchemas,
+    skills: {
+      type: "array",
+      title: "Skills",
+      items: {
+        type: "object",
+        properties: {
+          skillId: {
+            type: "string",
+            title: "Skill",
+            $ref: "#/functions/skill",
+            format: {
+              add: {
+                schema: skillSchema,
+              },
+            } as any,
+          },
+        },
+        required: ["skillId"],
+      },
+    },
+    attackSkillId: {
+      type: "string",
+      title: "Attack Skill",
+      $ref: "#/functions/skill",
+      format: {
+        add: {
+          schema: skillSchema,
+        },
+      } as any,
+    },
+    aiBehavior: enemyAiBehaviorSchema,
     reward: enemyRewardSchema,
   },
   required: ["name"],

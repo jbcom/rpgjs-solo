@@ -120,5 +120,6 @@ curl -sS -X POST "$BASE_URL/..." \
 
 - Project settings and database enemies both support combat animation spritesheet media IDs under `animations`: `attack`, `hurt`, `die`, and `castSpell`.
 - The RPGJS starter runtime uses these spritesheets in action battle: attack actions, damage/hurt feedback, delayed death removal, and skill/cast usage can temporarily switch to the configured spritesheet.
-- Database enemies support action battle AI options under `behavior`: `enemyType`, `attackSkillId`, `attackCooldown`, `visionRange`, `attackRange`, `dodgeChance`, `dodgeCooldown`, `fleeThreshold`, `attackPatterns`, `patrolWaypoints`, and `groupBehavior`.
+- Database enemies support action battle AI options under `behavior`: `enemyType`, `attackCooldown`, `visionRange`, `attackRange`, `dodgeChance`, `dodgeCooldown`, `fleeThreshold`, `attackPatterns`, `patrolWaypoints`, and `groupBehavior`.
+- Project settings and database enemies both support level-gated skill acquisition under `skills`: `{ skillId, level }`.
 - Database skills support media IDs under `icon`, `animation`, and `sound`.

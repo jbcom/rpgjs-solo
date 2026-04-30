@@ -529,6 +529,24 @@ export interface ChangeEquipmentParams {
 }
 
 /**
+ * Parameters for changing player skills.
+ */
+export interface ChangeSkillParams {
+  /** Skill to learn or forget */
+  skillId: string;
+  /** Whether to learn or forget the skill */
+  state: 'learn' | 'forget';
+}
+
+/**
+ * Parameters for using a player skill.
+ */
+export interface UseSkillParams {
+  /** Skill to use */
+  skillId: string;
+}
+
+/**
  * Parameters for the change_variable block
  * 
  * Modifies a variable value using various operations.
@@ -874,6 +892,8 @@ export interface BlockParamsMap {
   change_gold: ChangeGoldParams;
   change_item: ChangeItemParams;
   change_equipment: ChangeEquipmentParams;
+  change_skill: ChangeSkillParams;
+  use_skill: UseSkillParams;
   change_variable: ChangeVariableParams;
   change_hp: ChangeHpParams;
   change_sp: ChangeSpParams;

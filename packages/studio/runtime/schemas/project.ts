@@ -1,5 +1,6 @@
 import { FromSchema } from "json-schema-to-ts";
 import { createAppearanceSchema, parameterSchemas, inventorySchemas } from "./character-config";
+import { skillSchema } from "./database";
 
 const keyEnum = ["down", "up", "left", "right", "space", "backspace", "tab", "shift", "control", "alt", "meta", "capslock", "numlock", "scrolllock", "printscreen", "pause", "insert", "delete", "home", "end", "pageup", "pagedown", "arrowup", "arrowdown", "arrowleft", "arrowright", "escape", "enter", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"] as const;
 
@@ -59,6 +60,33 @@ export const projectSchema = {
       },
     },
     hero: createAppearanceSchema("Hero"),
+    skills: {
+      type: "array",
+      title: "Skills",
+      description: "Skills learned automatically when the hero reaches a level.",
+      items: {
+        type: "object",
+        properties: {
+          level: {
+            type: "number",
+            title: "Level",
+            minimum: 1,
+            default: 1,
+          },
+          skillId: {
+            type: "string",
+            title: "Skill",
+            $ref: "#/functions/skill",
+            format: {
+              add: {
+                schema: skillSchema,
+              },
+            } as any,
+          },
+        },
+        required: ["level", "skillId"],
+      },
+    },
     ...inventorySchemas,
     ...parameterSchemas,
     startMapId: {

@@ -17,6 +17,11 @@ import {
   getGameDataProvider,
   getStudioGameRuntimeConfig,
 } from "./data-provider";
+import {
+  normalizeStudioDatabase,
+  normalizeStudioDatabaseRecord,
+} from "./database-normalizer";
+import { createStudioDefaultClass } from "./skills-to-learn";
 export { createStudioActionBattleAnimations } from "./action-battle-animations";
 export type {
   StudioCombatAnimationIds,
@@ -42,6 +47,11 @@ const mergePlayerConfig = (
       ...(overrideConfig.parameters ?? {}),
     },
     startingInventory: overrideConfig.startingInventory ?? baseConfig.startingInventory,
+    skillsToLearn:
+      overrideConfig.skillsToLearn ??
+      overrideConfig.skills ??
+      baseConfig.skillsToLearn ??
+      baseConfig.skills,
     startingEquipment: {
       ...(baseConfig.startingEquipment ?? {}),
       ...(overrideConfig.startingEquipment ?? {}),
@@ -57,6 +67,11 @@ const resolvePlayerConfig = async (player: RpgPlayer): Promise<ProjectBasic> => 
   const gameConfig = window.gameConfig ?? {};
   const baseHeroConfig = {
     ...(gameConfig.hero ?? {}),
+    skillsToLearn:
+      gameConfig.skillsToLearn ??
+      gameConfig.skills ??
+      gameConfig.hero?.skillsToLearn ??
+      gameConfig.hero?.skills,
     animations: gameConfig.animations ?? gameConfig.hero?.animations,
   } as ProjectBasic;
   const provider = getGameDataProvider();
@@ -98,27 +113,6 @@ const applyStartGameOnce = async (player: RpgPlayer, map?: RpgMap) => {
   runtimePlayer.__studioStartGameApplied = true;
 };
 
-const normalizeDatabaseRecord = (record: any): { id: string; data: any } | null => {
-  if (!record || typeof record !== "object") return null;
-
-  const id = typeof record._id === "string" && record._id
-    ? record._id
-    : typeof record.id === "string" && record.id
-      ? record.id
-      : "";
-  if (!id) return null;
-
-  const data = {
-    ...record,
-    id,
-    _type: record._type ?? record.itemType,
-  };
-  delete data.itemType;
-  delete data._id;
-
-  return { id, data };
-};
-
 const collectStartingItemIds = (config: ProjectBasic): string[] => {
   const ids = new Set<string>();
 
@@ -138,6 +132,16 @@ const assignPlayerStartParams = (
   config: ProjectBasic,
   startingItems: Record<string, any> = {},
 ) => {
+  const defaultClass = createStudioDefaultClass(config.skillsToLearn);
+  const currentClass = (player as any)._class?.();
+  const hasCurrentClass =
+    currentClass &&
+    typeof currentClass === "object" &&
+    Object.keys(currentClass).length > 0;
+  if (defaultClass && !hasCurrentClass && (player as any)._class?.set) {
+    (player as any)._class.set(defaultClass);
+  }
+
   player.level = config.initialLevel ?? 1;
   player.finalLevel = config.finalLevel ?? 99;
   player.expCurve = config.expCurve ?? {
@@ -212,7 +216,7 @@ const ensureStartingItemsInDatabase = async (
     const missing = new Set(missingIds);
 
     for (const record of records) {
-      const normalized = normalizeDatabaseRecord(record);
+      const normalized = normalizeStudioDatabaseRecord(record);
       if (!normalized || !missing.has(normalized.id)) continue;
       map.addInDatabase(normalized.id, normalized.data, { force: true });
       startingItems[normalized.id] = normalized.data;
@@ -362,6 +366,10 @@ export default (_config?: unknown) => {
               {
                 id: "items",
                 label: "Items",
+              },
+              {
+                id: "skills",
+                label: "Skills",
               },
               {
                 id: "equip",
@@ -673,14 +681,7 @@ export default (_config?: unknown) => {
       const response = await getGameDataProvider().getDatabase(
         configuredProjectId || gameConfig?._id,
       );
-      const database: any = {};
-      for (const item of response) {
-        item.id = item._id;
-        item._type = item.itemType;
-        delete item.itemType;
-        delete item._id;
-        database[item.id] = item;
-      }
+      const database = normalizeStudioDatabase(response);
       databaseCacheByProjectId.set(resolvedProjectId, database);
       return database;
     },

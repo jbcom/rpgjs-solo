@@ -663,6 +663,35 @@ Allowed `slot`:
 - `boots`
 - `shield`
 
+### `change_skill`
+
+Use to teach or remove a database skill from the player.
+
+```json
+{
+  "type": "change_skill",
+  "data": {
+    "skillId": "SKILL_ID",
+    "state": "learn"
+  }
+}
+```
+
+Allowed `state`: `learn`, `forget`.
+
+### `use_skill`
+
+Use to make the player use a learned skill.
+
+```json
+{
+  "type": "use_skill",
+  "data": {
+    "skillId": "SKILL_ID"
+  }
+}
+```
+
 ### `move_route`
 
 Use for scripted movement or rotation.

@@ -19,6 +19,16 @@ export type ProjectBasic = {
     itemId?: string;
     amount: number;
   }>;
+  skillsToLearn?: Array<{
+    level?: number;
+    skill?: string;
+    skillId?: string;
+  }>;
+  skills?: Array<{
+    level?: number;
+    skill?: string;
+    skillId?: string;
+  }>;
   startingEquipment?: Record<string, string>;
   animations?: {
     attack?: string;

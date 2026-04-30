@@ -17,6 +17,8 @@ import {
   schemaRecoverAll,
   schemaChangeItem,
   schemaChangeEquipment,
+  schemaChangeSkill,
+  schemaUseSkill,
   schemaChangeVariable,
   schemaMoveRoute,
   schemaChangeCharacterGraphic,
@@ -90,6 +92,10 @@ export const defaultBlocks = [
     schemaChangeItem,
 
     schemaChangeEquipment,
+
+    schemaChangeSkill,
+
+    schemaUseSkill,
   
     schemaChangeVariable,
   
