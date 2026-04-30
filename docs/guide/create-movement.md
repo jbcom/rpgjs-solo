@@ -51,6 +51,31 @@ export default defineModule<RpgServer>({
 })
 ```
 
+### Interrupting client-predicted movement
+
+When client prediction is enabled, movement inputs can already be buffered when
+another action starts. For blocking actions such as a Zelda-like sword attack,
+stop local movement and discard pending predicted inputs before the action
+animation starts:
+
+```ts
+import { RpgClient, RpgClientEngine, defineModule } from "@rpgjs/client";
+
+export default defineModule<RpgClient>({
+  engine: {
+    onInput(engine: RpgClientEngine, { input }) {
+      if (input === "action") {
+        engine.interruptCurrentPlayerMovement();
+      }
+    }
+  }
+});
+```
+
+This prevents held directional inputs from being replayed during server
+reconciliation. Once movement is allowed again, normal keyboard repeat can send
+new movement inputs.
+
 ### Core Movement Methods
 
 #### Required Imports

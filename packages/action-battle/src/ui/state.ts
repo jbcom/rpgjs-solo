@@ -2,6 +2,16 @@ import { signal } from "canvasengine";
 import { ActionBattleActionBarSkill, ActionBattleOptions } from "../types";
 import { DEFAULT_ACTION_BATTLE_OPTIONS, normalizeActionBattleOptions } from "../config";
 
+export interface ActionBattleAttackPreviewState {
+  active: boolean;
+  id: number;
+  direction: string;
+  startedAt: number;
+  durationMs: number;
+  color: number;
+  accentColor: number;
+}
+
 export interface ActionBattleTargetingState {
   active: boolean;
   skill: ActionBattleActionBarSkill | null;
@@ -18,6 +28,16 @@ const defaultTargetingState: ActionBattleTargetingState = {
   aoeMask: DEFAULT_ACTION_BATTLE_OPTIONS.skills?.defaultAoeMask || ["#"],
 };
 
+const defaultAttackPreviewState: ActionBattleAttackPreviewState = {
+  active: false,
+  id: 0,
+  direction: "down",
+  startedAt: 0,
+  durationMs: 180,
+  color: 0xfff3b0,
+  accentColor: 0xffffff,
+};
+
 export const actionBattleUiOptions = signal(
   normalizeActionBattleOptions({}).ui || {}
 );
@@ -28,6 +48,10 @@ export const actionBattleSkillOptions = signal(
 export const actionBattleTargetingState = signal<ActionBattleTargetingState>({
   ...defaultTargetingState,
 });
+export const actionBattleAttackPreviewState =
+  signal<ActionBattleAttackPreviewState>({
+    ...defaultAttackPreviewState,
+  });
 
 export const setActionBattleOptions = (options: ActionBattleOptions = {}) => {
   const normalized = normalizeActionBattleOptions(options);
@@ -64,5 +88,38 @@ export const moveTargetingOffset = (dx: number, dy: number) => {
   actionBattleTargetingState.set({
     ...state,
     offset: next,
+  });
+};
+
+export const startAttackPreview = (options: {
+  direction: string;
+  durationMs?: number;
+  color?: number;
+  accentColor?: number;
+}) => {
+  const current = actionBattleAttackPreviewState();
+  const id = current.id + 1;
+  const durationMs = Math.max(
+    1,
+    options.durationMs ?? defaultAttackPreviewState.durationMs
+  );
+  actionBattleAttackPreviewState.set({
+    active: true,
+    id,
+    direction: options.direction,
+    startedAt: Date.now(),
+    durationMs,
+    color: options.color ?? defaultAttackPreviewState.color,
+    accentColor: options.accentColor ?? defaultAttackPreviewState.accentColor,
+  });
+  return id;
+};
+
+export const stopAttackPreview = (id?: number) => {
+  const current = actionBattleAttackPreviewState();
+  if (id !== undefined && current.id !== id) return;
+  actionBattleAttackPreviewState.set({
+    ...current,
+    active: false,
   });
 };

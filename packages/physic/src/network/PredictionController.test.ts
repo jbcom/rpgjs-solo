@@ -96,4 +96,32 @@ describe("PredictionController", () => {
     expect(secondAck.acknowledgedFrame).toBe(input.frame);
     expect(secondAck.acknowledgedTick).toBe(101);
   });
+
+  it("can clear pending inputs without resetting the next frame", () => {
+    const controller = new PredictionController<string>({
+      getPhysicsTick: () => 1,
+      getCurrentState: () => ({ x: 0, y: 0, direction: "right" }),
+      setAuthoritativeState: () => {
+        // no-op for this unit test
+      },
+    });
+
+    const first = controller.recordInput("right", Date.now());
+    controller.recordInput("right", Date.now() + 1);
+
+    controller.clearPendingInputs();
+
+    expect(controller.getPendingInputs()).toHaveLength(0);
+
+    const staleAck = controller.applyServerAck({
+      frame: first.frame,
+      serverTick: 1,
+      state: { x: 30, y: 0, direction: "right" },
+    });
+    expect(staleAck.needsReconciliation).toBe(false);
+    expect(controller.getPendingInputs()).toHaveLength(0);
+
+    const next = controller.recordInput("right", Date.now() + 2);
+    expect(next.frame).toBe(3);
+  });
 });

@@ -145,6 +145,11 @@ const orderedInputs = buffer.consume(playerId);
 
 Activate prediction only when you need it; otherwise the controller can be skipped and everything falls back to the authoritative server position.
 
+When gameplay enters a state where buffered movement must not be replayed, such
+as a blocking attack or dialog, call `clearPendingInputs()` on the prediction
+controller. It discards pending input history while keeping the next frame
+number monotonic.
+
 ## Integration with @rpgjs/common
 
 `@rpgjs/common` now delegates all simulation to this package. The legacy Matter.js wrapper has been removed in favour of the shared deterministic `PhysicsEngine` that lives directly in `@rpgjs/physic`. Every hitbox, zone and movement strategy is backed by the deterministic core exposed here, ensuring the same behaviour on both client and server without third-party physics engines.
@@ -1004,4 +1009,3 @@ Documentation will be generated in the `docs/` directory.
 ## License
 
 MIT
-

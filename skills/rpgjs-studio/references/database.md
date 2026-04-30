@@ -58,6 +58,29 @@ This is required for flows like:
 
 ## Payloads from schemas
 
+### `POST /api/database/skills`
+
+Supported fields from `skillSchema`:
+
+- `name: string`
+- `description?: string`
+- `icon?: string`
+- `animation?: string`
+- `sound?: string`
+- `mpCost: number`
+- `power: number`
+- `element?: "none" | "fire" | "water" | "earth" | "wind" | "light" | "dark"`
+- `skillType?: "physical" | "magical" | "support" | "healing"`
+- `target?: "single" | "all" | "self" | "ally" | "enemy"`
+- `range?: number`
+- `successRate?: number`
+
+Notes:
+
+- `name`, `mpCost`, and `power` are the required fields from the schema.
+- `icon`, `animation`, and `sound` must be media `_id`s. Search `/api/media?query=<search>` first.
+- Use media type `icon` for `icon`, media type `animation` for `animation`, and media type `sound` for `sound`.
+
 ### `POST /api/database/items`
 
 Supported fields from `itemSchema`:
@@ -143,6 +166,7 @@ Supported fields from `enemySchema`:
 - `startingEquipment?: { weaponId?: string, armorId?: string }`
 - `startingInventory?: Array<{ itemId: string, amount: number }>`
 - `animations?: { attack?: string, hurt?: string, die?: string, castSpell?: string }`
+- `behavior?: { enemyType?: "aggressive" | "defensive" | "ranged" | "tank" | "berserker", attackSkillId?: string, attackCooldown?: number, visionRange?: number, attackRange?: number, dodgeChance?: number, dodgeCooldown?: number, fleeThreshold?: number, attackPatterns?: Array<"melee" | "combo" | "charged" | "zone" | "dashAttack">, patrolWaypoints?: Array<{ x: number, y: number }>, groupBehavior?: boolean }`
 - `reward?: { exp?: number, gold?: number, items?: Array<{ itemId: string, amount: number, chance: number }> }`
 
 Notes:
@@ -150,6 +174,8 @@ Notes:
 - `graphic` and `faceset` are media `_id`s. Search `/api/media?query=<search>` first.
 - `animations.attack`, `animations.hurt`, `animations.die`, and `animations.castSpell` are spritesheet media `_id`s. Search `/api/media?query=<search>` first.
 - `weaponId`, `armorId`, and `itemId` are item `_id`s. Search `/api/database/items?query=<search>` first.
+- `behavior.attackSkillId` is a skill `_id`. Search `/api/database/skills?query=<search>` first.
+- `behavior.dodgeChance` and `behavior.fleeThreshold` use ratios between `0` and `1`.
 
 ### `POST /api/database/variables`
 

@@ -85,13 +85,19 @@ where the hero performs the attack in place before moving again.
 provideActionBattle({
   attack: {
     lockMovement: true,
-    lockDurationMs: 350
+    lockDurationMs: 350,
+    showPreview: true,
+    previewDurationMs: 180,
+    previewColor: 0xfff3b0,
+    previewAccentColor: 0xffffff
   }
 });
 ```
 
 Set `lockMovement` to `false` if you want players to keep moving while
-attacking.
+attacking. The client stops local predicted movement as soon as the action
+input is pressed and shows a short slash preview by default. Disable
+`showPreview` when you provide your own client-side attack effect.
 
 ## Plugin-first extension points
 
@@ -164,9 +170,9 @@ const enemyPresets = {
 createActionEnemy(this, "slime", enemyPresets);
 ```
 
-When the action targets a normal event with no `BattleAi`, action-battle lets
-the event handle `onAction` without playing the player attack animation. Enemy
-events with `BattleAi` still trigger the A-RPG attack.
+When the action targets a normal event with no `BattleAi`, the server lets the
+event handle `onAction` and does not create the combat hitbox. Enemy events
+with `BattleAi` still trigger the A-RPG attack.
 
 ## Configure stats with the standard RPGJS API
 

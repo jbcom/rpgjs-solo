@@ -51,6 +51,7 @@ const beginPlayerAttackLock = (
   const previousCanMove =
     typeof player.canMove === "function" ? player.canMove() : true;
   const previousDirectionFixed = player.directionFixed;
+  const previousAnimationFixed = player.animationFixed;
 
   player.pendingInputs = [];
   player.lastProcessedInputTs = 0;
@@ -63,6 +64,7 @@ const beginPlayerAttackLock = (
     runtimePlayer.__actionBattleAttackLockedUntil = 0;
     player.canMove.set(previousCanMove);
     player.directionFixed = previousDirectionFixed;
+    player.animationFixed = previousAnimationFixed;
   }, durationMs);
 
   return true;
@@ -589,6 +591,7 @@ export const createActionBattleServer = (
           const lockMovement = options.attack?.lockMovement !== false;
           const lockDurationMs =
             options.attack?.lockDurationMs ?? DEFAULT_ATTACK_LOCK_DURATION_MS;
+          let movementLocked = false;
 
           if (
             lockMovement &&
@@ -596,8 +599,12 @@ export const createActionBattleServer = (
           ) {
             return;
           }
+          movementLocked = lockMovement && lockDurationMs > 0;
 
           playActionBattleAnimation("attack", player, options.animations);
+          if (movementLocked) {
+            player.animationFixed = true;
+          }
 
           map?.createMovingHitbox(hitboxes, { speed: 3 }).subscribe({
             next(hits) {

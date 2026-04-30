@@ -258,6 +258,13 @@ This creates the reusable enemy entry in the database.
       "amount": 1
     }
   ],
+  "behavior": {
+    "enemyType": "aggressive",
+    "visionRange": 180,
+    "attackRange": 60,
+    "attackPatterns": ["melee", "combo", "dashAttack"],
+    "groupBehavior": true
+  },
   "reward": {
     "exp": 25,
     "gold": 12,

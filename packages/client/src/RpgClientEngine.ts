@@ -1186,6 +1186,18 @@ export class RpgClientEngine<T = any> {
   }
 
   async processInput({ input }: { input: Direction }) {
+    if (this.stopProcessingInput) return;
+
+    const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
+    const canMove =
+      !currentPlayer ||
+      typeof currentPlayer.canMove !== "function" ||
+      currentPlayer.canMove();
+    if (!canMove) {
+      this.interruptCurrentPlayerMovement(currentPlayer);
+      return;
+    }
+
     const timestamp = Date.now();
     let frame: number;
     let tick: number;
@@ -1200,7 +1212,6 @@ export class RpgClientEngine<T = any> {
     this.inputFrameCounter = frame;
     this.hooks.callHooks("client-engine-onInput", this, { input, playerId: this.playerId }).subscribe();
 
-    const currentPlayer = this.sceneMap.getCurrentPlayer();
     const bodyReady = this.ensureCurrentPlayerBody();
     if (currentPlayer && bodyReady) {
       currentPlayer.changeDirection(input);
@@ -1219,6 +1230,13 @@ export class RpgClientEngine<T = any> {
 
   processAction({ action }: { action: number }) {
     if (this.stopProcessingInput) return;
+    const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
+    const canMove =
+      !currentPlayer ||
+      typeof currentPlayer.canMove !== "function" ||
+      currentPlayer.canMove();
+    if (!canMove) return;
+
     this.hooks.callHooks("client-engine-onInput", this, { input: 'action', playerId: this.playerId }).subscribe();
     this.webSocket.emit('action', { action })
   }
@@ -1347,6 +1365,15 @@ export class RpgClientEngine<T = any> {
 
   private flushPendingMovePath(): void {
     if (!this.predictionEnabled || !this.prediction) {
+      return;
+    }
+    const player = this.sceneMap?.getCurrentPlayer?.() as any;
+    if (
+      player &&
+      typeof player.canMove === "function" &&
+      !player.canMove()
+    ) {
+      this.interruptCurrentPlayerMovement(player);
       return;
     }
     const pendingInputs = this.prediction.getPendingInputs();
@@ -1488,6 +1515,34 @@ export class RpgClientEngine<T = any> {
   }
 
   /**
+   * Stop local movement immediately and discard pending predicted movement.
+   *
+   * Use this before a blocking action such as an A-RPG attack, dialog, dash
+   * startup, or any client-side state where already buffered movement inputs
+   * must not be replayed after server reconciliation.
+   *
+   * @param player - Player object to stop. Defaults to the current player.
+   * @returns `true` when a player was found and interrupted.
+   *
+   * @example
+   * ```ts
+   * engine.interruptCurrentPlayerMovement();
+   * ```
+   */
+  interruptCurrentPlayerMovement(player: any = this.sceneMap?.getCurrentPlayer?.()): boolean {
+    if (!player) {
+      return false;
+    }
+    (this.sceneMap as any)?.stopMovement?.(player);
+    this.prediction?.clearPendingInputs();
+    this.pendingPredictionFrames = [];
+    this.lastInputTime = 0;
+    this.lastMovePathSentAt = Date.now();
+    this.lastMovePathSentFrame = this.inputFrameCounter;
+    return true;
+  }
+
+  /**
    * Trigger a flash animation on a sprite
    * 
    * This method allows you to trigger a flash effect on any sprite from client-side code.
@@ -1572,7 +1627,7 @@ export class RpgClientEngine<T = any> {
     if (typeof ack.x !== "number" || typeof ack.y !== "number") {
       return;
     }
-    const player = this.getCurrentPlayer();
+    const player = this.getCurrentPlayer() as any;
     const myId = this.playerIdSignal();
     if (!player || !myId) {
       return;
@@ -1595,8 +1650,12 @@ export class RpgClientEngine<T = any> {
     authoritativeState: PredictionState<Direction>,
     pendingInputs: PredictionHistoryEntry<Direction>[],
   ): void {
-    const player = this.getCurrentPlayer();
+    const player = this.getCurrentPlayer() as any;
     if (!player) {
+      return;
+    }
+    if (typeof player.canMove === "function" && !player.canMove()) {
+      this.interruptCurrentPlayerMovement(player);
       return;
     }
 

@@ -27,6 +27,10 @@ export const DEFAULT_ACTION_BATTLE_OPTIONS: ActionBattleOptions = {
   attack: {
     lockMovement: true,
     lockDurationMs: 350,
+    showPreview: true,
+    previewDurationMs: 180,
+    previewColor: 0xfff3b0,
+    previewAccentColor: 0xffffff,
   },
   animations: {},
 };

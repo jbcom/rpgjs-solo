@@ -1,0 +1,90 @@
+<Container>
+  @if (shouldRender) {
+    <Graphics draw={drawSlash} />
+  }
+</Container>
+
+<script>
+  import { computed, signal, tick } from "canvasengine";
+  import { inject, RpgClientEngine } from "@rpgjs/client";
+  import { actionBattleAttackPreviewState } from "../ui/state";
+
+  const { object } = defineProps();
+  const engine = inject(RpgClientEngine);
+  const now = signal(Date.now());
+
+  tick(() => {
+    if (actionBattleAttackPreviewState().active) {
+      now.set(Date.now());
+    }
+  });
+
+  const isCurrentPlayer = computed(() => {
+    if (!object?.id) return false;
+    const idValue = typeof object.id === "function" ? object.id() : object.id;
+    return idValue === engine.playerId;
+  });
+
+  const preview = computed(() => actionBattleAttackPreviewState());
+  const progress = computed(() => {
+    const state = preview();
+    if (!state.active) return 1;
+    const elapsed = now() - state.startedAt;
+    return Math.max(0, Math.min(1, elapsed / state.durationMs));
+  });
+
+  const shouldRender = computed(() => {
+    const state = preview();
+    return isCurrentPlayer() && state.active && progress() < 1;
+  });
+
+  const getHitbox = () => object.hitbox?.() || { w: 32, h: 32 };
+
+  const drawRect = (g, x, y, width, height, color, alpha) => {
+    g.rect(x, y, width, height);
+    g.fill({ color, alpha });
+  };
+
+  const drawSlash = (g) => {
+    g.clear();
+    if (!shouldRender()) return;
+
+    const state = preview();
+    const p = progress();
+    const alpha = Math.sin(Math.PI * p);
+    if (alpha <= 0) return;
+
+    const hitbox = getHitbox();
+    const width = hitbox.w || 32;
+    const height = hitbox.h || 32;
+    const reach = 16 + 18 * p;
+    const thickness = 4 + 3 * (1 - p);
+    const color = state.color;
+    const accent = state.accentColor;
+
+    if (state.direction === "left") {
+      drawRect(g, -reach - 6, height * 0.24, reach, thickness, accent, alpha * 0.55);
+      drawRect(g, -reach - 10, height * 0.46, reach + 4, thickness + 2, color, alpha);
+      drawRect(g, -reach - 6, height * 0.70, reach, thickness, accent, alpha * 0.4);
+      return;
+    }
+
+    if (state.direction === "right") {
+      drawRect(g, width + 6, height * 0.24, reach, thickness, accent, alpha * 0.55);
+      drawRect(g, width + 6, height * 0.46, reach + 4, thickness + 2, color, alpha);
+      drawRect(g, width + 6, height * 0.70, reach, thickness, accent, alpha * 0.4);
+      return;
+    }
+
+    if (state.direction === "up") {
+      drawRect(g, width * 0.24, -reach - 6, thickness, reach, accent, alpha * 0.55);
+      drawRect(g, width * 0.46, -reach - 10, thickness + 2, reach + 4, color, alpha);
+      drawRect(g, width * 0.70, -reach - 6, thickness, reach, accent, alpha * 0.4);
+      return;
+    }
+
+    drawRect(g, width * 0.24, height + 6, thickness, reach, accent, alpha * 0.55);
+    drawRect(g, width * 0.46, height + 6, thickness + 2, reach + 4, color, alpha);
+    drawRect(g, width * 0.70, height + 6, thickness, reach, accent, alpha * 0.4);
+  };
+</script>

@@ -588,16 +588,28 @@ to classic A-RPG combat where the attack resolves before movement resumes.
 provideActionBattle({
   attack: {
     lockMovement: true,
-    lockDurationMs: 350
+    lockDurationMs: 350,
+    showPreview: true,
+    previewDurationMs: 180,
+    previewColor: 0xfff3b0,
+    previewAccentColor: 0xffffff
   }
 });
 ```
 
 Set `lockMovement` to `false` if your game should allow moving attacks.
+The client also stops predicted movement immediately and shows a short slash
+preview so the action feels responsive even before the server hit resolves. Set
+`showPreview` to `false` if your project uses only spritesheet combat
+animations.
 
-When the action targets a normal event with no `BattleAi`, action-battle lets
-the event handle `onAction` without playing the player attack animation. Enemy
-events with `BattleAi` still trigger the A-RPG attack.
+Player attacks are resolved with `createMovingHitbox()` instead of a passive
+contact collision. You can still customize the generated hitboxes with
+`attack.hitboxes` or `attack.resolveHitboxes`.
+
+When the action targets a normal event with no `BattleAi`, the server lets the
+event handle `onAction` and does not create the combat hitbox. Enemy events
+with `BattleAi` still trigger the A-RPG attack.
 
 ## Configurable Combat Animations
 

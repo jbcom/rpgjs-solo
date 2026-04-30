@@ -73,6 +73,14 @@ export class PredictionController<DirectionType = unknown> {
     return [...this.history];
   }
 
+  clearPendingInputs(markCurrentFrameAcked = true): void {
+    this.history = [];
+    this.pendingSnapshot = null;
+    if (markCurrentFrameAcked) {
+      this.lastAckFrame = Math.max(this.lastAckFrame, this.frameCounter);
+    }
+  }
+
   queueServerSnapshot(snapshot: PredictionState<DirectionType>): void {
     if (this.hasPendingInputs()) {
       this.pendingSnapshot = snapshot;

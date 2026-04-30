@@ -102,6 +102,10 @@ export interface ActionBattleTargetingOptions {
 export interface ActionBattleAttackOptions {
   lockMovement?: boolean;
   lockDurationMs?: number;
+  showPreview?: boolean;
+  previewDurationMs?: number;
+  previewColor?: number;
+  previewAccentColor?: number;
   hitboxes?: Partial<
     Record<
       "up" | "down" | "left" | "right" | "default",

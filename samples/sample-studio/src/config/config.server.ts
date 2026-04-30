@@ -15,6 +15,10 @@ export const configServer = {
     provideSaveStorage(new LocalStorageSaveStorageStrategy({ key: "rpgjs-studio" })),
     provideActionBattle({
       animations: createStudioActionBattleAnimations(),
+       attack: {
+        lockMovement: true,
+        lockDurationMs: 350
+      }
     })
   ],
 };
