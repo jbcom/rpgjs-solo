@@ -9,6 +9,7 @@
     @for (graphicObj of graphicsSignals) {
       <Sprite 
         sheet={sheet(graphicObj)} 
+        scale={graphicScale(graphicObj)}
         direction 
         tint 
         hitbox
@@ -375,6 +376,18 @@
         animationCurrentIndex.update(index => index + 1)
       }
     };
+  }
+
+  const graphicScale = (graphicObject) => {
+    const scale = graphicObject?.scale;
+    if (Array.isArray(scale)) return scale;
+    if (typeof scale === 'number') return [scale, scale];
+    if (scale && typeof scale === 'object') {
+      const x = typeof scale.x === 'number' ? scale.x : 1;
+      const y = typeof scale.y === 'number' ? scale.y : x;
+      return [x, y];
+    }
+    return undefined;
   }
 
   // Combine animation change detection with movement state from smoothX/smoothY

@@ -25,18 +25,28 @@
 }
 
 .rpg-ui-dialog-container[data-full-width="false"] .rpg-ui-dialog {
+  width: min(720px, 100%);
+  max-width: 100%;
   margin-left: auto;
   margin-right: auto;
 }
 
 .rpg-ui-dialog {
+  --rpg-ui-dialog-min-height: 256px;
+  --rpg-ui-dialog-padding: 24px;
+  --rpg-ui-dialog-face-margin: 8px;
+  --rpg-ui-dialog-face-size: calc(
+    var(--rpg-ui-dialog-min-height) -
+    var(--rpg-ui-dialog-padding) * 2 -
+    var(--rpg-ui-dialog-face-margin) * 2
+  );
   background: var(--rpg-ui-surface);
   border: 4px solid var(--rpg-ui-border);
   border-radius: var(--rpg-ui-radius-lg);
-  padding: 24px;
+  padding: var(--rpg-ui-dialog-padding);
   position: relative;
   box-shadow: var(--rpg-ui-shadow-lg);
-  min-height: 256px;
+  min-height: var(--rpg-ui-dialog-min-height);
   display: flex;
   flex-direction: column;
   margin-top: 24px;
@@ -116,20 +126,26 @@
   justify-content: flex-start;
   flex-direction: row;
   flex-wrap: nowrap;
+  flex: 1 1 auto;
   min-height: 128px;
   width: 100%;
 }
 
+.rpg-ui-dialog-body > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .rpg-ui-dialog-face {
   flex: 0 0 auto;
-  width: 96px;
-  height: 96px;
-  align-self: flex-start;
-  border-radius: var(--rpg-ui-radius-sm);
+  width: var(--rpg-ui-dialog-face-size);
+  height: var(--rpg-ui-dialog-face-size);
+  align-self: center;
+  margin: var(--rpg-ui-dialog-face-margin) 0;
   overflow: hidden;
-  background: var(--rpg-ui-border-dark);
-  border: 2px solid var(--rpg-ui-border);
-  box-shadow: var(--rpg-ui-shadow);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;

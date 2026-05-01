@@ -23,6 +23,9 @@ Workflow:
 - List all media: `GET /api/media/all`
 - List media by type: `GET /api/media/all/:type`
 - Get media group: `GET /api/media/group/:groupId`
+- Read game-ready media data: `GET /api/game/media/:mediaId`
+
+`GET /api/game/media/:mediaId` returns the media data shape intended for the RPGJS runtime. Use it when the game needs to inspect a Studio media record and consume the fields available in-game. Prefer this endpoint over admin media endpoints from runtime code.
 
 ## Write and generation endpoints
 
@@ -67,6 +70,12 @@ curl -sS "$BASE_URL/api/media/all" \
   -H "Content-Type: application/json"
 ```
 
+## Example: read game media data
+
+```bash
+curl -sS "$BASE_URL/api/game/media/$MEDIA_ID"
+```
+
 ## Example: generate an icon
 
 ```bash
@@ -97,5 +106,6 @@ curl -sS -X POST "$BASE_URL/api/media/replace/$MEDIA_ID" \
 
 - Use `GET /api/media/all` or `GET /api/media/all/:type` first when the user knows a file by name but not by ID.
 - Prefer `GET /api/media?query=<search>` for name-based lookup when a task needs a specific referenced asset.
+- Use `GET /api/game/media/:mediaId` when the caller is game/runtime code and needs the media fields usable in the game.
 - For metadata-only updates, use `PUT /api/media/:id` with JSON.
 - Media generation is now unified and workflow-based. Always estimate first, ask for confirmation, then execute.

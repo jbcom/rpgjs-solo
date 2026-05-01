@@ -123,3 +123,4 @@ curl -sS -X POST "$BASE_URL/..." \
 - Database enemies support action battle AI options under `behavior`: `enemyType`, `attackCooldown`, `visionRange`, `attackRange`, `dodgeChance`, `dodgeCooldown`, `fleeThreshold`, `attackPatterns`, `patrolWaypoints`, and `groupBehavior`.
 - Project settings and database enemies both support level-gated skill acquisition under `skills`: `{ skillId, level }`.
 - Database skills support media IDs under `icon`, `animation`, and `sound`.
+- Game/runtime code can read media data usable in the game with `GET /api/game/media/:mediaId`; use `references/media.md` for details.

@@ -9,6 +9,8 @@ import {
 import { normalizeEventType } from "@common/event-types";
 import { assignParams } from "./assign-params";
 import { createStudioActionBattleAnimations } from "./action-battle-animations";
+import { getGraphicKey } from "./graphic-key";
+export { getGraphicKey } from "./graphic-key";
 
 /**
  * Extended RpgMap interface with studio-specific properties
@@ -71,17 +73,6 @@ export type EventTypeRuntime = {
     onTouch?: EventHook;
     onChange?: EventHook;
   };
-};
-
-export const getGraphicKey = (graphic: any): string | null => {
-  if (!graphic) return null;
-  if (typeof graphic === "string") return graphic;
-  if (typeof graphic === "object") {
-    return (
-      graphic.fileName || graphic.id || graphic._id || graphic.graphic || null
-    );
-  }
-  return null;
 };
 
 const applyGraphicSetting: TriggerSettingsApplier = ({
