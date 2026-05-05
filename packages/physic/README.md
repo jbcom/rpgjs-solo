@@ -9,10 +9,22 @@ A deterministic 2D top-down physics library for RPG, sandbox and MMO games.
 - **Modular**: Extensible architecture with plugin support
 - **Performant**: Optimized for 1000+ dynamic entities at 60 FPS
 - **Zero dependencies**: No external runtime dependencies
-- **Region-based**: Support for distributed simulation across regions
+- **Region-based**: Experimental support for distributed simulation across regions
 - **Collision detection**: Circle and AABB colliders with spatial optimization
 - **Forces & Constraints**: Springs, anchors, attractions, explosions
 - **Event system**: Collision events, sleep/wake notifications
+
+## Recommended RPG Server Path
+
+For production RPG-JS server physics, start with:
+
+- `PhysicsEngine` without regions
+- the default `SpatialHash` broad phase
+- RPG helpers such as `createCharacter`, `createStaticObstacle`, `createSensor`, `moveEntity`, and `stepFrame`
+- `ZoneManager` for vision, skills, and area detection
+- `ProjectileSystem` for high-volume server-authoritative projectiles
+
+`RegionManager`, `Region`, `BVH`, and `Quadtree` are exported for experimentation and benchmarking, but they are not the recommended default path yet.
 
 ## Installation
 
@@ -636,7 +648,7 @@ Static entities (mass = 0 or Infinity) act as blockers for line-of-sight.
 - [Canvas Example](./examples/canvas/) - Interactive HTML5 Canvas demo (run with `npm run example`)
 - [Basic Usage](./examples/basic.ts) - Simple physics simulation
 - [Static Obstacles](./examples/static-obstacles.ts) - Creating immovable obstacles for RPG games
-- [Regions](./examples/regions.ts) - Distributed simulation with regions
+- [Regions](./examples/regions.ts) - Experimental distributed simulation with regions
 - [Forces](./examples/forces.ts) - Applying forces and constraints
 
 ## Architecture
@@ -647,7 +659,7 @@ The library is organized in layers:
 2. **Physics Layer**: Entities, integrators, forces, constraints
 3. **Collision Layer**: Colliders, detection, resolution, spatial hash
 4. **World Layer**: World management, events, spatial partitioning
-5. **Region Layer**: Multi-region simulation, entity migration
+5. **Region Layer**: Experimental multi-region simulation, entity migration
 6. **API Layer**: High-level gameplay-oriented API
 
 ## API Reference
@@ -1054,6 +1066,12 @@ anchor.update(deltaTime);
 
 Distributed simulation across regions.
 
+> **Experimental:** regions are available for experiments and benchmarks, but
+> the recommended production path for RPG-JS server physics is a single
+> `PhysicsEngine` world with the default `SpatialHash` broad phase. Region
+> migration semantics, event propagation, stats, and config propagation still
+> need production validation.
+
 ```typescript
 const engine = new PhysicsEngine({
   enableRegions: true,
@@ -1074,9 +1092,12 @@ const entity = engine.createEntity({ position: { x: 100, y: 100 }, radius: 10 })
 The library is optimized for:
 - **1000 dynamic entities** at 60 FPS
 - **10000 static entities** supported
-- **Spatial hash** for O(n) collision detection
+- **SpatialHash** as the default broad phase for RPG workloads
 - **Sleep system** for inactive entities
 - **Object pooling** ready (utilities provided)
+
+`BVH` and `Quadtree` are currently experimental alternatives. Keep `SpatialHash`
+unless a benchmark for your entity distribution shows a clear advantage.
 
 ## Determinism
 

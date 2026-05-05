@@ -22,6 +22,11 @@ export interface RegionManagerConfig {
  * 
  * Manages multiple regions in a distributed physics world.
  * Handles entity migration between regions and region activation/deactivation.
+ *
+ * @experimental Region simulation is not the recommended default path for
+ * RPG-JS server physics yet. Prefer `PhysicsEngine` without regions until
+ * migration semantics, events, stats, and config propagation are fully
+ * benchmarked and documented.
  * 
  * @example
  * ```typescript

@@ -50,7 +50,15 @@ export { EventSystem } from './world/events';
 export type { SpatialPartition } from './world/SpatialPartition';
 
 // Region Layer
+/**
+ * @experimental Region simulation is not the recommended default path for
+ * RPG-JS server physics yet.
+ */
 export { Region, type RegionConfig } from './region/Region';
+/**
+ * @experimental Region simulation is not the recommended default path for
+ * RPG-JS server physics yet.
+ */
 export { RegionManager, type RegionManagerConfig } from './region/RegionManager';
 export * from './region/migration';
 

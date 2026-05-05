@@ -25,6 +25,10 @@ class QuadNode {
  * Design: simple PR quadtree with capacity threshold; reinserts on update.
  * This implementation favors predictable performance and minimal allocations.
  *
+ * @experimental The default and recommended broad phase for RPG-JS is
+ * `SpatialHash`. Quadtree needs workload-specific benchmarks before it should
+ * be used as the production default.
+ *
  * @example
  * ```typescript
  * const qt = new Quadtree(new AABB(-1000,-1000,1000,1000), 8, 6, 8);
@@ -187,5 +191,4 @@ export class Quadtree implements SpatialPartition {
 function containsAABB(outer: AABB, inner: AABB): boolean {
   return outer.minX <= inner.minX && outer.maxX >= inner.maxX && outer.minY <= inner.minY && outer.maxY >= inner.maxY;
 }
-
 

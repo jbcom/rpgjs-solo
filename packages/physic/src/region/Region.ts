@@ -20,6 +20,10 @@ export interface RegionConfig {
  * 
  * Represents an independent simulation zone that can contain entities.
  * Regions can overlap to allow smooth entity transitions.
+ *
+ * @experimental Region simulation is not the recommended default path for
+ * RPG-JS server physics yet. Prefer a single `PhysicsEngine` world until
+ * region migration semantics are fully benchmarked and documented.
  * 
  * @example
  * ```typescript
@@ -198,4 +202,3 @@ export class Region {
     return boundaryEntities;
   }
 }
-

@@ -25,6 +25,10 @@ class BVHNode {
  *
  * Not a dynamic tree; we rebuild the entire hierarchy when entities change.
  * Suitable for medium sized scenes; keeps API parity with `SpatialPartition`.
+ *
+ * @experimental The default and recommended broad phase for RPG-JS is
+ * `SpatialHash`. BVH needs workload-specific benchmarks before it should be
+ * used as the production default.
  */
 export class BVH implements SpatialPartition {
   private entities: Map<Entity, BVHLeaf> = new Map();
@@ -171,5 +175,4 @@ function centerOf(b: AABB, axis: number): number {
 function equalAABB(a: AABB, b: AABB): boolean {
   return a.minX === b.minX && a.minY === b.minY && a.maxX === b.maxX && a.maxY === b.maxY;
 }
-
 
