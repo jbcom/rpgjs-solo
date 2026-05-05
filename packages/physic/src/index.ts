@@ -78,6 +78,16 @@ export { ObjectPool } from './utils/pool';
 export * from './utils/uuid';
 
 export { ProjectileType } from './movement/strategies/ProjectileMovement';
+export {
+  ProjectileSystem,
+  type ProjectileDestroyEvent,
+  type ProjectileDestroyReason,
+  type ProjectileHitEvent,
+  type ProjectileSpawnConfig,
+  type ProjectileSpawnEvent,
+  type ProjectileState,
+  type ProjectileSystemOptions,
+} from './projectile/ProjectileSystem';
 
 
 export {

@@ -723,6 +723,61 @@ Available RPG helpers:
 - `teleportEntity(idOrEntity, position)` teleports and resynchronizes the broad phase.
 - `stepFrame(inputs)` applies input directions, steps physics, updates sensors, and returns the new tick.
 
+### Server Projectiles
+
+Use `ProjectileSystem` for high-volume server-authoritative projectiles. It keeps projectile state in a lightweight data store, raycasts each traveled segment, and emits lifecycle events. Projectiles are not added as physics entities, so they do not participate in projectile-projectile collisions by default.
+
+```typescript
+import { PhysicsEngine, ProjectileSystem } from '@rpgjs/physic';
+
+const engine = new PhysicsEngine({ timeStep: 1 / 60 });
+const projectiles = new ProjectileSystem(engine);
+
+projectiles.onSpawn(({ projectile }) => {
+  socket.broadcast('projectile:spawn', {
+    id: projectile.id,
+    ownerId: projectile.ownerId,
+    origin: projectile.origin,
+    direction: projectile.direction,
+    speed: projectile.speed,
+    range: projectile.range,
+    ttl: projectile.ttl,
+    spawnTick: projectile.spawnTick,
+  });
+});
+
+projectiles.onHit(({ projectile, hit }) => {
+  socket.broadcast('projectile:hit', {
+    id: projectile.id,
+    targetId: hit.entity.uuid,
+    x: hit.point.x,
+    y: hit.point.y,
+  });
+});
+
+projectiles.onDestroy(({ projectile, reason }) => {
+  socket.broadcast('projectile:destroy', {
+    id: projectile.id,
+    reason,
+  });
+});
+
+projectiles.spawn({
+  id: 'arrow-1',
+  ownerId: 'hero-1',
+  origin: { x: 100, y: 100 },
+  direction: { x: 1, y: 0 },
+  speed: 420,
+  range: 640,
+  ttl: 1.5,
+  spawnTick: engine.getTick(),
+});
+
+projectiles.step(1 / 60);
+```
+
+For sockets, send `spawn`, `hit`, and `destroy` events. Do not send projectile positions every tick; clients can interpolate or predict visuals from the deterministic spawn payload while the server remains authoritative for hits and destruction.
+
 When you use engine helpers such as `teleport`, `freeze`, `unfreeze`, or
 `assignPolygonCollider`, the engine automatically synchronizes the entity with
 the spatial partition. If you mutate an entity manually, call `updateEntity`
