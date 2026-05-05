@@ -128,6 +128,28 @@ describe("Move Routes - Basic Movements", () => {
   });
 });
 
+describe("Map Shapes", () => {
+  test("should create static obstacle body for map shape", async () => {
+    const map = player.getCurrentMap() as any;
+    const shape = map.createShape({
+      x: 40,
+      y: 56,
+      width: 24,
+      height: 32,
+      name: "test-obstacle",
+    });
+    const entity = map.physic.getEntityByUUID("shape-test-obstacle");
+
+    expect(shape.name).toBe("test-obstacle");
+    expect(entity).toBeDefined();
+    expect(entity.position.x).toBe(52);
+    expect(entity.position.y).toBe(72);
+    expect(entity.width).toBe(24);
+    expect(entity.height).toBe(32);
+    expect(entity.isStatic()).toBe(true);
+  });
+});
+
 describe("Move Routes - Move Helper Functions", () => {
   test("should move right using Move.right()", async () => {
     const initialX = player.x();

@@ -24,7 +24,6 @@ import { Subject } from "rxjs";
 import { BehaviorSubject } from "rxjs";
 import { COEFFICIENT_ELEMENTS, DAMAGE_CRITICAL, DAMAGE_PHYSIC, DAMAGE_SKILL } from "../presets";
 import { z } from "zod";
-import { EntityState } from "@rpgjs/physic";
 import { MapOptions } from "../decorators/map";
 import { EventMode } from "../decorators/event";
 import { BaseRoom } from "./BaseRoom";
@@ -2500,18 +2499,15 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     const centerX = x + width / 2;
     const centerY = y + height / 2;
 
-    // Create static entity (hitbox) in physics engine
+    // Create static obstacle in physics engine
     const entityId = `shape-${name}`;
-    const entity = this.physic.createEntity({
-      uuid: entityId,
-      position: { x: centerX, y: centerY },
-      width: width,
-      height: height,
-      mass: Infinity, // Static entity
-      state: EntityState.Static,
-      restitution: 0, // No bounce
+    this.physic.createStaticObstacle(entityId, {
+      x: centerX,
+      y: centerY,
+      width,
+      height,
+      restitution: 0,
     });
-    entity.freeze(); // Ensure it's frozen
 
     // Build properties object
     const properties: Record<string, any> = {
