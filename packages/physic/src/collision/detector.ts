@@ -4,9 +4,7 @@ import { CircleCollider } from './CircleCollider';
 import { AABBCollider } from './AABBCollider';
 import { PolygonCollider, entityToPolygonConfig } from './PolygonCollider';
 import { CapsuleCollider } from './CapsuleCollider';
-
-// Collider cache to avoid repeated allocations
-const colliderCache: WeakMap<Entity, Collider> = new WeakMap();
+import { getCachedCollider, setCachedCollider } from './collider-cache';
 
 /**
  * Collision detector
@@ -22,7 +20,7 @@ const colliderCache: WeakMap<Entity, Collider> = new WeakMap();
  * @returns Appropriate collider instance
  */
 export function createCollider(entity: Entity): Collider | null {
-  const cached = colliderCache.get(entity);
+  const cached = getCachedCollider(entity);
   if (cached) {
     return cached;
   }
@@ -38,7 +36,7 @@ export function createCollider(entity: Entity): Collider | null {
     collider = new AABBCollider(entity);
   }
   if (collider) {
-    colliderCache.set(entity, collider);
+    setCachedCollider(entity, collider);
   }
   return collider;
 }
@@ -97,4 +95,3 @@ export function findCollisions(entities: Entity[]): CollisionInfo[] {
 
   return collisions;
 }
-

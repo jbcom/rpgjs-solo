@@ -11,6 +11,7 @@ import { AABB } from '../core/math/AABB';
 import { Ray, RaycastHit } from '../collision/Ray';
 import type { EntityConfig } from '../physics/Entity';
 import { sweepEntities } from '../collision/sweep';
+import { invalidateCollider } from '../collision/collider-cache';
 
 /**
  * World configuration
@@ -200,6 +201,11 @@ export class World {
     if (!this.entities.has(entity)) {
       return;
     }
+    invalidateCollider(entity);
+    this.syncEntity(entity);
+  }
+
+  private syncEntity(entity: Entity): void {
     this.syncEntityCollection(entity);
     this.spatialPartition.update(entity);
   }
@@ -493,7 +499,7 @@ export class World {
 
   private refreshEntitiesInPartition(): void {
     for (const entity of this.entities) {
-      this.updateEntity(entity);
+      this.syncEntity(entity);
     }
   }
 

@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { World } from './World';
 import { Entity } from '../physics/Entity';
 import { AABB } from '../core/math/AABB';
+import { Vector2 } from '../core/math/Vector2';
+import { assignPolygonCollider } from '../collision/PolygonCollider';
 
 describe('World', () => {
   let world: World;
@@ -144,6 +146,32 @@ describe('World', () => {
     world.updateEntity(entity);
 
     const result = world.queryAABB(new AABB(-10, -10, 10, 10));
+    expect(result).toContain(entity);
+  });
+
+  it('should update broad-phase bounds after a collider shape change is synchronized', () => {
+    const entity = world.createEntity({
+      position: { x: 0, y: 0 },
+      width: 2,
+      height: 2,
+      mass: 0,
+    });
+
+    // Prime the collider cache as an AABB before switching to a polygon.
+    expect(world.queryAABB(new AABB(-2, -2, 2, 2))).toContain(entity);
+
+    assignPolygonCollider(entity, {
+      vertices: [
+        new Vector2(-30, -1),
+        new Vector2(30, -1),
+        new Vector2(30, 1),
+        new Vector2(-30, 1),
+      ],
+      isConvex: true,
+    });
+    world.updateEntity(entity);
+
+    const result = world.queryAABB(new AABB(25, -2, 35, 2));
     expect(result).toContain(entity);
   });
 });

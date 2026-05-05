@@ -4,6 +4,7 @@ import { Vector2 } from '../core/math/Vector2';
 import { AABBCollider } from './AABBCollider';
 import { CircleCollider } from './CircleCollider';
 import { PolygonCollider, assignPolygonCollider } from './PolygonCollider';
+import { createCollider } from './detector';
 
 describe('PolygonCollider', () => {
   it('detects convex polygon vs polygon (SAT)', () => {
@@ -61,6 +62,48 @@ describe('PolygonCollider', () => {
     const col = poly.testCollision(circle);
     expect(col).not.toBeNull();
   });
-});
 
+  it('replaces a cached AABB collider when a polygon collider is assigned later', () => {
+    const entity = new Entity({
+      position: { x: 0, y: 0 },
+      width: 2,
+      height: 2,
+    });
+
+    expect(createCollider(entity)).toBeInstanceOf(AABBCollider);
+
+    assignPolygonCollider(entity, {
+      vertices: [
+        new Vector2(-1, -1),
+        new Vector2(1, -1),
+        new Vector2(1, 1),
+        new Vector2(-1, 1),
+      ],
+      isConvex: true,
+    });
+
+    expect(createCollider(entity)).toBeInstanceOf(PolygonCollider);
+  });
+
+  it('replaces a cached circle collider when a polygon collider is assigned later', () => {
+    const entity = new Entity({
+      position: { x: 0, y: 0 },
+      radius: 2,
+    });
+
+    expect(createCollider(entity)).toBeInstanceOf(CircleCollider);
+
+    assignPolygonCollider(entity, {
+      vertices: [
+        new Vector2(-2, -2),
+        new Vector2(2, -2),
+        new Vector2(2, 2),
+        new Vector2(-2, 2),
+      ],
+      isConvex: true,
+    });
+
+    expect(createCollider(entity)).toBeInstanceOf(PolygonCollider);
+  });
+});
 

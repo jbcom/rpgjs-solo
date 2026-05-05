@@ -5,6 +5,7 @@ import { Collider, CollisionInfo, ContactPoint } from './Collider';
 import { AABBCollider } from './AABBCollider';
 import { CircleCollider } from './CircleCollider';
 import { Ray, RaycastHit } from './Ray';
+import { invalidateCollider } from './collider-cache';
 
 /**
  * Configuration for polygon colliders
@@ -40,6 +41,7 @@ export const entityToPolygonConfig: WeakMap<Entity, PolygonConfig> = new WeakMap
  */
 export function assignPolygonCollider(entity: Entity, config: PolygonConfig): void {
   entityToPolygonConfig.set(entity, config);
+  invalidateCollider(entity);
 }
 
 /**
@@ -413,5 +415,4 @@ function polygonCentroid(poly: Vector2[]): Vector2 {
   const n = poly.length > 0 ? poly.length : 1;
   return new Vector2(cx / n, cy / n);
 }
-
 
