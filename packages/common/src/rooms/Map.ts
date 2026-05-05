@@ -532,15 +532,12 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       this.physicsAccumulatorMs -= fixedStepMs;
       hooks?.beforeStep?.();
       
-      // Update movements before physics step (applies velocity changes from inputs)
+      // Update movement strategies before advancing a full RPG physics frame.
       this.physic.updateMovements();
-      
-      const tick = this.physic.stepOneTick();
+
+      const tick = this.physic.stepFrame();
       executed += 1;
-      
-      // Run post-tick updates (zones, position sync callbacks)
-      this.runPostTickUpdates();
-      
+
       hooks?.afterStep?.(tick);
     }
 
@@ -623,8 +620,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   protected forceSingleTick(hooks?: { beforeStep?: () => void; afterStep?: (tick: number) => void }): number {
     hooks?.beforeStep?.();
     this.physic.updateMovements();
-    const tick = this.physic.stepOneTick();
-    this.runPostTickUpdates();
+    const tick = this.physic.stepFrame();
     hooks?.afterStep?.(tick);
     const fixedMs = this.physic.getWorld().getTimeStep() * 1000;
     this.physicsAccumulatorMs = Math.max(0, this.physicsAccumulatorMs - fixedMs);
