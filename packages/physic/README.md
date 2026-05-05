@@ -1,32 +1,31 @@
 # RPG Physic
 
-A deterministic 2D top-down physics library for RPG, sandbox and MMO games.
+Deterministic 2D top-down physics for RPG-JS games.
 
-## Features
+Use it when you need the same gameplay simulation on the server and in the
+browser: movement, collisions, sensors, and high-volume projectiles.
 
-- **Deterministic**: Same inputs produce same results across platforms
-- **Cross-platform**: Works in Node.js, browsers, Deno, and Web Workers
-- **Modular**: Extensible architecture with plugin support
-- **Performant**: Optimized for 1000+ dynamic entities at 60 FPS
-- **Zero dependencies**: No external runtime dependencies
-- **Region-based**: Experimental support for distributed simulation across regions
-- **Collision detection**: Circle and AABB colliders with spatial optimization
-- **Forces & Constraints**: Springs, anchors, attractions, explosions
-- **Event system**: Collision events, sleep/wake notifications
+## What To Use
 
-## Recommended RPG Server Path
+For most RPG-JS projects, start with this stack:
 
-For production RPG-JS server physics, start with:
+- `PhysicsEngine` as the main entry point.
+- `createCharacter()` for players and NPCs.
+- `createStaticObstacle()` for walls, trees, rocks, and map blockers.
+- `createSensor()` for vision, skills, aggro ranges, and area detection.
+- `stepFrame()` for a fixed server tick.
+- `ProjectileSystem` for arrows, bullets, spells, and other high-volume projectiles.
 
-- `PhysicsEngine` without regions
-- the default `SpatialHash` broad phase
-- RPG helpers such as `createCharacter`, `createStaticObstacle`, `createSensor`, `moveEntity`, and `stepFrame`
-- `ZoneManager` for vision, skills, and area detection
-- `ProjectileSystem` for high-volume server-authoritative projectiles
+Keep these for advanced or experimental work:
 
-`RegionManager`, `Region`, `BVH`, and `Quadtree` are exported for experimentation and benchmarking, but they are not the recommended default path yet.
+- `World`, `Entity`, and colliders when you need low-level control.
+- `MovementManager` and movement strategies for scripted movement.
+- `RegionManager`, `Region`, `BVH`, and `Quadtree` for experiments and benchmarks.
 
-## Installation
+The recommended production default is a single `PhysicsEngine` world with the
+default `SpatialHash` broad phase.
+
+## Install
 
 ```bash
 npm install @rpgjs/physic
@@ -34,715 +33,176 @@ npm install @rpgjs/physic
 
 ## Quick Start
 
-```typescript
-import { PhysicsEngine } from '@rpgjs/physic';
-
-// Create physics engine
-const engine = new PhysicsEngine({
-  timeStep: 1 / 60, // 60 FPS
-});
-
-// Create entities
-const ball = engine.createEntity({
-  position: { x: 0, y: 0 },
-  radius: 10,
-  mass: 1,
-  velocity: { x: 5, y: 0 },
-});
-
-const ground = engine.createEntity({
-  position: { x: 0, y: 100 },
-  width: 200,
-  height: 10,
-  mass: 0, // Static
-});
-
-// Listen to collisions
-engine.getEvents().onCollisionEnter((collision) => {
-  console.log('Collision!', collision.entityA.uuid, collision.entityB.uuid);
-});
-
-// Simulation loop
-function gameLoop() {
-  engine.step();
-  // Render entities at engine.getEntities()
-  requestAnimationFrame(gameLoop);
-}
-
-gameLoop();
-```
-
-## Determinism & Networking
-
-`@rpgjs/physic` is deterministic as long as every peer advances the simulation by **whole ticks**.  
-Use the new `stepOneTick` / `stepTicks` helpers to drive the engine with an integer tick counter, and keep a copy of that counter for reconciliation purposes.
-
 ```ts
-const engine = new PhysicsEngine({ timeStep: 1 / 60 });
-const fixedDt = engine.getWorld().getTimeStep();
-
-function predictionLoop(collectedInputs: InputBuffer) {
-  // Apply buffered inputs for this tick (movement, abilities, etc.)
-  applyInputs(collectedInputs.peek());
-
-  engine.updateMovements(fixedDt);
-  const tick = engine.stepOneTick(); // identical tick index on every machine
-  renderAtTick(tick);
-}
-```
-
-### Snapshots & Reconciliation
-
-For client-side prediction, take a snapshot when the server acknowledges a tick, rewind to it, then replay the unconfirmed inputs:
-
-```ts
-const confirmed = engine.takeSnapshot();
-pendingInputs = []; // clear inputs up to confirmed tick
-
-// ...later (server correction)
-engine.restoreSnapshot(serverSnapshot);
-for (const input of pendingInputs) {
-  applyInput(input);
-  engine.stepOneTick();
-}
-```
-
-Snapshots only store the minimal per-entity state (position, velocity, rotation, sleeping flag) to keep payloads small.
-
-### Quantization
-
-To eliminate floating-point drift across platforms, you can quantize positions/velocities every tick:
-
-```ts
-const engine = new PhysicsEngine({
-  timeStep: 1 / 60,
-  positionQuantizationStep: 1 / 16,   // 1/16th of a pixel
-  velocityQuantizationStep: 1 / 256,  // optional velocity clamp
-});
-```
-
-Quantization is optional but strongly recommended for authoritative MMO servers.
-
-### Prediction & Reconciliation Helpers
-
-Networking a top-down RPG now relies on dedicated utilities:
-
-- `PredictionController` (client-side) buffers local inputs, queues server snapshots, and reconciles the physics body once authoritative data arrives.
-- `DeterministicInputBuffer` (server-side) stores per-player inputs in order, deduplicates frames, and lets you consume the queue deterministically each tick.
-
-```ts
-// Client
-const engine = new PhysicsEngine({ timeStep: 1 / 60 });
-const hero = engine.createEntity({ /* ... */ });
-
-const prediction = new PredictionController({
-  correctionThreshold: 5,
-  getPhysicsTick: () => engine.getTick(),
-  getCurrentState: () => ({ 
-    x: hero.position.x, 
-    y: hero.position.y, 
-    direction: hero.velocity 
-  }),
-  setAuthoritativeState: (state) => {
-    hero.position.set(state.x, state.y);
-    hero.velocity.set(state.direction.x, state.direction.y);
-  },
-});
-
-// Server
-const buffer = new DeterministicInputBuffer<Direction>();
-buffer.enqueue(playerId, { frame, tick, timestamp, payload: direction });
-const orderedInputs = buffer.consume(playerId);
-```
-
-Activate prediction only when you need it; otherwise the controller can be skipped and everything falls back to the authoritative server position.
-
-When gameplay enters a state where buffered movement must not be replayed, such
-as a blocking attack or dialog, call `clearPendingInputs()` on the prediction
-controller. It discards pending input history while keeping the next frame
-number monotonic.
-
-## Integration with @rpgjs/common
-
-`@rpgjs/common` now delegates all simulation to this package. The legacy Matter.js wrapper has been removed in favour of the shared deterministic `PhysicsEngine` that lives directly in `@rpgjs/physic`. Every hitbox, zone and movement strategy is backed by the deterministic core exposed here, ensuring the same behaviour on both client and server without third-party physics engines.
-
-## Using PhysicsEngine for RPG Games
-
-For RPG-style games, use `PhysicsEngine` directly instead of the deprecated `TopDownPhysics` class. This section shows how to create characters, manage collisions, zones, and movements using the core engine.
-
-### Creating Characters
-
-Characters in RPG games are typically circular entities with a radius. Create them using `createEntity`:
-
-```ts
-import { PhysicsEngine, Vector2, EntityState } from '@rpgjs/physic';
-
-const engine = new PhysicsEngine({
-  timeStep: 1 / 60,
-  gravity: new Vector2(0, 0), // No gravity for top-down games
-  enableSleep: false,
-});
-
-// Create a hero character
-const hero = engine.createEntity({
-  uuid: 'hero-1',
-  position: { x: 128, y: 96 },
-  radius: 24,
-  mass: 1,
-  friction: 0.4,
-  linearDamping: 0.2,
-  maxLinearVelocity: 200, // pixels per second
-});
-
-// Create an NPC
-const npc = engine.createEntity({
-  uuid: 'npc-1',
-  position: { x: 200, y: 150 },
-  radius: 20,
-  mass: 100,
-  friction: 0.4,
-  linearDamping: 0.2,
-  maxLinearVelocity: 150,
-});
-```
-
-### Character Movement
-
-Use the `MovementManager` to apply movement strategies to characters:
-
-```ts
-import { MovementManager, LinearMove, Dash } from '@rpgjs/physic';
-
-const movement = engine.getMovementManager();
-
-// Apply linear movement to hero (e.g., from keyboard input)
-const moveSpeed = 200; // pixels per second
-const direction = new Vector2(1, 0).normalize(); // normalized direction
-movement.add(hero, new LinearMove(direction, moveSpeed));
-
-// Apply a dash ability
-movement.add(hero, new Dash(300, { x: 1, y: 0 }, 0.2)); // speed, direction, duration
-
-// Update movements and step simulation
-function gameLoop() {
-  engine.stepWithMovements(); // Updates movements and advances physics
-  // Render entities...
-  requestAnimationFrame(gameLoop);
-}
-```
-
-### Handling Input for Character Control
-
-For player-controlled characters, set velocity directly based on input:
-
-```ts
-const moveSpeed = 200; // pixels per second
-
-function updateHeroMovement(keys: { [key: string]: boolean }) {
-  const move = new Vector2(0, 0);
-  
-  if (keys['w'] || keys['arrowup']) move.y -= 1;
-  if (keys['s'] || keys['arrowdown']) move.y += 1;
-  if (keys['a'] || keys['arrowleft']) move.x -= 1;
-  if (keys['d'] || keys['arrowright']) move.x += 1;
-  
-  if (move.length() > 0) {
-    move.normalizeInPlace().mulInPlace(moveSpeed);
-    hero.setVelocity({ x: move.x, y: move.y });
-  } else {
-    hero.setVelocity({ x: 0, y: 0 });
-  }
-}
-
-// In your game loop
-function gameLoop() {
-  updateHeroMovement(keyboardState);
-  engine.step();
-  // Render...
-}
-```
-
-### Character Collisions
-
-By default, all entities with `mass > 0` will collide with each other and with static obstacles. To control collision behavior:
-
-```ts
-// Make an entity static (won't be pushed, but will block others)
-const wall = engine.createEntity({
-  position: { x: 100, y: 0 },
-  width: 20,
-  height: 100,
-  mass: Infinity, // or mass: 0
-  state: EntityState.Static,
-});
-wall.freeze(); // Ensure it's frozen
-
-// Listen to collisions
-hero.onCollisionEnter(({ other }) => {
-  console.log(`Hero collided with ${other.uuid}`);
-});
-
-// Temporarily disable collisions for a character (e.g., for phasing ability)
-// Note: This requires managing collision groups or using custom collision filtering
-// For now, you can teleport the entity or use movement strategies to pass through
-```
-
-### Zones for Vision and Detection
-
-Use `ZoneManager` to create vision cones, skill ranges, and area-of-effect detection:
-
-```ts
-const zones = engine.getZoneManager();
-
-// Create a vision zone attached to the hero
-const visionZoneId = zones.createAttachedZone(hero, {
-  radius: 150,
-  angle: 120, // 120-degree cone
-  direction: 'right', // Initial direction
-  offset: { x: 0, y: 0 },
-}, {
-  onEnter: (entities) => {
-    console.log('Hero sees entities:', entities.map(e => e.uuid));
-  },
-  onExit: (entities) => {
-    console.log('Hero lost sight of entities:', entities.map(e => e.uuid));
-  },
-});
-
-// Update zone direction based on hero movement
-function updateVisionZone() {
-  const velocity = hero.velocity;
-  if (velocity.length() > 1) {
-    // Determine direction from velocity
-    const angle = Math.atan2(velocity.y, velocity.x);
-    let direction: 'up' | 'down' | 'left' | 'right' = 'right';
-    if (angle > -Math.PI / 4 && angle < Math.PI / 4) direction = 'right';
-    else if (angle > Math.PI / 4 && angle < 3 * Math.PI / 4) direction = 'down';
-    else if (angle > -3 * Math.PI / 4 && angle < -Math.PI / 4) direction = 'up';
-    else direction = 'left';
-    
-    zones.updateZone(visionZoneId, { direction });
-  }
-}
-
-// In game loop
-function gameLoop() {
-  engine.step();
-  zones.update(); // Important: update zones after physics step
-  updateVisionZone();
-  // Render...
-}
-```
-
-### Deterministic Tick-Based Simulation
-
-For networked games, use `stepOneTick` to ensure deterministic simulation:
-
-```ts
-const engine = new PhysicsEngine({ timeStep: 1 / 60 });
-const fixedDt = engine.getWorld().getTimeStep();
-
-function gameLoop() {
-  // Gather inputs for this tick
-  const input = collectInputs();
-  
-  // Apply inputs
-  applyInputToHero(hero, input);
-  
-  // Advance exactly one tick
-  const tick = engine.stepOneTick();
-  
-  // Update zones
-  zones.update();
-  
-  // Render at this tick
-  render();
-  
-  requestAnimationFrame(gameLoop);
-}
-```
-
-### Complete RPG Example
-
-Here's a complete example combining all concepts:
-
-```ts
-import {
-  PhysicsEngine,
-  Vector2,
-  MovementManager,
-  ZoneManager,
-  LinearMove,
-  SeekAvoid,
-} from '@rpgjs/physic';
+import { PhysicsEngine, Vector2 } from '@rpgjs/physic';
 
 const engine = new PhysicsEngine({
   timeStep: 1 / 60,
   gravity: new Vector2(0, 0),
-  enableSleep: false,
 });
 
-const movement = engine.getMovementManager();
-const zones = engine.getZoneManager();
-
-// Create hero
-const hero = engine.createEntity({
-  uuid: 'hero',
-  position: { x: 300, y: 300 },
-  radius: 25,
-  mass: 1,
-  friction: 0.4,
-  linearDamping: 0.2,
-  maxLinearVelocity: 200,
-});
-
-// Create NPCs
-const npc = engine.createEntity({
-  uuid: 'npc-1',
-  position: { x: 500, y: 400 },
-  radius: 20,
-  mass: 100,
-  friction: 0.4,
-  linearDamping: 0.2,
-  maxLinearVelocity: 150,
-});
-
-// Create static obstacles (walls)
-const wall = engine.createEntity({
-  uuid: 'wall-1',
-  position: { x: 400, y: 300 },
-  width: 20,
-  height: 100,
-  mass: Infinity,
-});
-wall.freeze();
-
-// Create vision zone for hero
-const visionZoneId = zones.createAttachedZone(hero, {
-  radius: 150,
-  angle: 120,
-  direction: 'right',
-}, {
-  onEnter: (entities) => console.log('Hero sees:', entities),
-});
-
-// Apply movement strategy to NPC (e.g., seek and avoid hero)
-movement.add(npc, new SeekAvoid(engine, () => hero, 180, 140, 80, 48));
-
-// Game loop
-function gameLoop() {
-  // Update hero movement from input
-  updateHeroFromInput(hero);
-  
-  // Step simulation
-  engine.stepWithMovements();
-  
-  // Update zones
-  zones.update();
-  
-  // Render
-  render();
-  
-  requestAnimationFrame(gameLoop);
-}
-```
-
-### Recommended Input Flow for Networked Games
-
-1. Gather inputs for the next tick (direction, dash, attack, ...).
-2. Apply them locally through `PhysicsEngine` (client-side prediction).
-3. Send the input packet `{ tick, payload }` to the server.
-4. When the authoritative snapshot comes back, restore it and replay any unconfirmed inputs using `stepOneTick`.
-
-The included RPG example under `packages/physic/examples/rpg` demonstrates this loop with keyboard controls, NPC strategies, and debug UI using `PhysicsEngine` directly.
-
-### Deprecated: TopDownPhysics
-
-> **Note:** `TopDownPhysics` is deprecated. Use `PhysicsEngine` directly as shown above. The `TopDownPhysics` class was a convenience wrapper that is no longer recommended for new code.
-
-## Zones
-
-Zones allow detecting entities within circular or cone-shaped areas without physical collisions. This is useful for vision systems, skill ranges, explosions, area-of-effect abilities, and other gameplay mechanics that need to detect presence without triggering collision responses.
-
-Zones can be:
-- **Static**: Fixed position in the world
-- **Attached**: Follow an entity's position (with optional offset)
-
-Each zone can have:
-- A circular or cone-shaped detection area (angle < 360° creates a cone)
-- Optional line-of-sight checking (blocks through static entities)
-- Event callbacks for entities entering/exiting the zone
-
-### Basic Usage
-
-```typescript
-import { PhysicsEngine, ZoneManager } from '@rpgjs/physic';
-
-const engine = new PhysicsEngine({ timeStep: 1/60 });
-const zones = engine.getZoneManager();
-
-// Create a static zone
-const staticZone = zones.createZone({
-  id: 'healing-fountain',
-  position: { x: 100, y: 100 },
-  radius: 50,
-}, {
-  onEnter: (entities) => console.log('Entities entered:', entities),
-  onExit: (entities) => console.log('Entities exited:', entities),
-});
-
-// Create a zone attached to an entity
-const player = engine.createEntity({
-  position: { x: 0, y: 0 },
-  radius: 10,
-  mass: 1,
-});
-
-const visionZone = zones.createAttachedZone(player, {
-  radius: 100,
-  angle: 90, // 90-degree cone
-  direction: 'right',
-  offset: { x: 0, y: 0 }, // Optional offset from entity position
-}, {
-  onEnter: (entities) => console.log('Player sees:', entities),
-  onExit: (entities) => console.log('Player lost sight of:', entities),
-});
-
-// Update zones after each physics step
-function gameLoop() {
-  engine.step();
-  zones.update(); // Important: call update after step
-  // ... render entities
-}
-```
-
-### Zone Configuration
-
-- `id`: Optional stable zone identifier (auto-generated when omitted)
-- `radius`: Detection radius in world units
-- `angle`: Cone angle in degrees (360 = full circle, < 360 = cone)
-- `direction`: Direction for cone-shaped zones (`'up' | 'down' | 'left' | 'right'`)
-- `limitedByWalls`: If true, line-of-sight is required (static entities block detection)
-- `offset`: For attached zones, offset from entity position
-- `metadata`: Optional custom data attached to the zone
-
-### Updating Zones
-
-**Important:** Always call `zones.update()` after each physics step to keep zones synchronized:
-
-```typescript
-engine.step();
-zones.update(); // Zones are calculated on post-step state
-```
-
-This ensures zones detect entities based on their positions after physics simulation, maintaining determinism.
-
-### Querying Zones
-
-```typescript
-// Get all entities currently in a zone
-const entities = zones.getEntitiesInZone(visionZoneId);
-
-// Update zone configuration
-zones.updateZone(visionZoneId, { radius: 150, angle: 120 });
-
-// Remove a zone
-zones.removeZone(visionZoneId);
-```
-
-### Using Zones with PhysicsEngine
-
-The `ZoneManager` exposed by `PhysicsEngine` is a generic system that works with any `Entity` and can be used independently for vision, skills, explosions, and other gameplay mechanics on both client and server. This is the recommended approach for all zone-based detection in RPG games.
-
-## Tile Grid System
-
-The engine includes a built-in tile grid system for grid-based logic, such as tile-based movement, triggers, or blocking specific areas (e.g., water, lava).
-
-### Configuration
-
-Configure the tile size in the `PhysicsEngine` constructor:
-
-```typescript
-const engine = new PhysicsEngine({
-  timeStep: 1 / 60,
-  tileWidth: 32,  // Default: 32
-  tileHeight: 32, // Default: 32
-});
-```
-
-### Tile Hooks
-
-Entities have hooks to react to tile changes:
-
-```typescript
-// Triggered when entering a new tile
-entity.onEnterTile(({ x, y }) => {
-  console.log(`Entered tile [${x}, ${y}]`);
-});
-
-// Triggered when leaving a tile
-entity.onLeaveTile(({ x, y }) => {
-  console.log(`Left tile [${x}, ${y}]`);
-});
-
-// Check if entity can enter a tile (return false to block movement)
-entity.canEnterTile(({ x, y }) => {
-  if (isWater(x, y)) {
-    return false; // Block movement
-  }
-  return true;
-});
-```
-
-The `currentTile` property on the entity stores the current tile coordinates:
-
-```typescript
-console.log(entity.currentTile); // Vector2(10, 5)
-```
-
-## Vision Blocking (Raycasting)
-
-The engine supports raycasting for vision blocking and line-of-sight checks.
-
-### Raycasting API
-
-You can perform raycasts directly via the `PhysicsEngine` or `World`:
-
-```typescript
-import { Ray } from '@rpgjs/physic';
-
-const hit = engine.raycast(
-  startPosition,
-  direction,
-  maxDistance,
-  collisionMask, // Optional mask
-  (entity) => entity !== self // Optional filter
-);
-
-if (hit) {
-  console.log('Hit entity:', hit.entity.uuid);
-  console.log('Hit point:', hit.point);
-  console.log('Hit normal:', hit.normal);
-  console.log('Distance:', hit.distance);
-}
-```
-
-### Vision Zones with Line of Sight
-
-Zones can be configured to respect walls using `limitedByWalls: true`. This uses raycasting internally to check if entities are visible.
-
-```typescript
-const visionZone = zones.createAttachedZone(hero, {
-  radius: 150,
-  angle: 120,
-  limitedByWalls: true, // Enable line-of-sight checks
-}, {
-  onEnter: (entities) => console.log('Seen:', entities),
-});
-```
-
-Static entities (mass = 0 or Infinity) act as blockers for line-of-sight.
-
-## Examples
-
-- [Canvas Example](./examples/canvas/main.ts) - Interactive HTML5 Canvas demo (run with `npm run example`)
-- [Basic Usage](./examples/basic.ts) - Simple physics simulation
-- [Static Obstacles](./examples/static-obstacles.ts) - Creating immovable obstacles for RPG games
-- [Regions](./examples/regions.ts) - Experimental distributed simulation with regions
-- [Forces](./examples/forces.ts) - Applying forces and constraints
-
-## Architecture
-
-The library is organized in layers:
-
-1. **Core Math Layer**: Vectors, matrices, AABB, geometric utilities
-2. **Physics Layer**: Entities, integrators, forces, constraints
-3. **Collision Layer**: Colliders, detection, resolution, spatial hash
-4. **World Layer**: World management, events, spatial partitioning
-5. **Region Layer**: Experimental multi-region simulation, entity migration
-6. **API Layer**: High-level gameplay-oriented API
-
-## API Reference
-
-### PhysicsEngine
-
-Main entry point for physics simulation.
-
-```typescript
-const engine = new PhysicsEngine({
-  timeStep: 1 / 60,
-  enableRegions: false,
-  gravity: new Vector2(0, 0),
-});
-
-// Create entities
-const entity = engine.createEntity({
-  position: { x: 0, y: 0 },
-  radius: 10,
-  mass: 1,
-});
-
-// Step simulation
-engine.step();
-
-// Apply forces
-engine.applyForce(entity, new Vector2(10, 0));
-
-// Teleport entity
-engine.teleport(entity, new Vector2(100, 200));
-```
-
-For RPG server loops, prefer the higher-level helpers when you only need
-characters, rectangular map blockers, sensors, and per-frame inputs:
-
-```typescript
-const engine = new PhysicsEngine({ timeStep: 1 / 60 });
-
-const hero = engine.createCharacter('hero-1', {
+const hero = engine.createCharacter('hero', {
   x: 100,
   y: 100,
   hitbox: { width: 16, height: 24 },
   speed: 120,
 });
 
-engine.createStaticObstacle('tree-1', {
-  x: 160,
+engine.createStaticObstacle('tree', {
+  x: 180,
   y: 100,
   width: 32,
   height: 32,
 });
 
-engine.createSensor('hero-vision', {
-  entity: hero,
-  radius: 96,
-  onEnter: (entities) => {
-    console.log('Seen:', entities.map((entity) => entity.uuid));
-  },
+engine.stepFrame({
+  hero: 'right',
 });
 
-// Apply authoritative server inputs and advance one fixed tick.
-const tick = engine.stepFrame({
-  'hero-1': 'right',
+console.log(hero.position.x, hero.position.y);
+```
+
+## Server Tick Loop
+
+Run physics from a fixed tick on the server. Send inputs to the server, apply
+them with `stepFrame()`, then broadcast only the state your game needs.
+
+```ts
+const engine = new PhysicsEngine({ timeStep: 1 / 60 });
+
+engine.createCharacter('player-1', {
+  x: 100,
+  y: 100,
+  hitbox: 12,
+  speed: 140,
+});
+
+function tick(inputs: Record<string, 'up' | 'down' | 'left' | 'right' | 'idle'>) {
+  const tickId = engine.stepFrame(inputs);
+
+  return {
+    tick: tickId,
+    players: engine.getEntities().map((entity) => ({
+      id: entity.uuid,
+      x: entity.position.x,
+      y: entity.position.y,
+    })),
+  };
+}
+```
+
+`stepFrame()` applies movement inputs, advances physics by one tick, updates
+sensors, and returns the new tick number.
+
+## Characters
+
+Use `createCharacter()` for players, NPCs, monsters, and moving objects.
+
+```ts
+const player = engine.createCharacter('player-1', {
+  x: 64,
+  y: 128,
+  hitbox: { width: 18, height: 28 },
+  speed: 160,
+  linearDamping: 0.12,
 });
 ```
 
-Available RPG helpers:
+Supported hitboxes:
 
-- `createCharacter(id, { x, y, hitbox, speed })` creates a dynamic player/NPC body with a stable id.
-- `createStaticObstacle(id, { x, y, width, height })` creates an immovable map blocker.
-- `createSensor(id, options)` creates a stable static or entity-attached zone.
-- `moveEntity(idOrEntity, direction, speed?)` sets velocity from `'up'`, `'down'`, `'left'`, `'right'`, `'idle'`, or a vector.
-- `teleportEntity(idOrEntity, position)` teleports and resynchronizes the broad phase.
-- `stepFrame(inputs)` applies input directions, steps physics, updates sensors, and returns the new tick.
+```ts
+hitbox: 12
+hitbox: { radius: 12 }
+hitbox: { width: 16, height: 24 }
+hitbox: { type: 'circle', radius: 12 }
+hitbox: { type: 'box', width: 16, height: 24 }
+hitbox: { type: 'capsule', radius: 8, height: 28 }
+```
 
-### Server Projectiles
+Move a character manually:
 
-Use `ProjectileSystem` for high-volume server-authoritative projectiles. It keeps projectile state in a lightweight data store, raycasts each traveled segment, and emits lifecycle events. Projectiles are not added as physics entities, so they do not participate in projectile-projectile collisions by default.
+```ts
+engine.moveEntity('player-1', 'left');
+engine.moveEntity(player, { x: 1, y: 1 }, 220);
+engine.moveEntity('player-1', 'idle');
+```
 
-```typescript
-import { PhysicsEngine, ProjectileSystem } from '@rpgjs/physic';
+Teleport safely:
 
-const engine = new PhysicsEngine({ timeStep: 1 / 60 });
+```ts
+engine.teleportEntity('player-1', { x: 320, y: 96 });
+```
+
+Teleporting through the engine keeps the broad phase synchronized.
+
+## Static Obstacles
+
+Use `createStaticObstacle()` for map blockers.
+
+```ts
+engine.createStaticObstacle('wall-1', {
+  x: 256,
+  y: 128,
+  width: 128,
+  height: 24,
+});
+```
+
+Static obstacles block dynamic entities and can be used by raycasts and sensors.
+
+## Sensors
+
+Sensors detect entities without creating physical collision responses. They are
+useful for vision, aggro, skill ranges, interaction zones, explosions, and traps.
+
+```ts
+engine.createSensor('hero-vision', {
+  entity: hero,
+  radius: 120,
+  onEnter: (entities) => {
+    console.log('entered vision:', entities.map((entity) => entity.uuid));
+  },
+  onExit: (entities) => {
+    console.log('left vision:', entities.map((entity) => entity.uuid));
+  },
+});
+
+engine.stepFrame({ hero: 'right' });
+```
+
+Static sensor:
+
+```ts
+engine.createSensor('healing-zone', {
+  position: { x: 500, y: 300 },
+  radius: 48,
+  onEnter: healEntities,
+});
+```
+
+Cone sensor:
+
+```ts
+engine.createSensor('guard-view', {
+  entity: guard,
+  radius: 160,
+  angle: 90,
+  direction: 'down',
+  limitedByWalls: true,
+});
+```
+
+For advanced zone operations, use `engine.getZoneManager()`.
+
+## Projectiles
+
+Use `ProjectileSystem` for high-volume projectiles. Projectiles are plain data,
+not full physics entities, so you can simulate many of them without adding
+projectile-projectile collisions or syncing positions every tick.
+
+```ts
+import { ProjectileSystem } from '@rpgjs/physic';
+
 const projectiles = new ProjectileSystem(engine);
 
 projectiles.onSpawn(({ projectile }) => {
@@ -776,8 +236,8 @@ projectiles.onDestroy(({ projectile, reason }) => {
 
 projectiles.spawn({
   id: 'arrow-1',
-  ownerId: 'hero-1',
-  origin: { x: 100, y: 100 },
+  ownerId: 'hero',
+  origin: hero.position,
   direction: { x: 1, y: 0 },
   speed: 420,
   range: 640,
@@ -788,377 +248,190 @@ projectiles.spawn({
 projectiles.step(1 / 60);
 ```
 
-For sockets, send `spawn`, `hit`, and `destroy` events. Do not send projectile positions every tick; clients can interpolate or predict visuals from the deterministic spawn payload while the server remains authoritative for hits and destruction.
+For sockets, send:
 
-When you use engine helpers such as `teleport`, `freeze`, `unfreeze`, or
-`assignPolygonCollider`, the engine automatically synchronizes the entity with
-the spatial partition. If you mutate an entity manually, call `updateEntity`
-before running spatial queries or relying on collisions:
+- `spawn`
+- `hit`
+- `destroy`
 
-```typescript
+Avoid sending every projectile position every tick. Clients can predict visuals
+from spawn data while the server remains authoritative for hits.
+
+## Collisions
+
+Listen to global collision events:
+
+```ts
+engine.getEvents().onCollisionEnter((collision) => {
+  console.log(collision.entityA.uuid, collision.entityB.uuid);
+});
+```
+
+Listen on a single entity:
+
+```ts
+hero.onCollisionEnter(({ other }) => {
+  console.log('hero touched', other.uuid);
+});
+```
+
+Use collision masks for filtering:
+
+```ts
+const PLAYER = 0x01;
+const WALL = 0x02;
+
+engine.createCharacter('hero', {
+  x: 0,
+  y: 0,
+  hitbox: 12,
+  speed: 120,
+  collisionCategory: PLAYER,
+  collisionMask: WALL,
+});
+```
+
+## Manual Mutations
+
+Prefer engine helpers. They keep spatial data synchronized:
+
+```ts
+engine.moveEntity('hero', 'right');
+engine.teleportEntity('hero', { x: 100, y: 100 });
+engine.freeze(entity);
+engine.unfreeze(entity);
+```
+
+If you mutate an entity directly, call `updateEntity()` afterward:
+
+```ts
 entity.position.set(128, 96);
 entity.width = 32;
 entity.height = 48;
 engine.updateEntity(entity);
 ```
 
-### Entity
+## Prediction And Reconciliation
 
-Physical entities in the world.
+For client prediction, use fixed ticks and snapshots.
 
-```typescript
-const entity = new Entity({
-  position: { x: 0, y: 0 },
-  velocity: { x: 5, y: 0 },
-  radius: 10,
-  mass: 1,
-  restitution: 0.8, // Bounciness
-  friction: 0.3,
-});
+```ts
+const snapshot = engine.takeSnapshot();
 
-// Apply forces
-entity.applyForce(new Vector2(10, 0));
-entity.applyImpulse(new Vector2(5, 0));
-
-// Control state
-entity.freeze(); // Make static
-entity.sleep(); // Put to sleep
-entity.wakeUp(); // Wake up
-entity.stopMovement(); // Stop all movement immediately (keeps entity dynamic)
-```
-
-#### Per-entity Hooks
-
-`Entity` exposes local hooks so you can react to collisions, position changes, direction changes, and movement state without diving into the global event bus.
-
-- `onCollisionEnter` and `onCollisionExit` fire when the entity starts or stops colliding with another body.
-- `onPositionChange` fires whenever the entity's position (x, y) changes. Useful for synchronizing rendering, network updates, or logging.
-- `onDirectionChange` fires when the entity's direction changes, providing both the normalized direction vector and a simplified cardinal direction (`CardinalDirection`: `'left'`, `'right'`, `'up'`, `'down'`, or `'idle'`).
-- `onMovementChange` fires when the entity starts or stops moving (based on velocity threshold). Provides `isMoving` boolean and `intensity` (speed magnitude in pixels/second) for fine-grained animation control. Useful for animations, gameplay reactions, or network sync.
-
-You can also manually trigger these hooks using `notifyPositionChange()`, `notifyDirectionChange()`, and `notifyMovementChange()` when modifying position or velocity directly.
-
-```typescript
-const player = engine.createEntity({ position: { x: 0, y: 0 }, radius: 12, mass: 1 });
-
-const stopWatchingCollision = player.onCollisionEnter(({ other }) => {
-  console.log(`Player collided with ${other.uuid}`);
-});
-
-// Sync position changes for rendering or network updates
-player.onPositionChange(({ x, y }) => {
-  console.log(`Position changed to (${x}, ${y})`);
-  // Update rendering, sync network, etc.
-});
-
-player.onDirectionChange(({ cardinalDirection, direction }) => {
-  console.log(`Heading: ${cardinalDirection}`, direction);
-  // Update sprite direction, sync network, etc.
-});
-
-// Detect when player starts or stops moving
-player.onMovementChange(({ isMoving, intensity }) => {
-  console.log(`Player is ${isMoving ? 'moving' : 'stopped'} at speed ${intensity.toFixed(1)} px/s`);
-  
-  // Update animations based on intensity
-  if (isMoving && intensity > 100) {
-    // Fast movement - use run animation
-    playerAnimation = 'run';
-  } else if (isMoving && intensity < 10) {
-    // Slow movement - use walk animation (avoid flicker on micro-movements)
-    playerAnimation = 'walk';
-  } else if (!isMoving) {
-    // Stopped - use idle animation
-    playerAnimation = 'idle';
-  }
-  // Sync network, etc.
-});
-
-// Manually trigger position sync after direct modification
-player.position.set(100, 200);
-player.notifyPositionChange(); // Trigger sync hooks
-
-// Manually trigger movement state sync after velocity modification
-player.velocity.set(5, 0);
-player.notifyMovementChange(); // Trigger sync hooks if state changed
-```
-
-Use the returned unsubscribe function to detach listeners when they are no longer needed.
-
-### Movement System
-
-The movement module provides reusable strategies and a manager that plugs into the physics engine.
-
-```typescript
-import {
-  PhysicsEngine,
-  MovementManager,
-  Dash,
-  LinearMove,
-} from '@rpgjs/physic';
-
-const engine = new PhysicsEngine({ timeStep: 1 / 60 });
-const player = engine.createEntity({
-  position: { x: 0, y: 0 },
-  radius: 10,
-  mass: 1,
-});
-
-const movement = engine.getMovementManager();
-
-movement.add(player, new Dash(8, { x: 1, y: 0 }, 0.2));
-movement.add(player, new LinearMove({ x: 0, y: 3 }, 1.5));
-
-function loop() {
-  engine.stepWithMovements();
-  requestAnimationFrame(loop);
-}
-
-loop();
-```
-
-- `MovementManager` accepts entities directly or can be instantiated with a resolver (`MovementManager.forEngine(engine)` is used internally by `PhysicsEngine`).
-- Strategies consume the generic `MovementBody` interface so you can wrap custom bodies; `@rpgjs/common` exposes an adapter for Matter.js hitboxes.
-- Call `movement.update(dt)` manually when you need custom timing, or use `engine.stepWithMovements(dt)` to update movements and advance the simulation in one call.
-- Use `movement.stopMovement(entity)` to completely stop an entity's movement, clearing all strategies and stopping velocity (useful when changing maps or teleporting).
-
-#### Projectile Movement
-
-`ProjectileMovement` is a movement strategy for simple straight, arc, or bounce trajectories. It is server-compatible and does not use DOM events. Use `onHeightUpdate` when you need arc height for rendering, networking, or gameplay feedback:
-
-```typescript
-import { ProjectileMovement, ProjectileType } from '@rpgjs/physic';
-
-movement.add(projectileEntity, new ProjectileMovement(ProjectileType.Arc, {
-  speed: 240,
-  direction: { x: 1, y: 0 },
-  maxRange: 320,
-  maxHeight: 24,
-  gravity: 60,
-  onHeightUpdate: (height, body) => {
-    console.log(body.id, height);
-  },
-}));
-```
-
-#### Awaiting Movement Completion
-
-The `add()` method returns a Promise that resolves when the movement completes (when `isFinished()` returns true). This allows you to chain movements or execute code after a movement finishes:
-
-```typescript
-// Wait for a dash to complete
-await movement.add(player, new Dash(8, { x: 1, y: 0 }, 0.2));
-console.log('Dash completed!');
-
-// Chain multiple movements
-await movement.add(player, new Dash(8, { x: 1, y: 0 }, 0.2));
-await movement.add(player, new Dash(8, { x: 0, y: 1 }, 0.2));
-console.log('Both dashes completed!');
-```
-
-#### Movement Callbacks
-
-You can pass `MovementOptions` to the `add()` method for lifecycle callbacks:
-
-```typescript
-import { MovementOptions, Knockback } from '@rpgjs/physic';
-
-// Apply knockback with callbacks
-await movement.add(player, new Knockback({ x: -1, y: 0 }, 5, 0.3), {
-  onStart: () => {
-    // Called when the movement starts (first update)
-    player.directionFixed = true;
-    player.animationFixed = true;
-    console.log('Knockback started!');
-  },
-  onComplete: () => {
-    // Called when the movement completes
-    player.directionFixed = false;
-    player.animationFixed = false;
-    console.log('Knockback finished!');
-  }
-});
-```
-
-The `MovementOptions` interface:
-
-```typescript
-interface MovementOptions {
-  /** Callback executed when the movement starts (first update call) */
-  onStart?: () => void;
-  
-  /** Callback executed when the movement completes (isFinished returns true) */
-  onComplete?: () => void;
+engine.restoreSnapshot(serverSnapshot);
+for (const input of pendingInputs) {
+  engine.stepFrame({ hero: input.direction });
 }
 ```
 
-**Note:** If the strategy doesn't implement `isFinished()`, the Promise resolves immediately after the strategy is added, and `onComplete` will not be called automatically.
+Quantization can reduce floating-point drift:
 
-### Static Obstacles
-
-Create immovable obstacles (walls, trees, decorations) by setting `mass` to `0` or `Infinity`. 
-Static entities will block other entities without being pushed.
-
-```typescript
-// Dynamic player character
-const player = engine.createEntity({
-  position: { x: 0, y: 0 },
-  radius: 10,
-  mass: 1, // Normal mass for dynamic entity
-});
-
-// Static wall obstacle (cannot be pushed)
-const wall = engine.createEntity({
-  position: { x: 100, y: 0 },
-  width: 20,
-  height: 100,
-  mass: Infinity, // Immovable obstacle
-});
-
-// Alternative: use mass = 0
-const tree = engine.createEntity({
-  position: { x: 200, y: 0 },
-  radius: 15,
-  mass: 0, // Also makes it immovable
-});
-
-// Player will be blocked by obstacles, but obstacles won't move
-```
-
-### Forces
-
-Apply various forces to entities.
-
-```typescript
-import { applyAttraction, applyRepulsion, applyExplosion } from '@rpgjs/physic';
-
-// Attract entity to point
-applyAttraction(entity, targetPoint, strength, maxDistance);
-
-// Repel entity from point
-applyRepulsion(entity, sourcePoint, strength, maxDistance);
-
-// Explosion force
-applyExplosion(entity, center, strength, radius, falloff);
-```
-
-### Constraints
-
-Connect entities with constraints.
-
-```typescript
-import { SpringConstraint, DistanceConstraint, AnchorConstraint } from '@rpgjs/physic';
-
-// Spring between two entities
-const spring = new SpringConstraint(entity1, entity2, restLength, stiffness, damping);
-spring.update(deltaTime);
-
-// Distance constraint
-const distance = new DistanceConstraint(entity1, entity2, targetDistance, stiffness);
-distance.update(deltaTime);
-
-// Anchor entity to point
-const anchor = new AnchorConstraint(entity, anchorPoint, stiffness);
-anchor.update(deltaTime);
-```
-
-### Regions
-
-Distributed simulation across regions.
-
-> **Experimental:** regions are available for experiments and benchmarks, but
-> the recommended production path for RPG-JS server physics is a single
-> `PhysicsEngine` world with the default `SpatialHash` broad phase. Region
-> migration semantics, event propagation, stats, and config propagation still
-> need production validation.
-
-```typescript
+```ts
 const engine = new PhysicsEngine({
-  enableRegions: true,
-  regionConfig: {
-    worldBounds: new AABB(0, 0, 1000, 1000),
-    regionSize: 200,
-    overlap: 20,
-    autoActivate: true,
-  },
+  timeStep: 1 / 60,
+  positionQuantizationStep: 1 / 16,
+  velocityQuantizationStep: 1 / 256,
+});
+```
+
+`PredictionController` and `DeterministicInputBuffer` are available when you
+need a fuller prediction/reconciliation pipeline.
+
+## Low-Level API
+
+Use low-level APIs when the RPG helpers are not enough:
+
+- `createEntity()` for custom bodies.
+- `World` for direct simulation control.
+- `raycast()` for line checks and targeting.
+- `sweep()` for continuous collision checks.
+- `MovementManager` for scripted movement strategies such as dash, knockback,
+  path following, or projectile-style movement.
+
+Example:
+
+```ts
+const entity = engine.createEntity({
+  uuid: 'custom-body',
+  position: { x: 0, y: 0 },
+  radius: 10,
+  mass: 1,
 });
 
-// Entities automatically migrate between regions
-const entity = engine.createEntity({ position: { x: 100, y: 100 }, radius: 10 });
+const hit = engine.raycast(entity.position, { x: 1, y: 0 }, 200);
 ```
 
-## Performance
+## Experimental APIs
 
-The library is optimized for:
-- **1000 dynamic entities** at 60 FPS
-- **10000 static entities** supported
-- **SpatialHash** as the default broad phase for RPG workloads
-- **Sleep system** for inactive entities
-- **Object pooling** ready (utilities provided)
+These APIs are exported, but are not the recommended default path yet:
 
-`BVH` and `Quadtree` are currently experimental alternatives. Keep `SpatialHash`
-unless a benchmark for your entity distribution shows a clear advantage.
+- `RegionManager`
+- `Region`
+- `BVH`
+- `Quadtree`
 
-## Determinism
-
-All physics operations are deterministic. Same inputs will produce same outputs across platforms, making it suitable for:
-- Network synchronization
-- Replay systems
-- Testing and debugging
-
-## Testing
-
-```bash
-# Run tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage
-npm run test:coverage
-
-# Run benchmarks (separate from tests)
-npm run benchmark          # Run all benchmarks
-npm run benchmark:1000    # 1000 entities benchmark
-npm run benchmark:10000   # 10000 static entities benchmark
-npm run benchmark:collisions  # Collision detection benchmark
-npm run benchmark:projectiles # Lightweight projectile benchmark
-npm run benchmark:regions     # Region-based simulation benchmark
-```
-
-## Building
-
-```bash
-# Build library
-npm run build
-
-# Type check
-npm run typecheck
-
-# Generate documentation
-npm run docs
-```
+Use them for experiments and benchmarks. Keep `PhysicsEngine` without regions
+and the default `SpatialHash` unless your own benchmark shows a clear win.
 
 ## Examples
 
 ```bash
-# Run interactive canvas example
-npm run example
+npm run example:rpg
 ```
 
-This will start a Vite dev server and open the canvas example in your browser.
+The RPG example is a plain HTML/Canvas mini-game using the recommended APIs:
+characters, static obstacles, sensors, and `ProjectileSystem`.
 
-## Documentation
+Other examples in this package are intended for development and regression
+testing.
 
-Full API documentation is available after building:
+## Commands
 
 ```bash
+npm test
+npm run typecheck
+npm run build
 npm run docs
+npm run test:coverage
+npm run benchmark:projectiles
 ```
 
-Documentation will be generated in the `docs/` directory.
+Benchmark commands:
 
-## License
+```bash
+npm run benchmark
+npm run benchmark:1000
+npm run benchmark:10000
+npm run benchmark:collisions
+npm run benchmark:projectiles
+npm run benchmark:regions
+```
 
-MIT
+## Current Benchmark Signal
+
+On the current development machine, the lightweight projectile benchmark showed:
+
+- 1k active projectiles: about `1.09ms/step`
+- 5k active projectiles: about `5.68ms/step`
+- 10k active projectiles: about `11.92ms/step`
+- 0 physics entities created for projectiles
+
+Treat these as micro-benchmarks. For production sizing, benchmark your real map,
+obstacle density, player count, masks, and socket interest management.
+
+## Package Shape
+
+Main exports:
+
+```ts
+import {
+  PhysicsEngine,
+  ProjectileSystem,
+  Vector2,
+  AABB,
+  Entity,
+  World,
+} from '@rpgjs/physic';
+```
+
+The package has no runtime dependencies.
