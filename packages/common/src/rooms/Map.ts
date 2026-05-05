@@ -7,7 +7,6 @@ import {
   Entity,
   EntityState,
   assignPolygonCollider,
-  AABB,
   createCollider,
 } from "@rpgjs/physic";
 import { combineLatest, Observable, share, Subject, Subscription } from "rxjs";
@@ -653,10 +652,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const hitbox = typeof owner.hitbox === "function" ? owner.hitbox() : owner.hitbox;
     const width = hitbox?.w ?? 32;
     const height = hitbox?.h ?? 32;
-    const radius = Math.max(width, height) / 2;
     this.addCharacter({
       owner,
-      radius,
       kind,
       maxSpeed: owner.speed(),
       collidesWithCharacters: !this.shouldDisableCharacterCollisions(owner),
@@ -1101,16 +1098,13 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       boxWidth = Math.max(width, 1);
       boxHeight = Math.max(height, 1);
 
-      entity = this.physic.createEntity({
-        uuid: id,
-        position: { x: centerX, y: centerY },
+      entity = this.physic.createStaticObstacle(id, {
+        x: centerX,
+        y: centerY,
         width: boxWidth,
         height: boxHeight,
-        mass: Infinity,
-        state: EntityState.Static,
-        restitution: 0
+        restitution: 0,
       });
-      entity.freeze();
     }
 
     return id;
@@ -1152,7 +1146,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    */
   private addCharacter(options: {
     owner: any;
-    radius?: number;
     kind?: PhysicsEntityKind;
     collidesWithCharacters?: boolean;
     maxSpeed?: number;
@@ -1172,9 +1165,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const width = hitbox?.w ?? 32;
     const height = hitbox?.h ?? 32;
 
-    // Calculate radius from dimensions (use the larger dimension for circular collider)
-    const radius = Math.max(width, height) / 2;
-
     // owner.x() and owner.y() are TOP-LEFT positions
     const topLeftX = owner.x();
     const topLeftY = owner.y();
@@ -1185,19 +1175,16 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     const isStatic = !!options.isStatic;
 
-    const entity = this.physic.createEntity({
-      uuid: id,
-      position: { x: centerX, y: centerY },
-      // Use radius for circular collision detection
-      radius: Math.max(radius, 1),
-      // Also store explicit width/height for consistent position conversions
-      // This ensures getBodyPosition/setBodyPosition use the same dimensions
-      width: width,
-      height: height,
+    const speed = options.maxSpeed ? options.maxSpeed * this.speedScalar : 200;
+    const entity = this.physic.createCharacter(id, {
+      x: centerX,
+      y: centerY,
+      hitbox: { width, height },
+      speed,
       mass: options.mass ?? (isStatic ? Infinity : 1),
       friction: options.friction ?? 0.4,
       linearDamping: isStatic ? 1 : 0.2,
-      maxLinearVelocity: options.maxSpeed ? options.maxSpeed * this.speedScalar : 200,
+      maxLinearVelocity: speed,
       restitution: 0
     });
 
@@ -1420,8 +1407,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const entityHeight = entity.height || entity.radius * 2 || 32;
     const centerX = x + entityWidth / 2;
     const centerY = y + entityHeight / 2;
-    entity.position.set(centerX, centerY);
-    this.physic.updateEntity(entity);
+    this.physic.teleportEntity(entity, { x: centerX, y: centerY });
 
     return true;
   }
@@ -1467,27 +1453,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const entity = this.physic.getEntityByUUID(player.id);
     if (!entity) return false;
 
-    const speedValue = player.speed()
-
-    let vx = 0, vy = 0;
-    switch (direction) {
-      case Direction.Left:
-        vx = -speedValue * this.speedScalar;
-        break;
-      case Direction.Right:
-        vx = speedValue * this.speedScalar;
-        break;
-      case Direction.Up:
-        vy = -speedValue * this.speedScalar;
-        break;
-      case Direction.Down:
-        vy = speedValue * this.speedScalar;
-        break;
-    }
-
-    // Input sets the base velocity. Movement strategies (dash/knockback/AI, etc.)
-    // are responsible for adding or overriding velocity when needed.
-    entity.setVelocity({ x: vx, y: vy });
+    const speed = player.speed() * this.speedScalar;
+    this.physic.moveEntity(entity, direction, speed);
     entity.wakeUp();
     return true;
   }

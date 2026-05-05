@@ -48,6 +48,17 @@ afterEach(async () => {
 
 
 describe("Move Routes - Basic Movements", () => {
+  test("should create player physics body with rectangular RPG hitbox and speed", async () => {
+    const map = player.getCurrentMap() as any;
+    const entity = map.getBody(player.id);
+    const hitbox = player.hitbox();
+
+    expect(entity).toBeDefined();
+    expect(entity.width).toBe(hitbox.w);
+    expect(entity.height).toBe(hitbox.h);
+    expect(entity.radius).toBe(0);
+    expect(entity.maxLinearVelocity).toBe(player.speed() * 50);
+  });
 
   test("should move right using Direction enum", async () => {
     const initialX = player.x();
