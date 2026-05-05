@@ -128,4 +128,93 @@ describe('PhysicsEngine', () => {
     expect(entities).toContain(entity);
     expect(engine.getTick()).toBe(5);
   });
+
+  it('should create and move RPG characters by id', () => {
+    const engine = new PhysicsEngine({ timeStep: 1 });
+    const hero = engine.createCharacter('hero', {
+      x: 0,
+      y: 0,
+      hitbox: { width: 16, height: 24 },
+      speed: 50,
+    });
+
+    expect(hero.uuid).toBe('hero');
+    expect(hero.width).toBe(16);
+    expect(hero.height).toBe(24);
+
+    expect(engine.moveEntity('hero', 'right')).toBe(true);
+    expect(hero.velocity.x).toBe(50);
+    expect(hero.velocity.y).toBe(0);
+
+    const initialY = hero.position.y;
+    expect(engine.stepFrame({ hero: 'down' })).toBe(1);
+    expect(hero.velocity.x).toBe(0);
+    expect(hero.velocity.y).toBeGreaterThan(0);
+    expect(hero.position.y).toBeGreaterThan(initialY);
+  });
+
+  it('should create static RPG obstacles', () => {
+    const engine = new PhysicsEngine();
+    const wall = engine.createStaticObstacle('wall', {
+      x: 32,
+      y: 48,
+      width: 64,
+      height: 16,
+    });
+
+    expect(wall.uuid).toBe('wall');
+    expect(wall.mass).toBe(0);
+    expect(wall.invMass).toBe(0);
+    expect(wall.width).toBe(64);
+    expect(wall.height).toBe(16);
+  });
+
+  it('should teleport RPG entities by id and keep queries synchronized', () => {
+    const engine = new PhysicsEngine({
+      spatialCellSize: 10,
+      spatialGridWidth: 100,
+      spatialGridHeight: 100,
+    });
+    const hero = engine.createCharacter('hero', {
+      x: 100,
+      y: 0,
+      hitbox: 2,
+      speed: 50,
+    });
+
+    expect(engine.teleportEntity('hero', { x: 0, y: 0 })).toBe(true);
+    expect(engine.queryAABB(new AABB(-5, -5, 5, 5))).toContain(hero);
+  });
+
+  it('should create stable RPG sensors and update them during stepFrame', () => {
+    const engine = new PhysicsEngine({ timeStep: 1 });
+    const hero = engine.createCharacter('hero', {
+      x: 0,
+      y: 0,
+      hitbox: 2,
+      speed: 10,
+    });
+    const npc = engine.createCharacter('npc', {
+      x: 20,
+      y: 0,
+      hitbox: 2,
+      speed: 10,
+    });
+    const entered: string[] = [];
+
+    const sensorId = engine.createSensor('vision', {
+      entity: hero,
+      radius: 12,
+      onEnter: (entities) => {
+        entered.push(...entities.map((entity) => entity.uuid));
+      },
+    });
+
+    expect(sensorId).toBe('vision');
+    expect(engine.getZoneManager().getZone('vision')?.id).toBe('vision');
+
+    engine.stepFrame({ npc: 'left' });
+
+    expect(entered).toContain('npc');
+  });
 });

@@ -1,5 +1,5 @@
 import { World, WorldConfig } from '../world/World';
-import { Entity, EntityConfig } from '../physics/Entity';
+import { CardinalDirection, Entity, EntityConfig } from '../physics/Entity';
 import { RegionManager, RegionManagerConfig } from '../region/RegionManager';
 import { EventSystem } from '../world/events';
 import { Vector2 } from '../core/math/Vector2';
@@ -8,7 +8,53 @@ import { assignPolygonCollider, PolygonConfig } from '../collision/PolygonCollid
 import { RaycastHit } from '../collision/raycast';
 import { sweepEntities as sweepUtil, SweepResult } from '../collision/sweep';
 import { MovementManager } from '../movement/MovementManager';
-import { ZoneManager } from './ZoneManager';
+import { AttachedZoneConfig, StaticZoneConfig, ZoneCallbacks, ZoneManager } from './ZoneManager';
+
+export type RPGEntityRef = Entity | string;
+export type RPGMovementDirection = CardinalDirection | Vector2 | { x: number; y: number };
+export type RPGFrameInput = RPGMovementDirection | {
+  direction: RPGMovementDirection;
+  speed?: number;
+};
+
+export type RPGHitbox =
+  | number
+  | { radius: number }
+  | { width: number; height: number }
+  | { type: 'circle'; radius: number }
+  | { type: 'box' | 'aabb'; width: number; height: number }
+  | { type: 'capsule'; radius: number; height: number };
+
+export interface RPGCharacterOptions extends Omit<EntityConfig, 'uuid' | 'position' | 'velocity' | 'radius' | 'width' | 'height' | 'capsule' | 'maxLinearVelocity'> {
+  x: number;
+  y: number;
+  hitbox: RPGHitbox;
+  /** Movement speed in units per second used by moveEntity/stepFrame */
+  speed: number;
+  /** Optional initial velocity */
+  velocity?: Vector2 | { x: number; y: number };
+  /** Maximum linear velocity (defaults to speed) */
+  maxLinearVelocity?: number;
+}
+
+export interface RPGStaticObstacleOptions extends Omit<EntityConfig, 'uuid' | 'position' | 'velocity' | 'mass' | 'radius' | 'width' | 'height' | 'capsule'> {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type RPGSensorOptions = (
+  | Omit<StaticZoneConfig, 'id' | 'position'>
+  | Omit<AttachedZoneConfig, 'id' | 'entity'>
+) & {
+  position?: Vector2 | { x: number; y: number };
+  x?: number;
+  y?: number;
+  entity?: RPGEntityRef;
+  onEnter?: ZoneCallbacks['onEnter'];
+  onExit?: ZoneCallbacks['onExit'];
+};
 
 /**
  * Physics engine configuration
@@ -44,6 +90,7 @@ export class PhysicsEngine {
   private useRegions: boolean;
   private movementManager: MovementManager | null = null;
   private zoneManager: ZoneManager | null = null;
+  private readonly rpgSpeeds = new Map<string, number>();
   private tick: number = 0;
 
   /**
@@ -157,6 +204,28 @@ export class PhysicsEngine {
   }
 
   /**
+   * Applies a frame of RPG movement inputs, advances the simulation, and updates sensors.
+   *
+   * @param inputs - Map of entity id to direction input
+   * @returns Current tick index after stepping
+   */
+  public stepFrame(inputs: Record<string, RPGFrameInput> = {}): number {
+    for (const [id, input] of Object.entries(inputs)) {
+      if (this.isFrameInputObject(input)) {
+        this.moveEntity(id, input.direction, input.speed);
+      } else {
+        this.moveEntity(id, input);
+      }
+    }
+
+    this.step();
+    if (this.zoneManager) {
+      this.zoneManager.update();
+    }
+    return this.tick;
+  }
+
+  /**
    * Advances the simulation by a fixed number of ticks.
    *
    * @param ticks - Number of ticks to simulate (>= 1)
@@ -202,6 +271,93 @@ export class PhysicsEngine {
   }
 
   /**
+   * Creates a dynamic RPG character with a stable id, hitbox, and default movement speed.
+   *
+   * This is the recommended creation path for players and NPCs in server-side RPG
+   * simulations because the entity is registered and ready for `moveEntity` and
+   * `stepFrame` immediately.
+   *
+   * @param id - Stable entity identifier
+   * @param options - Character configuration
+   * @returns Created entity
+   */
+  public createCharacter(id: string, options: RPGCharacterOptions): Entity {
+    const { x, y, hitbox: hitboxOption, speed, velocity, maxLinearVelocity, ...entityOptions } = options;
+    const hitbox = this.resolveHitbox(hitboxOption);
+    const config: EntityConfig = {
+      ...entityOptions,
+      ...hitbox,
+      uuid: id,
+      position: { x, y },
+      mass: options.mass ?? 1,
+      maxLinearVelocity: maxLinearVelocity ?? speed,
+    };
+    if (velocity !== undefined) {
+      config.velocity = velocity;
+    }
+    const entity = this.createEntity(config);
+    this.rpgSpeeds.set(entity.uuid, speed);
+    return entity;
+  }
+
+  /**
+   * Creates a static rectangular obstacle for RPG maps.
+   *
+   * @param id - Stable entity identifier
+   * @param options - Obstacle configuration
+   * @returns Created static entity
+   */
+  public createStaticObstacle(id: string, options: RPGStaticObstacleOptions): Entity {
+    return this.createEntity({
+      ...options,
+      uuid: id,
+      position: { x: options.x, y: options.y },
+      width: options.width,
+      height: options.height,
+      mass: 0,
+    });
+  }
+
+  /**
+   * Creates a static or attached sensor zone with a stable id.
+   *
+   * Sensors detect entities through the `ZoneManager` and do not create physical
+   * collision responses.
+   *
+   * @param id - Stable sensor identifier
+   * @param options - Sensor configuration
+   * @returns Sensor identifier
+   */
+  public createSensor(id: string, options: RPGSensorOptions): string {
+    const { onEnter, onExit, entity, position, x, y, ...zoneOptions } = options;
+    let callbacks: ZoneCallbacks | undefined;
+    if (onEnter || onExit) {
+      callbacks = {};
+      if (onEnter) callbacks.onEnter = onEnter;
+      if (onExit) callbacks.onExit = onExit;
+    }
+
+    if (entity) {
+      const attachedEntity = this.resolveEntity(entity);
+      if (!attachedEntity) {
+        throw new Error(`Cannot create sensor "${id}" for unknown entity`);
+      }
+      return this.getZoneManager().createZone({
+        ...zoneOptions,
+        id,
+        entity: attachedEntity,
+      }, callbacks);
+    }
+
+    const resolvedPosition = position ?? { x: x ?? 0, y: y ?? 0 };
+    return this.getZoneManager().createZone({
+      ...zoneOptions,
+      id,
+      position: resolvedPosition,
+    }, callbacks);
+  }
+
+  /**
    * Adds an existing entity to the engine
    * 
    * @param entity - Entity to add
@@ -222,6 +378,7 @@ export class PhysicsEngine {
    * @param entity - Entity to remove
    */
   public removeEntity(entity: Entity): void {
+    this.rpgSpeeds.delete(entity.uuid);
     if (this.useRegions && this.regionManager) {
       this.regionManager.removeEntity(entity);
     } else {
@@ -319,6 +476,58 @@ export class PhysicsEngine {
   }
 
   /**
+   * Teleports an entity by id or entity reference.
+   *
+   * @param entity - Entity or UUID to teleport
+   * @param position - New position
+   * @returns True when the entity was found
+   */
+  public teleportEntity(entity: RPGEntityRef, position: Vector2 | { x: number; y: number }): boolean {
+    const target = this.resolveEntity(entity);
+    if (!target) {
+      return false;
+    }
+    this.teleport(target, position);
+    return true;
+  }
+
+  /**
+   * Moves an entity in a cardinal or vector direction using its configured RPG speed.
+   *
+   * Pass `'idle'` or a zero vector to stop the entity.
+   *
+   * @param entity - Entity or UUID to move
+   * @param direction - Cardinal direction or arbitrary vector
+   * @param speed - Optional speed override for this command
+   * @returns True when the entity was found
+   */
+  public moveEntity(entity: RPGEntityRef, direction: RPGMovementDirection, speed?: number): boolean {
+    const target = this.resolveEntity(entity);
+    if (!target) {
+      return false;
+    }
+
+    const vector = this.resolveDirection(direction);
+    const magnitude = vector.length();
+    if (magnitude === 0) {
+      target.setVelocity({ x: 0, y: 0 });
+      return true;
+    }
+
+    const resolvedSpeed = speed ?? this.rpgSpeeds.get(target.uuid) ?? target.maxLinearVelocity;
+    if (!Number.isFinite(resolvedSpeed) || resolvedSpeed <= 0) {
+      target.setVelocity({ x: 0, y: 0 });
+      return true;
+    }
+
+    target.setVelocity({
+      x: (vector.x / magnitude) * resolvedSpeed,
+      y: (vector.y / magnitude) * resolvedSpeed,
+    });
+    return true;
+  }
+
+  /**
    * Synchronizes an entity after manual position, shape, or state changes.
    *
    * Direct mutations such as `entity.position.set(...)`, `entity.width = ...`,
@@ -389,6 +598,7 @@ export class PhysicsEngine {
     } else {
       this.world.clear();
     }
+    this.rpgSpeeds.clear();
     this.tick = 0;
   }
 
@@ -556,6 +766,62 @@ export class PhysicsEngine {
    */
   public getRegionManager(): RegionManager | null {
     return this.regionManager;
+  }
+
+  private resolveEntity(entity: RPGEntityRef): Entity | undefined {
+    if (entity instanceof Entity) {
+      return entity;
+    }
+    return this.getEntityByUUID(entity);
+  }
+
+  private resolveHitbox(hitbox: RPGHitbox): Pick<EntityConfig, 'radius' | 'width' | 'height' | 'capsule'> {
+    if (typeof hitbox === 'number') {
+      return { radius: hitbox };
+    }
+
+    if ('type' in hitbox) {
+      if (hitbox.type === 'circle') {
+        return { radius: hitbox.radius };
+      }
+      if (hitbox.type === 'capsule') {
+        return { capsule: { radius: hitbox.radius, height: hitbox.height } };
+      }
+      return { width: hitbox.width, height: hitbox.height };
+    }
+
+    if ('radius' in hitbox) {
+      return { radius: hitbox.radius };
+    }
+    return { width: hitbox.width, height: hitbox.height };
+  }
+
+  private resolveDirection(direction: RPGMovementDirection): Vector2 {
+    if (direction instanceof Vector2) {
+      return direction.clone();
+    }
+
+    if (typeof direction === 'string') {
+      switch (direction) {
+        case 'up':
+          return new Vector2(0, -1);
+        case 'down':
+          return new Vector2(0, 1);
+        case 'left':
+          return new Vector2(-1, 0);
+        case 'right':
+          return new Vector2(1, 0);
+        case 'idle':
+        default:
+          return new Vector2(0, 0);
+      }
+    }
+
+    return new Vector2(direction.x, direction.y);
+  }
+
+  private isFrameInputObject(input: RPGFrameInput): input is { direction: RPGMovementDirection; speed?: number } {
+    return typeof input === 'object' && !(input instanceof Vector2) && 'direction' in input;
   }
 }
 

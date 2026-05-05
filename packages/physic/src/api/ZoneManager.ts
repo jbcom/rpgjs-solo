@@ -13,6 +13,8 @@ export type ZoneDirection = 'up' | 'down' | 'left' | 'right';
  * Configuration for a static zone (fixed position in the world)
  */
 export interface StaticZoneConfig {
+  /** Optional zone identifier (auto-generated if not provided) */
+  id?: string;
   /** Zone position in world coordinates */
   position: Vector2 | { x: number; y: number };
   /** Zone radius */
@@ -31,6 +33,8 @@ export interface StaticZoneConfig {
  * Configuration for a zone attached to an entity
  */
 export interface AttachedZoneConfig {
+  /** Optional zone identifier (auto-generated if not provided) */
+  id?: string;
   /** Entity to attach the zone to */
   entity: Entity;
   /** Offset from entity position (default: {x: 0, y: 0}) */
@@ -161,7 +165,10 @@ export class ZoneManager {
     config: ZoneConfig,
     callbacks?: ZoneCallbacks,
   ): string {
-    const id = generateUUID();
+    const id = config.id ?? generateUUID();
+    if (this.zones.has(id)) {
+      throw new Error(`Zone "${id}" already exists`);
+    }
     const radius = config.radius;
     if (typeof radius !== 'number' || radius <= 0) {
       throw new Error('Zone radius must be a positive number');
@@ -583,4 +590,3 @@ export class ZoneManager {
     return a;
   }
 }
-

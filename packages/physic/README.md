@@ -471,6 +471,7 @@ const zones = engine.getZoneManager();
 
 // Create a static zone
 const staticZone = zones.createZone({
+  id: 'healing-fountain',
   position: { x: 100, y: 100 },
   radius: 50,
 }, {
@@ -505,6 +506,7 @@ function gameLoop() {
 
 ### Zone Configuration
 
+- `id`: Optional stable zone identifier (auto-generated when omitted)
 - `radius`: Detection radius in world units
 - `angle`: Cone angle in degrees (360 = full circle, < 360 = cone)
 - `direction`: Direction for cone-shaped zones (`'up' | 'down' | 'left' | 'right'`)
@@ -677,6 +679,49 @@ engine.applyForce(entity, new Vector2(10, 0));
 // Teleport entity
 engine.teleport(entity, new Vector2(100, 200));
 ```
+
+For RPG server loops, prefer the higher-level helpers when you only need
+characters, rectangular map blockers, sensors, and per-frame inputs:
+
+```typescript
+const engine = new PhysicsEngine({ timeStep: 1 / 60 });
+
+const hero = engine.createCharacter('hero-1', {
+  x: 100,
+  y: 100,
+  hitbox: { width: 16, height: 24 },
+  speed: 120,
+});
+
+engine.createStaticObstacle('tree-1', {
+  x: 160,
+  y: 100,
+  width: 32,
+  height: 32,
+});
+
+engine.createSensor('hero-vision', {
+  entity: hero,
+  radius: 96,
+  onEnter: (entities) => {
+    console.log('Seen:', entities.map((entity) => entity.uuid));
+  },
+});
+
+// Apply authoritative server inputs and advance one fixed tick.
+const tick = engine.stepFrame({
+  'hero-1': 'right',
+});
+```
+
+Available RPG helpers:
+
+- `createCharacter(id, { x, y, hitbox, speed })` creates a dynamic player/NPC body with a stable id.
+- `createStaticObstacle(id, { x, y, width, height })` creates an immovable map blocker.
+- `createSensor(id, options)` creates a stable static or entity-attached zone.
+- `moveEntity(idOrEntity, direction, speed?)` sets velocity from `'up'`, `'down'`, `'left'`, `'right'`, `'idle'`, or a vector.
+- `teleportEntity(idOrEntity, position)` teleports and resynchronizes the broad phase.
+- `stepFrame(inputs)` applies input directions, steps physics, updates sensors, and returns the new tick.
 
 When you use engine helpers such as `teleport`, `freeze`, `unfreeze`, or
 `assignPolygonCollider`, the engine automatically synchronizes the entity with
