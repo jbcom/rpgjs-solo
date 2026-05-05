@@ -28,6 +28,7 @@
     "benchmark:1000": "tsx benchmarks/cli/benchmark.ts 1000",
     "benchmark:10000": "tsx benchmarks/cli/benchmark.ts 10000",
     "benchmark:collisions": "tsx benchmarks/cli/benchmark.ts collisions",
+    "benchmark:projectiles": "tsx benchmarks/cli/benchmark.ts projectiles",
     "benchmark:regions": "tsx benchmarks/cli/benchmark.ts regions",
     "example": "vite --mode example",
     "example:dev": "vite --mode example",

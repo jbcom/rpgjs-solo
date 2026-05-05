@@ -24,8 +24,13 @@ export {
   type EntityPositionSyncHandler,
   type EntityDirectionSyncEvent,
   type EntityDirectionSyncHandler,
+  type EntityMovementChangeEvent,
+  type EntityMovementChangeHandler,
+  type EntityTileEvent,
+  type EntityTileHandler,
+  type EntityCanEnterTileHandler,
 } from './physics/Entity';
-export { Integrator, IntegrationMethod } from './physics/integrator';
+export { Integrator, IntegrationMethod, type IntegratorConfig } from './physics/integrator';
 export * from './physics/forces';
 export * from './physics/constraints';
 
@@ -37,16 +42,22 @@ export { CapsuleCollider } from './collision/CapsuleCollider';
 export { SpatialHash } from './collision/spatial-hash';
 export { Quadtree } from './collision/quadtree';
 export { BVH } from './collision/bvh';
-export { CollisionResolver } from './collision/resolver';
+export { CollisionResolver, type ResolverConfig } from './collision/resolver';
 export * from './collision/detector';
 export { PolygonCollider, assignPolygonCollider, type PolygonConfig } from './collision/PolygonCollider';
 export { raycast, type RaycastHit } from './collision/raycast';
-export { Ray } from './collision/Ray';
+export { Ray, type RaycastHit as ColliderRaycastHit } from './collision/Ray';
 export { sweepEntities, type SweepResult } from './collision/sweep';
 
 // World Layer
 export { World, type WorldConfig } from './world/World';
-export { EventSystem } from './world/events';
+export {
+  EventSystem,
+  type CollisionEventHandler,
+  type EntityEventHandler,
+  type SleepEventHandler,
+  type WakeEventHandler,
+} from './world/events';
 export type { SpatialPartition } from './world/SpatialPartition';
 
 // Region Layer
@@ -67,6 +78,13 @@ export {
   PhysicsEngine,
   type PhysicsEngineConfig,
   type PhysicsSnapshot,
+  type RPGCharacterOptions,
+  type RPGEntityRef,
+  type RPGFrameInput,
+  type RPGHitbox,
+  type RPGMovementDirection,
+  type RPGSensorOptions,
+  type RPGStaticObstacleOptions,
 } from './api/PhysicsEngine';
 export {
   ZoneManager,
@@ -94,6 +112,7 @@ export {
   type ProjectileSpawnConfig,
   type ProjectileSpawnEvent,
   type ProjectileState,
+  type ProjectileHandler,
   type ProjectileSystemOptions,
 } from './projectile/ProjectileSystem';
 

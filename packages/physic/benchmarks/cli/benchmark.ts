@@ -7,6 +7,7 @@
 
 import { PhysicsEngine } from '../../src/api/PhysicsEngine.js';
 import { AABB } from '../../src/core/math/AABB.js';
+import { ProjectileSystem } from '../../src/projectile/ProjectileSystem.js';
 import { benchmark, formatBenchmark } from '../../src/utils/benchmark.js';
 
 /**
@@ -151,6 +152,68 @@ function benchmarkRegions(): void {
 }
 
 /**
+ * Benchmark: lightweight projectile simulation without physical projectile entities
+ */
+function benchmarkProjectiles(): void {
+  console.log('\n=== Benchmark: Lightweight Projectiles ===');
+  benchmarkProjectileCount(1000, 100);
+  benchmarkProjectileCount(5000, 50);
+  benchmarkProjectileCount(10000, 25);
+  benchmarkProjectileHits(1000, 25);
+}
+
+function benchmarkProjectileCount(count: number, iterations: number): void {
+  const engine = new PhysicsEngine({ timeStep: 1 / 60 });
+  const projectiles = new ProjectileSystem(engine);
+
+  for (let i = 0; i < count; i += 1) {
+    projectiles.spawn({
+      id: `projectile-${i}`,
+      origin: { x: 0, y: i * 4 },
+      direction: { x: 1, y: 0 },
+      speed: 600,
+      range: 100000,
+      ttl: 120,
+      spawnTick: 0,
+    });
+  }
+
+  const result = benchmark(`${count} active projectiles step`, () => {
+    projectiles.step(1 / 60);
+  }, iterations, 5);
+
+  console.log(formatBenchmark(result));
+  console.log(`Physics entities created: ${engine.getEntities().length}`);
+}
+
+function benchmarkProjectileHits(count: number, iterations: number): void {
+  const result = benchmark(`${count} projectiles spawn + hit`, () => {
+    const engine = new PhysicsEngine({ timeStep: 1 / 60 });
+    engine.createStaticObstacle('wall', {
+      x: 64,
+      y: count * 2,
+      width: 8,
+      height: count * 4,
+    });
+
+    const projectiles = new ProjectileSystem(engine);
+    for (let i = 0; i < count; i += 1) {
+      projectiles.spawn({
+        id: `hit-${i}`,
+        origin: { x: 0, y: i * 4 },
+        direction: { x: 1, y: 0 },
+        speed: 600,
+        range: 1000,
+        ttl: 10,
+      });
+    }
+    projectiles.step(0.2);
+  }, iterations, 3);
+
+  console.log(formatBenchmark(result));
+}
+
+/**
  * Run all benchmarks
  */
 function runAllBenchmarks(): void {
@@ -160,6 +223,7 @@ function runAllBenchmarks(): void {
   benchmark1000Entities();
   benchmark10000Static();
   benchmarkCollisions();
+  benchmarkProjectiles();
   benchmarkRegions();
 
   console.log('\n===================================');
@@ -183,9 +247,11 @@ switch (command) {
   case 'regions':
     benchmarkRegions();
     break;
+  case 'projectiles':
+    benchmarkProjectiles();
+    break;
   case 'all':
   default:
     runAllBenchmarks();
     break;
 }
-

@@ -1,19 +1,14 @@
 import { Vector2 } from '../core/math/Vector2';
 import { AABB } from '../core/math/AABB';
 import { SpatialPartition } from '../world/SpatialPartition';
-import { Ray } from './Ray';
+import { Ray, type RaycastHit } from './Ray';
 import { AABBCollider } from './AABBCollider';
 import { CircleCollider } from './CircleCollider';
 import { PolygonCollider } from './PolygonCollider';
 import { createCollider } from './detector';
 import { Collider } from './Collider';
 
-export interface RaycastHit {
-  entity: ReturnType<Collider['getEntity']>;
-  point: Vector2;
-  normal: Vector2;
-  distance: number;
-}
+export type { RaycastHit } from './Ray';
 
 /**
  * Casts a ray in the world using the spatial partition for broad-phase, then shape-specific narrow-phase.
@@ -169,5 +164,4 @@ function segmentRayIntersection(a: Vector2, b: Vector2, r0: Vector2, r1: Vector2
   }
   return null;
 }
-
 

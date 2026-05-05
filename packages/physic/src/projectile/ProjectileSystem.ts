@@ -57,7 +57,7 @@ export interface ProjectileSystemOptions {
   defaultRange?: number;
 }
 
-type ProjectileHandler<T> = (event: T) => void;
+export type ProjectileHandler<T> = (event: T) => void;
 
 interface ProjectileRecord {
   state: ProjectileState;

@@ -645,7 +645,7 @@ Static entities (mass = 0 or Infinity) act as blockers for line-of-sight.
 
 ## Examples
 
-- [Canvas Example](./examples/canvas/) - Interactive HTML5 Canvas demo (run with `npm run example`)
+- [Canvas Example](./examples/canvas/main.ts) - Interactive HTML5 Canvas demo (run with `npm run example`)
 - [Basic Usage](./examples/basic.ts) - Simple physics simulation
 - [Static Obstacles](./examples/static-obstacles.ts) - Creating immovable obstacles for RPG games
 - [Regions](./examples/regions.ts) - Experimental distributed simulation with regions
@@ -1123,6 +1123,7 @@ npm run benchmark          # Run all benchmarks
 npm run benchmark:1000    # 1000 entities benchmark
 npm run benchmark:10000   # 10000 static entities benchmark
 npm run benchmark:collisions  # Collision detection benchmark
+npm run benchmark:projectiles # Lightweight projectile benchmark
 npm run benchmark:regions     # Region-based simulation benchmark
 ```
 
