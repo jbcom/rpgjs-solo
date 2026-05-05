@@ -1,17 +1,12 @@
 import { provideGlobalConfig, Presets } from "@rpgjs/client";
 import { provideClientModules } from "@rpgjs/client";
-import { configCommon } from "./config.common";
+import { configCommon, studio } from "./config.common";
 import { provideActionBattle } from "@rpgjs/action-battle/client";
 import { provideStudioGame } from "@rpgjs/studio/client";
-import { projectId } from "./config.common";
 
 export const configClient = {
   providers: [
-    provideStudioGame({
-      projectId,
-      baseUrl: 'http://localhost:5173',
-      assetsUrl: 'http://localhost:5173/api/uploads',
-    }),
+    provideStudioGame(studio),
     provideActionBattle({
       ui: {
         actionBar: {
