@@ -173,20 +173,7 @@ export class ProjectileMovement implements MovementStrategy {
       this.verticalVelocity -= gravity * dt;
       this.currentHeight += this.verticalVelocity * dt;
 
-      if (this.options.onHeightUpdate) {
-        this.options.onHeightUpdate(this.currentHeight, body);
-      } else {
-        const dispatcher = globalThis as typeof globalThis & { dispatchEvent?: (event: Event) => void };
-        if (typeof dispatcher.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
-        const event = new CustomEvent('projectile:height', {
-          detail: {
-            id: body.id,
-            height: this.currentHeight,
-          },
-        });
-          dispatcher.dispatchEvent(event);
-        }
-      }
+      this.options.onHeightUpdate?.(this.currentHeight, body);
 
       if (this.currentHeight <= 0) {
         this.currentHeight = 0;
@@ -228,4 +215,3 @@ export class ProjectileMovement implements MovementStrategy {
     body.setVelocity({ x: 0, y: 0 });
   }
 }
-

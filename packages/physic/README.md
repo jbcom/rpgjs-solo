@@ -855,6 +855,25 @@ loop();
 - Call `movement.update(dt)` manually when you need custom timing, or use `engine.stepWithMovements(dt)` to update movements and advance the simulation in one call.
 - Use `movement.stopMovement(entity)` to completely stop an entity's movement, clearing all strategies and stopping velocity (useful when changing maps or teleporting).
 
+#### Projectile Movement
+
+`ProjectileMovement` is a movement strategy for simple straight, arc, or bounce trajectories. It is server-compatible and does not use DOM events. Use `onHeightUpdate` when you need arc height for rendering, networking, or gameplay feedback:
+
+```typescript
+import { ProjectileMovement, ProjectileType } from '@rpgjs/physic';
+
+movement.add(projectileEntity, new ProjectileMovement(ProjectileType.Arc, {
+  speed: 240,
+  direction: { x: 1, y: 0 },
+  maxRange: 320,
+  maxHeight: 24,
+  gravity: 60,
+  onHeightUpdate: (height, body) => {
+    console.log(body.id, height);
+  },
+}));
+```
+
 #### Awaiting Movement Completion
 
 The `add()` method returns a Promise that resolves when the movement completes (when `isFinished()` returns true). This allows you to chain movements or execute code after a movement finishes:

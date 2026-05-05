@@ -5,6 +5,7 @@ import { EntityMovementBody } from '../adapters/EntityMovementBody';
 import { LinearMove } from './LinearMove';
 import { Dash } from './Dash';
 import { SeekAvoid } from './SeekAvoid';
+import { ProjectileMovement, ProjectileType } from './ProjectileMovement';
 
 /**
  * Helper to create a movement body from an entity.
@@ -110,5 +111,29 @@ describe('Movement strategies', () => {
       expect(Math.abs(follower.velocity.y)).toBeGreaterThan(0);
     });
   });
-});
 
+  describe('ProjectileMovement', () => {
+    it('reports arc height updates through a server-compatible callback', () => {
+      const entity = engine.createEntity({
+        uuid: 'projectile',
+        position: { x: 0, y: 0 },
+        mass: 1,
+      });
+      const body = createBody(entity);
+      const onHeightUpdate = vi.fn();
+      const strategy = new ProjectileMovement(ProjectileType.Arc, {
+        speed: 10,
+        direction: { x: 1, y: 0 },
+        maxHeight: 4,
+        gravity: 10,
+        onHeightUpdate,
+      });
+
+      strategy.update(body, 0.1);
+
+      expect(onHeightUpdate).toHaveBeenCalledOnce();
+      expect(onHeightUpdate.mock.calls[0][0]).toBeGreaterThan(0);
+      expect(onHeightUpdate.mock.calls[0][1].id).toBe('projectile');
+    });
+  });
+});

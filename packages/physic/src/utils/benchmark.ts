@@ -2,6 +2,10 @@
  * Benchmark utilities for performance testing
  */
 
+function now(): number {
+  return Date.now();
+}
+
 /**
  * Benchmark result
  */
@@ -52,16 +56,16 @@ export function benchmark(
 
   // Actual benchmark
   const times: number[] = [];
-  const start = performance.now();
+  const start = now();
 
   for (let i = 0; i < iterations; i++) {
-    const iterStart = performance.now();
+    const iterStart = now();
     fn();
-    const iterEnd = performance.now();
+    const iterEnd = now();
     times.push(iterEnd - iterStart);
   }
 
-  const end = performance.now();
+  const end = now();
   const totalTime = end - start;
   const averageTime = totalTime / iterations;
   const minTime = Math.min(...times);
@@ -102,4 +106,3 @@ export function compareBenchmarks(
 export function formatBenchmark(result: BenchmarkResult): string {
   return `${result.name}: ${result.averageTime.toFixed(3)}ms/op, ${result.opsPerSecond.toFixed(0)} ops/s`;
 }
-
