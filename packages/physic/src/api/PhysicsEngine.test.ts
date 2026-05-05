@@ -58,6 +58,24 @@ describe('PhysicsEngine', () => {
     expect(entity.position.y).toBe(200);
   });
 
+  it('should reindex a static entity after teleport', () => {
+    const engine = new PhysicsEngine({
+      spatialCellSize: 10,
+      spatialGridWidth: 100,
+      spatialGridHeight: 100,
+    });
+    const wall = engine.createEntity({
+      position: { x: 100, y: 0 },
+      radius: 2,
+      mass: 0,
+    });
+
+    engine.teleport(wall, new Vector2(0, 0));
+
+    const entities = engine.queryAABB(new AABB(-5, -5, 5, 5));
+    expect(entities).toContain(wall);
+  });
+
   it('should query AABB', () => {
     const engine = new PhysicsEngine();
     const entity1 = engine.createEntity({ position: { x: 5, y: 5 }, radius: 2 });
@@ -78,5 +96,36 @@ describe('PhysicsEngine', () => {
     expect(insideBounds).toContain(entity1);
     expect(insideBounds).not.toContain(entity2);
   });
-});
 
+  it('should reindex entities after restoring a snapshot', () => {
+    const engine = new PhysicsEngine({
+      spatialCellSize: 10,
+      spatialGridWidth: 100,
+      spatialGridHeight: 100,
+    });
+    const entity = engine.createEntity({
+      uuid: 'player',
+      position: { x: 100, y: 0 },
+      radius: 2,
+      mass: 1,
+    });
+
+    engine.restoreSnapshot({
+      tick: 5,
+      entities: [
+        {
+          uuid: entity.uuid,
+          position: { x: 0, y: 0 },
+          velocity: { x: 0, y: 0 },
+          rotation: 0,
+          angularVelocity: 0,
+          sleeping: false,
+        },
+      ],
+    });
+
+    const entities = engine.queryAABB(new AABB(-5, -5, 5, 5));
+    expect(entities).toContain(entity);
+    expect(engine.getTick()).toBe(5);
+  });
+});

@@ -163,6 +163,48 @@ export class RegionManager {
   }
 
   /**
+   * Synchronizes an entity with its current region, migrating it when needed.
+   *
+   * @param entity - Entity to synchronize
+   */
+  public updateEntity(entity: Entity): void {
+    const currentRegion = this.entityRegionMap.get(entity);
+    const newRegion = this.getRegionAt(entity.position);
+
+    if (!newRegion) {
+      if (currentRegion) {
+        currentRegion.removeEntity(entity);
+        this.entityRegionMap.delete(entity);
+      }
+      return;
+    }
+
+    if (!currentRegion) {
+      newRegion.addEntity(entity);
+      this.entityRegionMap.set(entity, newRegion);
+      if (this.config.autoActivate) {
+        newRegion.activate();
+      }
+      return;
+    }
+
+    if (newRegion !== currentRegion) {
+      currentRegion.removeEntity(entity);
+      newRegion.addEntity(entity);
+      this.entityRegionMap.set(entity, newRegion);
+      if (this.config.autoActivate) {
+        newRegion.activate();
+      }
+      if (this.config.autoActivate && currentRegion.getEntities().length === 0) {
+        currentRegion.deactivate();
+      }
+      return;
+    }
+
+    currentRegion.getWorld().updateEntity(entity);
+  }
+
+  /**
    * Updates entity positions and migrates them between regions if needed
    */
   public updateEntities(): void {
@@ -178,17 +220,8 @@ export class RegionManager {
     }
 
     // Perform migrations
-    for (const { entity, newRegion } of entitiesToMigrate) {
-      const oldRegion = this.entityRegionMap.get(entity);
-      if (oldRegion) {
-        oldRegion.removeEntity(entity);
-      }
-      newRegion.addEntity(entity);
-      this.entityRegionMap.set(entity, newRegion);
-
-      if (this.config.autoActivate) {
-        newRegion.activate();
-      }
+    for (const { entity } of entitiesToMigrate) {
+      this.updateEntity(entity);
     }
   }
 
@@ -270,4 +303,3 @@ export class RegionManager {
     };
   }
 }
-

@@ -4,9 +4,8 @@ import { RegionManager, RegionManagerConfig } from '../region/RegionManager';
 import { EventSystem } from '../world/events';
 import { Vector2 } from '../core/math/Vector2';
 import { AABB } from '../core/math/AABB';
-import type { SpatialPartition } from '../world/SpatialPartition';
 import { assignPolygonCollider, PolygonConfig } from '../collision/PolygonCollider';
-import { raycast as raycastUtil, RaycastHit } from '../collision/raycast';
+import { RaycastHit } from '../collision/raycast';
 import { sweepEntities as sweepUtil, SweepResult } from '../collision/sweep';
 import { MovementManager } from '../movement/MovementManager';
 import { ZoneManager } from './ZoneManager';
@@ -316,10 +315,24 @@ export class PhysicsEngine {
    */
   public teleport(entity: Entity, position: Vector2 | { x: number; y: number }): void {
     entity.teleport(position);
+    this.updateEntity(entity);
+  }
 
-    // Update region if using regions
+  /**
+   * Synchronizes an entity after manual position, shape, or state changes.
+   *
+   * Direct mutations such as `entity.position.set(...)`, `entity.width = ...`,
+   * or `entity.freeze()` bypass the world's broad-phase structures. Call this
+   * helper after such mutations so spatial queries and collisions use the
+   * current entity state immediately.
+   *
+   * @param entity - Entity to synchronize
+   */
+  public updateEntity(entity: Entity): void {
     if (this.useRegions && this.regionManager) {
-      this.regionManager.updateEntities();
+      this.regionManager.updateEntity(entity);
+    } else {
+      this.world.updateEntity(entity);
     }
   }
 
@@ -330,6 +343,7 @@ export class PhysicsEngine {
    */
   public freeze(entity: Entity): void {
     entity.freeze();
+    this.updateEntity(entity);
   }
 
   /**
@@ -339,6 +353,7 @@ export class PhysicsEngine {
    */
   public unfreeze(entity: Entity): void {
     entity.unfreeze();
+    this.updateEntity(entity);
   }
 
   /**
@@ -362,13 +377,7 @@ export class PhysicsEngine {
       }
       return entities;
     }
-    // Use spatial partition from world
-    const world = this.world as any;
-    if (world.spatialPartition) {
-      return Array.from(world.spatialPartition.queryAABB(bounds));
-    }
-    // Fallback to checking all entities
-    return this.world.getEntities().filter((e) => bounds.contains(e.position));
+    return this.world.queryAABB(bounds);
   }
 
   /**
@@ -398,6 +407,7 @@ export class PhysicsEngine {
    */
   public assignPolygonCollider(entity: Entity, config: PolygonConfig): void {
     assignPolygonCollider(entity, config);
+    this.updateEntity(entity);
   }
 
   /**
@@ -416,10 +426,7 @@ export class PhysicsEngine {
    * ```
    */
   public raycast(origin: Vector2, direction: Vector2, maxDistance: number, mask?: number, filter?: (entity: Entity) => boolean): RaycastHit | null {
-    const world = this.world as any;
-    const partition: SpatialPartition | undefined = world.spatialPartition;
-    if (!partition) return null;
-    return raycastUtil(partition, origin, direction, maxDistance, mask, filter);
+    return this.world.raycast(origin, direction, maxDistance, mask, filter);
   }
 
   /**
@@ -536,6 +543,7 @@ export class PhysicsEngine {
       } else {
         entity.wakeUp();
       }
+      this.updateEntity(entity);
     }
 
     this.tick = snapshot.tick;
@@ -562,4 +570,3 @@ export interface PhysicsSnapshot {
     sleeping: boolean;
   }>;
 }
-

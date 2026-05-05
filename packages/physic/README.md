@@ -678,6 +678,18 @@ engine.applyForce(entity, new Vector2(10, 0));
 engine.teleport(entity, new Vector2(100, 200));
 ```
 
+When you use engine helpers such as `teleport`, `freeze`, `unfreeze`, or
+`assignPolygonCollider`, the engine automatically synchronizes the entity with
+the spatial partition. If you mutate an entity manually, call `updateEntity`
+before running spatial queries or relying on collisions:
+
+```typescript
+entity.position.set(128, 96);
+entity.width = 32;
+entity.height = 48;
+engine.updateEntity(entity);
+```
+
 ### Entity
 
 Physical entities in the world.

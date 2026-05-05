@@ -1421,6 +1421,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const centerX = x + entityWidth / 2;
     const centerY = y + entityHeight / 2;
     entity.position.set(centerX, centerY);
+    this.physic.updateEntity(entity);
 
     return true;
   }
@@ -1675,6 +1676,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     entity.position.set(centerX, centerY);
     entity.notifyPositionChange();
+    this.physic.updateEntity(entity);
     
     return entity;
   }

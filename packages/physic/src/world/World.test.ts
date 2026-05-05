@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { World } from './World';
 import { Entity } from '../physics/Entity';
-import { Vector2 } from '../core/math/Vector2';
+import { AABB } from '../core/math/AABB';
 
 describe('World', () => {
   let world: World;
@@ -77,5 +77,73 @@ describe('World', () => {
     world.clear();
     expect(world.getEntities().length).toBe(0);
   });
-});
 
+  it('should not keep cleared dynamic entities in the simulation sets', () => {
+    const entity = world.createEntity({
+      position: { x: 0, y: 0 },
+      radius: 10,
+      mass: 1,
+      velocity: { x: 10, y: 0 },
+    });
+
+    world.clear();
+    world.step();
+
+    expect(entity.position.x).toBe(0);
+    expect(world.getStats()).toEqual({
+      totalEntities: 0,
+      dynamicEntities: 0,
+      staticEntities: 0,
+      sleepingEntities: 0,
+    });
+  });
+
+  it('should detect collisions after a dynamic entity crosses spatial cells in one step', () => {
+    const fastWorld = new World({
+      timeStep: 1 / 60,
+      spatialCellSize: 10,
+      spatialGridWidth: 100,
+      spatialGridHeight: 100,
+      enableSleep: false,
+      resolverIterations: 1,
+    });
+
+    fastWorld.createEntity({
+      uuid: 'moving',
+      position: { x: 0, y: 0 },
+      radius: 1,
+      mass: 1,
+      velocity: { x: 600, y: 0 },
+      linearDamping: 0,
+    });
+    fastWorld.createEntity({
+      uuid: 'wall',
+      position: { x: 11, y: 0 },
+      radius: 1,
+      mass: 0,
+    });
+
+    let collisionDetected = false;
+    fastWorld.getEvents().onCollisionEnter(() => {
+      collisionDetected = true;
+    });
+
+    fastWorld.step();
+
+    expect(collisionDetected).toBe(true);
+  });
+
+  it('should update broad-phase queries after direct entity mutation is synchronized', () => {
+    const entity = world.createEntity({
+      position: { x: 100, y: 100 },
+      radius: 5,
+      mass: 0,
+    });
+
+    entity.position.set(0, 0);
+    world.updateEntity(entity);
+
+    const result = world.queryAABB(new AABB(-10, -10, 10, 10));
+    expect(result).toContain(entity);
+  });
+});

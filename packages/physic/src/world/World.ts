@@ -7,6 +7,7 @@ import { CollisionInfo } from '../collision/Collider';
 import { EventSystem } from './events';
 import { SpatialPartition } from './SpatialPartition';
 import { Vector2 } from '../core/math/Vector2';
+import { AABB } from '../core/math/AABB';
 import { Ray, RaycastHit } from '../collision/Ray';
 import type { EntityConfig } from '../physics/Entity';
 import { sweepEntities } from '../collision/sweep';
@@ -181,14 +182,39 @@ export class World {
    */
   public addEntity(entity: Entity): Entity {
     this.entities.add(entity);
-    if (entity.isStatic()) {
-      this.staticEntities.add(entity);
-    } else {
-      this.dynamicEntities.add(entity);
-    }
+    this.syncEntityCollection(entity);
     this.spatialPartition.insert(entity);
     this.events.emitEntityAdded(entity);
     return entity;
+  }
+
+  /**
+   * Synchronizes an entity with the world's broad-phase structures.
+   *
+   * Call this after manually changing an entity position, dimensions, or state
+   * outside the normal physics step.
+   *
+   * @param entity - Entity to synchronize
+   */
+  public updateEntity(entity: Entity): void {
+    if (!this.entities.has(entity)) {
+      return;
+    }
+    this.syncEntityCollection(entity);
+    this.spatialPartition.update(entity);
+  }
+
+  /**
+   * Queries entities in an AABB region.
+   *
+   * The returned array comes from the broad-phase partition and may contain
+   * false positives from overlapping cells.
+   *
+   * @param bounds - AABB to query
+   * @returns Array of entities in overlapping partition cells
+   */
+  public queryAABB(bounds: AABB): Entity[] {
+    return Array.from(this.spatialPartition.queryAABB(bounds));
   }
 
   /**
@@ -261,8 +287,8 @@ export class World {
    * Updates all entities, detects and resolves collisions.
    */
   public step(): void {
-    // Update spatial partition with the latest positions
-    this.refreshDynamicEntitiesInPartition();
+    // Pick up direct position/state mutations made since the previous step.
+    this.refreshEntitiesInPartition();
 
     // Clear forces and integrate
     for (const entity of this.dynamicEntities) {
@@ -280,6 +306,9 @@ export class World {
       }
     }
 
+    // Broad-phase queries below must use post-integration positions.
+    this.refreshDynamicEntitiesInPartition();
+
     let firstPassCollisions: CollisionInfo[] = [];
     for (let iteration = 0; iteration < this.resolverIterations; iteration++) {
       const collisions = this.detectCollisions();
@@ -291,13 +320,12 @@ export class World {
       }
       this.sortCollisionsForDeterminism(collisions);
       this.resolver.resolveAll(collisions);
-      if (iteration + 1 < this.resolverIterations) {
-        this.refreshDynamicEntitiesInPartition();
-      }
+      this.refreshDynamicEntitiesInPartition();
     }
 
     if (this.positionQuantizationStep !== null || this.velocityQuantizationStep !== null) {
       this.quantizeEntities();
+      this.refreshDynamicEntitiesInPartition();
     }
 
     this.handleCollisionEvents(firstPassCollisions);
@@ -433,7 +461,10 @@ export class World {
       this.events.emitEntityRemoved(entity);
     }
     this.entities.clear();
+    this.staticEntities.clear();
+    this.dynamicEntities.clear();
     this.spatialPartition.clear();
+    this.queryResults.clear();
     this.previousCollisions.clear();
   }
 
@@ -457,6 +488,22 @@ export class World {
   private refreshDynamicEntitiesInPartition(): void {
     for (const entity of this.dynamicEntities) {
       this.spatialPartition.update(entity);
+    }
+  }
+
+  private refreshEntitiesInPartition(): void {
+    for (const entity of this.entities) {
+      this.updateEntity(entity);
+    }
+  }
+
+  private syncEntityCollection(entity: Entity): void {
+    if (entity.isStatic()) {
+      this.dynamicEntities.delete(entity);
+      this.staticEntities.add(entity);
+    } else {
+      this.staticEntities.delete(entity);
+      this.dynamicEntities.add(entity);
     }
   }
 
@@ -619,4 +666,3 @@ export class World {
     }
   }
 }
-
