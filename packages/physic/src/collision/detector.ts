@@ -66,7 +66,31 @@ export function testCollision(entityA: Entity, entityB: Entity): CollisionInfo |
     return null;
   }
 
-  return colliderA.testCollision(colliderB);
+  const directCollision = colliderA.testCollision(colliderB);
+  if (directCollision) {
+    return directCollision;
+  }
+
+  const reverseCollision = colliderB.testCollision(colliderA);
+  if (!reverseCollision) {
+    return null;
+  }
+
+  return reverseCollisionInfo(reverseCollision);
+}
+
+function reverseCollisionInfo(collision: CollisionInfo): CollisionInfo {
+  return {
+    entityA: collision.entityB,
+    entityB: collision.entityA,
+    contacts: collision.contacts.map((contact) => ({
+      point: contact.point,
+      normal: contact.normal.mul(-1),
+      depth: contact.depth,
+    })),
+    normal: collision.normal.mul(-1),
+    depth: collision.depth,
+  };
 }
 
 /**
