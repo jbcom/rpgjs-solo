@@ -1660,8 +1660,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    * @private
    */
   private addZone(id: string, options: ZoneOptions): string {
-    // Check if zone or entity already exists
-    const zoneManager = this.physic.getZoneManager();
+    // Check if the requested public zone id conflicts with an entity id.
     if (this.physic.getEntityByUUID(id)) {
       throw new Error(`Zone with id ${id} already exists as entity`);
     }
@@ -1680,26 +1679,21 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
     }
 
-    const callbacks: { onEnter?: (entities: Entity[]) => void; onExit?: (entities: Entity[]) => void } = {};
-
-    // Store callbacks for later updates
-    (callbacks as any)._onEnterString = undefined;
-    (callbacks as any)._onExitString = undefined;
-
-    const zoneId = attachedEntity
-      ? zoneManager.createAttachedZone(attachedEntity, {
+    const zoneId = this.physic.createSensor(id, attachedEntity
+      ? {
+        entity: attachedEntity,
         radius,
         angle: options.angle ?? 360,
         direction: options.direction ?? 'down',
         limitedByWalls: options.limitedByWalls ?? false,
-      }, callbacks)
-      : zoneManager.createZone({
+      }
+      : {
         position: { x: options.x ?? 0, y: options.y ?? 0 },
         radius,
         angle: options.angle ?? 360,
         direction: options.direction ?? 'down',
         limitedByWalls: options.limitedByWalls ?? false,
-      }, callbacks);
+      });
 
     // Store zone ID mapping
     (this as any)._zoneIdMap = (this as any)._zoneIdMap || new Map();

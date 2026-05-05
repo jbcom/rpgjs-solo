@@ -148,6 +148,37 @@ describe("Map Shapes", () => {
     expect(entity.height).toBe(32);
     expect(entity.isStatic()).toBe(true);
   });
+
+  test("should detect entities with moving hitbox sensor", async () => {
+    const map = player.getCurrentMap() as any;
+    const hitbox = player.hitbox();
+    const hitsPromise = new Promise<any[]>((resolve, reject) => {
+      let subscription: { unsubscribe: () => void };
+      const timeout = setTimeout(() => {
+        subscription.unsubscribe();
+        reject(new Error("moving hitbox did not detect player"));
+      }, 500);
+      subscription = map.createMovingHitbox([
+        {
+          x: player.x(),
+          y: player.y(),
+          width: hitbox.w,
+          height: hitbox.h,
+        },
+      ]).subscribe({
+        next: (hits: any[]) => {
+          clearTimeout(timeout);
+          subscription.unsubscribe();
+          resolve(hits);
+        },
+        error: reject,
+      });
+      map.physic.getZoneManager().update();
+    });
+
+    const hits = await hitsPromise;
+    expect(hits.map((hit) => hit.id)).toContain(player.id);
+  });
 });
 
 describe("Move Routes - Move Helper Functions", () => {
