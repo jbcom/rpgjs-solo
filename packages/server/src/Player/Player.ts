@@ -461,7 +461,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
         const centerX = positions.x + width / 2;
         const centerY = positions.y + height / 2;
         
-        this.map.physic.teleport(entity, { x: centerX, y: centerY });
+        this.map.physic.teleportEntity(entity, { x: centerX, y: centerY });
       }
     }
     this.x.set(positions.x)

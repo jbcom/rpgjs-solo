@@ -396,6 +396,10 @@ describe('Map WorldMapsManager Integration', () => {
     const worldY = player.worldPositionY()
     expect(worldX).toBe(100)
     expect(worldY).toBe(200)
+    const entity = map?.physic.getEntityByUUID(player.id)
+    const hitbox = player.hitbox()
+    expect(entity?.position.x).toBe(100 + hitbox.w / 2)
+    expect(entity?.position.y).toBe(200 + hitbox.h / 2)
 
     // Change to map2 which is at worldX: 1024, worldY: 0
     await player.changeMap('map2', { x: 50, y: 100 })
