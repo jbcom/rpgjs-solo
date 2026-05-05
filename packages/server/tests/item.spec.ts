@@ -1,10 +1,11 @@
 import { beforeEach, test, expect, afterEach, describe, vi } from "vitest";
 import { testing, waitForSyncComplete, TestingFixture } from "@rpgjs/testing";
 import { defineModule, createModule } from "@rpgjs/common";
-import { RpgPlayer, RpgServer } from "../src";
+import { RpgEvent, RpgPlayer, RpgServer } from "../src";
 import { RpgClient } from "../../client/src";
 import { ItemLog } from "../src/logs";
 import type { ItemObject } from "../src/Player/ItemManager";
+import { syncClass } from "@signe/sync";
 
 // Define test items as objects for database
 const TestPotion = {
@@ -123,6 +124,76 @@ describe("Item Management - Basic Operations", () => {
     expect(item.id()).toBe("TestPotion");
     expect(item.quantity()).toBe(5);
     expect(item.name()).toBe("Test Potion");
+  });
+
+  test("should sync cloneable event items and equipments initialized before sync", () => {
+    const event = new RpgEvent();
+    event.id = "enemy-event";
+    event.setMap(player.getCurrentMap()!);
+    event.execMethod = vi.fn() as any;
+    event.addItem("TestSword", 1);
+    event.equip("TestSword", true);
+
+    const packets: any[] = [];
+    const memory: Record<string, any> = {};
+    const setPath = (target: Record<string, any>, path: string, value: any) => {
+      const parts = path.split(".");
+      let current = target;
+      for (let i = 0; i < parts.length - 1; i++) {
+        current = current[parts[i]] ??= {};
+      }
+      current[parts[parts.length - 1]] = value;
+    };
+
+    syncClass(event, {
+      onSync(values) {
+        const packet: Record<string, any> = {};
+        for (const [path, value] of values) {
+          setPath(packet, path, value);
+          setPath(memory, path, value);
+        }
+        structuredClone({ type: "sync", value: packet });
+        packets.push(packet);
+        values.clear();
+      },
+    });
+
+    expect(packets).toContainEqual({
+      items: {
+        "0": expect.objectContaining({
+          id: "TestSword",
+          name: "Test Sword",
+          quantity: 1,
+        }),
+      },
+    });
+    expect(packets).toContainEqual({
+      equipments: {
+        "0": expect.objectContaining({
+          id: "TestSword",
+          name: "Test Sword",
+          quantity: 1,
+        }),
+      },
+    });
+    expect(memory).toEqual(
+      expect.objectContaining({
+        items: {
+          "0": expect.objectContaining({
+            id: "TestSword",
+            name: "Test Sword",
+            quantity: 1,
+          }),
+        },
+        equipments: {
+          "0": expect.objectContaining({
+            id: "TestSword",
+            name: "Test Sword",
+            quantity: 1,
+          }),
+        },
+      })
+    );
   });
   
 

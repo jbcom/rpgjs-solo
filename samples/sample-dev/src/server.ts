@@ -381,7 +381,7 @@ export default createServer({
         maps: [
           {
             id: 'center-map',
-           // events: [{ event: Event() }]
+            events: [{ event: Event() }]
           }
         ],
         worldMaps: [

@@ -3,6 +3,50 @@ import { connected, id, persist, sync, users } from "@signe/sync";
 import { Item, Skill } from "./database";
 import { Constructor } from "./Utils";
 
+const readReactiveValue = (value: any) => {
+  if (typeof value === "function" && value.observable) {
+    return value();
+  }
+  return value;
+};
+
+const toCloneableSyncValue = (value: any, seen = new WeakSet<object>()): any => {
+  const resolved = readReactiveValue(value);
+
+  if (resolved == null || typeof resolved !== "object") {
+    return typeof resolved === "function" ? undefined : resolved;
+  }
+  if (seen.has(resolved)) {
+    return undefined;
+  }
+  seen.add(resolved);
+
+  if (Array.isArray(resolved)) {
+    return resolved
+      .map((item) => toCloneableSyncValue(item, seen))
+      .filter((item) => item !== undefined);
+  }
+
+  const output: Record<string, any> = {};
+  for (const [key, child] of Object.entries(resolved)) {
+    if (
+      key.startsWith("$") ||
+      key === "_itemInstance" ||
+      key === "_subject" ||
+      key === "observable" ||
+      key === "options"
+    ) {
+      continue;
+    }
+
+    const childValue = toCloneableSyncValue(child, seen);
+    if (childValue !== undefined) {
+      output[key.startsWith("__") ? key.slice(2) : key] = childValue;
+    }
+  }
+  return output;
+};
+
 export enum Control {
   Action = 'action',
   Attack = 'attack',
@@ -90,8 +134,8 @@ export abstract class RpgCommonPlayer {
   @sync() _exp = signal(0);
   @sync() _level = signal(1);
   @sync() _class = signal({});
-  @sync(Item) items = signal<Item[]>([]);
-  @sync() equipments = signal<any[]>([]);
+  @sync({ classType: Item, transform: toCloneableSyncValue }) items = signal<Item[]>([]);
+  @sync({ transform: toCloneableSyncValue }) equipments = signal<any[]>([]);
   @sync() states = signal<any[]>([]);
   @sync(Skill) skills = signal<Skill[]>([]);
   @sync() _effects = signal<any[]>([]);

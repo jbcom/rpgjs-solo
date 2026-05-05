@@ -126,6 +126,15 @@ map.showAnimation(playerPos, "spell-effects", "lightning");
 
 For more complex animations with custom logic, you can create Canvas Engine components.
 
+<Info>
+There are two different prop shapes in the client rendering pipeline:
+
+- scene components loaded with `provideLoadMap()` receive `data` and `params`
+- component animations rendered with `showComponentAnimation()` receive their props directly (`x`, `y`, `onFinish`, and your custom params)
+
+The examples below are for `componentAnimations`, not for custom map scene components.
+</Info>
+
 ### 1. Creating a Custom Animation Component
 
 Create a Canvas Engine component file (e.g., `ExplosionComponent.ce`):
@@ -137,7 +146,7 @@ Create a Canvas Engine component file (e.g., `ExplosionComponent.ce`):
   import { animatedSignal, mount, tick } from "canvasengine";
   import { inject, RpgClientEngine } from "@rpgjs/client";
 
-  // Get props passed from server
+  // Get props passed to the component animation
   const { 
     x, 
     y, 
@@ -187,6 +196,18 @@ Create a Canvas Engine component file (e.g., `ExplosionComponent.ce`):
     }
   });
 </script>
+```
+
+This direct prop shape matches how component animations are rendered in `draw-map.ce`:
+
+```html
+<componentAnimation.component ...animation />
+```
+
+By contrast, custom map scene components are mounted from `canvas.ce` with a `data` object:
+
+```html
+<sceneComponent() data={map().data} params={map().params} />
 ```
 
 ### 2. Registering the Component Animation
