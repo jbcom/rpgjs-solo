@@ -1,33 +1,25 @@
-# RPG Example
+# Mini RPG Canvas Example
 
-This example demonstrates a complete RPG-style game using RPG Physic library.
+This example is a small browser RPG built with plain HTML and Canvas.
 
-## Features
+It uses the physics package directly:
 
-- **Hero Character**: Controlled with WASD or arrow keys
-- **NPCs**: Non-player characters that wander around
-- **Static Environment**: Walls, obstacles, and decorative trees
-- **Camera System**: Smooth camera following the hero
-- **Collision Detection**: Full physics-based collisions between all entities
+- `PhysicsEngine.createCharacter()` for the hero and enemies
+- `PhysicsEngine.createStaticObstacle()` for walls and map blockers
+- `PhysicsEngine.createSensor()` / `ZoneManager` for the hero vision counter
+- `PhysicsEngine.stepFrame()` for fixed-tick movement
+- `ProjectileSystem` for server-style projectiles without creating physics entities
 
 ## Controls
 
-- **WASD** or **Arrow Keys**: Move the hero
-- **Z** or **Q**: Alternative keys for up/left (AZERTY layout)
+- `WASD` or arrow keys: move
+- `Space`: shoot toward the cursor
+- Mouse click: shoot once
 
-## Running the Example
+## Run
 
 ```bash
-npm run example:dev
+npm run example:rpg
 ```
 
-Then navigate to the RPG example in your browser.
-
-## Architecture
-
-- Uses `PhysicsEngine` for physics simulation
-- Entities are categorized as: hero, npc, wall, obstacle, tree
-- Camera system uses smooth interpolation (lerp) for following
-- Keyboard input directly sets entity velocity
-- NPCs use simple random wandering AI
-
+The Vite dev server serves this folder directly.

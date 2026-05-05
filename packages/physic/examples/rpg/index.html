@@ -1,208 +1,172 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RPG Physic - RPG Example</title>
+  <title>RPG Physic - Mini RPG</title>
   <style>
-    body {
-      margin: 0;
-      padding: 20px;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #1a1a1a;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #16181b;
+      color: #eef1f3;
+    }
+
+    * {
       box-sizing: border-box;
     }
-    h1 {
-      margin: 0 0 18px 0;
-      color: #4ecdc4;
-      font-size: 26px;
-      letter-spacing: 0.04em;
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at top left, rgba(73, 128, 98, 0.18), transparent 34rem),
+        linear-gradient(135deg, #171a1e 0%, #22262a 100%);
     }
-    .layout {
-      display: flex;
-      gap: 24px;
-      align-items: flex-start;
-      width: 100%;
-      max-width: 1450px;
-    }
-    .scene {
-      flex: 1;
-      display: flex;
-      justify-content: center;
-    }
-    #canvas {
-      border: 3px solid #333;
-      background: #2d5016;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-      max-width: 100%;
-      height: auto;
-      border-radius: 12px;
-    }
-    .debug-panel {
-      width: 350px;
-      background: #202020;
-      border: 1px solid #2f2f2f;
-      border-radius: 14px;
-      padding: 24px;
-      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.35);
-      display: flex;
-      flex-direction: column;
-      gap: 26px;
-      height: 700px;
-      overflow: auto;
-    }
-    .panel-section {
-      display: flex;
-      flex-direction: column;
+
+    main {
+      width: min(1180px, calc(100vw - 32px));
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
       gap: 18px;
+      align-items: stretch;
     }
-    .panel-info {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+
+    .game-shell {
+      min-width: 0;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #111417;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
     }
-    .info {
+
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      image-rendering: auto;
+      background: #263a2c;
+    }
+
+    aside {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #202327;
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 18px;
+      min-height: 0;
+    }
+
+    h1 {
       margin: 0;
-      font-size: 13px;
-      color: #8f8f8f;
-      text-align: left;
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: 0;
     }
-    .panel-status {
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: #aab3b9;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    dl {
       margin: 0;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 9px 14px;
       font-size: 13px;
-      color: #d1d1d1;
-      line-height: 1.4;
     }
-    .panel-status strong {
-      color: #4ecdc4;
-      font-weight: 600;
+
+    dt {
+      color: #aab3b9;
     }
-    .panel-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
+
+    dd {
+      margin: 0;
+      font-variant-numeric: tabular-nums;
+      color: #eef1f3;
     }
-    .debug-card {
-      background: #2a2a2a;
-      border-radius: 12px;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
+
+    .help {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
       gap: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-    }
-    .debug-card__badge {
-      align-self: flex-start;
-      background: rgba(78, 205, 196, 0.18);
-      color: #4ecdc4;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      padding: 3px 10px;
-      border-radius: 999px;
-    }
-    .debug-card h3 {
-      margin: 0;
-      font-size: 17px;
-      color: #ffffff;
-    }
-    .debug-card p {
-      margin: 0;
+      color: #c8ced2;
       font-size: 13px;
-      color: #c7c7c7;
       line-height: 1.45;
+      align-self: end;
     }
-    .debug-card__button {
-      align-self: flex-start;
-      background: #4ecdc4;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 6px;
-      color: #1a1a1a;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.1s ease, background 0.2s ease;
-    }
-    .debug-card__button:hover {
-      transform: translateY(-2px);
-      background: #5fe3da;
-    }
-    .panel-section h2 {
-      margin: 0;
-      color: #4ecdc4;
-      font-size: 18px;
-      letter-spacing: 0.04em;
-    }
-    .panel-section ul {
-      margin: 0;
-      padding-left: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      font-size: 13px;
-      color: #d5d5d5;
-      line-height: 1.45;
-    }
-    .key {
-      background: #444;
-      padding: 2px 8px;
+
+    kbd {
+      display: inline-grid;
+      place-items: center;
+      min-width: 24px;
+      height: 22px;
+      padding: 0 6px;
       border-radius: 4px;
-      font-family: monospace;
-      font-weight: bold;
+      background: #30363b;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
     }
-    @media (max-width: 1200px) {
-      .layout {
-        flex-direction: column;
+
+    @media (max-width: 900px) {
+      body {
+        place-items: start center;
+        padding: 16px 0;
       }
-      .debug-panel {
-        width: 100%;
+
+      main {
+        grid-template-columns: 1fr;
       }
-      .scene {
-        width: 100%;
-        justify-content: center;
-      }
-      #canvas {
-        max-width: 100%;
+
+      aside {
+        min-height: auto;
       }
     }
   </style>
 </head>
 <body>
-  <h1>🗡️ RPG Physic - Jeu RPG</h1>
-  <div class="layout">
-    <div class="scene">
-      <canvas id="canvas" width="1024" height="768"></canvas>
-    </div>
-    <aside class="debug-panel" id="debug-panel">
-      <section class="panel-section">
-        <div class="panel-info">
-          <span class="info" id="info">Position: (0, 0) | NPCs: 5 | FPS: 60</span>
-          <p class="panel-status" id="debug-status">Sélectionnez un mouvement pour l’appliquer sur les NPCs.</p>
-          <p class="panel-status" id="npc-focus">Dernier NPC ciblé : -</p>
-        </div>
-        <div class="panel-grid" id="debug-controls" aria-label="Contrôles debug pour tester les stratégies de mouvement"></div>
-      </section>
-      <section class="panel-section">
-        <h2>Contrôles</h2>
-        <ul>
-          <li>Déplacement : <span class="key">WASD</span> ou <span class="key">Flèches</span></li>
-          <li>Le héros (bleu) se déplace et peut pousser les NPCs (vert)</li>
-          <li>Les murs et obstacles (gris) sont statiques</li>
-          <li>Les arbres (marron) sont décoratifs</li>
-          <li>Utilisez le panneau de droite pour déclencher des stratégies de déplacement sur les NPCs</li>
-        </ul>
-      </section>
+  <main>
+    <section class="game-shell" aria-label="Mini RPG game">
+      <canvas id="game" width="960" height="600"></canvas>
+    </section>
+
+    <aside>
+      <header>
+        <h1>Mini RPG</h1>
+        <p class="subtitle">A compact RPG scene using @rpgjs/physic for movement, collisions, sensors, and server-style projectiles.</p>
+      </header>
+
+      <dl>
+        <dt>Health</dt>
+        <dd id="health">100</dd>
+        <dt>Enemies</dt>
+        <dd id="enemies">0</dd>
+        <dt>Vision</dt>
+        <dd id="vision">0</dd>
+        <dt>Projectiles</dt>
+        <dd id="projectiles">0</dd>
+        <dt>Tick</dt>
+        <dd id="tick">0</dd>
+      </dl>
+
+      <ul class="help">
+        <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrows to move.</li>
+        <li><kbd>Space</kbd> to shoot toward the cursor.</li>
+        <li>Projectiles are simulated by <code>ProjectileSystem</code>, not physical entities.</li>
+      </ul>
     </aside>
-  </div>
+  </main>
 
   <script type="module" src="./main.ts"></script>
 </body>
 </html>
-
