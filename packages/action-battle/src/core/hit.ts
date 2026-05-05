@@ -1,4 +1,8 @@
 import type { ActionBattleCombatSystem, ActionBattleHitContext, ActionBattleHitResult } from "./contracts";
+import {
+  isActionBattleEntityInvincible,
+  setActionBattleInvincibility,
+} from "./hit-reaction";
 
 export const applyActionBattleHit = (
   system: ActionBattleCombatSystem,
@@ -19,6 +23,20 @@ export const applyActionBattleHit = (
     };
   }
   if (before) hitContext = before;
+
+  if (isActionBattleEntityInvincible(hitContext.target)) {
+    return {
+      damage: 0,
+      knockbackForce: 0,
+      knockbackDuration: 0,
+      defeated: false,
+      attacker: hitContext.attacker,
+      target: hitContext.target,
+      cancelled: true,
+      metadata: hitContext.metadata,
+      reaction: hitContext.reaction,
+    };
+  }
 
   const damage =
     hitContext.damage ??
@@ -50,6 +68,13 @@ export const applyActionBattleHit = (
     );
   }
 
+  if (!damage.defeated && hitContext.reaction?.invincibilityMs) {
+    setActionBattleInvincibility(
+      hitContext.target,
+      hitContext.reaction.invincibilityMs
+    );
+  }
+
   const result: ActionBattleHitResult = {
     damage: damage.damage,
     knockbackForce: knockback.force,
@@ -58,6 +83,7 @@ export const applyActionBattleHit = (
     attacker: hitContext.attacker,
     target: hitContext.target,
     rawDamage: damage.raw,
+    reaction: hitContext.reaction,
     metadata: hitContext.metadata,
   };
 

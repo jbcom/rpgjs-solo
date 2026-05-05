@@ -5,7 +5,24 @@ import {
 } from "./animations";
 import { getActionBattleOptions } from "./config";
 import { getActionBattleSystems } from "./core/context";
+import {
+  isActionBattleEntityInvincible,
+  setActionBattleInvincibility,
+} from "./core/hit-reaction";
+import {
+  normalizeActionBattleEnemyAttackProfiles,
+  type ActionBattleEnemyAttackProfileMap,
+  type NormalizedActionBattleEnemyAttackProfileMap,
+} from "./core/enemy-attack-profiles";
+import {
+  resolveActionBattleHitboxSpeed,
+  scheduleActionBattleStartup,
+} from "./core/attack-runtime";
 import type { ActionBattleDamageResult } from "./core/contracts";
+import type {
+  NormalizedActionBattleAttackProfile,
+  NormalizedActionBattleHitReactionProfile,
+} from "./types";
 import type { ActionBattleAnimationOptions } from "./types";
 
 type RpgEventWithBattleAi = RpgEvent & {
@@ -22,10 +39,14 @@ export interface BattleAiOptions {
   fleeThreshold?: number;
   attackSkill?: any;
   attackPatterns?: AttackPattern[];
+  attackProfiles?: ActionBattleEnemyAttackProfileMap;
   patrolWaypoints?: Array<{ x: number; y: number }>;
   groupBehavior?: boolean;
   moveToCooldown?: number;
   retreatCooldown?: number;
+  poise?: number;
+  hitstunMs?: number;
+  invincibilityMs?: number;
   behavior?: {
     baseScore?: number;
     updateInterval?: number;
@@ -295,6 +316,7 @@ export class BattleAi {
   // Attack configuration
   private attackSkill: any | null; // Skill to use for attacks
   private attackPatterns: AttackPattern[];
+  private attackProfiles: NormalizedActionBattleEnemyAttackProfileMap;
   private animations?: ActionBattleAnimationOptions;
   private comboCount: number = 0;
   private comboMax: number = 3;
@@ -340,6 +362,9 @@ export class BattleAi {
   private lastRetreatTime: number = 0;
   private timers: ReturnType<typeof setTimeout>[] = [];
   private behaviorKey?: string;
+  private poise: number = 0;
+  private hitstunMs: number = 150;
+  private invincibilityMs: number = 250;
 
   /**
    * Create a new Battle AI Controller
@@ -390,6 +415,9 @@ export class BattleAi {
       AttackPattern.Combo,
       AttackPattern.DashAttack
     ];
+    this.attackProfiles = normalizeActionBattleEnemyAttackProfiles(
+      options.attackProfiles
+    );
 
     // Initialize group behavior
     this.groupBehavior = options.groupBehavior || false;
@@ -426,6 +454,15 @@ export class BattleAi {
     }
     if (options.retreatCooldown !== undefined) {
       this.retreatCooldown = options.retreatCooldown;
+    }
+    if (options.poise !== undefined) {
+      this.poise = Math.max(0, options.poise);
+    }
+    if (options.hitstunMs !== undefined) {
+      this.hitstunMs = Math.max(0, options.hitstunMs);
+    }
+    if (options.invincibilityMs !== undefined) {
+      this.invincibilityMs = Math.max(0, options.invincibilityMs);
     }
 
     // Setup AI systems
@@ -896,11 +933,25 @@ export class BattleAi {
    */
   private performMeleeAttack() {
     if (!this.target) return;
+    const profile = this.getAttackProfile(AttackPattern.Melee);
 
     this.faceTarget();
+    this.telegraphAttack(profile);
     playActionBattleAnimation("attack", this.event, this.animations, {
       target: this.target,
     });
+
+    this.scheduleAttackStartup(profile, () => {
+      this.executeMeleeAttack(profile, AttackPattern.Melee);
+    });
+  }
+
+  private executeMeleeAttack(
+    profile: NormalizedActionBattleAttackProfile,
+    pattern: AttackPattern
+  ) {
+    if (!this.target) return;
+    this.debugLog('attack', `Applying ${pattern} hit`);
 
     // Use skill if available
     if (this.attackSkill) {
@@ -912,17 +963,22 @@ export class BattleAi {
         this.event.useSkill(this.attackSkill, this.target);
       } catch (e) {
         // Skill failed (no SP, etc.) - fall back to basic attack
-        this.performBasicHitbox();
+        this.performBasicHitbox(profile, pattern);
       }
     } else {
-      this.performBasicHitbox();
+      this.performBasicHitbox(profile, pattern);
     }
   }
 
   /**
    * Perform basic hitbox attack when no skill is set
    */
-  private performBasicHitbox() {
+  private performBasicHitbox(
+    profile: NormalizedActionBattleAttackProfile = this.getAttackProfile(
+      AttackPattern.Melee
+    ),
+    pattern: AttackPattern = AttackPattern.Melee
+  ) {
     if (!this.target) return;
 
     const eventX = this.event.x();
@@ -944,11 +1000,13 @@ export class BattleAi {
     }];
 
     const map = this.event.getCurrentMap();
-    map?.createMovingHitbox(hitboxes, { speed: 5 }).subscribe({
-      next: (hits) => {
-        hits.forEach((hit) => {
+    map?.createMovingHitbox(hitboxes, {
+      speed: resolveActionBattleHitboxSpeed(profile, hitboxes.length),
+    }).subscribe({
+      next: (hits: any[]) => {
+        hits.forEach((hit: any) => {
           if (hit instanceof RpgPlayer && hit !== this.event) {
-            this.applyHit(hit);
+            this.applyHit(hit, undefined, profile, pattern);
           }
         });
       },
@@ -983,7 +1041,25 @@ export class BattleAi {
    * });
    * ```
    */
-  private applyHit(target: RpgPlayer, hooks?: ApplyHitHooks): HitResult {
+  private applyHit(
+    target: RpgPlayer,
+    hooks?: ApplyHitHooks,
+    profile: NormalizedActionBattleAttackProfile = this.getAttackProfile(
+      AttackPattern.Melee
+    ),
+    pattern: AttackPattern = AttackPattern.Melee
+  ): HitResult {
+    if (isActionBattleEntityInvincible(target)) {
+      return {
+        damage: 0,
+        knockbackForce: 0,
+        knockbackDuration: 0,
+        defeated: false,
+        attacker: this.event,
+        target
+      };
+    }
+
     // Use RPGJS damage formula
     const { damage } = target.applyDamage(this.event as any);
 
@@ -1017,6 +1093,10 @@ export class BattleAi {
       cycles: 1
     });
     target.showHit(`-${hitResult.damage}`);
+    setActionBattleInvincibility(
+      target,
+      profile.reaction.invincibilityMs
+    );
 
     // Apply knockback
     if (hitResult.knockbackForce > 0) {
@@ -1080,7 +1160,15 @@ export class BattleAi {
     if (!this.target) return;
 
     this.comboCount++;
-    this.performMeleeAttack();
+    const profile = this.getAttackProfile(AttackPattern.Combo);
+    this.faceTarget();
+    this.telegraphAttack(profile);
+    playActionBattleAnimation("attack", this.event, this.animations, {
+      target: this.target,
+    });
+    this.scheduleAttackStartup(profile, () => {
+      this.executeMeleeAttack(profile, AttackPattern.Combo);
+    });
 
     if (this.comboCount < this.comboMax) {
       this.schedule(() => {
@@ -1100,9 +1188,11 @@ export class BattleAi {
    */
   private performChargedAttack() {
     if (!this.target) return;
+    const profile = this.getAttackProfile(AttackPattern.Charged);
 
     this.chargingAttack = true;
     this.faceTarget();
+    this.telegraphAttack(profile);
     playActionBattleAnimation(
       "attack",
       this.event,
@@ -1113,35 +1203,24 @@ export class BattleAi {
       { repeat: 2 }
     );
 
-    this.schedule(() => {
+    this.scheduleAttackStartup(profile, () => {
       if (!this.target || this.state !== AiState.Combat) {
         this.chargingAttack = false;
         return;
       }
-
-      // Charged attacks can use a stronger skill or wider hitbox
-      if (this.attackSkill) {
-        try {
-          playActionBattleAnimation("castSkill", this.event, this.animations, {
-            skill: this.attackSkill,
-            target: this.target,
-          });
-          this.event.useSkill(this.attackSkill, this.target);
-        } catch (e) {
-          this.performBasicHitbox();
-        }
-      } else {
-        this.performBasicHitbox();
-      }
-      
+      this.executeMeleeAttack(profile, AttackPattern.Charged);
+    });
+    this.schedule(() => {
       this.chargingAttack = false;
-    }, 800);
+    }, profile.totalDurationMs);
   }
 
   /**
    * Perform zone attack (360 degrees)
    */
   private performZoneAttack() {
+    const profile = this.getAttackProfile(AttackPattern.Zone);
+    this.telegraphAttack(profile);
     playActionBattleAnimation("attack", this.event, this.animations, {
       target: this.target ?? undefined,
     });
@@ -1163,15 +1242,19 @@ export class BattleAi {
       });
     });
 
-    const map = this.event.getCurrentMap();
-    map?.createMovingHitbox(hitboxes, { speed: 5 }).subscribe({
-      next: (hits) => {
-        hits.forEach((hit) => {
-          if (hit instanceof RpgPlayer && hit !== this.event) {
-            this.applyHit(hit);
-          }
-        });
-      },
+    this.scheduleAttackStartup(profile, () => {
+      const map = this.event.getCurrentMap();
+      map?.createMovingHitbox(hitboxes, {
+        speed: resolveActionBattleHitboxSpeed(profile, hitboxes.length),
+      }).subscribe({
+        next: (hits: any[]) => {
+          hits.forEach((hit: any) => {
+            if (hit instanceof RpgPlayer && hit !== this.event) {
+              this.applyHit(hit, undefined, profile, AttackPattern.Zone);
+            }
+          });
+        },
+      });
     });
   }
 
@@ -1180,6 +1263,7 @@ export class BattleAi {
    */
   private performDashAttack() {
     if (!this.target) return;
+    const profile = this.getAttackProfile(AttackPattern.DashAttack);
 
     const dx = this.target.x() - this.event.x();
     const dy = this.target.y() - this.event.y();
@@ -1191,12 +1275,43 @@ export class BattleAi {
     const dirY = dy / dist;
 
     this.faceTarget();
-    this.event.dash({ x: dirX, y: dirY }, 10, 200);
+    this.telegraphAttack(profile);
 
-    this.schedule(() => {
+    this.scheduleAttackStartup(profile, () => {
       if (!this.target || this.state !== AiState.Combat) return;
-      this.performMeleeAttack();
-    }, 200);
+      this.event.dash({ x: dirX, y: dirY }, 10, 200);
+      this.schedule(() => {
+        if (!this.target || this.state !== AiState.Combat) return;
+        this.executeMeleeAttack(profile, AttackPattern.DashAttack);
+      }, 200);
+    });
+  }
+
+  private getAttackProfile(
+    pattern: AttackPattern
+  ): NormalizedActionBattleAttackProfile {
+    return this.attackProfiles[
+      pattern as keyof NormalizedActionBattleEnemyAttackProfileMap
+    ] ?? this.attackProfiles.melee;
+  }
+
+  private telegraphAttack(profile: NormalizedActionBattleAttackProfile) {
+    if (profile.startupMs <= 0) return;
+    this.event.flash({
+      type: 'tint',
+      tint: 'white',
+      duration: Math.min(profile.startupMs, 300),
+      cycles: 1
+    });
+  }
+
+  private scheduleAttackStartup(
+    profile: NormalizedActionBattleAttackProfile,
+    callback: () => void
+  ) {
+    return scheduleActionBattleStartup(profile, callback, (scheduled, delay) =>
+      this.schedule(scheduled, delay)
+    );
   }
 
   /**
@@ -1487,7 +1602,12 @@ export class BattleAi {
     });
   }
 
-  handleDamage(attacker: RpgPlayer, damageResult: ActionBattleDamageResult): boolean {
+  handleDamage(
+    attacker: RpgPlayer,
+    damageResult: ActionBattleDamageResult & {
+      reaction?: NormalizedActionBattleHitReactionProfile;
+    }
+  ): boolean {
     const damage = damageResult.damage;
     this.debugLog('damage', `Took ${damage} damage from ${attacker.id} (HP: ${this.event.hp}/${this.event.param[MAXHP] || '?'})`);
 
@@ -1506,11 +1626,20 @@ export class BattleAi {
     // Track damage
     this.recentDamageTaken += damage;
 
+    const reaction = damageResult.reaction;
+    const staggerPower = reaction?.staggerPower ?? damage;
+    const hitstunMs = reaction?.hitstunMs ?? this.hitstunMs;
+    const shouldStun = staggerPower >= this.poise && hitstunMs > 0;
+    setActionBattleInvincibility(
+      this.event,
+      reaction?.invincibilityMs ?? this.invincibilityMs
+    );
+
     // Brief stun
-    if (this.state !== AiState.Stunned && this.state !== AiState.Flee) {
+    if (shouldStun && this.state !== AiState.Stunned && this.state !== AiState.Flee) {
       this.debugLog('damage', 'Stunned from damage');
       this.isMovingToTarget = false;
-      this.stunnedUntil = Date.now() + 150;
+      this.stunnedUntil = Date.now() + hitstunMs;
       this.changeState(AiState.Stunned);
     }
 

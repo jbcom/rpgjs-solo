@@ -12,7 +12,20 @@ import { playActionBattleAnimation } from "./animations";
 import { getActionBattleSystems, setActionBattleSystems } from "./core/context";
 import { applyActionBattleHit } from "./core/hit";
 import { DEFAULT_ZELDA_PLAYER_HITBOXES } from "./core/defaults";
+import {
+  ActionBattleHitTracker,
+  createActionBattleAttackId,
+  getNormalizedActionBattleAttackProfile,
+  resolveActionBattleHitboxSpeed,
+  scheduleActionBattleStartup,
+} from "./core/attack-runtime";
+import { normalizeActionBattleAttackProfile } from "./core/attack-profile";
+import { resolveActionBattleWeaponAttackProfile } from "./core/equipment";
 import type { ActionBattleHitbox } from "./core/contracts";
+import type {
+  ActionBattleAttackProfile,
+  NormalizedActionBattleAttackProfile,
+} from "./types";
 
 export const ACTION_BATTLE_ACTION_BAR_GUI_ID = "action-battle-action-bar";
 const DEFAULT_ATTACK_LOCK_DURATION_MS = 350;
@@ -31,7 +44,8 @@ export const DEFAULT_PLAYER_ATTACK_HITBOXES = {
 const beginPlayerAttackLock = (
   player: RpgPlayer,
   map: ReturnType<RpgPlayer["getCurrentMap"]> | undefined,
-  durationMs: number
+  durationMs: number,
+  locks: { movement: boolean; direction: boolean }
 ): boolean => {
   if (durationMs <= 0) return true;
 
@@ -53,11 +67,15 @@ const beginPlayerAttackLock = (
   const previousDirectionFixed = player.directionFixed;
   const previousAnimationFixed = player.animationFixed;
 
-  player.pendingInputs = [];
-  player.lastProcessedInputTs = 0;
-  (map as any)?.stopMovement?.(player);
-  player.canMove.set(false);
-  player.directionFixed = true;
+  if (locks.movement) {
+    player.pendingInputs = [];
+    player.lastProcessedInputTs = 0;
+    (map as any)?.stopMovement?.(player);
+    player.canMove.set(false);
+  }
+  if (locks.direction) {
+    player.directionFixed = true;
+  }
 
   setTimeout(() => {
     if (runtimePlayer.__actionBattleAttackLockId !== lockId) return;
@@ -200,7 +218,8 @@ export function getPlayerWeaponKnockbackForce(player: RpgPlayer): number {
 export function applyPlayerHitToEvent(
   player: RpgPlayer, 
   target: RpgEvent, 
-  hooks?: ApplyHitHooks
+  hooks?: ApplyHitHooks,
+  metadata?: Record<string, any>
 ): HitResult | undefined {
   const ai = (target as any).battleAi as BattleAi;
   if (!ai) return undefined;
@@ -243,6 +262,8 @@ export function applyPlayerHitToEvent(
     {
       attacker: player,
       target,
+      metadata,
+      reaction: metadata?.reaction,
     }
   );
 
@@ -251,6 +272,7 @@ export function applyPlayerHitToEvent(
       damage: result.damage,
       defeated: result.defeated,
       raw: result.rawDamage,
+      reaction: result.reaction,
     });
   }
 
@@ -269,11 +291,13 @@ const toLegacyHitResult = (context: any): HitResult => ({
 const resolvePlayerAttackHitboxes = (
   player: RpgPlayer,
   directionKey: string,
-  options: ActionBattleOptions
+  options: ActionBattleOptions,
+  profile: NormalizedActionBattleAttackProfile
 ): ActionBattleHitbox[] => {
   const configuredHitboxes = {
     ...DEFAULT_PLAYER_ATTACK_HITBOXES,
     ...options.attack?.hitboxes,
+    ...profile.hitboxes,
   };
   const hitboxConfig =
     configuredHitboxes[
@@ -293,6 +317,39 @@ const resolvePlayerAttackHitboxes = (
       direction: directionKey,
       defaultHitboxes,
     }) ?? defaultHitboxes
+  );
+};
+
+const mergeAttackProfileOverrides = (
+  base: NormalizedActionBattleAttackProfile,
+  override: ActionBattleAttackProfile
+): ActionBattleAttackProfile => ({
+  ...base,
+  ...override,
+  reaction: {
+    ...base.reaction,
+    ...override.reaction,
+  },
+  hitboxes: {
+    ...base.hitboxes,
+    ...override.hitboxes,
+  },
+});
+
+const resolvePlayerAttackProfile = (
+  player: RpgPlayer,
+  options: ActionBattleOptions
+): NormalizedActionBattleAttackProfile => {
+  const baseProfile = getNormalizedActionBattleAttackProfile(options);
+  const weaponProfile = resolveActionBattleWeaponAttackProfile(player);
+  if (!weaponProfile) return baseProfile;
+  return normalizeActionBattleAttackProfile(
+    mergeAttackProfileOverrides(baseProfile, weaponProfile),
+    {
+      lockMovement: options.attack?.lockMovement,
+      lockDurationMs: options.attack?.lockDurationMs,
+      hitboxes: options.attack?.hitboxes,
+    }
   );
 };
 
@@ -423,7 +480,7 @@ const ensureActionBarGui = (
   const gui = existing || player.gui(ACTION_BATTLE_ACTION_BAR_GUI_ID);
   if (!(gui as any).__actionBattleReady) {
     (gui as any).__actionBattleReady = true;
-    gui.on("useItem", ({ id }) => {
+    gui.on("useItem", ({ id }: { id: string }) => {
       try {
         player.useItem(id);
       } catch {
@@ -431,10 +488,13 @@ const ensureActionBarGui = (
       }
       gui.update(buildActionBarData(player, options));
     });
-    gui.on("useSkill", ({ id, target }) => {
-      handleActionBattleSkillUse(player, id, target, options);
-      gui.update(buildActionBarData(player, options));
-    });
+    gui.on(
+      "useSkill",
+      ({ id, target }: { id: string; target?: { x: number; y: number } }) => {
+        handleActionBattleSkillUse(player, id, target, options);
+        gui.update(buildActionBarData(player, options));
+      }
+    );
     gui.on("refresh", () => {
       gui.update(buildActionBarData(player, options));
     });
@@ -523,7 +583,7 @@ const handleActionBattleSkillUse = (
   const targets: any[] = [];
   const affects = options.targeting?.affects || "events";
   if (affects === "events" || affects === "both") {
-    map.getEvents().forEach((event) => {
+    map.getEvents().forEach((event: RpgEvent) => {
       const tile = getEntityTile(event, tileSize);
       if (affected.has(`${tile.x},${tile.y}`)) {
         targets.push(event);
@@ -531,7 +591,7 @@ const handleActionBattleSkillUse = (
     });
   }
   if (affects === "players" || affects === "both") {
-    map.getPlayers().forEach((other) => {
+    map.getPlayers().forEach((other: RpgPlayer) => {
       if (other.id === player.id) return;
       const tile = getEntityTile(other, tileSize);
       if (affected.has(`${tile.x},${tile.y}`)) {
@@ -574,6 +634,7 @@ export const createActionBattleServer = (
         if (input.action == Control.Action) {
           const map = player.getCurrentMap();
           const direction = player.getDirection();
+          const attackProfile = resolvePlayerAttackProfile(player, options);
 
           // Convert Direction enum to string key
           const directionKey = direction as string;
@@ -581,42 +642,80 @@ export const createActionBattleServer = (
           const hitboxes = resolvePlayerAttackHitboxes(
             player,
             directionKey,
-            options
+            options,
+            attackProfile
           );
 
           if (isActionReservedForNormalEvent(player, map, hitboxes)) {
             return;
           }
 
-          const lockMovement = options.attack?.lockMovement !== false;
+          const lockMovement = attackProfile.movementLock;
+          const lockDirection = attackProfile.directionLock;
           const lockDurationMs =
-            options.attack?.lockDurationMs ?? DEFAULT_ATTACK_LOCK_DURATION_MS;
-          let movementLocked = false;
+            attackProfile.totalDurationMs ?? DEFAULT_ATTACK_LOCK_DURATION_MS;
+          const actionLocked = (lockMovement || lockDirection) && lockDurationMs > 0;
 
           if (
-            lockMovement &&
-            !beginPlayerAttackLock(player, map, Math.max(0, lockDurationMs))
+            actionLocked &&
+            !beginPlayerAttackLock(player, map, Math.max(0, lockDurationMs), {
+              movement: lockMovement,
+              direction: lockDirection,
+            })
           ) {
             return;
           }
-          movementLocked = lockMovement && lockDurationMs > 0;
 
           playActionBattleAnimation("attack", player, options.animations);
-          if (movementLocked) {
+          if (actionLocked) {
             player.animationFixed = true;
           }
+          const attackId = createActionBattleAttackId(
+            player.id,
+            attackProfile.id
+          );
+          const hitTracker = new ActionBattleHitTracker(
+            attackProfile.hitPolicy
+          );
+          if (options.debug?.attacks) {
+            console.log("[ActionBattle] player attack", {
+              attackId,
+              playerId: player.id,
+              profile: attackProfile.id,
+              hitboxes,
+            });
+          }
 
-          map?.createMovingHitbox(hitboxes, { speed: 3 }).subscribe({
-            next(hits) {
-              hits.forEach((hit) => {
-                if (hit instanceof RpgEvent) {
-                  const result = applyPlayerHitToEvent(player, hit);
-                  if (result?.defeated) {
-                    console.log(`Player ${player.id} defeated AI ${hit.id}`);
-                  }
-                }
+          scheduleActionBattleStartup(attackProfile, () => {
+            map
+              ?.createMovingHitbox(hitboxes, {
+                speed: resolveActionBattleHitboxSpeed(
+                  attackProfile,
+                  hitboxes.length
+                ),
+              })
+              .subscribe({
+                next(hits: any[]) {
+                  hits.forEach((hit: any) => {
+                    if (hit instanceof RpgEvent) {
+                      if (!hitTracker.tryHit(hit)) return;
+                      const result = applyPlayerHitToEvent(
+                        player,
+                        hit,
+                        undefined,
+                        {
+                          attackId,
+                          attackProfileId: attackProfile.id,
+                          reaction: attackProfile.reaction,
+                        }
+                      );
+                      if (result?.defeated) {
+                        console.log(`Player ${player.id} defeated AI ${hit.id}`);
+                      }
+                    }
+                  });
+                },
               });
-            },
           });
         }
       },
@@ -662,6 +761,44 @@ export const createActionBattleServer = (
 
 export default createActionBattleServer();
 
+export {
+  ACTION_BATTLE_HITBOX_FRAME_MS,
+  ActionBattleHitTracker,
+  createActionBattleAttackId,
+  getNormalizedActionBattleAttackProfile,
+  resolveActionBattleHitboxSpeed,
+  scheduleActionBattleStartup,
+} from "./core/attack-runtime";
+export {
+  DEFAULT_ACTION_BATTLE_ATTACK_PROFILE,
+  normalizeActionBattleAttackProfile,
+  type ActionBattleAttackProfileFallbacks,
+} from "./core/attack-profile";
+export type {
+  ActionBattleAttackDirection,
+  ActionBattleAttackHitboxConfig,
+  ActionBattleAttackHitboxMap,
+  ActionBattleAttackHitPolicy,
+  ActionBattleAttackProfile,
+  ActionBattleDebugOptions,
+  ActionBattleHitReactionProfile,
+  NormalizedActionBattleHitReactionProfile,
+  NormalizedActionBattleAttackProfile,
+} from "./types";
+export {
+  DEFAULT_ACTION_BATTLE_HIT_REACTION,
+  isActionBattleEntityInvincible,
+  normalizeActionBattleHitReaction,
+  setActionBattleInvincibility,
+} from "./core/hit-reaction";
+export {
+  DEFAULT_ACTION_BATTLE_ENEMY_ATTACK_PROFILES,
+  normalizeActionBattleEnemyAttackProfiles,
+  type ActionBattleEnemyAttackProfileKey,
+  type ActionBattleEnemyAttackProfileMap,
+  type NormalizedActionBattleEnemyAttackProfileMap,
+} from "./core/enemy-attack-profiles";
+export { resolveActionBattleWeaponAttackProfile } from "./core/equipment";
 export {
   AiDebug,
   AiState,

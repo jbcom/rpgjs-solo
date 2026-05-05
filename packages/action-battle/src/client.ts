@@ -14,12 +14,14 @@ import {
 import { ActionBattleOptions } from "./types";
 import { normalizeActionBattleOptions } from "./config";
 import { resolveActionBattleAnimation } from "./animations";
+import { getNormalizedActionBattleAttackProfile } from "./core/attack-runtime";
 
 const DEFAULT_ATTACK_LOCK_DURATION_MS = 350;
 
 const beginLocalPlayerAttackLock = (
   engine: RpgClientEngine,
-  durationMs: number
+  durationMs: number,
+  locks: { movement: boolean; direction: boolean }
 ): boolean => {
   if (durationMs <= 0) return true;
 
@@ -44,13 +46,17 @@ const beginLocalPlayerAttackLock = (
   const previousDirectionFixed = player.directionFixed;
   const previousAnimationFixed = player.animationFixed;
 
-  if (typeof engine.interruptCurrentPlayerMovement === "function") {
-    engine.interruptCurrentPlayerMovement(player);
-  } else {
-    (engine.scene as any)?.stopMovement?.(player);
+  if (locks.movement) {
+    if (typeof engine.interruptCurrentPlayerMovement === "function") {
+      engine.interruptCurrentPlayerMovement(player);
+    } else {
+      (engine.scene as any)?.stopMovement?.(player);
+    }
+    player.canMove.set(false);
   }
-  player.canMove.set(false);
-  player.directionFixed = true;
+  if (locks.direction) {
+    player.directionFixed = true;
+  }
   player.animationFixed = true;
 
   setTimeout(() => {
@@ -154,14 +160,17 @@ export const createActionBattleClient = (
         if (input !== "action") return;
         const player = engine.scene?.getCurrentPlayer?.() as any;
         if (!player) return;
+        const attackProfile = getNormalizedActionBattleAttackProfile(normalized);
         const lockDurationMs = Math.max(
           0,
-          normalized.attack?.lockDurationMs ?? DEFAULT_ATTACK_LOCK_DURATION_MS
+          attackProfile.totalDurationMs ?? DEFAULT_ATTACK_LOCK_DURATION_MS
         );
-        beginLocalPlayerAttackLock(
-          engine,
-          normalized.attack?.lockMovement === false ? 0 : lockDurationMs
-        );
+        if (attackProfile.movementLock || attackProfile.directionLock) {
+          beginLocalPlayerAttackLock(engine, lockDurationMs, {
+            movement: attackProfile.movementLock,
+            direction: attackProfile.directionLock,
+          });
+        }
         playLocalPlayerAttackAnimation(player, normalized);
         showLocalAttackPreview(player, normalized);
       },
