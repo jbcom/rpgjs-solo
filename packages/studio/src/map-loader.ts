@@ -895,7 +895,7 @@ export const loadMap = async (mapId: string) => {
       terrainByTileset: isV2 ? terrainByTileset : [],
     },
     hitboxes: allHitboxes,
-    component: isV2 ? MapComponentV2 : MapComponent,
+    component: MapComponentV2,
     config: client.globalConfig,
     events: map.events,
     width: isV2 ? map.params.width * 48 : map.params.width,

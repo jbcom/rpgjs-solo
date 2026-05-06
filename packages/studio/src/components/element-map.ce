@@ -1023,8 +1023,19 @@ const lightRadius = Math.max(4, resolvedLightSpot.radius * ((lightScaleX + light
 const mappedLightSpot = mapLocalLightSpotToWorld(normalizedRule, resolvedLightSpot.x, resolvedLightSpot.y)
 const lightCenterX = mappedLightSpot.x
 const lightCenterY = mappedLightSpot.y
+const hitboxValue = hitbox || { x: 0, y: 0, width: 0, height: 0 }
+const hitboxX = toFiniteNumber(hitboxValue.x, 0) ?? 0
+const hitboxY = toFiniteNumber(hitboxValue.y, 0) ?? 0
+const hitboxWidth = clampMin(toFiniteNumber(hitboxValue.width, 1) ?? 1)
+const hitboxHeight = clampMin(toFiniteNumber(hitboxValue.height, 1) ?? 1)
+const hitboxScaleX = drawWidth / Math.max(1, rectangle.width)
+const hitboxScaleY = drawHeight / Math.max(1, rectangle.height)
 const resolvedZIndexOffset = toFiniteNumber(zIndexOffset(), 0) ?? 0
-const resolvedElementZIndex = Math.round(drawY + resolvedZIndexOffset + drawHeight)
+const hasSortableHitbox = hitbox && hitbox.type !== "none"
+const elementSortY = hasSortableHitbox
+    ? drawY + (hitboxY * hitboxScaleY)
+    : drawY + drawHeight
+const resolvedElementZIndex = Math.round(elementSortY + resolvedZIndexOffset)
 const resolvedLightSpotZIndex = resolvedElementZIndex - 2
 
 const lightSpotOverlay = {
@@ -1041,17 +1052,11 @@ const lightSpotOverlay = {
 
 const spriteParts = buildSegmentsWithRule(normalizedRule) ?? fallbackSpriteParts
 
-const hitboxValue = hitbox || { x: 0, y: 0, width: 0, height: 0 }
-const hitboxX = toFiniteNumber(hitboxValue.x, 0) ?? 0
-const hitboxY = toFiniteNumber(hitboxValue.y, 0) ?? 0
-const hitboxWidth = clampMin(toFiniteNumber(hitboxValue.width, 1) ?? 1)
-const hitboxHeight = clampMin(toFiniteNumber(hitboxValue.height, 1) ?? 1)
-
 const shadow = {
-    x: drawX + (hitboxX * scaleX) + (hitboxWidth * scaleX),
-    y: drawY + (hitboxY * scaleY) + (hitboxHeight * scaleY),
-    width: (hitboxWidth * scaleX) / 2,
-    height: (hitboxHeight * scaleY) / 2
+    x: drawX + (hitboxX * hitboxScaleX) + (hitboxWidth * hitboxScaleX),
+    y: drawY + (hitboxY * hitboxScaleY) + (hitboxHeight * hitboxScaleY),
+    width: (hitboxWidth * hitboxScaleX) / 2,
+    height: (hitboxHeight * hitboxScaleY) / 2
 }
 
 let zIndex = signal(0)

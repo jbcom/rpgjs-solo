@@ -49,10 +49,10 @@
       "dist"
     ],
     "devDependencies": {
-      "@canvasengine/compiler": "^2.0.0-beta.58",
+      "@canvasengine/compiler": "^2.0.0-beta.61",
       "pixi.js": "^8.18.1",
       "vite": "^8.0.10",
-      "vite-plugin-dts": "^4.5.4"
+      "vite-plugin-dts": "^5.0.0"
     },
     "type": "module"
   }
