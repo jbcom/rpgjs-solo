@@ -25,6 +25,15 @@ export type {
   ActionBattleUiOptions,
   ActionBattleUiActionBarOptions,
   ActionBattleUiTargetingOptions,
+  ActionBattleAttackDirection,
+  ActionBattleAttackHitboxConfig,
+  ActionBattleAttackHitboxMap,
+  ActionBattleAttackHitPolicy,
+  ActionBattleAttackProfile,
+  ActionBattleDebugOptions,
+  ActionBattleHitReactionProfile,
+  NormalizedActionBattleHitReactionProfile,
+  NormalizedActionBattleAttackProfile,
   ActionBattleCombatOptions,
   ActionBattleSystemOptions,
   ActionBattleAiSystemOptions,
@@ -47,6 +56,33 @@ export type {
   ActionBattleKnockbackResult,
   ActionBattleSystems,
 } from "./core/contracts";
+export {
+  DEFAULT_ACTION_BATTLE_ATTACK_PROFILE,
+  normalizeActionBattleAttackProfile,
+  type ActionBattleAttackProfileFallbacks,
+} from "./core/attack-profile";
+export {
+  ACTION_BATTLE_HITBOX_FRAME_MS,
+  ActionBattleHitTracker,
+  createActionBattleAttackId,
+  getNormalizedActionBattleAttackProfile,
+  resolveActionBattleHitboxSpeed,
+  scheduleActionBattleStartup,
+} from "./core/attack-runtime";
+export {
+  DEFAULT_ACTION_BATTLE_HIT_REACTION,
+  isActionBattleEntityInvincible,
+  normalizeActionBattleHitReaction,
+  setActionBattleInvincibility,
+} from "./core/hit-reaction";
+export {
+  DEFAULT_ACTION_BATTLE_ENEMY_ATTACK_PROFILES,
+  normalizeActionBattleEnemyAttackProfiles,
+  type ActionBattleEnemyAttackProfileKey,
+  type ActionBattleEnemyAttackProfileMap,
+  type NormalizedActionBattleEnemyAttackProfileMap,
+} from "./core/enemy-attack-profiles";
+export { resolveActionBattleWeaponAttackProfile } from "./core/equipment";
 export {
   DEFAULT_ZELDA_PLAYER_HITBOXES,
   createDefaultPlayerHitboxResolver,

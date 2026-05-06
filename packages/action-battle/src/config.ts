@@ -1,4 +1,5 @@
 import { ActionBattleOptions } from "./types";
+import { normalizeActionBattleAttackProfile } from "./core/attack-profile";
 
 export const DEFAULT_ACTION_BATTLE_OPTIONS: ActionBattleOptions = {
   ui: {
@@ -41,6 +42,16 @@ let currentActionBattleOptions: ActionBattleOptions =
 export function normalizeActionBattleOptions(
   options: ActionBattleOptions = {}
 ): ActionBattleOptions {
+  const attack = {
+    ...DEFAULT_ACTION_BATTLE_OPTIONS.attack,
+    ...options.attack,
+  };
+  const attackProfile = normalizeActionBattleAttackProfile(attack.profile, {
+    lockMovement: attack.lockMovement,
+    lockDurationMs: attack.lockDurationMs,
+    hitboxes: attack.hitboxes,
+  });
+
   return {
     ui: {
       actionBar: {
@@ -64,9 +75,13 @@ export function normalizeActionBattleOptions(
       ...DEFAULT_ACTION_BATTLE_OPTIONS.targeting,
       ...options.targeting,
     },
+    debug: {
+      ...DEFAULT_ACTION_BATTLE_OPTIONS.debug,
+      ...options.debug,
+    },
     attack: {
-      ...DEFAULT_ACTION_BATTLE_OPTIONS.attack,
-      ...options.attack,
+      ...attack,
+      profile: attackProfile,
     },
     animations: {
       ...DEFAULT_ACTION_BATTLE_OPTIONS.animations,

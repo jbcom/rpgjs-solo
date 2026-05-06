@@ -231,6 +231,24 @@ new BattleAi(event, {
     AttackPattern.Combo,
     AttackPattern.DashAttack
   ],
+
+  // Per-pattern enemy attack timing and reactions
+  attackProfiles: {
+    charged: {
+      startupMs: 900,
+      activeMs: 140,
+      recoveryMs: 300,
+      reaction: {
+        hitstunMs: 240,
+        staggerPower: 2
+      }
+    }
+  },
+
+  // Hit reaction tuning
+  poise: 1,
+  hitstunMs: 150,
+  invincibilityMs: 250,
   
   // Patrol waypoints (for idle state)
   patrolWaypoints: [
@@ -248,6 +266,11 @@ new BattleAi(event, {
   }
 });
 ```
+
+`attackProfiles` lets enemies telegraph attacks with `startupMs`, keep hitboxes
+active for `activeMs`, and apply hit reactions. `poise` controls interruption:
+an incoming hit only stuns the enemy when its `reaction.staggerPower` is greater
+than or equal to the enemy's `poise`.
 
 ## Enemy Types
 
@@ -606,6 +629,98 @@ animations.
 Player attacks are resolved with `createMovingHitbox()` instead of a passive
 contact collision. You can still customize the generated hitboxes with
 `attack.hitboxes` or `attack.resolveHitboxes`.
+
+### Attack profile model
+
+Use `attack.profile` to describe the timing model of a player attack in one
+typed object. A profile separates the attack into startup, active, and recovery
+phases so combat systems can share the same vocabulary.
+
+```ts
+import { provideActionBattle } from "@rpgjs/action-battle/server";
+
+export default provideActionBattle({
+  attack: {
+    profile: {
+      id: "iron-sword",
+      startupMs: 80,
+      activeMs: 120,
+      recoveryMs: 180,
+      cooldownMs: 380,
+      movementLock: true,
+      directionLock: true,
+      animationKey: "attack",
+      hitPolicy: "oncePerTarget",
+      reaction: {
+        invincibilityMs: 250,
+        hitstunMs: 150,
+        staggerPower: 1
+      },
+      hitboxes: {
+        right: { offsetX: 18, offsetY: -18, width: 42, height: 36 }
+      }
+    },
+    lockDurationMs: 380
+  }
+});
+```
+
+The default profile mirrors the legacy attack lock: no startup, a short active
+window, and recovery that totals `350ms`. The player attack runtime uses
+`startupMs` before creating the hitbox, `activeMs` to keep the hitbox active,
+and `totalDurationMs` for movement and direction locks. `hitPolicy:
+"oncePerTarget"` prevents the same attack window from damaging the same target
+multiple times.
+
+`reaction` describes what happens after the hit connects:
+
+- `invincibilityMs`: temporary invincibility after damage.
+- `hitstunMs`: stun duration requested by the hit.
+- `staggerPower`: value compared against enemy `poise`.
+
+```ts
+import {
+  normalizeActionBattleAttackProfile,
+  type ActionBattleAttackProfile
+} from "@rpgjs/action-battle/server";
+
+const sword: ActionBattleAttackProfile = {
+  id: "sword",
+  startupMs: 70,
+  activeMs: 110,
+  recoveryMs: 170
+};
+
+const normalized = normalizeActionBattleAttackProfile(sword);
+```
+
+Equipped weapons can override the player attack profile:
+
+```ts
+const Dagger = {
+  id: "dagger",
+  name: "Dagger",
+  _type: "weapon" as const,
+  atk: 8,
+  knockbackForce: 20,
+  attackProfile: {
+    id: "dagger",
+    startupMs: 40,
+    activeMs: 70,
+    recoveryMs: 110
+  }
+};
+```
+
+Enable lightweight attack logs while tuning profiles:
+
+```ts
+provideActionBattle({
+  debug: {
+    attacks: true
+  }
+});
+```
 
 When the action targets a normal event with no `BattleAi`, the server lets the
 event handle `onAction` and does not create the combat hitbox. Enemy events

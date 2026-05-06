@@ -1,6 +1,7 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { applyActionBattleHit } from "./hit";
 import type { ActionBattleCombatSystem } from "./contracts";
+import { setActionBattleInvincibility } from "./hit-reaction";
 
 const entity = (hp = 100) => ({
   hp,
@@ -10,6 +11,10 @@ const entity = (hp = 100) => ({
 });
 
 describe("applyActionBattleHit", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test("runs beforeHit before resolving damage", () => {
     const calls: string[] = [];
     const attacker = entity();
@@ -54,5 +59,53 @@ describe("applyActionBattleHit", () => {
 
     expect(result.cancelled).toBe(true);
     expect(resolveDamage).not.toHaveBeenCalled();
+  });
+
+  test("cancels a hit when the target is invincible", () => {
+    const resolveDamage = vi.fn();
+    const attacker = entity();
+    const target = entity();
+    setActionBattleInvincibility(target, 500, 1000);
+    vi.spyOn(Date, "now").mockReturnValue(1100);
+    const system: ActionBattleCombatSystem = {
+      resolveHitboxes: () => [],
+      resolveDamage,
+      resolveKnockback: () => ({ force: 0, duration: 0 }),
+    };
+
+    const result = applyActionBattleHit(system, {
+      attacker: attacker as any,
+      target: target as any,
+    });
+
+    expect(result.cancelled).toBe(true);
+    expect(resolveDamage).not.toHaveBeenCalled();
+  });
+
+  test("applies invincibility from hit reaction after damage", () => {
+    vi.spyOn(Date, "now").mockReturnValue(2000);
+    const attacker = entity();
+    const target = entity();
+    const system: ActionBattleCombatSystem = {
+      resolveHitboxes: () => [],
+      resolveDamage: () => ({ damage: 12, defeated: false }),
+      resolveKnockback: () => ({ force: 0, duration: 0 }),
+    };
+
+    const result = applyActionBattleHit(system, {
+      attacker: attacker as any,
+      target: target as any,
+      reaction: {
+        invincibilityMs: 300,
+        hitstunMs: 120,
+        staggerPower: 1,
+      },
+    });
+
+    expect(result.cancelled).toBeUndefined();
+    expect(applyActionBattleHit(system, {
+      attacker: attacker as any,
+      target: target as any,
+    }).cancelled).toBe(true);
   });
 });

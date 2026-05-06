@@ -1,5 +1,6 @@
 import type { RpgEvent, RpgPlayer } from "@rpgjs/server";
 import type { AttackPattern, EnemyType, AiState } from "../ai.server";
+import type { NormalizedActionBattleHitReactionProfile } from "../types";
 
 export type ActionBattleEntity = RpgPlayer | RpgEvent;
 
@@ -58,6 +59,7 @@ export interface ActionBattleHitContext {
   pattern?: AttackPattern | string;
   damage?: ActionBattleDamageResult;
   knockback?: ActionBattleKnockbackResult;
+  reaction?: NormalizedActionBattleHitReactionProfile;
   cancelled?: boolean;
   metadata?: Record<string, any>;
 }
@@ -70,6 +72,7 @@ export interface ActionBattleHitResult {
   attacker: ActionBattleEntity;
   target: ActionBattleEntity;
   rawDamage?: any;
+  reaction?: NormalizedActionBattleHitReactionProfile;
   cancelled?: boolean;
   metadata?: Record<string, any>;
 }

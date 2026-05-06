@@ -89,6 +89,61 @@ export interface ActionBattleUiOptions {
   targeting?: ActionBattleUiTargetingOptions;
 }
 
+export type ActionBattleAttackDirection =
+  | "up"
+  | "down"
+  | "left"
+  | "right"
+  | "default";
+
+export interface ActionBattleAttackHitboxConfig {
+  offsetX: number;
+  offsetY: number;
+  width: number;
+  height: number;
+}
+
+export type ActionBattleAttackHitboxMap = Partial<
+  Record<ActionBattleAttackDirection, ActionBattleAttackHitboxConfig>
+>;
+
+export type ActionBattleAttackHitPolicy =
+  | "oncePerTarget"
+  | "allowRepeatHits";
+
+export interface ActionBattleHitReactionProfile {
+  invincibilityMs?: number;
+  hitstunMs?: number;
+  staggerPower?: number;
+}
+
+export interface NormalizedActionBattleHitReactionProfile {
+  invincibilityMs: number;
+  hitstunMs: number;
+  staggerPower: number;
+}
+
+export interface ActionBattleAttackProfile {
+  id?: string;
+  startupMs?: number;
+  activeMs?: number;
+  recoveryMs?: number;
+  cooldownMs?: number;
+  movementLock?: boolean;
+  directionLock?: boolean;
+  animationKey?: ActionBattleAnimationKey;
+  hitPolicy?: ActionBattleAttackHitPolicy;
+  reaction?: ActionBattleHitReactionProfile;
+  hitboxes?: ActionBattleAttackHitboxMap;
+}
+
+export interface NormalizedActionBattleAttackProfile
+  extends Required<Omit<ActionBattleAttackProfile, "hitboxes" | "reaction">> {
+  reaction: NormalizedActionBattleHitReactionProfile;
+  hitboxes?: ActionBattleAttackHitboxMap;
+  totalDurationMs: number;
+}
+
 export interface ActionBattleSkillOptions {
   getTargeting?: ActionBattleSkillTargetingResolver;
   defaultAoeMask?: ActionBattleAoeMask;
@@ -99,19 +154,19 @@ export interface ActionBattleTargetingOptions {
   allowEmptyTarget?: boolean;
 }
 
+export interface ActionBattleDebugOptions {
+  attacks?: boolean;
+}
+
 export interface ActionBattleAttackOptions {
+  profile?: ActionBattleAttackProfile;
   lockMovement?: boolean;
   lockDurationMs?: number;
   showPreview?: boolean;
   previewDurationMs?: number;
   previewColor?: number;
   previewAccentColor?: number;
-  hitboxes?: Partial<
-    Record<
-      "up" | "down" | "left" | "right" | "default",
-      { offsetX: number; offsetY: number; width: number; height: number }
-    >
-  >;
+  hitboxes?: ActionBattleAttackHitboxMap;
   resolveHitboxes?: (context: {
     player: any;
     direction: string;
@@ -139,6 +194,7 @@ export interface ActionBattleOptions {
   skills?: ActionBattleSkillOptions;
   targeting?: ActionBattleTargetingOptions;
   attack?: ActionBattleAttackOptions;
+  debug?: ActionBattleDebugOptions;
   animations?: ActionBattleAnimationOptions;
   systems?: ActionBattleSystemOptions;
 }

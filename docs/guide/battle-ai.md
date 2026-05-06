@@ -99,6 +99,88 @@ attacking. The client stops local predicted movement as soon as the action
 input is pressed and shows a short slash preview by default. Disable
 `showPreview` when you provide your own client-side attack effect.
 
+### Attack profile model
+
+Use `attack.profile` to describe the timing model of a player attack in one
+typed object. A profile separates the attack into startup, active, and recovery
+phases so combat systems can share the same vocabulary.
+
+```ts
+provideActionBattle({
+  attack: {
+    profile: {
+      id: "iron-sword",
+      startupMs: 80,
+      activeMs: 120,
+      recoveryMs: 180,
+      cooldownMs: 380,
+      movementLock: true,
+      directionLock: true,
+      animationKey: "attack",
+      hitPolicy: "oncePerTarget",
+      reaction: {
+        invincibilityMs: 250,
+        hitstunMs: 150,
+        staggerPower: 1
+      },
+      hitboxes: {
+        right: { offsetX: 18, offsetY: -18, width: 42, height: 36 }
+      }
+    },
+    lockDurationMs: 380
+  }
+});
+```
+
+The default profile mirrors the legacy attack lock: no startup, a short active
+window, and recovery that totals `350ms`. The player attack runtime uses
+`startupMs` before creating the hitbox, `activeMs` to keep the hitbox active,
+and `totalDurationMs` for movement and direction locks.
+
+| Field | Purpose |
+|---|---|
+| `id` | Stable name for this attack profile. |
+| `startupMs` | Wind-up time before the attack should become active. |
+| `activeMs` | Duration of the intended hit window. |
+| `recoveryMs` | Time after the active window before the action fully recovers. |
+| `cooldownMs` | Minimum delay before the same profile should be reused. |
+| `movementLock` | Whether the attack should lock movement. |
+| `directionLock` | Whether the attack should lock facing direction. |
+| `animationKey` | Animation key from `animations`, usually `attack`. |
+| `hitPolicy` | `oncePerTarget` blocks duplicate hits during one attack; `allowRepeatHits` allows repeated hits. |
+| `reaction.invincibilityMs` | Temporary invincibility after this hit connects. |
+| `reaction.hitstunMs` | Stun duration requested by this hit. |
+| `reaction.staggerPower` | Stagger value compared against enemy `poise`. |
+| `hitboxes` | Optional hitbox overrides for this profile. |
+
+Weapons can override the player attack profile from their database entry:
+
+```ts
+const Dagger = {
+  id: "dagger",
+  name: "Dagger",
+  _type: "weapon" as const,
+  atk: 8,
+  knockbackForce: 20,
+  attackProfile: {
+    id: "dagger",
+    startupMs: 40,
+    activeMs: 70,
+    recoveryMs: 110
+  }
+};
+```
+
+Enable lightweight attack logs while tuning profiles:
+
+```ts
+provideActionBattle({
+  debug: {
+    attacks: true
+  }
+});
+```
+
 ## Plugin-first extension points
 
 Action battle is structured as replaceable systems. You can keep the default
@@ -251,6 +333,20 @@ new BattleAi(event, {
     AttackPattern.Combo,
     AttackPattern.DashAttack
   ],
+  attackProfiles: {
+    charged: {
+      startupMs: 900,
+      activeMs: 140,
+      recoveryMs: 300,
+      reaction: {
+        hitstunMs: 240,
+        staggerPower: 2
+      }
+    }
+  },
+  poise: 1,
+  hitstunMs: 150,
+  invincibilityMs: 250,
   patrolWaypoints: [
     { x: 100, y: 100 },
     { x: 300, y: 100 }
@@ -285,6 +381,11 @@ Per-enemy `animations` override the global `provideActionBattle()` animations.
 Use a string for a simple animation name, an object to temporarily switch
 graphics, or a resolver function for data-driven events. Return `null` or
 `undefined` from a resolver to skip the animation.
+
+`attackProfiles` lets enemies telegraph attacks with `startupMs`, keep hitboxes
+active for `activeMs`, and apply hit reactions. `poise` controls interruption:
+an incoming hit only stuns the enemy when its `reaction.staggerPower` is greater
+than or equal to the enemy's `poise`.
 
 When combat spritesheets come from RPGJS Studio media fields, convert the media
 ids with `createStudioActionBattleAnimations()`. Studio-generated combat
