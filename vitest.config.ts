@@ -10,6 +10,12 @@ export default defineConfig({
       "@rpgjs/physic": path.resolve(__dirname, "packages/physic/src"),
       "@rpgjs/vite": path.resolve(__dirname, "packages/vite/src"),
       "@rpgjs/vue": path.resolve(__dirname, "packages/vue/src"),
+      "@rpgjs/action-battle/server": path.resolve(
+        __dirname,
+        "packages/action-battle/src/server.ts",
+      ),
+      "@rpgjs/action-battle": path.resolve(__dirname, "packages/action-battle/src"),
+      "@common": path.resolve(__dirname, "packages/studio/runtime"),
     },
   },
   test: {

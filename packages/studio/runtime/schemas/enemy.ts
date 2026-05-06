@@ -161,7 +161,11 @@ export const enemySchema = {
         },
       } as any,
     },
-    aiBehavior: enemyAiBehaviorSchema,
+    behavior: enemyAiBehaviorSchema,
+    aiBehavior: {
+      ...enemyAiBehaviorSchema,
+      description: "Deprecated alias for behavior.",
+    },
     reward: enemyRewardSchema,
   },
   required: ["name"],

@@ -126,6 +126,26 @@ const normalizeAttackPatterns = (value: unknown): AttackPattern[] | undefined =>
   return patterns.length > 0 ? patterns : undefined;
 };
 
+const normalizePatrolWaypoints = (
+  value: unknown,
+): Array<{ x: number; y: number }> | undefined => {
+  if (!Array.isArray(value)) return undefined;
+
+  const waypoints = value
+    .map((waypoint) => {
+      const x = toNumber(waypoint?.x);
+      const y = toNumber(waypoint?.y);
+      return x !== undefined && y !== undefined ? { x, y } : null;
+    })
+    .filter((waypoint): waypoint is { x: number; y: number } => waypoint !== null);
+
+  return waypoints.length > 0 || value.length === 0 ? waypoints : undefined;
+};
+
+const hasAnyKey = (source: any, keys: readonly string[]): boolean => {
+  return !!source && typeof source === "object" && keys.some((key) => source[key] !== undefined);
+};
+
 const pickNumericOption = (
   source: any,
   key: keyof BattleAiOptions,
@@ -182,10 +202,43 @@ const learnEnemySkills = (event: RpgEvent, enemy: any): string | undefined => {
   return firstSkillId;
 };
 
-const resolveEnemyBattleAiOptions = (
+const battleAiBehaviorOptionKeys = [
+  "enemyType",
+  "behaviorKey",
+  "attackSkill",
+  "attackSkillId",
+  "attackCooldown",
+  "visionRange",
+  "attackRange",
+  "dodgeChance",
+  "dodgeCooldown",
+  "fleeThreshold",
+  "moveToCooldown",
+  "retreatCooldown",
+  "attackPatterns",
+  "patrolWaypoints",
+  "groupBehavior",
+] as const;
+
+const behaviorGaugeKeys = [
+  "baseScore",
+  "updateInterval",
+  "minStateDuration",
+  "assaultThreshold",
+  "retreatThreshold",
+] as const;
+
+export const resolveEnemyBattleAiOptions = (
   enemy: any,
   fallbackAttackSkill?: string,
 ): BattleAiOptions => {
+  const studioBehavior =
+    enemy?.behavior && typeof enemy.behavior === "object"
+      ? enemy.behavior
+      : {};
+  const legacyAiBehavior = hasAnyKey(studioBehavior, battleAiBehaviorOptionKeys)
+    ? studioBehavior
+    : {};
   const aiBehavior =
     enemy?.aiBehavior && typeof enemy.aiBehavior === "object"
       ? enemy.aiBehavior
@@ -193,12 +246,13 @@ const resolveEnemyBattleAiOptions = (
   const behaviorKey =
     typeof enemy?.aiBehavior === "string"
       ? enemy.aiBehavior
-      : enemy?.behaviorKey ?? aiBehavior.behaviorKey;
+      : enemy?.behaviorKey ?? aiBehavior.behaviorKey ?? legacyAiBehavior.behaviorKey;
   const options: BattleAiOptions = {
     enemyType:
       normalizeEnemyType(enemy?.enemyType) ??
       normalizeEnemyType(enemy?.aiBehavior) ??
       normalizeEnemyType(aiBehavior.enemyType) ??
+      normalizeEnemyType(legacyAiBehavior.enemyType) ??
       EnemyType.Aggressive,
     visionRange: 150,
     attackRange: 50,
@@ -210,19 +264,26 @@ const resolveEnemyBattleAiOptions = (
   }
 
   const configuredAttackSkill =
-    enemy?.attackSkill ?? enemy?.attackSkillId ?? aiBehavior.attackSkill ?? aiBehavior.attackSkillId;
+    enemy?.attackSkill ??
+    enemy?.attackSkillId ??
+    aiBehavior.attackSkill ??
+    aiBehavior.attackSkillId ??
+    legacyAiBehavior.attackSkill ??
+    legacyAiBehavior.attackSkillId;
   if (typeof configuredAttackSkill === "string" && configuredAttackSkill.trim()) {
     options.attackSkill = configuredAttackSkill;
   } else if (fallbackAttackSkill) {
     options.attackSkill = fallbackAttackSkill;
   }
 
-  const patterns = normalizeAttackPatterns(enemy?.attackPatterns ?? aiBehavior.attackPatterns);
+  const patterns = normalizeAttackPatterns(
+    enemy?.attackPatterns ?? aiBehavior.attackPatterns ?? legacyAiBehavior.attackPatterns,
+  );
   if (patterns) {
     options.attackPatterns = patterns;
   }
 
-  for (const source of [enemy, aiBehavior]) {
+  for (const source of [enemy, aiBehavior, legacyAiBehavior]) {
     pickNumericOption(source, "attackCooldown", options);
     pickNumericOption(source, "visionRange", options);
     pickNumericOption(source, "attackRange", options);
@@ -236,22 +297,27 @@ const resolveEnemyBattleAiOptions = (
     if (groupBehavior !== undefined) {
       options.groupBehavior = groupBehavior;
     }
+
+    const patrolWaypoints = normalizePatrolWaypoints(source?.patrolWaypoints);
+    if (patrolWaypoints) {
+      options.patrolWaypoints = patrolWaypoints;
+    }
   }
 
-  const behavior = enemy?.behavior ?? aiBehavior.behavior;
-  if (behavior && typeof behavior === "object") {
-    options.behavior = {};
-    for (const key of [
-      "baseScore",
-      "updateInterval",
-      "minStateDuration",
-      "assaultThreshold",
-      "retreatThreshold",
-    ] as const) {
+  const behavior =
+    aiBehavior.behavior && typeof aiBehavior.behavior === "object"
+      ? aiBehavior.behavior
+      : studioBehavior;
+  if (hasAnyKey(behavior, behaviorGaugeKeys)) {
+    const gaugeOptions: NonNullable<BattleAiOptions["behavior"]> = {};
+    for (const key of behaviorGaugeKeys) {
       const value = toNumber(behavior[key]);
       if (value !== undefined) {
-        options.behavior[key] = value;
+        gaugeOptions[key] = value;
       }
+    }
+    if (Object.keys(gaugeOptions).length > 0) {
+      options.behavior = gaugeOptions;
     }
   }
 
