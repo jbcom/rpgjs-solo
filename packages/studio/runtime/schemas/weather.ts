@@ -1,31 +1,37 @@
-import { WEATHER_EFFECTS, WEATHER_PRESET_NAMES } from "../weather";
+import { WEATHER_EFFECTS, WEATHER_PRESET_NAMES, WEATHER_PRESET_NAMES_BY_EFFECT } from "../weather";
 
 const weatherEffectEnum = [...WEATHER_EFFECTS];
 const weatherPresetEnum = ["custom", ...WEATHER_PRESET_NAMES];
-const weatherEffectLabels = ["Rain", "Snow", "Fog", "Clouds"];
-const weatherPresetLabelByValue: Record<string, string> = {
-  custom: "Custom",
-  lightRain: "Light Rain",
-  steadyRain: "Steady Rain",
-  stormRain: "Storm Rain",
-  lightSnow: "Light Snow",
-  winterSnow: "Winter Snow",
-  blizzardSnow: "Blizzard Snow",
-  rpgMorningMist: "RPG Morning Mist",
-  rpgForestFog: "RPG Forest Fog",
-  rpgSwampFog: "RPG Swamp Fog",
-  rpgNightFog: "RPG Night Fog",
-  rpgHeavyFog: "RPG Heavy Fog",
-  lightClouds: "Light Clouds",
-  overcastClouds: "Overcast Clouds",
-  stormClouds: "Storm Clouds",
-  goldenHourRays: "Golden Hour Rays",
-  sunnySoftRays: "Sunny Soft Rays",
-  sunsetTwinkleRays: "Sunset Twinkle Rays",
-  dramaticCrepuscularRays: "Dramatic Crepuscular Rays",
-  morningHazeRays: "Morning Haze Rays",
+const weatherEffectLabels = ["Rain", "Snow", "Fog", "Cloud"];
+
+const toDisplayLabel = (value: string): string => {
+  if (value === "custom") {
+    return "Custom";
+  }
+
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/^rpg\b/i, "RPG")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 };
-const weatherPresetLabels = weatherPresetEnum.map((value) => weatherPresetLabelByValue[value] ?? value);
+
+const weatherPresetLabels = weatherPresetEnum.map(toDisplayLabel);
+
+const presetEnumForEffect = (effect: keyof typeof WEATHER_PRESET_NAMES_BY_EFFECT) => [
+  "custom",
+  ...WEATHER_PRESET_NAMES_BY_EFFECT[effect],
+];
+
+const presetLabelsForEffect = (effect: keyof typeof WEATHER_PRESET_NAMES_BY_EFFECT) =>
+  presetEnumForEffect(effect).map(toDisplayLabel);
+
+const weatherPresetSchemaForEffect = (effect: keyof typeof WEATHER_PRESET_NAMES_BY_EFFECT) => ({
+  ...weatherStateProperties.preset,
+  enum: presetEnumForEffect(effect),
+  format: {
+    labels: presetLabelsForEffect(effect),
+  },
+});
 
 export const weatherParamsProperties = {
   density: {
@@ -128,10 +134,31 @@ export const weatherStateProperties = {
 export const weatherStateSchema = {
   type: "object",
   properties: {
+    effect: {
+      ...weatherStateProperties.effect,
+      default: "rain",
+    },
     preset: weatherStateProperties.preset,
+    params: weatherStateProperties.params,
   },
-  required: ["preset"],
+  required: ["effect", "preset"],
   allOf: [
+    {
+      if: { properties: { effect: { const: "rain" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("rain") } },
+    },
+    {
+      if: { properties: { effect: { const: "snow" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("snow") } },
+    },
+    {
+      if: { properties: { effect: { const: "fog" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("fog") } },
+    },
+    {
+      if: { properties: { effect: { const: "cloud" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("cloud") } },
+    },
     {
       if: {
         properties: {
@@ -143,7 +170,6 @@ export const weatherStateSchema = {
           effect: weatherStateProperties.effect,
           params: weatherStateProperties.params,
         },
-        required: ["effect"],
       },
     },
   ],
@@ -159,10 +185,31 @@ export const weatherStateNullableSchema = {
 export const weatherSetBlockSchema = {
   type: "object",
   properties: {
+    effect: {
+      ...weatherStateProperties.effect,
+      default: "rain",
+    },
     preset: weatherStateProperties.preset,
+    params: weatherStateProperties.params,
   },
-  required: ["preset"],
+  required: ["effect", "preset"],
   allOf: [
+    {
+      if: { properties: { effect: { const: "rain" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("rain") } },
+    },
+    {
+      if: { properties: { effect: { const: "snow" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("snow") } },
+    },
+    {
+      if: { properties: { effect: { const: "fog" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("fog") } },
+    },
+    {
+      if: { properties: { effect: { const: "cloud" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("cloud") } },
+    },
     {
       if: {
         properties: {
@@ -177,7 +224,6 @@ export const weatherSetBlockSchema = {
           },
           params: weatherStateProperties.params,
         },
-        required: ["effect"],
       },
     },
   ],
@@ -186,28 +232,40 @@ export const weatherSetBlockSchema = {
 export const weatherPatchBlockSchema = {
   type: "object",
   properties: {
+    effect: weatherStateProperties.effect,
     preset: weatherStateProperties.preset,
+    params: {
+      ...weatherStateProperties.params,
+      title: "Parameters patch",
+    },
   },
   allOf: [
+    {
+      if: { properties: { effect: { const: "rain" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("rain") } },
+    },
+    {
+      if: { properties: { effect: { const: "snow" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("snow") } },
+    },
+    {
+      if: { properties: { effect: { const: "fog" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("fog") } },
+    },
+    {
+      if: { properties: { effect: { const: "cloud" } } },
+      then: { properties: { preset: weatherPresetSchemaForEffect("cloud") } },
+    },
     {
       if: {
         properties: {
           preset: { const: "custom" },
         },
       },
-      then: {
-        properties: {
-          effect: weatherStateProperties.effect,
-          params: {
-            ...weatherStateProperties.params,
-            title: "Parameters patch",
-          },
-        },
-        anyOf: [{ required: ["effect"] }, { required: ["params"] }],
-      },
-      else: {
-        required: ["preset"],
-      },
+      then: {},
+    },
+    {
+      anyOf: [{ required: ["effect"] }, { required: ["preset"] }, { required: ["params"] }],
     },
   ],
 } as const;

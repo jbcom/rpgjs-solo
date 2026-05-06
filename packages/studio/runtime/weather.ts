@@ -1,6 +1,6 @@
 export const WEATHER_EFFECTS = ['rain', 'snow', 'fog', 'cloud'] as const;
 
-export const CANVAS_WEATHER_EFFECTS = ['rain', 'snow', 'fog'] as const;
+export const CANVAS_WEATHER_EFFECTS = ['rain', 'snow', 'fog', 'cloud'] as const;
 
 export type WeatherEffect = (typeof WEATHER_EFFECTS)[number];
 export type CanvasWeatherEffect = (typeof CANVAS_WEATHER_EFFECTS)[number];
@@ -52,6 +52,13 @@ export const CLOUD_PRESETS = {
   morningHazeRays: { effect: "cloud", speed: 0.09, density: 0.52, height: 0.7, scale: 1.3, sunIntensity: 0.9, sunAngle: 0.9, raySpread: 1.05, rayTwinkle: 0.42, rayTwinkleSpeed: 0.8 },
 } as const;
 
+export const WEATHER_PRESETS_BY_EFFECT = {
+  rain: RAIN_PRESETS,
+  snow: SNOW_PRESETS,
+  fog: FOG_PRESETS,
+  cloud: CLOUD_PRESETS,
+} as const;
+
 export const WEATHER_PRESETS = {
   ...RAIN_PRESETS,
   ...SNOW_PRESETS,
@@ -63,6 +70,12 @@ export type WeatherPresetName = keyof typeof WEATHER_PRESETS;
 export type WeatherPresetSelection = WeatherPresetName | "custom";
 
 export const WEATHER_PRESET_NAMES = Object.keys(WEATHER_PRESETS) as WeatherPresetName[];
+export const WEATHER_PRESET_NAMES_BY_EFFECT = {
+  rain: Object.keys(RAIN_PRESETS),
+  snow: Object.keys(SNOW_PRESETS),
+  fog: Object.keys(FOG_PRESETS),
+  cloud: Object.keys(CLOUD_PRESETS),
+} as Record<WeatherEffect, WeatherPresetName[]>;
 
 export interface WeatherState {
   effect: WeatherEffect;
@@ -93,6 +106,14 @@ export interface CanvasWeatherOptions {
   windStrength: number;
   maxDrops: number;
   scale: number;
+  height: number;
+  sunIntensity: number;
+  sunAngle: number;
+  raySpread: number;
+  rayTwinkle: number;
+  rayTwinkleSpeed: number;
+  alpha: number;
+  zIndex: number;
 }
 
 const DEFAULT_TRANSITION_MS = 0;
@@ -175,6 +196,13 @@ export const isWeatherPresetName = (value: unknown): value is WeatherPresetName 
   return typeof value === 'string' && (WEATHER_PRESET_NAMES as readonly string[]).includes(value);
 };
 
+export const isWeatherPresetForEffect = (
+  preset: unknown,
+  effect: WeatherEffect
+): preset is WeatherPresetName => {
+  return isWeatherPresetName(preset) && WEATHER_PRESETS[preset].effect === effect;
+};
+
 const extractPresetParams = (preset: WeatherPresetName): WeatherParams => {
   const source = WEATHER_PRESETS[preset] as Record<string, unknown>;
   return {
@@ -251,18 +279,19 @@ export const normalizeWeatherState = (
 
   const source = value as Record<string, unknown>;
   const rawPreset = source['preset'];
-  const preset = rawPreset === 'custom'
-    ? 'custom'
-    : isWeatherPresetName(rawPreset)
-      ? rawPreset
-      : undefined;
   const presetDefinition = isWeatherPresetName(rawPreset) ? WEATHER_PRESETS[rawPreset] : null;
-  const effect = presetDefinition?.effect ?? source['effect'];
+  const sourceEffect = isWeatherEffect(source['effect']) ? source['effect'] : undefined;
+  const effect = sourceEffect ?? presetDefinition?.effect;
   if (!isWeatherEffect(effect)) {
     return null;
   }
+  const preset = rawPreset === 'custom'
+    ? 'custom'
+    : isWeatherPresetForEffect(rawPreset, effect)
+      ? rawPreset
+      : undefined;
 
-  const presetParams = isWeatherPresetName(rawPreset) ? extractPresetParams(rawPreset) : {};
+  const presetParams = isWeatherPresetName(preset) ? extractPresetParams(preset) : {};
   const sourceParams =
     source['params'] && typeof source['params'] === 'object'
       ? (source['params'] as Record<string, unknown>)
@@ -298,10 +327,15 @@ export const mergeWeatherState = (
   if (!nextEffect || !isWeatherEffect(nextEffect)) {
     return current ? cloneWeatherState(current) : null;
   }
+  const preset = nextPreset === 'custom'
+    ? 'custom'
+    : isWeatherPresetForEffect(nextPreset, nextEffect)
+      ? nextPreset
+      : undefined;
 
-  const baseParams = presetChanged && isWeatherPresetName(nextPreset)
-    ? extractPresetParams(nextPreset)
-    : { ...(isWeatherPresetName(nextPreset) ? extractPresetParams(nextPreset) : {}), ...(current?.params ?? {}) };
+  const baseParams = presetChanged && isWeatherPresetName(preset)
+    ? extractPresetParams(preset)
+    : { ...(isWeatherPresetName(preset) ? extractPresetParams(preset) : {}), ...(current?.params ?? {}) };
 
   const mergedParams = {
     ...baseParams,
@@ -310,7 +344,7 @@ export const mergeWeatherState = (
 
   return {
     effect: nextEffect,
-    preset: nextPreset,
+    preset,
     params: normalizeWeatherParams(nextEffect, mergedParams),
     transitionMs: normalizeTransitionMs(patch.transitionMs ?? current?.transitionMs),
     startedAt:
@@ -369,9 +403,6 @@ export const resolveEffectiveWeather = (
 };
 
 export const toCanvasWeatherEffect = (effect: WeatherEffect): CanvasWeatherEffect => {
-  if (effect === 'cloud') {
-    return 'fog';
-  }
   return effect;
 };
 
@@ -387,6 +418,14 @@ export const toCanvasWeatherOptions = (weatherState: WeatherState): CanvasWeathe
       windStrength: fallback.params?.windStrength ?? DEFAULT_WEATHER_PARAMS.rain.windStrength,
       maxDrops: fallback.params?.maxDrops ?? DEFAULT_WEATHER_PARAMS.rain.maxDrops,
       scale: fallback.params?.scale ?? DEFAULT_WEATHER_PARAMS.rain.scale,
+      height: fallback.params?.height ?? DEFAULT_WEATHER_PARAMS.rain.height,
+      sunIntensity: fallback.params?.sunIntensity ?? DEFAULT_WEATHER_PARAMS.rain.sunIntensity,
+      sunAngle: fallback.params?.sunAngle ?? DEFAULT_WEATHER_PARAMS.rain.sunAngle,
+      raySpread: fallback.params?.raySpread ?? DEFAULT_WEATHER_PARAMS.rain.raySpread,
+      rayTwinkle: fallback.params?.rayTwinkle ?? DEFAULT_WEATHER_PARAMS.rain.rayTwinkle,
+      rayTwinkleSpeed: fallback.params?.rayTwinkleSpeed ?? DEFAULT_WEATHER_PARAMS.rain.rayTwinkleSpeed,
+      alpha: fallback.params?.opacity ?? DEFAULT_WEATHER_PARAMS.rain.opacity,
+      zIndex: 1000,
     };
   }
 
@@ -398,5 +437,13 @@ export const toCanvasWeatherOptions = (weatherState: WeatherState): CanvasWeathe
     windStrength: normalized.params?.windStrength ?? DEFAULT_WEATHER_PARAMS[normalized.effect].windStrength,
     maxDrops: normalized.params?.maxDrops ?? DEFAULT_WEATHER_PARAMS[normalized.effect].maxDrops,
     scale: normalized.params?.scale ?? DEFAULT_WEATHER_PARAMS[normalized.effect].scale,
+    height: normalized.params?.height ?? DEFAULT_WEATHER_PARAMS[normalized.effect].height,
+    sunIntensity: normalized.params?.sunIntensity ?? DEFAULT_WEATHER_PARAMS[normalized.effect].sunIntensity,
+    sunAngle: normalized.params?.sunAngle ?? DEFAULT_WEATHER_PARAMS[normalized.effect].sunAngle,
+    raySpread: normalized.params?.raySpread ?? DEFAULT_WEATHER_PARAMS[normalized.effect].raySpread,
+    rayTwinkle: normalized.params?.rayTwinkle ?? DEFAULT_WEATHER_PARAMS[normalized.effect].rayTwinkle,
+    rayTwinkleSpeed: normalized.params?.rayTwinkleSpeed ?? DEFAULT_WEATHER_PARAMS[normalized.effect].rayTwinkleSpeed,
+    alpha: normalized.params?.opacity ?? DEFAULT_WEATHER_PARAMS[normalized.effect].opacity,
+    zIndex: 1000,
   };
 };

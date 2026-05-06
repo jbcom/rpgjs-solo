@@ -16,11 +16,32 @@
     }
 </Container>
 
+@if (weatherOptions) {
+  <Weather
+      effect={weatherOptions().effect}
+      density={weatherOptions().density}
+      speed={weatherOptions().speed}
+      windDirection={weatherOptions().windDirection}
+      windStrength={weatherOptions().windStrength}
+      maxDrops={weatherOptions().maxDrops}
+      scale={weatherOptions().scale}
+      height={weatherOptions().height}
+      sunIntensity={weatherOptions().sunIntensity}
+      sunAngle={weatherOptions().sunAngle}
+      raySpread={weatherOptions().raySpread}
+      rayTwinkle={weatherOptions().rayTwinkle}
+      rayTwinkleSpeed={weatherOptions().rayTwinkleSpeed}
+      alpha={weatherOptions().alpha}
+      zIndex={weatherOptions().zIndex}
+    />
+}
+
   <script>
     import { computed, effect } from 'canvasengine'
     import { TiledMap, Weather } from "@canvasengine/presets";
     import { EventLayerComponent, RpgClientEngine, inject } from "@rpgjs/client";
     import ElementMap from './element-map.ce'
+    import { toCanvasWeatherOptions } from '@common/weather';
     import { assetsUrl } from "../constants";
 
     const { data } = defineProps()
@@ -246,9 +267,16 @@
     const events = computed(() => engine.sceneMap.events)
 
     effect(() => {
-      const weather = data().params?.weather
-      if (weather) {
-         engine.sceneMap.setLocalWeather(weather);
+      engine.sceneMap.setLocalWeather(data().weather ?? data().params?.weather ?? null);
+    })
+
+    const weatherOptions = computed(() => {
+      const sceneMapWeather = (engine.sceneMap as any).weather;
+      const effectiveWeather = sceneMapWeather();
+      if (!effectiveWeather) {
+        return null;
       }
+      console.log(toCanvasWeatherOptions(effectiveWeather))
+      return toCanvasWeatherOptions(effectiveWeather);
     })
   </script>

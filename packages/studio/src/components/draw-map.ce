@@ -17,12 +17,20 @@
       windStrength={weatherOptions().windStrength}
       maxDrops={weatherOptions().maxDrops}
       scale={weatherOptions().scale}
+      height={weatherOptions().height}
+      sunIntensity={weatherOptions().sunIntensity}
+      sunAngle={weatherOptions().sunAngle}
+      raySpread={weatherOptions().raySpread}
+      rayTwinkle={weatherOptions().rayTwinkle}
+      rayTwinkleSpeed={weatherOptions().rayTwinkleSpeed}
+      alpha={weatherOptions().alpha}
+      zIndex={weatherOptions().zIndex}
     />
   </Container>
 }
   
   <script>
-    import { computed } from 'canvasengine'
+    import { computed, effect } from 'canvasengine'
     import { EventLayerComponent, RpgClientEngine, inject } from "@rpgjs/client";
     import ElementMap from './element-map.ce'
     import { Weather } from '@canvasengine/presets'
@@ -33,6 +41,11 @@
     const middleLayer = computed(() => data().data)
 
     const engine = inject(RpgClientEngine);
+
+    effect(() => {
+      engine.sceneMap.setLocalWeather(data().weather ?? data().params?.weather ?? null);
+    })
+
     const weatherOptions = computed(() => {
       const sceneMapWeather = (engine.sceneMap as any).weather;
       if (typeof sceneMapWeather !== 'function') {
