@@ -6,6 +6,7 @@ import {
   Vector2,
   Entity,
   EntityState,
+  AABB,
   assignPolygonCollider,
   createCollider,
 } from "@rpgjs/physic";
@@ -34,6 +35,10 @@ interface ZoneOptions {
   linkedTo?: string;
   limitedByWalls?: boolean;
 }
+
+const COLLISION_PROXIMITY_MARGIN = 1;
+const DEFAULT_INTERACTION_RANGE = 16;
+const INTERACTION_SIDE_PADDING = 4;
 
 export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   abstract players: Signal<Record<string, T>>;
@@ -1555,13 +1560,93 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
       const otherAABB = otherCollider.getBounds();
       
-      // Check if AABBs actually intersect
-      if (entityAABB.intersects(otherAABB)) {
+      // Check if AABBs intersect, allowing a small physics solver gap.
+      if (expandedAABB.intersects(otherAABB)) {
         collisions.push(other.uuid);
       }
     }
 
     return collisions;
+  }
+
+  /**
+   * Get entities inside the action area directly in front of an entity.
+   *
+   * This is intentionally separate from physical collisions: a player often
+   * presses the action key while blocked just before touching an NPC, so the
+   * physics solver may leave a tiny gap even though gameplay expects an
+   * interaction.
+   */
+  private getInteractionCollisions(
+    id: string,
+    direction?: Direction | string,
+    range = DEFAULT_INTERACTION_RANGE,
+  ): string[] {
+    const entity = this.physic.getEntityByUUID(id);
+    if (!entity) return [];
+
+    const collider = createCollider(entity);
+    if (!collider) return [];
+
+    const entityAABB = collider.getBounds();
+    const interactionAABB = this.getInteractionAABB(entityAABB, direction, range);
+    const nearby = this.physic.queryAABB(interactionAABB);
+    const collisions: string[] = [];
+
+    for (const other of nearby) {
+      if (other.uuid === id) continue;
+
+      const otherCollider = createCollider(other);
+      if (!otherCollider) continue;
+
+      if (interactionAABB.intersects(otherCollider.getBounds())) {
+        collisions.push(other.uuid);
+      }
+    }
+
+    return collisions;
+  }
+
+  private getInteractionAABB(
+    bounds: AABB,
+    direction?: Direction | string,
+    range = DEFAULT_INTERACTION_RANGE,
+  ): AABB {
+    const distance = Number.isFinite(range) ? Math.max(0, range) : DEFAULT_INTERACTION_RANGE;
+    const sidePadding = distance > 0 ? Math.min(INTERACTION_SIDE_PADDING, distance / 2) : 0;
+
+    switch (direction) {
+      case Direction.Up:
+        return new AABB(
+          bounds.minX - sidePadding,
+          bounds.minY - distance,
+          bounds.maxX + sidePadding,
+          bounds.minY + COLLISION_PROXIMITY_MARGIN,
+        );
+      case Direction.Down:
+        return new AABB(
+          bounds.minX - sidePadding,
+          bounds.maxY - COLLISION_PROXIMITY_MARGIN,
+          bounds.maxX + sidePadding,
+          bounds.maxY + distance,
+        );
+      case Direction.Left:
+        return new AABB(
+          bounds.minX - distance,
+          bounds.minY - sidePadding,
+          bounds.minX + COLLISION_PROXIMITY_MARGIN,
+          bounds.maxY + sidePadding,
+        );
+      case Direction.Right:
+        return new AABB(
+          bounds.maxX - COLLISION_PROXIMITY_MARGIN,
+          bounds.minY - sidePadding,
+          bounds.maxX + distance,
+          bounds.maxY + sidePadding,
+        );
+      default:
+        return bounds.expand(distance);
+    }
   }
 
   /**

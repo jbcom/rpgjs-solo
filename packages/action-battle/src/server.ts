@@ -115,6 +115,16 @@ const getVisibleActionEvents = (
     collisions.forEach((id: string) => addEvent(map.getEvent(id)));
   }
 
+  const direction =
+    typeof player.getDirection === "function" ? player.getDirection() : undefined;
+  const interactionCollisions = (map as any).getInteractionCollisions?.(
+    player.id,
+    direction
+  );
+  if (Array.isArray(interactionCollisions)) {
+    interactionCollisions.forEach((id: string) => addEvent(map.getEvent(id)));
+  }
+
   for (const event of map.getEvents()) {
     const rect = eventRect(event);
     if (hitboxes.some((hitbox) => rectsOverlap(hitbox, rect))) {

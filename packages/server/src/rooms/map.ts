@@ -1053,10 +1053,20 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   @Action('action')
   onAction(player: RpgPlayer, action: any) {
-    // Get collisions using the helper method from RpgCommonMap
-    const collisions = (this as any).getCollisions(player.id);
-    const events = collisions
-      .map(id => this.getEvent(id))
+    const direction =
+      typeof player.getDirection === "function"
+        ? player.getDirection()
+        : typeof player.direction === "function"
+          ? player.direction()
+          : undefined;
+    const collisions = new Set<string>((this as any).getCollisions(player.id));
+    const interactionCollisions = (this as any).getInteractionCollisions?.(player.id, direction);
+    if (Array.isArray(interactionCollisions)) {
+      interactionCollisions.forEach(id => collisions.add(id));
+    }
+
+    const events = Array.from(collisions)
+      .map(id => this.getEvent<RpgEvent>(id))
       .filter((event): event is RpgEvent => !!event && this.isEventVisibleForPlayer(event, player));
     if (events.length > 0) {
       events.forEach(event => {
