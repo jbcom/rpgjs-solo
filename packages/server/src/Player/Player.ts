@@ -1481,13 +1481,19 @@ export class RpgEvent extends RpgPlayer {
    * `sprite.onBeforeRemove` runs a visual transition. Gameplay collision is
    * removed immediately; the event is deleted from the map after `timeoutMs`.
    *
+   * The server only sends the removal context. The client decides how to render
+   * `transition` in `sprite.onBeforeRemove`, so the payload can describe an
+   * animation, sound, particle effect, GUI transition, or project-specific data.
+   *
    * @example
    * ```ts
    * event.remove({
    *   reason: 'defeated',
    *   transition: {
+   *     type: 'enemy-death',
    *     animation: 'die',
    *     graphic: 'slime_die',
+   *     sound: 'slime-death',
    *     duration: 700
    *   },
    *   timeoutMs: 700

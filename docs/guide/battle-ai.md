@@ -394,10 +394,12 @@ an incoming hit only stuns the enemy when its `reaction.staggerPower` is greater
 than or equal to the enemy's `poise`.
 
 `rewards` are awarded once to the player who lands the killing blow. On defeat,
-Action Battle calls `event.remove({ reason: "defeated", transition })`; client
-modules can use `sprite.onBeforeRemove` to play the visual transition before the
-sprite disappears. The legacy `onDefeated(event, attacker)` signature remains
-supported for two-argument callbacks.
+Action Battle calls `event.remove({ reason: "defeated", transition })`. The
+server only sends that removal context; client modules decide how to render it
+with `sprite.onBeforeRemove`, for example by awaiting a death animation, playing
+a sound, or showing a particle effect before the sprite disappears. The legacy
+`onDefeated(event, attacker)` signature remains supported for two-argument
+callbacks.
 
 When combat spritesheets come from RPGJS Studio media fields, convert the media
 ids with `createStudioActionBattleAnimations()`. Studio-generated combat

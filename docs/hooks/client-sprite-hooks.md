@@ -131,33 +131,67 @@ const sprite: RpgSpriteHooks = {
 sprite disappears from the scene. Return a promise to keep the sprite visible
 while a transition runs.
 
+The server does not decide how the transition is rendered. It only sends a
+removal context with `event.remove()`. The client reads that context in
+`onBeforeRemove` and can play an animation, sound, particle effect, GUI
+transition, or any combination of effects.
+
 **Parameters:**
 - `sprite: RpgSprite` - The sprite instance
 - `context.reason?: string` - Removal reason, such as `"defeated"`
 - `context.data?: any` - Custom data sent by `event.remove()`
-- `context.transition?: object` - Optional animation/effect metadata
-- `context.timeoutMs?: number` - Safety timeout used by the server
+- `context.transition?: object` - Optional transition metadata. This is a
+  project-defined payload; RPGJS forwards it to the client.
+- `context.timeoutMs?: number` - Safety timeout used by the server before the
+  event is removed from the map.
 
-**Example:**
+**Server example:**
 ```ts
+event.remove({
+    reason: 'defeated',
+    transition: {
+        type: 'enemy-death',
+        animation: 'die',
+        graphic: 'slime_die',
+        sound: 'slime-death',
+        duration: 700
+    },
+    timeoutMs: 700
+})
+```
+
+**Client example:**
+```ts
+import { RpgClientEngine, RpgSprite, RpgSpriteHooks } from '@rpgjs/client'
+import { inject } from '@signe/di'
+
 const sprite: RpgSpriteHooks = {
     async onBeforeRemove(sprite: RpgSprite, context) {
         if (context.reason !== 'defeated') return
 
+        const engine = inject(RpgClientEngine)
         const transition = context.transition
+        const tasks = []
+
         if (transition?.animation) {
             const timeoutMs = context.timeoutMs ?? transition.duration ?? 700
 
             if (transition.graphic) {
-                await sprite.setAnimation(transition.animation, transition.graphic, 1, {
+                tasks.push(sprite.setAnimation(transition.animation, transition.graphic, 1, {
                     timeoutMs
-                })
+                }))
             } else {
-                await sprite.setAnimation(transition.animation, 1, {
+                tasks.push(sprite.setAnimation(transition.animation, 1, {
                     timeoutMs
-                })
+                }))
             }
         }
+
+        if (transition?.sound) {
+            tasks.push(engine.playSound(transition.sound))
+        }
+
+        await Promise.all(tasks)
     }
 }
 ```
@@ -165,6 +199,11 @@ const sprite: RpgSpriteHooks = {
 `sprite.setAnimation()` returns a promise for finite animations. Awaiting it keeps
 the sprite visible until the animation finishes, is interrupted, or reaches the
 configured timeout.
+
+`timeoutMs` is the maximum time the server keeps the removed sprite visible on
+clients. Set it to at least the expected duration of the client transition. The
+client hook may finish earlier, but the event is removed from the map when the
+server timeout expires.
 
 ### onChanges
 
