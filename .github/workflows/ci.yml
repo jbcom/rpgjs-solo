@@ -105,8 +105,22 @@ jobs:
             - v5-studio
             - v5
       steps:
+        - name: Check starter repository token
+          run: |
+            if [ -z "$GH_ACCESS_TOKEN" ]; then
+              echo "::error::Missing GH_ACCESS_TOKEN secret. It must be a GitHub token with write access to rpgjs/starter."
+              exit 1
+            fi
+          env:
+            GH_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
+
         - name: Checkout the starter repository
-          run: git clone --branch ${{ matrix.starter_branch }} --single-branch https://github.com/rpgjs/starter starter
+          uses: actions/checkout@v4
+          with:
+            repository: rpgjs/starter
+            ref: ${{ matrix.starter_branch }}
+            path: starter
+            token: ${{ secrets.GH_ACCESS_TOKEN }}
 
         - name: Install npm-check-updates globally
           run: npm i npm-check-updates -g
@@ -122,13 +136,15 @@ jobs:
             npm i --package-lock-only
 
         - name: Deploy to external repository
-          uses: cpina/github-action-push-to-another-repository@main
-          env:
-            API_TOKEN_GITHUB: ${{ secrets.GH_ACCESS_TOKEN }}
-          with:
-            source-directory: starter/
-            destination-github-username: rpgjs
-            destination-repository-name: starter
-            user-email: "${{ github.actor}}@users.noreply.github.com"
-            commit-message: update package dependencies to latest RPGJS version on ${{ matrix.starter_branch }}
-            target-branch: ${{ matrix.starter_branch }}
+          run: |
+            cd starter
+            if git diff --quiet; then
+              echo "No dependency changes to commit."
+              exit 0
+            fi
+
+            git config user.name "${{ github.actor }}"
+            git config user.email "${{ github.actor }}@users.noreply.github.com"
+            git add package.json package-lock.json
+            git commit -m "update package dependencies to latest RPGJS version on ${{ matrix.starter_branch }}"
+            git push origin HEAD:${{ matrix.starter_branch }}
