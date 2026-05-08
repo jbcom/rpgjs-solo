@@ -707,10 +707,13 @@ Convenience method to display a transition by its ID using the GUI system.
 - Kind: `method`
 - Defined in: `RpgClientEngine`
 
+The returned promise resolves when the transition component calls its
+`onFinish` prop.
+
 ### Signature
 
 ```ts
-startTransition(id: string, props?: any)
+startTransition(id: string, props?: any): Promise<void>
 ```
 
 ### Parameters
@@ -729,6 +732,9 @@ engine.startTransition('fade', {
   duration: 1000,
   onFinish: () => console.log('Fade complete')
 });
+
+// Wait until the transition finishes
+await engine.startTransition('fade', { duration: 1000 });
 ```
 
 ## stopAllSounds

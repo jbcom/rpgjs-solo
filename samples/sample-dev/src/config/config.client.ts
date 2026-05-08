@@ -25,29 +25,9 @@ import { provideVueGui } from "@rpgjs/vue";
 import { provideTiledMap } from "@rpgjs/tiledmap/client";
 import { provideMain } from "../modules/main";
 import TooltipComponent from "../components/tooltip.ce";
-import { RpgClientObject } from "@rpgjs/client";
 import { withMobile } from "@rpgjs/client";
 import { provideActionBattle } from "@rpgjs/action-battle/client";
 import { HudComponent } from "@rpgjs/client";
-
-function waitForSpriteAnimation(sprite: RpgClientObject, timeoutMs = 700) {
-  return new Promise<void>((resolve) => {
-    let finished = false;
-    let subscription: { unsubscribe: () => void } | undefined;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      subscription?.unsubscribe();
-      resolve();
-    };
-
-    subscription = sprite.animationIsPlaying?.observable.subscribe((isPlaying: boolean) => {
-      if (!isPlaying) finish();
-    });
-    setTimeout(finish, timeoutMs);
-  });
-}
-
 
 export default {
   providers: [
@@ -137,16 +117,17 @@ export default {
           async onBeforeRemove(sprite, context) {
             const transition = context.transition;
             if (!transition?.animation) return;
+            const timeoutMs = context.timeoutMs ?? transition.duration ?? 700;
 
             if (transition.graphic !== undefined) {
-              sprite.setAnimation(transition.animation, transition.graphic, 1);
+              await sprite.setAnimation(transition.animation, transition.graphic, 1, {
+                timeoutMs,
+              });
             } else {
-              sprite.setAnimation(transition.animation, 1);
+              await sprite.setAnimation(transition.animation, 1, {
+                timeoutMs,
+              });
             }
-            await waitForSpriteAnimation(
-              sprite,
-              context.timeoutMs ?? transition.duration ?? 700
-            );
           }
         },
         sceneMap: { 

@@ -146,15 +146,25 @@ const sprite: RpgSpriteHooks = {
 
         const transition = context.transition
         if (transition?.animation) {
+            const timeoutMs = context.timeoutMs ?? transition.duration ?? 700
+
             if (transition.graphic) {
-                sprite.setAnimation(transition.animation, transition.graphic, 1)
+                await sprite.setAnimation(transition.animation, transition.graphic, 1, {
+                    timeoutMs
+                })
             } else {
-                sprite.setAnimation(transition.animation, 1)
+                await sprite.setAnimation(transition.animation, 1, {
+                    timeoutMs
+                })
             }
         }
     }
 }
 ```
+
+`sprite.setAnimation()` returns a promise for finite animations. Awaiting it keeps
+the sprite visible until the animation finishes, is interrupted, or reaches the
+configured timeout.
 
 ### onChanges
 

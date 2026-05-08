@@ -232,7 +232,8 @@ export default defineModule<RpgClient>({
 
 #### On a Player
 
-Use the `showComponentAnimation` method:
+Use the `showComponentAnimation` method. On a client sprite, it returns a
+promise that resolves when the component animation calls `onFinish`.
 
 ```ts
 /**
@@ -240,34 +241,44 @@ Use the `showComponentAnimation` method:
  * @param id - The component animation ID
  * @param params - Parameters to pass to the component
  */
-player.showComponentAnimation(id: string, params: any)
+sprite.showComponentAnimation(id: string, params: any): Promise<void>
 ```
 
 **Examples:**
 
 ```ts
 // Basic explosion on player
-player.showComponentAnimation("explosion", {});
+await sprite.showComponentAnimation("explosion", {});
 
 // Explosion with custom parameters
-player.showComponentAnimation("explosion", {
+await sprite.showComponentAnimation("explosion", {
   intensity: 2.5,
   color: "red",
   duration: 1500
 });
 
 // Hit indicator with damage text
-player.showComponentAnimation("hit", {
+await sprite.showComponentAnimation("hit", {
   text: "150",
   color: "red"
 });
 
 // Heal animation
-player.showComponentAnimation("heal", {
+await sprite.showComponentAnimation("heal", {
   amount: 50,
   color: "green"
 });
 ```
+
+For a spritesheet animation on the same sprite, use `showAnimation()`:
+
+```ts
+await sprite.showAnimation("explosion", "default")
+```
+
+Server-side methods such as `player.showComponentAnimation()` and
+`map.showComponentAnimation()` only send the animation request to clients and
+remain fire-and-forget.
 
 #### On a Map
 

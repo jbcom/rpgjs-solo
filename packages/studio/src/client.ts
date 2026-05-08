@@ -73,29 +73,6 @@ const resolveHeroMediaSpritesheet = async (value: unknown): Promise<any | null> 
   return null;
 };
 
-const waitForSpriteAnimation = (sprite: any, timeoutMs = 700) => {
-  if (!sprite?.animationIsPlaying || !sprite.animationIsPlaying()) {
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve) => {
-    let finished = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    let subscription: { unsubscribe: () => void } | undefined;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      if (timeout) clearTimeout(timeout);
-      subscription?.unsubscribe();
-      resolve();
-    };
-    timeout = setTimeout(finish, Math.max(0, timeoutMs));
-    subscription = sprite.animationIsPlaying.observable.subscribe((isPlaying: boolean) => {
-      if (!isPlaying) finish();
-    });
-    if (finished) subscription.unsubscribe();
-  });
-};
-
 export default (config: StudioGameModuleConfig) => {
   return defineModule<RpgClient>({
     engine: {
@@ -181,16 +158,17 @@ export default (config: StudioGameModuleConfig) => {
         if (context.reason !== "defeated") return;
         const transition = context.transition;
         if (!transition?.animation) return;
+        const timeoutMs = context.timeoutMs ?? transition.duration ?? 700;
 
         if (transition.graphic !== undefined) {
-          sprite.setAnimation(transition.animation, transition.graphic, 1);
+          await sprite.setAnimation(transition.animation, transition.graphic, 1, {
+            timeoutMs,
+          });
         } else {
-          sprite.setAnimation(transition.animation, 1);
+          await sprite.setAnimation(transition.animation, 1, {
+            timeoutMs,
+          });
         }
-        await waitForSpriteAnimation(
-          sprite,
-          context.timeoutMs ?? transition.duration ?? 700,
-        );
       },
     },
     sceneMap: {

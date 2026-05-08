@@ -14,6 +14,7 @@ type Frame = { x: number; y: number; ts: number };
 type AnimationRestoreOptions = {
   restoreAnimationName?: string;
   restoreGraphics?: any[];
+  timeoutMs?: number;
 };
 
 export abstract class RpgClientObject extends RpgCommonPlayer {
@@ -113,6 +114,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
 
   private animationSubscription?: Subscription;
   private animationResetTimeout?: ReturnType<typeof setTimeout>;
+  private animationWaitResolve?: () => void;
 
   private clearAnimationControls() {
     if (this.animationSubscription) {
@@ -125,6 +127,12 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     }
   }
 
+  private resolveAnimationWait() {
+    const resolve = this.animationWaitResolve;
+    this.animationWaitResolve = undefined;
+    resolve?.();
+  }
+
   private finishTemporaryAnimation() {
     const restoreState = this.animationRestoreState;
     this.clearAnimationControls();
@@ -135,6 +143,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     }
     this.animationRestoreState = undefined;
     this.animationIsPlaying.set(false);
+    this.resolveAnimationWait();
   }
 
   /**
@@ -241,6 +250,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     this.animationIsPlaying.set(false);
     this.animationCurrentIndex.set(0);
     this.clearAnimationControls();
+    this.resolveAnimationWait();
   }
 
   /**
@@ -252,17 +262,19 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
    *
    * @param animationName - Name of the animation to play
    * @param nbTimes - Number of times to repeat the animation (default: Infinity for continuous)
+   * @param options - Restore and timeout options
+   * @returns A promise resolved when a finite animation finishes, is interrupted, or times out
    *
    * @example
    * ```ts
    * // Play attack animation 3 times
-   * player.setAnimation('attack', 3);
+   * await player.setAnimation('attack', 3);
    *
    * // Play continuous spell animation
    * player.setAnimation('spell');
    * ```
    */
-  setAnimation(animationName: string, nbTimes?: number, options?: AnimationRestoreOptions): void;
+  setAnimation(animationName: string, nbTimes?: number, options?: AnimationRestoreOptions): Promise<void>;
   /**
    * Set a custom animation with temporary graphic change
    *
@@ -273,20 +285,22 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
    * @param animationName - Name of the animation to play
    * @param graphic - The graphic(s) to temporarily use during the animation
    * @param nbTimes - Number of times to repeat the animation (default: Infinity for continuous)
+   * @param options - Restore and timeout options
+   * @returns A promise resolved when a finite animation finishes, is interrupted, or times out
    *
    * @example
    * ```ts
    * // Play attack animation with temporary graphic change
-   * player.setAnimation('attack', 'hero_attack', 3);
+   * await player.setAnimation('attack', 'hero_attack', 3);
    * ```
    */
-  setAnimation(animationName: string, graphic?: string | string[], nbTimes?: number, options?: AnimationRestoreOptions): void;
+  setAnimation(animationName: string, graphic?: string | string[], nbTimes?: number, options?: AnimationRestoreOptions): Promise<void>;
   setAnimation(
     animationName: string,
     graphicOrNbTimes?: string | string[] | number,
     nbTimesOrOptions?: number | AnimationRestoreOptions,
     options?: AnimationRestoreOptions
-  ): void {
+  ): Promise<void> {
     let graphic: string | string[] | undefined;
     let finalNbTimes: number = Infinity;
     let restoreOptions: AnimationRestoreOptions | undefined = options;
@@ -313,6 +327,13 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     if (this.animationIsPlaying()) {
       this.finishTemporaryAnimation();
     }
+
+    const waitPromise =
+      finalNbTimes === Infinity
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            this.animationWaitResolve = resolve;
+          });
 
     this.animationIsPlaying.set(true);
     const previousAnimationName =
@@ -349,10 +370,12 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
         if (this.animationIsPlaying()) {
           this.finishTemporaryAnimation();
         }
-      }, Math.max(1000, finalNbTimes * 1000));
+      }, restoreOptions?.timeoutMs ?? Math.max(1000, finalNbTimes * 1000));
     }
 
     this.animationName.set(animationName);
+
+    return waitPromise;
   }
 
   /**
@@ -360,10 +383,25 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
    *
    * @param id - Identifier of the component animation to play.
    * @param params - Parameters forwarded to the animation effect.
+   * @returns A promise resolved when the animation component calls `onFinish`.
    */
-  showComponentAnimation(id: string, params: any) {
+  showComponentAnimation(id: string, params: any): Promise<void> {
     const engine = inject(RpgClientEngine);
-    engine.getComponentAnimation(id).displayEffect(params, this);
+    return engine.getComponentAnimation(id).displayEffect(params, this);
+  }
+
+  /**
+   * Display a registered spritesheet animation effect on this object.
+   *
+   * @param graphic - Identifier of the spritesheet to use.
+   * @param animationName - Name of the animation inside the spritesheet.
+   * @returns A promise resolved when the animation component calls `onFinish`.
+   */
+  showAnimation(graphic: string, animationName: string = 'default'): Promise<void> {
+    return this.showComponentAnimation('animation', {
+      graphic,
+      animationName,
+    });
   }
   
   /**

@@ -1176,13 +1176,29 @@ export class RpgClientEngine<T = any> {
    *   duration: 1000,
    *   onFinish: () => console.log('Fade complete')
    * });
+   *
+   * // Wait until the transition component calls onFinish
+   * await engine.startTransition('fade', { duration: 1000 });
    * ```
    */
-  startTransition(id: string, props: any = {}) {
+  startTransition(id: string, props: any = {}): Promise<void> {
     if (!this.guiService.exists(id)) {
       throw new Error(`Transition with id ${id} not found. Make sure to add it using engine.addTransition() or in your module's transitions property.`);
     }
-    this.guiService.display(id, props);
+    return new Promise<void>((resolve) => {
+      let finished = false;
+      const finish = (data?: any) => {
+        if (finished) return;
+        finished = true;
+        props?.onFinish?.(data);
+        resolve();
+      };
+
+      this.guiService.display(id, {
+        ...props,
+        onFinish: finish,
+      });
+    });
   }
 
   async processInput({ input }: { input: Direction }) {
