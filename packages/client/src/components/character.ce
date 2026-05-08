@@ -414,7 +414,7 @@
   );
 
   let beforeRemovePromise = null;
-  let beforeRemoveContext = null;
+  let beforeRemoveTransitionValue = null;
   const resolveRemoveContext = () => {
     if (!object._removeTransition) return null;
     const value = object._removeTransition();
@@ -422,6 +422,7 @@
     try {
       const context = JSON.parse(value);
       if (!context || typeof context !== 'object' || !context.active) return null;
+      context.__transitionValue = value;
       return context;
     }
     catch {
@@ -440,10 +441,10 @@
   const runBeforeRemove = () => {
     const context = resolveRemoveContext();
     if (!context) return Promise.resolve();
-    if (beforeRemovePromise && beforeRemoveContext === context) {
+    if (beforeRemovePromise && beforeRemoveTransitionValue === context.__transitionValue) {
       return beforeRemovePromise;
     }
-    beforeRemoveContext = context;
+    beforeRemoveTransitionValue = context.__transitionValue;
     beforeRemovePromise = withTimeout(
       lastValueFrom(hooks.callHooks("client-sprite-onBeforeRemove", object, context)),
       context.timeoutMs
