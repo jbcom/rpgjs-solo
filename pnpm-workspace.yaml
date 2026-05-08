@@ -1,6 +1,7 @@
 packages:
   - 'packages/**'
   - samples/**
+verifyDepsBeforeRun: false
 allowBuilds:
   esbuild: true
   workerd: true
