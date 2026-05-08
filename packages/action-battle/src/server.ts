@@ -817,4 +817,15 @@ export {
   DEFAULT_KNOCKBACK,
   EnemyType,
 } from "./ai.server";
-export type { ApplyHitHooks, BattleAiOptions, HitResult } from "./ai.server";
+export type {
+  ApplyHitHooks,
+  BattleAiDefeatedCallback,
+  BattleAiDefeatedContext,
+  BattleAiDefeatReward,
+  BattleAiLegacyDefeatedCallback,
+  BattleAiLegacyOptions,
+  BattleAiOptions,
+  BattleAiRewardItem,
+  BattleAiRewards,
+  HitResult,
+} from "./ai.server";

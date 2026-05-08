@@ -7,7 +7,18 @@ import type { ActionBattleOptions } from "./types";
 export { BattleAi, AiState, EnemyType, AttackPattern, AiDebug, DEFAULT_KNOCKBACK } from "./ai.server";
 
 // Types exports
-export type { HitResult, ApplyHitHooks, BattleAiOptions } from "./ai.server";
+export type {
+  HitResult,
+  ApplyHitHooks,
+  BattleAiOptions,
+  BattleAiDefeatedCallback,
+  BattleAiDefeatedContext,
+  BattleAiDefeatReward,
+  BattleAiLegacyDefeatedCallback,
+  BattleAiLegacyOptions,
+  BattleAiRewardItem,
+  BattleAiRewards,
+} from "./ai.server";
 export type {
   ActionBattleAnimationContext,
   ActionBattleAnimationEntity,

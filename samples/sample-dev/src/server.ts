@@ -124,7 +124,7 @@ export function Event() {
     name: "EV-1",
     mode: EventMode.Scenario,
     onInit() {
-      this.setGraphic("hero");
+      this.setGraphic("monster");
       this.speed.set(2)
       this.teleport({ x: 100, y: 200 })
       this.name.set("John Doe");
@@ -151,36 +151,51 @@ export function Event() {
       this.equip(EnemyClaw.id);
       
       // Initialize AI behavior
-      // this.battleAi = new BattleAi(this, {
-      //   enemyType: EnemyType.Defensive,
-      //   visionRange: 150,
-      //   attackRange: 50,
-      //   attackCooldown: 900,
-      //   dodgeChance: 0.35,
-      //   dodgeCooldown: 2000,
-      //   fleeThreshold: 0.2,
-      //   attackPatterns: [
-      //     AttackPattern.Melee,
-      //     AttackPattern.Combo,
-      //     AttackPattern.DashAttack,
-      //     AttackPattern.Charged
-      //   ],
-      //   moveToCooldown: 450,
-      //   retreatCooldown: 700,
-      //   behavior: {
-      //     baseScore: 55,
-      //     updateInterval: 450,
-      //     minStateDuration: 700,
-      //     assaultThreshold: 70,
-      //     retreatThreshold: 30
-      //   },
-      // });
+      this.battleAi = new BattleAi(this, {
+        enemyType: EnemyType.Defensive,
+        visionRange: 150,
+        attackRange: 50,
+        attackCooldown: 900,
+        dodgeChance: 0.35,
+        dodgeCooldown: 2000,
+        fleeThreshold: 0.2,
+        attackPatterns: [
+          AttackPattern.Melee,
+          AttackPattern.Combo,
+          AttackPattern.DashAttack,
+          AttackPattern.Charged
+        ],
+        moveToCooldown: 450,
+        retreatCooldown: 700,
+        behavior: {
+          baseScore: 55,
+          updateInterval: 450,
+          minStateDuration: 700,
+          assaultThreshold: 70,
+          retreatThreshold: 30
+        },
+      });
     },
     onPlayerTouch(player: RpgPlayer) {
      console.log("touch");
     },
     async onAction(player: RpgPlayer) {
-      this.remove()
+      this.remove({
+        reason: "sample-dev-action",
+        data: {
+          source: "Event.onAction"
+        },
+        transition: {
+          animation: "attack",
+          graphic: "monster",
+          duration: 700,
+          effect: "die"
+        },
+       // timeoutMs: 700
+      });
+
+     // this.setAnimation('attack')
+
       // player.gold = 100;
       // await player.showText("Hello", {
       //   face: {

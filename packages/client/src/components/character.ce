@@ -413,6 +413,50 @@
     filter(([prev, curr]) => prev !== curr)
   );
 
+  let beforeRemovePromise = null;
+  let beforeRemoveContext = null;
+  const resolveRemoveContext = () => {
+    if (!object._removeTransition) return null;
+    const value = object._removeTransition();
+    if (!value || typeof value !== 'string') return null;
+    try {
+      const context = JSON.parse(value);
+      if (!context || typeof context !== 'object' || !context.active) return null;
+      return context;
+    }
+    catch {
+      return null;
+    }
+  };
+
+  const withTimeout = (promise, timeoutMs = 0) => {
+    if (!timeoutMs || timeoutMs <= 0) return promise;
+    return Promise.race([
+      promise,
+      new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
+  };
+
+  const runBeforeRemove = () => {
+    const context = resolveRemoveContext();
+    if (!context) return Promise.resolve();
+    if (beforeRemovePromise && beforeRemoveContext === context) {
+      return beforeRemovePromise;
+    }
+    beforeRemoveContext = context;
+    beforeRemovePromise = withTimeout(
+      lastValueFrom(hooks.callHooks("client-sprite-onBeforeRemove", object, context)),
+      context.timeoutMs
+    );
+    return beforeRemovePromise;
+  };
+
+  const removeTransitionSubscription = object._removeTransition?.observable?.subscribe(() => {
+    if (resolveRemoveContext()) {
+      runBeforeRemove();
+    }
+  });
+
   const animationMovementSubscription = combineLatest([animationChange$, moving$]).subscribe(([[prev, curr], isMoving]) => {
     if (curr == 'stand' && !isMoving) {
       realAnimationName.set(curr);
@@ -442,7 +486,34 @@
    * @example
    * await onBeforeDestroy();
    */
+  const waitForTemporaryAnimationEnd = (maxDuration = 1200) => {
+    if (!object.animationIsPlaying || !object.animationIsPlaying()) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      let finished = false;
+      let timeout;
+      let subscription;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timeout);
+        subscription?.unsubscribe();
+        resolve();
+      };
+      timeout = setTimeout(finish, maxDuration);
+      subscription = object.animationIsPlaying.observable.subscribe((isPlaying) => {
+        if (!isPlaying) finish();
+      });
+      if (finished) subscription.unsubscribe();
+    });
+  };
+
   const onBeforeDestroy = async () => {
+    await runBeforeRemove();
+    await waitForTemporaryAnimationEnd();
+    removeTransitionSubscription?.unsubscribe();
     animationMovementSubscription.unsubscribe();
     xSubscription.unsubscribe();
     ySubscription.unsubscribe();

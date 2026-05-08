@@ -260,7 +260,7 @@ new BattleAi(event, {
   groupBehavior: true,
   
   // Callback when AI is defeated
-  onDefeated: (event, attacker) => {
+  onDefeated: ({ event, attacker }) => {
     const name = attacker?.name?.() ?? "Unknown";
     console.log(`${event.name()} was defeated by ${name}!`);
   }
@@ -839,8 +839,9 @@ new BattleAi(this, {
 });
 ```
 
-`waitEnd: true` delays event removal for defeated AI with the default delay used
-by action-battle. Use `delayMs` when you need an exact duration.
+`waitEnd: true` uses the default defeated transition timeout. Use `delayMs`
+when you need an exact duration. The visual transition itself is handled by the
+client `sprite.onBeforeRemove` hook.
 
 ## Knockback System
 
@@ -992,24 +993,56 @@ console.log(`Player knockback force: ${force}`);
 
 ## onDefeated Hook
 
-The `onDefeated` callback is triggered when an AI enemy is killed. It receives the defeated event and the player who landed the killing blow (if available). Use it to:
+The `onDefeated` callback is triggered when an AI enemy is killed. The simplest
+reward flow is configured directly on `BattleAi`; the reward is given to the
+player who landed the killing blow.
+
+```typescript
+new BattleAi(this, {
+  enemyType: EnemyType.Aggressive,
+  animations: {
+    die: {
+      animationName: "die",
+      graphic: "goblin_die",
+      repeat: 1,
+      delayMs: 700
+    }
+  },
+  rewards: {
+    exp: 50,
+    gold: 25,
+    items: [{ itemId: "health_potion", amount: 1, chance: 30 }],
+    showNotification: true
+  }
+});
+```
+
+On defeat, `BattleAi` stops the AI, awards configured rewards once, and calls
+`event.remove({ reason: "defeated", transition })`. The client can use
+`sprite.onBeforeRemove` to play the `die` transition before the sprite
+disappears.
+
+`onDefeated` receives a context object in new code:
 - Award experience, gold, or items to the player
 - Spawn loot drops
 - Trigger events or cutscenes
 - Update quest progress
-- Play death animations or sounds
+- Play death sounds
 
 ### Basic Usage
 
 ```typescript
 new BattleAi(this, {
   enemyType: EnemyType.Aggressive,
-  onDefeated: (event, attacker) => {
+  onDefeated: ({ event, attacker }) => {
     const name = attacker?.name?.() ?? "Unknown";
     console.log(`${event.name()} was defeated by ${name}!`);
   }
 });
 ```
+
+The legacy `(event, attacker)` callback signature is still supported for
+two-argument callbacks.
 
 ### Award Rewards on Kill
 
@@ -1025,19 +1058,10 @@ function Goblin() {
       
       new BattleAi(this, {
         enemyType: EnemyType.Aggressive,
-        onDefeated: (event, attacker) => {
-          if (!attacker) return;
-
-          // Award gold
-          attacker.gold += 25;
-          
-          // Award experience
-          attacker.exp += 50;
-          
-          // Random loot drop
-          if (Math.random() < 0.3) {
-            attacker.addItem(HealthPotion);
-          }
+        rewards: {
+          gold: 25,
+          exp: 50,
+          items: [{ item: HealthPotion, amount: 1, chance: 30 }]
         }
       });
     }
@@ -1049,7 +1073,7 @@ function Goblin() {
 
 ```typescript
 new BattleAi(this, {
-  onDefeated: (event, attacker) => {
+  onDefeated: ({ event }) => {
     const map = event.getCurrentMap();
     if (!map) return;
     
@@ -1069,7 +1093,7 @@ new BattleAi(this, {
 let killCount = 0;
 
 new BattleAi(this, {
-  onDefeated: (event, attacker) => {
+  onDefeated: () => {
     killCount++;
     
     // Check quest progress
@@ -1093,7 +1117,7 @@ function DragonBoss() {
       
       new BattleAi(this, {
         enemyType: EnemyType.Tank,
-        onDefeated: (event, attacker) => {
+        onDefeated: ({ event }) => {
           const map = event.getCurrentMap();
           
           // Announce victory

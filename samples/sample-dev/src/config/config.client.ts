@@ -30,6 +30,24 @@ import { withMobile } from "@rpgjs/client";
 import { provideActionBattle } from "@rpgjs/action-battle/client";
 import { HudComponent } from "@rpgjs/client";
 
+function waitForSpriteAnimation(sprite: RpgClientObject, timeoutMs = 700) {
+  return new Promise<void>((resolve) => {
+    let finished = false;
+    let subscription: { unsubscribe: () => void } | undefined;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      subscription?.unsubscribe();
+      resolve();
+    };
+
+    subscription = sprite.animationIsPlaying?.observable.subscribe((isPlaying: boolean) => {
+      if (!isPlaying) finish();
+    });
+    setTimeout(finish, timeoutMs);
+  });
+}
+
 
 export default {
   providers: [
@@ -115,6 +133,20 @@ export default {
          // componentsInFront: [LightHalo],
           onInit: (sprite) => {
            
+          },
+          async onBeforeRemove(sprite, context) {
+            const transition = context.transition;
+            if (!transition?.animation) return;
+
+            if (transition.graphic !== undefined) {
+              sprite.setAnimation(transition.animation, transition.graphic, 1);
+            } else {
+              sprite.setAnimation(transition.animation, 1);
+            }
+            await waitForSpriteAnimation(
+              sprite,
+              context.timeoutMs ?? transition.duration ?? 700
+            );
           }
         },
         sceneMap: { 

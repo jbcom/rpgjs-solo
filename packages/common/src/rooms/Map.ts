@@ -374,6 +374,10 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         this.removeHitbox(key, event, "npc");
       } else if (type === "update") {
         event.id = event.id ?? key;
+        if (event._removeTransition?.()) {
+          this.removeHitbox(key, event, "npc");
+          return;
+        }
         if (!this.getBody(key)) {
           this.createCharacterHitbox(event, "npc", {
             mass: 100,

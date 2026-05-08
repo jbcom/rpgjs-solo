@@ -125,6 +125,37 @@ const sprite: RpgSpriteHooks = {
 }
 ```
 
+### onBeforeRemove
+
+**Description:** Called when the server requests sprite removal, before the
+sprite disappears from the scene. Return a promise to keep the sprite visible
+while a transition runs.
+
+**Parameters:**
+- `sprite: RpgSprite` - The sprite instance
+- `context.reason?: string` - Removal reason, such as `"defeated"`
+- `context.data?: any` - Custom data sent by `event.remove()`
+- `context.transition?: object` - Optional animation/effect metadata
+- `context.timeoutMs?: number` - Safety timeout used by the server
+
+**Example:**
+```ts
+const sprite: RpgSpriteHooks = {
+    async onBeforeRemove(sprite: RpgSprite, context) {
+        if (context.reason !== 'defeated') return
+
+        const transition = context.transition
+        if (transition?.animation) {
+            if (transition.graphic) {
+                sprite.setAnimation(transition.animation, transition.graphic, 1)
+            } else {
+                sprite.setAnimation(transition.animation, 1)
+            }
+        }
+    }
+}
+```
+
 ### onChanges
 
 **Description:** Called when sprite data changes (from server updates)
@@ -519,4 +550,4 @@ const sprite: RpgSpriteHooks = {
 export default defineModule({
     sprite
 })
-``` 
+```

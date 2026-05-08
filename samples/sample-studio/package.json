@@ -27,7 +27,7 @@
     "@rpgjs/tiledmap": "workspace:*",
     "@rpgjs/ui-css": "workspace:*",
     "@rpgjs/studio": "workspace:*",
-    "@signe/di": "^2.9.0",
+    "@signe/di": "2.9.2",
     "canvasengine": "2.0.0-beta.61",
     "pixi.js": "8.18.1",
     "vite-plugin-dts": "^5.0.0"

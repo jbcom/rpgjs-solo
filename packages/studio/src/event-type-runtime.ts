@@ -532,27 +532,9 @@ const enemyRuntime: EventTypeRuntime = {
         const attackSkill = learnEnemySkills(context.event, enemy);
         (context.event as any).battleAi = new BattleAi(context.event, {
           ...resolveEnemyBattleAiOptions(enemy, attackSkill),
-          onDefeated: (event: RpgEvent) => {
-            const map = event.getCurrentMap?.();
-            if (map) {
-              // TODO
-              const player = map.getPlayers()?.[0];
-              if (player) {
-                player.exp += enemy.reward?.exp ?? 0;
-                player.gold += enemy.reward?.gold ?? 0;
-                player.showNotification(`You won ${enemy.reward?.exp} experience and ${enemy.reward?.gold} gold`);
-                for (const item of enemy.reward?.items ?? []) {
-                  const rand = Math.random() * 100;
-                  if (rand < item.chance) {
-                    const itemWon = player.addItem(item.itemId, item.amount);
-                    const itemData = map?.database?.()?.[item.itemId];
-                    player.showNotification(`You won ${item.amount} ${itemWon.name()}`, {
-                      icon: itemData?.icon
-                    });
-                  }
-                }
-              }
-            }
+          rewards: {
+            ...enemy.reward,
+            showNotification: true,
           },
         });
         applyGraphicSetting({ event: context.event, trigger: enemy, fallbackParams: context.params, object: context.object, eventType: context.eventType });

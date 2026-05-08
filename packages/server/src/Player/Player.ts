@@ -1476,15 +1476,58 @@ export class RpgEvent extends RpgPlayer {
    * 
    * Stops all movements before removing to prevent "unable to resolve entity" errors
    * from the MovementManager when the entity is destroyed while moving.
+   *
+   * Pass options to keep the sprite visible briefly on clients while
+   * `sprite.onBeforeRemove` runs a visual transition. Gameplay collision is
+   * removed immediately; the event is deleted from the map after `timeoutMs`.
+   *
+   * @example
+   * ```ts
+   * event.remove({
+   *   reason: 'defeated',
+   *   transition: {
+   *     animation: 'die',
+   *     graphic: 'slime_die',
+   *     duration: 700
+   *   },
+   *   timeoutMs: 700
+   * })
+   * ```
    */
-  remove() {
+  remove(options?: {
+    reason?: string;
+    data?: any;
+    transition?: {
+      animation?: string;
+      graphic?: string | string[];
+      duration?: number;
+      effect?: string;
+    };
+    timeoutMs?: number;
+  }) {
     const map = this.getCurrentMap();
     if (!map) return;
     
     // Stop all movements before removing to prevent MovementManager errors
     this.stopMoveTo();
-    
-    map.removeEvent(this.id);
+
+    const timeoutMs = Math.max(0, options?.timeoutMs ?? options?.transition?.duration ?? 0);
+    if (!options || timeoutMs <= 0) {
+      map.removeEvent(this.id);
+      return;
+    }
+
+    this._removeTransition.set(JSON.stringify({
+      active: true,
+      reason: options.reason,
+      data: options.data,
+      transition: options.transition,
+      timeoutMs,
+    }));
+    (map as any).removeHitbox?.(this.id, this, "npc");
+    setTimeout(() => {
+      map.removeEvent(this.id);
+    }, timeoutMs);
   }
 
   override isEvent(): boolean {

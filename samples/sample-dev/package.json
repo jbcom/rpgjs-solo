@@ -14,16 +14,16 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "@canvasengine/compiler": "2.0.0-beta.58",
+    "@canvasengine/compiler": "2.0.0-beta.61",
     "@types/express": "^5.0.6",
     "@vitejs/plugin-vue": "^6.0.6",
     "partykit": "^0.0.115",
     "path-browserify": "^1.0.1",
-    "vite": "^8.0.10"
+    "vite": "^8.0.11"
   },
   "private": true,
   "dependencies": {
-    "@canvasengine/presets": "2.0.0-beta.58",
+    "@canvasengine/presets": "2.0.0-beta.61",
     "@rpgjs/action-battle": "workspace:*",
     "@rpgjs/client": "workspace:*",
     "@rpgjs/common": "workspace:*",
@@ -33,11 +33,11 @@
     "@rpgjs/ui-css": "workspace:*",
     "@rpgjs/vite": "workspace:*",
     "@rpgjs/vue": "workspace:*",
-    "@signe/di": "^2.9.0",
-    "canvasengine": "2.0.0-beta.58",
+    "@signe/di": "2.9.2",
+    "canvasengine": "2.0.0-beta.61",
     "express": "^5.2.1",
     "pixi.js": "^8.18.1",
-    "vue": "^3.5.33",
+    "vue": "^3.5.34",
     "ws": "^8.20.0"
   },
   "type": "module"

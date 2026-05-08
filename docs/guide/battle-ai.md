@@ -370,7 +370,13 @@ new BattleAi(event, {
       delayMs: 700
     }
   },
-  onDefeated: (event, attacker) => {
+  rewards: {
+    exp: 50,
+    gold: 25,
+    items: [{ itemId: "health_potion", amount: 1, chance: 30 }],
+    showNotification: true
+  },
+  onDefeated: ({ event, attacker }) => {
     const name = attacker?.name?.() ?? "Unknown";
     console.log(`${event.name()} was defeated by ${name}!`);
   }
@@ -386,6 +392,12 @@ graphics, or a resolver function for data-driven events. Return `null` or
 active for `activeMs`, and apply hit reactions. `poise` controls interruption:
 an incoming hit only stuns the enemy when its `reaction.staggerPower` is greater
 than or equal to the enemy's `poise`.
+
+`rewards` are awarded once to the player who lands the killing blow. On defeat,
+Action Battle calls `event.remove({ reason: "defeated", transition })`; client
+modules can use `sprite.onBeforeRemove` to play the visual transition before the
+sprite disappears. The legacy `onDefeated(event, attacker)` signature remains
+supported for two-argument callbacks.
 
 When combat spritesheets come from RPGJS Studio media fields, convert the media
 ids with `createStudioActionBattleAnimations()`. Studio-generated combat

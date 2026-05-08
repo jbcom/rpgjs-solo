@@ -2,6 +2,7 @@ import { MAXHP, RpgEvent, RpgPlayer } from "@rpgjs/server";
 import {
   getActionBattleAnimationRemovalDelay,
   playActionBattleAnimation,
+  resolveActionBattleAnimation,
 } from "./animations";
 import { getActionBattleOptions } from "./config";
 import { getActionBattleSystems } from "./core/context";
@@ -29,7 +30,42 @@ type RpgEventWithBattleAi = RpgEvent & {
   battleAi?: BattleAi;
 };
 
-export interface BattleAiOptions {
+export interface BattleAiRewardItem {
+  item?: any;
+  itemId?: string;
+  amount?: number;
+  chance?: number;
+}
+
+export interface BattleAiRewards {
+  exp?: number;
+  gold?: number;
+  items?: Array<BattleAiRewardItem | string>;
+  showNotification?: boolean;
+}
+
+export interface BattleAiDefeatReward {
+  readonly awarded: boolean;
+  giveTo(player?: RpgPlayer | null): void;
+}
+
+export interface BattleAiDefeatedContext {
+  event: RpgEvent;
+  attacker?: RpgPlayer;
+  reward: BattleAiDefeatReward;
+  remove: () => void;
+}
+
+export type BattleAiDefeatedCallback = (
+  context: BattleAiDefeatedContext
+) => void;
+
+export type BattleAiLegacyDefeatedCallback = (
+  event: RpgEvent,
+  attacker?: RpgPlayer
+) => void;
+
+export interface BattleAiBaseOptions {
   enemyType?: EnemyType;
   attackCooldown?: number;
   visionRange?: number;
@@ -56,8 +92,18 @@ export interface BattleAiOptions {
   };
   behaviorKey?: string;
   animations?: ActionBattleAnimationOptions;
+  rewards?: BattleAiRewards;
+  autoAwardRewards?: boolean;
+}
+
+export interface BattleAiOptions extends BattleAiBaseOptions {
   /** Callback called when the AI is defeated */
-  onDefeated?: (event: RpgEvent, attacker?: RpgPlayer) => void;
+  onDefeated?: BattleAiDefeatedCallback;
+}
+
+export interface BattleAiLegacyOptions extends BattleAiBaseOptions {
+  /** @deprecated Use the context callback signature instead. */
+  onDefeated?: BattleAiLegacyDefeatedCallback;
 }
 
 /**
@@ -93,6 +139,84 @@ export interface HitResult {
   /** The entity that was hit */
   target: RpgPlayer | RpgEvent;
 }
+
+const normalizeRewardItem = (
+  item: BattleAiRewardItem | string
+): BattleAiRewardItem => {
+  if (typeof item === "string") {
+    return { itemId: item, amount: 1, chance: 100 };
+  }
+  return {
+    ...item,
+    amount: item.amount ?? 1,
+    chance: item.chance ?? 100,
+  };
+};
+
+const getRewardItemRef = (item: BattleAiRewardItem) => item.item ?? item.itemId;
+
+const getPlayerMap = (player: RpgPlayer) => {
+  return typeof (player as any).getCurrentMap === "function"
+    ? (player as any).getCurrentMap()
+    : undefined;
+};
+
+const getRewardItemName = (inventoryItem: any, itemRef: any): string => {
+  if (inventoryItem && typeof inventoryItem.name === "function") {
+    return inventoryItem.name();
+  }
+  if (inventoryItem?.name) return inventoryItem.name;
+  if (typeof itemRef === "string") return itemRef;
+  if (itemRef?.name) return itemRef.name;
+  if (itemRef?.id) return itemRef.id;
+  return "item";
+};
+
+const createDefeatReward = (
+  rewards: BattleAiRewards | undefined
+): BattleAiDefeatReward => {
+  let awarded = false;
+  return {
+    get awarded() {
+      return awarded;
+    },
+    giveTo(player?: RpgPlayer | null) {
+      if (!player || awarded || !rewards) return;
+      awarded = true;
+
+      const exp = rewards.exp ?? 0;
+      const gold = rewards.gold ?? 0;
+      if (exp > 0) player.exp += exp;
+      if (gold > 0) player.gold += gold;
+
+      if (rewards.showNotification && (exp > 0 || gold > 0)) {
+        player.showNotification(`You won ${exp} experience and ${gold} gold`);
+      }
+
+      for (const rawItem of rewards.items ?? []) {
+        const item = normalizeRewardItem(rawItem);
+        const itemRef = getRewardItemRef(item);
+        if (!itemRef) continue;
+        if (Math.random() * 100 >= (item.chance ?? 100)) continue;
+
+        const amount = item.amount ?? 1;
+        const inventoryItem = player.addItem(itemRef, amount);
+        if (rewards.showNotification) {
+          const itemData =
+            typeof itemRef === "string"
+              ? getPlayerMap(player)?.database?.()?.[itemRef]
+              : undefined;
+          player.showNotification(
+            `You won ${amount} ${getRewardItemName(inventoryItem, itemRef)}`,
+            {
+              icon: itemData?.icon,
+            }
+          );
+        }
+      }
+    },
+  };
+};
 
 /**
  * Hook options for customizing hit behavior
@@ -340,7 +464,12 @@ export class BattleAi {
   private isMovingToTarget: boolean = false;
 
   // Callback when AI is defeated
-  private onDefeatedCallback?: (event: RpgEvent, attacker?: RpgPlayer) => void;
+  private onDefeatedCallback?:
+    | BattleAiDefeatedCallback
+    | BattleAiLegacyDefeatedCallback;
+  private rewards?: BattleAiRewards;
+  private autoAwardRewards: boolean = true;
+  private defeated: boolean = false;
 
   // Direction hysteresis to prevent animation flickering
   private lastFacingDirection: string | null = null;
@@ -390,9 +519,11 @@ export class BattleAi {
    * });
    * ```
    */
+  constructor(event: RpgEventWithBattleAi, options?: BattleAiOptions);
+  constructor(event: RpgEventWithBattleAi, options?: BattleAiLegacyOptions);
   constructor(
     event: RpgEventWithBattleAi,
-    options: BattleAiOptions = {}
+    options: BattleAiOptions | BattleAiLegacyOptions = {}
   ) {
     event.battleAi = this;
     this.event = event;
@@ -428,6 +559,8 @@ export class BattleAi {
 
     // Initialize defeat callback
     this.onDefeatedCallback = options.onDefeated;
+    this.rewards = options.rewards;
+    this.autoAwardRewards = options.autoAwardRewards ?? true;
 
     // Behavior gauge settings
     if (options.behavior) {
@@ -1593,6 +1726,7 @@ export class BattleAi {
    * The actual damage is applied externally via RPGJS API.
    */
   takeDamage(attacker: RpgPlayer): boolean {
+    if (this.defeated) return true;
     // Apply damage using RPGJS system
     const raw = this.event.applyDamage(attacker);
     return this.handleDamage(attacker, {
@@ -1608,6 +1742,7 @@ export class BattleAi {
       reaction?: NormalizedActionBattleHitReactionProfile;
     }
   ): boolean {
+    if (this.defeated) return true;
     const damage = damageResult.damage;
     this.debugLog('damage', `Took ${damage} damage from ${attacker.id} (HP: ${this.event.hp}/${this.event.param[MAXHP] || '?'})`);
 
@@ -1660,7 +1795,10 @@ export class BattleAi {
    * and removes the event from the map.
    */
   private kill(attacker?: RpgPlayer) {
-    const dieAnimation = playActionBattleAnimation(
+    if (this.defeated) return;
+    this.defeated = true;
+
+    const dieAnimation = resolveActionBattleAnimation(
       "die",
       this.event,
       this.animations,
@@ -1669,18 +1807,57 @@ export class BattleAi {
       }
     );
     const removeDelay = getActionBattleAnimationRemovalDelay(dieAnimation);
+    const reward = createDefeatReward(this.rewards);
+    let removed = false;
+    const remove = () => {
+      if (removed) return;
+      removed = true;
+      this.event.remove({
+        reason: "defeated",
+        data: {
+          animation: dieAnimation,
+        },
+        transition: dieAnimation
+          ? {
+              animation: dieAnimation.animationName,
+              graphic: dieAnimation.graphic,
+              duration: removeDelay,
+            }
+          : undefined,
+        timeoutMs: removeDelay,
+      });
+    };
 
-    // Call onDefeated hook before cleanup
+    if (this.autoAwardRewards) {
+      reward.giveTo(attacker);
+    }
+
+    const context: BattleAiDefeatedContext = {
+      event: this.event,
+      attacker,
+      reward,
+      remove,
+    };
+
+    // Call onDefeated hook before cleanup. One-argument callbacks receive the
+    // newer context object; two-argument callbacks keep the legacy signature.
     if (this.onDefeatedCallback) {
-      this.onDefeatedCallback(this.event, attacker);
+      if (this.onDefeatedCallback.length >= 2) {
+        (
+          this.onDefeatedCallback as (
+            event: RpgEvent,
+            attacker?: RpgPlayer
+          ) => void
+        )(this.event, attacker);
+      } else {
+        (this.onDefeatedCallback as (context: BattleAiDefeatedContext) => void)(
+          context
+        );
+      }
     }
-    
+
     this.destroy();
-    if (removeDelay > 0) {
-      this.schedule(() => this.event.remove(), removeDelay);
-    } else {
-      this.event.remove();
-    }
+    remove();
   }
 
   /**

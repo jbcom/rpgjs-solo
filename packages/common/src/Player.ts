@@ -149,6 +149,9 @@ export abstract class RpgCommonPlayer {
   @sync() componentsCenter = signal<string | null>(null);
   @sync() componentsLeft = signal<string | null>(null);
   @sync() componentsRight = signal<string | null>(null);
+  @sync({
+    persist: false
+  }) _removeTransition = signal("");
   @connected() isConnected = signal(false)
 
   // Store intended movement direction (not synced, only used locally)

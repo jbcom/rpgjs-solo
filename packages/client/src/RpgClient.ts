@@ -8,6 +8,18 @@ type RpgClass<T = any> = new (...args: any[]) => T
 type RpgComponent = RpgClientObject
 type SceneMap = Container
 
+export interface RpgSpriteBeforeRemoveContext {
+    reason?: string
+    data?: any
+    transition?: {
+        animation?: string
+        graphic?: string | string[]
+        duration?: number
+        effect?: string
+    }
+    timeoutMs?: number
+}
+
 export interface RpgClientEngineHooks {
     /**
      * When the engine is started. If you send false, you prevent the client from connecting to the server
@@ -113,6 +125,21 @@ export interface RpgSpriteHooks {
      * @memberof RpgSpriteHooks
      */
     onDestroy?: (sprite: RpgComponent) => any
+
+    /**
+     * Called when a sprite removal is requested, before it disappears from the scene.
+     *
+     * Return a promise to keep the sprite visible while an animation, effect, or
+     * sound transition is running. The server still owns gameplay removal and
+     * uses the timeout carried by the remove request as a safety limit.
+     *
+     * @prop { (sprite: RpgSprite, context: RpgSpriteBeforeRemoveContext) => any } [onBeforeRemove]
+     * @memberof RpgSpriteHooks
+     */
+    onBeforeRemove?: (
+        sprite: RpgComponent,
+        context: RpgSpriteBeforeRemoveContext
+    ) => any
 
     /**
      * As soon as a data is changed on the server side (the name for example), you are able to know the new data but also the old data.

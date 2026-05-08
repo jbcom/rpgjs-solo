@@ -51,7 +51,7 @@
     "devDependencies": {
       "@canvasengine/compiler": "^2.0.0-beta.61",
       "pixi.js": "^8.18.1",
-      "vite": "^8.0.10",
+      "vite": "^8.0.11",
       "vite-plugin-dts": "^5.0.0"
     },
     "type": "module"
