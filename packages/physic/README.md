@@ -5,6 +5,27 @@ Deterministic 2D top-down physics for RPG-JS games.
 Use it when you need the same gameplay simulation on the server and in the
 browser: movement, collisions, sensors, and high-volume projectiles.
 
+## Why Use It
+
+`@rpgjs/physic` is designed for server-authoritative RPG gameplay where the
+same rules must run consistently on the server and, when needed, on the client.
+
+Key strengths:
+
+- **Gameplay-first API:** create players, NPCs, obstacles, sensors, and
+  projectiles without wiring a general-purpose physics engine from scratch.
+- **Deterministic fixed-step simulation:** use `stepFrame()` with stable inputs
+  for predictable server ticks and client prediction.
+- **Server and browser friendly:** the runtime package is ESM, has no runtime
+  dependencies, and does not require Node.js APIs.
+- **Efficient broad phase by default:** `SpatialHash` is the recommended
+  production default for RPG maps.
+- **Lightweight projectiles:** projectiles are plain data with raycast-based hit
+  detection, so you do not need to create a physics entity for every arrow,
+  bullet, or spell.
+- **RPG-oriented helpers:** sensors, collision masks, teleports, snapshots, and
+  movement helpers are included for common RPG server workflows.
+
 ## What To Use
 
 For most RPG-JS projects, start with this stack:
@@ -24,6 +45,20 @@ Keep these for advanced or experimental work:
 
 The recommended production default is a single `PhysicsEngine` world with the
 default `SpatialHash` broad phase.
+
+## Coordinate Model
+
+Positions are expressed in world units.
+
+- Entity `x` and `y` values represent the entity center.
+- `speed` values are world units per second.
+- `timeStep` is expressed in seconds. `1 / 60` means 60 simulation ticks per
+  second.
+- Rectangular hitboxes and static obstacles use `width` and `height` around the
+  entity center.
+
+For example, an obstacle at `{ x: 256, y: 128, width: 128, height: 24 }` is
+centered at `(256, 128)`.
 
 ## Install
 
@@ -93,6 +128,66 @@ function tick(inputs: Record<string, 'up' | 'down' | 'left' | 'right' | 'idle'>)
 
 `stepFrame()` applies movement inputs, advances physics by one tick, updates
 sensors, and returns the new tick number.
+
+## Server Architecture
+
+For online games, keep the server authoritative:
+
+1. Receive player inputs.
+2. Store the latest input per player for the next tick.
+3. Call `engine.stepFrame(inputs)` at a fixed interval.
+4. Broadcast only the state your clients need.
+5. Let clients predict visuals locally when possible.
+
+Prefer sending compact state:
+
+```ts
+function serializeState(engine: PhysicsEngine) {
+  return {
+    tick: engine.getTick(),
+    entities: engine.getEntities().map((entity) => ({
+      id: entity.uuid,
+      x: entity.position.x,
+      y: entity.position.y,
+      vx: entity.velocity.x,
+      vy: entity.velocity.y,
+    })),
+  };
+}
+```
+
+Avoid sending every internal physics detail every tick. Treat the server as the
+source of truth and the client as a renderer/predictor.
+
+## Edge And Durable Objects
+
+The package runtime is suitable for edge environments because it does not depend
+on Node.js APIs. A natural Cloudflare Durable Object model is:
+
+```txt
+1 Durable Object = 1 active map instance, room, battle, or dungeon
+```
+
+Good Durable Object usage:
+
+- Create one `PhysicsEngine` per active map instance.
+- Load static map blockers when the object starts.
+- Apply inputs through RPC or WebSocket messages.
+- Run ticks only while the instance is active.
+- Persist the canonical game state you need to recover after eviction.
+- Rebuild the engine from persisted state when the object wakes up.
+
+Avoid:
+
+- One global Durable Object for the whole game world.
+- A permanent 60 Hz tick for empty maps.
+- Relying only on in-memory engine state for important gameplay data.
+- Using `RegionManager` as Durable Object sharding. It is an in-memory
+  experimental API, not distributed edge partitioning.
+
+For large games, shard by map instance first. Sharding one continuous map across
+multiple Durable Objects is possible, but it requires explicit boundary
+management, migration rules, and cross-object interaction handling.
 
 ## Characters
 
@@ -337,6 +432,13 @@ const engine = new PhysicsEngine({
 `PredictionController` and `DeterministicInputBuffer` are available when you
 need a fuller prediction/reconciliation pipeline.
 
+Snapshots are intentionally lightweight. `takeSnapshot()` stores physics state
+for existing entities: position, velocity, rotation, angular velocity, sleeping
+state, and tick. It does not serialize the full map, static obstacle definitions,
+hitbox setup, projectiles, sensors, callbacks, movement strategies, or custom
+game data. For persistence or Durable Object recovery, store your canonical game
+state separately and use snapshots only as one part of the reconstruction flow.
+
 ## Low-Level API
 
 Use low-level APIs when the RPG helpers are not enough:
@@ -361,6 +463,189 @@ const entity = engine.createEntity({
 const hit = engine.raycast(entity.position, { x: 1, y: 0 }, 200);
 ```
 
+## Movement Strategies
+
+Use `MovementManager` when a movement is not just direct player input. It is
+useful for dashes, knockbacks, scripted movement, path following, ice movement,
+or other temporary behaviours.
+
+Available presets:
+
+- `Dash`: applies a burst of velocity in one direction for a fixed duration.
+- `Knockback`: pushes a body in one direction with optional decay.
+- `LinearMove`: moves a body in a constant direction.
+- `LinearRepulsion`: pushes a body away from a point or source.
+- `PathFollow`: moves a body along a list of waypoints.
+- `SeekAvoid`: seeks a target while avoiding nearby obstacles.
+- `ProjectileMovement`: moves a body like a projectile.
+- `IceMovement`: simulates sliding movement, including optional entry
+  velocity for slippery terrain.
+- `Oscillate`: moves a body back and forth.
+- `CompositeMovement`: combines multiple movement strategies.
+
+```ts
+const movement = engine.getMovementManager();
+
+const dash = movement.dash(player, {
+  speed: 240,
+  direction: { x: 1, y: 0 },
+  duration: 0.15,
+  onComplete: () => {
+    engine.moveEntity(player, 'idle');
+  },
+});
+
+function tick() {
+  engine.stepWithMovements();
+}
+
+dash.finished.then(() => {
+  console.log('dash complete');
+});
+```
+
+Call `stepWithMovements()` or call `updateMovements()` before `step()` so active
+strategies update entity velocities before the physics tick.
+
+Helper methods return a `MovementHandle`:
+
+```ts
+const patrol = movement.followPath(guard, {
+  waypoints: [
+    { x: 120, y: 120 },
+    { x: 360, y: 120 },
+    { x: 360, y: 300 },
+  ],
+  speed: 80,
+  loop: true,
+});
+
+if (patrol.isActive()) {
+  patrol.cancel();
+}
+```
+
+Common helper options:
+
+- `replace`: remove existing movements on the target before adding the new one
+  (defaults to `true` for helper methods).
+- `stopOnComplete`: set velocity to zero when the movement finishes.
+- `onStart`: callback called on the first movement update.
+- `onComplete`: callback called when the strategy finishes naturally.
+
+Use `replace: false` when you intentionally want to stack strategies:
+
+```ts
+movement.dash(player, {
+  speed: 260,
+  direction: { x: 1, y: 0 },
+  duration: 0.12,
+  replace: false,
+});
+```
+
+For slippery terrain, start `ice()` when an entity enters the surface and pass
+the current velocity so the slide continues from the previous movement:
+
+```ts
+import type { IceMovement } from '@rpgjs/physic';
+
+const ice = movement.ice(player, {
+  direction: player.velocity.lengthSquared() > 0
+    ? player.velocity.normalize()
+    : { x: 1, y: 0 },
+  maxSpeed: 180,
+  acceleration: 0.35,
+  friction: 0.08,
+  initialVelocity: player.velocity,
+  replace: false,
+});
+const iceMovement = ice.strategy as IceMovement;
+
+// While the player stays on ice:
+iceMovement.setTargetDirection({ x: 1, y: 0 });
+
+// When the input is released, the entity keeps sliding and slows down.
+iceMovement.stop();
+```
+
+### Custom Movement Strategies
+
+Create a custom movement by implementing `MovementStrategy`.
+
+```ts
+import type { MovementBody, MovementStrategy } from '@rpgjs/physic';
+
+class PatrolMovement implements MovementStrategy {
+  private elapsed = 0;
+
+  constructor(
+    private readonly speed: number,
+    private readonly duration: number,
+  ) {}
+
+  update(body: MovementBody, dt: number): void {
+    this.elapsed += dt;
+    body.setVelocity({ x: this.speed, y: 0 });
+  }
+
+  isFinished(): boolean {
+    return this.elapsed >= this.duration;
+  }
+
+  onFinished(): void {
+    // Optional hook for cleanup or chaining.
+  }
+}
+
+const patrolDone = engine.getMovementManager().add(
+  player,
+  new PatrolMovement(80, 2),
+);
+```
+
+`update(body, dt)` is called before each physics step. Use it to change the
+body velocity, or `translate()` when you intentionally need direct movement.
+`dt` is in seconds and should match the engine tick duration. When
+`isFinished()` returns `true`, the manager removes the strategy, calls
+`onFinished()`, triggers the `onComplete` option, and resolves the `Promise`
+returned by `movement.add()`.
+
+Do not `await movement.add()` before your tick loop starts. The promise resolves
+only after future calls to `stepWithMovements()` or `updateMovements()`.
+
+The low-level `movement.add(entity, new MyStrategy())` API is still available
+when you need to instantiate strategies directly. Prefer helper methods for
+common presets and `add()` for custom or advanced composition.
+
+## Performance Guidelines
+
+Performance depends more on world shape and simulation policy than on raw entity
+count. Benchmark with your real map, not only synthetic tests.
+
+Recommended defaults:
+
+- Start with one `PhysicsEngine` per active map instance.
+- Use the default `SpatialHash` broad phase.
+- Prefer 20 or 30 Hz server ticks for networked games unless 60 Hz is required.
+- Keep static blockers as static obstacles (`mass: 0`).
+- Use `ProjectileSystem` for arrows, bullets, and spells instead of full
+  physics entities.
+- Send projectile `spawn`, `hit`, and `destroy` events instead of syncing every
+  projectile position every tick.
+- Keep sensor counts reasonable. Cone sensors with `limitedByWalls` can raycast
+  and are more expensive than simple circular sensors.
+- Use `positionQuantizationStep` and `velocityQuantizationStep` when you need to
+  reduce floating-point drift across server/client prediction.
+
+Watch for bottlenecks:
+
+- Too many dynamic entities colliding in the same area.
+- Too many sensors updated every tick.
+- Too many projectiles with long raycasts.
+- Broadcasting full world state to every client.
+- Running ticks for inactive or empty map instances.
+
 ## Experimental APIs
 
 These APIs are exported, but are not the recommended default path yet:
@@ -377,10 +662,14 @@ and the default `SpatialHash` unless your own benchmark shows a clear win.
 
 ```bash
 npm run example:rpg
+npm run example:movement
 ```
 
 The RPG example is a plain HTML/Canvas mini-game using the recommended APIs:
 characters, static obstacles, sensors, and `ProjectileSystem`.
+
+The movement example is a focused arena showing `MovementManager` helpers such
+as `dash`, `knockback`, `followPath`, `oscillate`, `seekAvoid`, and `ice`.
 
 Other examples in this package are intended for development and regression
 testing.

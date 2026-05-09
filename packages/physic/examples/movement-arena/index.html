@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RPG Physic - Movement Arena</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #17191c;
+      color: #eef1f3;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #17191c 0%, #24282d 100%);
+    }
+
+    main {
+      width: min(1180px, calc(100vw - 32px));
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .game-shell {
+      min-width: 0;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #101316;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      background: #26323a;
+    }
+
+    aside {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #202327;
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto auto auto 1fr;
+      gap: 18px;
+      min-height: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: #aab3b9;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    dl {
+      margin: 0;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 9px 14px;
+      font-size: 13px;
+    }
+
+    dt {
+      color: #aab3b9;
+    }
+
+    dd {
+      margin: 0;
+      font-variant-numeric: tabular-nums;
+      color: #eef1f3;
+    }
+
+    .legend,
+    .help {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+      color: #c8ced2;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .legend span {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      margin-right: 8px;
+      border-radius: 50%;
+      vertical-align: -1px;
+    }
+
+    .hero { background: #5aa7ff; }
+    .path { background: #ffcd69; }
+    .oscillate { background: #8ee36f; }
+    .seek { background: #ff6f7f; }
+    .ice-floor {
+      border-radius: 2px;
+      background: #76e1ff;
+    }
+
+    kbd {
+      display: inline-grid;
+      place-items: center;
+      min-width: 24px;
+      height: 22px;
+      padding: 0 6px;
+      border-radius: 4px;
+      background: #30363b;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        place-items: start center;
+        padding: 16px 0;
+      }
+
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="game-shell" aria-label="Movement arena game">
+      <canvas id="game" width="960" height="600"></canvas>
+    </section>
+
+    <aside>
+      <header>
+        <h1>Movement Arena</h1>
+        <p class="subtitle">A focused example for MovementManager helpers, handles, and preset strategies.</p>
+      </header>
+
+      <dl>
+        <dt>Tick</dt>
+        <dd id="tick">0</dd>
+        <dt>Active moves</dt>
+        <dd id="activeMoves">0</dd>
+        <dt>Dash</dt>
+        <dd id="dash">ready</dd>
+        <dt>Repulses</dt>
+        <dd id="repulses">0</dd>
+        <dt>Surface</dt>
+        <dd id="surface">normal</dd>
+      </dl>
+
+      <ul class="legend">
+        <li><span class="hero"></span>Hero: direct movement + Dash</li>
+        <li><span class="path"></span>Guard: followPath loop</li>
+        <li><span class="oscillate"></span>Orb: oscillate</li>
+        <li><span class="seek"></span>Chaser: seekAvoid</li>
+        <li><span class="ice-floor"></span>Ice floor: sliding hero movement</li>
+      </ul>
+
+      <ul class="help">
+        <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrows to move.</li>
+        <li><kbd>Shift</kbd> to dash in the current direction.</li>
+        <li><kbd>Space</kbd> to knock back nearby NPCs.</li>
+        <li><kbd>1</kbd> resets the guard path.</li>
+      </ul>
+    </aside>
+  </main>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
