@@ -77,6 +77,23 @@ npm install
 npm run dev
 ```
 
+## Releases
+
+RPGJS uses Changesets so every package can keep its own version. For each
+publishable change, run:
+
+```bash
+pnpm changeset
+```
+
+Select the affected `@rpgjs/*` packages, choose the semver bump, and write a
+short release note. When changes land on the `v5` branch, GitHub Actions creates
+or updates a version PR. Merging that PR publishes the updated packages to npm.
+
+Internal `@rpgjs/*` dependencies are updated during release. If a package depends
+on another package that is being released, it receives at least a patch release
+so the published npm ranges remain consistent.
+
 ## License
 
 MIT. Free for commercial use.

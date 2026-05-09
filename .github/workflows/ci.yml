@@ -1,5 +1,9 @@
 name: CI
 
+permissions:
+  contents: write
+  pull-requests: write
+
 on:
   push:
     branches:
@@ -35,11 +39,9 @@ jobs:
   build_and_publish:
       needs: tests
       if: github.ref == 'refs/heads/v5'
-      strategy:
-        matrix:
-          os: [ubuntu-latest]
-          node-version: [lts/*]
-      runs-on: ${{ matrix.os }}
+      runs-on: ubuntu-latest
+      outputs:
+        published: ${{ steps.changesets.outputs.published }}
       steps:
         - name: ⬇️ Checkout
           id: checkout
@@ -51,8 +53,9 @@ jobs:
           id: setup-node
           uses: actions/setup-node@v4
           with:
-            node-version: ${{ matrix.node-version }}
-  
+            node-version: lts/*
+            registry-url: https://registry.npmjs.org
+
         - name: 🥡 Setup pnpm
           id: setup-pnpm
           uses: pnpm/action-setup@v4
@@ -62,7 +65,7 @@ jobs:
         - name: 🎈 Get pnpm store directory
           id: get-pnpm-cache-dir
           run: |
-            echo "::set-output name=pnpm_cache_dir::$(pnpm store path)"
+            echo "pnpm_cache_dir=$(pnpm store path)" >> "$GITHUB_OUTPUT"
   
         - name: 🔆 Cache pnpm modules
           uses: actions/cache@v4
@@ -81,19 +84,23 @@ jobs:
           id: build-the-mono-repo
           run: |
             pnpm build
-  
-        - name: 📣 Change version and publish to npm
-          id: publish
-          run: |
-            pnpm run rpgjs:version
-            pnpm run rpgjs:publish
+
+        - name: 📣 Version packages or publish to npm
+          id: changesets
+          uses: changesets/action@v1
+          with:
+            version: pnpm run version-packages
+            publish: pnpm run publish-packages
+            commit: "chore: version packages"
+            title: "chore: version packages"
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
             NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   starter_repo_update_dependencies:
       needs: build_and_publish
-      if: github.ref == 'refs/heads/v5'
+      if: github.ref == 'refs/heads/v5' && needs.build_and_publish.outputs.published == 'true'
       runs-on: ubuntu-latest
       strategy:
         matrix:
