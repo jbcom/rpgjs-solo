@@ -34,6 +34,7 @@
     "example:dev": "vite --mode example",
     "example:rpg": "vite --mode rpg",
     "example:movement": "vite --mode movement-arena",
+    "example:bomberman": "vite --mode bomberman",
     "typecheck": "tsc --noEmit",
     "docs": "typedoc"
   },

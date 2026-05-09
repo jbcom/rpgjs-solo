@@ -60,6 +60,25 @@ export default defineConfig(({ command, mode }) => {
     };
   }
 
+  // Bomberman example mode
+  if (command === 'serve' && mode === 'bomberman') {
+    return {
+      root: resolve(__dirname, 'examples/bomberman'),
+      server: {
+        port: 3003,
+        open: true,
+      },
+      resolve: {
+        alias: {
+          '@': resolve(__dirname, './src'),
+        },
+      },
+      optimizeDeps: {
+        include: ['../../src/index.js'],
+      },
+    };
+  }
+
   // Library build mode
   return {
     plugins: [
