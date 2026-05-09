@@ -1,58 +1,58 @@
 {
-    "name": "@rpgjs/studio",
-    "version": "5.0.0-beta.7",
-    "main": "dist/client/index.js",
-    "types": "dist/src/index.d.ts",
-    "scripts": {
-      "dev": "vite build --watch",
-      "build": "vite build"
+  "name": "@rpgjs/studio",
+  "version": "5.0.0",
+  "main": "dist/client/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/client/index.js",
+      "types": "./dist/src/index.d.ts"
     },
-    "exports": {
-      ".": {
-        "import": "./dist/client/index.js",
-        "types": "./dist/src/index.d.ts"
-      },
-      "./runtime": {
-        "import": "./dist/runtime/index.js",
-        "types": "./dist/runtime/index.d.ts"
-      },
-      "./runtime/*": {
-        "import": "./dist/runtime/*.js",
-        "types": "./dist/runtime/*.d.ts"
-      },
-      "./client": {
-        "import": "./dist/client/index.js",
-        "types": "./dist/src/index.d.ts"
-      },
-      "./server": {
-        "import": "./dist/server/index.js",
-        "types": "./dist/src/server.d.ts"
-      }
+    "./runtime": {
+      "import": "./dist/runtime/index.js",
+      "types": "./dist/runtime/index.d.ts"
     },
-    "keywords": [],
-    "author": "",
-    "license": "MIT",
-    "description": "RPGJS is a framework for creating RPG/MMORPG games",
-    "peerDependencies": {
-      "@canvasengine/presets": "*",
-      "@rpgjs/client": "workspace:*",
-      "@rpgjs/common": "workspace:*",
-      "@rpgjs/server": "workspace:*",
-      "@rpgjs/vite": "workspace:*",
-      "@rpgjs/action-battle": "workspace:*",
-      "canvasengine": "*"
+    "./runtime/*": {
+      "import": "./dist/runtime/*.js",
+      "types": "./dist/runtime/*.d.ts"
     },
-    "publishConfig": {
-      "access": "public"
+    "./client": {
+      "import": "./dist/client/index.js",
+      "types": "./dist/src/index.d.ts"
     },
-    "files": [
-      "dist"
-    ],
-    "devDependencies": {
-      "@canvasengine/compiler": "^2.0.0-beta.61",
-      "pixi.js": "^8.18.1",
-      "vite": "^8.0.11",
-      "vite-plugin-dts": "^5.0.0"
-    },
-    "type": "module"
-  }
+    "./server": {
+      "import": "./dist/server/index.js",
+      "types": "./dist/src/server.d.ts"
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "RPGJS is a framework for creating RPG/MMORPG games",
+  "peerDependencies": {
+    "@canvasengine/presets": "*",
+    "@rpgjs/client": "workspace:*",
+    "@rpgjs/common": "workspace:*",
+    "@rpgjs/server": "workspace:*",
+    "@rpgjs/vite": "workspace:*",
+    "@rpgjs/action-battle": "workspace:*",
+    "canvasengine": "*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@canvasengine/compiler": "^2.0.0-beta.61",
+    "pixi.js": "^8.18.1",
+    "vite": "^8.0.11",
+    "vite-plugin-dts": "^5.0.0"
+  },
+  "type": "module"
+}
