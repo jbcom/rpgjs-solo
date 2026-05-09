@@ -10,7 +10,7 @@ import { MovementBody, MovementStrategy } from '../MovementStrategy';
  * ```
  */
 export class IceMovement implements MovementStrategy {
-  private currentVelocity = { x: 0, y: 0 };
+  private currentVelocity: { x: number; y: number };
   private elapsed = 0;
   private stopped = false;
   private readonly targetDirection: { x: number; y: number };
@@ -23,6 +23,7 @@ export class IceMovement implements MovementStrategy {
    * @param acceleration - Fraction of the gap closed per second (0-1)
    * @param friction - Fraction of velocity retained per second when stopping (0-1)
    * @param duration - Optional duration in seconds
+   * @param initialVelocity - Optional starting velocity used when entering a slippery surface
    */
   constructor(
     direction: { x: number; y: number },
@@ -30,7 +31,9 @@ export class IceMovement implements MovementStrategy {
     private acceleration = 0.2,
     private friction = 0.08,
     private readonly duration?: number,
+    initialVelocity: { x: number; y: number } = { x: 0, y: 0 },
   ) {
+    this.currentVelocity = { x: initialVelocity.x, y: initialVelocity.y };
     const magnitude = Math.hypot(direction.x, direction.y);
     this.targetDirection = magnitude > 0
       ? { x: direction.x / magnitude, y: direction.y / magnitude }
@@ -107,4 +110,3 @@ export class IceMovement implements MovementStrategy {
     return 1 - Math.pow(1 - clamped, dt);
   }
 }
-

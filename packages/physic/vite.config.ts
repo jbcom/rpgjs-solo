@@ -41,6 +41,44 @@ export default defineConfig(({ command, mode }) => {
     };
   }
 
+  // Movement manager example mode
+  if (command === 'serve' && mode === 'movement-arena') {
+    return {
+      root: resolve(__dirname, 'examples/movement-arena'),
+      server: {
+        port: 3002,
+        open: true,
+      },
+      resolve: {
+        alias: {
+          '@': resolve(__dirname, './src'),
+        },
+      },
+      optimizeDeps: {
+        include: ['../../src/index.js'],
+      },
+    };
+  }
+
+  // Bomberman example mode
+  if (command === 'serve' && mode === 'bomberman') {
+    return {
+      root: resolve(__dirname, 'examples/bomberman'),
+      server: {
+        port: 3003,
+        open: true,
+      },
+      resolve: {
+        alias: {
+          '@': resolve(__dirname, './src'),
+        },
+      },
+      optimizeDeps: {
+        include: ['../../src/index.js'],
+      },
+    };
+  }
+
   // Library build mode
   return {
     plugins: [
@@ -68,4 +106,3 @@ export default defineConfig(({ command, mode }) => {
     },
   };
 });
-

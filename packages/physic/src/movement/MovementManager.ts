@@ -2,6 +2,15 @@ import { PhysicsEngine } from '../api/PhysicsEngine';
 import { Entity } from '../physics/Entity';
 import { EntityMovementBody } from './adapters/EntityMovementBody';
 import { MovementBody, MovementStrategy, MovementOptions } from './MovementStrategy';
+import { Dash } from './strategies/Dash';
+import { IceMovement } from './strategies/IceMovement';
+import { Knockback } from './strategies/Knockback';
+import { LinearMove } from './strategies/LinearMove';
+import { LinearRepulsion } from './strategies/LinearRepulsion';
+import { Oscillate } from './strategies/Oscillate';
+import { PathFollow } from './strategies/PathFollow';
+import { ProjectileMovement, ProjectileOptions, ProjectileType } from './strategies/ProjectileMovement';
+import { SeekAvoid } from './strategies/SeekAvoid';
 
 /**
  * Resolves an entity from an identifier.
@@ -24,12 +33,102 @@ interface StrategyEntry {
   strategy: MovementStrategy;
   options?: MovementOptions;
   resolve?: () => void;
+  handleState?: MovementHandleState;
   started: boolean;
+  stopOnComplete: boolean;
 }
 
 interface MovementEntry {
   body: MovementBody;
   strategies: StrategyEntry[];
+}
+
+interface MovementHandleState {
+  active: boolean;
+  resolve: () => void;
+}
+
+export interface MovementHandle {
+  /** Identifier of the body controlled by this movement. */
+  readonly targetId: string;
+  /** Strategy instance registered by the helper. */
+  readonly strategy: MovementStrategy;
+  /** Resolves when the movement finishes naturally or is cancelled. */
+  readonly finished: Promise<void>;
+  /** Removes the strategy without firing onComplete. */
+  cancel(): boolean;
+  /** Returns true while the strategy is still registered. */
+  isActive(): boolean;
+}
+
+export interface MovementHelperOptions extends MovementOptions {
+  /** Remove existing strategies for the target before adding this movement (default: true). */
+  replace?: boolean;
+  /** Set velocity to zero when the strategy finishes naturally. */
+  stopOnComplete?: boolean;
+}
+
+export interface DashOptions extends MovementHelperOptions {
+  speed: number;
+  direction: { x: number; y: number };
+  duration: number;
+}
+
+export interface KnockbackOptions extends MovementHelperOptions {
+  direction: { x: number; y: number };
+  speed: number;
+  duration: number;
+  decayFactor?: number;
+}
+
+export interface LinearMoveOptions extends MovementHelperOptions {
+  velocity: { x: number; y: number };
+  duration?: number;
+}
+
+export interface PathFollowOptions extends MovementHelperOptions {
+  waypoints: Array<{ x: number; y: number }>;
+  speed: number;
+  loop?: boolean;
+  pauseAtWaypoints?: number;
+  tolerance?: number;
+}
+
+export interface OscillateOptions extends MovementHelperOptions {
+  direction: { x: number; y: number };
+  amplitude: number;
+  period: number;
+  type?: 'linear' | 'sine' | 'circular';
+  duration?: number;
+}
+
+export interface IceOptions extends MovementHelperOptions {
+  direction: { x: number; y: number };
+  maxSpeed?: number;
+  acceleration?: number;
+  friction?: number;
+  duration?: number;
+  initialVelocity?: { x: number; y: number };
+}
+
+export interface SeekAvoidOptions extends MovementHelperOptions {
+  target: Entity | string | (() => Entity | null | undefined);
+  maxSpeed?: number;
+  repulseRadius?: number;
+  repulseWeight?: number;
+  arriveRadius?: number;
+}
+
+export interface LinearRepulsionOptions extends MovementHelperOptions {
+  target: { x: number; y: number } | (() => { x: number; y: number });
+  maxSpeed?: number;
+  repulseRadius?: number;
+  repulseWeight?: number;
+  ignoredEntity?: Entity | string | (() => Entity | undefined);
+}
+
+export interface ProjectileMovementHelperOptions extends MovementHelperOptions, ProjectileOptions {
+  type: ProjectileType;
 }
 
 /**
@@ -41,7 +140,11 @@ interface MovementEntry {
  * @example
  * ```typescript
  * const manager = new MovementManager((id) => engine.getEntityByUUID(id));
- * manager.add(playerEntity, new LinearMove({ x: 2, y: 0 }));
+ * manager.dash(playerEntity, {
+ *   speed: 240,
+ *   direction: { x: 1, y: 0 },
+ *   duration: 0.15,
+ * });
  *
  * // Game loop
  * manager.update(deltaSeconds);
@@ -52,7 +155,10 @@ export class MovementManager {
   private readonly entries: Map<string, MovementEntry> = new Map();
   private readonly entityWrappers = new WeakMap<Entity, EntityMovementBody>();
 
-  constructor(private readonly resolveEntity?: EntityResolver) {}
+  constructor(
+    private readonly resolveEntity?: EntityResolver,
+    private readonly engine?: PhysicsEngine,
+  ) {}
 
   /**
    * Convenience factory that binds the manager to a physics engine.
@@ -65,7 +171,7 @@ export class MovementManager {
     manager = new MovementManager((id) => {
       const entity = engine.getEntityByUUID(id);
       return entity ? manager.wrapEntity(entity) : undefined;
-    });
+    }, engine);
     return manager;
   }
 
@@ -83,14 +189,14 @@ export class MovementManager {
    * @example
    * ```typescript
    * // Simple usage - fire and forget
-   * manager.add(player, new Dash(8, { x: 1, y: 0 }, 200));
+   * manager.add(player, new Dash(240, { x: 1, y: 0 }, 0.15));
    * 
-   * // Wait for completion
-   * await manager.add(player, new Dash(8, { x: 1, y: 0 }, 200));
-   * console.log('Dash finished!');
+   * // React to completion after the tick loop has advanced the strategy
+   * manager.add(player, new Dash(240, { x: 1, y: 0 }, 0.15))
+   *   .then(() => console.log('Dash finished!'));
    * 
    * // With callbacks
-   * await manager.add(player, new Knockback({ x: -1, y: 0 }, 5, 300), {
+   * manager.add(player, new Knockback({ x: -1, y: 0 }, 180, 0.25), {
    *   onStart: () => {
    *     player.directionFixed = true;
    *     player.animationFixed = true;
@@ -104,30 +210,222 @@ export class MovementManager {
    */
   add(target: Entity | MovementBody | string, strategy: MovementStrategy, options?: MovementOptions): Promise<void> {
     const body = this.resolveTarget(target);
+    const entry = this.addEntry(body, strategy, options, false);
+
+    return new Promise<void>((resolve) => {
+      entry.resolve = resolve;
+      if (!strategy.isFinished) {
+        resolve();
+      }
+    });
+  }
+
+  dash(target: Entity | MovementBody | string, options: DashOptions): MovementHandle {
+    return this.addWithHandle(
+      target,
+      new Dash(options.speed, options.direction, options.duration),
+      options,
+      options.stopOnComplete ?? true,
+    );
+  }
+
+  knockback(target: Entity | MovementBody | string, options: KnockbackOptions): MovementHandle {
+    return this.addWithHandle(
+      target,
+      new Knockback(options.direction, options.speed, options.duration, options.decayFactor),
+      options,
+      options.stopOnComplete ?? true,
+    );
+  }
+
+  linearMove(target: Entity | MovementBody | string, options: LinearMoveOptions): MovementHandle {
+    return this.addWithHandle(
+      target,
+      new LinearMove(options.velocity, options.duration),
+      options,
+      options.stopOnComplete ?? false,
+    );
+  }
+
+  followPath(target: Entity | MovementBody | string, options: PathFollowOptions): MovementHandle {
+    return this.addWithHandle(
+      target,
+      new PathFollow(
+        options.waypoints,
+        options.speed,
+        options.loop ?? false,
+        options.pauseAtWaypoints ?? 0,
+        options.tolerance ?? 0.1,
+      ),
+      options,
+      options.stopOnComplete ?? false,
+    );
+  }
+
+  oscillate(target: Entity | MovementBody | string, options: OscillateOptions): MovementHandle {
+    return this.addWithHandle(
+      target,
+      new Oscillate(
+        options.direction,
+        options.amplitude,
+        options.period,
+        options.type ?? 'sine',
+        options.duration,
+      ),
+      options,
+      options.stopOnComplete ?? false,
+    );
+  }
+
+  ice(target: Entity | MovementBody | string, options: IceOptions): MovementHandle {
+    return this.addWithHandle(
+      target,
+      new IceMovement(
+        options.direction,
+        options.maxSpeed,
+        options.acceleration,
+        options.friction,
+        options.duration,
+        options.initialVelocity,
+      ),
+      options,
+      options.stopOnComplete ?? false,
+    );
+  }
+
+  seekAvoid(target: Entity | MovementBody | string, options: SeekAvoidOptions): MovementHandle {
+    return this.addWithHandle(
+      target,
+      new SeekAvoid(
+        this.requireEngine(),
+        () => this.resolveEntityProvider(options.target),
+        options.maxSpeed,
+        options.repulseRadius,
+        options.repulseWeight,
+        options.arriveRadius,
+      ),
+      options,
+      options.stopOnComplete ?? false,
+    );
+  }
+
+  linearRepulsion(target: Entity | MovementBody | string, options: LinearRepulsionOptions): MovementHandle {
+    const ignoredEntity = options.ignoredEntity;
+    return this.addWithHandle(
+      target,
+      new LinearRepulsion(
+        this.requireEngine(),
+        typeof options.target === 'function' ? options.target : () => options.target as { x: number; y: number },
+        options.maxSpeed,
+        options.repulseRadius,
+        options.repulseWeight,
+        ignoredEntity ? () => this.resolveOptionalEntity(ignoredEntity) : undefined,
+      ),
+      options,
+      options.stopOnComplete ?? false,
+    );
+  }
+
+  projectile(target: Entity | MovementBody | string, options: ProjectileMovementHelperOptions): MovementHandle {
+    const { type, replace, stopOnComplete, onStart, onComplete, ...projectileOptions } = options;
+    const helperOptions: MovementHelperOptions = {};
+    if (replace !== undefined) helperOptions.replace = replace;
+    if (stopOnComplete !== undefined) helperOptions.stopOnComplete = stopOnComplete;
+    if (onStart !== undefined) helperOptions.onStart = onStart;
+    if (onComplete !== undefined) helperOptions.onComplete = onComplete;
+    return this.addWithHandle(
+      target,
+      new ProjectileMovement(type, projectileOptions),
+      helperOptions,
+      stopOnComplete ?? true,
+    );
+  }
+
+  isMoving(target: Entity | MovementBody | string): boolean {
+    return this.hasActiveStrategies(target);
+  }
+
+  count(target: Entity | MovementBody | string): number {
+    const body = this.resolveTarget(target);
+    return this.entries.get(body.id)?.strategies.length ?? 0;
+  }
+
+  stop(target: Entity | MovementBody | string): void {
+    this.stopMovement(target);
+  }
+
+  private addWithHandle(
+    target: Entity | MovementBody | string,
+    strategy: MovementStrategy,
+    options: MovementHelperOptions,
+    defaultStopOnComplete: boolean,
+  ): MovementHandle {
+    const body = this.resolveTarget(target);
+    if (options.replace ?? true) {
+      this.clear(body);
+    }
+
+    return this.addHandleEntry(body, strategy, options, defaultStopOnComplete);
+  }
+
+  private createHandle(
+    body: MovementBody,
+    strategy: MovementStrategy,
+    finished: Promise<void>,
+  ): MovementHandle {
+    return {
+      targetId: body.id,
+      strategy,
+      finished,
+      cancel: () => this.remove(body, strategy),
+      isActive: () => this.entries.get(body.id)?.strategies.some((entry) => entry.strategy === strategy) ?? false,
+    };
+  }
+
+  private addEntry(
+    body: MovementBody,
+    strategy: MovementStrategy,
+    options: MovementOptions | undefined,
+    stopOnComplete: boolean,
+    handleState?: MovementHandleState,
+  ): StrategyEntry {
     const key = body.id;
 
     if (!this.entries.has(key)) {
       this.entries.set(key, { body, strategies: [] });
     }
 
-    // If the strategy doesn't have isFinished, resolve immediately
-    if (!strategy.isFinished) {
-      const entry: StrategyEntry = { strategy, started: false };
-      if (options) {
-        entry.options = options;
-      }
-      this.entries.get(key)!.strategies.push(entry);
-      return Promise.resolve();
+    const entry: StrategyEntry = {
+      strategy,
+      started: false,
+      stopOnComplete,
+    };
+    if (options) {
+      entry.options = options;
     }
+    if (handleState) {
+      entry.handleState = handleState;
+    }
+    this.entries.get(key)!.strategies.push(entry);
+    return entry;
+  }
 
-    // Create a Promise that will resolve when the strategy finishes
-    return new Promise<void>((resolve) => {
-      const entry: StrategyEntry = { strategy, resolve, started: false };
-      if (options) {
-        entry.options = options;
-      }
-      this.entries.get(key)!.strategies.push(entry);
+  private addHandleEntry(
+    body: MovementBody,
+    strategy: MovementStrategy,
+    options: MovementHelperOptions,
+    stopOnComplete: boolean,
+  ): MovementHandle {
+    let resolveFinished: () => void = () => {};
+    const finished = new Promise<void>((resolve) => {
+      resolveFinished = resolve;
     });
+    const handleState: MovementHandleState = {
+      active: true,
+      resolve: resolveFinished,
+    };
+    this.addEntry(body, strategy, options, stopOnComplete, handleState);
+    return this.createHandle(body, strategy, finished);
   }
 
   /**
@@ -152,7 +450,10 @@ export class MovementManager {
       return false;
     }
 
-    entry.strategies.splice(index, 1);
+    const [removed] = entry.strategies.splice(index, 1);
+    if (removed) {
+      this.finishHandle(removed);
+    }
     if (entry.strategies.length === 0) {
       this.entries.delete(body.id);
     }
@@ -166,6 +467,13 @@ export class MovementManager {
    */
   clear(target: Entity | MovementBody | string): void {
     const body = this.resolveTarget(target);
+    const entry = this.entries.get(body.id);
+    if (!entry) {
+      return;
+    }
+    for (const strategyEntry of entry.strategies) {
+      this.finishHandle(strategyEntry);
+    }
     this.entries.delete(body.id);
   }
 
@@ -286,12 +594,17 @@ export class MovementManager {
           
           // Call strategy's own onFinished callback
           strategy.onFinished?.();
+
+          if (strategyEntry.stopOnComplete) {
+            body.setVelocity({ x: 0, y: 0 });
+          }
           
           // Call options onComplete callback
           options?.onComplete?.();
           
           // Resolve the Promise
           resolve?.();
+          this.finishHandle(strategyEntry);
         }
       }
 
@@ -305,7 +618,49 @@ export class MovementManager {
    * Removes all strategies from all entities.
    */
   clearAll(): void {
+    for (const entry of this.entries.values()) {
+      for (const strategyEntry of entry.strategies) {
+        this.finishHandle(strategyEntry);
+      }
+    }
     this.entries.clear();
+  }
+
+  private finishHandle(entry: StrategyEntry): void {
+    const state = entry.handleState;
+    if (!state || !state.active) {
+      return;
+    }
+    state.active = false;
+    state.resolve();
+  }
+
+  private requireEngine(): PhysicsEngine {
+    if (!this.engine) {
+      throw new Error('MovementManager: this helper requires a manager created with MovementManager.forEngine(engine).');
+    }
+    return this.engine;
+  }
+
+  private resolveEntityProvider(target: Entity | string | (() => Entity | null | undefined)): Entity | null | undefined {
+    if (typeof target === 'function') {
+      return target();
+    }
+    if (target instanceof Entity) {
+      return target;
+    }
+    return this.resolveOptionalEntity(target);
+  }
+
+  private resolveOptionalEntity(target: Entity | string | (() => Entity | undefined)): Entity | undefined {
+    if (typeof target === 'function') {
+      return target();
+    }
+    if (target instanceof Entity) {
+      return target;
+    }
+    const body = this.resolveEntity?.(target);
+    return body?.getEntity?.() ?? undefined;
   }
 
   private resolveTarget(target: Entity | MovementBody | string): MovementBody {
@@ -347,4 +702,3 @@ export class MovementManager {
     );
   }
 }
-

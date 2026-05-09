@@ -8,8 +8,10 @@ import type { Entity } from '../physics/Entity';
  * 
  * @example
  * ```typescript
- * // Add a dash with callbacks
- * const promise = manager.add(player, new Dash(8, { x: 1, y: 0 }, 200), {
+ * const handle = manager.dash(player, {
+ *   speed: 240,
+ *   direction: { x: 1, y: 0 },
+ *   duration: 0.15,
  *   onStart: () => {
  *     player.directionFixed = true;
  *     player.animationFixed = true;
@@ -20,9 +22,7 @@ import type { Entity } from '../physics/Entity';
  *   }
  * });
  * 
- * // Wait for completion
- * await promise;
- * console.log('Dash completed!');
+ * handle.finished.then(() => console.log('Dash completed!'));
  * ```
  */
 export interface MovementOptions {
@@ -98,4 +98,3 @@ export interface MovementStrategy {
    */
   onFinished?(): void;
 }
-

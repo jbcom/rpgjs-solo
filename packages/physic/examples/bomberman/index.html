@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RPG Physic - Bomberman</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #141717;
+      color: #edf2f1;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at top left, rgba(55, 117, 104, 0.18), transparent 34rem),
+        linear-gradient(135deg, #131616 0%, #202525 100%);
+    }
+
+    main {
+      width: min(1010px, calc(100vw - 32px));
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .game-shell {
+      min-width: 0;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #101313;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 15 / 13;
+      image-rendering: crisp-edges;
+      background: #253833;
+    }
+
+    aside {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #1e2424;
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 18px;
+      min-height: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: #aab8b5;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    dl {
+      margin: 0;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 9px 14px;
+      font-size: 13px;
+    }
+
+    dt {
+      color: #aab8b5;
+    }
+
+    dd {
+      margin: 0;
+      font-variant-numeric: tabular-nums;
+      color: #edf2f1;
+    }
+
+    .help {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+      color: #c9d2cf;
+      font-size: 13px;
+      line-height: 1.45;
+      align-self: end;
+    }
+
+    kbd {
+      display: inline-grid;
+      place-items: center;
+      min-width: 24px;
+      height: 22px;
+      padding: 0 6px;
+      border-radius: 4px;
+      background: #303838;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    code {
+      color: #f1cf7a;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    @media (max-width: 860px) {
+      body {
+        place-items: start center;
+        padding: 16px 0;
+      }
+
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        min-height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="game-shell" aria-label="Bomberman physics example">
+      <canvas id="game" width="600" height="520"></canvas>
+    </section>
+
+    <aside>
+      <header>
+        <h1>Bomberman</h1>
+        <p class="subtitle">Grid gameplay using @rpgjs/physic for movement, blockers, and deterministic ticks.</p>
+      </header>
+
+      <dl>
+        <dt>Status</dt>
+        <dd id="status">alive</dd>
+        <dt>Bombs</dt>
+        <dd id="bombs">0</dd>
+        <dt>Enemies</dt>
+        <dd id="enemies">1</dd>
+        <dt>Blocks</dt>
+        <dd id="blocks">0</dd>
+        <dt>Tick</dt>
+        <dd id="tick">0</dd>
+      </dl>
+
+      <ul class="help">
+        <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrows to move.</li>
+        <li><kbd>Space</kbd> places a bomb on the current tile.</li>
+        <li><kbd>R</kbd> resets after defeat.</li>
+        <li>The enemy plans an escape route before placing a bomb.</li>
+        <li>Walls and blocks are static physics obstacles.</li>
+      </ul>
+    </aside>
+  </main>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
