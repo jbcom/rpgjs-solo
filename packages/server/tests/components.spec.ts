@@ -1,5 +1,20 @@
 import { describe, expect, test } from "vitest";
 import { Components } from "../src/Player/Components";
+import { WithComponentManager } from "../src/Player/ComponentManager";
+import { signal } from "@signe/reactive";
+
+class BasePlayer {
+  graphics = signal<string[]>([]);
+  componentsTop = signal<string | null>(null);
+  componentsCenter = signal<string | null>(null);
+  componentsBottom = signal<string | null>(null);
+  componentsLeft = signal<string | null>(null);
+  componentsRight = signal<string | null>(null);
+}
+
+const ComponentPlayer = WithComponentManager(BasePlayer as any) as any;
+
+const readPayload = (value: string | null) => value ? JSON.parse(value) : null;
 
 describe("Components helpers", () => {
   test("creates hp and sp bars with defaults that can be overridden", () => {
@@ -69,5 +84,96 @@ describe("Components helpers", () => {
         opacity: 0.5
       }
     });
+  });
+});
+
+describe("ComponentManager", () => {
+  test("setComponentsTop normalizes a single component with layout options", () => {
+    const player = new ComponentPlayer();
+    const component = Components.text("{name}");
+
+    player.setComponentsTop(component, { width: 80, marginBottom: 8 });
+
+    expect(readPayload(player.componentsTop())).toEqual({
+      components: [[component]],
+      layout: { width: 80, marginBottom: 8 }
+    });
+  });
+
+  test("setComponentsBottom normalizes vertical lists and keeps hitbox layout options", () => {
+    const player = new ComponentPlayer();
+    const shape = Components.shape({
+      type: "rect",
+      width: 32,
+      height: 32,
+      fill: "#ff0000",
+      opacity: 0.5
+    });
+
+    player.setComponentsBottom([shape, Components.hpBar()], { marginBottom: 16 });
+
+    expect(readPayload(player.componentsBottom())).toEqual({
+      components: [[shape], [Components.hpBar()]],
+      layout: { marginBottom: 16 }
+    });
+  });
+
+  test("setComponentsLeft, center and right keep table layouts", () => {
+    const player = new ComponentPlayer();
+    const table = [[Components.text("{name}"), Components.spBar()]];
+
+    player.setComponentsLeft(table, { marginRight: 2 });
+    player.setComponentsCenter(table, { width: 100 });
+    player.setComponentsRight(table, { marginLeft: 4 });
+
+    expect(readPayload(player.componentsLeft())).toEqual({
+      components: table,
+      layout: { marginRight: 2 }
+    });
+    expect(readPayload(player.componentsCenter())).toEqual({
+      components: table,
+      layout: { width: 100 }
+    });
+    expect(readPayload(player.componentsRight())).toEqual({
+      components: table,
+      layout: { marginLeft: 4 }
+    });
+  });
+
+  test("mergeComponents appends normalized rows and merges layout options", () => {
+    const player = new ComponentPlayer();
+
+    player.setComponentsTop([Components.text("{name}")], { width: 80, marginBottom: 4 });
+    player.mergeComponents("top", [Components.hpBar()], { marginBottom: 8 });
+
+    expect(readPayload(player.componentsTop())).toEqual({
+      components: [[Components.text("{name}")], [Components.hpBar()]],
+      layout: { width: 80, marginBottom: 8 }
+    });
+  });
+
+  test("removeComponents clears the selected component position", () => {
+    const player = new ComponentPlayer();
+
+    player.setComponentsTop(Components.text("{name}"));
+    player.setComponentsBottom(Components.hpBar());
+
+    player.removeComponents("top");
+
+    expect(player.componentsTop()).toBeNull();
+    expect(readPayload(player.componentsBottom())).toEqual({
+      components: [[Components.hpBar()]],
+      layout: {}
+    });
+  });
+
+  test("setGraphic accepts one or many graphics", () => {
+    const player = new ComponentPlayer();
+
+    player.setGraphic("hero");
+    expect(player.graphics()).toEqual(["hero"]);
+
+    player.setGraphic(["hero-idle", "hero-run"]);
+    expect(player.graphics()).toEqual(["hero-idle", "hero-run"]);
   });
 });
