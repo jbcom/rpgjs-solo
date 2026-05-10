@@ -58,6 +58,7 @@ The callback function must return an object with the following properties:
 - **`events`** - Map events data
 - **`id`** - Map identifier (defaults to the mapId parameter)
 - **`hitboxes`** - Array of collision hitboxes for the map
+- **`positions`** - Named positions, used by `player.changeMap("map", "name")`
 
 ## Creating a Map Component
 

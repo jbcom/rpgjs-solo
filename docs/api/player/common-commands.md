@@ -185,7 +185,13 @@ await player.changeMap("town", {x: 10, y: 20});
 
 // Change player to map "dungeon" at a named position
 await player.changeMap("dungeon", "entrance");
+
+// Change player to map "town" at the Tiled "start" position, if present
+await player.changeMap("town");
 ```
+
+When the map is loaded from Tiled, `positions` can be the `name` of a point object.
+If `positions` is omitted, RPGJS tries to use the `start` point.
 
 ## emit
 

@@ -20,6 +20,8 @@ type MapData = {
   height?: number;
   /** Optional map events data (NPCs, interactive objects, etc.) */
   events?: any;
+  /** Optional named positions, for example Tiled point objects used by changeMap("map", "name") */
+  positions?: Record<string, { x: number; y: number; z?: number }>;
   /** Optional map identifier, defaults to the mapId parameter if not provided */
   id?: string;
 }

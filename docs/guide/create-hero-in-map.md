@@ -17,10 +17,7 @@ import { RpgPlayer, type RpgPlayerHooks } from "@rpgjs/server";
 export const player: RpgPlayerHooks = {
   onConnected(player: RpgPlayer) {
     player.initializeDefaultStats();
-    player.changeMap("simplemap", {
-      x: 100,
-      y: 100
-    });
+    player.changeMap("simplemap");
     player.name.set("YourName");
     player.setGraphic("hero");
   }
@@ -30,11 +27,27 @@ export const player: RpgPlayerHooks = {
 This does three things:
 
 1. Sends the player to `simplemap`
-2. Places the player at the given coordinates
+2. Places the player at the Tiled point named `start`, if it exists
 3. Uses the `hero` spritesheet on the client
 
 It also initializes the built-in default stats so HP, SP, and parameters such as
 `maxHp` are available immediately on the client.
+
+To use the automatic start position, create an object layer in Tiled, add a point,
+and set its name to `start`. You can also target any named point explicitly:
+
+```ts
+player.changeMap("simplemap", "entrance");
+```
+
+If you prefer coordinates, pass them directly:
+
+```ts
+player.changeMap("simplemap", {
+  x: 100,
+  y: 100
+});
+```
 
 ## Initialize default stats only when needed
 
@@ -77,10 +90,7 @@ export const player: RpgPlayerHooks = {
 
   onStart(player: RpgPlayer) {
     player.initializeDefaultStats();
-    player.changeMap("simplemap", {
-      x: 100,
-      y: 100
-    });
+    player.changeMap("simplemap");
     player.name.set("YourName");
     player.setGraphic("hero");
   }

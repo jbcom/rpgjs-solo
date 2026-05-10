@@ -65,6 +65,10 @@ export default defineModule<RpgServer>({
 `EventDefinition` only describes the event behavior. Map placement fields such as `id`, `x`, and `y` belong to the outer wrapper in `maps[].events`.
 Inside object-based hooks, `this` is typed as `RpgEvent`, so methods like `this.setGraphic()` are inferred correctly by TypeScript.
 
+When using Tiled, you can omit `x` and `y` and place the event with a point object.
+Set the point name to the event name, for example `chest-1`, and RPGJS will use
+that point as the event position.
+
 ## Event hooks
 
 The most common hooks are:

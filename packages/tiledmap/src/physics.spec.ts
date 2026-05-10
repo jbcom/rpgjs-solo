@@ -32,7 +32,7 @@ vi.mock("@canvasengine/tiled", () => {
   return { MapClass };
 });
 
-import { prepareTiledPhysicsData } from "./physics";
+import { applyTiledPointEvents, prepareTiledPhysicsData } from "./physics";
 
 describe("prepareTiledPhysicsData", () => {
   it("adds tiled collision hitboxes without duplicating them on repeated preparation", () => {
@@ -86,5 +86,160 @@ describe("prepareTiledPhysicsData", () => {
     prepareTiledPhysicsData(mapData, map);
 
     expect(mapData.hitboxes).toEqual([]);
+  });
+});
+
+describe("tiled point positions", () => {
+  it("extracts named point objects as map positions", () => {
+    const mapData = {
+      parsedMap: {
+        width: 1,
+        height: 1,
+        objects: [
+          { point: true, name: "start", x: 10, y: 20 },
+          { point: true, name: "entrance", x: 30, y: 40 },
+        ],
+      },
+    };
+
+    prepareTiledPhysicsData(mapData, {});
+
+    expect(mapData.positions).toEqual({
+      start: { x: 10, y: 20 },
+      entrance: { x: 30, y: 40 },
+    });
+  });
+
+  it("uses class or type as a fallback for the special start position", () => {
+    const mapData = {
+      parsedMap: {
+        width: 1,
+        height: 1,
+        objects: [
+          { point: true, class: "start", x: 10, y: 20 },
+          { point: true, type: "start", x: 30, y: 40 },
+        ],
+      },
+    };
+
+    prepareTiledPhysicsData(mapData, {});
+
+    expect(mapData.positions).toEqual({
+      start: { x: 10, y: 20 },
+    });
+  });
+
+  it("keeps explicitly named start before class or type fallback", () => {
+    const mapData = {
+      parsedMap: {
+        width: 1,
+        height: 1,
+        objects: [
+          { point: true, name: "start", x: 10, y: 20 },
+          { point: true, class: "start", x: 30, y: 40 },
+        ],
+      },
+    };
+
+    prepareTiledPhysicsData(mapData, {});
+
+    expect(mapData.positions).toEqual({
+      start: { x: 10, y: 20 },
+    });
+  });
+});
+
+describe("applyTiledPointEvents", () => {
+  it("places direct object events by matching their name with a tiled point", () => {
+    const mapData = {
+      parsedMap: {
+        objects: [
+          { point: true, name: "EV-1", x: 10, y: 20 },
+        ],
+      },
+      events: [
+        { name: "EV-1", onInit() {} },
+      ],
+    };
+
+    applyTiledPointEvents(mapData);
+
+    expect(mapData.events).toEqual([
+      {
+        event: { name: "EV-1", onInit: expect.any(Function) },
+        x: 10,
+        y: 20,
+      },
+    ]);
+  });
+
+  it("places wrapped object events by matching the wrapped event name", () => {
+    const mapData = {
+      parsedMap: {
+        objects: [
+          { point: true, name: "EV-1", x: 10, y: 20 },
+        ],
+      },
+      events: [
+        { id: "event-id", event: { name: "EV-1", onInit() {} } },
+      ],
+    };
+
+    applyTiledPointEvents(mapData);
+
+    expect(mapData.events).toEqual([
+      {
+        id: "event-id",
+        event: { name: "EV-1", onInit: expect.any(Function) },
+        x: 10,
+        y: 20,
+      },
+    ]);
+  });
+
+  it("places class events decorated with EventData metadata", () => {
+    class NpcEvent {}
+    (NpcEvent as any)._name = "EV-1";
+    (NpcEvent as any).prototype._name = "EV-1";
+
+    const mapData = {
+      parsedMap: {
+        objects: [
+          { point: true, name: "EV-1", x: 10, y: 20 },
+        ],
+      },
+      events: [
+        { event: NpcEvent },
+      ],
+    };
+
+    applyTiledPointEvents(mapData);
+
+    expect(mapData.events).toEqual([
+      {
+        event: NpcEvent,
+        x: 10,
+        y: 20,
+      },
+    ]);
+  });
+
+  it("does not override explicit event coordinates", () => {
+    const mapData = {
+      parsedMap: {
+        objects: [
+          { point: true, name: "EV-1", x: 10, y: 20 },
+        ],
+      },
+      events: [
+        { x: 50, y: 60, event: { name: "EV-1" } },
+      ],
+    };
+
+    applyTiledPointEvents(mapData);
+
+    expect(mapData.events).toEqual([
+      { x: 50, y: 60, event: { name: "EV-1" } },
+    ]);
   });
 });

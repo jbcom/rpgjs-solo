@@ -13,6 +13,7 @@ type RectHitbox = {
 };
 
 const TILED_HITBOX_ID_PREFIX = "__tiled_collision__:";
+const START_POSITION_NAME = "start";
 
 export function prepareTiledPhysicsData(mapData: any, map: AnyMap): void {
   if (!mapData?.parsedMap) {
@@ -26,6 +27,7 @@ export function prepareTiledPhysicsData(mapData: any, map: AnyMap): void {
   mapData.hitboxes = mergeTiledHitboxes(mapData.hitboxes, tiledHitboxes);
   mapData.width = tiledMap.widthPx;
   mapData.height = tiledMap.heightPx;
+  mapData.positions = mergeTiledPositions(mapData.positions, collectTiledPointPositions(mapData.parsedMap.objects));
 }
 
 export function applyTiledPointEvents(mapData: any): void {
@@ -41,9 +43,15 @@ export function applyTiledPointEvents(mapData: any): void {
 
     mapData.events = mapData.events
       .map((eventEntry: any) => {
-        if (eventEntry?.name === obj.name) {
+        if (
+          obj.name &&
+          eventEntry?.x === undefined &&
+          eventEntry?.y === undefined &&
+          getEventName(eventEntry) === obj.name
+        ) {
+          const isWrappedEvent = eventEntry && typeof eventEntry === "object" && "event" in eventEntry;
           return {
-            event: eventEntry,
+            ...(isWrappedEvent ? eventEntry : { event: eventEntry }),
             x: obj.x,
             y: obj.y,
           };
@@ -52,6 +60,69 @@ export function applyTiledPointEvents(mapData: any): void {
       })
       .filter((eventEntry: any) => eventEntry !== null);
   }
+}
+
+function collectTiledPointPositions(objects: any): Record<string, { x: number; y: number }> {
+  if (!Array.isArray(objects)) {
+    return {};
+  }
+
+  const positions: Record<string, { x: number; y: number }> = {};
+
+  for (const obj of objects) {
+    if (!obj?.point || typeof obj.x !== "number" || typeof obj.y !== "number") {
+      continue;
+    }
+
+    if (typeof obj.name === "string" && obj.name.length > 0) {
+      positions[obj.name] = { x: obj.x, y: obj.y };
+    }
+
+    if (
+      !positions[START_POSITION_NAME] &&
+      (obj.class === START_POSITION_NAME || obj.type === START_POSITION_NAME)
+    ) {
+      positions[START_POSITION_NAME] = { x: obj.x, y: obj.y };
+    }
+  }
+
+  return positions;
+}
+
+function mergeTiledPositions(existingPositions: any, tiledPositions: Record<string, { x: number; y: number }>) {
+  return {
+    ...(existingPositions && typeof existingPositions === "object" ? existingPositions : {}),
+    ...tiledPositions,
+  };
+}
+
+function getEventName(eventEntry: any): string | undefined {
+  const event = eventEntry?.event ?? eventEntry;
+
+  if (typeof event === "function") {
+    const staticEventName = (event as any)._name;
+    const prototypeEventName = (event as any).prototype?._name;
+    const staticName = (event as any).name;
+    const prototypeName = (event as any).prototype?.name;
+    if (typeof prototypeEventName === "string") {
+      return prototypeEventName;
+    }
+    if (typeof staticEventName === "string") {
+      return staticEventName;
+    }
+    if (typeof prototypeName === "string") {
+      return prototypeName;
+    }
+    if (typeof staticName === "string") {
+      return staticName;
+    }
+  }
+
+  if (typeof event?.name === "string") {
+    return event.name;
+  }
+
+  return undefined;
 }
 
 function collectBlockedTileHitboxes(tiledMap: MapClass): RectHitbox[] {

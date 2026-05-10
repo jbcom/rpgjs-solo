@@ -9,9 +9,7 @@ export default defineModule<RpgServer>({
     {
       id: 'simplemap',
       events: [{
-        id: 'npc',
-        x: 100,
-        y: 160,
+        id: 'EV-1',
         event: Npc()
       }]
     }

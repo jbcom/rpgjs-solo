@@ -185,6 +185,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
   @sync(RpgPlayer) events = signal<RpgEvent[]>([]);
 
+  /** Internal: named map position to resolve after the target map data is ready */
+  @sync() pendingMapPosition = signal<string | null>(null);
+
   constructor() {
     super();
 
@@ -339,6 +342,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    *
    * // Change player to map "dungeon" at a named position
    * await player.changeMap("dungeon", "entrance");
+   *
+   * // Change player to map "town" at the Tiled "start" position, if present
+   * await player.changeMap("town");
    * ```
    */
   async changeMap(
@@ -354,7 +360,11 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     if (canChange.some(v => v === false)) return false;
 
     if (positions && typeof positions === 'object') {
+      this.pendingMapPosition.set(null);
       await this.teleport(positions)
+    }
+    else {
+      this.pendingMapPosition.set(positions ?? "start");
     }
     const transferToken = await room?.$sessionTransfer(this.conn, realMapId);
     this.emit("changeMap", {
@@ -519,6 +529,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
   snapshot() {
     const snapshot = createStatesSnapshotDeep(this);
+    delete (snapshot as any).pendingMapPosition;
     const expCurve = (this as any).expCurve;
     if (expCurve) {
       snapshot.expCurve = { ...expCurve };
@@ -594,7 +605,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     await this.applySnapshot(slotData.snapshot);
     const { snapshot, ...meta } = slotData;
     if (options.changeMap !== false && meta.map) {
-      await this.changeMap(meta.map);
+      await this.changeMap(meta.map, { x: this.x(), y: this.y(), z: this.z() });
     }
     return { ok: true, slot: meta, index: resolvedSlot };
   }

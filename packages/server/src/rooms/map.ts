@@ -78,6 +78,8 @@ const MapUpdateSchema = z.object({
   events: z.array(z.any()).optional(),
   /** Optional static hitboxes (custom maps) */
   hitboxes: z.array(z.any()).optional(),
+  /** Optional named positions resolved by map integrations such as Tiled */
+  positions: z.record(z.string(), z.any()).optional(),
   /** Parsed tiled map payload (optional) */
   parsedMap: z.any().optional(),
   /** Raw map source payload (optional) */
@@ -855,6 +857,23 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       // Keep physics body aligned with restored snapshot coordinates on map join.
       this.updateHitbox(player.id, player.x(), player.y(), width, height);
     };
+    const teleportToPendingNamedPosition = async () => {
+      const positionName = player.pendingMapPosition();
+      player.pendingMapPosition.set(null);
+
+      if (!positionName) {
+        return;
+      }
+
+      const position = this.data()?.positions?.[positionName];
+      if (
+        position &&
+        typeof position.x === "number" &&
+        typeof position.y === "number"
+      ) {
+        await player.teleport({ x: position.x, y: position.y });
+      }
+    };
 
     if (player.setMap) {
       player.setMap(this);
@@ -873,6 +892,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         // Avoid unhandled promise rejections from async hook execution.
         void (async () => {
           try {
+            await teleportToPendingNamedPosition();
             alignPlayerBodyWithSignals();
             await this.spawnScenarioEventsForPlayer(player);
 

@@ -16,6 +16,17 @@ const serverModule = defineModule<RpgServer>({
       file: '',
     }
   ],
+  map: {
+    onBeforeUpdate(mapData) {
+      if (mapData.id === 'map2') {
+        mapData.positions = {
+          start: { x: 300, y: 310 },
+          entrance: { x: 400, y: 410 },
+        }
+      }
+      return mapData
+    }
+  },
   player: {
     async onConnected(player) {
       // Start player on map1
@@ -69,4 +80,28 @@ test('Player can change map', async () => {
     
     expect(player.x()).toBe(200)
     expect(player.y()).toBe(200)
+
+    await player.changeMap('map1', { x: 100, y: 100 })
+    player = await client.waitForMapChange('map1')
+
+    const implicitResult = await player.changeMap('map2')
+    expect(implicitResult).toBe(true)
+
+    player = await client.waitForMapChange('map2')
+    await fixture.wait(0)
+
+    expect(player.x()).toBe(300)
+    expect(player.y()).toBe(310)
+
+    await player.changeMap('map1', { x: 100, y: 100 })
+    player = await client.waitForMapChange('map1')
+
+    const namedResult = await player.changeMap('map2', 'entrance')
+    expect(namedResult).toBe(true)
+
+    player = await client.waitForMapChange('map2')
+    await fixture.wait(0)
+
+    expect(player.x()).toBe(400)
+    expect(player.y()).toBe(410)
 })
