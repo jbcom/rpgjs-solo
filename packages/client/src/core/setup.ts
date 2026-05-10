@@ -14,7 +14,7 @@ export async function startGame(options: SetupOptions) {
 
   await injector(context, options.providers);
 
-  const engine = inject(context, RpgClientEngine);
+  const engine = inject<RpgClientEngine>(context, RpgClientEngine);
   await engine.start();
   return context;
 }

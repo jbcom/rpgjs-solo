@@ -11,6 +11,15 @@ import { RpgClientEvent } from "./Event";
 import { RpgClientEngine } from "../RpgClientEngine";
 import { inject } from "../core/inject";
 
+type TestGlobalScope = typeof globalThis & {
+  process?: {
+    env?: {
+      TEST?: string;
+    };
+  };
+  __RPGJS_TEST__?: boolean;
+};
+
 export class RpgClientMap extends RpgCommonMap<any> {
   engine: RpgClientEngine = inject(RpgClientEngine)
   @users(RpgClientPlayer) players = signal<Record<string, RpgClientPlayer>>({});
@@ -29,8 +38,9 @@ export class RpgClientMap extends RpgCommonMap<any> {
   constructor() {
     super();
     // Détecter l'environnement de test
-    const isTest = (typeof process !== 'undefined' && process.env?.TEST === 'true')
-      || (typeof window !== 'undefined' && (window as any).__RPGJS_TEST__ === true);
+    const testGlobal = globalThis as TestGlobalScope;
+    const isTest = testGlobal.process?.env?.TEST === 'true'
+      || testGlobal.__RPGJS_TEST__ === true;
     this.isTestEnvironment = isTest;
     if (isTest) {
       this.autoTickEnabled = false;

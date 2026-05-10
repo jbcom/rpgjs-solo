@@ -1,5 +1,5 @@
 import { Hooks, ModulesToken, RpgCommonPlayer } from "@rpgjs/common";
-import { trigger, signal } from "canvasengine";
+import { trigger, signal, type Trigger } from "canvasengine";
 import { from, map, of, Subscription, switchMap } from "rxjs";
 import { inject } from "../core/inject";
 import { RpgClientEngine } from "../RpgClientEngine";
@@ -11,6 +11,24 @@ type AnimationRestoreOptions = {
   timeoutMs?: number;
 };
 
+type FlashType = 'alpha' | 'tint' | 'both';
+
+type FlashOptions = {
+  type?: FlashType;
+  duration?: number;
+  cycles?: number;
+  alpha?: number;
+  tint?: number | string;
+};
+
+type FlashTriggerOptions = Omit<FlashOptions, "tint"> & {
+  tint: number;
+};
+
+type ConfigurableTrigger<T> = Omit<Trigger<T>, "start"> & {
+  start(config?: T): Promise<void>;
+};
+
 export abstract class RpgClientObject extends RpgCommonPlayer {
   abstract _type: string;
   emitParticleTrigger = trigger();
@@ -20,7 +38,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   _param = signal({});
   frames: Frame[] = [];
   graphicsSignals = signal<any[]>([]);
-  flashTrigger = trigger();
+  flashTrigger: ConfigurableTrigger<FlashTriggerOptions> = trigger<FlashTriggerOptions>();
   private animationRestoreState?: {
     animationName: string;
     graphics: any[];
@@ -167,13 +185,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
    * });
    * ```
    */
-  flash(options?: {
-    type?: 'alpha' | 'tint' | 'both';
-    duration?: number;
-    cycles?: number;
-    alpha?: number;
-    tint?: number | string;
-  }): void {
+  flash(options?: FlashOptions): void {
     const flashOptions = {
       type: options?.type || 'alpha',
       duration: options?.duration ?? 300,

@@ -129,14 +129,14 @@ importers:
         specifier: workspace:*
         version: link:../physic
       '@signe/di':
-        specifier: 2.9.2
-        version: 2.9.2
+        specifier: 2.10.0
+        version: 2.10.0
       '@signe/reactive':
-        specifier: 2.9.2
-        version: 2.9.2
+        specifier: 2.10.0
+        version: 2.10.0
       '@signe/sync':
-        specifier: 2.9.4
-        version: 2.9.4
+        specifier: 2.10.0
+        version: 2.10.0
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -1934,17 +1934,11 @@ packages:
   '@signe/reactive@2.10.0':
     resolution: {integrity: sha512-JmGxTS1C5C2jrB3vxnQXVuoiHgUNeAOJQ1uRS5pnAfo3qN/LJhFKmnHXBntdN5ypQSqLHoM6zDZhkhGFQYvHAQ==}
 
-  '@signe/reactive@2.9.2':
-    resolution: {integrity: sha512-2isDHIH01HHTq5wgVMuuZsyVkWykIYZJ/zf1/o/q5/7J5JjO3OIpLra+OxSNS5WmpRF9CNWoBY7tzq3eDFyk6Q==}
-
   '@signe/room@2.10.0':
     resolution: {integrity: sha512-AGJ/28numjPyhclw/wOZcYJz1Tb+ZVeDnQYy1gKN3deYb6RBCKYbLX3X0YEme5Z33XlxIum5Aq341dXsb+nQQA==}
 
   '@signe/sync@2.10.0':
     resolution: {integrity: sha512-jGnAjtEGadaaPNwP3nfL6aewSWDMilHonfDSA2aoAXZtaQxQP1vAV5rstoOqQAp2VivwmWXZ4fdneDsfjpvdBw==}
-
-  '@signe/sync@2.9.4':
-    resolution: {integrity: sha512-CbJhRj7QY/Wuj8uYWSMJ2/XEwcmPvsUXmkg0YblCgD6R1I9xVI+pO//nNjgDWhnAJG/s4uVjL/42bVd9ozGg7w==}
 
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
@@ -5433,10 +5427,6 @@ snapshots:
     dependencies:
       rxjs: 7.8.2
 
-  '@signe/reactive@2.9.2':
-    dependencies:
-      rxjs: 7.8.2
-
   '@signe/room@2.10.0':
     dependencies:
       '@signe/sync': 2.10.0
@@ -5447,12 +5437,6 @@ snapshots:
   '@signe/sync@2.10.0':
     dependencies:
       '@signe/reactive': 2.10.0
-      partysocket: 1.1.3
-      rxjs: 7.8.2
-
-  '@signe/sync@2.9.4':
-    dependencies:
-      '@signe/reactive': 2.9.2
       partysocket: 1.1.3
       rxjs: 7.8.2
 

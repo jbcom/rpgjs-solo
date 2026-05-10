@@ -36,7 +36,7 @@ interface GuiInstance {
   display: WritableSignal<boolean>;
   data: WritableSignal<any>;
   autoDisplay: boolean;
-  dependencies?: () => Signal[];
+  dependencies?: Signal[];
   subscription?: Subscription;
   attachToSprite?: boolean;
 }
@@ -461,7 +461,7 @@ export class RpgGui {
     // Use runtime dependencies or config dependencies
     const deps = dependencies.length > 0 
       ? dependencies 
-      : (guiInstance.dependencies ? guiInstance.dependencies() : []);
+      : (guiInstance.dependencies ?? []);
 
     if (deps.length > 0) {
       // Subscribe to dependencies

@@ -1,6 +1,6 @@
 import Canvas from "./components/scenes/canvas.ce";
 import { inject } from './core/inject'
-import { signal, bootstrapCanvas, Howl, trigger } from "canvasengine";
+import { signal, bootstrapCanvas, Howl, trigger, type Trigger } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { RpgSound } from "./Sound";
@@ -36,6 +36,17 @@ interface MovementTrajectoryPoint {
   direction?: Direction;
 }
 
+type ConfigurableTrigger<T> = Omit<Trigger<T>, "start"> & {
+  start(config?: T): Promise<void>;
+};
+
+type MapShakeOptions = {
+  intensity?: number;
+  duration?: number;
+  frequency?: number;
+  direction?: string;
+};
+
 export class RpgClientEngine<T = any> {
   private guiService: RpgGui;
   private webSocket: AbstractWebsocket;
@@ -69,7 +80,7 @@ export class RpgClientEngine<T = any> {
   /** ID of the sprite that the camera should follow. null means follow the current player */
   cameraFollowTargetId = signal<string | null>(null);
   /** Trigger for map shake animation */
-  mapShakeTrigger = trigger();
+  mapShakeTrigger: ConfigurableTrigger<MapShakeOptions> = trigger<MapShakeOptions>();
 
   controlsReady = signal(undefined); 
   gamePause = signal(false);
@@ -245,7 +256,7 @@ export class RpgClientEngine<T = any> {
 
     await this.webSocket.connection(() => {
       const saveClient = inject(SaveClientService);
-      saveClient.initialize(this.webSocket);
+      saveClient.initialize();
       this.initListeners()
       this.guiService._initialize()
       this.startPingPong();
@@ -437,7 +448,7 @@ export class RpgClientEngine<T = any> {
 
     this.webSocket.on("shakeMap", (data) => {
       const { intensity, duration, frequency, direction } = data || {};
-      (this.mapShakeTrigger as any).start({
+      this.mapShakeTrigger.start({
         intensity,
         duration,
         frequency,
@@ -586,7 +597,7 @@ export class RpgClientEngine<T = any> {
     })
     await this.webSocket.reconnect(() => {
       const saveClient = inject(SaveClientService);
-      saveClient.initialize(this.webSocket);
+      saveClient.initialize();
       this.initListeners()
       this.guiService._initialize()
     })
