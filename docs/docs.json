@@ -15,6 +15,14 @@
     {
       "source": "/guide/component.html",
       "destination": "/guide/component"
+    },
+    {
+      "source": "/commands/components.html",
+      "destination": "/api/player/components"
+    },
+    {
+      "source": "/commands/components",
+      "destination": "/api/player/components"
     }
   ],
   "navigation": {

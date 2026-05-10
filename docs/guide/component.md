@@ -1,95 +1,245 @@
 ---
 title: "Authoritative Sprite Components"
-description: "Display reusable sprite components from the server while keeping rendering on the client."
+description: "Display text, bars, shapes and custom CanvasEngine components around a player from the server."
 ---
 
 # Authoritative Sprite Components
 
-Sprite components are CanvasEngine components (`.ce`) rendered around a sprite.
-RPGJS has two complementary APIs:
+Use player components to display reusable UI around a player sprite: name tags,
+HP/SP bars, status indicators, badges, or custom CanvasEngine components.
 
-- client-side sprite components, configured with `componentsBehind` and `componentsInFront`, for visuals that apply to every sprite
-- server-driven sprite components, configured with `player.setComponentsTop()` and related methods, for visuals controlled by the server for one player
+The server is authoritative. It decides which component is displayed and sends a
+serializable description to every client on the map. The client renders the
+component and updates dynamic values such as `{name}`, `{hp}` or
+`{param.maxHp}` when synchronized player properties change.
 
-The server never imports `.ce` files. It only sends a component id and serializable props. The client owns the renderer.
+## Display Name Above The Player
 
-## Built-in Components
+![Player name component](/assets/name.png)
 
-Use the `Components` helpers for common RPG UI:
+In your server player file:
 
 ```ts
-import { Components } from '@rpgjs/server'
+import { RpgPlayer, type RpgPlayerHooks, Components } from '@rpgjs/server'
 
+const player: RpgPlayerHooks = {
+  onConnected(player: RpgPlayer) {
+    player.setHitbox(16, 16)
+    player.setGraphic('hero')
+    player.name = 'Sam'
+    player.setComponentsTop(Components.text('{name}'))
+  }
+}
+
+export default player
+```
+
+`Components.text('{name}')` creates a text component. The `{name}` placeholder
+is resolved on the client from the synchronized player property.
+
+<Warning>
+Prefer placeholders instead of injecting the current value yourself:
+
+```ts
+player.setComponentsTop(Components.text(player.name))
+```
+
+With `{name}`, changing the player name only synchronizes the `name` property.
+With `player.name`, the server must send a new component structure every time.
+</Warning>
+
+## Text Style
+
+![Styled player name component](/assets/name2.png)
+
+```ts
+player.setComponentsTop(Components.text('{name}', {
+  fill: '#000000',
+  fontSize: 20
+}))
+```
+
+Text style supports common CanvasEngine text options such as `fill`,
+`fontSize`, `fontFamily`, `fontStyle`, `fontWeight`, `stroke`, `opacity`,
+`wordWrap` and `align`.
+
+## Multiple Lines And Columns
+
+![Multiple text components](/assets/component-multi.png)
+
+A one-dimensional array is rendered vertically:
+
+```ts
 player.setComponentsTop([
-  Components.text('{name}', {
-    fill: '#ffffff',
-    fontSize: 12
-  }),
-  Components.hpBar({
-    width: 50,
-    height: 6,
-    fillColor: '#4ade80'
-  })
+  Components.text('HP: {hp}'),
+  Components.text('{name}')
 ])
 ```
 
-`Components.hpBar()` uses a red fill by default. `Components.spBar()` uses a
-blue fill by default. Pass `fillColor` to override either color.
-
-`player.setGraphic()` accepts a spritesheet id, a legacy tile id, or an array
-mixing both:
+A two-dimensional array is rendered as rows and columns:
 
 ```ts
-player.setGraphic('hero')
-player.setGraphic(3)
-player.setGraphic(['body', 'shield', 3])
+player.setComponentsTop([
+  [Components.text('{hp}'), Components.text('{name}')]
+])
 ```
 
-Numeric graphics are kept for compatibility with tile-based projects. Projects
-without a tile graphic resolver can ignore this form and use spritesheet ids.
-
-You can place components around the player:
+## Layout Options
 
 ```ts
-player.setComponentsTop(Components.text('{name}'))
-player.setComponentsBottom(Components.hpBar())
-player.setComponentsLeft(Components.shape({
-  type: 'circle',
-  fill: '#ff0000',
-  radius: 4
+player.setComponentsTop([
+  Components.text('HP: {hp}'),
+  Components.text('{name}')
+], {
+  width: 100,
+  height: 30,
+  marginBottom: 8
+})
+```
+
+Layout options configure the block that contains the components:
+
+- `width` and `height` define the layout box.
+- `marginBottom` moves a `top` or `bottom` component away from the sprite.
+- `marginRight` moves a `left` component away from the sprite.
+- `marginLeft` moves a `right` component away from the sprite.
+- `marginTop` can be used for additional vertical adjustment.
+
+`top`, `left` and `right` are placed outside the sprite graphic bounds, so they
+do not cover a graphic that is larger than the hitbox. `top` is centered on the
+graphic. `bottom` uses the hitbox as its positioning rectangle; a `32x32` shape
+inside a `32x32` hitbox matches the hitbox when centered.
+
+## HP And SP Bars
+
+![HP bar component](/assets/hpbar2.png)
+
+```ts
+player.setComponentsTop(Components.hpBar(), {
+  width: 42
+})
+```
+
+`Components.hpBar()` reads `hp` and `param.maxHp` and uses a red fill by
+default. `Components.spBar()` reads `sp` and `param.maxSp` and uses a blue fill
+by default. Pass `fillColor` to override the default color.
+
+```ts
+player.setComponentsTop(Components.spBar({
+  width: 42,
+  fillColor: '#60a5fa'
 }))
-
-player.removeComponents('top')
 ```
 
-Component text and props can use placeholders such as `{name}`, `{hp}`,
-`{sp}`, `{param.maxHp}`, or any synchronized player property.
+### Bar Text
 
-Shape components are centered from their rendered bounds. For example, a
-`32x32` rectangle centered in a `32x32` hitbox matches the hitbox exactly.
-
-Bar text is displayed above the bar and aligned to the left edge of the bar.
-It stays at the same position when the current value changes. The text can use
-normal player placeholders and bar-specific placeholders:
+![HP bar with text](/assets/hpbar3.png)
 
 ```ts
-player.setComponentsTop(Components.hpBar({
-  width: 60,
-  height: 6,
-  textColor: '#ffffff',
-  fontSize: 10
-}, 'HP: {$current}/{$max} - {name}'))
-
-player.setComponentsTop(Components.hpBar({}, null)) // no text
+player.setComponentsTop(
+  Components.hpBar({}, '{$percent}%'),
+  { width: 42 }
+)
 ```
+
+The text is displayed above the bar and aligned to the left edge of the bar. It
+does not move when the current value changes.
+
+Bar text can use normal player placeholders and bar-specific placeholders:
 
 - `{$current}`: current value
 - `{$max}`: maximum value
 - `{$percent}`: percentage without the `%` sign
 
-## Custom Components
+Set the text to `null` to hide it:
 
-Register reusable components on the client:
+```ts
+player.setComponentsTop(Components.hpBar({}, null))
+```
+
+## Other Positions
+
+![Shape component below the player](/assets/shape-component.png)
+
+```ts
+player.setComponentsBottom(
+  Components.shape({
+    type: 'rect',
+    width: 32,
+    height: 32,
+    fill: '#ff0000',
+    opacity: 0.5
+  }),
+  {
+    marginBottom: 16
+  }
+)
+```
+
+Available positions are:
+
+```ts
+player.setComponentsTop(Components.text('{name}'))
+player.setComponentsBottom(Components.hpBar())
+player.setComponentsLeft(Components.text('L'))
+player.setComponentsRight(Components.text('R'))
+player.setComponentsCenter(Components.shape({
+  type: 'circle',
+  radius: 8,
+  fill: '#ffffff'
+}))
+```
+
+Use `player.removeComponents(position)` to remove all components at a position:
+
+```ts
+player.removeComponents('top')
+```
+
+## Custom Player Properties
+
+Any synchronized player property can be used in placeholders.
+
+```ts
+import { RpgPlayer, type RpgPlayerHooks, Components } from '@rpgjs/server'
+
+declare module '@rpgjs/server' {
+  export interface RpgPlayer {
+    wood: number
+  }
+}
+
+const player: RpgPlayerHooks = {
+  props: {
+    wood: Number
+  },
+  onConnected(player: RpgPlayer) {
+    player.wood = 0
+    player.setComponentsTop(Components.text('Wood: {wood}'))
+  }
+}
+
+export default player
+```
+
+You can also create a bar for a custom value:
+
+```ts
+player.addParameter('maxWood', {
+  start: 100,
+  end: 500
+})
+
+player.wood = player.param.maxWood
+
+player.setComponentsTop(
+  Components.bar('wood', 'param.maxWood', {}, 'Wood: {$current}/{$max}')
+)
+```
+
+## Custom CanvasEngine Components
+
+Register a reusable CanvasEngine component on the client:
 
 ```ts
 // client.ts
@@ -105,7 +255,7 @@ export default defineModule<RpgClient>({
 })
 ```
 
-Create the CanvasEngine component:
+Create the component:
 
 ```html
 <!-- components/guild-badge.ce -->
@@ -125,8 +275,6 @@ Create the CanvasEngine component:
 Then let the server decide when to display it:
 
 ```ts
-import { Components } from '@rpgjs/server'
-
 player.setComponentsTop([
   Components.custom('guildBadge', {
     guildName: '{guild.name}',
@@ -135,43 +283,29 @@ player.setComponentsTop([
 ])
 ```
 
-Custom props must be serializable: strings, numbers, booleans, arrays, and plain objects.
+Custom props must be serializable: strings, numbers, booleans, arrays and plain
+objects. They can contain placeholders, so the component receives updated values
+when synchronized player properties change.
 
-## Layout
+## Graphic IDs And Legacy Tile IDs
 
-Pass layout options as the second argument:
-
-```ts
-player.setComponentsTop([
-  Components.text('{name}'),
-  Components.hpBar()
-], {
-  width: 80,
-  height: 16,
-  marginBottom: 8
-})
-```
-
-`top`, `left`, and `right` are anchored outside the sprite graphic bounds, so
-they do not cover frames that are larger than the hitbox. `top` is centered on
-the graphic. `bottom` uses the hitbox as its positioning rectangle and centers
-the component inside that rectangle, so a `32x32` shape on a `32x32` hitbox
-matches the hitbox. Use positive margins to move a component away from the
-sprite: `marginBottom` for `top` and `bottom`, `marginRight` for `left`, and
-`marginLeft` for `right`.
-
-A one-dimensional array is rendered vertically. A two-dimensional array is rendered as rows and columns:
+`player.setGraphic()` accepts a spritesheet id, a legacy tile id, or an array
+mixing both:
 
 ```ts
-player.setComponentsTop([
-  [Components.text('{name}'), Components.hpBar()]
-])
+player.setGraphic('hero')
+player.setGraphic(3)
+player.setGraphic(['body', 'shield', 3])
 ```
 
-## Difference With Animations
+Numeric graphics are kept for compatibility with tile-based projects. Projects
+without a tile graphic resolver can ignore numeric ids and use spritesheet ids.
+
+## Components Or Animations
 
 Use server-driven sprite components for persistent UI controlled by the server:
-name tags, HP bars, guild badges, status icons.
+name tags, HP bars, guild badges and status icons.
 
 Use `componentAnimations` and `showComponentAnimation()` for temporary effects:
-hit numbers, explosions, spell effects, and transitions that remove themselves with `onFinish`.
+hit numbers, explosions, spell effects and transitions that remove themselves
+with `onFinish`.
