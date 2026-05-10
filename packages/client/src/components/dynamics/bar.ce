@@ -1,8 +1,6 @@
-<Container>
-  <Graphics draw={drawBackground} />
-  <Graphics draw={drawFill} />
-  <Graphics draw={drawBorder} />
-  @if (labelText) {
+<Container width={width} height={containerHeight} minWidth={width} minHeight={containerHeight}>
+  <Graphics width={width} height={containerHeight} draw={drawBar} />
+  @if (hasLabel) {
     <Text text={labelText} x={labelPosition.x} y={labelPosition.y} size={labelSize} color={labelColor} />
   }
 </Container>
@@ -52,36 +50,38 @@ const fillWidth = computed(() => Math.max(0, width() * percent()));
 const labelTemplate = computed(() => read(text, null));
 const labelText = computed(() => {
   const template = labelTemplate();
-  if (!template) return '';
+  if (template == null || template === '') return '';
 
-  return String(template)
+  const value = String(template)
     .replace(/\{\$current\}/g, String(currentValue()))
     .replace(/\{\$max\}/g, String(maxValue()))
     .replace(/\{\$percent\}/g, String(Math.round(percent() * 100)));
+
+  return String(resolveDynamicValue(value, object) ?? '');
 });
 const labelSize = computed(() => toNumber(config().fontSize, 10));
+const hasLabel = computed(() => labelText().length > 0);
+const labelOffset = computed(() => hasLabel() ? labelSize() + 2 : 0);
+const containerHeight = computed(() => labelOffset() + height());
 const labelColor = computed(() => toColor(config().textColor, 0xffffff));
 const labelPosition = computed(() => ({
   x: 0,
-  y: -labelSize() - 2
+  y: 0
 }));
 
-const drawBackground = (g) => {
-  g.roundRect(0, 0, width(), height(), borderRadius());
+const drawBar = (g) => {
+  g.roundRect(0, labelOffset(), width(), height(), borderRadius());
   g.fill({ color: backgroundColor(), alpha: opacity() });
-};
 
-const drawFill = (g) => {
   const currentWidth = fillWidth();
-  if (currentWidth <= 0) return;
-  g.roundRect(0, 0, currentWidth, height(), borderRadius());
-  g.fill({ color: fillColor(), alpha: opacity() });
-};
-
-const drawBorder = (g) => {
+  if (currentWidth > 0) {
+    g.roundRect(0, labelOffset(), currentWidth, height(), borderRadius());
+    g.fill({ color: fillColor(), alpha: opacity() });
+  }
+  
   const strokeWidth = borderWidth();
   if (strokeWidth <= 0) return;
-  g.roundRect(0, 0, width(), height(), borderRadius());
+  g.roundRect(0, labelOffset(), width(), height(), borderRadius());
   g.stroke({ color: borderColor(), width: strokeWidth, alpha: opacity() });
 };
 </script>

@@ -7,6 +7,30 @@ interface MatchResult {
 }
 
 const readSignal = (value: any) => typeof value === 'function' ? value() : value;
+const DYNAMIC_VALUE_PATTERN = /\{([^}]+)\}/g;
+
+const hasDynamicValue = (value: any) => {
+    value = readSignal(value);
+    if (typeof value !== 'string') return false;
+    DYNAMIC_VALUE_PATTERN.lastIndex = 0;
+    return DYNAMIC_VALUE_PATTERN.test(value);
+};
+
+const resolveDynamicSnapshot = (value: any, object?: any): any => {
+    value = readSignal(value);
+
+    if (Array.isArray(value)) {
+        return value.map((entry) => resolveDynamicSnapshot(entry, object));
+    }
+
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, entry]) => [key, resolveDynamicSnapshot(entry, object)])
+        );
+    }
+
+    return resolveDynamicValue(value, object);
+};
 
 export const getDynamicValue = (property: string, object?: any) => {
     try {
@@ -44,28 +68,39 @@ export const resolveDynamicValue = (value: any, object?: any): any => {
         return value;
     }
 
-    const pattern = /\{([^}]+)\}/g;
-
-    return value.replace(pattern, (_fullMatch, property) => {
+    return value.replace(DYNAMIC_VALUE_PATTERN, (fullMatch, property) => {
         const propertyValue = getDynamicValue(property, object);
+        if (propertyValue == null && property.startsWith('$')) return fullMatch;
         return propertyValue != null ? String(propertyValue) : '';
     });
+};
+
+const resolveDynamicProp = (value: any, object?: any): any => {
+    if (Array.isArray(value) || (value && typeof value === 'object' && typeof value !== 'function')) {
+        return computed(() => resolveDynamicSnapshot(value, object));
+    }
+
+    if (typeof value === 'function' || hasDynamicValue(value)) {
+        return computed(() => resolveDynamicValue(value, object));
+    }
+
+    return value;
 };
 
 export const resolveDynamicProps = (props: any, object?: any): any => {
     props = readSignal(props);
 
     if (Array.isArray(props)) {
-        return props.map((value) => resolveDynamicProps(value, object));
+        return computed(() => resolveDynamicSnapshot(props, object));
     }
 
     if (props && typeof props === 'object') {
         return Object.fromEntries(
-            Object.entries(props).map(([key, value]) => [key, resolveDynamicProps(value, object)])
+            Object.entries(props).map(([key, value]) => [key, resolveDynamicProp(value, object)])
         );
     }
 
-    return resolveDynamicValue(props, object);
+    return resolveDynamicProp(props, object);
 };
 
 export const parseDynamicValue = (value: any, object?: any) => {
@@ -74,11 +109,11 @@ export const parseDynamicValue = (value: any, object?: any) => {
     }
 
     // Find all dynamic references like {propertyName}
-    const pattern = /\{([^}]+)\}/g;
     const matches: MatchResult[] = [];
     let match;
-    
-    while ((match = pattern.exec(value)) !== null) {
+
+    DYNAMIC_VALUE_PATTERN.lastIndex = 0;
+    while ((match = DYNAMIC_VALUE_PATTERN.exec(value)) !== null) {
         matches.push({
             property: match[1],
             fullMatch: match[0],
@@ -100,7 +135,7 @@ export const parseDynamicValue = (value: any, object?: any) => {
             const { property, fullMatch } = matches[i];
             
             const currentValue = getDynamicValue(property, object);
-            const propertyValue = currentValue != null ? String(currentValue) : '';
+            const propertyValue = currentValue != null ? String(currentValue) : property.startsWith('$') ? fullMatch : '';
             
             result = result.replace(fullMatch, propertyValue);
         }

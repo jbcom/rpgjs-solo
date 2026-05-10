@@ -1,18 +1,27 @@
 import { RpgPlayer, type RpgPlayerHooks, Components } from '@rpgjs/server'
 
 export const player: RpgPlayerHooks = {
+    props: {
+        wood: Number
+    },
     onConnected(player: RpgPlayer) {
         player.changeMap('simplemap')
         player.name.set('YourName')
         player.setGraphic('hero')
         player.initializeDefaultStats()
-        player.setComponentsTop([
-            Components.text('HP: {hp}'),
-            Components.text('{name}')
-        ])
-        setTimeout(() => {
-            player.hp = 10
-        }, 1000)
+        player.setComponentsBottom(
+            Components.shape({
+                type: 'rect',
+                width: 32,
+                height: 32,
+                fill: '#ff0000',
+                opacity: 0.5
+            }), 
+            {
+                marginBottom: 16
+            }
+        )
+       
     },
     onInput(player: RpgPlayer, { action }) {
         if (action == 'escape') {

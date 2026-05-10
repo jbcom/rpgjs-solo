@@ -50,6 +50,8 @@ const { object, position, graphicBounds } = defineProps({
 
 const client = inject(RpgClientEngine);
 const warnedComponents = new Set();
+const DEFAULT_HP_BAR_STYLE = { fillColor: '#ef4444' };
+const DEFAULT_SP_BAR_STYLE = { fillColor: '#3b82f6' };
 
 const readPosition = computed(() => position?.() ?? 'top');
 
@@ -120,7 +122,7 @@ const estimateComponentSize = (definition) => {
 
   if (definition?.type === 'hpBar' || definition?.type === 'spBar' || definition?.type === 'bar' || definition?.id === 'rpg:hpBar' || definition?.id === 'rpg:spBar' || definition?.id === 'rpg:bar') {
     const barHeight = toNumber(style.height, 8);
-    const labelHeight = props.text ? toNumber(style.fontSize, 10) + 2 : 0;
+    const labelHeight = props.text != null && props.text !== '' ? toNumber(style.fontSize, 10) + 2 : 0;
     return {
       width: toNumber(style.width, 50),
       height: barHeight + labelHeight
@@ -276,10 +278,10 @@ function getComponentProps(definition) {
     return { value: definition.value, style: definition.style };
   }
   if (definition.type === 'hpBar') {
-    return { current: '{hp}', max: '{param.maxHp}', style: definition.style, text: definition.text };
+    return { current: '{hp}', max: '{param.maxHp}', style: { ...DEFAULT_HP_BAR_STYLE, ...definition.style }, text: definition.text };
   }
   if (definition.type === 'spBar') {
-    return { current: '{sp}', max: '{param.maxSp}', style: definition.style, text: definition.text };
+    return { current: '{sp}', max: '{param.maxSp}', style: { ...DEFAULT_SP_BAR_STYLE, ...definition.style }, text: definition.text };
   }
   if (definition.type === 'bar') {
     return { current: `{${definition.current}}`, max: `{${definition.max}}`, style: definition.style, text: definition.text };

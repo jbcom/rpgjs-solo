@@ -70,12 +70,16 @@ export interface BarComponentOptions {
   fillColor?: string;
   /** Border color in hexadecimal format */
   borderColor?: string;
+  /** Text color in hexadecimal format */
+  textColor?: string;
   /** Border width */
   borderWidth?: number;
   /** Height of the bar in pixels */
   height?: number;
   /** Width of the bar in pixels */
   width?: number;
+  /** Text font size in pixels */
+  fontSize?: number;
   /** Border radius */
   borderRadius?: number;
   /** Opacity between 0 and 1 */
@@ -126,6 +130,8 @@ export type ComponentDefinition =
 export type ComponentInput = ComponentDefinition | ComponentDefinition[] | ComponentDefinition[][];
 
 const toTemplatePath = (value: string) => value.includes('{') ? value : `{${value}}`;
+const DEFAULT_HP_BAR_STYLE: BarComponentOptions = { fillColor: '#ef4444' };
+const DEFAULT_SP_BAR_STYLE: BarComponentOptions = { fillColor: '#3b82f6' };
 
 /**
  * Components factory for creating component definitions
@@ -229,11 +235,11 @@ export const Components = {
    * ## Design
    * 
    * HP bars read from the player's hp and param.maxHp properties. The
-   * bar can optionally display text above it showing current, max, or
-   * percentage values.
+   * bar uses a red fill by default and can optionally display text above it
+   * showing current, max, or percentage values.
    * 
-   * @param options - Bar styling options
-   * @param text - Optional text to display above the bar. Can use placeholders:
+   * @param options - Bar styling options. `fillColor` overrides the default red fill.
+   * @param text - Optional left-aligned text to display above the bar. Can use player placeholders like `{name}` and:
    *   - {$current} - Current HP value
    *   - {$max} - Maximum HP value
    *   - {$percent} - Percentage value
@@ -256,16 +262,17 @@ export const Components = {
    * ```
    */
   hpBar(style?: BarComponentOptions, text?: string | null): ComponentDefinition {
+    const barStyle = { ...DEFAULT_HP_BAR_STYLE, ...style };
     return {
       type: 'hpBar',
       id: 'rpg:hpBar',
       props: {
         current: '{hp}',
         max: '{param.maxHp}',
-        style,
+        style: barStyle,
         text: text ?? undefined
       },
-      style,
+      style: barStyle,
       text: text ?? undefined
     };
   },
@@ -274,11 +281,11 @@ export const Components = {
    * Create an SP bar component
    * 
    * Creates a skill point bar that automatically displays the player's
-   * current SP relative to their maximum SP. The bar updates automatically
-   * as SP changes.
+   * current SP relative to their maximum SP. The bar uses a blue fill by
+   * default and updates automatically as SP changes.
    * 
-   * @param style - Bar styling options
-   * @param text - Optional text to display above the bar. Can use placeholders:
+   * @param style - Bar styling options. `fillColor` overrides the default blue fill.
+   * @param text - Optional left-aligned text to display above the bar. Can use player placeholders like `{name}` and:
    *   - {$current} - Current SP value
    *   - {$max} - Maximum SP value
    *   - {$percent} - Percentage value
@@ -295,16 +302,17 @@ export const Components = {
    * ```
    */
   spBar(style?: BarComponentOptions, text?: string | null): ComponentDefinition {
+    const barStyle = { ...DEFAULT_SP_BAR_STYLE, ...style };
     return {
       type: 'spBar',
       id: 'rpg:spBar',
       props: {
         current: '{sp}',
         max: '{param.maxSp}',
-        style,
+        style: barStyle,
         text: text ?? undefined
       },
-      style,
+      style: barStyle,
       text: text ?? undefined
     };
   },
@@ -318,7 +326,7 @@ export const Components = {
    * @param current - Property path for current value (e.g., 'wood', 'mana')
    * @param max - Property path for maximum value (e.g., 'param.maxWood', 'param.maxMana')
    * @param style - Bar styling options
-   * @param text - Optional text to display above the bar. Can use placeholders:
+   * @param text - Optional left-aligned text to display above the bar. Can use player placeholders like `{name}` and:
    *   - {$current} - Current value
    *   - {$max} - Maximum value
    *   - {$percent} - Percentage value

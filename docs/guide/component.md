@@ -33,6 +33,9 @@ player.setComponentsTop([
 ])
 ```
 
+`Components.hpBar()` uses a red fill by default. `Components.spBar()` uses a
+blue fill by default. Pass `fillColor` to override either color.
+
 You can place components around the player:
 
 ```ts
@@ -49,6 +52,25 @@ player.removeComponents('top')
 
 Component text and props can use placeholders such as `{name}`, `{hp}`,
 `{sp}`, `{param.maxHp}`, or any synchronized player property.
+
+Bar text is displayed above the bar and aligned to the left edge of the bar.
+It stays at the same position when the current value changes. The text can use
+normal player placeholders and bar-specific placeholders:
+
+```ts
+player.setComponentsTop(Components.hpBar({
+  width: 60,
+  height: 6,
+  textColor: '#ffffff',
+  fontSize: 10
+}, 'HP: {$current}/{$max} - {name}'))
+
+player.setComponentsTop(Components.hpBar({}, null)) // no text
+```
+
+- `{$current}`: current value
+- `{$max}`: maximum value
+- `{$percent}`: percentage without the `%` sign
 
 ## Custom Components
 
