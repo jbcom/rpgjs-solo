@@ -48,10 +48,10 @@ export class RpgClientEngine<T = any> {
   stopProcessingInput = false;
   width = signal("100%");
   height = signal("100%");
-  spritesheets: Map<string, any> = new Map();
+  spritesheets: Map<string | number, any> = new Map();
   sounds: Map<string, any> = new Map();
   componentAnimations: any[] = [];
-  private spritesheetResolver?: (id: string) => any | Promise<any>;
+  private spritesheetResolver?: (id: string | number) => any | Promise<any>;
   private soundResolver?: (id: string) => any | Promise<any>;
   particleSettings: {
     emitters: any[]
@@ -647,7 +647,7 @@ export class RpgClientEngine<T = any> {
    * });
    * ```
    */
-  setSpritesheetResolver(resolver: (id: string) => any | Promise<any>): void {
+  setSpritesheetResolver(resolver: (id: string | number) => any | Promise<any>): void {
     this.spritesheetResolver = resolver;
   }
 
@@ -658,7 +658,7 @@ export class RpgClientEngine<T = any> {
    * If not found and a resolver is set, it calls the resolver to create the spritesheet.
    * The resolved spritesheet is automatically cached for future use.
    * 
-   * @param id - The spritesheet ID to retrieve
+   * @param id - The spritesheet ID or legacy tile ID to retrieve
    * @returns The spritesheet if found or created, or undefined if not found and no resolver
    * @returns Promise<any> if the resolver is asynchronous
    * 
@@ -671,7 +671,7 @@ export class RpgClientEngine<T = any> {
    * const spritesheet = await engine.getSpriteSheet('dynamic-sprite');
    * ```
    */
-  getSpriteSheet(id: string): any | Promise<any> {
+  getSpriteSheet(id: string | number): any | Promise<any> {
     // Check cache first
     if (this.spritesheets.has(id)) {
       return this.spritesheets.get(id);

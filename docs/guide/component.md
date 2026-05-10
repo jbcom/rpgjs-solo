@@ -36,6 +36,18 @@ player.setComponentsTop([
 `Components.hpBar()` uses a red fill by default. `Components.spBar()` uses a
 blue fill by default. Pass `fillColor` to override either color.
 
+`player.setGraphic()` accepts a spritesheet id, a legacy tile id, or an array
+mixing both:
+
+```ts
+player.setGraphic('hero')
+player.setGraphic(3)
+player.setGraphic(['body', 'shield', 3])
+```
+
+Numeric graphics are kept for compatibility with tile-based projects. Projects
+without a tile graphic resolver can ignore this form and use spritesheet ids.
+
 You can place components around the player:
 
 ```ts

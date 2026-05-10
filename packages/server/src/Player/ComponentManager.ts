@@ -3,6 +3,7 @@ import { RpgCommonPlayer } from "@rpgjs/common";
 import { ComponentInput, ComponentLayout } from "./Components";
 
 type ComponentPosition = 'top' | 'center' | 'bottom' | 'left' | 'right';
+type GraphicInput = string | number | (string | number)[];
 
 /**
  * Component Manager Mixin
@@ -33,7 +34,7 @@ type ComponentPosition = 'top' | 'center' | 'bottom' | 'left' | 'right';
  */
 export function WithComponentManager<TBase extends Constructor<RpgCommonPlayer>>(Base: TBase): new (...args: ConstructorParameters<TBase>) => InstanceType<TBase> & IComponentManager {
   return class extends Base {
-    setGraphic(graphic: string | string[]): void {
+    setGraphic(graphic: GraphicInput): void {
        if (Array.isArray(graphic)) {
          this.graphics.set(graphic);
        } else {
@@ -348,7 +349,7 @@ export interface IComponentManager {
    * The graphics system provides flexible visual representation that can be
    * dynamically changed during gameplay for different states, equipment, or animations.
    *
-   * @param graphic - Single graphic name or array of graphic names for animation sequences
+   * @param graphic - Single graphic name, legacy tile id, or array of graphic names/tile ids for animation sequences
    * @returns void
    *
    * @example
@@ -358,6 +359,9 @@ export interface IComponentManager {
    *
    * // Set multiple graphics for animation sequences
    * player.setGraphic(["hero_idle", "hero_walk", "hero_run"]);
+   *
+   * // Set a legacy tile id
+   * player.setGraphic(3);
    * 
    * // Dynamic graphic changes based on equipment
    * if (player.hasArmor('platemail')) {
@@ -368,7 +372,7 @@ export interface IComponentManager {
    * player.setGraphic(["mage_cast_1", "mage_cast_2", "mage_cast_3"]);
    * ```
    */
-  setGraphic(graphic: string | string[]): void;
+  setGraphic(graphic: GraphicInput): void;
 
   /**
    * Set components to display above the player graphic

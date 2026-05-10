@@ -64,7 +64,7 @@ export class RpgResource {
       // Extract image path from spritesheet
       const imageLink = spritesheet?.image || spritesheet?.imageSource || undefined;
       if (imageLink) {
-        RpgResource._spritesheets.set(id, imageLink);
+        RpgResource._spritesheets.set(String(id), imageLink);
       }
     });
 
@@ -147,4 +147,3 @@ export class RpgResource {
     return RpgResource._sounds;
   }
 }
-

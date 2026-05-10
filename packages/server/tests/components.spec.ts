@@ -4,7 +4,7 @@ import { WithComponentManager } from "../src/Player/ComponentManager";
 import { signal } from "@signe/reactive";
 
 class BasePlayer {
-  graphics = signal<string[]>([]);
+  graphics = signal<Array<string | number>>([]);
   componentsTop = signal<string | null>(null);
   componentsCenter = signal<string | null>(null);
   componentsBottom = signal<string | null>(null);
@@ -167,13 +167,16 @@ describe("ComponentManager", () => {
     });
   });
 
-  test("setGraphic accepts one or many graphics", () => {
+  test("setGraphic accepts sprite ids, legacy tile ids and mixed arrays", () => {
     const player = new ComponentPlayer();
 
     player.setGraphic("hero");
     expect(player.graphics()).toEqual(["hero"]);
 
-    player.setGraphic(["hero-idle", "hero-run"]);
-    expect(player.graphics()).toEqual(["hero-idle", "hero-run"]);
+    player.setGraphic(3);
+    expect(player.graphics()).toEqual([3]);
+
+    player.setGraphic(["hero-idle", 4, "hero-run"]);
+    expect(player.graphics()).toEqual(["hero-idle", 4, "hero-run"]);
   });
 });
