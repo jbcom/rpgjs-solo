@@ -3,7 +3,18 @@ import { Gui } from './Gui'
 import { RpgPlayer } from '../Player/Player'
 
 export type ShopSellList = Record<string, number> | Array<{ id: string; multiplier: number }>
-export type ShopItemInput = string | { id?: string; [key: string]: any }
+type ReactiveField<T> = T | (() => T)
+type ShopItemObject = {
+    id?: ReactiveField<string>
+    name?: ReactiveField<string>
+    description?: ReactiveField<string>
+    price?: ReactiveField<number>
+    icon?: ReactiveField<string>
+    type?: string
+    _type?: string
+    [key: string]: unknown
+}
+export type ShopItemInput = string | ShopItemObject
 
 export interface ShopGuiOptions {
     items: ShopItemInput[]
@@ -66,15 +77,21 @@ export class ShopGui extends Gui {
             return undefined
         }
 
+        const readItemField = <K extends keyof ShopItemObject>(item: ShopItemObject, key: K) => {
+            const value = item[key]
+            return typeof value === 'function' ? value() : value
+        }
+
         const buildItemData = (item: ShopItemInput, overrides: { price?: number; quantity?: number } = {}) => {
+            const itemObject = typeof item === 'string' ? null : item
             const rawId = typeof item === 'string'
                 ? item
-                : (typeof item?.id === 'function' ? item.id() : (item?.id ?? item?.name))
+                : (readItemField(item, 'id') ?? readItemField(item, 'name'))
             const data = databaseById(rawId)
-            const itemName = typeof item?.name === 'function' ? item.name() : item?.name
-            const itemDescription = typeof item?.description === 'function' ? item.description() : item?.description
-            const itemPrice = typeof item?.price === 'function' ? item.price() : item?.price
-            const itemIcon = typeof item?.icon === 'function' ? item.icon() : item?.icon
+            const itemName = itemObject ? readItemField(itemObject, 'name') : undefined
+            const itemDescription = itemObject ? readItemField(itemObject, 'description') : undefined
+            const itemPrice = itemObject ? readItemField(itemObject, 'price') : undefined
+            const itemIcon = itemObject ? readItemField(itemObject, 'icon') : undefined
             const atk = getStatValue(data, 'atk')
             const def = getStatValue(data, 'def', ['pdef', 'sdef'])
             const intValue = getStatValue(data, 'int')
@@ -91,7 +108,7 @@ export class ShopGui extends Gui {
                 description: data?.description ?? itemDescription ?? '',
                 icon: data?.icon ?? itemIcon,
                 id: rawId,
-                type: data?._type ?? item.type ?? item?._type,
+                type: data?._type ?? itemObject?.type ?? itemObject?._type,
                 stats: Object.keys(stats).length ? stats : undefined,
                 equipped: rawId ? equippedIds.has(rawId) : false,
                 ...(overrides.quantity !== undefined ? { quantity: overrides.quantity } : {})
@@ -147,11 +164,12 @@ export class ShopGui extends Gui {
                 const multiplier = Object.prototype.hasOwnProperty.call(this.sellMultipliers, id)
                     ? this.sellMultipliers[id]
                     : this.baseSellMultiplier
-                const basePrice = (this.player as any).databaseById?.(id)?.price ?? (typeof (inventory as any)?.price === 'function' ? (inventory as any).price() : (inventory as any)?.price) ?? 0
-                const price = basePrice * multiplier
-                if (!basePrice || price <= 0) return
                 const inventory = (this.player as any).getItem?.(id)
                 if (!inventory) return
+                const inventoryPrice = typeof inventory.price === 'function' ? inventory.price() : inventory.price
+                const basePrice = (this.player as any).databaseById?.(id)?.price ?? inventoryPrice ?? 0
+                const price = basePrice * multiplier
+                if (!basePrice || price <= 0) return
                 const quantity = inventory.quantity()
                 if (quantity - nb < 0) return
                 ;(this.player as any)._gold.update((gold) => gold + price * nb)

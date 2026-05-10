@@ -1,5 +1,5 @@
 import { Constructor, PlayerCtor } from "@rpgjs/common";
-import { signal } from "@signe/reactive";
+import { signal, type WritableSignal } from "@signe/reactive";
 import { type } from "@signe/sync";
 
 /**
@@ -32,7 +32,12 @@ import { type } from "@signe/sync";
  */
 export function WithVariableManager<TBase extends PlayerCtor>(Base: TBase) {
   return class extends Base {
-    variables = type(signal<Record<string, any>>({}) as any, 'variables', { persist: true }, this as any);
+    variables: WritableSignal<Record<string, any>> = type(
+      signal<Record<string, any>>({}) as never,
+      'variables',
+      { persist: true },
+      this as never
+    ) as unknown as WritableSignal<Record<string, any>>;
 
     setVariable(key: string, val: any): void {
       this.variables.mutate((variables) => {

@@ -1,5 +1,5 @@
 import { inject } from "@signe/di";
-import { Action, MockConnection, Room } from "@signe/room";
+import { Action, Room, type RoomMethods } from "@signe/room";
 import { Hooks, ModulesToken } from "@rpgjs/common";
 import { context } from "../core/context";
 import { users } from "@signe/sync";
@@ -24,8 +24,8 @@ export class LobbyRoom extends BaseRoom {
     }
   }
 
-  async onJoin(player: RpgPlayer, conn: MockConnection) {
-    player.map = this;
+  async onJoin(player: RpgPlayer, conn: Parameters<RoomMethods["$send"]>[0]) {
+    player.map = this as unknown as RpgPlayer["map"];
     player.context = context;
     player.conn = conn;
     this.hooks.callHooks("server-player-onConnected", player).subscribe();

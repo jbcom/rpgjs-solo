@@ -229,6 +229,12 @@ class MoveList {
   // Threshold for considering a player as "stuck" (in pixels)
   private static readonly STUCK_THRESHOLD = 2;
 
+  private getRandomDirectionIndex(): number {
+    MoveList.callCounter += 1;
+    MoveList.randomCounter += 1;
+    const noise = MoveList.perlinNoise.get(MoveList.callCounter, MoveList.randomCounter, 0.2);
+    return Math.abs(Math.floor(((noise + 1) / 2) * 4)) % 4;
+  }
 
   /**
    * Clears the movement state for a specific player
@@ -1638,7 +1644,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               this.currentDirection = { x: 0, y: 0 };
               body.setVelocity({ x: 0, y: 0 });
               if (!this.finished) {
-                const playerFrequency = typeof this.player.frequency === 'function' ? this.player.frequency() : this.player.frequency;
+                const playerFrequency = this.player.frequency;
                 if (playerFrequency && playerFrequency > 0) {
                   this.waitingForFrequency = true;
                   this.frequencyWaitStartTime = Date.now();

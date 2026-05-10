@@ -15,7 +15,6 @@ import { IComponentManager, WithComponentManager } from "./ComponentManager";
 import { RpgMap } from "../rooms/map";
 import { Context, inject } from "@signe/di";
 import { IGuiManager, WithGuiManager } from "./GuiManager";
-import { MockConnection } from "@signe/room";
 import { IMoveManager, WithMoveManager } from "./MoveManager";
 import { IGoldManager, WithGoldManager } from "./GoldManager";
 import { WithVariableManager, type IVariableManager } from "./VariableManager";
@@ -44,8 +43,8 @@ import {
   shouldAutoSave,
   type SaveRequestContext,
   type SaveSlotIndex,
-  type SaveSlotMeta,
 } from "../services/save";
+import type { SaveSlotMeta } from "@rpgjs/common";
 
 /**
  * Combines multiple RpgCommonPlayer mixins into one
@@ -100,7 +99,7 @@ const BasicPlayerMixins = combinePlayerMixins([
 export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   map: RpgMap | null = null;
   context?: Context;
-  conn: MockConnection | null = null;
+  conn: Parameters<RpgMap["$send"]>[0] | null = null;
   touchSide: boolean = false; // Protection against map change loops
   private _clientListeners = new Map<string, Set<(data: any) => void | Promise<void>>>();
 
@@ -366,7 +365,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     else {
       this.pendingMapPosition.set(positions ?? "start");
     }
-    const transferToken = await room?.$sessionTransfer(this.conn, realMapId);
+    const transferToken = this.conn
+      ? await room?.$sessionTransfer(this.conn, realMapId)
+      : undefined;
     this.emit("changeMap", {
       mapId: realMapId,
       positions,
@@ -1052,7 +1053,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       if (currentEntity) {
         const zoneInfo = zoneManager.getZone(physicZoneId);
         if (zoneInfo) {
-          shape._updatePosition(zoneInfo.position.x, zoneInfo.position.y);
+          (shape as unknown as { _updatePosition(x: number, y: number): void })._updatePosition(zoneInfo.position.x, zoneInfo.position.y);
         }
       }
     };
@@ -1453,10 +1454,10 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    */
   setSync(schema: any) {
     for (let key in schema) {
-      this[key] = type(signal(null), key, {
-        syncWithClient: schema[key]?.$syncWithClient,
+      this[key] = type(signal<unknown>(null) as never, key, {
+        syncToClient: schema[key]?.$syncWithClient,
         persist: schema[key]?.$permanent,
-      }, this)
+      }, this as never)
     }
   }
 

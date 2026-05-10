@@ -1,4 +1,4 @@
-import { Action, MockConnection, Request, Room, RoomMethods, RoomOnJoin, UnhandledAction } from "@signe/room";
+import { Action, Request, Room, UnhandledAction, type RoomMethods, type RoomOnJoin } from "@signe/room";
 import {
   Hooks,
   IceMovement,
@@ -754,7 +754,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * // You typically don't call it directly
    * ```
    */
-  interceptorPacket(player: RpgPlayer, packet: any, conn: MockConnection) {
+  interceptorPacket(player: RpgPlayer, packet: any, conn: Parameters<RoomMethods["$send"]>[0]) {
     let obj: any = {}
     let packetValue = packet?.value;
 
@@ -843,7 +843,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * });
    * ```
    */
-  onJoin(player: RpgPlayer, conn: MockConnection) {
+  onJoin(player: RpgPlayer, conn: Parameters<RoomMethods["$send"]>[0]) {
     const alignPlayerBodyWithSignals = () => {
       const hitbox = typeof player.hitbox === 'function' ? player.hitbox() : player.hitbox;
       const width = hitbox?.w ?? 32;
@@ -950,7 +950,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * });
    * ```
    */
-  async onLeave(player: RpgPlayer, conn: MockConnection) {
+  async onLeave(player: RpgPlayer, conn: Parameters<RoomMethods["$send"]>[0]) {
     // Execute global map hooks (from RpgServer.map)
     await lastValueFrom(this.hooks.callHooks("server-map-onLeave", player, this));
 

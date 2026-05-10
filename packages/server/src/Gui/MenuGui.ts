@@ -168,7 +168,7 @@ export class MenuGui extends Gui {
         this.on('openSave', async () => {
             this.close()
             const gui = new SaveLoadGui(this.player)
-            player._gui[gui.id] = gui
+            ;(this.player as unknown as { _gui: Record<string, Gui> })._gui[gui.id] = gui
             await gui.open(options.saveSlots || [], {
                 mode: 'save',
                 maxSlots: options.saveMaxSlots

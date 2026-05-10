@@ -1,5 +1,10 @@
 import type { RpgTransportServer } from "./types";
 
+type MapUpdateHeadersInit =
+  | HeadersInit
+  | Record<string, string | string[] | undefined>
+  | Map<string, string | undefined>;
+
 interface ResolveMapOptions {
   host?: string;
   headers?: Headers;
@@ -121,11 +126,25 @@ export function resolveMapUpdateToken(explicitToken?: string): string {
   return explicitToken ?? readEnvVariable(MAP_UPDATE_TOKEN_ENV) ?? "";
 }
 
+function normalizeMapUpdateHeaders(init?: MapUpdateHeadersInit): HeadersInit | undefined {
+  if (!init) return undefined;
+  if (init instanceof Headers || Array.isArray(init)) return init;
+  if (init instanceof Map) {
+    return Array.from(init.entries()).filter((entry): entry is [string, string] => entry[1] !== undefined);
+  }
+  return Object.entries(init).flatMap(([key, value]) => {
+    if (value === undefined) return [];
+    return Array.isArray(value)
+      ? value.map((item): [string, string] => [key, item])
+      : [[key, value] as [string, string]];
+  });
+}
+
 export function createMapUpdateHeaders(
   token?: string,
-  init?: HeadersInit,
+  init?: MapUpdateHeadersInit,
 ): Headers {
-  const headers = new Headers(init);
+  const headers = new Headers(normalizeMapUpdateHeaders(init));
   if (!headers.has("content-type")) {
     headers.set("content-type", "application/json");
   }

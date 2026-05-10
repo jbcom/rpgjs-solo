@@ -1,6 +1,8 @@
 import { random } from "@rpgjs/common"
 import { DEX, AGI, ATK, PDEF, SDEF, STR, INT } from "@rpgjs/common"
 
+export { DEX, AGI, ATK, PDEF, SDEF, STR, INT } from "@rpgjs/common"
+
 export const MAXHP_CURVE = {
     start: 741,
     end: 7467

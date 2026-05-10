@@ -61,7 +61,7 @@ export function WithGuiManager<TBase extends PlayerCtor>(
       message: string,
       options: { time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" } = {}
     ): Promise<any> {
-      this.emit('notification', {
+      ;(this as unknown as { emit(type: string, value?: unknown): void }).emit('notification', {
         message,
         ...options,
       });

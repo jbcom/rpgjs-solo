@@ -16,6 +16,8 @@ export type ParameterCurve = {
 };
 
 export type ParameterValue = number | ParameterCurve;
+type ParameterModifierMap = Record<string, { value?: number; rate?: number }>;
+type ParameterCurveMap = Record<string, ParameterCurve>;
 
 const DEFAULT_EXP_CURVE: ExpCurve = {
   basis: 30,
@@ -463,12 +465,12 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
      * console.log(player.param[MAXHP]); // Updated value
      * ```
      */
-    private _paramsModifierSignal = type(signal<{
-        [key: string]: {
-            value?: number,
-            rate?: number
-        }
-    }>({}) as any, '_paramsModifierSignal', { persist: true }, this as any)
+    private _paramsModifierSignal: WritableSignal<ParameterModifierMap> = type(
+        signal<ParameterModifierMap>({}) as never,
+        '_paramsModifierSignal',
+        { persist: true },
+        this as never
+    ) as unknown as WritableSignal<ParameterModifierMap>
 
     /**
      * Signal for base parameters configuration
@@ -476,12 +478,12 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
      * Stores the start and end values for each parameter's level curve.
      * Changes to this signal trigger recalculation of all parameter values.
      */
-    private _parametersSignal = type(signal<{
-        [key: string]: {
-            start: number,
-            end: number
-        }
-    }>({}) as any, '_parametersSignal', { persist: true }, this as any)
+    private _parametersSignal: WritableSignal<ParameterCurveMap> = type(
+        signal<ParameterCurveMap>({}) as never,
+        '_parametersSignal',
+        { persist: true },
+        this as never
+    ) as unknown as WritableSignal<ParameterCurveMap>
 
     private _paramProxy: { [key: string]: number } | null = null
 
@@ -501,8 +503,8 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
      * console.log(player.param[MAXHP]); // New calculated value
      * ```
      */
-    _param = type(computed(() => {
-        const obj = {}
+    _param: ComputedSignal<Record<string, number>> = type(computed<Record<string, number>>(() => {
+        const obj: Record<string, number> = {}
         const parameters = this._parametersSignal()
         const allModifiers = this._getAggregatedModifiers()
         const level = this._level()
@@ -520,7 +522,7 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
         }
         
         return obj
-    }) as any, '_param', {}, this as any) 
+    }) as never, '_param', {}, this as never) as unknown as ComputedSignal<Record<string, number>>
 
     /**
      * Aggregates parameter modifiers from all sources (direct modifiers, states, equipment)
@@ -619,7 +621,12 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      * @memberof ParameterManager
      * */
-    public _expCurveSignal = type(signal<string>(JSON.stringify(DEFAULT_EXP_CURVE)) as any, '_expCurveSignal', { persist: true }, this as any)
+    public _expCurveSignal: WritableSignal<string> = type(
+        signal<string>(JSON.stringify(DEFAULT_EXP_CURVE)) as never,
+        '_expCurveSignal',
+        { persist: true },
+        this as never
+    ) as unknown as WritableSignal<string>
 
     get expCurve(): ExpCurve { 
         const raw = this._expCurveSignal()
@@ -919,7 +926,7 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
     }
 
     set parameters(val) {
-        const normalizedParameters = {}
+        const normalizedParameters: Record<string, ParameterCurve> = {}
         for (const [name, parameterValue] of Object.entries(val || {})) {
             normalizedParameters[name] = normalizeParameterCurve(parameterValue)
         }

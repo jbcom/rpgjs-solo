@@ -1,7 +1,5 @@
-import { isInstanceOf, isString, PlayerCtor, type Constructor } from "@rpgjs/common";
-import { RpgCommonPlayer, Matter, SeekAvoid } from "@rpgjs/common";
+import { isInstanceOf, isString, PlayerCtor } from "@rpgjs/common";
 import { signal, type WritableArraySignal } from "@signe/reactive";
-import { ATK, PDEF, SDEF } from "../presets";
 import { ItemLog, StateLog } from "../logs";
 import { persist } from "@signe/sync";
 import { RpgPlayer } from "./Player";
@@ -59,10 +57,11 @@ export function WithStateManager<TBase extends PlayerCtor>(Base: TBase) {
       stateInput: StateClass | string,
       databaseByIdOverride?: (id: string) => any
     ) {
-      if (isString(stateInput)) {
-        return databaseByIdOverride
-          ? databaseByIdOverride(stateInput)
-          : (this as any).databaseById(stateInput);
+      if (typeof stateInput === "string") {
+        if (databaseByIdOverride) {
+          return databaseByIdOverride(stateInput);
+        }
+        return (this as any).databaseById(stateInput);
       }
       return stateInput;
     }

@@ -1,5 +1,6 @@
 import type { WeatherState } from "@rpgjs/common";
 import type { MapEventDefinition, MapEventPlacement } from "../rooms/map";
+import type { RpgPlayer } from "../Player/Player";
 
 export interface MapOptions {
     /** 

@@ -106,7 +106,7 @@ export interface AttachShapeOptions {
   properties?: object;
 }
 
-export abstract class RpgCommonPlayer {
+export class RpgCommonPlayer {
   @id() id: string;
   @sync() name = signal("");
   @sync() type = signal("");
@@ -284,7 +284,9 @@ export abstract class RpgCommonPlayer {
     return this.direction();
   }
 
-  abstract isEvent(): boolean;
+  isEvent(): boolean {
+    return false;
+  }
 }
 
 export type PlayerCtor<T extends RpgCommonPlayer = RpgCommonPlayer> = Constructor<T>

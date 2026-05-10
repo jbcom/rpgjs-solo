@@ -1,5 +1,10 @@
 import { RpgPlayer } from '../Player/Player'
 
+export interface GuiOpenOptions {
+    waitingAction?: boolean
+    blockPlayerInput?: boolean
+}
+
 export class Gui {
 
     private _close: Function = () => {}
@@ -13,10 +18,10 @@ export class Gui {
         
     }
 
-    open(data?, {
+    open(data?: unknown, {
         waitingAction = false,
         blockPlayerInput = false
-    } = {}): Promise<any> {
+    }: GuiOpenOptions = {}): Promise<any> {
         return new Promise((resolve) => {
             this.player.emit('gui.open', {
                 guiId: this.id,
@@ -48,7 +53,7 @@ export class Gui {
         }
     }
 
-    close(data?) {
+    close(data?: unknown) {
         this.player.emit('gui.exit', this.id)
         if (this._blockPlayerInput) {
             this.player.canMove.set(true)
@@ -56,7 +61,7 @@ export class Gui {
         this._close(data)
     }
 
-    update(data?, { clientActionId }: { clientActionId?: string } = {}) {
+    update(data?: unknown, { clientActionId }: { clientActionId?: string } = {}) {
         this.player.emit('gui.update', {
             guiId: this.id,
             data,

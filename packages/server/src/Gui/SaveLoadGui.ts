@@ -1,13 +1,13 @@
 import { PrebuiltGui } from '@rpgjs/common'
 import type { SaveSlot } from '@rpgjs/common'
-import { Gui } from './Gui'
+import { Gui, type GuiOpenOptions } from './Gui'
 import { RpgPlayer } from '../Player/Player'
 
 export type SaveLoadMode = 'save' | 'load'
 
 export type { SaveSlot } from '@rpgjs/common'
 
-export interface SaveLoadOptions {
+export interface SaveLoadOptions extends GuiOpenOptions {
     mode?: SaveLoadMode
     maxSlots?: number
 }
