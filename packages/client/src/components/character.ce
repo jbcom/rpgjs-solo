@@ -4,6 +4,8 @@
       <compConfig.component object ...compConfig.props />
     </Container>
   } 
+  <PlayerComponents object position="bottom" />
+  <PlayerComponents object position="left" />
   <Particle emit={emitParticleTrigger} settings={particleSettings} zIndex={1000} name={particleName} />
   <Container>
     @for (graphicObj of graphicsSignals) {
@@ -17,6 +19,9 @@
       />
     }
   </Container>
+  <PlayerComponents object position="center" />
+  <PlayerComponents object position="right" />
+  <PlayerComponents object position="top" />
   @for (compConfig of normalizedComponentsInFront) {
     <Container dependencies={compConfig.dependencies}>
       <compConfig.component object ...compConfig.props />

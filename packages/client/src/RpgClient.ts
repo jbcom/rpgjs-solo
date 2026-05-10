@@ -7,6 +7,12 @@ import { type MapPhysicsEntityContext, type MapPhysicsInitContext } from '@rpgjs
 type RpgClass<T = any> = new (...args: any[]) => T
 type RpgComponent = RpgClientObject
 type SceneMap = Container
+export type SpriteComponentConfig = ComponentFunction | {
+    component: ComponentFunction
+    props?: Record<string, any> | ((object: RpgClientObject) => Record<string, any>)
+    data?: Record<string, any> | ((object: RpgClientObject) => Record<string, any>)
+    dependencies?: (object: RpgClientObject) => any[]
+}
 
 export interface RpgSpriteBeforeRemoveContext {
     reason?: string
@@ -93,7 +99,7 @@ export interface RpgSpriteHooks {
      * }
      * ```
      */
-    componentsBehind?: ComponentFunction[]
+    componentsBehind?: SpriteComponentConfig[]
     
     /**
      * Array of components to render in front of the sprite
@@ -108,7 +114,28 @@ export interface RpgSpriteHooks {
      * }
      * ```
      */
-    componentsInFront?: ComponentFunction[]
+    componentsInFront?: SpriteComponentConfig[]
+
+    /**
+     * Reusable sprite components addressable by server-side component definitions.
+     *
+     * The server sends only the component id and serializable props. The client
+     * registry maps that id to the CanvasEngine component that renders it.
+     *
+     * @prop {Record<string, ComponentFunction>} [components]
+     * @memberof RpgSpriteHooks
+     * @example
+     * ```ts
+     * import GuildBadge from './components/guild-badge.ce'
+     *
+     * const sprite: RpgSpriteHooks = {
+     *   components: {
+     *     guildBadge: GuildBadge
+     *   }
+     * }
+     * ```
+     */
+    components?: Record<string, ComponentFunction>
     
     /**
      * As soon as the sprite is initialized

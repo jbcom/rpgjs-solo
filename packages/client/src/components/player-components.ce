@@ -1,0 +1,179 @@
+<Container x={containerPosition.x} y={containerPosition.y}>
+  @for (entry of renderedComponents) {
+    <Container x={entry.x} y={entry.y}>
+      <entry.component object ...entry.props />
+    </Container>
+  }
+</Container>
+
+<script>
+import { computed } from "canvasengine";
+import { RpgClientEngine } from "../RpgClientEngine";
+import { inject } from "../core/inject";
+import { resolveDynamicProps } from "./dynamics/parse-value";
+
+const { object, position } = defineProps({
+  position: {
+    default: 'top'
+  }
+});
+
+const client = inject(RpgClientEngine);
+const warnedComponents = new Set();
+
+const readPosition = computed(() => position?.() ?? 'top');
+
+const componentSource = computed(() => {
+  switch (readPosition()) {
+    case 'bottom':
+      return object.componentsBottom?.();
+    case 'center':
+      return object.componentsCenter?.();
+    case 'left':
+      return object.componentsLeft?.();
+    case 'right':
+      return object.componentsRight?.();
+    case 'top':
+    default:
+      return object.componentsTop?.();
+  }
+});
+
+const componentData = computed(() => {
+  const value = componentSource();
+  if (!value) {
+    return { components: [], layout: {} };
+  }
+
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    if (typeof process === 'undefined' || process.env?.NODE_ENV !== 'production') {
+      console.warn('[RPGJS] Invalid server sprite component payload', error);
+    }
+    return { components: [], layout: {} };
+  }
+});
+
+const layout = computed(() => componentData()?.layout ?? {});
+const rows = computed(() => componentData()?.components ?? []);
+const hitbox = object.hitbox;
+
+const cellWidth = computed(() => layout().width ?? 80);
+const cellHeight = computed(() => layout().height ?? 16);
+const totalWidth = computed(() => {
+  const maxColumns = rows().reduce((max, row) => Math.max(max, row.length), 0);
+  return maxColumns * cellWidth();
+});
+const totalHeight = computed(() => rows().length * cellHeight());
+
+const containerPosition = computed(() => {
+  const box = hitbox();
+  const margins = layout();
+  const horizontalCenter = (box.w / 2) - (totalWidth() / 2);
+  const verticalCenter = (box.h / 2) - (totalHeight() / 2);
+
+  switch (readPosition()) {
+    case 'bottom':
+      return {
+        x: horizontalCenter + (margins.marginLeft ?? 0) - (margins.marginRight ?? 0),
+        y: box.h + (margins.marginTop ?? 0) - (margins.marginBottom ?? 0)
+      };
+    case 'center':
+      return {
+        x: horizontalCenter + (margins.marginLeft ?? 0) - (margins.marginRight ?? 0),
+        y: verticalCenter + (margins.marginTop ?? 0) - (margins.marginBottom ?? 0)
+      };
+    case 'left':
+      return {
+        x: -totalWidth() - (margins.marginRight ?? 0) + (margins.marginLeft ?? 0),
+        y: verticalCenter + (margins.marginTop ?? 0) - (margins.marginBottom ?? 0)
+      };
+    case 'right':
+      return {
+        x: box.w + (margins.marginLeft ?? 0) - (margins.marginRight ?? 0),
+        y: verticalCenter + (margins.marginTop ?? 0) - (margins.marginBottom ?? 0)
+      };
+    case 'top':
+    default:
+      return {
+        x: horizontalCenter + (margins.marginLeft ?? 0) - (margins.marginRight ?? 0),
+        y: -totalHeight() - (margins.marginBottom ?? 0) + (margins.marginTop ?? 0)
+      };
+  }
+});
+
+const getComponentId = (definition) => {
+  if (!definition) return undefined;
+  if (definition.id) return definition.id;
+  if (definition.type === 'text') return 'rpg:text';
+  if (definition.type === 'hpBar') return 'rpg:hpBar';
+  if (definition.type === 'spBar') return 'rpg:spBar';
+  if (definition.type === 'bar') return 'rpg:bar';
+  if (definition.type === 'shape') return 'rpg:shape';
+  if (definition.type === 'image') return 'rpg:image';
+  if (definition.type === 'tile') return 'rpg:tile';
+  return definition.type;
+};
+
+const getComponentProps = (definition) => {
+  if (definition.props) return definition.props;
+
+  if (definition.type === 'text') {
+    return { value: definition.value, style: definition.style };
+  }
+  if (definition.type === 'hpBar') {
+    return { current: '{hp}', max: '{param.maxHp}', style: definition.style, text: definition.text };
+  }
+  if (definition.type === 'spBar') {
+    return { current: '{sp}', max: '{param.maxSp}', style: definition.style, text: definition.text };
+  }
+  if (definition.type === 'bar') {
+    return { current: `{${definition.current}}`, max: `{${definition.max}}`, style: definition.style, text: definition.text };
+  }
+  if (definition.type === 'shape') {
+    return definition.value;
+  }
+  if (definition.type === 'image' || definition.type === 'tile') {
+    return { value: definition.value };
+  }
+
+  return {};
+};
+
+const warnMissingComponent = (id) => {
+  if (!id || warnedComponents.has(id)) return;
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') return;
+  warnedComponents.add(id);
+  console.warn(`[RPGJS] Server sprite component "${id}" is not registered on the client.`);
+};
+
+const renderedComponents = computed(() => {
+  const entries = [];
+
+  rows().forEach((row, rowIndex) => {
+    row.forEach((definition, columnIndex) => {
+      const id = getComponentId(definition);
+      const component = client.getSpriteComponent(id);
+
+      if (!component) {
+        warnMissingComponent(id);
+        return;
+      }
+
+      entries.push({
+        component,
+        props: resolveDynamicProps(getComponentProps(definition), object),
+        x: columnIndex * cellWidth(),
+        y: rowIndex * cellHeight()
+      });
+    });
+  });
+
+  return entries;
+});
+</script>

@@ -6,6 +6,9 @@ export const player: RpgPlayerHooks = {
         player.name.set('YourName')
         player.setGraphic('hero')
         player.initializeDefaultStats()
+        player.setComponentsTop([
+            [Components.text('{hp}'), Components.text('{name}')]
+        ])
     },
     onInput(player: RpgPlayer, { action }) {
         if (action == 'escape') {

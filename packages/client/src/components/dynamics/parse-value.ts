@@ -6,6 +6,68 @@ interface MatchResult {
     index: number;
 }
 
+const readSignal = (value: any) => typeof value === 'function' ? value() : value;
+
+export const getDynamicValue = (property: string, object?: any) => {
+    try {
+        const propertyPath = property.split('.');
+        let currentValue = object;
+
+        for (let j = 0; j < propertyPath.length; j++) {
+            let prop = propertyPath[j];
+
+            currentValue = readSignal(currentValue);
+
+            if (j === 0) {
+                if (prop === 'hp') prop = 'hpSignal';
+                if (prop === 'sp') prop = 'spSignal';
+                if (prop === 'param') prop = '_param';
+            }
+
+            if (currentValue && typeof currentValue === 'object' && prop in currentValue) {
+                currentValue = currentValue[prop];
+            } else {
+                return undefined;
+            }
+        }
+
+        return readSignal(currentValue);
+    } catch (error) {
+        return undefined;
+    }
+};
+
+export const resolveDynamicValue = (value: any, object?: any): any => {
+    value = readSignal(value);
+
+    if (typeof value !== 'string') {
+        return value;
+    }
+
+    const pattern = /\{([^}]+)\}/g;
+
+    return value.replace(pattern, (_fullMatch, property) => {
+        const propertyValue = getDynamicValue(property, object);
+        return propertyValue != null ? String(propertyValue) : '';
+    });
+};
+
+export const resolveDynamicProps = (props: any, object?: any): any => {
+    props = readSignal(props);
+
+    if (Array.isArray(props)) {
+        return props.map((value) => resolveDynamicProps(value, object));
+    }
+
+    if (props && typeof props === 'object') {
+        return Object.fromEntries(
+            Object.entries(props).map(([key, value]) => [key, resolveDynamicProps(value, object)])
+        );
+    }
+
+    return resolveDynamicValue(props, object);
+};
+
 export const parseDynamicValue = (value: any, object?: any) => {
     if (typeof value !== 'string') {
         return computed(() => String(value ?? ''));
@@ -37,40 +99,8 @@ export const parseDynamicValue = (value: any, object?: any) => {
         for (let i = matches.length - 1; i >= 0; i--) {
             const { property, fullMatch } = matches[i];
             
-            // Try to access the property from the object
-            // Support nested properties like {param.maxHp}
-            let propertyValue = '';
-            try {
-                const propertyPath = property.split('.');
-                let currentValue = object;
-                
-                for (let j = 0; j < propertyPath.length; j++) {
-                    const prop = propertyPath[j];
-                    
-                    // Check if currentValue is a signal (function) and call it
-                    if (typeof currentValue === 'function') {
-                        currentValue = currentValue();
-                    }
-                    
-                    // Access the property
-                    if (currentValue && typeof currentValue === 'object' && prop in currentValue) {
-                        currentValue = currentValue[prop];
-                    } else {
-                        currentValue = undefined;
-                        break;
-                    }
-                }
-                
-                // If the final value is a signal, call it
-                if (typeof currentValue === 'function') {
-                    currentValue = currentValue();
-                }
-                
-                propertyValue = currentValue != null ? String(currentValue) : '';
-            } catch (error) {
-                // If property doesn't exist or can't be accessed, use empty string
-                propertyValue = '';
-            }
+            const currentValue = getDynamicValue(property, object);
+            const propertyValue = currentValue != null ? String(currentValue) : '';
             
             result = result.replace(fullMatch, propertyValue);
         }

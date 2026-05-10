@@ -1,0 +1,80 @@
+<Graphics draw={drawShape} />
+
+<script>
+import { computed } from "canvasengine";
+import { resolveDynamicValue } from "./parse-value";
+
+const props = defineProps();
+const { object } = props;
+
+const read = (prop, fallback) => prop ? prop() : fallback;
+
+const toNumber = (value, fallback = 0) => {
+  const resolved = resolveDynamicValue(value, object);
+  const num = typeof resolved === 'number' ? resolved : parseFloat(resolved);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+const toColor = (value, fallback) => {
+  const resolved = resolveDynamicValue(value, object);
+  if (typeof resolved === 'number') return resolved;
+  if (typeof resolved === 'string' && resolved.startsWith('#')) {
+    return parseInt(resolved.slice(1), 16);
+  }
+  return resolved ?? fallback;
+};
+
+const config = computed(() => ({
+  type: read(props.type, 'rectangle'),
+  fill: toColor(read(props.fill, '#ffffff'), 0xffffff),
+  radius: toNumber(read(props.radius, 8), 8),
+  width: toNumber(read(props.width, 16), 16),
+  height: toNumber(read(props.height, 16), 16),
+  x1: toNumber(read(props.x1, 0), 0),
+  y1: toNumber(read(props.y1, 0), 0),
+  x2: toNumber(read(props.x2, 16), 16),
+  y2: toNumber(read(props.y2, 0), 0),
+  opacity: Math.max(0, Math.min(1, toNumber(read(props.opacity, 1), 1))),
+  points: read(props.points, []),
+  line: read(props.line, null)
+}));
+
+const drawShape = (g) => {
+  const cfg = config();
+
+  if (cfg.type === 'circle') {
+    g.circle(0, 0, cfg.radius);
+  } else if (cfg.type === 'ellipse') {
+    g.ellipse(0, 0, cfg.width / 2, cfg.height / 2);
+  } else if (cfg.type === 'line') {
+    g.moveTo(cfg.x1, cfg.y1);
+    g.lineTo(cfg.x2, cfg.y2);
+  } else if (cfg.type === 'polygon' && Array.isArray(cfg.points)) {
+    g.poly(cfg.points);
+  } else if (cfg.type === 'rounded-rectangle') {
+    g.roundRect(0, 0, cfg.width, cfg.height, toNumber(read(props.radius, 4), 4));
+  } else {
+    g.rect(0, 0, cfg.width, cfg.height);
+  }
+
+  if (cfg.type === 'line') {
+    const line = cfg.line ?? {};
+    g.stroke({
+      color: toColor(line.color, cfg.fill),
+      width: toNumber(line.width, 1),
+      alpha: toNumber(line.alpha, cfg.opacity)
+    });
+    return;
+  }
+
+  g.fill({ color: cfg.fill, alpha: cfg.opacity });
+
+  if (cfg.line) {
+    g.stroke({
+      color: toColor(cfg.line.color, cfg.fill),
+      width: toNumber(cfg.line.width, 1),
+      alpha: toNumber(cfg.line.alpha, cfg.opacity)
+    });
+  }
+};
+</script>

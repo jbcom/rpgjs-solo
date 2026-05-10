@@ -1,0 +1,87 @@
+<Container>
+  <Graphics draw={drawBackground} />
+  <Graphics draw={drawFill} />
+  <Graphics draw={drawBorder} />
+  @if (labelText) {
+    <Text text={labelText} x={labelPosition.x} y={labelPosition.y} size={labelSize} color={labelColor} />
+  }
+</Container>
+
+<script>
+import { computed } from "canvasengine";
+import { resolveDynamicValue } from "./parse-value";
+
+const { object, current, max, style, text } = defineProps();
+
+const read = (prop, fallback) => prop ? prop() : fallback;
+
+const toNumber = (value, fallback = 0) => {
+  const resolved = resolveDynamicValue(value, object);
+  const num = typeof resolved === 'number' ? resolved : parseFloat(resolved);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+const toColor = (value, fallback) => {
+  const resolved = resolveDynamicValue(value, object);
+  if (typeof resolved === 'number') return resolved;
+  if (typeof resolved === 'string' && resolved.startsWith('#')) {
+    return parseInt(resolved.slice(1), 16);
+  }
+  return resolved ?? fallback;
+};
+
+const config = computed(() => read(style, {}) ?? {});
+const width = computed(() => toNumber(config().width, 50));
+const height = computed(() => toNumber(config().height, 8));
+const borderRadius = computed(() => toNumber(config().borderRadius, 3));
+const borderWidth = computed(() => toNumber(config().borderWidth, 1));
+const backgroundColor = computed(() => toColor(config().bgColor, 0x16213e));
+const fillColor = computed(() => toColor(config().fillColor, 0x4ade80));
+const borderColor = computed(() => toColor(config().borderColor, 0x4a5568));
+const opacity = computed(() => Math.max(0, Math.min(1, toNumber(config().opacity, 1))));
+
+const currentValue = computed(() => toNumber(read(current, 0), 0));
+const maxValue = computed(() => Math.max(0, toNumber(read(max, 0), 0)));
+const percent = computed(() => {
+  const max = maxValue();
+  if (max <= 0) return 0;
+  return Math.max(0, Math.min(1, currentValue() / max));
+});
+
+const fillWidth = computed(() => Math.max(0, width() * percent()));
+const labelTemplate = computed(() => read(text, null));
+const labelText = computed(() => {
+  const template = labelTemplate();
+  if (!template) return '';
+
+  return String(template)
+    .replace(/\{\$current\}/g, String(currentValue()))
+    .replace(/\{\$max\}/g, String(maxValue()))
+    .replace(/\{\$percent\}/g, String(Math.round(percent() * 100)));
+});
+const labelSize = computed(() => toNumber(config().fontSize, 10));
+const labelColor = computed(() => toColor(config().textColor, 0xffffff));
+const labelPosition = computed(() => ({
+  x: 0,
+  y: -labelSize() - 2
+}));
+
+const drawBackground = (g) => {
+  g.roundRect(0, 0, width(), height(), borderRadius());
+  g.fill({ color: backgroundColor(), alpha: opacity() });
+};
+
+const drawFill = (g) => {
+  const currentWidth = fillWidth();
+  if (currentWidth <= 0) return;
+  g.roundRect(0, 0, currentWidth, height(), borderRadius());
+  g.fill({ color: fillColor(), alpha: opacity() });
+};
+
+const drawBorder = (g) => {
+  const strokeWidth = borderWidth();
+  if (strokeWidth <= 0) return;
+  g.roundRect(0, 0, width(), height(), borderRadius());
+  g.stroke({ color: borderColor(), width: strokeWidth, alpha: opacity() });
+};
+</script>

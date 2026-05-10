@@ -195,6 +195,11 @@ export function provideClientModules(modules: RpgClientModule[]): FactoryProvide
                 engine.addSpriteComponentInFront(component);
               });
             }
+            if (sprite.components) {
+              Object.entries(sprite.components).forEach(([id, component]) => {
+                engine.registerSpriteComponent(id, component);
+              });
+            }
           },
         };
       }
@@ -226,4 +231,3 @@ export function provideClientGlobalConfig(config: any = {}) {
   }
   return provideGlobalConfig(config)
 }
-

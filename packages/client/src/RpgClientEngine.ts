@@ -14,6 +14,10 @@ import { lastValueFrom, Observable, combineLatest, BehaviorSubject, filter, swit
 import { GlobalConfigToken } from "./module";
 import * as PIXI from "pixi.js";
 import { PrebuiltComponentAnimations } from "./components/animations";
+import TextComponent from "./components/dynamics/text.ce";
+import BarComponent from "./components/dynamics/bar.ce";
+import ShapeComponent from "./components/dynamics/shape.ce";
+import ImageComponent from "./components/dynamics/image.ce";
 import {
   PredictionController,
   type PredictionHistoryEntry,
@@ -61,6 +65,7 @@ export class RpgClientEngine<T = any> {
   playerIdSignal = signal<string | null>(null);
   spriteComponentsBehind = signal<any[]>([]);
   spriteComponentsInFront = signal<any[]>([]);
+  spriteComponents: Map<string, any> = new Map();
   /** ID of the sprite that the camera should follow. null means follow the current player */
   cameraFollowTargetId = signal<string | null>(null);
   /** Trigger for map shake animation */
@@ -122,6 +127,13 @@ export class RpgClientEngine<T = any> {
       id: "animation",
       component: PrebuiltComponentAnimations.Animation
     })
+
+    this.registerSpriteComponent("rpg:text", TextComponent);
+    this.registerSpriteComponent("rpg:hpBar", BarComponent);
+    this.registerSpriteComponent("rpg:spBar", BarComponent);
+    this.registerSpriteComponent("rpg:bar", BarComponent);
+    this.registerSpriteComponent("rpg:shape", ShapeComponent);
+    this.registerSpriteComponent("rpg:image", ImageComponent);
 
     this.predictionEnabled = (this.globalConfig as any)?.prediction?.enabled !== false;
     this.initializePredictionController();
@@ -1091,6 +1103,37 @@ export class RpgClientEngine<T = any> {
   addSpriteComponentInFront(component: any | { component: any, props: (object: any) => any, dependencies?: (object: any) => any[] }) {
     this.spriteComponentsInFront.update((components: any[]) => [...components, component])
     return component
+  }
+
+  /**
+   * Register a reusable sprite component that can be addressed by the server.
+   *
+   * Server-side component definitions only carry the component id and
+   * serializable props. The client registry maps that id to the CanvasEngine
+   * component that performs the actual rendering.
+   *
+   * @param id - Stable component id used by server component definitions
+   * @param component - CanvasEngine component to render for this id
+   * @returns The registered component
+   *
+   * @example
+   * ```ts
+   * engine.registerSpriteComponent('guildBadge', GuildBadgeComponent);
+   * ```
+   */
+  registerSpriteComponent(id: string, component: any) {
+    this.spriteComponents.set(id, component);
+    return component;
+  }
+
+  /**
+   * Get a reusable sprite component by id.
+   *
+   * @param id - Component id registered on the client
+   * @returns The CanvasEngine component, or undefined when missing
+   */
+  getSpriteComponent(id: string) {
+    return this.spriteComponents.get(id);
   }
 
   /**

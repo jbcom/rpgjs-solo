@@ -7,6 +7,11 @@ description: "Component-based UI layout helpers and component utilities for play
 
 Component-based UI layout helpers and component utilities for players.
 
+Server-driven components are authoritative descriptions of sprite UI. Built-in
+helpers such as `Components.text()` and `Components.hpBar()` use RPGJS renderers,
+while `Components.custom(id, props)` targets a CanvasEngine component registered
+on the client under `sprite.components`.
+
 ## Members
 
 - [mergeComponents](#mergecomponents)

@@ -1,0 +1,20 @@
+<Sprite sheet={sheet} />
+
+<script>
+import { computed } from "canvasengine";
+import { RpgClientEngine } from "../../RpgClientEngine";
+import { inject } from "../../core/inject";
+import { resolveDynamicValue } from "./parse-value";
+
+const { object, value } = defineProps();
+const client = inject(RpgClientEngine);
+
+const sheet = computed(() => {
+  const id = resolveDynamicValue(value?.(), object);
+  if (!id) return null;
+  return {
+    definition: client.getSpriteSheet(id),
+    playing: 'default'
+  };
+});
+</script>

@@ -114,15 +114,18 @@ export interface ShapeComponentOptions {
 }
 
 export type ComponentDefinition = 
-  | { type: 'text'; value: string; style?: TextComponentOptions }
-  | { type: 'hpBar'; style?: BarComponentOptions; text?: string | null }
-  | { type: 'spBar'; style?: BarComponentOptions; text?: string | null }
-  | { type: 'bar'; current: string; max: string; style?: BarComponentOptions; text?: string | null }
-  | { type: 'shape'; value: ShapeComponentOptions }
-  | { type: 'image'; value: string }
-  | { type: 'tile'; value: number | string };
+  | { type: 'custom'; id: string; props?: Record<string, any> }
+  | { type: 'text'; id: 'rpg:text'; value: string; props: { value: string; style?: TextComponentOptions }; style?: TextComponentOptions }
+  | { type: 'hpBar'; id: 'rpg:hpBar'; props: { current: string; max: string; style?: BarComponentOptions; text?: string | null }; style?: BarComponentOptions; text?: string | null }
+  | { type: 'spBar'; id: 'rpg:spBar'; props: { current: string; max: string; style?: BarComponentOptions; text?: string | null }; style?: BarComponentOptions; text?: string | null }
+  | { type: 'bar'; id: 'rpg:bar'; current: string; max: string; props: { current: string; max: string; style?: BarComponentOptions; text?: string | null }; style?: BarComponentOptions; text?: string | null }
+  | { type: 'shape'; id: 'rpg:shape'; value: ShapeComponentOptions; props: ShapeComponentOptions }
+  | { type: 'image'; id: 'rpg:image'; value: string; props: { value: string } }
+  | { type: 'tile'; id: 'rpg:tile'; value: number | string; props: { value: number | string } };
 
 export type ComponentInput = ComponentDefinition | ComponentDefinition[] | ComponentDefinition[][];
+
+const toTemplatePath = (value: string) => value.includes('{') ? value : `{${value}}`;
 
 /**
  * Components factory for creating component definitions
@@ -145,6 +148,32 @@ export type ComponentInput = ComponentDefinition | ComponentDefinition[] | Compo
  * ```
  */
 export const Components = {
+  /**
+   * Use a client-registered sprite component
+   *
+   * The server only sends a stable component id and serializable props. The
+   * matching CanvasEngine component must be registered on the client.
+   *
+   * @param id - Client-side component id
+   * @param props - Serializable props passed to the component
+   * @returns Component definition for a custom component
+   *
+   * @example
+   * ```ts
+   * Components.custom('guildBadge', {
+   *   guildName: '{guild.name}',
+   *   color: '{guild.color}'
+   * });
+   * ```
+   */
+  custom(id: string, props: Record<string, any> = {}): ComponentDefinition {
+    return {
+      type: 'custom',
+      id,
+      props
+    };
+  },
+
   /**
    * Create a text component
    * 
@@ -180,7 +209,12 @@ export const Components = {
   text(value: string, style?: TextComponentOptions): ComponentDefinition {
     return {
       type: 'text',
+      id: 'rpg:text',
       value,
+      props: {
+        value,
+        style
+      },
       style
     };
   },
@@ -224,6 +258,13 @@ export const Components = {
   hpBar(style?: BarComponentOptions, text?: string | null): ComponentDefinition {
     return {
       type: 'hpBar',
+      id: 'rpg:hpBar',
+      props: {
+        current: '{hp}',
+        max: '{param.maxHp}',
+        style,
+        text: text ?? undefined
+      },
       style,
       text: text ?? undefined
     };
@@ -256,6 +297,13 @@ export const Components = {
   spBar(style?: BarComponentOptions, text?: string | null): ComponentDefinition {
     return {
       type: 'spBar',
+      id: 'rpg:spBar',
+      props: {
+        current: '{sp}',
+        max: '{param.maxSp}',
+        style,
+        text: text ?? undefined
+      },
       style,
       text: text ?? undefined
     };
@@ -289,8 +337,15 @@ export const Components = {
   bar(current: string, max: string, style?: BarComponentOptions, text?: string | null): ComponentDefinition {
     return {
       type: 'bar',
+      id: 'rpg:bar',
       current,
       max,
+      props: {
+        current: toTemplatePath(current),
+        max: toTemplatePath(max),
+        style,
+        text: text ?? undefined
+      },
       style,
       text: text ?? undefined
     };
@@ -333,6 +388,8 @@ export const Components = {
   shape(value: ShapeComponentOptions): ComponentDefinition {
     return {
       type: 'shape',
+      id: 'rpg:shape',
+      props: value,
       value
     };
   },
@@ -353,6 +410,8 @@ export const Components = {
   image(value: string): ComponentDefinition {
     return {
       type: 'image',
+      id: 'rpg:image',
+      props: { value },
       value
     };
   },
@@ -373,8 +432,9 @@ export const Components = {
   tile(value: number | string): ComponentDefinition {
     return {
       type: 'tile',
+      id: 'rpg:tile',
+      props: { value },
       value
     };
   }
 }; 
-

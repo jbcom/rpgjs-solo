@@ -11,6 +11,11 @@ This guide explains how to use sprite components to add visual elements behind o
 
 RPGJS allows you to attach custom components to sprites that render either behind or in front of the main sprite graphics. This is useful for adding visual effects like shadows, health bars, status indicators, auras, or other UI elements that should be positioned relative to sprites.
 
+For persistent components controlled by the server for a specific player, see
+[Authoritative Sprite Components](/guide/component). That API reuses the same
+CanvasEngine component model, but the server decides which registered component
+id to display and with which serializable props.
+
 ## Component Properties
 
 ### `componentsBehind`

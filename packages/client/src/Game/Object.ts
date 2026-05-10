@@ -1,14 +1,8 @@
 import { Hooks, ModulesToken, RpgCommonPlayer } from "@rpgjs/common";
-import { trigger, signal, effect } from "canvasengine";
-import { filter, from, map, of, Subscription, switchMap } from "rxjs";
+import { trigger, signal } from "canvasengine";
+import { from, map, of, Subscription, switchMap } from "rxjs";
 import { inject } from "../core/inject";
 import { RpgClientEngine } from "../RpgClientEngine";
-import TextComponent from "../components/dynamics/text.ce";
-
-const DYNAMIC_COMPONENTS = {
-  text: TextComponent,
-}
-
 type Frame = { x: number; y: number; ts: number };
 
 type AnimationRestoreOptions = {
@@ -26,7 +20,6 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   _param = signal({});
   frames: Frame[] = [];
   graphicsSignals = signal<any[]>([]);
-  _component = {} // temporary component memory
   flashTrigger = trigger();
   private animationRestoreState?: {
     animationName: string;
@@ -56,24 +49,6 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     )
     .subscribe((sheets) => {  
       this.graphicsSignals.set(sheets);
-    });
-
-    this.componentsTop.observable
-    .pipe(
-      filter(value => value !== null && value !== undefined),
-      map((value) => typeof value === 'string' ? JSON.parse(value) : value),
-    )
-    .subscribe(({components}) => {
-      for (const component of components) {
-        for (const [key, value] of Object.entries(component)) {
-          this._component = value as any; // temporary component memory
-          console.log(value)
-          const type = (value as any).type as keyof typeof DYNAMIC_COMPONENTS;
-          if (DYNAMIC_COMPONENTS[type]) {
-            this.engine.addSpriteComponentInFront(DYNAMIC_COMPONENTS[type]);
-          }
-        }
-      }
     });
 
     this.engine.tick

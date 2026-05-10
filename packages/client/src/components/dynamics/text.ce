@@ -1,157 +1,38 @@
-<Text text={parseDynamicValue(component.value, object)} ...getComponentStyle(component) />
+<Text text={textValue} color={textColor} size={textSize} fontFamily={textFontFamily} style={textStyle} />
 
 <script>
 import { computed } from "canvasengine";
-import { parseDynamicValue } from "./parse-value";
+import { resolveDynamicValue } from "./parse-value";
 
-const { object } = defineProps();
-const component = object._component;
+const { object, value, style } = defineProps();
 
-/**
- * Parses a numeric style value that can be a number or a string
- * 
- * If the value is a string, it may contain dynamic references like {hp}
- * which need to be parsed using parseDynamicValue. If it's a number,
- * it's returned as-is wrapped in a computed.
- * 
- * @param value - Numeric value (number or string)
- * @param object - Object to resolve dynamic references from
- * @returns Computed signal with the numeric value
- */
+const read = (prop, fallback) => prop ? prop() : fallback;
+
 const parseNumericStyleValue = (value, object) => {
-    if (value === undefined || value === null) {
-        return undefined;
-    }
-    
-    if (typeof value === 'number') {
-        return value;
-    }
-    
-    if (typeof value === 'string') {
-        // Check if it contains dynamic references
-        if (value.includes('{')) {
-            // Parse dynamic value and convert to number
-            const parsed = parseDynamicValue(value, object);
-            return computed(() => {
-                const str = parsed();
-                const num = parseFloat(str);
-                return isNaN(num) ? 0 : num;
-            });
-        } else {
-            // Simple string number, convert directly
-            const num = parseFloat(value);
-            return isNaN(num) ? undefined : num;
-        }
-    }
-    
-    return value;
+    value = resolveDynamicValue(value, object);
+    if (value === undefined || value === null) return undefined;
+    if (typeof value === 'number') return value;
+
+    const num = parseFloat(value);
+    return isNaN(num) ? undefined : num;
 };
 
-/**
- * Maps component style properties to Canvas Engine Text component props
- * 
- * Converts TextComponentOptions from the server to the format expected
- * by the Canvas Engine Text component. Supports all text styling properties
- * including fill, fontSize, fontFamily, fontStyle, fontWeight, stroke,
- * opacity, wordWrap, and align. Also supports dynamic values (number | string)
- * for numeric properties like fontSize and opacity.
- * 
- * @param component - Component definition with style property
- * @returns Object with Text component props
- * 
- * @example
- * ```ts
- * // Component with style
- * const component = {
- *   style: {
- *     fill: '#000000',
- *     fontSize: 20,
- *     fontFamily: 'Arial',
- *     fontWeight: 'bold'
- *   }
- * };
- * 
- * const props = getComponentStyle(component);
- * // Returns: { color: '#000000', size: 20, fontFamily: 'Arial', style: { fontWeight: 'bold' } }
- * 
- * // Component with dynamic fontSize
- * const component2 = {
- *   style: {
- *     fill: '#000000',
- *     fontSize: '{hp}', // Will be resolved from object.hp
- *     opacity: '0.8'
- *   }
- * };
- * ```
- */
-const getComponentStyle = (component) => {
-    if (!component.style) {
-        return {};
-    }
-
-    const style = component.style;
-    const result = {};
-
-    // Map fill to color (shortcut property)
-    // fill can be a string (hex color) or a dynamic string
-    if (style.fill !== undefined) {
-        if (typeof style.fill === 'string' && style.fill.includes('{')) {
-            result.color = parseDynamicValue(style.fill, object);
-        } else {
-            result.color = style.fill;
-        }
-    }
-
-    // Map fontSize to size (shortcut property)
-    // fontSize can be number or string (with dynamic references)
-    if (style.fontSize !== undefined) {
-        const fontSizeValue = parseNumericStyleValue(style.fontSize, object);
-        if (fontSizeValue !== undefined) {
-            result.size = fontSizeValue;
-        }
-    }
-
-    // Map fontFamily (shortcut property)
-    if (style.fontFamily !== undefined) {
-        if (typeof style.fontFamily === 'string' && style.fontFamily.includes('{')) {
-            result.fontFamily = parseDynamicValue(style.fontFamily, object);
-        } else {
-            result.fontFamily = style.fontFamily;
-        }
-    }
-
-    // Build style object for PixiJS Text properties
+const getTextStyle = (style) => {
+    if (!style) return {};
     const textStyle = {};
 
-    // Font style properties
     if (style.fontStyle !== undefined) {
-        if (typeof style.fontStyle === 'string' && style.fontStyle.includes('{')) {
-            textStyle.fontStyle = parseDynamicValue(style.fontStyle, object);
-        } else {
-            textStyle.fontStyle = style.fontStyle;
-        }
+        textStyle.fontStyle = resolveDynamicValue(style.fontStyle, object);
     }
 
     if (style.fontWeight !== undefined) {
-        if (typeof style.fontWeight === 'string' && style.fontWeight.includes('{')) {
-            textStyle.fontWeight = parseDynamicValue(style.fontWeight, object);
-        } else if (typeof style.fontWeight === 'number') {
-            textStyle.fontWeight = style.fontWeight;
-        } else {
-            textStyle.fontWeight = style.fontWeight;
-        }
+        textStyle.fontWeight = resolveDynamicValue(style.fontWeight, object);
     }
 
-    // Stroke properties
     if (style.stroke !== undefined) {
-        if (typeof style.stroke === 'string' && style.stroke.includes('{')) {
-            textStyle.stroke = parseDynamicValue(style.stroke, object);
-        } else {
-            textStyle.stroke = style.stroke;
-        }
+        textStyle.stroke = resolveDynamicValue(style.stroke, object);
     }
 
-    // Opacity (can be number or string)
     if (style.opacity !== undefined) {
         const opacityValue = parseNumericStyleValue(style.opacity, object);
         if (opacityValue !== undefined) {
@@ -159,25 +40,29 @@ const getComponentStyle = (component) => {
         }
     }
 
-    // Word wrap
     if (style.wordWrap !== undefined) {
         textStyle.wordWrap = style.wordWrap;
     }
 
-    // Text alignment
     if (style.align !== undefined) {
-        if (typeof style.align === 'string' && style.align.includes('{')) {
-            textStyle.align = parseDynamicValue(style.align, object);
-        } else {
-            textStyle.align = style.align;
-        }
+        textStyle.align = resolveDynamicValue(style.align, object);
     }
 
-    // Only add style prop if there are style properties
-    if (Object.keys(textStyle).length > 0) {
-        result.style = textStyle;
-    }
+    return textStyle;
+};
 
-    return result;
-}
+const textValue = computed(() => String(resolveDynamicValue(read(value, ''), object) ?? ''));
+const textColor = computed(() => {
+    const currentStyle = read(style, {});
+    return currentStyle.fill !== undefined ? resolveDynamicValue(currentStyle.fill, object) : undefined;
+});
+const textSize = computed(() => {
+    const currentStyle = read(style, {});
+    return currentStyle.fontSize !== undefined ? parseNumericStyleValue(currentStyle.fontSize, object) : undefined;
+});
+const textFontFamily = computed(() => {
+    const currentStyle = read(style, {});
+    return currentStyle.fontFamily !== undefined ? resolveDynamicValue(currentStyle.fontFamily, object) : undefined;
+});
+const textStyle = computed(() => getTextStyle(read(style, {})));
 </script>
