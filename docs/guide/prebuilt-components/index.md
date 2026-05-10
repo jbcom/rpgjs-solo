@@ -7,6 +7,13 @@ description: "Guide for Prebuilt Components in RPGJS."
 
 RPGJS includes a collection of prebuilt sprite components that you can use directly in your game. These components are ready to use out of the box and can be customized through props to match your game's aesthetic.
 
+<Info>
+Use prebuilt components when RPGJS already provides the sprite visual effect you
+need. For custom client-side effects, see
+[Sprite Components](/guide/sprite-components). For server-controlled player
+visuals, see [Authoritative Sprite Components](/guide/component).
+</Info>
+
 ## Available Components
 
 ### Light Halo
@@ -52,5 +59,6 @@ export default defineModule<RpgClient>({
 
 ## See Also
 
-- [Sprite Components Guide](/guide/sprite-components.md) - Learn how to create and use sprite components
+- [Components overview](/guide/components-overview) - Choose the right component system
+- [Sprite Components Guide](/guide/sprite-components) - Learn how to create and use sprite components
 - [CanvasEngine Documentation](https://canvasengine.net/) - Deep dive into the rendering engine

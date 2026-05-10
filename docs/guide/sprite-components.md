@@ -7,6 +7,13 @@ description: "Guide for Sprite Components Guide in RPGJS."
 
 This guide explains how to use sprite components to add visual elements behind or in front of sprites in RPGJS.
 
+<Info>
+Use sprite components for client-side visual layers attached to sprites. If the
+server must decide which component is displayed for a player, use
+[Authoritative Sprite Components](/guide/component). If the element is an
+interactive interface, use [GUI](/gui/index).
+</Info>
+
 ## Overview
 
 RPGJS allows you to attach custom components to sprites that render either behind or in front of the main sprite graphics. This is useful for adding visual effects like shadows, health bars, status indicators, auras, or other UI elements that should be positioned relative to sprites.

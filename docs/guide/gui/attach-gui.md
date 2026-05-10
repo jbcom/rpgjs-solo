@@ -7,6 +7,13 @@ description: "Guide for Attach GUI to Sprites Guide in RPGJS."
 
 This guide explains how to use the `attachToSprite` option to attach GUI components directly to sprites in the game world.
 
+<Info>
+Use attached GUI when an interface should follow a sprite and still use GUI
+lifecycle and interaction APIs. For passive sprite visuals, use
+[Sprite Components](/guide/sprite-components) or
+[Authoritative Sprite Components](/guide/component).
+</Info>
+
 ## Overview
 
 By default, GUI components are displayed as fixed overlays on the screen. However, you can attach GUI components to sprites so they follow the sprite's position in the game world. This is useful for:
@@ -16,6 +23,10 @@ By default, GUI components are displayed as fixed overlays on the screen. Howeve
 - Interactive UI elements attached to specific sprites
 - Contextual menus that follow a sprite
 - Status indicators that move with the sprite
+
+Attached GUI differs from sprite components because it is opened, hidden, and
+driven through the GUI system. Sprite components are better for passive visual
+layers such as shadows, halos, labels, and bars.
 
 ## Basic Usage
 

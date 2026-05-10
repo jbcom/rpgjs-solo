@@ -7,6 +7,12 @@ description: "Guide for Synchronization between Server and Client in RPGJS."
 
 In RPGJS, synchronization between the server and the client is a crucial aspect to ensure a consistent and immersive gameplay experience. This readme will guide you through the process of synchronizing data between the server and the client, utilizing schemas and hooks provided by RPGJS.
 
+<Info>
+Synchronized player properties can also drive server-controlled visuals. See
+[Authoritative Sprite Components](/guide/component) for components that update
+from placeholders such as `{name}`, `{hp}`, and `{param.maxHp}`.
+</Info>
+
 ## Understanding RPGJS Schemas and Data Synchronization
 
 RPGJS uses schemas to define the structure of data that needs to be synchronized between the server and the client. These schemas ensure that the properties of entities, such as players and items, are consistent and correctly communicated between the server and the client. Properties are implemented as signals, which provide reactivity - when a property changes using the `.set()` method, it is automatically sent to the client, keeping the game state up-to-date.

@@ -294,5 +294,5 @@ All props are reactive signals, meaning:
 
 ## See Also
 
-- [Sprite Components Guide](/guide/sprite-components.md) - General guide on using sprite components
+- [Sprite Components Guide](/guide/sprite-components) - General guide on using sprite components
 - [CanvasEngine Reactive Programming](https://canvasengine.net/concepts/reactive.md) - Understanding signals and reactivity

@@ -5,7 +5,7 @@ description: "Start here to learn how to build an RPG or MMORPG with RPGJS."
 
 # Guide overview
 
-Use this section to learn RPGJS step by step, from project setup to gameplay systems, rendering, GUI, and production workflows.
+Use this section to learn RPGJS step by step, from project setup to maps, components, GUI, gameplay systems, and production workflows.
 
 ## Recommended reading order
 
@@ -14,13 +14,16 @@ Use this section to learn RPGJS step by step, from project setup to gameplay sys
 3. [Structure](/guide/structure)
 4. [Create your first map](/guide/create-your-first-map)
 5. [Create hero in map](/guide/create-hero-in-map)
+6. [Components overview](/guide/components-overview)
+7. [GUI overview](/gui/index)
 
 ## Main topics
 
 - Project setup and architecture
 - Maps, rendering, and world building
-- Events, data, movement, and gameplay systems
-- GUI integration and client-side behavior
+- Components for sprites, server-controlled visuals, and prebuilt effects
+- GUI for screens, HUDs, dialogs, and sprite-attached interfaces
+- Events, movement, synchronization, combat, data, and gameplay systems
 - Advanced runtime and production topics
 
 ## Related pages

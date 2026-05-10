@@ -40,17 +40,15 @@
               "guide/structure",
               "guide/create-your-first-map",
               "guide/create-hero-in-map",
-              "guide/create-spritesheet",
-              "guide/create-world",
-              "guide/create-event",
-              "guide/create-database",
-              "guide/create-sounds"
+              "guide/create-spritesheet"
             ]
           },
           {
-            "group": "Maps & Rendering",
+            "group": "Maps & World",
             "pages": [
               "tiled/index",
+              "guide/create-world",
+              "guide/world-maps",
               "advanced/provide-load-map",
               "guide/create-shape",
               "guide/display-animations",
@@ -59,16 +57,29 @@
             ]
           },
           {
+            "group": "Components",
+            "pages": [
+              "guide/components-overview",
+              "guide/sprite-components",
+              "guide/component",
+              "guide/prebuilt-components/index",
+              "guide/prebuilt-components/light-halo"
+            ]
+          },
+          {
             "group": "Gameplay",
             "pages": [
+              "guide/create-event",
+              "guide/event-modes",
               "guide/create-movement",
               "guide/move-routes",
-              "guide/event-modes",
+              "guide/create-database",
               "guide/items",
               "guide/save-load",
-              "guide/sounds",
               "guide/synchronization",
               "guide/battle-ai",
+              "guide/create-sounds",
+              "guide/sounds",
               "guide/testing",
               "guide/create-module"
             ]
@@ -76,14 +87,11 @@
           {
             "group": "GUI",
             "pages": [
-              "guide/sprite-components",
-              "guide/component",
-              "guide/prebuilt-components/index",
-              "guide/prebuilt-components/light-halo",
-              "guide/gui/attach-gui",
+              "gui/index",
               "gui/title-screen",
               "gui/dialog-box",
               "gui/hud",
+              "guide/gui/attach-gui",
               "gui/engine-injection",
               "gui/optimistic-actions",
               "gui/vue-integration"

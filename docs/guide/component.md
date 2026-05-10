@@ -8,6 +8,13 @@ description: "Display text, bars, shapes and custom CanvasEngine components arou
 Use player components to display reusable UI around a player sprite: name tags,
 HP/SP bars, status indicators, badges, or custom CanvasEngine components.
 
+<Info>
+Use authoritative sprite components when server gameplay code decides what
+appears around a player. For client-only visual layers on sprites, use
+[Sprite Components](/guide/sprite-components). For interactive menus, dialogs,
+or widgets, use [GUI](/gui/index).
+</Info>
+
 The server is authoritative. It decides which component is displayed and sends a
 serializable description to every client on the map. The client renders the
 component and updates dynamic values such as `{name}`, `{hp}` or

@@ -575,4 +575,4 @@ const Warhammer = {
 
 ## Reference source
 
-This guide is based on the package documentation in [packages/action-battle/README.md](/home/samuel/www/RPG-JS/packages/action-battle/README.md).
+This guide is based on the package documentation in [packages/action-battle/README.md](https://github.com/RSamaium/RPG-JS/blob/master/packages/action-battle/README.md).
