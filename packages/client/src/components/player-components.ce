@@ -1,7 +1,37 @@
-<Container x={containerPosition.x} y={containerPosition.y}>
-  @for (entry of renderedComponents) {
-    <Container x={entry.x} y={entry.y}>
-      <entry.component object ...entry.props />
+<Container
+  x={blockPosition().x}
+  y={blockPosition().y}
+  width={blockSize().width}
+  height={blockSize().height}
+  minWidth={blockSize().width}
+  minHeight={blockSize().height}
+  display="flex"
+  flexDirection="column"
+  justifyContent="center"
+  alignItems="center"
+  rowGap={gap().row}
+>
+  @for (row of renderedRows) {
+    <Container
+      width="100%"
+      height={row.height}
+      display="flex"
+      flexDirection="row"
+      justifyContent="center"
+      alignItems="center"
+      columnGap={gap().column}
+    >
+      @for (entry of row.entries) {
+        <Container
+          width={entry.width}
+          height={entry.height}
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+        >
+          <entry.component object ...entry.props />
+        </Container>
+      }
     </Container>
   }
 </Container>
@@ -10,9 +40,9 @@
 import { computed } from "canvasengine";
 import { RpgClientEngine } from "../RpgClientEngine";
 import { inject } from "../core/inject";
-import { resolveDynamicProps } from "./dynamics/parse-value";
+import { resolveDynamicProps, resolveDynamicValue } from "./dynamics/parse-value";
 
-const { object, position } = defineProps({
+const { object, position, graphicBounds } = defineProps({
   position: {
     default: 'top'
   }
@@ -62,52 +92,171 @@ const componentData = computed(() => {
 const layout = computed(() => componentData()?.layout ?? {});
 const rows = computed(() => componentData()?.components ?? []);
 const hitbox = object.hitbox;
+const DEFAULT_CELL_HEIGHT = 16;
+const DEFAULT_CELL_WIDTH = 32;
 
-const cellWidth = computed(() => layout().width ?? 80);
-const cellHeight = computed(() => layout().height ?? 16);
-const totalWidth = computed(() => {
-  const maxColumns = rows().reduce((max, row) => Math.max(max, row.length), 0);
-  return maxColumns * cellWidth();
+const toNumber = (value, fallback = 0) => {
+  const resolved = resolveDynamicValue(value, object);
+  const num = typeof resolved === 'number' ? resolved : parseFloat(resolved);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+const estimateTextWidth = (value, style = {}) => {
+  const text = String(resolveDynamicValue(value ?? '', object) ?? '');
+  const fontSize = toNumber(style.fontSize, 12);
+  return Math.max(1, Math.ceil(text.length * fontSize * 0.6));
+};
+
+const estimateComponentSize = (definition) => {
+  const props = getComponentProps(definition);
+  const style = props?.style ?? definition?.style ?? {};
+
+  if (definition?.type === 'text' || definition?.id === 'rpg:text') {
+    return {
+      width: estimateTextWidth(props.value ?? definition.value, style),
+      height: toNumber(style.fontSize, 12)
+    };
+  }
+
+  if (definition?.type === 'hpBar' || definition?.type === 'spBar' || definition?.type === 'bar' || definition?.id === 'rpg:hpBar' || definition?.id === 'rpg:spBar' || definition?.id === 'rpg:bar') {
+    const barHeight = toNumber(style.height, 8);
+    const labelHeight = props.text ? toNumber(style.fontSize, 10) + 2 : 0;
+    return {
+      width: toNumber(style.width, 50),
+      height: barHeight + labelHeight
+    };
+  }
+
+  if (definition?.type === 'shape' || definition?.id === 'rpg:shape') {
+    const shape = props ?? {};
+    if (shape.type === 'circle') {
+      const radius = toNumber(shape.radius, 8);
+      return { width: radius * 2, height: radius * 2 };
+    }
+    if (shape.type === 'line') {
+      return {
+        width: Math.abs(toNumber(shape.x2, 16) - toNumber(shape.x1, 0)),
+        height: Math.max(1, Math.abs(toNumber(shape.y2, 0) - toNumber(shape.y1, 0)))
+      };
+    }
+    return {
+      width: toNumber(shape.width, 16),
+      height: toNumber(shape.height, 16)
+    };
+  }
+
+  return {
+    width: toNumber(definition?.props?.width, DEFAULT_CELL_WIDTH),
+    height: toNumber(definition?.props?.height, DEFAULT_CELL_HEIGHT)
+  };
+};
+
+const rowMetrics = computed(() => {
+  return rows().map((row) => {
+    const cells = row.map((definition) => {
+      const intrinsic = estimateComponentSize(definition);
+      return {
+        definition,
+        width: intrinsic.width,
+        height: intrinsic.height
+      };
+    });
+
+    return {
+      cells,
+      width: cells.reduce((sum, cell) => sum + cell.width, 0),
+      height: cells.reduce((max, cell) => Math.max(max, cell.height), 0)
+    };
+  });
 });
-const totalHeight = computed(() => rows().length * cellHeight());
 
-const containerPosition = computed(() => {
+const intrinsicWidth = computed(() => rowMetrics().reduce((max, row) => Math.max(max, row.width), 0));
+const intrinsicHeight = computed(() => rowMetrics().reduce((sum, row) => sum + row.height, 0));
+const gap = computed(() => ({
+  row: toNumber(layout().rowGap ?? layout().gap, 0),
+  column: toNumber(layout().columnGap ?? layout().gap, 0)
+}));
+
+const fallbackBounds = computed(() => {
   const box = hitbox();
+  const width = box?.w ?? 0;
+  const height = box?.h ?? 0;
+
+  return {
+    left: 0,
+    top: 0,
+    right: width,
+    bottom: height,
+    width,
+    height,
+    centerX: width / 2,
+    centerY: height / 2
+  };
+});
+
+const bounds = computed(() => {
+  const resolvedBounds = typeof graphicBounds === 'function' ? graphicBounds() : undefined;
+  return resolvedBounds ?? fallbackBounds();
+});
+
+const blockSize = computed(() => {
+  const graphic = bounds();
+  const rowGapTotal = Math.max(0, rowMetrics().length - 1) * gap().row;
+  const maxColumns = rowMetrics().reduce((max, row) => Math.max(max, row.cells.length), 0);
+  const columnGapTotal = Math.max(0, maxColumns - 1) * gap().column;
+  const contentWidth = intrinsicWidth() + columnGapTotal;
+  const contentHeight = intrinsicHeight() + rowGapTotal;
+  const position = readPosition();
+  const width = layout().width ?? Math.max(contentWidth, position === 'top' || position === 'bottom' || position === 'center' ? graphic.width : contentWidth);
+  const height = layout().height ?? Math.max(contentHeight, position === 'left' || position === 'right' || position === 'center' ? graphic.height : contentHeight);
+
+  return {
+    width,
+    height
+  };
+});
+
+const blockPosition = computed(() => {
+  const box = hitbox() ?? { w: 0, h: 0 };
+  const graphic = bounds();
+  const size = blockSize();
   const margins = layout();
-  const horizontalCenter = (box.w / 2) - (totalWidth() / 2);
-  const verticalCenter = (box.h / 2) - (totalHeight() / 2);
+  const marginLeft = margins.marginLeft ?? 0;
+  const marginRight = margins.marginRight ?? 0;
+  const marginTop = margins.marginTop ?? 0;
+  const marginBottom = margins.marginBottom ?? 0;
 
   switch (readPosition()) {
     case 'bottom':
       return {
-        x: horizontalCenter + (margins.marginLeft ?? 0) - (margins.marginRight ?? 0),
-        y: box.h + (margins.marginTop ?? 0) - (margins.marginBottom ?? 0)
+        x: graphic.centerX - (size.width / 2) + marginLeft - marginRight,
+        y: box.h + marginTop - marginBottom
       };
     case 'center':
       return {
-        x: horizontalCenter + (margins.marginLeft ?? 0) - (margins.marginRight ?? 0),
-        y: verticalCenter + (margins.marginTop ?? 0) - (margins.marginBottom ?? 0)
+        x: graphic.centerX - (size.width / 2) + marginLeft - marginRight,
+        y: graphic.centerY - (size.height / 2) + marginTop - marginBottom
       };
     case 'left':
       return {
-        x: -totalWidth() - (margins.marginRight ?? 0) + (margins.marginLeft ?? 0),
-        y: verticalCenter + (margins.marginTop ?? 0) - (margins.marginBottom ?? 0)
+        x: graphic.left - size.width + marginLeft - marginRight,
+        y: graphic.centerY - (size.height / 2) + marginTop - marginBottom
       };
     case 'right':
       return {
-        x: box.w + (margins.marginLeft ?? 0) - (margins.marginRight ?? 0),
-        y: verticalCenter + (margins.marginTop ?? 0) - (margins.marginBottom ?? 0)
+        x: graphic.right + marginLeft - marginRight,
+        y: graphic.centerY - (size.height / 2) + marginTop - marginBottom
       };
     case 'top':
     default:
       return {
-        x: horizontalCenter + (margins.marginLeft ?? 0) - (margins.marginRight ?? 0),
-        y: -totalHeight() - (margins.marginBottom ?? 0) + (margins.marginTop ?? 0)
+        x: graphic.centerX - (size.width / 2) + marginLeft - marginRight,
+        y: graphic.top - size.height + marginTop - marginBottom
       };
   }
 });
 
-const getComponentId = (definition) => {
+function getComponentId(definition) {
   if (!definition) return undefined;
   if (definition.id) return definition.id;
   if (definition.type === 'text') return 'rpg:text';
@@ -118,9 +267,9 @@ const getComponentId = (definition) => {
   if (definition.type === 'image') return 'rpg:image';
   if (definition.type === 'tile') return 'rpg:tile';
   return definition.type;
-};
+}
 
-const getComponentProps = (definition) => {
+function getComponentProps(definition) {
   if (definition.props) return definition.props;
 
   if (definition.type === 'text') {
@@ -143,7 +292,7 @@ const getComponentProps = (definition) => {
   }
 
   return {};
-};
+}
 
 const warnMissingComponent = (id) => {
   if (!id || warnedComponents.has(id)) return;
@@ -152,11 +301,12 @@ const warnMissingComponent = (id) => {
   console.warn(`[RPGJS] Server sprite component "${id}" is not registered on the client.`);
 };
 
-const renderedComponents = computed(() => {
-  const entries = [];
+const renderedRows = computed(() => {
+  return rowMetrics().map((row) => {
+    const entries = [];
 
-  rows().forEach((row, rowIndex) => {
-    row.forEach((definition, columnIndex) => {
+    row.cells.forEach((cell) => {
+      const definition = cell.definition;
       const id = getComponentId(definition);
       const component = client.getSpriteComponent(id);
 
@@ -168,12 +318,15 @@ const renderedComponents = computed(() => {
       entries.push({
         component,
         props: resolveDynamicProps(getComponentProps(definition), object),
-        x: columnIndex * cellWidth(),
-        y: rowIndex * cellHeight()
+        width: cell.width,
+        height: cell.height
       });
     });
-  });
 
-  return entries;
+    return {
+      height: row.height,
+      entries
+    };
+  });
 });
 </script>

@@ -32,13 +32,13 @@ export interface ComponentLayout {
   width?: number;
   /** Height of the component block in pixels */
   height?: number;
-  /** Margin from the top of the player in pixels */
+  /** Vertical offset from the top anchor in pixels */
   marginTop?: number;
-  /** Margin from the bottom of the player in pixels */
+  /** Vertical offset from the bottom anchor in pixels */
   marginBottom?: number;
-  /** Margin from the left of the player in pixels */
+  /** Horizontal offset from the left anchor in pixels */
   marginLeft?: number;
-  /** Margin from the right of the player in pixels */
+  /** Horizontal offset from the right anchor in pixels */
   marginRight?: number;
 }
 

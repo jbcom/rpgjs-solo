@@ -115,6 +115,13 @@ player.setComponentsTop([
 })
 ```
 
+`top`, `left`, and `right` are anchored outside the sprite graphic bounds, so
+they do not cover frames that are larger than the hitbox. `top` and `bottom`
+are centered on the graphic; `bottom` starts below the hitbox. Use positive
+margins to move a component away from the sprite: `marginBottom` for `top`,
+`marginTop` for `bottom`, `marginRight` for `left`, and `marginLeft` for
+`right`.
+
 A one-dimensional array is rendered vertically. A two-dimensional array is rendered as rows and columns:
 
 ```ts

@@ -75,7 +75,7 @@ export function WithComponentManager<TBase extends Constructor<RpgCommonPlayer>>
      * ], {
      *   width: 100,
      *   height: 30,
-     *   marginBottom: -10
+     *   marginBottom: 8
      * });
      * ```
      */

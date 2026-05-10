@@ -4,8 +4,8 @@
       <compConfig.component object ...compConfig.props />
     </Container>
   } 
-  <PlayerComponents object position="bottom" />
-  <PlayerComponents object position="left" />
+  <PlayerComponents object position="bottom" graphicBounds />
+  <PlayerComponents object position="left" graphicBounds />
   <Particle emit={emitParticleTrigger} settings={particleSettings} zIndex={1000} name={particleName} />
   <Container>
     @for (graphicObj of graphicsSignals) {
@@ -19,9 +19,9 @@
       />
     }
   </Container>
-  <PlayerComponents object position="center" />
-  <PlayerComponents object position="right" />
-  <PlayerComponents object position="top" />
+  <PlayerComponents object position="center" graphicBounds />
+  <PlayerComponents object position="right" graphicBounds />
+  <PlayerComponents object position="top" graphicBounds />
   @for (compConfig of normalizedComponentsInFront) {
     <Container dependencies={compConfig.dependencies}>
       <compConfig.component object ...compConfig.props />
@@ -42,13 +42,14 @@
 
 <script>
   import { signal, effect, mount, computed, tick, animatedSignal, on } from "canvasengine";
+  import { Assets } from "pixi.js";
 
   import { lastValueFrom, combineLatest, pairwise, filter, map, startWith } from "rxjs";
   import { Particle } from "@canvasengine/presets";
   import { GameEngineToken, ModulesToken } from "@rpgjs/common";
   import { RpgClientEngine } from "../RpgClientEngine";
   import { inject } from "../core/inject";  
-  import { Direction } from "@rpgjs/common";
+  import { Direction, Animation } from "@rpgjs/common";
   import Hit from "./effects/hit.ce";
   import PlayerComponents from "./player-components.ce";
   import { RpgGui } from "../Gui/Gui";
@@ -394,6 +395,280 @@
     }
     return undefined;
   }
+
+  const imageDimensions = signal({});
+  const loadingImageDimensions = new Set();
+
+  const toPositiveNumber = (value) => {
+    const number = typeof value === 'number' ? value : parseFloat(value);
+    return Number.isFinite(number) && number > 0 ? number : undefined;
+  };
+
+  const toFiniteNumber = (value, fallback = 0) => {
+    const number = typeof value === 'number' ? value : parseFloat(value);
+    return Number.isFinite(number) ? number : fallback;
+  };
+
+  const clampRatio = (value) => Math.min(1, Math.max(0, value));
+
+  const normalizePair = (value, fallback = [1, 1]) => {
+    if (Array.isArray(value)) {
+      const x = toFiniteNumber(value[0], fallback[0]);
+      const y = toFiniteNumber(value[1] ?? value[0], x);
+      return [x, y];
+    }
+    if (typeof value === 'number') {
+      return [value, value];
+    }
+    if (value && typeof value === 'object') {
+      const x = toFiniteNumber(value.x, fallback[0]);
+      const y = toFiniteNumber(value.y ?? value.x, x);
+      return [x, y];
+    }
+    return fallback;
+  };
+
+  const normalizeAnchor = (value) => {
+    if (!Array.isArray(value)) return undefined;
+    const [x, y] = normalizePair(value, [0, 0]);
+    return [clampRatio(x), clampRatio(y)];
+  };
+
+  const resolveImageSource = (image) => {
+    if (typeof image === 'string') return image;
+    if (typeof image?.default === 'string') return image.default;
+    return undefined;
+  };
+
+  const parentTextureOptions = (graphicObject) => {
+    const props = [
+      'width',
+      'height',
+      'framesHeight',
+      'framesWidth',
+      'rectWidth',
+      'rectHeight',
+      'offset',
+      'image',
+      'sound',
+      'spriteRealSize',
+      'scale',
+      'anchor',
+      'pivot',
+      'x',
+      'y',
+      'opacity'
+    ];
+
+    return props.reduce((options, prop) => {
+      if (graphicObject?.[prop] !== undefined) {
+        options[prop] = graphicObject[prop];
+      }
+      return options;
+    }, {});
+  };
+
+  const resolveTextureOptions = (graphicObject) => {
+    const textures = graphicObject?.textures ?? {};
+    const texture =
+      textures[realAnimationName()] ??
+      textures[Animation.Stand] ??
+      Object.values(textures)[0] ??
+      {};
+
+    return {
+      ...parentTextureOptions(graphicObject),
+      ...texture
+    };
+  };
+
+  const resolveFirstAnimationFrame = (textureOptions) => {
+    const animations = textureOptions?.animations;
+    if (!animations) return {};
+
+    try {
+      const frames = typeof animations === 'function'
+        ? animations({ direction: direction() })
+        : animations;
+      if (!Array.isArray(frames)) return {};
+      const firstGroup = frames[0];
+      return Array.isArray(firstGroup) ? firstGroup[0] ?? {} : firstGroup ?? {};
+    }
+    catch {
+      return {};
+    }
+  };
+
+  const optionValue = (prop, frame, textureOptions, graphicObject) => {
+    return frame?.[prop] ?? textureOptions?.[prop] ?? graphicObject?.[prop];
+  };
+
+  const resolveFrameSize = (textureOptions, dimensions) => {
+    const framesWidth = toPositiveNumber(textureOptions?.framesWidth) ?? 1;
+    const framesHeight = toPositiveNumber(textureOptions?.framesHeight) ?? 1;
+    const imageSource = resolveImageSource(textureOptions?.image);
+    const loadedSize = imageSource ? dimensions[imageSource] : undefined;
+    const fullWidth = toPositiveNumber(textureOptions?.width) ?? loadedSize?.width;
+    const fullHeight = toPositiveNumber(textureOptions?.height) ?? loadedSize?.height;
+    const width = toPositiveNumber(textureOptions?.rectWidth) ??
+      toPositiveNumber(textureOptions?.spriteWidth) ??
+      (fullWidth ? fullWidth / framesWidth : undefined);
+    const height = toPositiveNumber(textureOptions?.rectHeight) ??
+      toPositiveNumber(textureOptions?.spriteHeight) ??
+      (fullHeight ? fullHeight / framesHeight : undefined);
+
+    return {
+      width,
+      height
+    };
+  };
+
+  const resolveHitboxAnchor = (spriteWidth, spriteHeight, realSize, box) => {
+    if (!spriteWidth || !spriteHeight || !box) {
+      return [0, 0];
+    }
+
+    const heightOfSprite = typeof realSize === 'number' ? realSize : realSize?.height;
+    const resolvedHeight = toPositiveNumber(heightOfSprite) ?? spriteHeight;
+    const gap = Math.max(0, (spriteHeight - resolvedHeight) / 2);
+    const hitboxTopLeftX = clampRatio((spriteWidth - box.w) / 2 / spriteWidth);
+    const hitboxTopLeftY = clampRatio((spriteHeight - box.h - gap) / spriteHeight);
+    const hitboxCenterX = clampRatio(hitboxTopLeftX + box.w / 2 / spriteWidth);
+    const hitboxCenterY = clampRatio(hitboxTopLeftY + box.h / 2 / spriteHeight);
+    const footY = clampRatio((spriteHeight - gap) / spriteHeight);
+
+    switch (box.anchorMode ?? 'top-left') {
+      case 'center':
+        return [hitboxCenterX, hitboxCenterY];
+      case 'foot':
+        return [hitboxCenterX, footY];
+      case 'top-left':
+      default:
+        return [hitboxTopLeftX, hitboxTopLeftY];
+    }
+  };
+
+  const loadImageDimensions = (image) => {
+    const source = resolveImageSource(image);
+    if (!source || imageDimensions()[source] || loadingImageDimensions.has(source)) {
+      return;
+    }
+
+    loadingImageDimensions.add(source);
+    Assets.load(source)
+      .then((texture) => {
+        const width = toPositiveNumber(texture?.width);
+        const height = toPositiveNumber(texture?.height);
+        if (!width || !height) return;
+
+        imageDimensions.update((dimensions) => ({
+          ...dimensions,
+          [source]: { width, height }
+        }));
+      })
+      .catch(() => {})
+      .finally(() => {
+        loadingImageDimensions.delete(source);
+      });
+  };
+
+  effect(() => {
+    const sources = new Set();
+
+    graphicsSignals().forEach((graphicObject) => {
+      const baseImage = resolveImageSource(graphicObject?.image);
+      if (baseImage) sources.add(baseImage);
+
+      Object.values(graphicObject?.textures ?? {}).forEach((textureOptions) => {
+        const image = resolveImageSource(textureOptions?.image ?? graphicObject?.image);
+        if (image) sources.add(image);
+      });
+    });
+
+    sources.forEach((source) => loadImageDimensions(source));
+  });
+
+  const hitboxBounds = computed(() => {
+    const box = hitbox();
+    const width = box?.w ?? 0;
+    const height = box?.h ?? 0;
+
+    return {
+      left: 0,
+      top: 0,
+      right: width,
+      bottom: height,
+      width,
+      height,
+      centerX: width / 2,
+      centerY: height / 2
+    };
+  });
+
+  const graphicBounds = computed(() => {
+    const box = hitbox();
+    const fallback = hitboxBounds();
+    const dimensions = imageDimensions();
+    const graphics = graphicsSignals();
+    let bounds = null;
+
+    graphics.forEach((graphicObject) => {
+      const textureOptions = resolveTextureOptions(graphicObject);
+      const frame = resolveFirstAnimationFrame(textureOptions);
+      const size = resolveFrameSize(textureOptions, dimensions);
+      const spriteWidth = size.width ?? box?.w;
+      const spriteHeight = size.height ?? box?.h;
+
+      if (!spriteWidth || !spriteHeight) {
+        return;
+      }
+
+      const explicitAnchor = normalizeAnchor(optionValue('anchor', frame, textureOptions, graphicObject));
+      const anchor = explicitAnchor ?? resolveHitboxAnchor(
+        spriteWidth,
+        spriteHeight,
+        optionValue('spriteRealSize', frame, textureOptions, graphicObject),
+        box
+      );
+      const scale = normalizePair(optionValue('scale', frame, textureOptions, graphicObject) ?? graphicScale(graphicObject));
+      const x = toFiniteNumber(optionValue('x', frame, textureOptions, graphicObject), 0);
+      const y = toFiniteNumber(optionValue('y', frame, textureOptions, graphicObject), 0);
+      const leftEdge = -anchor[0] * spriteWidth * scale[0];
+      const rightEdge = (1 - anchor[0]) * spriteWidth * scale[0];
+      const topEdge = -anchor[1] * spriteHeight * scale[1];
+      const bottomEdge = (1 - anchor[1]) * spriteHeight * scale[1];
+      const graphic = {
+        left: x + Math.min(leftEdge, rightEdge),
+        top: y + Math.min(topEdge, bottomEdge),
+        right: x + Math.max(leftEdge, rightEdge),
+        bottom: y + Math.max(topEdge, bottomEdge)
+      };
+
+      bounds = bounds
+        ? {
+            left: Math.min(bounds.left, graphic.left),
+            top: Math.min(bounds.top, graphic.top),
+            right: Math.max(bounds.right, graphic.right),
+            bottom: Math.max(bounds.bottom, graphic.bottom)
+          }
+        : graphic;
+    });
+
+    if (!bounds) {
+      return fallback;
+    }
+
+    const width = bounds.right - bounds.left;
+    const height = bounds.bottom - bounds.top;
+
+    return {
+      ...bounds,
+      width,
+      height,
+      centerX: bounds.left + width / 2,
+      centerY: bounds.top + height / 2
+    };
+  });
 
   // Combine animation change detection with movement state from smoothX/smoothY
   const movementAnimations = ['walk', 'stand'];
