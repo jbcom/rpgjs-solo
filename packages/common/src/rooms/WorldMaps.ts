@@ -30,6 +30,15 @@ export interface WorldMapConfig {
   tileHeight?: number;
 }
 
+type WorldMapSource = {
+  worldX: number;
+  worldY: number;
+  widthPx: number;
+  heightPx: number;
+  tileWidth?: number;
+  tileHeight?: number;
+};
+
 /**
  * World Maps Manager
  * 
@@ -106,8 +115,8 @@ export class WorldMapsManager {
    * - Direction: collect maps adjacent in the given direction
    * - Point: collect the map containing the given world point
    * 
-   * The given `map` can be any object exposing `worldX`, `worldY`, `width`, `height` properties
-   * (e.g. your `RpgMap` instance or a `WorldMapInfo`).
+   * The given `map` can be any object exposing `worldX`, `worldY`, `widthPx`, `heightPx`
+   * and optional `tileWidth`, `tileHeight` properties (e.g. your `RpgMap` instance or a `WorldMapInfo`).
    * 
    * @param map - The source map
    * @param search - Search strategy (box, direction or point)
@@ -126,7 +135,7 @@ export class WorldMapsManager {
    * ```
    */
   getAdjacentMaps(
-    map: { worldX: number; worldY: number; widthPx: number; heightPx: number },
+    map: WorldMapSource,
     search:
       | { minX: number; minY: number; maxX: number; maxY: number }
       | { x: number; y: number }
@@ -146,8 +155,8 @@ export class WorldMapsManager {
         const verticallyOverlapsOrTouches =
           Math.max(src.worldY, m.worldY) <= Math.min(src.worldY + src.heightPx, m.worldY + m.heightPx);
 
-        const marginLeftRight = src.tileWidth / 2
-        const marginTopDown = src.tileHeight / 2
+        const marginLeftRight = (src.tileWidth ?? 32) / 2
+        const marginTopDown = (src.tileHeight ?? 32) / 2
   
         switch (search) {
           case 0: // Up
