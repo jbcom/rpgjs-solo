@@ -1,4 +1,6 @@
-<Graphics draw={drawShape} />
+<Container width={shapeWidth} height={shapeHeight} minWidth={shapeWidth} minHeight={shapeHeight}>
+  <Graphics width={shapeWidth} height={shapeHeight} draw={drawShape} />
+</Container>
 
 <script>
 import { computed } from "canvasengine";
@@ -39,22 +41,81 @@ const config = computed(() => ({
   line: read(props.line, null)
 }));
 
-const drawShape = (g) => {
+const getPointBounds = (points) => {
+  if (!Array.isArray(points) || points.length < 2) {
+    return { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+  }
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (let i = 0; i < points.length; i += 2) {
+    const x = toNumber(points[i], 0);
+    const y = toNumber(points[i + 1], 0);
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+
+  return { minX, minY, maxX, maxY };
+};
+
+const shapeBox = computed(() => {
   const cfg = config();
 
   if (cfg.type === 'circle') {
-    g.circle(0, 0, cfg.radius);
+    return { width: cfg.radius * 2, height: cfg.radius * 2, offsetX: 0, offsetY: 0 };
+  }
+
+  if (cfg.type === 'line') {
+    const minX = Math.min(cfg.x1, cfg.x2);
+    const minY = Math.min(cfg.y1, cfg.y2);
+    const maxX = Math.max(cfg.x1, cfg.x2);
+    const maxY = Math.max(cfg.y1, cfg.y2);
+    return {
+      width: Math.max(1, maxX - minX),
+      height: Math.max(1, maxY - minY),
+      offsetX: -minX,
+      offsetY: -minY
+    };
+  }
+
+  if (cfg.type === 'polygon') {
+    const bounds = getPointBounds(cfg.points);
+    return {
+      width: Math.max(1, bounds.maxX - bounds.minX),
+      height: Math.max(1, bounds.maxY - bounds.minY),
+      offsetX: -bounds.minX,
+      offsetY: -bounds.minY
+    };
+  }
+
+  return { width: cfg.width, height: cfg.height, offsetX: 0, offsetY: 0 };
+});
+
+const shapeWidth = computed(() => shapeBox().width);
+const shapeHeight = computed(() => shapeBox().height);
+
+const drawShape = (g) => {
+  const cfg = config();
+  const box = shapeBox();
+
+  if (cfg.type === 'circle') {
+    g.circle(cfg.radius, cfg.radius, cfg.radius);
   } else if (cfg.type === 'ellipse') {
-    g.ellipse(0, 0, cfg.width / 2, cfg.height / 2);
+    g.ellipse(box.width / 2, box.height / 2, box.width / 2, box.height / 2);
   } else if (cfg.type === 'line') {
-    g.moveTo(cfg.x1, cfg.y1);
-    g.lineTo(cfg.x2, cfg.y2);
+    g.moveTo(cfg.x1 + box.offsetX, cfg.y1 + box.offsetY);
+    g.lineTo(cfg.x2 + box.offsetX, cfg.y2 + box.offsetY);
   } else if (cfg.type === 'polygon' && Array.isArray(cfg.points)) {
-    g.poly(cfg.points);
+    g.poly(cfg.points.map((point, index) => toNumber(point, 0) + (index % 2 === 0 ? box.offsetX : box.offsetY)));
   } else if (cfg.type === 'rounded-rectangle') {
-    g.roundRect(0, 0, cfg.width, cfg.height, toNumber(read(props.radius, 4), 4));
+    g.roundRect(0, 0, box.width, box.height, toNumber(read(props.radius, 4), 4));
   } else {
-    g.rect(0, 0, cfg.width, cfg.height);
+    g.rect(0, 0, box.width, box.height);
   }
 
   if (cfg.type === 'line') {

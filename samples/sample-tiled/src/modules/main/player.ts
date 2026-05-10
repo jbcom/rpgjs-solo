@@ -9,18 +9,7 @@ export const player: RpgPlayerHooks = {
         player.name.set('YourName')
         player.setGraphic('hero')
         player.initializeDefaultStats()
-        player.setComponentsBottom(
-            Components.shape({
-                type: 'rect',
-                width: 32,
-                height: 32,
-                fill: '#ff0000',
-                opacity: 0.5
-            }), 
-            {
-                marginBottom: 16
-            }
-        )
+        
        
     },
     onInput(player: RpgPlayer, { action }) {
@@ -38,5 +27,9 @@ export const player: RpgPlayerHooks = {
         // await player.showText('3. The global configuration is done in src/config')
         // await player.showText('And, please, support the project on github https://github.com/RSamaium/RPG-JS ! :)')
         player.setVariable('AFTER_INTRO', true)
+        player.setComponentsTop([
+            Components.text('HP: {hp}'),
+            Components.text('{name}')
+        ])
     }
 }

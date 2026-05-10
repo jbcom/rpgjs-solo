@@ -90,7 +90,7 @@ export interface ShapeComponentOptions {
   /** Fill color in hexadecimal format */
   fill: string;
   /** Type of shape */
-  type: 'circle' | 'rectangle' | 'ellipse' | 'polygon' | 'line' | 'rounded-rectangle';
+  type: 'circle' | 'rect' | 'rectangle' | 'ellipse' | 'polygon' | 'line' | 'rounded-rectangle';
   /** Radius (for circle) */
   radius?: number | string;
   /** Width (for rectangle, ellipse) */

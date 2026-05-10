@@ -53,6 +53,9 @@ player.removeComponents('top')
 Component text and props can use placeholders such as `{name}`, `{hp}`,
 `{sp}`, `{param.maxHp}`, or any synchronized player property.
 
+Shape components are centered from their rendered bounds. For example, a
+`32x32` rectangle centered in a `32x32` hitbox matches the hitbox exactly.
+
 Bar text is displayed above the bar and aligned to the left edge of the bar.
 It stays at the same position when the current value changes. The text can use
 normal player placeholders and bar-specific placeholders:
@@ -138,11 +141,12 @@ player.setComponentsTop([
 ```
 
 `top`, `left`, and `right` are anchored outside the sprite graphic bounds, so
-they do not cover frames that are larger than the hitbox. `top` and `bottom`
-are centered on the graphic; `bottom` starts below the hitbox. Use positive
-margins to move a component away from the sprite: `marginBottom` for `top`,
-`marginTop` for `bottom`, `marginRight` for `left`, and `marginLeft` for
-`right`.
+they do not cover frames that are larger than the hitbox. `top` is centered on
+the graphic. `bottom` uses the hitbox as its positioning rectangle and centers
+the component inside that rectangle, so a `32x32` shape on a `32x32` hitbox
+matches the hitbox. Use positive margins to move a component away from the
+sprite: `marginBottom` for `top` and `bottom`, `marginRight` for `left`, and
+`marginLeft` for `right`.
 
 A one-dimensional array is rendered vertically. A two-dimensional array is rendered as rows and columns:
 
