@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { Context, injector } from "@signe/di";
 import { signal } from "canvasengine";
+import { PrebuiltGui } from "@rpgjs/common";
 import { WebSocketToken } from "../services/AbstractSocket";
 
 vi.mock("../components/gui", () => {
@@ -38,6 +39,18 @@ const createGui = async () => {
 const CanvasGui = () => null;
 const VueInventory = {
   name: "inventory",
+  render() {
+    return null;
+  },
+};
+const VueDialog = {
+  name: PrebuiltGui.Dialog,
+  render() {
+    return null;
+  },
+};
+const VueMainMenu = {
+  name: PrebuiltGui.MainMenu,
   render() {
     return null;
   },
@@ -144,6 +157,116 @@ describe("RpgGui Vue integration", () => {
         name: "inventory",
         display: true,
         data: { items: ["potion"] },
+      }),
+    );
+  });
+
+  test("allows Vue GUI entries to replace prebuilt CanvasEngine GUIs", async () => {
+    const { gui } = await createGui();
+    const bridge = {
+      updateGuiState: vi.fn(),
+      initializeGuiStates: vi.fn(),
+    };
+
+    gui._setVueGuiInstance(bridge);
+    gui.add({
+      id: PrebuiltGui.Dialog,
+      component: VueDialog,
+    });
+
+    expect(gui.get(PrebuiltGui.Dialog)?.component).toBe(VueDialog);
+    expect(gui.getAll()[PrebuiltGui.Dialog].component).toBe(VueDialog);
+    expect((gui as any).gui()[PrebuiltGui.Dialog]).toBeUndefined();
+    expect(gui.getVueGuis().filter(item => item.name === PrebuiltGui.Dialog)).toHaveLength(1);
+
+    gui.display(PrebuiltGui.Dialog, { text: "Hello" });
+    expect(bridge.updateGuiState).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        name: PrebuiltGui.Dialog,
+        display: true,
+        data: { text: "Hello" },
+      }),
+    );
+
+    gui.hide(PrebuiltGui.Dialog);
+    expect(bridge.updateGuiState).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        name: PrebuiltGui.Dialog,
+        display: false,
+      }),
+    );
+  });
+
+  test("allows CanvasEngine GUI entries to replace Vue GUI entries with the same id", async () => {
+    const { gui } = await createGui();
+    const bridge = {
+      updateGuiState: vi.fn(),
+      initializeGuiStates: vi.fn(),
+    };
+
+    gui._setVueGuiInstance(bridge);
+    gui.add({
+      id: PrebuiltGui.Dialog,
+      component: VueDialog,
+    });
+    gui.add({
+      id: PrebuiltGui.Dialog,
+      component: CanvasGui,
+    });
+
+    expect(gui.get(PrebuiltGui.Dialog)?.component).toBe(CanvasGui);
+    expect(gui.getVueGuis().some(item => item.name === PrebuiltGui.Dialog)).toBe(false);
+    expect((gui as any).gui()[PrebuiltGui.Dialog].component).toBe(CanvasGui);
+    expect(bridge.initializeGuiStates).toHaveBeenLastCalledWith([]);
+  });
+
+  test("keeps main menu optimistic reducers when a Vue GUI replaces the prebuilt component", async () => {
+    const { gui, socket } = await createGui();
+    const bridge = {
+      updateGuiState: vi.fn(),
+      initializeGuiStates: vi.fn(),
+    };
+
+    gui.add({
+      id: PrebuiltGui.MainMenu,
+      component: VueMainMenu,
+    });
+    gui._setVueGuiInstance(bridge);
+    gui.display(PrebuiltGui.MainMenu, {
+      items: [
+        {
+          id: "potion",
+          quantity: 2,
+        },
+      ],
+    });
+
+    gui.guiInteraction(PrebuiltGui.MainMenu, "useItem", { id: "potion" });
+
+    expect(gui.get(PrebuiltGui.MainMenu)?.data().items).toEqual([
+      {
+        id: "potion",
+        quantity: 1,
+      },
+    ]);
+    expect(bridge.updateGuiState).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        name: PrebuiltGui.MainMenu,
+        data: {
+          items: [
+            {
+              id: "potion",
+              quantity: 1,
+            },
+          ],
+        },
+      }),
+    );
+    expect(socket.emit).toHaveBeenCalledWith(
+      "gui.interaction",
+      expect.objectContaining({
+        guiId: PrebuiltGui.MainMenu,
+        name: "useItem",
       }),
     );
   });

@@ -314,12 +314,16 @@ export class RpgGui {
     };
 
     if (this.isVueComponentInstance(guiInstance)) {
+      this.removeCanvasGui(guiId);
       const existingIndex = this.extraGuis.findIndex(existing => existing.name === guiId);
       if (existingIndex >= 0) {
+        this.extraGuis[existingIndex].subscription?.unsubscribe();
         this.extraGuis[existingIndex] = guiInstance;
       } else {
         this.extraGuis.push(guiInstance);
       }
+
+      this._initializeVueComponents();
       
       if (guiInstance.autoDisplay) {
         this.display(guiId, gui.data);
@@ -329,7 +333,9 @@ export class RpgGui {
       return;
     }
 
+    this.removeVueGui(guiId);
     this.gui()[guiId] = guiInstance;
+    this._initializeVueComponents();
 
     // Auto display if enabled and it's a CanvasEngine component
     if (guiInstance.autoDisplay && typeof gui.component === 'function') {
@@ -531,6 +537,22 @@ export class RpgGui {
 
   private isVueComponentInstance(gui: GuiInstance) {
     return typeof gui.component !== "function";
+  }
+
+  private removeCanvasGui(guiId: string) {
+    const current = this.gui();
+    if (!(guiId in current)) return;
+    const next = { ...current };
+    delete next[guiId];
+    this.gui.set(next);
+  }
+
+  private removeVueGui(guiId: string) {
+    const removed = this.extraGuis.filter(existing => existing.name === guiId);
+    removed.forEach(gui => gui.subscription?.unsubscribe());
+    if (removed.length > 0) {
+      this.extraGuis = this.extraGuis.filter(existing => existing.name !== guiId);
+    }
   }
 
   private resolveComponent(gui: GuiOptions | any) {

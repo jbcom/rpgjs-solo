@@ -5,8 +5,6 @@ import { mergeConfig } from "@signe/di";
 startGame(
   mergeConfig(configClient, {
     // Use one player id per page instance to avoid stale session restore during dev reloads.
-    providers: [provideMmorpg({
-      host: 'localhost:1999'
-    })],
+    providers: [provideMmorpg({})],
   }) 
 );

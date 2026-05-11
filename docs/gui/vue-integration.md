@@ -66,6 +66,64 @@ export default {
 
 `provideVueGui()` creates `#vue-gui-overlay` inside `#rpg` when the element does not exist and `createIfNotFound` is enabled.
 
+## Replace Prebuilt GUI
+
+You can replace a prebuilt CanvasEngine GUI with a Vue component by registering a Vue GUI with the same ID. Server APIs keep using the same GUI ID, but the rendered component comes from Vue:
+
+```ts
+import { provideClientModules } from '@rpgjs/client'
+import { PrebuiltGui } from '@rpgjs/common'
+import { provideVueGui } from '@rpgjs/vue'
+import Dialog from './gui/dialog.vue'
+
+export default {
+  providers: [
+    provideVueGui({
+      selector: '#vue-gui-overlay',
+      createIfNotFound: true,
+    }),
+    provideClientModules([
+      {
+        gui: [
+          {
+            id: PrebuiltGui.Dialog,
+            component: Dialog,
+          },
+        ],
+      },
+    ]),
+  ],
+}
+```
+
+With this setup, `player.showText()` and `player.gui(PrebuiltGui.Dialog).open(data)` open the Vue dialog instead of the built-in CanvasEngine dialog. The same pattern works for other prebuilt IDs such as `PrebuiltGui.MainMenu`, `PrebuiltGui.Shop`, `PrebuiltGui.Save`, `PrebuiltGui.TitleScreen`, and `PrebuiltGui.Gameover`.
+
+Use the regular Vue injections to close the GUI or send actions back to the server:
+
+```vue
+<script setup>
+import { inject } from 'vue'
+
+defineProps({
+  text: {
+    type: String,
+    default: '',
+  },
+})
+
+const rpgGuiClose = inject('rpgGuiClose')
+const rpgGuiInteraction = inject('rpgGuiInteraction')
+</script>
+
+<template>
+  <div class="dialog">
+    <p>{{ text }}</p>
+    <button @click="rpgGuiInteraction('rpg-dialog', 'next')">Next</button>
+    <button @click="rpgGuiClose('rpg-dialog')">Close</button>
+  </div>
+</template>
+```
+
 ## Vue Components
 
 Data passed through `player.gui(id).open(data)` becomes Vue props:
