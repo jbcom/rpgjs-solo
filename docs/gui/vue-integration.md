@@ -104,7 +104,7 @@ function useItem(item) {
 </template>
 ```
 
-Use `v-propagate` when mouse events should also be forwarded to the game canvas.
+Use `v-propagate` when mouse, pointer, and wheel events should also be forwarded to the game canvas.
 
 ## Attached Vue GUI
 
@@ -173,6 +173,20 @@ Vue components can inject:
 | `rpgGuiInteraction` | Send a GUI action to the server |
 | `rpgKeypress` | Observable of mapped keypresses |
 | `rpgSound` | Sound helper with `get(id)` and `play(id)` |
+
+## Vue Directives
+
+Use `v-propagate` on an element when events inside a Vue GUI must also be sent to the RPGJS canvas:
+
+```vue
+<template>
+  <div v-propagate>
+    Test
+  </div>
+</template>
+```
+
+The directive forwards mouse, pointer, and wheel events from the Vue element to `#rpg canvas`.
 
 ## Behavior Notes
 

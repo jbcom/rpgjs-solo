@@ -46,6 +46,32 @@ interface VueGuiOptions {
 
 type MaybeSignal<T> = T | (() => T)
 
+const mouseEvents = [
+    'click',
+    'dblclick',
+    'mousedown',
+    'mouseup',
+    'mousemove',
+    'mouseenter',
+    'mouseleave',
+    'mouseover',
+    'mouseout',
+    'contextmenu',
+]
+
+const pointerEvents = [
+    'pointerdown',
+    'pointerup',
+    'pointermove',
+    'pointerenter',
+    'pointerleave',
+    'pointerover',
+    'pointerout',
+    'pointercancel',
+]
+
+const wheelEvents = ['wheel']
+
 const readValue = <T>(value: MaybeSignal<T> | undefined): T | undefined => {
     return typeof value === 'function'
         ? (value as () => T)()
@@ -238,8 +264,13 @@ export class VueGui {
         this.app.directive('propagate', {
             mounted: (el: HTMLElement) => {
                 const eventListeners: Record<string, EventListener> = {}
-                const mouseEvents = ['click', 'mousedown', 'mouseup', 'mousemove', 'wheel']
-                mouseEvents.forEach(eventType => {
+                const events = [
+                    ...mouseEvents,
+                    ...wheelEvents,
+                    ...(typeof PointerEvent !== 'undefined' ? pointerEvents : []),
+                ]
+
+                events.forEach(eventType => {
                     const callback = (event: Event) => this.propagateEvent(event)
                     eventListeners[eventType] = callback
                     el.addEventListener(eventType, callback)
@@ -600,19 +631,69 @@ export class VueGui {
 
     private propagateEvent(event: Event) {
         const canvas = document.querySelector('#rpg canvas') as HTMLCanvasElement
-        if (!canvas || !canvas.getBoundingClientRect) return
+        if (!canvas) return
 
-        const rect = canvas.getBoundingClientRect()
-        const mouseEvent = event as MouseEvent
+        const propagatedEvent = this.createPropagatedEvent(event)
+        canvas.dispatchEvent(propagatedEvent)
+    }
 
-        canvas.dispatchEvent(new MouseEvent(event.type, {
+    private createPropagatedEvent(event: Event) {
+        if (typeof WheelEvent !== 'undefined' && event instanceof WheelEvent) {
+            return new WheelEvent(event.type, {
+                ...this.getMouseEventInit(event),
+                deltaX: event.deltaX,
+                deltaY: event.deltaY,
+                deltaZ: event.deltaZ,
+                deltaMode: event.deltaMode,
+            })
+        }
+
+        if (typeof PointerEvent !== 'undefined' && event instanceof PointerEvent) {
+            return new PointerEvent(event.type, {
+                ...this.getMouseEventInit(event),
+                pointerId: event.pointerId,
+                width: event.width,
+                height: event.height,
+                pressure: event.pressure,
+                tangentialPressure: event.tangentialPressure,
+                tiltX: event.tiltX,
+                tiltY: event.tiltY,
+                twist: event.twist,
+                pointerType: event.pointerType,
+                isPrimary: event.isPrimary,
+            })
+        }
+
+        if (typeof MouseEvent !== 'undefined' && event instanceof MouseEvent) {
+            return new MouseEvent(event.type, this.getMouseEventInit(event))
+        }
+
+        return new Event(event.type, {
             bubbles: event.bubbles,
             cancelable: event.cancelable,
-            clientX: mouseEvent.clientX - rect.left,
-            clientY: mouseEvent.clientY - rect.top,
-            button: mouseEvent.button,
-            buttons: mouseEvent.buttons,
-        }))
+            composed: event.composed,
+        })
+    }
+
+    private getMouseEventInit(event: MouseEvent): MouseEventInit {
+        return {
+            bubbles: event.bubbles,
+            cancelable: event.cancelable,
+            composed: event.composed,
+            detail: event.detail,
+            view: event.view,
+            screenX: event.screenX,
+            screenY: event.screenY,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            ctrlKey: event.ctrlKey,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey,
+            metaKey: event.metaKey,
+            button: event.button,
+            buttons: event.buttons,
+            relatedTarget: event.relatedTarget,
+        }
     }
 
     private tooltipPosition(position: { x: number, y: number }) {
