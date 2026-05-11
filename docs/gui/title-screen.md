@@ -64,9 +64,13 @@ Si le serveur ne fournit pas `entries`, la liste par defaut du client est:
 ]
 ```
 
-To customize this list on the client, edit:
+To replace the title screen completely, register your own GUI with the `rpg-title-screen` ID. The data and interaction contract is documented in [Prebuilt GUI Contracts](/gui/prebuilt-contracts).
 
-- `packages/client/src/components/gui/title-screen.ce`
+For example, a custom component should emit a `select` interaction with:
+
+```ts
+onInteraction('select', { id: entry.id, index, entry })
+```
 
 ## Style
 

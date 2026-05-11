@@ -286,4 +286,4 @@ export default {
 ## See Also
 
 - [Sounds Guide](/guide/sounds) - Comprehensive guide on configuring and using sounds, including dynamic sound resolution
-```
+- [Prebuilt GUI Contracts](/gui/prebuilt-contracts) - Data and interaction contract for replacing `rpg-dialog` with your own CanvasEngine or Vue dialog box

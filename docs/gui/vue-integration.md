@@ -98,28 +98,42 @@ export default {
 
 With this setup, `player.showText()` and `player.gui(PrebuiltGui.Dialog).open(data)` open the Vue dialog instead of the built-in CanvasEngine dialog. The same pattern works for other prebuilt IDs such as `PrebuiltGui.MainMenu`, `PrebuiltGui.Shop`, `PrebuiltGui.Save`, `PrebuiltGui.TitleScreen`, and `PrebuiltGui.Gameover`.
 
-Use the regular Vue injections to close the GUI or send actions back to the server:
+Each prebuilt GUI has a defined data and interaction contract. See [Prebuilt GUI Contracts](/gui/prebuilt-contracts) for the full list of fields, actions, and expected close values.
+
+Use the regular Vue injections to close the GUI or send actions back to the server. For dialog boxes, closing with the selected choice index resolves `player.showChoices()`:
 
 ```vue
 <script setup>
 import { inject } from 'vue'
+import { PrebuiltGui } from '@rpgjs/common'
 
 defineProps({
-  text: {
+  message: {
     type: String,
     default: '',
+  },
+  choices: {
+    type: Array,
+    default: () => [],
   },
 })
 
 const rpgGuiClose = inject('rpgGuiClose')
-const rpgGuiInteraction = inject('rpgGuiInteraction')
 </script>
 
 <template>
   <div class="dialog">
-    <p>{{ text }}</p>
-    <button @click="rpgGuiInteraction('rpg-dialog', 'next')">Next</button>
-    <button @click="rpgGuiClose('rpg-dialog')">Close</button>
+    <p>{{ message }}</p>
+    <button
+      v-for="(choice, index) in choices"
+      :key="index"
+      @click="rpgGuiClose(PrebuiltGui.Dialog, index)"
+    >
+      {{ choice.text }}
+    </button>
+    <button v-if="!choices.length" @click="rpgGuiClose(PrebuiltGui.Dialog)">
+      Continue
+    </button>
   </div>
 </template>
 ```
