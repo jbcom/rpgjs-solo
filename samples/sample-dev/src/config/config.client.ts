@@ -18,6 +18,7 @@ import Shadow from "../components/shadow.ce";
 import WoodComponent from "../components/wood.ce";
 import WoodUiComponent from "../components/wood-ui.ce";
 import VueComponent from "../vue-component-with-injections.vue";
+import VueTooltipComponent from "../tooltip.vue";
 import FadeComponent from "../components/fade.ce";
 import PlayerStatsComponent from "../components/player-stats.ce";
 import { signal, effect } from 'canvasengine'
@@ -203,6 +204,11 @@ export default {
           {
             id: "my-tooltip",
             component: TooltipComponent,
+            attachToSprite: true
+          },
+          {
+            id: "vue-tooltip",
+            component: VueTooltipComponent,
             attachToSprite: true
           },
           {

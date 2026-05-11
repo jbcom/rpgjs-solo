@@ -539,6 +539,13 @@ export interface RpgClient {
          * ```
          */
         attachToSprite?: boolean
+        /**
+         * Vue v4 compatibility alias for `attachToSprite`.
+         *
+         * Prefer `attachToSprite` in v5 projects. This is read by `@rpgjs/vue`
+         * for Vue GUI components migrated from the v4 GUI API.
+         */
+        rpgAttachToSprite?: boolean
     } | any)[],
 
     /** 

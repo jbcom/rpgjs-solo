@@ -3,12 +3,12 @@ import { signal, Signal, WritableSignal } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "../services/AbstractSocket";
 import { DialogboxComponent, ShopComponent, SaveLoadComponent, MainMenuComponent, NotificationComponent, TitleScreenComponent, GameoverComponent } from "../components/gui";
 import { combineLatest, Subscription } from "rxjs";
-import { delay, PrebuiltGui } from "@rpgjs/common";
+import { PrebuiltGui } from "@rpgjs/common";
 
 interface GuiOptions {
   name?: string;
   id?: string;
-  component: any;
+  component?: any;
   display?: boolean;
   data?: any;
   /**
@@ -28,9 +28,13 @@ interface GuiOptions {
    * @default false
    */
   attachToSprite?: boolean;
+  /**
+   * Vue v4 compatibility flag. Prefer attachToSprite in v5 projects.
+   */
+  rpgAttachToSprite?: boolean;
 }
 
-interface GuiInstance {
+export interface GuiInstance {
   name: string;
   component: any;
   display: WritableSignal<boolean>;
@@ -40,6 +44,19 @@ interface GuiInstance {
   subscription?: Subscription;
   attachToSprite?: boolean;
 }
+
+type GuiState = {
+  name: string;
+  component: any;
+  display: boolean;
+  data: any;
+  attachToSprite: boolean;
+};
+
+type VueGuiBridge = {
+  updateGuiState?: (state: GuiState) => void;
+  initializeGuiStates?: (states: GuiState[]) => void;
+};
 
 interface GuiAction {
   guiId: string;
@@ -117,7 +134,7 @@ export class RpgGui {
   private webSocket: AbstractWebsocket;
   gui = signal<Record<string, GuiInstance>>({});
   extraGuis: GuiInstance[] = [];
-  private vueGuiInstance: any = null; // Reference to VueGui instance
+  private vueGuiInstance: VueGuiBridge | null = null;
   private optimisticReducers = new Map<string, OptimisticReducer[]>();
   private pendingActions = new Map<string, GuiAction[]>();
   /**
@@ -196,6 +213,7 @@ export class RpgGui {
    */
   _setVueGuiInstance(vueGuiInstance: any) {
     this.vueGuiInstance = vueGuiInstance;
+    this._initializeVueComponents();
   }
 
   /**
@@ -207,21 +225,9 @@ export class RpgGui {
    * @param data - Component data
    */
   private _notifyVueGui(guiId: string, display: boolean, data: any = {}) {
-    if (this.vueGuiInstance && this.vueGuiInstance.vm) {
-      // Find the GUI in extraGuis
-      const extraGui = this.extraGuis.find(gui => gui.name === guiId);
-      if (extraGui) {
-        // Update the Vue component's display state and data
-        this.vueGuiInstance.vm.gui[guiId] = {
-          name: guiId,
-          display,
-          data,
-          attachToSprite: extraGui.attachToSprite || false
-        };
-        // Trigger Vue reactivity
-        this.vueGuiInstance.vm.gui = Object.assign({}, this.vueGuiInstance.vm.gui);
-      }
-    }
+    const extraGui = this.extraGuis.find(gui => gui.name === guiId);
+    if (!extraGui) return;
+    this.vueGuiInstance?.updateGuiState?.(this.toGuiState(extraGui, display, data));
   }
 
   /**
@@ -229,20 +235,9 @@ export class RpgGui {
    * This should be called after VueGui is mounted
    */
   _initializeVueComponents() {
-    if (this.vueGuiInstance && this.vueGuiInstance.vm) {
-      // Initialize all extraGuis in the Vue instance
-      this.extraGuis.forEach(gui => {
-        this.vueGuiInstance.vm.gui[gui.name] = {
-          name: gui.name,
-          display: gui.display(),
-          data: gui.data(),
-          attachToSprite: gui.attachToSprite || false
-        };
-      });
-      
-      // Trigger Vue reactivity
-      this.vueGuiInstance.vm.gui = Object.assign({}, this.vueGuiInstance.vm.gui);
-    }
+    this.vueGuiInstance?.initializeGuiStates?.(
+      this.extraGuis.map(gui => this.toGuiState(gui))
+    );
   }
 
   guiInteraction(guiId: string, name: string, data: any) {
@@ -301,30 +296,35 @@ export class RpgGui {
    * });
    * ```
    */
-  add(gui: GuiOptions) {
-    const guiId = gui.name || gui.id;
+  add(gui: GuiOptions | any) {
+    const component = this.resolveComponent(gui);
+    const guiId = this.resolveGuiId(gui, component);
     if (!guiId) {
       throw new Error("GUI must have a name or id");
     }
+    const attachToSprite = this.resolveAttachToSprite(gui, component);
     const guiInstance: GuiInstance = {
       name: guiId,
-      component: gui.component,
-      display: signal(gui.display || false),
-      data: signal(gui.data || {}),
+      component,
+      display: signal<boolean>(gui.display || false),
+      data: signal<any>(gui.data || {}),
       autoDisplay: gui.autoDisplay || false,
       dependencies: gui.dependencies ? gui.dependencies() : [],
-      attachToSprite: gui.attachToSprite || false,
+      attachToSprite,
     };
 
-    // Accept both CanvasEngine components (.ce) and Vue components
-    // Vue components will be handled by VueGui if available
-    if (typeof gui.component !== 'function') {
-      guiInstance.component = gui;
-      this.extraGuis.push(guiInstance);
+    if (this.isVueComponentInstance(guiInstance)) {
+      const existingIndex = this.extraGuis.findIndex(existing => existing.name === guiId);
+      if (existingIndex >= 0) {
+        this.extraGuis[existingIndex] = guiInstance;
+      } else {
+        this.extraGuis.push(guiInstance);
+      }
       
-      // Auto display Vue components if enabled
       if (guiInstance.autoDisplay) {
-        this._notifyVueGui(guiId, true, gui.data || {});
+        this.display(guiId, gui.data);
+      } else {
+        this._notifyVueGui(guiId, guiInstance.display(), guiInstance.data());
       }
       return;
     }
@@ -357,8 +357,15 @@ export class RpgGui {
    * ```
    */
   getAttachedGuis(): GuiInstance[] {
-    const allGuis = this.getAll();
-    return Object.values(allGuis).filter(gui => gui.attachToSprite === true);
+    return Object.values(this.gui()).filter(gui => gui.attachToSprite === true);
+  }
+
+  getVueGuis(): GuiInstance[] {
+    return [...this.extraGuis];
+  }
+
+  getAttachedVueGuis(): GuiInstance[] {
+    return this.extraGuis.filter(gui => gui.attachToSprite === true);
   }
 
   /**
@@ -520,6 +527,32 @@ export class RpgGui {
 
   private isVueComponent(id: string) {
     return this.extraGuis.some(gui => gui.name === id);
+  }
+
+  private isVueComponentInstance(gui: GuiInstance) {
+    return typeof gui.component !== "function";
+  }
+
+  private resolveComponent(gui: GuiOptions | any) {
+    return gui?.component ?? gui;
+  }
+
+  private resolveGuiId(gui: GuiOptions | any, component: any) {
+    return gui?.name || gui?.id || component?.name || component?.__name;
+  }
+
+  private resolveAttachToSprite(gui: GuiOptions | any, component: any) {
+    return !!(gui?.attachToSprite || gui?.rpgAttachToSprite || component?.attachToSprite || component?.rpgAttachToSprite);
+  }
+
+  private toGuiState(gui: GuiInstance, display = gui.display(), data = gui.data()): GuiState {
+    return {
+      name: gui.name,
+      component: gui.component,
+      display,
+      data,
+      attachToSprite: gui.attachToSprite || false,
+    };
   }
 
   private clearPendingActions(guiId: string) {
