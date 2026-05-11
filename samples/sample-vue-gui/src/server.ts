@@ -30,8 +30,9 @@ const player: RpgPlayerHooks = {
       hint: "Action: inventory, Escape: quest log",
     });
   },
-  async onInput(player: RpgPlayer, { action }) {
-    if (action === "action") {
+  async onInput(player: RpgPlayer, input) {
+    const action = input?.action ?? input;
+    if (action === "space" || action === "enter" || action === "action") {
       const inventory = player.gui("vue-inventory");
       inventory.on("use-item", (data) => {
         const item = inventoryItems.find((entry) => entry.id === data.itemId);

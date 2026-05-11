@@ -36,6 +36,10 @@ export default {
             id: "vue-hud",
             component: HudGui,
             autoDisplay: true,
+            data: {
+              title: "Vue GUI Sample",
+              hint: "Space/Enter: inventory, Escape: quest log",
+            },
           },
           {
             id: "vue-inventory",

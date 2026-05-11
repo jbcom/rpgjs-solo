@@ -5,8 +5,8 @@ import {
     createApp,
     defineComponent,
     h,
+    markRaw,
     reactive,
-    resolveComponent,
 } from 'vue'
 import { RpgClientEngine, RpgGui, inject, Context } from '@rpgjs/client'
 import { Observable, Subscription } from 'rxjs'
@@ -63,6 +63,7 @@ export class VueGui {
     private vm: VueInstance
     private guiState: Record<string, GuiState>
     private tooltipState: AttachedTarget[]
+    private mountElement?: HTMLElement
     private mounted = false
     private registeredComponents = new Set<string>()
     private objectSubscriptions: Subscription[] = []
@@ -83,6 +84,7 @@ export class VueGui {
         if (!mountElement) {
             throw new Error('No mount element found for VueGui. Please provide a valid element or selector.')
         }
+        this.mountElement = mountElement
 
         const guiState = reactive<Record<string, GuiState>>({})
         const tooltipState = reactive<AttachedTarget[]>([])
@@ -116,7 +118,7 @@ export class VueGui {
                 const fixedNodes = this.fixedGui.map((ui: GuiState) => {
                     if (!ui.display) return null
                     return h(
-                        resolveComponent(ui.name),
+                        ui.component,
                         {
                             key: ui.name,
                             ...ui.data,
@@ -128,7 +130,6 @@ export class VueGui {
                 })
 
                 const attachedNodes = this.attachedGui.flatMap((ui: GuiState) => {
-                    if (!ui.display) return []
                     return this.tooltipFilter().map((target: AttachedTarget) => {
                         return h(
                             'div',
@@ -137,7 +138,7 @@ export class VueGui {
                                 style: this.tooltipPosition(target),
                             },
                             [
-                                h(resolveComponent(ui.name), {
+                                h(ui.component, {
                                     ...ui.data,
                                     spriteData: target,
                                     object: target.object,
@@ -150,7 +151,14 @@ export class VueGui {
                     })
                 })
 
-                return h('div', { class: 'rpg-vue-gui-root' }, [
+                return h('div', {
+                    class: 'rpg-vue-gui-root',
+                    style: {
+                        position: 'absolute',
+                        inset: '0',
+                        pointerEvents: 'none',
+                    },
+                }, [
                     ...fixedNodes,
                     h('div', {
                         id: 'tooltips',
@@ -181,7 +189,8 @@ export class VueGui {
     updateGuiState(state: GuiState) {
         if (!this.mounted || !this.guiState) return
         this.registerComponent(state.name, state.component)
-        this.guiState[state.name] = state
+        this.guiState[state.name] = this.toReactiveGuiState(state)
+        this.updateAttachedTargets()
     }
 
     initializeGuiStates(states: GuiState[]) {
@@ -193,8 +202,9 @@ export class VueGui {
             }
         })
         states.forEach((state) => {
-            this.guiState[state.name] = state
+            this.guiState[state.name] = this.toReactiveGuiState(state)
         })
+        this.updateAttachedTargets()
     }
 
     destroy() {
@@ -204,10 +214,18 @@ export class VueGui {
         this.tickSubscription = undefined
         this.app?.unmount()
         this.mounted = false
+        this.mountElement = undefined
     }
 
     private registerComponents(guis: Array<{ name: string, component: any }>) {
         guis.forEach((gui) => this.registerComponent(gui.name, gui.component))
+    }
+
+    private toReactiveGuiState(state: GuiState): GuiState {
+        return {
+            ...state,
+            component: markRaw(state.component),
+        }
     }
 
     private registerComponent(name: string, component: any) {
@@ -244,19 +262,19 @@ export class VueGui {
         if (mountElement) {
             if (typeof mountElement === 'string') {
                 const element = document.querySelector(mountElement) as HTMLElement
-                if (element) return element
+                if (element) return this.prepareOverlayElement(element)
             } else {
-                return mountElement
+                return this.prepareOverlayElement(mountElement)
             }
         }
 
         if (selector) {
             const element = document.querySelector(selector) as HTMLElement
-            if (element) return element
+            if (element) return this.prepareOverlayElement(element)
         }
 
         const defaultElement = document.querySelector('#vue-gui-overlay') as HTMLElement
-        if (defaultElement) return defaultElement
+        if (defaultElement) return this.prepareOverlayElement(defaultElement)
 
         if (createIfNotFound) {
             const newElement = document.createElement('div')
@@ -267,6 +285,7 @@ export class VueGui {
             newElement.style.width = '100%'
             newElement.style.height = '100%'
             newElement.style.pointerEvents = 'none'
+            newElement.style.zIndex = '1000'
 
             const gameContainer = document.querySelector('#rpg')
             if (gameContainer) {
@@ -283,6 +302,29 @@ export class VueGui {
         }
 
         throw new Error('Could not find or create mount element for VueGui')
+    }
+
+    private prepareOverlayElement(element: HTMLElement): HTMLElement {
+        const style = getComputedStyle(element)
+        if (style.position === 'static') {
+            element.style.position = 'absolute'
+        }
+        if (!element.style.top) element.style.top = '0'
+        if (!element.style.left) element.style.left = '0'
+        if (!element.style.width) element.style.width = '100%'
+        if (!element.style.height) element.style.height = '100%'
+        if (!element.style.pointerEvents) element.style.pointerEvents = 'none'
+        if (!element.style.zIndex) element.style.zIndex = '1000'
+
+        const parent = element.parentElement
+        if (parent) {
+            const parentStyle = getComputedStyle(parent)
+            if (parentStyle.position === 'static') {
+                parent.style.position = 'relative'
+            }
+        }
+
+        return element
     }
 
     private getInjectObject() {
@@ -429,32 +471,40 @@ export class VueGui {
         const scene = this.clientEngine.scene
         if (!scene || !this.tooltipState) return
 
-        const updateTargets = () => {
-            const objects = {
-                ...scene.players(),
-                ...scene.events(),
-            }
-            const targets = Object.entries(objects)
-                .filter(([id]) => this.parentGui.shouldDisplayAttachedGui(id))
-                .map(([id, object]) => {
-                    return {
-                        id,
-                        object,
-                        position: this.objectScreenPosition(object as any),
-                    }
-                })
-
-            this.tooltipState.splice(0, this.tooltipState.length, ...targets)
-        }
-
         this.objectSubscriptions = [
-            scene.players.observable.subscribe(updateTargets),
-            scene.events.observable.subscribe(updateTargets),
-            this.parentGui.attachedGuiDisplayState.observable.subscribe(updateTargets),
+            scene.players.observable.subscribe(() => this.updateAttachedTargets()),
+            scene.events.observable.subscribe(() => this.updateAttachedTargets()),
+            this.parentGui.attachedGuiDisplayState.observable.subscribe(() => this.updateAttachedTargets()),
         ]
 
-        this.tickSubscription = this.clientEngine.tick?.subscribe(updateTargets)
-        updateTargets()
+        this.tickSubscription = this.clientEngine.tick?.subscribe(() => this.updateAttachedTargets())
+        this.updateAttachedTargets()
+    }
+
+    private updateAttachedTargets() {
+        const scene = this.clientEngine?.scene
+        if (!scene || !this.tooltipState) return
+
+        const objects = {
+            ...scene.players(),
+            ...scene.events(),
+        }
+        const currentPlayer = scene.getCurrentPlayer?.()
+        if (currentPlayer?.id) {
+            objects[currentPlayer.id] = currentPlayer
+        }
+
+        const targets = Object.entries(objects)
+            .filter(([id]) => this.parentGui.shouldDisplayAttachedGui(id))
+            .map(([id, object]) => {
+                return {
+                    id,
+                    object,
+                    position: this.objectScreenPosition(object as any),
+                }
+            })
+
+        this.tooltipState.splice(0, this.tooltipState.length, ...targets)
     }
 
     private objectScreenPosition(object: any) {
@@ -462,28 +512,74 @@ export class VueGui {
         const rect = canvas?.getBoundingClientRect()
         const width = rect?.width || (this.clientEngine.renderer as any)?.screen?.width || 0
         const height = rect?.height || (this.clientEngine.renderer as any)?.screen?.height || 0
-        const currentPlayer = this.clientEngine.scene?.getCurrentPlayer?.()
+        const hitbox = this.readObjectHitbox(object)
         const objectX = this.readObjectCoordinate(object, 'x')
         const objectY = this.readObjectCoordinate(object, 'y')
+        const worldX = isFiniteNumber(objectX) ? objectX + hitbox.w / 2 : undefined
+        const worldY = isFiniteNumber(objectY) ? objectY : undefined
+        const viewportPosition = this.viewportScreenPosition(worldX, worldY)
+        if (viewportPosition) return viewportPosition
+
+        const currentPlayer = this.clientEngine.scene?.getCurrentPlayer?.()
         const cameraX = this.readObjectCoordinate(currentPlayer, 'x')
         const cameraY = this.readObjectCoordinate(currentPlayer, 'y')
 
         if (
-            isFiniteNumber(objectX)
-            && isFiniteNumber(objectY)
+            isFiniteNumber(worldX)
+            && isFiniteNumber(worldY)
             && isFiniteNumber(cameraX)
             && isFiniteNumber(cameraY)
         ) {
             return {
-                x: width / 2 + objectX - cameraX,
-                y: height / 2 + objectY - cameraY,
+                x: width / 2 + worldX - cameraX,
+                y: height / 2 + worldY - cameraY,
             }
         }
 
         return {
-            x: isFiniteNumber(objectX) ? objectX : 0,
-            y: isFiniteNumber(objectY) ? objectY : 0,
+            x: isFiniteNumber(worldX) ? worldX : 0,
+            y: isFiniteNumber(worldY) ? worldY : 0,
         }
+    }
+
+    private viewportScreenPosition(worldX: number | undefined, worldY: number | undefined) {
+        if (!isFiniteNumber(worldX) || !isFiniteNumber(worldY)) return undefined
+
+        const viewport = this.getViewport()
+        if (!viewport) return undefined
+
+        const screenPoint = typeof viewport.toScreen === 'function'
+            ? viewport.toScreen(worldX, worldY)
+            : typeof viewport.toGlobal === 'function'
+                ? viewport.toGlobal({ x: worldX, y: worldY })
+                : undefined
+        if (!screenPoint || !isFiniteNumber(screenPoint.x) || !isFiniteNumber(screenPoint.y)) {
+            return undefined
+        }
+
+        const canvas = document.querySelector('#rpg canvas') as HTMLCanvasElement | null
+        const overlay = this.mountElement ?? document.querySelector('#vue-gui-overlay') as HTMLElement | null
+        const canvasRect = canvas?.getBoundingClientRect()
+        const overlayRect = overlay?.getBoundingClientRect()
+        const rendererScreen = (this.clientEngine.renderer as any)?.screen
+        const scaleX = canvasRect && rendererScreen?.width
+            ? canvasRect.width / rendererScreen.width
+            : 1
+        const scaleY = canvasRect && rendererScreen?.height
+            ? canvasRect.height / rendererScreen.height
+            : 1
+
+        return {
+            x: screenPoint.x * scaleX + ((canvasRect?.left ?? 0) - (overlayRect?.left ?? 0)),
+            y: screenPoint.y * scaleY + ((canvasRect?.top ?? 0) - (overlayRect?.top ?? 0)),
+        }
+    }
+
+    private getViewport() {
+        return (this.clientEngine as any).canvasElement
+            ?.propObservables
+            ?.context
+            ?.viewport
     }
 
     private readObjectCoordinate(object: any, key: 'x' | 'y') {
@@ -492,6 +588,14 @@ export class VueGui {
         const bodyValue = bodyPosition?.[key]
         if (isFiniteNumber(bodyValue)) return bodyValue
         return readValue<number>(object[key])
+    }
+
+    private readObjectHitbox(object: any) {
+        const hitbox = readValue<any>(object?.hitbox)
+        return {
+            w: isFiniteNumber(hitbox?.w) ? hitbox.w : 32,
+            h: isFiniteNumber(hitbox?.h) ? hitbox.h : 32,
+        }
     }
 
     private propagateEvent(event: Event) {

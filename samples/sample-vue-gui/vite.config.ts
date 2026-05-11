@@ -4,6 +4,9 @@ import { rpgjs } from "@rpgjs/vite";
 import startServer from "./src/server";
 
 export default defineConfig({
+  optimizeDeps: {
+    exclude: ["canvasengine"],
+  },
   plugins: [
     vue(),
     ...rpgjs({
