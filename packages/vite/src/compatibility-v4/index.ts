@@ -8,7 +8,6 @@ import { flagTransform } from "./flag-transform";
 import vitePluginRequire from "./require-transform";
 import { loadConfigFileSync } from "./load-config-file";
 import {
-  assetsFolder,
   ClientBuildConfigOptions,
   Config,
   dedent,
@@ -335,6 +334,7 @@ function createServerEntryLoad() {
 export function loadSpriteSheet(directoryName: string, modulePath: string, options: ClientBuildConfigOptions, projectRoot = process.cwd(), warning = false): ImportImageObject {
   const importSprites = searchFolderAndTransformToImportString(directoryName, modulePath, ".ts", undefined, undefined, projectRoot);
   let propImagesString = "";
+  let variablesString = importSprites.variablesString;
 
   if (importSprites.importString) {
     const images = getAllFiles(importSprites.folder).filter((file) => {
@@ -344,27 +344,43 @@ export function loadSpriteSheet(directoryName: string, modulePath: string, optio
     if (!images.length) {
       warn(`No spritesheet image found in ${directoryName}`);
     } else {
-      const objectString = images
+      const imageImports = images
         .map((file) => {
           const filename = path.basename(file);
           const basename = filename.replace(path.extname(filename), "");
-          if (options.serveMode === false) {
-            const outputDir = options.config?.compilerOptions?.build?.outputDir ?? "dist";
-            const dest = path.join(projectRoot, outputDir, assetsFolder(options.type === "rpg" ? "" : "client"), filename);
-            fs.mkdirSync(path.dirname(dest), { recursive: true });
-            fs.copyFileSync(file, dest);
-          }
-          return `"${basename}": "${toPosix(path.relative(importSprites.folder, file))}"`;
-        })
+          const importPath = `${importPathForFile(file, projectRoot)}?url`;
+          const variableName = formatVariableName(importPath);
+          return { basename, importPath, variableName };
+        });
+      const objectString = imageImports
+        .map(({ basename, variableName }) => `"${basename}": ${variableName}`)
         .join(",\n");
+      const imageImportString = imageImports
+        .map(({ importPath, variableName }) => `import ${variableName} from '${importPath}'`)
+        .join("\n");
+      const generatedSpritesheetsVariable = `__rpgjsV4Spritesheets_${formatVariableName(directoryName)}`;
+      variablesString = `...${generatedSpritesheetsVariable}`;
 
       const dimensions = sizeOf(fs.readFileSync(images.at(-1)!)) as { width?: number; height?: number };
       propImagesString = dedent`
+        ${imageImportString}
+        const ${generatedSpritesheetsVariable} = [${importSprites.variablesString}].flatMap((spritesheet) => {
+          return Object.entries({ ${objectString} }).map(([id, image]) => ({
+            ...spritesheet,
+            ...(spritesheet.prototype ?? {}),
+            id,
+            image,
+          }))
+        })
         ;[${importSprites.variablesString}].forEach((spritesheet) => {
           spritesheet.images = { ${objectString} }
           spritesheet.prototype ||= {}
           spritesheet.prototype.width = ${dimensions.width ?? 0}
           spritesheet.prototype.height = ${dimensions.height ?? 0}
+        })
+        ${generatedSpritesheetsVariable}.forEach((spritesheet) => {
+          spritesheet.width = ${dimensions.width ?? 0}
+          spritesheet.height = ${dimensions.height ?? 0}
         })
       `;
     }
@@ -374,6 +390,7 @@ export function loadSpriteSheet(directoryName: string, modulePath: string, optio
 
   return {
     ...importSprites,
+    variablesString,
     propImagesString,
   };
 }

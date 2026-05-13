@@ -73,6 +73,26 @@ hitbox = [16, 16]
 
 The legacy starter modules are mapped automatically: `@rpgjs/mobile-gui` uses the v5 mobile GUI helper, while `@rpgjs/default-gui` and `@rpgjs/gamepad` are treated as compatibility no-ops because their behavior is built into v5.
 
+## Spritesheets
+
+The compatibility layer keeps the v4 spritesheet directory convention. A v4 folder such as:
+
+```txt
+main/spritesheets/characters/
+  characters.ts
+  hero.png
+  female.png
+```
+
+is converted to v5 spritesheets with ids based on the image file names. `hero.png` is registered as `hero`, and `female.png` is registered as `female`, so a v4 config can keep:
+
+```toml
+[start]
+graphic = 'hero'
+```
+
+The image files are imported through Vite, so they work in both development and production builds.
+
 ## Example
 
 See `samples/sample-v4-compat` for a minimal v4-style project running on the v5 packages. The sample keeps the v4 module layout and only uses `vite.config.ts` to enable `compatibilityV4Plugin()`.

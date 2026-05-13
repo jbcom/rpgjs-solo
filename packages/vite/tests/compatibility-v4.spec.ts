@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import path from "path";
 import { flagTransform } from "../src/compatibility-v4/flag-transform";
-import { createClientConfigLoad, createModulesLoad, createTiledMapEntries, createWorldMapEntries, loadClientFiles, loadServerFiles } from "../src/compatibility-v4";
+import { createClientConfigLoad, createModulesLoad, createTiledMapEntries, createWorldMapEntries, loadClientFiles, loadServerFiles, loadSpriteSheet } from "../src/compatibility-v4";
 import { loadConfigFileSync } from "../src/compatibility-v4/load-config-file";
 
 const fixtureRoot = path.resolve(__dirname, "fixtures/v4-game");
@@ -42,6 +42,17 @@ describe("compatibilityV4Plugin", () => {
     expect(code).toContain("sounds:");
     expect(code).toContain("prototype.width = 32");
     expect(code).toContain("prototype.height = 32");
+  });
+
+  it("registers v4 spritesheet images by file basename", () => {
+    const config = loadConfigFileSync("development", fixtureRoot);
+    const spritesheet = loadSpriteSheet("characters", "./src/modules/main", { type: "rpg", serveMode: true, config }, fixtureRoot);
+
+    expect(spritesheet.variablesString).toContain("...");
+    expect(spritesheet.propImagesString).toContain("hero.svg?url");
+    expect(spritesheet.propImagesString).toContain('"hero":');
+    expect(spritesheet.propImagesString).toContain("id,");
+    expect(spritesheet.propImagesString).toContain("image,");
   });
 
   it("generates a client config with Tiled as the default map loader", () => {
