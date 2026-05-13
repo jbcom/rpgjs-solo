@@ -1,12 +1,16 @@
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import type { Duplex } from "node:stream";
 import { injector } from "@signe/di";
+import {
+  createMemoryNodeRoomStorage,
+  createNodeRoomTransport,
+  type NodeRoom,
+  type NodeRoomTransport,
+} from "@signe/room/node";
 import { context as serverContext } from "../core/context";
 import { setInject } from "../core/inject";
 import { provideServerModules } from "../module";
-import { PartyConnection } from "./connection";
 import { createMapUpdateHeaders, resolveMapUpdateToken, updateMap } from "./map";
-import { PartyRoom } from "./room";
 import type {
   CreateRpgServerTransportOptions,
   HandleNodeRequestOptions,
@@ -18,12 +22,6 @@ import type {
   RpgWebSocketServer,
   SendMapUpdateOptions,
 } from "./types";
-
-type PartiesFetchInit = {
-  body?: any;
-  headers?: HeadersInit | IncomingHttpHeaders | Map<string, string | undefined>;
-  method?: string;
-};
 
 function normalizePathPrefix(path: string, fallback: string): string {
   const trimmed = (path || fallback).trim();
@@ -190,26 +188,14 @@ function resolveUrlFromSocketRequest(request: RpgWebSocketRequestLike): { header
   };
 }
 
-function createConnectionContext(url: URL, headers: Headers, method?: string): any {
-  const normalizedHeaders = new Map<string, string>();
-  headers.forEach((value, key) => {
-    normalizedHeaders.set(key.toLowerCase(), value);
-  });
-
-  return {
-    request: {
-      headers: {
-        has: (name: string) => normalizedHeaders.has(name.toLowerCase()),
-        get: (name: string) => normalizedHeaders.get(name.toLowerCase()),
-        entries: () => normalizedHeaders.entries(),
-        keys: () => normalizedHeaders.keys(),
-        values: () => normalizedHeaders.values(),
-      },
-      method,
-      url: url.toString(),
-    },
-    url,
-  };
+function ensureNodeSessionIdQuery(url: URL): URL {
+  if (!url.searchParams.has("id")) {
+    const partySocketId = url.searchParams.get("_pk");
+    if (partySocketId) {
+      url.searchParams.set("id", partySocketId);
+    }
+  }
+  return url;
 }
 
 export class RpgServerTransport {
@@ -218,8 +204,9 @@ export class RpgServerTransport {
   private readonly initializeMaps: boolean;
   private readonly mapUpdateToken: string;
   private readonly tiledBasePaths?: string[];
-  private readonly rooms = new Map<string, PartyRoom>();
+  private readonly rooms = new Map<string, NodeRoom>();
   private readonly servers = new Map<string, RpgTransportServer>();
+  private readonly transport: NodeRoomTransport;
   private lastKnownHost = "";
 
   constructor(
@@ -230,6 +217,36 @@ export class RpgServerTransport {
     this.mapUpdateToken = resolveMapUpdateToken(options.mapUpdateToken);
     this.partiesPath = normalizePathPrefix(options.partiesPath || "/parties/main", "/parties/main");
     this.tiledBasePaths = options.tiledBasePaths;
+
+    const owner = this;
+    class RpgNodeServer extends serverModule {
+      constructor(room: NodeRoom) {
+        super(room);
+        owner.rooms.set(room.id, room);
+        owner.servers.set(room.id, this as RpgTransportServer);
+        console.log(`Created new server instance for room: ${room.id}`);
+      }
+
+      async onStart() {
+        await owner.ensureServerContext();
+        await super.onStart?.();
+        const roomId = (this as any).room?.id;
+        console.log(`Server started for room: ${roomId}`);
+
+        if (owner.initializeMaps && roomId) {
+          await updateMap(roomId, this as RpgTransportServer, {
+            host: owner.lastKnownHost,
+            mapUpdateToken: owner.mapUpdateToken,
+            tiledBasePaths: owner.tiledBasePaths,
+          });
+        }
+      }
+    }
+
+    this.transport = createNodeRoomTransport(RpgNodeServer as any, {
+      partiesPath: this.partiesPath,
+      storage: createMemoryNodeRoomStorage(),
+    });
   }
 
   private async ensureServerContext(): Promise<void> {
@@ -242,7 +259,7 @@ export class RpgServerTransport {
     this.serverContextInitialized = true;
   }
 
-  getRoom(roomId: string): PartyRoom | undefined {
+  getRoom(roomId: string): NodeRoom | undefined {
     return this.rooms.get(roomId);
   }
 
@@ -250,84 +267,22 @@ export class RpgServerTransport {
     return this.servers.get(roomId);
   }
 
-  private async ensureRoomAndServer(roomId: string, host?: string): Promise<{ room: PartyRoom; rpgServer: RpgTransportServer }> {
+  private async ensureRoomAndServer(roomId: string, host?: string): Promise<{ room: NodeRoom; rpgServer: RpgTransportServer }> {
     if (host) {
       this.lastKnownHost = host;
     }
 
-    let room = this.rooms.get(roomId);
-    if (!room) {
-      room = new PartyRoom(roomId);
-      this.rooms.set(roomId, room);
-      console.log(`Created new room: ${roomId}`);
+    await this.transport.getRoom("main", roomId);
+    const room = this.rooms.get(roomId);
+    const rpgServer = this.servers.get(roomId);
+    if (!room || !rpgServer) {
+      throw new Error(`Unable to initialize room: ${roomId}`);
     }
-
-    let rpgServer = this.servers.get(roomId);
-    if (!rpgServer) {
-      await this.ensureServerContext();
-      rpgServer = new this.serverModule(room);
-      this.servers.set(roomId, rpgServer);
-      console.log(`Created new server instance for room: ${roomId}`);
-
-      if (typeof rpgServer.onStart === "function") {
-        try {
-          await rpgServer.onStart();
-          console.log(`Server started for room: ${roomId}`);
-        } catch (error) {
-          console.error(`Error starting server for room ${roomId}:`, error);
-        }
-      }
-
-      if (this.initializeMaps) {
-        await updateMap(roomId, rpgServer, {
-          host: host || this.lastKnownHost,
-          mapUpdateToken: this.mapUpdateToken,
-          tiledBasePaths: this.tiledBasePaths,
-        });
-      }
-    }
-
-    room.context.parties = this.buildPartiesContext();
     return { room, rpgServer };
   }
 
-  private buildPartiesContext() {
-    return {
-      main: {
-        get: async (targetRoomId: string) => {
-          return {
-            fetch: async (path: string, init?: PartiesFetchInit) => {
-              const method = (init?.method || "GET").toUpperCase();
-              const headers = toHeaders(init?.headers);
-              const requestPath = path.startsWith("/") ? path : `/${path}`;
-              let bodyText = "";
-
-              if (typeof init?.body === "string") {
-                bodyText = init.body;
-              } else if (typeof init?.body !== "undefined") {
-                bodyText = JSON.stringify(init.body);
-              }
-
-              return this.dispatchRoomRequest(
-                targetRoomId,
-                createRequestLike(
-                  `http://localhost${this.partiesPath}/${targetRoomId}${requestPath}`,
-                  method,
-                  headers,
-                  bodyText,
-                ),
-                this.lastKnownHost,
-              );
-            },
-          };
-        },
-      },
-    } as any;
-  }
-
   private async dispatchRoomRequest(roomId: string, requestLike: RpgTransportRequestLike, host?: string): Promise<Response> {
-    const { room, rpgServer } = await this.ensureRoomAndServer(roomId, host);
-    room.context.parties = this.buildPartiesContext();
+    const { rpgServer } = await this.ensureRoomAndServer(roomId, host);
     const result = await rpgServer.onRequest?.(requestLike);
     return normalizeEngineResponse(result);
   }
@@ -392,10 +347,14 @@ export class RpgServerTransport {
         return false;
       }
 
-      const bodyText = await readNodeBody(req);
       const response = await this.dispatchRoomRequest(
         route.roomId,
-        createRequestLike(normalizedUrl.toString(), (req.method || "GET").toUpperCase(), headers, bodyText),
+        createRequestLike(
+          normalizedUrl.toString(),
+          (req.method || "GET").toUpperCase(),
+          headers,
+          await readNodeBody(req),
+        ),
         host,
       );
 
@@ -422,78 +381,21 @@ export class RpgServerTransport {
 
       const queryParams = Object.fromEntries(normalizedRequest.url.searchParams.entries());
       console.log(`Room: ${route.roomId}, Query params:`, queryParams);
+      this.lastKnownHost = normalizedRequest.url.host;
+      ensureNodeSessionIdQuery(normalizedRequest.url);
+      const connection = await this.transport.acceptWebSocket(
+        ws as any,
+        new Request(normalizedRequest.url.toString(), {
+          headers: normalizedRequest.headers,
+          method: normalizedRequest.method || "GET",
+        }),
+      );
 
-      const { room, rpgServer } = await this.ensureRoomAndServer(route.roomId, normalizedRequest.url.host);
-      room.context.parties = this.buildPartiesContext();
-
-      const connection = new PartyConnection(ws, queryParams._pk, normalizedRequest.rawUrl);
-      room.addConnection(connection);
-
-      console.log(`WebSocket connection established: ${connection.id} in room: ${route.roomId}`);
-
-      let isClosed = false;
-      const cleanup = async (logMessage?: string, error?: Error) => {
-        if (isClosed) {
-          return;
-        }
-        isClosed = true;
-        if (logMessage) {
-          console.log(logMessage);
-        }
-        if (error) {
-          console.error("WebSocket error:", error);
-        }
-        room.removeConnection(connection.id);
-        await rpgServer.onClose?.(connection as any);
-      };
-
-      ws.on("message", async (data: Buffer | string) => {
-        try {
-          const rawMessage = typeof data === "string" ? data : data.toString();
-
-          if (PartyConnection.packetLossEnabled && PartyConnection.packetLossRate > 0) {
-            if (!PartyConnection.packetLossFilter || rawMessage.includes(PartyConnection.packetLossFilter)) {
-              const random = Math.random();
-              if (random < PartyConnection.packetLossRate) {
-                console.log(
-                  `\x1b[31m[PACKET LOSS]\x1b[0m Connection ${connection.id}: Server dropped an incoming packet (${(PartyConnection.packetLossRate * 100).toFixed(1)}% loss rate)`,
-                );
-                console.log(`\x1b[33m[PACKET DATA]\x1b[0m ${rawMessage.slice(0, 100)}${rawMessage.length > 100 ? "..." : ""}`);
-                return;
-              }
-            }
-          }
-
-          connection.bufferIncoming(rawMessage, async (batch: string[]) => {
-            for (const message of batch) {
-              await rpgServer.onMessage?.(message, connection as any);
-            }
-          });
-        } catch (error) {
-          console.error("Error processing WebSocket message:", error);
-        }
-      });
-
-      ws.on("close", () => {
-        void cleanup(`WebSocket connection closed: ${connection.id} from room: ${route.roomId}`);
-      });
-
-      ws.on("error", (error: Error) => {
-        void cleanup(undefined, error);
-      });
-
-      if (typeof rpgServer.onConnect === "function") {
-        await rpgServer.onConnect(
-          connection as any,
-          createConnectionContext(normalizedRequest.url, normalizedRequest.headers, normalizedRequest.method) as any,
-        );
-      }
-
-      await connection.send({
+      await connection.send(JSON.stringify({
         type: "connected",
         id: connection.id,
         message: "Connected to RPG-JS server",
-      });
+      }));
 
       return true;
     } catch (error) {
@@ -516,8 +418,11 @@ export class RpgServerTransport {
       return false;
     }
 
+    ensureNodeSessionIdQuery(url);
+    request.url = `${url.pathname}${url.search}`;
+    this.lastKnownHost = host;
     wsServer.handleUpgrade(request, socket, head, (ws) => {
-      void this.acceptWebSocket(ws, request);
+      void this.acceptWebSocket(ws as any, request);
     });
 
     return true;

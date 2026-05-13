@@ -61,7 +61,10 @@ class BridgeWebsocket extends AbstractWebsocket {
     this.socket = await connectionRoom({
         host,
         room: this.targetRoom,
-        id: this.privateId
+        id: this.privateId,
+        query: {
+          id: this.privateId,
+        },
     }, instance)
 
     listeners?.(this.socket)
@@ -93,7 +96,10 @@ class BridgeWebsocket extends AbstractWebsocket {
       room,
       id: this.privateId,
       host: host || this.options.host || window.location.host,
-      query,
+      query: {
+        ...query,
+        id: this.privateId,
+      },
     })
   }
 

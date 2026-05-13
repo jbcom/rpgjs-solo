@@ -39,9 +39,9 @@ class MockWebSocket {
 
 class MockServer extends RpgServerEngine {
   requests: Array<{ method: string; roomId: string; url: string; body: any }> = [];
-  messages: Array<{ connectionId: string; message: string }> = [];
+  messages: Array<{ connectionId: string; sessionId: string; message: string }> = [];
   closedConnections: string[] = [];
-  connectedContexts: Array<{ connectionId: string; url: string }> = [];
+  connectedContexts: Array<{ connectionId: string; sessionId: string; url: string }> = [];
 
   constructor(public room: any) {
     super();
@@ -72,6 +72,7 @@ class MockServer extends RpgServerEngine {
   async onMessage(message: string, connection: any) {
     this.messages.push({
       connectionId: connection.id,
+      sessionId: connection.sessionId,
       message,
     });
   }
@@ -79,6 +80,7 @@ class MockServer extends RpgServerEngine {
   async onConnect(connection: any, context: any) {
     this.connectedContexts.push({
       connectionId: connection.id,
+      sessionId: connection.sessionId,
       url: context.request.url,
     });
   }
@@ -149,15 +151,16 @@ describe("createRpgServerTransport", () => {
     await wait(10);
 
     const server = transport.getServer("lobby") as MockServer;
-    expect(server.connectedContexts).toEqual([
-      {
-        connectionId: "player-1",
-        url: "http://localhost/parties/main/lobby?_pk=player-1",
-      },
-    ]);
+    expect(server.connectedContexts).toHaveLength(1);
+    expect(server.connectedContexts[0]).toMatchObject({
+      sessionId: "player-1",
+    });
+    expect(server.connectedContexts[0].url).toContain("_pk=player-1");
+    expect(server.connectedContexts[0].url).toContain("id=player-1");
+    expect(server.connectedContexts[0].connectionId).not.toBe("player-1");
     expect(JSON.parse(ws.sent[0])).toMatchObject({
       type: "connected",
-      id: "player-1",
+      id: server.connectedContexts[0].connectionId,
     });
 
     ws.emit("message", Buffer.from("ping"));
@@ -165,7 +168,8 @@ describe("createRpgServerTransport", () => {
 
     expect(server.messages).toEqual([
       {
-        connectionId: "player-1",
+        connectionId: server.connectedContexts[0].connectionId,
+        sessionId: "player-1",
         message: "ping",
       },
     ]);
@@ -173,7 +177,44 @@ describe("createRpgServerTransport", () => {
     ws.emit("close");
     await wait(10);
 
-    expect(server.closedConnections).toEqual(["player-1"]);
+    expect(server.closedConnections).toEqual([server.connectedContexts[0].connectionId]);
+  });
+
+  it("keeps two active websockets when they share the same session id", async () => {
+    const transport = createRpgServerTransport(MockServer as any, {
+      initializeMaps: false,
+    });
+    const first = new MockWebSocket();
+    const second = new MockWebSocket();
+    const request = {
+      url: "http://localhost/parties/main/lobby?_pk=shared-session",
+      method: "GET",
+      headers: {
+        host: "localhost",
+      },
+    };
+
+    expect(await transport.acceptWebSocket(first as any, request)).toBe(true);
+    expect(await transport.acceptWebSocket(second as any, request)).toBe(true);
+
+    await wait(10);
+
+    const server = transport.getServer("lobby") as MockServer;
+    expect(server.connectedContexts).toHaveLength(2);
+    expect(server.connectedContexts.map((context) => context.sessionId)).toEqual([
+      "shared-session",
+      "shared-session",
+    ]);
+    expect(server.connectedContexts[0].connectionId).not.toBe(server.connectedContexts[1].connectionId);
+
+    const room = transport.getRoom("lobby")!;
+    expect(Array.from(room.getConnections())).toHaveLength(2);
+
+    await room.broadcast("hello");
+    await wait(10);
+
+    expect(first.sent).toContain("hello");
+    expect(second.sent).toContain("hello");
   });
 
   it("rejects map/update in production when the token is missing", async () => {

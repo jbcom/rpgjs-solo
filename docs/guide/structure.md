@@ -25,6 +25,17 @@ startGame(
 
 Use this entry when the client connects to a remote RPGJS server.
 
+By default, MMORPG mode stores a stable session id in `localStorage` and passes it
+to `@signe/room` as the connection session id. Refreshes and multiple tabs from
+the same browser therefore restore the same player session while each WebSocket
+keeps its own connection id. Use `connectionIdScope: "session"` to keep the
+session only for one browser tab, or `connectionIdScope: "ephemeral"` to create a
+new player session on each page load:
+
+```ts
+providers: [provideMmorpg({ connectionIdScope: "session" })]
+```
+
 ## `server.ts`
 
 `server.ts` creates the game server and registers your providers:

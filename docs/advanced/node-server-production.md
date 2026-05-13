@@ -116,6 +116,20 @@ You can also send the token as:
 4. From a trusted backend source, call `transport.updateMap()` or `POST /parties/main/map-<id>/map/update`.
 5. Let gameplay clients use only normal movement and game actions.
 
+## WebSocket session ids
+
+The Node transport is backed by `@signe/room/node` and follows the
+`@signe/room` session model:
+
+- `conn.id` is unique for each active WebSocket connection.
+- `conn.sessionId` is the stable private session id sent by the client.
+
+`provideMmorpg()` sends this stable id through PartySocket, so a browser refresh
+or a second tab can restore the same player session without replacing the first
+active WebSocket. When you need to address or exclude a single physical socket,
+use `conn.id`; when you need to inspect the restored player session, use
+`conn.sessionId`.
+
 ## Hono and other runtimes
 
 The same transport can be used outside Express:
