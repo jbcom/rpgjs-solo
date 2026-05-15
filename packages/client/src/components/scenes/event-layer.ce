@@ -13,7 +13,6 @@
 </Container>
 
 <script>
-    import { effect, signal } from 'canvasengine'
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
     import Character from "../character.ce";

@@ -12,3 +12,4 @@ export * from "./PerlinNoise";
 export * from "@rpgjs/physic";
 export * from "./Presets";
 export * from "./weather";
+export * from "./lighting";

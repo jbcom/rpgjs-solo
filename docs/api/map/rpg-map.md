@@ -13,6 +13,7 @@ Reference for the `RpgMap` class.
 - [applySyncToClient](#applysynctoclient)
 - [broadcast](#broadcast)
 - [clear](#clear)
+- [clearLighting](#clearlighting)
 - [clearWeather](#clearweather)
 - [createDynamicEvent](#createdynamicevent)
 - [createDynamicWorldMaps](#createdynamicworldmaps)
@@ -30,6 +31,7 @@ Reference for the `RpgMap` class.
 - [getPlayers](#getplayers)
 - [getShape](#getshape)
 - [getShapes](#getshapes)
+- [getLighting](#getlighting)
 - [getWeather](#getweather)
 - [getWorldMaps](#getworldmaps)
 - [globalConfig](#globalconfig)
@@ -44,6 +46,7 @@ Reference for the `RpgMap` class.
 - [onInput](#oninput)
 - [onJoin](#onjoin)
 - [onLeave](#onleave)
+- [patchLighting](#patchlighting)
 - [patchWeather](#patchweather)
 - [players](#players)
 - [playSound](#playsound)
@@ -52,6 +55,9 @@ Reference for the `RpgMap` class.
 - [removeInDatabase](#removeindatabase)
 - [removeShape](#removeshape)
 - [setAutoTick](#setautotick)
+- [setDay](#setday)
+- [setLighting](#setlighting)
+- [setNight](#setnight)
 - [setSync](#setsync)
 - [setWeather](#setweather)
 - [shakeMap](#shakemap)
@@ -59,6 +65,7 @@ Reference for the `RpgMap` class.
 - [showComponentAnimation](#showcomponentanimation)
 - [sounds](#sounds)
 - [stopSound](#stopsound)
+- [transitionLighting](#transitionlighting)
 - [updateMap](#updatemap)
 - [updateWorld](#updateworld)
 - [updateWorldMaps](#updateworldmaps)
@@ -218,6 +225,24 @@ clearWeather(options?: WeatherSetOptions): void
 ### Parameters
 
 - `options?`: `WeatherSetOptions`
+
+## clearLighting
+
+Clear lighting for this map.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+clearLighting(options?: { sync?: boolean }): void
+```
+
+### Parameters
+
+- `options?`: `{ sync?: boolean }`
 
 ## createDynamicEvent
 
@@ -822,6 +847,24 @@ const allShapes = map.getShapes();
 console.log(allShapes.length); // 2
 ```
 
+## getLighting
+
+Get the current map lighting state.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+getLighting(): LightingState | null
+```
+
+### Returns
+
+The current lighting state, or `null` when lighting is disabled.
+
 ## getWeather
 
 Get the current map weather state.
@@ -1205,6 +1248,27 @@ console.log(`Player ${player.id} left map ${map.id}`);
 });
 ```
 
+## patchLighting
+
+Patch the current lighting state.
+
+Nested `ambient`, `sun`, and `shadows` values are merged. `spots` is replaced when provided.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+patchLighting(patch: Partial<LightingState>, options?: { sync?: boolean }): LightingState | null
+```
+
+### Parameters
+
+- `patch`: `Partial<LightingState>`
+- `options?`: `{ sync?: boolean }`
+
 ## patchWeather
 
 Patch the current weather state.
@@ -1551,6 +1615,55 @@ map.weather.set('rainy');
 const currentWeather = map.weather();
 ```
 
+## setDay
+
+Apply the default daytime lighting preset.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+setDay(options?: { sync?: boolean }): LightingState | null
+```
+
+## setLighting
+
+Set the full lighting state for this map.
+
+When `sync` is true (default), all connected clients receive the new lighting.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+setLighting(next: LightingState | null, options?: { sync?: boolean }): LightingState | null
+```
+
+### Parameters
+
+- `next`: `LightingState | null`
+- `options?`: `{ sync?: boolean }`
+
+## setNight
+
+Apply the default nighttime lighting preset.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+setNight(options?: { sync?: boolean }): LightingState | null
+```
+
 ## setWeather
 
 Set the full weather state for this map.
@@ -1783,6 +1896,28 @@ map.playSound("battle-theme", { loop: true });
 // Later, stop it for everyone
 map.stopSound("battle-theme");
 ```
+
+## transitionLighting
+
+Transition lighting over time by broadcasting intermediate lighting states.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+transitionLighting(
+  toLighting: Partial<LightingState>,
+  options?: { duration?: number, easing?: 'linear' | 'easeInOut', sync?: boolean }
+): LightingState | null
+```
+
+### Parameters
+
+- `toLighting`: `Partial<LightingState>`
+- `options?`: transition options
 
 ## updateMap
 

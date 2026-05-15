@@ -1,5 +1,5 @@
 import { Move, RpgEvent, RpgMap, RpgPlayer, RpgServer } from "@rpgjs/server";
-import { defineModule, WorldMapsManager } from "@rpgjs/common";
+import { defineModule, normalizeLightingState, WorldMapsManager } from "@rpgjs/common";
 import { BlockExecutionService } from "./block-executor";
 import { apiUrl } from "./constants";
 import { RATIO_MAP_X, RATIO_MAP_Y } from "@common/map";
@@ -428,6 +428,7 @@ export default (_config?: unknown) => {
           mapData?.data?.weather,
         );
         mapData.data.weather = normalizedInitialWeather;
+        mapData.data.lighting = normalizeLightingState(mapData?.data?.lighting);
         // Add baseUrl to map context for use in block executors
         (mapExtended as any).apiBaseUrl = apiUrl;
 

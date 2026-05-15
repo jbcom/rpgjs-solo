@@ -1,5 +1,9 @@
 import {
   RpgCommonMap,
+  cloneLightingState,
+  normalizeLightingState,
+  type LightSpot,
+  type LightingState,
   type WeatherState,
   type MapPhysicsInitContext,
   type MapPhysicsEntityContext,
@@ -27,10 +31,32 @@ export class RpgClientMap extends RpgCommonMap<any> {
   currentPlayer = computed(() => this.players()[this.engine.playerIdSignal()!])
   weatherState = signal<WeatherState | null>(null);
   localWeatherOverride = signal<WeatherState | null>(null);
+  lightingState = signal<LightingState | null>(null);
+  localLightSpots = signal<Record<string, LightSpot>>({});
   weather = computed<WeatherState | null>(() => {
     const local = this.localWeatherOverride() 
     const state = this.weatherState()
     return local ?? state
+  });
+  lighting = computed<LightingState | null>(() => {
+    const state = cloneLightingState(this.lightingState());
+    const localSpots = Object.entries(this.localLightSpots()).map(([id, spot]) => ({
+      ...spot,
+      id: spot.id ?? id,
+    }));
+
+    if (!state && localSpots.length === 0) {
+      return null;
+    }
+
+    return {
+      ...(state ?? {}),
+      ambient: state?.ambient ?? (localSpots.length > 0 ? { darkness: 0.75 } : undefined),
+      spots: [
+        ...(state?.spots ?? []),
+        ...localSpots,
+      ],
+    };
   });
   private manualClientPhysicsTick = false;
   private readonly isTestEnvironment: boolean;
@@ -68,6 +94,8 @@ export class RpgClientMap extends RpgCommonMap<any> {
     this.events.set({})
     this.weatherState.set(null);
     this.localWeatherOverride.set(null);
+    this.lightingState.set(null);
+    this.localLightSpots.set({});
     this.clearPhysic()
   }
 
@@ -81,6 +109,56 @@ export class RpgClientMap extends RpgCommonMap<any> {
 
   clearLocalWeather(): void {
     this.localWeatherOverride.set(null);
+  }
+
+  getLighting(): LightingState | null {
+    return this.lighting();
+  }
+
+  addLightSpot(id: string, spot: LightSpot): void {
+    const normalized = normalizeLightingState({ spots: [{ ...spot, id }] });
+    const nextSpot = normalized?.spots?.[0];
+    if (!nextSpot) {
+      return;
+    }
+    this.localLightSpots.update((spots) => ({
+      ...spots,
+      [id]: nextSpot,
+    }));
+  }
+
+  patchLightSpot(id: string, patch: Partial<LightSpot>): void {
+    this.localLightSpots.update((spots) => {
+      const current = spots[id];
+      if (!current) {
+        return spots;
+      }
+      return {
+        ...spots,
+        [id]: {
+          ...current,
+          ...patch,
+          id,
+          x: patch.x ?? current.x,
+          y: patch.y ?? current.y,
+        },
+      };
+    });
+  }
+
+  removeLightSpot(id: string): void {
+    this.localLightSpots.update((spots) => {
+      if (!(id in spots)) {
+        return spots;
+      }
+      const next = { ...spots };
+      delete next[id];
+      return next;
+    });
+  }
+
+  clearLightSpots(): void {
+    this.localLightSpots.set({});
   }
 
   stepClientPhysics(deltaMs: number): number {

@@ -5,7 +5,7 @@ import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { RpgSound } from "./Sound";
 import { RpgResource } from "./Resource";
-import { Hooks, ModulesToken, Direction } from "@rpgjs/common";
+import { Hooks, ModulesToken, Direction, normalizeLightingState } from "@rpgjs/common";
 import { load } from "@signe/sync";
 import { RpgClientMap } from "./Game/Map"
 import { RpgGui } from "./Gui/Gui";
@@ -378,6 +378,7 @@ export class RpgClientEngine<T = any> {
 
     this.webSocket.on("changeMap", (data) => {
       this.sceneResetQueued = true;
+      this.sceneMap.clearLightSpots();
       // Reset camera follow to default (follow current player) when changing maps
       this.cameraFollowTargetId.set(null);
       const transferToken = typeof data?.transferToken === "string" ? data.transferToken : undefined;
@@ -480,6 +481,14 @@ export class RpgClientEngine<T = any> {
         startedAt: (raw as any).startedAt,
         seed: (raw as any).seed,
       });
+    });
+
+    this.webSocket.on("lightingState", (data) => {
+      const raw = (data && typeof data === "object" && "value" in data)
+        ? (data as any).value
+        : data;
+
+      this.sceneMap.lightingState.set(normalizeLightingState(raw));
     });
 
     this.webSocket.on('open', () => {

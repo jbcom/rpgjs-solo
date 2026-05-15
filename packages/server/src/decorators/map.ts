@@ -1,4 +1,4 @@
-import type { WeatherState } from "@rpgjs/common";
+import type { LightingState, WeatherState } from "@rpgjs/common";
 import type { MapEventDefinition, MapEventPlacement } from "../rooms/map";
 import type { RpgPlayer } from "../Player/Player";
 
@@ -137,6 +137,14 @@ export interface MapOptions {
      * ```
      */
     weather?: WeatherState | null
+
+    /**
+     * Initial lighting state for this map.
+     *
+     * This value is applied when the map is loaded and can later be updated
+     * at runtime with `map.setLighting()` from server logic.
+     */
+    lighting?: LightingState | null
 
     /** 
      * Whether to stop all sounds before playing the map sounds when a player joins.
@@ -320,6 +328,7 @@ export function MapData(options: MapOptions) {
         target.prototype.id = options.id
         target.prototype.sounds = options.sounds
         target.prototype.weather = options.weather
+        target.prototype.lighting = options.lighting
         target.prototype.lowMemory = options.lowMemory
         target.prototype.stopAllSoundsBeforeJoin = options.stopAllSoundsBeforeJoin
 

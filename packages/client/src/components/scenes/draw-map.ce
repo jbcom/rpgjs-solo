@@ -13,7 +13,7 @@
     </Container>
   }
 
-  @if (weatherProps) {
+  @if (weatherProps()) {
     <Weather ...weatherProps() />
   }
 </Container>

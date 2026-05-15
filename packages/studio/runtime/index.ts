@@ -13,6 +13,7 @@ export * from "./schemas/character-config";
 export * from "./schemas/database";
 export * from "./schemas/enemy";
 export * from "./schemas/event";
+export * from "./schemas/lighting";
 export * from "./schemas/map";
 export * from "./schemas/map-generation";
 export * from "./schemas/project";

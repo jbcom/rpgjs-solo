@@ -28,7 +28,8 @@ export class LobbyRoom extends BaseRoom {
     player.map = this as unknown as RpgPlayer["map"];
     player.context = context;
     player.conn = conn;
-    this.hooks.callHooks("server-player-onConnected", player).subscribe();
+    await lastValueFrom(this.hooks.callHooks("server-player-onConnected", player));
+    (this as any).$applySync?.();
   }
 
   @Action('gui.interaction')

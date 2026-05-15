@@ -1,4 +1,4 @@
-<Container  zIndex={zIndex}>
+<Container  zIndex={zIndex} onBeforeDestroy>
     <Container>
         @for (spritePart of spriteParts) {
             <Sprite
@@ -40,10 +40,12 @@
 </Container>
 
 <script>
-import { signal } from "canvasengine"
+import { mount, signal } from "canvasengine"
+import { inject, RpgClientEngine } from "@rpgjs/client"
 import LightSpot from "./light-spot.ce"
 
 const {
+    id,
     image,
     rect,
     drawIn,
@@ -59,6 +61,8 @@ const {
         default: 1
     }
 })
+
+const engine = inject(RpgClientEngine)
 
 const toFiniteNumber = (value, fallback = null) => {
     if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -1049,6 +1053,43 @@ const lightSpotOverlay = {
     style: resolvedLightSpot.style,
     zIndex: resolvedLightSpotZIndex
 }
+
+const readValue = (value) => typeof value === "function" ? value() : value
+
+const studioLightSpotId = [
+    "studio-element",
+    readValue(id) ?? "unknown",
+    Math.round(drawX),
+    Math.round(drawY),
+    Math.round(lightCenterX),
+    Math.round(lightCenterY)
+].join(":")
+
+const syncLightSpotWithSceneMap = () => {
+    if (!engine?.sceneMap) return
+    if (!lightSpotOverlay.enabled) {
+        engine.sceneMap.removeLightSpot(studioLightSpotId)
+        return
+    }
+
+    engine.sceneMap.addLightSpot(studioLightSpotId, {
+        id: studioLightSpotId,
+        x: lightSpotOverlay.centerX,
+        y: lightSpotOverlay.centerY,
+        radius: lightSpotOverlay.radius,
+        intensity: lightSpotOverlay.intensity,
+        flicker: lightSpotOverlay.flicker,
+        flickerSpeed: lightSpotOverlay.flickerSpeed,
+    })
+}
+
+const onBeforeDestroy = () => {
+    engine?.sceneMap?.removeLightSpot(studioLightSpotId)
+}
+
+mount(() => {
+    syncLightSpotWithSceneMap()
+})
 
 const spriteParts = buildSegmentsWithRule(normalizedRule) ?? fallbackSpriteParts
 

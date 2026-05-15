@@ -8,7 +8,6 @@ import {
   inject,
 } from "@rpgjs/client";
 import { defineModule } from "@rpgjs/common";
-import Shadow from "./components/shadow.ce";
 import {
   createSpriteSheetObject,
   resolveAssetSource,
@@ -153,7 +152,6 @@ export default (config: StudioGameModuleConfig) => {
       },
     },
     sprite: {
-      componentsBehind: [Shadow],
       async onBeforeRemove(sprite, context) {
         if (context.reason !== "defeated") return;
         const transition = context.transition;

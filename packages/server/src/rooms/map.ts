@@ -13,7 +13,18 @@ import {
   type MapPhysicsInitContext,
   type MapPhysicsEntityContext,
 } from "@rpgjs/common";
-import { WorldMapsManager, type WeatherState, type WorldMapConfig } from "@rpgjs/common";
+import {
+  DEFAULT_DAY_LIGHTING,
+  DEFAULT_NIGHT_LIGHTING,
+  WorldMapsManager,
+  cloneLightingState,
+  mergeLightingState,
+  normalizeLightingState,
+  type LightingState,
+  type LightingTransitionOptions,
+  type WeatherState,
+  type WorldMapConfig,
+} from "@rpgjs/common";
 import { RpgPlayer, RpgEvent } from "../Player/Player";
 import { generateShortUUID, sync, type, users } from "@signe/sync";
 import { signal } from "@signe/reactive";
@@ -192,6 +203,11 @@ interface WeatherSetOptions {
   sync?: boolean;
 }
 
+interface LightingSetOptions {
+  sync?: boolean;
+  cancelTransition?: boolean;
+}
+
 @Room({
   path: "map-{id}"
 })
@@ -305,6 +321,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   damageFormulas: any = {}
   private _weatherState: WeatherState | null = null;
+  private _lightingState: LightingState | null = null;
+  private _lightingTransitionTimer?: ReturnType<typeof setInterval>;
   /** Internal: Map of shapes by name */
   private _shapes: Map<string, RpgShape> = new Map();
   /** Internal: Map of shape entity UUIDs to RpgShape instances */
@@ -903,6 +921,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
             this.sounds.forEach(sound => player.playSound(sound, { loop: true }));
             player.emit("weatherState", this.getWeather());
+            player.emit("lightingState", this.getLighting());
 
             // Execute global map hooks (from RpgServer.map)
             await lastValueFrom(this.hooks.callHooks("server-map-onJoin", player, this));
@@ -1361,11 +1380,15 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     map.events = map.events ?? []
     let initialWeather: WeatherState | null | undefined = this.globalConfig?.weather;
+    let initialLighting: LightingState | null | undefined = this.globalConfig?.lighting;
 
     if (map.id) {
       const mapFound = this.maps.find(m => m.id === map.id)
       if (typeof mapFound?.weather !== "undefined") {
         initialWeather = mapFound.weather;
+      }
+      if (typeof mapFound?.lighting !== "undefined") {
+        initialLighting = mapFound.lighting;
       }
       if (mapFound?.events) {
         map.events = [
@@ -1402,6 +1425,11 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       this.setWeather(initialWeather);
     } else {
       this.clearWeather();
+    }
+    if (typeof initialLighting !== "undefined") {
+      this.setLighting(initialLighting);
+    } else {
+      this.clearLighting();
     }
 
     await lastValueFrom(this.hooks.callHooks("server-map-onBeforeUpdate", map, this))
@@ -2364,6 +2392,143 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this.setWeather(null, options);
   }
 
+  private clearLightingTransition(): void {
+    if (this._lightingTransitionTimer) {
+      clearInterval(this._lightingTransitionTimer);
+      this._lightingTransitionTimer = undefined;
+    }
+  }
+
+  private interpolateNumber(from: number | undefined, to: number | undefined, progress: number): number | undefined {
+    if (typeof from !== "number" && typeof to !== "number") {
+      return undefined;
+    }
+    const start = typeof from === "number" ? from : 0;
+    const end = typeof to === "number" ? to : start;
+    return start + (end - start) * progress;
+  }
+
+  private easeLightingProgress(progress: number, easing: LightingTransitionOptions["easing"]): number {
+    const value = Math.max(0, Math.min(1, progress));
+    if (easing === "easeInOut") {
+      return value < 0.5 ? 2 * value * value : 1 - Math.pow(-2 * value + 2, 2) / 2;
+    }
+    return value;
+  }
+
+  private interpolateLighting(from: LightingState, to: LightingState, progress: number): LightingState {
+    return {
+      ...to,
+      ambient: {
+        ...(to.ambient ?? {}),
+        darkness: this.interpolateNumber(from.ambient?.darkness, to.ambient?.darkness, progress),
+        fogRadius: this.interpolateNumber(from.ambient?.fogRadius, to.ambient?.fogRadius, progress),
+        fogSoftness: this.interpolateNumber(from.ambient?.fogSoftness, to.ambient?.fogSoftness, progress),
+      },
+      sun: {
+        ...(to.sun ?? {}),
+        x: this.interpolateNumber(from.sun?.x, to.sun?.x, progress),
+        y: this.interpolateNumber(from.sun?.y, to.sun?.y, progress),
+        z: this.interpolateNumber(from.sun?.z, to.sun?.z, progress),
+        radius: this.interpolateNumber(from.sun?.radius, to.sun?.radius, progress),
+        intensity: this.interpolateNumber(from.sun?.intensity, to.sun?.intensity, progress),
+        shadowWeight: this.interpolateNumber(from.sun?.shadowWeight, to.sun?.shadowWeight, progress),
+      },
+    };
+  }
+
+  /**
+   * Get the current map lighting state.
+   */
+  getLighting(): LightingState | null {
+    return cloneLightingState(this._lightingState);
+  }
+
+  /**
+   * Set the full lighting state for this map.
+   *
+   * When `sync` is true (default), all connected clients receive the new lighting.
+   */
+  setLighting(next: LightingState | null, options: LightingSetOptions = {}): LightingState | null {
+    const sync = options.sync !== false;
+    if (options.cancelTransition !== false) {
+      this.clearLightingTransition();
+    }
+    this._lightingState = cloneLightingState(normalizeLightingState(next));
+    if (sync) {
+      this.$broadcast({
+        type: "lightingState",
+        value: this._lightingState,
+      });
+    }
+    return this.getLighting();
+  }
+
+  /**
+   * Patch the current lighting state.
+   *
+   * Nested `ambient`, `sun`, and `shadows` values are merged.
+   */
+  patchLighting(patch: Partial<LightingState>, options: LightingSetOptions = {}): LightingState | null {
+    const next = mergeLightingState(this._lightingState, patch);
+    return this.setLighting(next, options);
+  }
+
+  /**
+   * Clear lighting for this map.
+   */
+  clearLighting(options: LightingSetOptions = {}): void {
+    this.setLighting(null, options);
+  }
+
+  /**
+   * Apply the default daytime lighting preset.
+   */
+  setDay(options: LightingSetOptions = {}): LightingState | null {
+    return this.setLighting(DEFAULT_DAY_LIGHTING, options);
+  }
+
+  /**
+   * Apply the default nighttime lighting preset.
+   */
+  setNight(options: LightingSetOptions = {}): LightingState | null {
+    return this.setLighting(DEFAULT_NIGHT_LIGHTING, options);
+  }
+
+  /**
+   * Transition lighting over time by broadcasting intermediate lighting states.
+   */
+  transitionLighting(toLighting: Partial<LightingState>, options: LightingTransitionOptions & LightingSetOptions = {}): LightingState | null {
+    this.clearLightingTransition();
+
+    const duration = Math.max(0, options.duration ?? 1000);
+    const from = cloneLightingState(this._lightingState) ?? cloneLightingState(DEFAULT_DAY_LIGHTING)!;
+    const to = mergeLightingState(from, toLighting);
+
+    if (duration <= 0) {
+      return this.setLighting(to, options);
+    }
+
+    const startedAt = Date.now();
+    const intervalMs = 50;
+
+    this._lightingTransitionTimer = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const progress = this.easeLightingProgress(elapsed / duration, options.easing);
+      const next = this.interpolateLighting(from, to, progress);
+      this.setLighting(next, { ...options, cancelTransition: false });
+
+      if (elapsed >= duration) {
+        this.clearLightingTransition();
+        this.setLighting(to, { ...options, cancelTransition: false });
+      }
+    }, intervalMs);
+
+    const first = this.interpolateLighting(from, to, 0);
+    this.setLighting(first, { ...options, cancelTransition: false });
+    return this.getLighting();
+  }
+
   /**
    * Configure runtime synchronized properties on the map
    * 
@@ -2817,6 +2982,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   clear(): void {
     try {
+      this.clearLightingTransition();
       // Stop input processing loop
       if (this._inputLoopSubscription) {
         this._inputLoopSubscription.unsubscribe();

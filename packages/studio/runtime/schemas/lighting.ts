@@ -1,0 +1,147 @@
+export const lightSpotSchema = {
+  type: "object",
+  title: "Light Spot",
+  properties: {
+    id: {
+      type: "string",
+      title: "ID",
+    },
+    x: {
+      type: "number",
+      title: "X",
+      description: "World X coordinate of the light center.",
+    },
+    y: {
+      type: "number",
+      title: "Y",
+      description: "World Y coordinate of the light center.",
+    },
+    radius: {
+      type: "number",
+      title: "Radius",
+      default: 180,
+    },
+    intensity: {
+      type: "number",
+      title: "Intensity",
+      default: 1,
+    },
+    color: {
+      type: "string",
+      title: "Color",
+      default: "#ffffff",
+    },
+    flicker: {
+      type: "boolean",
+      title: "Flicker",
+      default: false,
+    },
+    flickerSpeed: {
+      type: "number",
+      title: "Flicker Speed",
+      default: 12,
+    },
+    pulse: {
+      type: "boolean",
+      title: "Pulse",
+      default: false,
+    },
+    pulseSpeed: {
+      type: "number",
+      title: "Pulse Speed",
+      default: 2,
+    },
+  },
+  required: ["x", "y"],
+} as const;
+
+export const lightingStateSchema = {
+  type: "object",
+  title: "Lighting",
+  properties: {
+    ambient: {
+      type: "object",
+      title: "Ambient",
+      properties: {
+        darkness: {
+          type: "number",
+          title: "Darkness",
+          description: "Darkness outside light spots. 0 is daylight, 1 is full black.",
+          default: 0.75,
+        },
+        darkColor: {
+          type: "string",
+          title: "Dark Color",
+          default: "#0a1020",
+        },
+        fogColor: {
+          type: "string",
+          title: "Fog Color",
+          default: "#141a2a",
+        },
+        fogRadius: {
+          type: "number",
+          title: "Fog Radius",
+          default: 0.5,
+        },
+        fogSoftness: {
+          type: "number",
+          title: "Fog Softness",
+          default: 0.35,
+        },
+      },
+    },
+    spots: {
+      type: "array",
+      title: "Light Spots",
+      items: lightSpotSchema,
+    },
+    sun: {
+      type: "object",
+      title: "Sun",
+      properties: {
+        x: { type: "number", title: "X" },
+        y: { type: "number", title: "Y" },
+        z: { type: "number", title: "Z", default: 520 },
+        radius: { type: "number", title: "Radius" },
+        intensity: { type: "number", title: "Intensity", default: 0.85 },
+        shadowWeight: { type: "number", title: "Shadow Weight", default: 1 },
+        enabled: { type: "boolean", title: "Enabled", default: true },
+      },
+    },
+    shadows: {
+      type: "object",
+      title: "Shadows",
+      properties: {
+        enabled: {
+          type: "boolean",
+          title: "Enabled",
+          default: true,
+        },
+        mode: {
+          type: "string",
+          title: "Mode",
+          enum: ["strongest", "blend2"],
+          default: "strongest",
+        },
+        updateHz: {
+          type: "number",
+          title: "Update Hz",
+          default: 30,
+        },
+        shadowColor: {
+          type: "string",
+          title: "Shadow Color",
+          default: "#05070d",
+        },
+      },
+    },
+  },
+} as const;
+
+export const lightingStateNullableSchema = {
+  ...lightingStateSchema,
+  type: ["object", "null"],
+  title: "Lighting",
+  description: "Optional lighting state for the map",
+} as const;

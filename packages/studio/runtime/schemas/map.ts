@@ -1,5 +1,6 @@
 import { FromSchema } from "json-schema-to-ts";
 import { EventData, eventSchema } from "./event";
+import { lightingStateNullableSchema } from "./lighting";
 import { weatherStateNullableSchema } from "./weather";
 
 export const mapParamsSchema = {
@@ -147,6 +148,7 @@ export const mapSchema = {
       description: "The terrain of the map",
     },
     weather: weatherStateNullableSchema as any,
+    lighting: lightingStateNullableSchema as any,
     elementsAlwaysLow: {
       type: "string",
       title: "Elements Always Low",

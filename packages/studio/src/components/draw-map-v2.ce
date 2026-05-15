@@ -46,7 +46,7 @@
 
     const { data } = defineProps()
 
-     const engine = inject(RpgClientEngine);
+    const engine = inject(RpgClientEngine);
 
     const tilesetImage = computed(() => {
       const params = data().params
@@ -79,6 +79,61 @@
         }
       }
       return []
+    }
+
+    const toPositiveNumber = (value) => {
+      const number = Number(value)
+      return Number.isFinite(number) && number > 0 ? number : null
+    }
+
+    const parseTsxMetadata = (value) => {
+      if (typeof value !== 'string' || !value.trim()) {
+        return {}
+      }
+
+      const readAttribute = (tag, attribute) => {
+        const match = value.match(new RegExp(`<${tag}\\b[^>]*\\b${attribute}="([^"]+)"`))
+        return match?.[1]
+      }
+
+      return {
+        tilewidth: toPositiveNumber(readAttribute('tileset', 'tilewidth')),
+        tileheight: toPositiveNumber(readAttribute('tileset', 'tileheight')),
+        tilecount: toPositiveNumber(readAttribute('tileset', 'tilecount')),
+        columns: toPositiveNumber(readAttribute('tileset', 'columns')),
+        imagewidth: toPositiveNumber(readAttribute('image', 'width')),
+        imageheight: toPositiveNumber(readAttribute('image', 'height'))
+      }
+    }
+
+    const getTilesetMetadata = (tileset) => {
+      const metadata = tileset?.metadata || {}
+      const tsxMetadata = parseTsxMetadata(metadata.tsx)
+
+      return {
+        tilewidth: toPositiveNumber(metadata.tilewidth) || tsxMetadata.tilewidth,
+        tileheight: toPositiveNumber(metadata.tileheight) || tsxMetadata.tileheight,
+        tilecount: toPositiveNumber(metadata.tilecount) || tsxMetadata.tilecount,
+        columns: toPositiveNumber(metadata.columns) || tsxMetadata.columns,
+        imagewidth: toPositiveNumber(metadata.imagewidth) || tsxMetadata.imagewidth,
+        imageheight: toPositiveNumber(metadata.imageheight) || tsxMetadata.imageheight
+      }
+    }
+
+    const getMaxTileId = (tiles) => {
+      let max = -1
+      const visit = (value) => {
+        if (Array.isArray(value)) {
+          value.forEach(visit)
+          return
+        }
+        const number = Number(value)
+        if (Number.isFinite(number) && number >= 0) {
+          max = Math.max(max, number)
+        }
+      }
+      visit(tiles)
+      return max
     }
 
     const normalizeIdentifier = (value) => {
@@ -157,22 +212,27 @@
       const primaryTerrainTileset = (primaryTerrainId
         ? terrainTilesets.find((tileset) => resolveTilesetId(tileset) === primaryTerrainId)
         : null) || terrainTilesets[0] || params.baseTerrain || null
-      const baseTerrainMeta = primaryTerrainTileset?.metadata || params.baseTerrain?.metadata || {}
+      const baseTerrainMeta = getTilesetMetadata(params.baseTerrain)
+      const primaryTerrainMeta = getTilesetMetadata(primaryTerrainTileset)
       const fallbackTileWidth = baseTerrainMeta.tilewidth || 48
       const fallbackTileHeight = baseTerrainMeta.tileheight || 48
-      const tileWidth = primaryTerrainTileset?.metadata?.tilewidth || fallbackTileWidth
-      const tileHeight = primaryTerrainTileset?.metadata?.tileheight || fallbackTileHeight
+      const tileWidth = primaryTerrainMeta.tilewidth || fallbackTileWidth
+      const tileHeight = primaryTerrainMeta.tileheight || fallbackTileHeight
       const currentTerrainImage = terrainImage()
 
       const terrainGrid = Array.isArray(terrain) && Array.isArray(terrain[0]) ? terrain : null
       const terrainFlat = Array.isArray(terrain) && !Array.isArray(terrain[0]) ? terrain : null
       const tilesetsForMap = primaryTerrainTileset ? [primaryTerrainTileset] : []
+      const maxTerrainTileId = getMaxTileId(terrain)
 
       let gidOffset = 1
       const tiledTilesets = tilesetsForMap.map((tileset) => {
-        const meta = tileset?.metadata || {}
-        const columns = meta.columns || Math.floor((meta.imagewidth || 1) / tileWidth) || 1
-        const tilecount = meta.tilecount || columns * Math.floor((meta.imageheight || tileHeight) / tileHeight)
+        const meta = getTilesetMetadata(tileset)
+        const imageWidth = meta.imagewidth || (meta.columns ? meta.columns * tileWidth : tileWidth)
+        const columns = meta.columns || Math.floor(imageWidth / tileWidth) || 1
+        const imageHeight = meta.imageheight || tileHeight * Math.ceil(Math.max(meta.tilecount || 1, maxTerrainTileId + 1, 1) / columns)
+        const imageTileCount = columns * Math.floor(imageHeight / tileHeight)
+        const tilecount = Math.max(meta.tilecount || 0, imageTileCount, maxTerrainTileId + 1, 1)
         const firstgid = gidOffset
         gidOffset += tilecount || 0
         const imageSource = tileset?.fileName ? `${assetsUrl}/${tileset.fileName}` : currentTerrainImage
@@ -181,8 +241,8 @@
           name: tileset?.name || 'Tileset',
           image: {
             source: imageSource,
-            width: meta.imagewidth || columns * tileWidth,
-            height: meta.imageheight || tileHeight * Math.ceil((tilecount || 1) / columns)
+            width: imageWidth,
+            height: imageHeight
           },
           tilewidth: meta.tilewidth || tileWidth,
           tileheight: meta.tileheight || tileHeight,
