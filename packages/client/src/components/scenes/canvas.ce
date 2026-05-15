@@ -84,9 +84,9 @@
   const NIGHT_SPOT_RADIUS_SCALE = 4.25
   const NIGHT_SPOT_MIN_RADIUS = 170
   const NIGHT_SPOT_MIN_INTENSITY = 1
-  const SHADOW_SPOT_RADIUS_SCALE = 8.5
-  const SHADOW_SPOT_MIN_RADIUS = 360
-  const SHADOW_SPOT_MIN_INTENSITY = 1.15
+  const SHADOW_SPOT_RADIUS_SCALE = 12
+  const SHADOW_SPOT_MIN_RADIUS = 480
+  const SHADOW_SPOT_MIN_INTENSITY = 1.35
 
   const nightSpotRadius = (radius) => Math.max(radius * NIGHT_SPOT_RADIUS_SCALE, NIGHT_SPOT_MIN_RADIUS)
   const shadowSpotRadius = (radius) => Math.max(radius * SHADOW_SPOT_RADIUS_SCALE, SHADOW_SPOT_MIN_RADIUS)
@@ -181,7 +181,7 @@
         z: 170,
         radius: shadowSpotRadius(radius),
         intensity: shadowSpotIntensity(spot.intensity),
-        shadowWeight: 2,
+        shadowWeight: 2.4,
         enabled: true,
       }
     })
@@ -197,7 +197,7 @@
     if (shadows?.ambientLight === null || shadows?.ambientLight?.enabled === false) {
       return null
     }
-    return shadows?.ambientLight ?? { x: -0.18, y: -1, z: 420, intensity: 0.28, shadowWeight: 1 }
+    return shadows?.ambientLight ?? { x: -0.18, y: -1, z: 420, intensity: 0.32, shadowWeight: 1 }
   })
 
   const shadowEnabled = computed(() => {
@@ -209,7 +209,7 @@
   const shadowUpdateHz = computed(() => shadowState()?.updateHz ?? 60)
   const shadowScanHz = computed(() => shadowState()?.scanHz ?? 8)
   const shadowCullToViewport = computed(() => shadowState()?.cullToViewport ?? true)
-  const shadowMinInfluence = computed(() => shadowState()?.minInfluence ?? 0.2)
-  const shadowFalloffPower = computed(() => shadowState()?.falloffPower ?? 1.1)
+  const shadowMinInfluence = computed(() => shadowState()?.minInfluence ?? 0.24)
+  const shadowFalloffPower = computed(() => shadowState()?.falloffPower ?? 0.85)
   const shadowColor = computed(() => shadowState()?.shadowColor ?? "#05070d")
 </script>

@@ -414,13 +414,13 @@
       height,
       footAnchor: { x: 0.5, y: 1 },
       footOffset: { x: 0, y: 2 },
-      alpha: 0.42,
+      alpha: 0.5,
       blur: 3.5,
       gradientPower: 2,
       hardness: 0.42,
       minLength: Math.max(6, (box?.h ?? 32) * 0.25),
       maxLength: Math.max(90, height * 1.8),
-      contactAlpha: 0.24,
+      contactAlpha: 0.3,
       contactScale: 0.3,
     };
   }
