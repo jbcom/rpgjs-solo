@@ -107,7 +107,10 @@ export const packages = (type: "build" | "dev") => {
     {
       name: "studio",
       buildScript,
-      dependencies: createDependencies(packagesPath, ['action-battle', 'vite']),
+      dependencies: [
+        createDependency(packagesPath, 'action-battle', 'client/index.d.ts'),
+        createDependency(packagesPath, 'vite'),
+      ],
     },
   ];
 };
