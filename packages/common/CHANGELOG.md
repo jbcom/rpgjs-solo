@@ -1,6 +1,6 @@
 # @rpgjs/common
 
-## 5.0.0
+## 5.0.0-beta.9
 
 ### Major Changes
 

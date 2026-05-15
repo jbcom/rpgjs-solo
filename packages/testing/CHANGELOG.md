@@ -1,6 +1,6 @@
 # @rpgjs/testing
 
-## 5.0.0
+## 5.0.0-beta.9
 
 ### Major Changes
 
@@ -9,8 +9,8 @@
 ### Patch Changes
 
 - Updated dependencies [c456d25]
-  - @rpgjs/client@5.0.0
-  - @rpgjs/server@5.0.0
+  - @rpgjs/client@5.0.0-beta.9
+  - @rpgjs/server@5.0.0-beta.9
 
 ## 5.0.0-beta.8
 
