@@ -19,8 +19,7 @@
 </Container>
 
 <script>
-    import { NoiseFilter } from 'pixi-filters';
-    import { effect, signal, computed, mount, on, tick } from 'canvasengine'
+    import { computed } from 'canvasengine'
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
     import { Weather } from '@canvasengine/presets'
@@ -29,22 +28,10 @@
     const componentAnimations = engine.componentAnimations
     const map = engine.sceneMap?.data
     const sceneComponent = computed(() => map()?.component)
-    const sceneParams = map()?.params
     const mapParams = map()?.params
-    const animations = engine.sceneMap.animations
     const weather = engine.sceneMap.weather
     const backgroundMusic = { src: mapParams?.backgroundMusic, autoplay: true, loop: true }
     const backgroundAmbientSound = { src: mapParams?.backgroundAmbientSound, autoplay: true, loop: true }
-
-    const data = signal(map()?.data)
-
-    const scale = mapParams?.scale || 1
-    const worldWidth = (mapParams?.width || 2048) * scale
-    const worldHeight = (mapParams?.height || 2048) * scale
-   
-    const clamp = {
-      direction: "all"
-    }
 
     const shakeConfig = {
       trigger: engine.mapShakeTrigger,

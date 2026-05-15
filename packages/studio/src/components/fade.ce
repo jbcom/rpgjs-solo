@@ -16,7 +16,7 @@
     import { animatedSignal, mount, computed, signal, on, effect } from "canvasengine";
     import { inject, RpgClientEngine, RpgGui } from "@rpgjs/client";
     import { Loading } from '@canvasengine/presets'
-  
+
     const {
       onFinish,
       data
@@ -26,7 +26,7 @@
     const color = computed(() => data().color)
     const fadeIn = computed(() => data().fadeIn)
     const fadeTrigger = data().fadeTrigger
-  
+
     const engine = inject(RpgClientEngine);
     const gui = inject(RpgGui);
   
@@ -46,14 +46,27 @@
       }
     });
 
+    const startFade = () => {
+      opacity.set(fadeIn() ? 1 : 0);
+    }
+
     on(fadeTrigger, () => {
-      if (loader) {
-        loader.onComplete(() => {
-          opacity.set(fadeIn() ? 1 : 0);
-        })
+      if (!loader) {
+        startFade()
+        return
       }
+
+      const assetCount = typeof loader.getAssetCount === "function" ? loader.getAssetCount() : 0
+      const progress = typeof loader.getGlobalProgress === "function" ? loader.getGlobalProgress() : 1
+
+      if (assetCount === 0 || progress >= 1) {
+        startFade()
+        return
+      }
+
+      loader.onComplete(startFade)
     });
-  
+
     mount((element) => {
       loader = element.props.context?.globalLoader
       effect(() => {
@@ -62,4 +75,3 @@
       })
     });
   </script>
-  

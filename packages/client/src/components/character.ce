@@ -407,7 +407,7 @@
     const height = Math.max(bounds?.height ?? box?.h ?? 32, box?.h ?? 32) * scaleY;
 
     return {
-      enabled: shadowsEnabled(),
+      enabled: shadowsEnabled,
       height,
       footAnchor: { x: 0.5, y: 1 },
       footOffset: { x: 0, y: 2 },

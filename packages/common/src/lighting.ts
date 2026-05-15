@@ -6,6 +6,7 @@ export interface LightingAmbient {
   fogColor?: LightingColor;
   fogRadius?: number;
   fogSoftness?: number;
+  fogOpacity?: number;
 }
 
 export interface LightSpot {
@@ -32,10 +33,25 @@ export interface LightingSun {
   enabled?: boolean;
 }
 
+export interface LightingAmbientLight {
+  x: number;
+  y: number;
+  z?: number;
+  intensity?: number;
+  shadowWeight?: number;
+  length?: number;
+  enabled?: boolean;
+}
+
 export interface LightingShadows {
   enabled?: boolean;
   mode?: "strongest" | "blend2";
   updateHz?: number;
+  scanHz?: number;
+  cullToViewport?: boolean;
+  minInfluence?: number;
+  falloffPower?: number;
+  ambientLight?: LightingAmbientLight | null;
   shadowColor?: LightingColor;
 }
 
@@ -56,6 +72,7 @@ export const DEFAULT_DAY_LIGHTING: LightingState = {
     darkness: 0,
     darkColor: "#000000",
     fogColor: "#141424",
+    fogOpacity: 0.35,
   },
   sun: {
     intensity: 1,
@@ -74,6 +91,7 @@ export const DEFAULT_NIGHT_LIGHTING: LightingState = {
     darkness: 0.45,
     darkColor: "#0a1020",
     fogColor: "#141a2a",
+    fogOpacity: 0.35,
   },
   sun: {
     intensity: 0.35,

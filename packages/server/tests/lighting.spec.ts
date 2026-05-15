@@ -128,6 +128,12 @@ test("map lighting syncs to clients and merges local light spots", async () => {
     x: 300,
     y: 320,
   });
+  expect(client.client.sceneMap.getLighting()).toEqual({
+    spots: [
+      { id: "torch", x: 300, y: 320 },
+    ],
+  });
+  expect(client.client.sceneMap.getLighting()).not.toHaveProperty("ambient");
 
   await player.changeMap("map2", { x: 10, y: 10 });
   player = await client.waitForMapChange("map2");

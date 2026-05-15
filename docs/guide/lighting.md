@@ -7,7 +7,7 @@ description: "Guide for map lighting, light spots, shadows, and day/night transi
 
 Manage map lighting from the server and add temporary client-only spots for local effects.
 
-Lighting is rendered by the engine with CanvasEngine presets. You do not need to import `NightAmbiant` or `SpriteShadows` in your map components.
+Lighting is rendered by the engine with CanvasEngine presets. You do not need to import `NightAmbient` or `SpriteShadows` in your map components.
 
 ## Shared Types
 
@@ -31,7 +31,10 @@ import { MapData, RpgMap } from '@rpgjs/server'
     ambient: {
       darkness: 0.45,
       darkColor: '#0a1020',
-      fogColor: '#141a2a'
+      fogColor: '#141a2a',
+      fogRadius: 0.5,
+      fogSoftness: 0.35,
+      fogOpacity: 0.35
     },
     spots: [
       { x: 320, y: 180, radius: 160, intensity: 1, flicker: true }
@@ -40,7 +43,12 @@ import { MapData, RpgMap } from '@rpgjs/server'
       intensity: 0.35
     },
     shadows: {
-      enabled: true
+      enabled: true,
+      ambientLight: { x: -0.18, y: -1, z: 420, intensity: 0.18 },
+      minInfluence: 0.16,
+      falloffPower: 1.2,
+      scanHz: 8,
+      cullToViewport: true
     }
   }
 })
@@ -110,7 +118,9 @@ sceneMap.patchLightSpot('player-torch', {
 })
 ```
 
-Local spots are merged with synchronized map spots for rendering and are cleared when the client changes map.
+Local spots are merged with synchronized map spots for rendering and are cleared when the client changes map. If spots exist without an ambient configuration, the client renders `NightAmbient` with a default darkness of `0.75` so the spots are visible.
+
+Ambient lighting fields map to CanvasEngine `NightAmbient` props: `darkness` and `darkColor` become the darkness overlay, while `fogColor`, `fogRadius`, `fogSoftness`, and `fogOpacity` configure the haze overlay.
 
 ## Shadows
 
@@ -127,9 +137,14 @@ map.patchLighting({
   shadows: {
     enabled: true,
     mode: 'strongest',
-    updateHz: 30
+    updateHz: 30,
+    scanHz: 8,
+    cullToViewport: true,
+    minInfluence: 0.16,
+    falloffPower: 1.2,
+    ambientLight: { x: -0.18, y: -1, z: 420, intensity: 0.18, shadowWeight: 0.75 }
   }
 })
 ```
 
-Map light spots also affect shadows. In Studio maps, an element with a `lightSpot` is automatically registered as a local light spot for both `NightAmbiant` and `SpriteShadows`.
+Map light spots also affect shadows when `lighting.shadows.enabled` is `true`. Local spots, including Studio element `lightSpot` entries, also enable `SpriteShadows` with default shadow options so torch-lit Studio maps do not need a separate `lighting.shadows` block. `ambientLight` provides a directional baseline shadow for sprites outside point light radius; set it to `null` or `{ enabled: false }` to disable it. In Studio maps, an element with a `lightSpot` is automatically registered as a local light spot, then used by `NightAmbient` when night is active and by `SpriteShadows` when shadows are active.

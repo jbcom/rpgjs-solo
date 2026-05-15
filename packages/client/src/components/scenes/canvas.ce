@@ -1,26 +1,26 @@
 <Canvas width={engine.width} height={engine.height}>
   <Viewport worldWidth worldHeight clamp sortableChildren={true}>
-    @if (lightingAmbiantEnabled()) {
+    @if (lightingAmbientEnabled()) {
       <NightAmbiant
-        lightSpots={nightLights}
-        darkness={lightingDarkness}
-        darkColor={lightingDarkColor}
-        fogColor={lightingFogColor}
-        fogRadius={lightingFogRadius}
-        fogSoftness={lightingFogSoftness}
+        spots={nightLights}
+        darkness={lightingDarknessProps}
+        haze={lightingHaze}
       />
     }
     @if (shadowEnabled()) {
       <SpriteShadows
         lights={shadowLights}
+        ambientLight={shadowAmbientLight}
+        minInfluence={shadowMinInfluence}
+        falloffPower={shadowFalloffPower}
         mode={shadowMode}
         updateHz={shadowUpdateHz}
+        scanHz={shadowScanHz}
+        cullToViewport={shadowCullToViewport}
         shadowColor={shadowColor}
       />
     }
-    @if (sceneData()) {
-      <SceneMap />
-    }
+    <SceneMap />
   </Viewport>
   @for (gui of guiList) {
       <Container display="flex">
@@ -36,17 +36,18 @@
 </Canvas>
 
 <script>
-  import { signal, computed, effect } from "canvasengine";
+  import { computed, effect } from "canvasengine";
   import { inject } from "../../core/inject";
   import { RpgClientEngine } from "../../RpgClientEngine";
   import SceneMap from './draw-map.ce'
   import { RpgGui } from "../../Gui/Gui";
-  import { NightAmbiant, SpriteShadows } from "@canvasengine/presets";
   import { delay } from "@rpgjs/common";
+  import { NightAmbiant, SpriteShadows } from '@canvasengine/presets'
 
   const engine = inject(RpgClientEngine);
   const guiService = inject(RpgGui);
   const sceneData = engine.sceneMap.data
+  const lighting = engine.sceneMap.lighting
   const guiList = computed(() => {
     return Object.values(guiService.gui()).filter((gui) => !gui.attachToSprite)
   })
@@ -60,108 +61,6 @@
     const scale = Number(data?.params?.scale ?? 1) || 1
     return Number(data?.height ?? data?.params?.height ?? 2048) * scale
   })
-  const lighting = engine.sceneMap.lighting
-
-  const lightingAmbient = computed(() => {
-    const state = lighting?.()
-    return state?.ambient ?? {}
-  })
-
-  const nightLights = computed(() => {
-    const state = lighting?.()
-    return (state?.spots ?? []).map((spot, index) => ({
-      x: spot.x,
-      y: spot.y,
-      radius: (spot.radius ?? 180) * 0.72,
-      intensity: spot.intensity ?? (index === 0 ? 1 : 0.92),
-      flicker: spot.flicker,
-      flickerSpeed: spot.flickerSpeed ?? 14,
-      pulse: spot.pulse,
-      pulseSpeed: spot.pulseSpeed,
-      phase: spot.phase,
-    }))
-  })
-
-  const hasNightLights = computed(() => nightLights().length > 0)
-
-  const lightingDarkness = computed(() => {
-    const ambient = lightingAmbient()
-    return typeof ambient.darkness === "number"
-      ? ambient.darkness
-      : (hasNightLights() ? 0.75 : 0)
-  })
-
-  const lightingAmbiantEnabled = computed(() => {
-    const state = lighting?.()
-    if (!state) {
-      return false
-    }
-    return lightingDarkness() > 0 || hasNightLights()
-  })
-
-  const lightingDarkColor = computed(() => lightingAmbient().darkColor ?? "#080a12")
-  const lightingFogColor = computed(() => lightingAmbient().fogColor ?? "#12182a")
-  const lightingFogRadius = computed(() => (
-    hasNightLights() ? (lightingAmbient().fogRadius ?? 0.44) : 1
-  ))
-  const lightingFogSoftness = computed(() => (
-    hasNightLights() ? (lightingAmbient().fogSoftness ?? 0.3) : 1
-  ))
-
-  const defaultSunLight = () => {
-    const data = sceneData?.()
-    const width = Number(data?.width ?? data?.params?.width ?? 2048)
-    const height = Number(data?.height ?? data?.params?.height ?? 2048)
-    const scale = Number(data?.params?.scale ?? 1) || 1
-    const mapWidth = width * scale
-    const mapHeight = height * scale
-
-    return {
-      x: -mapWidth * 0.35,
-      y: -mapHeight * 0.45,
-      z: 520,
-      radius: Math.max(mapWidth, mapHeight) * 2.5,
-      intensity: 0.85,
-      shadowWeight: 1,
-      enabled: true,
-    }
-  }
-
-  const shadowState = computed(() => {
-    const state = lighting?.()
-    return state?.shadows ?? null
-  })
-
-  const shadowLights = computed(() => {
-    const state = lighting?.()
-    const sun = {
-      ...defaultSunLight(),
-      ...(state?.sun ?? {}),
-    }
-    const spotLights = (state?.spots ?? []).map((spot) => ({
-      x: spot.x,
-      y: spot.y,
-      z: 170,
-      radius: spot.radius ?? 420,
-      intensity: spot.intensity ?? 1.3,
-      shadowWeight: 1.5,
-      enabled: true,
-    }))
-
-    return [
-      ...((sun.enabled === false || sun.intensity <= 0) ? [] : [sun]),
-      ...spotLights,
-    ]
-  })
-
-  const shadowEnabled = computed(() => {
-    const shadows = shadowState()
-    return Boolean(shadows?.enabled && shadowLights().length > 0)
-  })
-
-  const shadowMode = computed(() => shadowState()?.mode ?? "strongest")
-  const shadowUpdateHz = computed(() => shadowState()?.updateHz ?? 60)
-  const shadowColor = computed(() => shadowState()?.shadowColor ?? "#05070d")
 
   effect(() => {
      if (sceneData() && !sceneData().component) {
@@ -178,8 +77,136 @@
   const onGuiInteraction = (gui, name, data) => {
     guiService.guiInteraction(gui.name, name, data)
   }
-  
+
   const clamp = {
     direction: "all"
   }
+  const NIGHT_SPOT_RADIUS_SCALE = 4.25
+  const NIGHT_SPOT_MIN_RADIUS = 170
+  const NIGHT_SPOT_MIN_INTENSITY = 1
+  const SHADOW_SPOT_RADIUS_SCALE = 8.5
+  const SHADOW_SPOT_MIN_RADIUS = 360
+  const SHADOW_SPOT_MIN_INTENSITY = 1.15
+
+  const nightSpotRadius = (radius) => Math.max(radius * NIGHT_SPOT_RADIUS_SCALE, NIGHT_SPOT_MIN_RADIUS)
+  const shadowSpotRadius = (radius) => Math.max(radius * SHADOW_SPOT_RADIUS_SCALE, SHADOW_SPOT_MIN_RADIUS)
+  const nightSpotIntensity = (intensity, fallback) => Math.max(intensity ?? fallback, NIGHT_SPOT_MIN_INTENSITY)
+  const shadowSpotIntensity = (intensity) => Math.max(intensity ?? 1.3, SHADOW_SPOT_MIN_INTENSITY)
+
+  const lightingAmbient = computed(() => {
+    const state = lighting?.()
+    return state?.ambient ?? {}
+  })
+
+  const nightLights = computed(() => {
+    const state = lighting?.()
+    return (state?.spots ?? []).map((spot, index) => {
+      const radius = spot.radius ?? 180
+      return {
+        x: spot.x,
+        y: spot.y,
+        radius: nightSpotRadius(radius),
+        intensity: nightSpotIntensity(spot.intensity, index === 0 ? 1 : 0.92),
+        flicker: spot.flicker,
+        flickerSpeed: spot.flickerSpeed ?? 14,
+        pulse: spot.pulse,
+        pulseSpeed: spot.pulseSpeed,
+        phase: spot.phase,
+      }
+    })
+  })
+  const hasNightLights = computed(() => nightLights().length > 0)
+
+  const lightingDarkness = computed(() => {
+    const darkness = lightingAmbient().darkness
+    return typeof darkness === "number" ? darkness : (hasNightLights() ? 0.75 : 0)
+  })
+
+  const lightingAmbientEnabled = computed(() => {
+    const state = lighting?.()
+    return Boolean(state && (lightingDarkness() > 0 || hasNightLights()))
+  })
+
+  const lightingDarknessProps = computed(() => ({
+    opacity: lightingDarkness(),
+    color: lightingAmbient().darkColor ?? "#080a12",
+  }))
+  const lightingHaze = computed(() => ({
+    color: lightingAmbient().fogColor ?? "#12182a",
+    radius: lightingAmbient().fogRadius ?? (hasNightLights() ? 0.44 : 1),
+    softness: lightingAmbient().fogSoftness ?? (hasNightLights() ? 0.3 : 1),
+    opacity: lightingAmbient().fogOpacity ?? 0.35,
+  }))
+
+  const defaultSunLight = () => {
+    const data = sceneData?.()
+    const width = Number(data?.width ?? data?.params?.width ?? 2048)
+    const height = Number(data?.height ?? data?.params?.height ?? 2048)
+    const scale = Number(data?.params?.scale ?? 1) || 1
+    const mapWidth = width * scale
+    const mapHeight = height * scale
+
+    return {
+      x: -mapWidth * 0.35,
+      y: -mapHeight * 0.45,
+      z: 520,
+      radius: Math.max(mapWidth, mapHeight) * 2.5,
+      intensity: 0.85,
+      shadowWeight: lightingDarkness() > 0 ? 2.2 : 1,
+      enabled: true,
+    }
+  }
+
+  const shadowState = computed(() => {
+    const state = lighting?.()
+    return state?.shadows ?? null
+  })
+
+  const shadowLights = computed(() => {
+    const state = lighting?.()
+    const defaultSun = defaultSunLight()
+    const sun = {
+      ...defaultSun,
+      ...(state?.sun ?? {}),
+      shadowWeight: state?.sun?.shadowWeight ?? defaultSun.shadowWeight,
+    }
+    const spotLights = (state?.spots ?? []).map((spot) => {
+      const radius = spot.radius ?? 180
+      return {
+        x: spot.x,
+        y: spot.y,
+        z: 170,
+        radius: shadowSpotRadius(radius),
+        intensity: shadowSpotIntensity(spot.intensity),
+        shadowWeight: 2,
+        enabled: true,
+      }
+    })
+
+    return [
+      ...((sun.enabled === false || sun.intensity <= 0) ? [] : [sun]),
+      ...spotLights,
+    ]
+  })
+
+  const shadowAmbientLight = computed(() => {
+    const shadows = shadowState()
+    if (shadows?.ambientLight === null || shadows?.ambientLight?.enabled === false) {
+      return null
+    }
+    return shadows?.ambientLight ?? { x: -0.18, y: -1, z: 420, intensity: 0.28, shadowWeight: 1 }
+  })
+
+  const shadowEnabled = computed(() => {
+    const shadows = shadowState()
+    return Boolean((shadows?.enabled || hasNightLights()) && (shadowLights().length > 0 || shadowAmbientLight()))
+  })
+
+  const shadowMode = computed(() => shadowState()?.mode ?? "strongest")
+  const shadowUpdateHz = computed(() => shadowState()?.updateHz ?? 60)
+  const shadowScanHz = computed(() => shadowState()?.scanHz ?? 8)
+  const shadowCullToViewport = computed(() => shadowState()?.cullToViewport ?? true)
+  const shadowMinInfluence = computed(() => shadowState()?.minInfluence ?? 0.2)
+  const shadowFalloffPower = computed(() => shadowState()?.falloffPower ?? 1.1)
+  const shadowColor = computed(() => shadowState()?.shadowColor ?? "#05070d")
 </script>

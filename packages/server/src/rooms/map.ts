@@ -2424,6 +2424,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         darkness: this.interpolateNumber(from.ambient?.darkness, to.ambient?.darkness, progress),
         fogRadius: this.interpolateNumber(from.ambient?.fogRadius, to.ambient?.fogRadius, progress),
         fogSoftness: this.interpolateNumber(from.ambient?.fogSoftness, to.ambient?.fogSoftness, progress),
+        fogOpacity: this.interpolateNumber(from.ambient?.fogOpacity, to.ambient?.fogOpacity, progress),
       },
       sun: {
         ...(to.sun ?? {}),

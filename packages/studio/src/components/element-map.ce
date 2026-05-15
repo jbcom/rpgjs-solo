@@ -104,6 +104,12 @@ const normalizeLightStyle = (value) => {
     return "normal"
 }
 
+const lightStyleRadiusScale = (style) => {
+    if (style === "soft") return 1.65
+    if (style === "intense") return 2.35
+    return 2.02
+}
+
 const rectangle = {
     x: rect[0],
     y: rect[1],
@@ -1047,6 +1053,7 @@ const lightSpotOverlay = {
     centerX: lightCenterX,
     centerY: lightCenterY,
     radius: lightRadius,
+    renderRadius: lightRadius * lightStyleRadiusScale(resolvedLightSpot.style),
     intensity: resolvedLightSpot.intensity / 100,
     flicker: resolvedLightSpot.flicker,
     flickerSpeed: resolvedLightSpot.flickerSpeed,
@@ -1076,7 +1083,7 @@ const syncLightSpotWithSceneMap = () => {
         id: studioLightSpotId,
         x: lightSpotOverlay.centerX,
         y: lightSpotOverlay.centerY,
-        radius: lightSpotOverlay.radius,
+        radius: lightSpotOverlay.renderRadius,
         intensity: lightSpotOverlay.intensity,
         flicker: lightSpotOverlay.flicker,
         flickerSpeed: lightSpotOverlay.flickerSpeed,

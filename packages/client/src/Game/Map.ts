@@ -49,14 +49,15 @@ export class RpgClientMap extends RpgCommonMap<any> {
       return null;
     }
 
-    return {
-      ...(state ?? {}),
-      ambient: state?.ambient ?? (localSpots.length > 0 ? { darkness: 0.75 } : undefined),
-      spots: [
-        ...(state?.spots ?? []),
-        ...localSpots,
-      ],
-    };
+    const next: LightingState = { ...(state ?? {}) };
+    if (!state?.ambient) {
+      delete next.ambient;
+    }
+    next.spots = [
+      ...(state?.spots ?? []),
+      ...localSpots,
+    ];
+    return next;
   });
   private manualClientPhysicsTick = false;
   private readonly isTestEnvironment: boolean;

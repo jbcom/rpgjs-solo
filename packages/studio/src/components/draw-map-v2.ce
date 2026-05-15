@@ -336,7 +336,6 @@
       if (!effectiveWeather) {
         return null;
       }
-      console.log(toCanvasWeatherOptions(effectiveWeather))
       return toCanvasWeatherOptions(effectiveWeather);
     })
   </script>

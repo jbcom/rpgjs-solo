@@ -89,6 +89,11 @@ export const lightingStateSchema = {
           title: "Fog Softness",
           default: 0.35,
         },
+        fogOpacity: {
+          type: "number",
+          title: "Fog Opacity",
+          default: 0.35,
+        },
       },
     },
     spots: {
@@ -128,6 +133,39 @@ export const lightingStateSchema = {
           type: "number",
           title: "Update Hz",
           default: 30,
+        },
+        scanHz: {
+          type: "number",
+          title: "Scan Hz",
+          default: 8,
+        },
+        cullToViewport: {
+          type: "boolean",
+          title: "Cull To Viewport",
+          default: true,
+        },
+        minInfluence: {
+          type: "number",
+          title: "Minimum Influence",
+          default: 0.16,
+        },
+        falloffPower: {
+          type: "number",
+          title: "Falloff Power",
+          default: 1.2,
+        },
+        ambientLight: {
+          type: ["object", "null"],
+          title: "Ambient Light",
+          properties: {
+            x: { type: "number", title: "X", default: -0.18 },
+            y: { type: "number", title: "Y", default: -1 },
+            z: { type: "number", title: "Z", default: 420 },
+            intensity: { type: "number", title: "Intensity", default: 0.18 },
+            shadowWeight: { type: "number", title: "Shadow Weight", default: 0.75 },
+            length: { type: "number", title: "Length" },
+            enabled: { type: "boolean", title: "Enabled", default: true },
+          },
         },
         shadowColor: {
           type: "string",
