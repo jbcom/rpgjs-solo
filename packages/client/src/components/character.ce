@@ -67,7 +67,10 @@
   const componentsBehind = client.spriteComponentsBehind;
   const componentsInFront = client.spriteComponentsInFront;
   const isMe = computed(() => id() === playerId);
-  const shadowsEnabled = computed(() => Boolean(client.sceneMap?.lighting?.()?.shadows?.enabled));
+  const shadowsEnabled = computed(() => {
+    const lighting = client.sceneMap?.lighting?.();
+    return Boolean(lighting?.shadows?.enabled || (lighting?.spots?.length ?? 0) > 0);
+  });
 
   /**
    * Normalize a single sprite component configuration

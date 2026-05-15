@@ -10,7 +10,7 @@ export const configServer = {
     provideServerModules([{
       player: {
         onJoinMap(player: RpgPlayer, map) {
-          map.setNight()
+        
         }
       }
     }]),

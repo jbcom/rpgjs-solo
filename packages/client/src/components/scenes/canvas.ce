@@ -115,16 +115,19 @@
       }
     })
   })
-  const hasNightLights = computed(() => nightLights().length > 0)
+  const hasLightSpots = computed(() => {
+    const state = lighting?.()
+    return (state?.spots?.length ?? 0) > 0
+  })
 
   const lightingDarkness = computed(() => {
     const darkness = lightingAmbient().darkness
-    return typeof darkness === "number" ? darkness : (hasNightLights() ? 0.75 : 0)
+    return typeof darkness === "number" ? darkness : 0
   })
 
   const lightingAmbientEnabled = computed(() => {
     const state = lighting?.()
-    return Boolean(state && (lightingDarkness() > 0 || hasNightLights()))
+    return Boolean(state && lightingDarkness() > 0)
   })
 
   const lightingDarknessProps = computed(() => ({
@@ -133,8 +136,8 @@
   }))
   const lightingHaze = computed(() => ({
     color: lightingAmbient().fogColor ?? "#12182a",
-    radius: lightingAmbient().fogRadius ?? (hasNightLights() ? 0.44 : 1),
-    softness: lightingAmbient().fogSoftness ?? (hasNightLights() ? 0.3 : 1),
+    radius: lightingAmbient().fogRadius ?? 0.44,
+    softness: lightingAmbient().fogSoftness ?? 0.3,
     opacity: lightingAmbient().fogOpacity ?? 0.35,
   }))
 
@@ -199,7 +202,7 @@
 
   const shadowEnabled = computed(() => {
     const shadows = shadowState()
-    return Boolean((shadows?.enabled || hasNightLights()) && (shadowLights().length > 0 || shadowAmbientLight()))
+    return Boolean((shadows?.enabled || hasLightSpots()) && (shadowLights().length > 0 || shadowAmbientLight()))
   })
 
   const shadowMode = computed(() => shadowState()?.mode ?? "strongest")

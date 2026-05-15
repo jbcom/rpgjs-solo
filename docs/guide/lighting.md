@@ -118,7 +118,7 @@ sceneMap.patchLightSpot('player-torch', {
 })
 ```
 
-Local spots are merged with synchronized map spots for rendering and are cleared when the client changes map. If spots exist without an ambient configuration, the client renders `NightAmbient` with a default darkness of `0.75` so the spots are visible.
+Local spots are merged with synchronized map spots for rendering and are cleared when the client changes map. Spots do not make the map night by themselves; `NightAmbient` is rendered only when synchronized lighting provides an ambient darkness value greater than `0`, for example through `map.setNight()` or `map.setLighting({ ambient: { darkness: ... } })`. Spots still enable sprite shadows during daytime.
 
 Ambient lighting fields map to CanvasEngine `NightAmbient` props: `darkness` and `darkColor` become the darkness overlay, while `fogColor`, `fogRadius`, `fogSoftness`, and `fogOpacity` configure the haze overlay.
 
@@ -147,4 +147,4 @@ map.patchLighting({
 })
 ```
 
-Map light spots also affect shadows when `lighting.shadows.enabled` is `true`. Local spots, including Studio element `lightSpot` entries, also enable `SpriteShadows` with default shadow options so torch-lit Studio maps do not need a separate `lighting.shadows` block. `ambientLight` provides a directional baseline shadow for sprites outside point light radius; set it to `null` or `{ enabled: false }` to disable it. In Studio maps, an element with a `lightSpot` is automatically registered as a local light spot, then used by `NightAmbient` when night is active and by `SpriteShadows` when shadows are active.
+Map light spots affect shadows even when the map is not in night mode. Local spots, including Studio element `lightSpot` entries, enable `SpriteShadows` with default shadow options so torch-lit Studio maps do not need a separate `lighting.shadows` block. `ambientLight` provides a directional baseline shadow for sprites outside point light radius; set it to `null` or `{ enabled: false }` to disable it. In Studio maps, an element with a `lightSpot` is automatically registered as a local light spot, then used by `NightAmbient` when night is active and by `SpriteShadows` whenever the spot exists.
