@@ -31,6 +31,7 @@ const createEntity = () => {
     componentsLeft: signal([]),
     componentsRight: signal([]),
     _param: signal({ maxHp: 100, custom: 7 }),
+    _canMove: signal(true),
     get name() {
       return name();
     },
@@ -78,5 +79,18 @@ describe("getEntityProp", () => {
     expect(getEntityProp(entity, "params.custom")()).toBe(7);
     expect(getEntityProp(entity, "params.missing")()).toBeUndefined();
     expect(getEntityProp(entity, "unknown" as any)()).toBeUndefined();
+  });
+
+  test("reads canMove from the synced value when available", () => {
+    const entity = createEntity();
+    const canMove = getEntityProp(entity, "canMove");
+
+    expect(canMove()).toBe(true);
+
+    entity._canMove.set(false);
+    expect(canMove()).toBe(false);
+
+    entity._canMove.set({ value: true } as any);
+    expect(canMove()).toBe(true);
   });
 });

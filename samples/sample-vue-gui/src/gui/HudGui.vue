@@ -16,6 +16,11 @@ const currentPlayer = ref(null);
 const rpgCurrentPlayer = inject("rpgCurrentPlayer");
 let playerSub;
 
+function readName(object) {
+  const name = object?.name;
+  return typeof name === "function" ? name() : name;
+}
+
 onMounted(() => {
   playerSub = rpgCurrentPlayer?.subscribe((player) => {
     currentPlayer.value = player?.object;
@@ -34,7 +39,7 @@ onUnmounted(() => {
       <span>{{ hint }}</span>
     </div>
     <div class="player-pill">
-      {{ currentPlayer?.name?.() || "Waiting for player" }}
+      {{ readName(currentPlayer) || "Waiting for player" }}
     </div>
   </section>
 </template>

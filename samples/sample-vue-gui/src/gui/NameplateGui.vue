@@ -8,11 +8,16 @@ defineProps({
   object: Object,
   spriteData: Object,
 });
+
+function readName(object) {
+  const name = object?.name;
+  return typeof name === "function" ? name() : name;
+}
 </script>
 
 <template>
   <div class="nameplate">
-    {{ object?.name?.() || spriteData?.object?.name?.() || "Player" }}
+    {{ readName(object) || readName(spriteData?.object) || "Player" }}
   </div>
 </template>
 

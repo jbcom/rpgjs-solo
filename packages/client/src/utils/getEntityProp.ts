@@ -1,5 +1,6 @@
 import { computed, Signal } from "canvasengine";
 import { RpgClientObject } from "../Game/Object";
+import { readPropValue } from "./readPropValue";
 
 const BUILTIN_PARAM_KEYS = [
   "maxHp",
@@ -32,7 +33,7 @@ const entityPropMap = {
   speed: (entity: RpgClientObject) => entity.speed,
   hitbox: (entity: RpgClientObject) => entity.hitbox(),
   animation: (entity: RpgClientObject) => entity.animationName(),
-  canMove: (entity: RpgClientObject) => entity.canMove,
+  canMove: (entity: RpgClientObject) => readPropValue<boolean>((entity as any)._canMove ?? entity.canMove),
   graphics: (entity: RpgClientObject) => entity.graphics(),
   items: (entity: RpgClientObject) => entity.items(),
   equipments: (entity: RpgClientObject) => entity.equipments(),

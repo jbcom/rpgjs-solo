@@ -25,6 +25,7 @@ import {
 } from "@rpgjs/common";
 import { NotificationManager } from "./Gui/NotificationManager";
 import { SaveClientService } from "./services/save";
+import { getCanMoveValue } from "./utils/readPropValue";
 
 interface MovementTrajectoryPoint {
   frame: number;
@@ -1270,7 +1271,7 @@ export class RpgClientEngine<T = any> {
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
     const canMove =
       !currentPlayer ||
-      currentPlayer.canMove !== false;
+      getCanMoveValue(currentPlayer);
     if (!canMove) {
       this.interruptCurrentPlayerMovement(currentPlayer);
       return;
@@ -1311,7 +1312,7 @@ export class RpgClientEngine<T = any> {
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
     const canMove =
       !currentPlayer ||
-      currentPlayer.canMove !== false;
+      getCanMoveValue(currentPlayer);
     if (!canMove) return;
 
     this.hooks.callHooks("client-engine-onInput", this, { input: 'action', playerId: this.playerId }).subscribe();
@@ -1447,7 +1448,7 @@ export class RpgClientEngine<T = any> {
     const player = this.sceneMap?.getCurrentPlayer?.() as any;
     if (
       player &&
-      player.canMove === false
+      !getCanMoveValue(player)
     ) {
       this.interruptCurrentPlayerMovement(player);
       return;
@@ -1730,7 +1731,7 @@ export class RpgClientEngine<T = any> {
     if (!player) {
       return;
     }
-    if (player.canMove === false) {
+    if (!getCanMoveValue(player)) {
       this.interruptCurrentPlayerMovement(player);
       return;
     }

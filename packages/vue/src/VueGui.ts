@@ -141,19 +141,20 @@ export class VueGui {
                 return this.getInjectObject()
             },
             render() {
-                const fixedNodes = this.fixedGui.map((ui: GuiState) => {
-                    if (!ui.display) return null
-                    return h(
-                        ui.component,
-                        {
-                            key: ui.name,
-                            ...ui.data,
-                            style: {
-                                pointerEvents: 'auto',
+                const fixedNodes = this.fixedGui
+                    .filter((ui: GuiState) => ui.display)
+                    .map((ui: GuiState) => {
+                        return h(
+                            ui.component,
+                            {
+                                key: ui.name,
+                                ...ui.data,
+                                style: {
+                                    pointerEvents: 'auto',
+                                },
                             },
-                        },
-                    )
-                })
+                        )
+                    })
 
                 const attachedNodes = this.attachedGui.flatMap((ui: GuiState) => {
                     return this.tooltipFilter().map((target: AttachedTarget) => {
@@ -187,6 +188,7 @@ export class VueGui {
                 }, [
                     ...fixedNodes,
                     h('div', {
+                        key: '__rpg-vue-tooltips',
                         id: 'tooltips',
                         style: {
                             position: 'absolute',

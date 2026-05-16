@@ -1,5 +1,15 @@
 # sample-vue-gui
 
+## 1.0.2
+
+### Patch Changes
+
+- Updated dependencies
+  - @rpgjs/client@5.0.0-beta.10
+  - @rpgjs/vue@5.0.0-beta.10
+  - @rpgjs/server@5.0.0-beta.10
+  - @rpgjs/vite@5.0.0-beta.10
+
 ## 1.0.1
 
 ### Patch Changes

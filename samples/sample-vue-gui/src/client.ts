@@ -5,9 +5,7 @@ import configClient from "./config/config.client";
 startGame(
   mergeConfig(configClient, {
     providers: [
-      provideMmorpg({
-        host: "localhost:1999",
-      }),
+      provideMmorpg(),
     ],
   }),
 );

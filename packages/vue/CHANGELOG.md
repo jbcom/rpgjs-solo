@@ -1,5 +1,16 @@
 # @rpgjs/vue
 
+## 5.0.0-beta.10
+
+### Patch Changes
+
+- Fix current-player control binding and canMove reads when values are provided by synced or reactive state.
+
+  Fix Vue GUI rendering for hidden fixed GUIs while keeping attached GUI targets updated.
+
+- Updated dependencies
+  - @rpgjs/client@5.0.0-beta.10
+
 ## 5.0.0-beta.9
 
 ### Major Changes

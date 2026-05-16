@@ -55,6 +55,7 @@
   import Hit from "./effects/hit.ce";
   import PlayerComponents from "./player-components.ce";
   import { RpgGui } from "../Gui/Gui";
+  import { getCanMoveValue } from "../utils/readPropValue";
 
   const { object, id } = defineProps();
 
@@ -63,10 +64,18 @@
   const guiService = inject(RpgGui);
 
   const spritesheets = client.spritesheets;
-  const playerId = client.playerId;
   const componentsBehind = client.spriteComponentsBehind;
   const componentsInFront = client.spriteComponentsInFront;
-  const isMe = computed(() => id() === playerId);
+  const readProp = (value) => typeof value === 'function' ? value() : value;
+  const isCurrentPlayer = () => {
+    const playerId = client.playerIdSignal();
+    const currentPlayer = playerId ? client.sceneMap?.players?.()?.[playerId] : undefined;
+    return readProp(id) === playerId
+      || readProp(object?.id) === playerId
+      || object === currentPlayer
+      || object === client.sceneMap?.getCurrentPlayer?.();
+  };
+  const isMe = computed(isCurrentPlayer);
   const shadowsEnabled = computed(() => {
     const lighting = client.sceneMap?.lighting?.();
     return Boolean(lighting?.shadows?.enabled || (lighting?.spots?.length ?? 0) > 0);
@@ -295,7 +304,7 @@
 
   const particleSettings = client.particleSettings;
 
-  const canControls = () => isMe() && object.canMove
+  const canControls = () => isMe() && getCanMoveValue(object)
   const keyboardControls = client.globalConfig.keyboardControls;
 
   const visible = computed(() => {
@@ -305,7 +314,7 @@
     return isConnected()
   });
 
-  const controls = signal({
+  const controls = {
     down: {
       repeat: true,
       bind: keyboardControls.down,
@@ -353,7 +362,7 @@
     gamepad: {
       enabled: true
     }
-  });
+  };
 
   const smoothX = animatedSignal(x(), {
     duration: isMe() ? 0 : 0
@@ -834,7 +843,11 @@
   mount((element) => {
     hooks.callHooks("client-sprite-onAdd", object).subscribe()
     hooks.callHooks("client-sceneMap-onAddSprite", client.sceneMap, object).subscribe()
-    if (isMe()) client.setKeyboardControls(element.directives.controls)
+    effect(() => {
+      if (isCurrentPlayer()) {
+        client.setKeyboardControls(element.directives.controls)
+      }
+    })
   })
 
   /**

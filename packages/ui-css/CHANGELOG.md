@@ -1,5 +1,11 @@
 # @rpgjs/ui-css
 
+## 5.0.0-beta.10
+
+### Patch Changes
+
+- Prepare beta.10 release.
+
 ## 5.0.0-beta.9
 
 ### Major Changes
