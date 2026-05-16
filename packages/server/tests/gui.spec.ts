@@ -1,5 +1,15 @@
 import { describe, expect, test, vi } from "vitest";
-import { MenuGui, SaveLoadGui, signal } from "../src";
+import {
+  DialogGui,
+  DialogPosition,
+  GameoverGui,
+  MenuGui,
+  NotificationGui,
+  SaveLoadGui,
+  ShopGui,
+  TitleGui,
+  signal,
+} from "../src";
 
 describe("GUI", () => {
   test("main menu sends cloneable data when inventory data contains signals", () => {
@@ -247,5 +257,197 @@ describe("GUI", () => {
     );
     expect(slots[1]).toEqual({ id: "slot-1", map: "town" });
     await expect(pending).resolves.toBe(1);
+  });
+
+  test("title and gameover guis resolve selected entries", async () => {
+    const player: any = {
+      canMove: true,
+      emit: vi.fn(),
+    };
+    const titleGui = new TitleGui(player);
+    const titlePending = titleGui.open({
+      title: "RPGJS",
+      entries: [{ id: "new", label: "New Game" }],
+    });
+
+    await titleGui.emit("select", { id: "new", index: 0 });
+
+    await expect(titlePending).resolves.toEqual({ id: "new", index: 0 });
+    expect(player.emit).toHaveBeenCalledWith("gui.exit", "rpg-title-screen");
+
+    const gameoverGui = new GameoverGui(player);
+    const gameoverPending = gameoverGui.open({
+      title: "Defeat",
+      entries: [{ id: "retry", label: "Retry" }],
+    });
+
+    await gameoverGui.emit("select", { id: "retry", index: 0 });
+
+    await expect(gameoverPending).resolves.toEqual({ id: "retry", index: 0 });
+    expect(player.emit).toHaveBeenCalledWith("gui.exit", "rpg-gameover");
+  });
+
+  test("notification gui opens without blocking for an action", async () => {
+    const player: any = {
+      emit: vi.fn(),
+    };
+    const gui = new NotificationGui(player);
+
+    await expect(gui.open({ message: "Saved" })).resolves.toBeNull();
+
+    expect(player.emit).toHaveBeenCalledWith("gui.open", {
+      guiId: "rpg-notification",
+      data: { message: "Saved" },
+    });
+  });
+
+  test("dialog gui sanitizes choices, blocks movement and restores talk target", async () => {
+    const sent: any[] = [];
+    const talkWith: any = {
+      name: signal("Guard"),
+      direction: signal(3),
+      breakRoutes: vi.fn(),
+      moveRoutes: vi.fn(),
+      replayRoutes: vi.fn(),
+      changeDirection: vi.fn(),
+    };
+    const player: any = {
+      canMove: true,
+      emit(type: string, value: any) {
+        sent.push({ type, value });
+      },
+    };
+    const gui = new DialogGui(player);
+    const pending = gui.openDialog("Hello", {
+      choices: [{ text: "Yes", value: "yes" }],
+      talkWith,
+      face: { id: "guard", expression: "neutral" },
+    });
+
+    expect(player.canMove).toBe(false);
+    expect(talkWith.breakRoutes).toHaveBeenCalledWith(true);
+    expect(talkWith.moveRoutes).toHaveBeenCalledTimes(1);
+    expect(sent[0]).toEqual({
+      type: "gui.open",
+      value: {
+        guiId: "rpg-dialog",
+        data: {
+          message: "Hello",
+          autoClose: false,
+          position: DialogPosition.Bottom,
+          fullWidth: false,
+          typewriterEffect: true,
+          speaker: "Guard",
+          choices: [{ text: "Yes" }],
+          face: { id: "guard", expression: "neutral" },
+        },
+      },
+    });
+
+    gui.close("yes");
+
+    await expect(pending).resolves.toBe("yes");
+    expect(player.canMove).toBe(true);
+    expect(talkWith.replayRoutes).toHaveBeenCalled();
+    expect(talkWith.changeDirection).toHaveBeenCalledWith(3);
+  });
+
+  test("shop gui builds buy and sell data then refreshes after actions", async () => {
+    const sent: any[] = [];
+    const inventoryItem = {
+      id: signal("potion"),
+      name: signal("Potion"),
+      description: signal("Restores HP"),
+      quantity: signal(3),
+      price: signal(20),
+    };
+    const player: any = {
+      canMove: true,
+      atk: 4,
+      pdef: 2,
+      sdef: 1,
+      param: { maxHp: 100 },
+      items: signal([inventoryItem]),
+      equipments: signal([{ id: signal("sword") }]),
+      _gold: signal(10),
+      buyItem: vi.fn(),
+      removeItem: vi.fn(),
+      syncChanges: vi.fn(),
+      getItem: vi.fn((id: string) => id === "potion" ? inventoryItem : null),
+      databaseById(id: string) {
+        const database = {
+          sword: {
+            _type: "weapon",
+            name: "Iron Sword",
+            description: "Reliable blade",
+            price: 100,
+            icon: "sword-icon",
+            paramsModifier: {
+              atk: { value: 8 },
+            },
+          },
+          potion: {
+            _type: "item",
+            name: "Potion",
+            description: "Restores HP",
+            price: 20,
+            icon: "potion-icon",
+          },
+        };
+        return database[id];
+      },
+      emit(type: string, value: any) {
+        sent.push({ type, value });
+      },
+    };
+    const gui = new ShopGui(player);
+    const pending = gui.open({
+      items: ["sword"],
+      sell: { potion: 0.25 },
+      message: "Welcome",
+      face: { id: "merchant" },
+    });
+
+    expect(sent[0]).toMatchObject({
+      type: "gui.open",
+      value: {
+        guiId: "rpg-shop",
+        data: {
+          message: "Welcome",
+          face: { id: "merchant" },
+          items: [
+            {
+              id: "sword",
+              price: 100,
+              name: "Iron Sword",
+              equipped: true,
+              stats: { atk: 8 },
+            },
+          ],
+          sellItems: [
+            {
+              id: "potion",
+              price: 5,
+              quantity: 3,
+            },
+          ],
+        },
+      },
+    });
+
+    await gui.emit("buyItem", { id: "sword", nb: 1, clientActionId: "buy-1" });
+    await gui.emit("sellItem", { id: "potion", nb: 2, clientActionId: "sell-1" });
+
+    expect(player.buyItem).toHaveBeenCalledWith("sword", 1);
+    expect(player.removeItem).toHaveBeenCalledWith("potion", 2);
+    expect(player._gold()).toBe(20);
+    expect(player.syncChanges).toHaveBeenCalledTimes(2);
+    expect(sent.filter((event) => event.type === "gui.update")).toMatchObject([
+      { value: { guiId: "rpg-shop", clientActionId: "buy-1" } },
+      { value: { guiId: "rpg-shop", clientActionId: "sell-1" } },
+    ]);
+
+    gui.close();
+    await pending;
   });
 });
