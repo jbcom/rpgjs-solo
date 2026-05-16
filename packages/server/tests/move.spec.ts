@@ -57,7 +57,7 @@ describe("Move Routes - Basic Movements", () => {
     expect(entity.width).toBe(hitbox.w);
     expect(entity.height).toBe(hitbox.h);
     expect(entity.radius).toBe(0);
-    expect(entity.maxLinearVelocity).toBe(player.speed() * 50);
+    expect(entity.maxLinearVelocity).toBe(player.speed * 50);
   });
 
   test("should move right using Direction enum", async () => {
@@ -68,7 +68,7 @@ describe("Move Routes - Basic Movements", () => {
       player.moveRoutes([Direction.Right])
     );
 
-    expect(player.x()).toBe(initialX + player.speed());
+    expect(player.x()).toBe(initialX + player.speed);
     expect(player.y()).toBe(initialY);
   });
 
@@ -80,7 +80,7 @@ describe("Move Routes - Basic Movements", () => {
       player.moveRoutes([Direction.Left])
     );
 
-    expect(player.x()).toBe(initialX - player.speed());
+    expect(player.x()).toBe(initialX - player.speed);
     expect(player.y()).toBe(initialY);
   });
 
@@ -93,7 +93,7 @@ describe("Move Routes - Basic Movements", () => {
     );
 
     expect(player.x()).toBe(initialX);
-    expect(player.y()).toBe(initialY - player.speed());
+    expect(player.y()).toBe(initialY - player.speed);
   });
 
   test("should move down using Direction enum", async () => {
@@ -105,7 +105,7 @@ describe("Move Routes - Basic Movements", () => {
     );
 
     expect(player.x()).toBe(initialX);
-    expect(player.y()).toBe(initialY + player.speed());
+    expect(player.y()).toBe(initialY + player.speed);
   });
 
   test("should execute multiple movements in sequence", async () => {

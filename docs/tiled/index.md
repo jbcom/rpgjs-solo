@@ -142,6 +142,34 @@ Place events in Tiled using point objects:
 }
 ```
 
+### Map API Compatibility
+
+When the server loads a Tiled map, `@rpgjs/tiledmap` attaches the CanvasEngine Tiled instance to `map.tiled` and exposes v4-compatible helpers on the map:
+
+```ts
+const layer = map.getLayerByName("Ground");
+const index = map.getTileIndex(4, 2);
+const origin = map.getTileOriginPosition(4, 2);
+const tile = map.getTileByPosition(128, 64);
+
+map.setTile(4, 2, "Ground", { gid: 12 });
+map.updateTileset({ firstgid: 1, name: "base" });
+```
+
+Available properties and methods:
+
+- `map.layers`
+- `map.zTileHeight`
+- `map.getLayerByName(name)`
+- `map.getTileIndex(x, y)`
+- `map.getTileOriginPosition(x, y)`
+- `map.getTileByPosition(x, y, z?)`
+- `map.getTileByIndex(tileIndex)`
+- `map.setTile(x, y, layer, tileInfo)`
+- `map.updateTileset(tileset)`
+
+These helpers are available only for maps prepared by `@rpgjs/tiledmap`. For new code, prefer using `map.tiled` directly when you need CanvasEngine-specific behavior.
+
 ## Physics Hooks Integration
 
 The tiled module now uses shared physics hooks:

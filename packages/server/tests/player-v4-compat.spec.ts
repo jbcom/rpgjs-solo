@@ -11,6 +11,18 @@ describe("RpgPlayer v4 compatibility helpers", () => {
     expect(player._name()).toBe("Hero");
   });
 
+  test("speed and canMove proxy their private synchronized signals", () => {
+    const player = new RpgPlayer();
+
+    player.speed = 7;
+    player.canMove = false;
+
+    expect(player.speed).toBe(7);
+    expect(player._speed()).toBe(7);
+    expect(player.canMove).toBe(false);
+    expect(player._canMove()).toBe(false);
+  });
+
   test("position proxies x, y and z signals", () => {
     const player = new RpgPlayer();
 
@@ -78,26 +90,36 @@ describe("RpgPlayer v4 compatibility helpers", () => {
   test("save without arguments returns a v4-style JSON snapshot and load accepts it", async () => {
     const player = new RpgPlayer();
     player.name = "Saved Hero";
+    player.speed = 6;
+    player.canMove = false;
     player.position = { x: 12, y: 34, z: 1 };
 
     const snapshot = await player.save();
     const data = JSON.parse(snapshot);
     expect(data.name).toBe("Saved Hero");
+    expect(data.speed).toBe(6);
+    expect(data.canMove).toBe(false);
 
     const restored = new RpgPlayer();
     await restored.load(snapshot);
 
     expect(restored.name).toBe("Saved Hero");
+    expect(restored.speed).toBe(6);
+    expect(restored.canMove).toBe(false);
     expect(restored.position).toEqual({ x: 12, y: 34, z: 1 });
   });
 
-  test("load maps legacy name snapshots to the private synchronized name signal", async () => {
+  test("load maps legacy snapshots to private synchronized signals", async () => {
     const player = new RpgPlayer();
 
-    await player.load({ name: "Legacy Hero", x: 5, y: 6, z: 0 });
+    await player.load({ name: "Legacy Hero", speed: 8, canMove: false, x: 5, y: 6, z: 0 });
 
     expect(player.name).toBe("Legacy Hero");
     expect(player._name()).toBe("Legacy Hero");
+    expect(player.speed).toBe(8);
+    expect(player._speed()).toBe(8);
+    expect(player.canMove).toBe(false);
+    expect(player._canMove()).toBe(false);
   });
 
   test("playSound supports the legacy all-map boolean", () => {

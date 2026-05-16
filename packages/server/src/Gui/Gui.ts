@@ -29,7 +29,7 @@ export class Gui {
             })
             this._blockPlayerInput = blockPlayerInput
             if (blockPlayerInput) {
-               this.player.canMove.set(false)
+               ;(this.player as any).canMove = false
             }
             if (!waitingAction) {
                 resolve(null)
@@ -56,7 +56,7 @@ export class Gui {
     close(data?: unknown) {
         this.player.emit('gui.exit', this.id)
         if (this._blockPlayerInput) {
-            this.player.canMove.set(true)
+            ;(this.player as any).canMove = true
         }
         this._close(data)
     }

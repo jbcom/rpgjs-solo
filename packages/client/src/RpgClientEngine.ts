@@ -1270,8 +1270,7 @@ export class RpgClientEngine<T = any> {
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
     const canMove =
       !currentPlayer ||
-      typeof currentPlayer.canMove !== "function" ||
-      currentPlayer.canMove();
+      currentPlayer.canMove !== false;
     if (!canMove) {
       this.interruptCurrentPlayerMovement(currentPlayer);
       return;
@@ -1312,8 +1311,7 @@ export class RpgClientEngine<T = any> {
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
     const canMove =
       !currentPlayer ||
-      typeof currentPlayer.canMove !== "function" ||
-      currentPlayer.canMove();
+      currentPlayer.canMove !== false;
     if (!canMove) return;
 
     this.hooks.callHooks("client-engine-onInput", this, { input: 'action', playerId: this.playerId }).subscribe();
@@ -1449,8 +1447,7 @@ export class RpgClientEngine<T = any> {
     const player = this.sceneMap?.getCurrentPlayer?.() as any;
     if (
       player &&
-      typeof player.canMove === "function" &&
-      !player.canMove()
+      player.canMove === false
     ) {
       this.interruptCurrentPlayerMovement(player);
       return;
@@ -1733,7 +1730,7 @@ export class RpgClientEngine<T = any> {
     if (!player) {
       return;
     }
-    if (typeof player.canMove === "function" && !player.canMove()) {
+    if (player.canMove === false) {
       this.interruptCurrentPlayerMovement(player);
       return;
     }

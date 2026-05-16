@@ -1,4 +1,5 @@
 import { MapClass } from "@canvasengine/tiled";
+import { applyTiledMapCompat } from "./compat";
 
 type AnyMap = {
   tiled?: MapClass;
@@ -22,6 +23,7 @@ export function prepareTiledPhysicsData(mapData: any, map: AnyMap): void {
 
   const tiledMap = new MapClass(mapData.parsedMap);
   map.tiled = tiledMap;
+  applyTiledMapCompat(map, mapData.parsedMap);
 
   const tiledHitboxes = collectBlockedTileHitboxes(tiledMap);
   mapData.hitboxes = mergeTiledHitboxes(mapData.hitboxes, tiledHitboxes);

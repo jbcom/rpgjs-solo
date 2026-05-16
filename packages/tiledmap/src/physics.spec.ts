@@ -8,6 +8,8 @@ vi.mock("@canvasengine/tiled", () => {
     tileheight: number;
     widthPx: number;
     heightPx: number;
+    layers: any[];
+    tilesets: any[];
     private blockedTiles: Set<string>;
 
     constructor(parsedMap: any) {
@@ -17,6 +19,8 @@ vi.mock("@canvasengine/tiled", () => {
       this.tileheight = parsedMap.tileheight ?? 32;
       this.widthPx = this.width * this.tilewidth;
       this.heightPx = this.height * this.tileheight;
+      this.layers = parsedMap.layers;
+      this.tilesets = parsedMap.tilesets;
       this.blockedTiles = new Set(parsedMap.blockedTiles ?? []);
     }
 
@@ -86,6 +90,42 @@ describe("prepareTiledPhysicsData", () => {
     prepareTiledPhysicsData(mapData, map);
 
     expect(mapData.hitboxes).toEqual([]);
+  });
+
+  it("adds v4 map helpers backed by Tiled data", () => {
+    const groundLayer = { name: "Ground", data: [1, 0, 2, 3] };
+    const mapData = {
+      parsedMap: {
+        width: 2,
+        height: 2,
+        tilewidth: 16,
+        tileheight: 20,
+        layers: [groundLayer],
+        tilesets: [{ firstgid: 1, name: "base" }],
+      },
+    };
+    const map: any = {};
+
+    prepareTiledPhysicsData(mapData, map);
+
+    expect(map.layers).toBe(mapData.parsedMap.layers);
+    expect(map.zTileHeight).toBe(20);
+    expect(map.getLayerByName("Ground")).toBe(groundLayer);
+    expect(map.getTileIndex(1, 1)).toBe(3);
+    expect(map.getTileOriginPosition(1, 1)).toEqual({ x: 16, y: 20 });
+    expect(map.getTileByPosition(16, 20)).toEqual({ hasCollision: false });
+    expect(map.getTileByIndex(2)).toMatchObject({ gid: 2, id: 2, index: 2, layer: groundLayer });
+
+    expect(map.setTile(1, 0, "Ground", { gid: 8 })).toEqual({ gid: 8 });
+    expect(groundLayer.data[1]).toBe(8);
+
+    expect(map.updateTileset({ firstgid: 1, name: "base", tilecount: 4 })).toEqual({
+      firstgid: 1,
+      name: "base",
+      tilecount: 4,
+    });
+    expect(map.tiled.tilesets).toEqual([{ firstgid: 1, name: "base", tilecount: 4 }]);
+    expect(mapData.parsedMap.tilesets).toEqual([{ firstgid: 1, name: "base", tilecount: 4 }]);
   });
 });
 

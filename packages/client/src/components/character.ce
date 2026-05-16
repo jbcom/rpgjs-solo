@@ -295,7 +295,7 @@
 
   const particleSettings = client.particleSettings;
 
-  const canControls = () => isMe() && object.canMove()
+  const canControls = () => isMe() && object.canMove
   const keyboardControls = client.globalConfig.keyboardControls;
 
   const visible = computed(() => {

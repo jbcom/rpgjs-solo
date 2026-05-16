@@ -716,6 +716,15 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     if ((snapshot as any)._name !== undefined && (snapshot as any).name === undefined) {
       (snapshot as any).name = (snapshot as any)._name;
     }
+    if ((snapshot as any)._speed !== undefined && (snapshot as any).speed === undefined) {
+      (snapshot as any).speed = (snapshot as any)._speed;
+    }
+    if ((snapshot as any)._canMove !== undefined && (snapshot as any).canMove === undefined) {
+      (snapshot as any).canMove = (snapshot as any)._canMove;
+    }
+    if ((snapshot as any).canMove === undefined) {
+      (snapshot as any).canMove = this.canMove;
+    }
     const expCurve = (this as any).expCurve;
     if (expCurve) {
       snapshot.expCurve = { ...expCurve };
@@ -727,6 +736,12 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     const data = typeof snapshot === "string" ? JSON.parse(snapshot) : snapshot;
     if (data && typeof data === "object" && (data as any).name !== undefined && (data as any)._name === undefined) {
       (data as any)._name = (data as any).name;
+    }
+    if (data && typeof data === "object" && (data as any).speed !== undefined && (data as any)._speed === undefined) {
+      (data as any)._speed = (data as any).speed;
+    }
+    if (data && typeof data === "object" && (data as any).canMove !== undefined && (data as any)._canMove === undefined) {
+      (data as any)._canMove = (data as any).canMove;
     }
     const withItems = (this as any).resolveItemsSnapshot?.(data) ?? data;
     const withSkills = (this as any).resolveSkillsSnapshot?.(withItems) ?? withItems;

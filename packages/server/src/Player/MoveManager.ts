@@ -295,7 +295,7 @@ class MoveList {
 
   private repeatTileMove(direction: string, repeat: number, propMap: string): CallbackTileMove {
     return (player: RpgPlayer, map): Direction[] => {
-      const playerSpeed = typeof player.speed === 'function' ? player.speed() : player.speed;
+      const playerSpeed = (player as any).speed;
 
       // Safety checks
       if (!playerSpeed || playerSpeed <= 0) {
@@ -774,7 +774,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       // Calculate maxSpeed based on player's speed and frequency
       // Original values: 180 for player target, 80 for position target (with default speed=4)
       // Factor: 45 for player (180/4), 20 for position (80/4)
-      const playerSpeed = (this as any).speed();
+      const playerSpeed = (this as any).speed;
       const rawFrequency = (this as any).frequency;
       const playerFrequency = typeof rawFrequency === 'function' ? rawFrequency() : rawFrequency;
       const frequencyScale = playerFrequency > 0 ? Frequency.High / playerFrequency : 1;
@@ -851,7 +851,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * Perform a dash movement in the specified direction
      * 
      * Creates a burst of velocity for a fixed duration. The total speed is calculated
-     * by adding the player's base speed (`this.speed()`) to the additional dash speed.
+   * by adding the player's base speed (`this.speed`) to the additional dash speed.
      * This ensures faster players also dash faster proportionally.
      * 
      * With default speed=4 and additionalSpeed=4: total = 8 (same as original default)
@@ -875,7 +875,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     dash(direction: { x: number, y: number }, additionalSpeed: number = 4, duration: number = 200, options?: MovementOptions): Promise<void> {
-      const playerSpeed = (this as any).speed();
+      const playerSpeed = (this as any).speed;
       // Total dash speed = base speed + additional speed
       // With speed=4, additionalSpeed=4: gives 8 (original default value)
       const totalSpeed = playerSpeed + additionalSpeed;
@@ -1054,7 +1054,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     followPath(waypoints: Array<{ x: number, y: number }>, speedMultiplier: number = 0.5, loop: boolean = false): void {
-      const playerSpeed = (this as any).speed();
+      const playerSpeed = (this as any).speed;
       // Path follow speed = player base speed * multiplier
       // With speed=4, multiplier=0.5: gives 2 (original default value)
       const speed = playerSpeed * speedMultiplier;
@@ -1106,7 +1106,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     applyIceMovement(direction: { x: number, y: number }, speedFactor: number = 1): void {
-      const playerSpeed = (this as any).speed();
+      const playerSpeed = (this as any).speed;
       // Max ice speed = player base speed * factor
       // With speed=4, factor=1: gives 4 (original default value)
       const maxSpeed = playerSpeed * speedFactor;
@@ -1135,7 +1135,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
      * ```
      */
     shootProjectile(type: ProjectileType, direction: { x: number, y: number }, speedFactor: number = 50): void {
-      const playerSpeed = (this as any).speed();
+      const playerSpeed = (this as any).speed;
       // Projectile speed = player base speed * factor
       // With speed=4, factor=50: gives 200 (original default value)
       const speed = playerSpeed * speedFactor;
@@ -1345,7 +1345,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 const currentTopLeftY = typeof this.player.y === 'function' ? this.player.y() : this.player.y;
 
                 // Get player speed
-                let playerSpeed = this.player.speed()
+                let playerSpeed = (this.player as any).speed
 
                 // Use player speed as distance, not tile size
                 let distance = playerSpeed;
@@ -1468,7 +1468,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               dx = this.currentTargetTopLeft.x - currentTopLeftX;
               dy = this.currentTargetTopLeft.y - currentTopLeftY;
               distance = Math.hypot(dx, dy);
-              const arrivalThreshold = Math.max(this.tolerance, this.player.speed());
+              const arrivalThreshold = Math.max(this.tolerance, (this.player as any).speed);
 
               // Snap to the target when the physics step overshoots the discrete route distance.
               if (distance <= arrivalThreshold) {
@@ -1508,7 +1508,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               dx = this.currentTarget.x - currentPosition.x;
               dy = this.currentTarget.y - currentPosition.y;
               distance = Math.hypot(dx, dy);
-              const arrivalThreshold = Math.max(this.tolerance, this.player.speed());
+              const arrivalThreshold = Math.max(this.tolerance, (this.player as any).speed);
 
               // Check if we've reached the target (using center position as fallback)
               if (distance <= arrivalThreshold) {

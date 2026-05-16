@@ -125,7 +125,7 @@ export function Event() {
     mode: EventMode.Scenario,
     onInit() {
       this.setGraphic("monster");
-      this.speed.set(2)
+      this.speed = 2
       this.teleport({ x: 100, y: 200 })
       this.name = "John Doe";
       

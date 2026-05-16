@@ -15,6 +15,7 @@ Movement APIs, movement strategies, and move route helpers.
 - [applyIceMovement](#applyicemovement)
 - [applyIceMovement](#applyicemovement)
 - [breakRoutes](#breakroutes)
+- [canMove](#canmove)
 - [clearAllPlayerStates](#clearallplayerstates)
 - [clearMovements](#clearmovements)
 - [clearPlayerState](#clearplayerstate)
@@ -39,6 +40,7 @@ Movement APIs, movement strategies, and move route helpers.
 - [replayRoutes](#replayroutes)
 - [shootProjectile](#shootprojectile)
 - [shootProjectile](#shootprojectile)
+- [speed](#speed)
 - [stopMoveTo](#stopmoveto)
 - [stuckThreshold](#stuckthreshold)
 - [stuckTimeout](#stucktimeout)
@@ -203,6 +205,30 @@ breakRoutes(force?: boolean): void
 
 - `force?`: `boolean`
 
+## canMove
+
+Whether the player can move.
+
+The synchronized state is stored internally in `_canMove`; `canMove` is exposed
+as a plain property for v4 compatibility.
+
+- Source: `packages/common/src/Player.ts`
+- Kind: `getter/setter`
+- Defined in: `RpgCommonPlayer`
+
+### Signature
+
+```ts
+canMove: boolean
+```
+
+### Examples
+
+```ts
+player.canMove = false;
+console.log(player.canMove);
+```
+
 ## clearAllPlayerStates
 
 Clears all player movement states
@@ -273,7 +299,7 @@ Move.clearPlayerState(player.id);
 Perform a dash movement in the specified direction
 
 Creates a burst of velocity for a fixed duration. The total speed is calculated
-by adding the player's base speed (`this.speed()`) to the additional dash speed.
+by adding the player's base speed (`this.speed`) to the additional dash speed.
 This ensures faster players also dash faster proportionally.
 
 With default speed=4 and additionalSpeed=4: total = 8 (same as original default)
@@ -818,6 +844,30 @@ shootProjectile(type: ProjectileType, direction: { x: number, y: number }, speed
 - `type`: `ProjectileType`
 - `direction`: `{ x: number, y: number }`
 - `speedFactor?`: `number`
+
+## speed
+
+Player movement speed.
+
+The synchronized state is stored internally in `_speed`; `speed` is exposed as
+a plain property for v4 compatibility.
+
+- Source: `packages/common/src/Player.ts`
+- Kind: `getter/setter`
+- Defined in: `RpgCommonPlayer`
+
+### Signature
+
+```ts
+speed: number
+```
+
+### Examples
+
+```ts
+player.speed = 6;
+console.log(player.speed);
+```
 
 ## stopMoveTo
 

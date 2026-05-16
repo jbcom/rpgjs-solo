@@ -429,7 +429,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     // Calculate next position before movement
     const currentX = player.x();
     const currentY = player.y();
-    const speed = player.speed();
+    const speed = player.speed;
 
     let nextX = currentX;
     let nextY = currentY;
@@ -660,7 +660,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     this.addCharacter({
       owner,
       kind,
-      maxSpeed: owner.speed(),
+      maxSpeed: owner.speed,
       collidesWithCharacters: !this.shouldDisableCharacterCollisions(owner),
       isStatic: options?.isStatic,
       mass: options?.mass,
@@ -1458,7 +1458,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const entity = this.physic.getEntityByUUID(player.id);
     if (!entity) return false;
 
-    const speed = player.speed() * this.speedScalar;
+    const speed = player.speed * this.speedScalar;
     this.physic.moveEntity(entity, direction, speed);
     entity.wakeUp();
     return true;

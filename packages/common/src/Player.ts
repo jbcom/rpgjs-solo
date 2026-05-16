@@ -118,11 +118,11 @@ export class RpgCommonPlayer {
   @sync() z = signal(0);
   @sync() tint = signal("white");
   @sync() direction = signal(Direction.Down);
-  @sync() speed = signal(4);
+  @sync() _speed = signal(4);
   @sync() graphics = signal<any>([]);
   @sync({
     persist: false
-  }) canMove = signal(true);
+  }) _canMove = signal(true);
   @sync() hitbox = signal<Hitbox>({
     w: 32,
     h: 32,
@@ -249,6 +249,34 @@ export class RpgCommonPlayer {
 
   set name(value: string) {
     this._name.set(value ?? "");
+  }
+
+  /**
+   * Player movement speed.
+   *
+   * The synchronized state is stored internally in `_speed`; `speed` is exposed
+   * as a plain property for v4 compatibility.
+   */
+  get speed(): number {
+    return this._speed?.() ?? 4;
+  }
+
+  set speed(value: number) {
+    this._speed.set(value ?? 4);
+  }
+
+  /**
+   * Whether this player can move.
+   *
+   * The synchronized state is stored internally in `_canMove`; `canMove` is
+   * exposed as a plain property for v4 compatibility.
+   */
+  get canMove(): boolean {
+    return this._canMove?.() ?? true;
+  }
+
+  set canMove(value: boolean) {
+    this._canMove.set(value ?? true);
   }
 
   /**

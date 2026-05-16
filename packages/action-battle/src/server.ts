@@ -62,8 +62,7 @@ const beginPlayerAttackLock = (
   runtimePlayer.__actionBattleAttackLockId = lockId;
   runtimePlayer.__actionBattleAttackLockedUntil = now + durationMs;
 
-  const previousCanMove =
-    typeof player.canMove === "function" ? player.canMove() : true;
+  const previousCanMove = player.canMove;
   const previousDirectionFixed = player.directionFixed;
   const previousAnimationFixed = player.animationFixed;
 
@@ -71,7 +70,7 @@ const beginPlayerAttackLock = (
     player.pendingInputs = [];
     player.lastProcessedInputTs = 0;
     (map as any)?.stopMovement?.(player);
-    player.canMove.set(false);
+    player.canMove = false;
   }
   if (locks.direction) {
     player.directionFixed = true;
@@ -80,7 +79,7 @@ const beginPlayerAttackLock = (
   setTimeout(() => {
     if (runtimePlayer.__actionBattleAttackLockId !== lockId) return;
     runtimePlayer.__actionBattleAttackLockedUntil = 0;
-    player.canMove.set(previousCanMove);
+    player.canMove = previousCanMove;
     player.directionFixed = previousDirectionFixed;
     player.animationFixed = previousAnimationFixed;
   }, durationMs);

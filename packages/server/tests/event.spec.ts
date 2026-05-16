@@ -75,6 +75,6 @@ test.skip('Player to touch event', async () => {
       ])
     )
     expect(event?.x()).toBe(100)
-    expect(event?.y()).toBe(150 + event!.speed())
+    expect(event?.y()).toBe(150 + event!.speed)
    
 })

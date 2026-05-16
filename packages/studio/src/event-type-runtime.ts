@@ -384,7 +384,7 @@ const applyMovementSetting: TriggerSettingsApplier = ({ event, trigger }) => {
   };
 
   if (movement.speed) {
-    event.speed.set(speedMap[movement.speed as keyof typeof speedMap]);
+    event.speed = speedMap[movement.speed as keyof typeof speedMap];
   }
 
   const frequencyMap = {

@@ -1139,7 +1139,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   @Action('move')
   async onInput(player: RpgPlayer, input: any) {
-    if (typeof player.canMove === "function" && !player.canMove()) {
+    if ((player as any).canMove === false) {
       player.pendingInputs = [];
       player.lastProcessedInputTs = 0;
       (this as any).stopMovement(player);
@@ -1589,7 +1589,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       }
     }
 
-    if (typeof player.canMove === "function" && !player.canMove()) {
+    if ((player as any).canMove === false) {
       player.pendingInputs = [];
       player.lastProcessedInputTs = 0;
       (this as any).stopMovement(player);
