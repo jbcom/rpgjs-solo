@@ -8,22 +8,22 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@canvasengine/presets": "2.0.0-beta.61",
+    "@canvasengine/presets": "2.0.0-rc.1",
     "@rpgjs/client": "workspace:*",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/server": "workspace:*",
     "@rpgjs/ui-css": "workspace:*",
     "@rpgjs/vite": "workspace:*",
     "@rpgjs/vue": "workspace:*",
-    "@signe/di": "2.10.0",
-    "canvasengine": "2.0.0-beta.61",
+    "@signe/di": "3.0.1",
+    "canvasengine": "2.0.0-rc.1",
     "pixi.js": "^8.18.1",
     "vue": "^3.5.34"
   },
   "devDependencies": {
-    "@canvasengine/compiler": "2.0.0-beta.61",
-    "@vitejs/plugin-vue": "^6.0.6",
+    "@canvasengine/compiler": "2.0.0-rc.1",
+    "@vitejs/plugin-vue": "^6.0.7",
     "path-browserify": "^1.0.1",
-    "vite": "^8.0.11"
+    "vite": "^8.0.13"
   }
 }

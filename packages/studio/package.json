@@ -34,13 +34,13 @@
   "license": "MIT",
   "description": "RPGJS is a framework for creating RPG/MMORPG games",
   "peerDependencies": {
-    "@canvasengine/presets": "*",
+    "@canvasengine/presets": "^2.0.0-rc.1",
     "@rpgjs/client": "workspace:*",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/server": "workspace:*",
     "@rpgjs/vite": "workspace:*",
     "@rpgjs/action-battle": "workspace:*",
-    "canvasengine": "*"
+    "canvasengine": "^2.0.0-rc.1"
   },
   "publishConfig": {
     "access": "public"
