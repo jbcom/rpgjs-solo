@@ -1,5 +1,3 @@
-import 'vitest-webgl-canvas-mock'
-
 const LOAD_FAILURE_SRC = 'LOAD_FAILURE_SRC';
 const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
@@ -64,3 +62,24 @@ console.error = (...args: unknown[]) => {
     }
     originalConsoleError(...args);
 };
+
+await import('vitest-webgl-canvas-mock');
+
+if (typeof HTMLCanvasElement !== "undefined") {
+    const getContext = HTMLCanvasElement.prototype.getContext;
+
+    HTMLCanvasElement.prototype.getContext = function (
+        contextId: string,
+        options?: CanvasRenderingContext2DSettings | WebGLContextAttributes,
+    ) {
+        if (contextId === "webgl2") {
+            return getContext.call(this, "webgl", options as WebGLContextAttributes);
+        }
+
+        if (contextId === "2d" || contextId === "webgl" || contextId === "experimental-webgl") {
+            return getContext.call(this, contextId, options as never);
+        }
+
+        return null;
+    } as typeof HTMLCanvasElement.prototype.getContext;
+}
