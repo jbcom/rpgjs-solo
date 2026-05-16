@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { MenuGui, signal } from "../src";
 
 describe("GUI", () => {
@@ -72,5 +72,100 @@ describe("GUI", () => {
 
     gui.close();
     return pending;
+  });
+
+  test("main menu item and equipment actions sync the player and refresh the client", async () => {
+    const sent: any[] = [];
+    const player: any = {
+      canMove: true,
+      items: signal([{ id: "potion", name: "Potion", quantity: 2 }]),
+      equipments: signal([]),
+      skills: signal([]),
+      param: {},
+      useItem: vi.fn(),
+      equip: vi.fn(),
+      syncChanges: vi.fn(),
+      showNotification: vi.fn(),
+      databaseById() {
+        return { _type: "item", consumable: true };
+      },
+      emit(type: string, value: any) {
+        sent.push({ type, value });
+      },
+    };
+
+    const gui = new MenuGui(player);
+    const pending = gui.open();
+
+    await gui.emit("useItem", { id: "potion", clientActionId: "use-1" });
+    await gui.emit("equipItem", { id: "sword", equip: true, clientActionId: "equip-1" });
+
+    expect(player.useItem).toHaveBeenCalledWith("potion");
+    expect(player.equip).toHaveBeenCalledWith("sword", true);
+    expect(player.syncChanges).toHaveBeenCalledTimes(2);
+    expect(player.showNotification).not.toHaveBeenCalled();
+    expect(sent.filter((event) => event.type === "gui.update")).toMatchObject([
+      { value: { guiId: "rpg-main-menu", clientActionId: "use-1" } },
+      { value: { guiId: "rpg-main-menu", clientActionId: "equip-1" } },
+    ]);
+
+    gui.close();
+    await pending;
+  });
+
+  test("main menu reports action errors and still refreshes the menu", async () => {
+    const sent: any[] = [];
+    const player: any = {
+      canMove: true,
+      items: signal([{ id: "potion", name: "Potion", quantity: 1 }]),
+      equipments: signal([]),
+      skills: signal([]),
+      param: {},
+      useItem: vi.fn(() => {
+        throw { msg: "Cannot use item" };
+      }),
+      syncChanges: vi.fn(),
+      showNotification: vi.fn(),
+      databaseById() {
+        return { _type: "item", consumable: true };
+      },
+      emit(type: string, value: any) {
+        sent.push({ type, value });
+      },
+    };
+
+    const gui = new MenuGui(player);
+    const pending = gui.open();
+
+    await gui.emit("useItem", { id: "potion", clientActionId: "use-error" });
+
+    expect(player.syncChanges).not.toHaveBeenCalled();
+    expect(player.showNotification).toHaveBeenCalledWith("Cannot use item");
+    expect(sent.some((event) => event.type === "gui.update" && event.value.clientActionId === "use-error")).toBe(true);
+
+    gui.close();
+    await pending;
+  });
+
+  test("main menu exit resolves the waiting open call and restores movement", async () => {
+    const player: any = {
+      canMove: true,
+      items: signal([]),
+      equipments: signal([]),
+      skills: signal([]),
+      param: {},
+      emit: vi.fn(),
+    };
+
+    const gui = new MenuGui(player);
+    const pending = gui.open();
+
+    expect(player.canMove).toBe(false);
+
+    await gui.emit("exit", {});
+
+    await expect(pending).resolves.toBe("exit");
+    expect(player.canMove).toBe(true);
+    expect(player.emit).toHaveBeenCalledWith("gui.exit", "rpg-main-menu");
   });
 });
