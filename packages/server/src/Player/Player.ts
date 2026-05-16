@@ -614,13 +614,37 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    *
    * @deprecated Use `player.setHitbox(width, height)` instead.
    * @param obj - Legacy size object.
+   * @param key - Legacy size key (`width`, `height`, or `hitbox`).
+   * @param value - Legacy size value.
    */
-  setSizes(obj: { width: number; height: number; hitbox?: { width: number; height: number } }): void {
-    if (!obj) {
+  setSizes(obj: { width: number; height: number; hitbox?: { width: number; height: number } }): void;
+  setSizes(key: "width" | "height" | "hitbox", value: number | { width?: number; height?: number }): void;
+  setSizes(
+    keyOrObj: { width: number; height: number; hitbox?: { width: number; height: number } } | "width" | "height" | "hitbox",
+    value?: number | { width?: number; height?: number }
+  ): void {
+    if (!keyOrObj) {
       return;
     }
-    const width = obj.hitbox?.width ?? obj.width;
-    const height = obj.hitbox?.height ?? obj.height;
+
+    if (typeof keyOrObj === "string") {
+      const current = this.hitbox();
+      if (keyOrObj === "width" && typeof value === "number") {
+        this.setHitbox(value, current.h);
+        return;
+      }
+      if (keyOrObj === "height" && typeof value === "number") {
+        this.setHitbox(current.w, value);
+        return;
+      }
+      if (keyOrObj === "hitbox" && value && typeof value === "object") {
+        this.setHitbox(value.width ?? current.w, value.height ?? current.h);
+      }
+      return;
+    }
+
+    const width = keyOrObj.hitbox?.width ?? keyOrObj.width;
+    const height = keyOrObj.hitbox?.height ?? keyOrObj.height;
     this.setHitbox(width, height);
   }
 
@@ -689,6 +713,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   snapshot() {
     const snapshot = createStatesSnapshotDeep(this);
     delete (snapshot as any).pendingMapPosition;
+    if ((snapshot as any)._name !== undefined && (snapshot as any).name === undefined) {
+      (snapshot as any).name = (snapshot as any)._name;
+    }
     const expCurve = (this as any).expCurve;
     if (expCurve) {
       snapshot.expCurve = { ...expCurve };
@@ -698,6 +725,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
 
   async applySnapshot(snapshot: string | object) {
     const data = typeof snapshot === "string" ? JSON.parse(snapshot) : snapshot;
+    if (data && typeof data === "object" && (data as any).name !== undefined && (data as any)._name === undefined) {
+      (data as any)._name = (data as any).name;
+    }
     const withItems = (this as any).resolveItemsSnapshot?.(data) ?? data;
     const withSkills = (this as any).resolveSkillsSnapshot?.(withItems) ?? withItems;
     const withStates = (this as any).resolveStatesSnapshot?.(withSkills) ?? withSkills;
@@ -722,16 +752,42 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     if (Array.isArray(resolvedSnapshot.equipments)) {
       this.equipments.set(resolvedSnapshot.equipments);
     }
-    await lastValueFrom(this.hooks.callHooks("server-player-onLoad", this, resolvedSnapshot));
+    if (this.context) {
+      await lastValueFrom(this.hooks.callHooks("server-player-onLoad", this, resolvedSnapshot));
+    }
     return resolvedSnapshot;
   }
 
-  async save(slot: SaveSlotIndex = "auto", meta: SaveSlotMeta = {}, context: SaveRequestContext = {}) {
+  private _isSnapshotInput(input: unknown): input is string | object {
+    if (input && typeof input === "object" && !Array.isArray(input)) {
+      return true;
+    }
+    if (typeof input !== "string") {
+      return false;
+    }
+    const trimmed = input.trim();
+    return trimmed.startsWith("{") || trimmed.startsWith("[");
+  }
+
+  /**
+   * Save the player state.
+   *
+   * For v4 compatibility, calling `save()` without arguments returns a JSON
+   * snapshot string. Pass a slot (`"auto"` or a number) to use the v5 storage
+   * strategy.
+   */
+  async save(): Promise<string>;
+  async save(slot: SaveSlotIndex, meta?: SaveSlotMeta, context?: SaveRequestContext): Promise<{ index: number; meta: SaveSlotMeta } | null>;
+  async save(slot?: SaveSlotIndex, meta: SaveSlotMeta = {}, context: SaveRequestContext = {}) {
+    if (arguments.length === 0) {
+      return JSON.stringify(this.snapshot());
+    }
+
     const policy = resolveAutoSaveStrategy();
     if (policy.canSave && !policy.canSave(this, context)) {
       return null;
     }
-    const resolvedSlot = resolveSaveSlot(slot, policy, this, context);
+    const resolvedSlot = resolveSaveSlot(slot ?? "auto", policy, this, context);
     if (resolvedSlot === null) {
       return null;
     }
@@ -743,16 +799,28 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     return { index: resolvedSlot, meta: finalMeta };
   }
 
+  /**
+   * Load player state.
+   *
+   * For v4 compatibility, pass a JSON string or plain snapshot object to apply
+   * it directly. Pass a slot (`"auto"` or a number) to use the v5 storage
+   * strategy.
+   */
   async load(
-    slot: SaveSlotIndex = "auto",
+    slot: SaveSlotIndex | string | object = "auto",
     context: SaveRequestContext = {},
     options: { changeMap?: boolean } = {}
   ) {
+    if (this._isSnapshotInput(slot)) {
+      const resolvedSnapshot = await this.applySnapshot(slot);
+      return { ok: true, snapshot: resolvedSnapshot };
+    }
+
     const policy = resolveAutoSaveStrategy();
     if (policy.canLoad && !policy.canLoad(this, context)) {
       return { ok: false };
     }
-    const resolvedSlot = resolveSaveSlot(slot, policy, this, context);
+    const resolvedSlot = resolveSaveSlot(slot as SaveSlotIndex, policy, this, context);
     if (resolvedSlot === null) {
       return { ok: false };
     }
@@ -1325,7 +1393,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * achievements. For map-wide sounds that all players should hear, use `map.playSound()` instead.
    * 
    * @param soundId - Sound identifier, defined on the client side
-   * @param options - Optional sound configuration
+   * @param options - Optional sound configuration, or `true` to play the sound for every player on the map (v4 compatibility)
    * @param options.volume - Volume level (0.0 to 1.0, default: 1.0)
    * @param options.loop - Whether the sound should loop (default: false)
    * 
@@ -1344,15 +1412,20 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * player.playSound("notification", { volume: 0.3 });
    * ```
    */
-  playSound(soundId: string, options?: { volume?: number; loop?: boolean }): void {
+  playSound(soundId: string, options?: { volume?: number; loop?: boolean } | boolean): void {
     const map = this.getCurrentMap();
     if (!map) return;
+
+    if (options === true) {
+      map.playSound(soundId);
+      return;
+    }
 
     const data: any = {
       soundId,
     };
 
-    if (options) {
+    if (options && typeof options === "object") {
       if (options.volume !== undefined) {
         data.volume = Math.max(0, Math.min(1, options.volume));
       }

@@ -45,9 +45,9 @@ interface AutoSaveStrategy {
 }
 ```
 
-The `getDefaultSlot()` function is the **auto slot**. When you call `player.save()`
-without a slot, this strategy decides which slot is used (e.g. always slot 0, or last
-used slot).
+The `getDefaultSlot()` function is the **auto slot**. When you call
+`player.save("auto")`, this strategy decides which slot is used (e.g. always slot 0,
+or last used slot).
 
 ### Auto-save example (server)
 
@@ -144,16 +144,21 @@ in `provideRpg()` and `provideMmorpg()`.
 ## Player API (server-side)
 
 - `player.snapshot()` -> returns the raw snapshot object (low-level).
-- `player.save(slot?)` -> stores a snapshot using the storage strategy.
-  - If `slot` is omitted, the policy `getDefaultSlot()` is used.
-- `player.load(slot?)` -> loads a slot using the storage strategy.
+- `player.save()` -> returns a JSON snapshot string for v4 compatibility.
+- `player.save(slot)` -> stores a snapshot using the storage strategy.
+  - Use `"auto"` to ask the policy `getDefaultSlot()` which slot to use.
+- `player.load(snapshot)` -> loads a JSON string or object snapshot for v4 compatibility.
+- `player.load(slot)` -> loads a slot using the storage strategy.
 
 Use `player.snapshot()` if you need to serialize or inspect state without saving.
 
 Examples:
 
 ```ts
-await player.save();      // auto slot (policy)
+const snapshot = await player.save(); // JSON snapshot string
+await player.load(snapshot);          // restore from snapshot
+
+await player.save("auto"); // auto slot (policy)
 await player.save(2);     // fixed slot
 await player.load(2);     // fixed slot
 ```

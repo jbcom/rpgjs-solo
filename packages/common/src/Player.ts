@@ -87,9 +87,9 @@ export interface ShowAnimationParams {
 
 export interface AttachShapeOptions {
   /** Width of the shape in pixels */
-  width: number;
+  width?: number;
   /** Height of the shape in pixels */
-  height: number;
+  height?: number;
   /** Circle radius in pixels (for zone shapes) */
   radius?: number;
   /** Vision aperture in degrees. 360 = full circle, <360 = cone */

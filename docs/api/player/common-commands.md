@@ -23,12 +23,14 @@ Core server-side player commands defined on the main Player class.
 - [lastProcessedInputTs](#lastprocessedinputts)
 - [Listen one-time to data from the client](#listen-one-time-to-data-from-the-client)
 - [Listen to data from the client](#listen-to-data-from-the-client)
+- [load](#load)
 - [name](#name)
 - [otherPlayersCollision](#otherplayerscollision)
 - [playSound](#playsound)
 - [position](#position)
 - [Remove listeners of the client event](#remove-listeners-of-the-client-event)
 - [Run Sync Changes](#run-sync-changes)
+- [save](#save)
 - [setAnimation](#setanimation)
 - [setGraphicAnimation](#setgraphicanimation)
 - [setGraphicAnimation](#setgraphicanimation)
@@ -578,6 +580,37 @@ otherPlayersCollision: Array<RpgPlayer | RpgEvent>
 
 Runtime players and events whose physics bodies overlap this player.
 
+## load
+
+Load player state.
+
+For v4 compatibility, `player.load(snapshot)` accepts a JSON string or plain
+snapshot object and applies it directly to the player. A string is treated as a
+snapshot only when it looks like JSON (`{...}` or `[...]`), so `player.load("auto")`
+continues to load the v5 auto save slot.
+
+The v5 save-slot API is still available with `player.load(slot, context, options)`.
+
+- Source: `packages/server/src/Player/Player.ts`
+- Kind: `method`
+- Defined in: `RpgPlayer`
+
+### Signature
+
+```ts
+load(snapshot: string | object): Promise<{ ok: true; snapshot: object }>
+load(slot?: number | "auto", context?: SaveRequestContext, options?: { changeMap?: boolean }): Promise<{ ok: boolean; slot?: SaveSlotMeta; index?: number }>
+```
+
+### Examples
+
+```ts
+const snapshot = await player.save();
+await player.load(snapshot);
+
+await player.load(2, { reason: "load", source: "menu" }, { changeMap: true });
+```
+
 ## playSound
 
 Play a sound on the client side for this player only
@@ -598,13 +631,13 @@ achievements. For map-wide sounds that all players should hear, use `map.playSou
 ### Signature
 
 ```ts
-playSound(soundId: string, options?: { volume?: number; loop?: boolean }): void
+playSound(soundId: string, options?: { volume?: number; loop?: boolean } | boolean): void
 ```
 
 ### Parameters
 
 - `soundId`: `string`
-- `options?`: `{ volume?: number; loop?: boolean }`
+- `options?`: `{ volume?: number; loop?: boolean } | boolean`
 
 ### Examples
 
@@ -620,6 +653,9 @@ player.playSound("background-music", {
 
 // Play a notification sound at low volume
 player.playSound("notification", { volume: 0.3 });
+
+// v4 compatibility: play the sound for every player on the map
+player.playSound("bell", true);
 ```
 
 ## position
@@ -814,11 +850,54 @@ legacy object to `setHitbox(...)`.
 
 ```ts
 setSizes(obj: { width: number; height: number; hitbox?: { width: number; height: number } }): void
+setSizes(key: "width" | "height" | "hitbox", value: number | { width?: number; height?: number }): void
 ```
 
 ### Parameters
 
 - `obj`: `{ width: number; height: number; hitbox?: { width: number; height: number } }`
+- `key`: `"width" | "height" | "hitbox"`
+- `value`: `number | { width?: number; height?: number }`
+
+### Examples
+
+```ts
+player.setSizes({ width: 32, height: 48 });
+player.setSizes("width", 32);
+player.setSizes("height", 48);
+player.setSizes("hitbox", { width: 24, height: 24 });
+```
+
+## save
+
+Save player state.
+
+For v4 compatibility, `player.save()` with no argument returns a JSON snapshot
+string that can be passed back to `player.load(snapshot)`.
+
+The v5 save-slot API is still available with `player.save(slot, meta, context)`.
+Use this form when you want to write to the configured save storage strategy.
+
+- Source: `packages/server/src/Player/Player.ts`
+- Kind: `method`
+- Defined in: `RpgPlayer`
+
+### Signature
+
+```ts
+save(): Promise<string>
+save(slot: number | "auto", meta?: SaveSlotMeta, context?: SaveRequestContext): Promise<{ index: number; meta: SaveSlotMeta } | null>
+```
+
+### Examples
+
+```ts
+const snapshot = await player.save();
+await player.load(snapshot);
+
+await player.save("auto", {}, { reason: "auto", source: "step" });
+await player.save(2, { label: "Before boss" }, { reason: "manual", source: "menu" });
+```
 
 ## setSync
 
