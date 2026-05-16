@@ -14,7 +14,7 @@ const inventoryItems = [
 
 const player: RpgPlayerHooks = {
   onConnected(player: RpgPlayer) {
-    player.name.set("Vue Hero");
+    player.name = "Vue Hero";
     player.changeMap("vue-gui-map", {
       x: 220,
       y: 180,

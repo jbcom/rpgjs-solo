@@ -46,6 +46,9 @@ export const getDynamicValue = (property: string, object?: any) => {
                 if (prop === 'hp') prop = 'hpSignal';
                 if (prop === 'sp') prop = 'spSignal';
                 if (prop === 'param') prop = '_param';
+                if (prop === 'name' && currentValue && typeof currentValue === 'object' && '_name' in currentValue) {
+                    prop = '_name';
+                }
             }
 
             if (currentValue && typeof currentValue === 'object' && prop in currentValue) {

@@ -127,7 +127,7 @@ export function Event() {
       this.setGraphic("monster");
       this.speed.set(2)
       this.teleport({ x: 100, y: 200 })
-      this.name.set("John Doe");
+      this.name = "John Doe";
       
       this.through = false;
       // this.infiniteMoveRoute([
@@ -377,7 +377,7 @@ export default createServer({
            }
            // player.hp -= 100;
             // const map = player.getCurrentMap()
-            // const event =map?.getEventBy(event => event.name() === "EV-1")
+            // const event = map?.getEventBy(event => event.name === "EV-1")
             // console.log(event)
             // event!.animationFixed = true 
             

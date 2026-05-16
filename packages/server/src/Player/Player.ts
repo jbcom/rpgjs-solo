@@ -489,6 +489,164 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   }
 
   /**
+   * Legacy v4 position object.
+   *
+   * Prefer the reactive `x`, `y`, and `z` signals in new code.
+   *
+   * @deprecated Use `player.x()`, `player.y()`, `player.z()` and `player.teleport()` instead.
+   * @returns Current top-left player position.
+   */
+  get position(): { x: number; y: number; z: number } {
+    return {
+      x: this.x(),
+      y: this.y(),
+      z: this.z(),
+    };
+  }
+
+  /**
+   * Set the legacy v4 position object.
+   *
+   * This updates the player's top-left coordinates and keeps the physics body in sync
+   * when the player is currently attached to a map.
+   *
+   * @deprecated Use `player.teleport({ x, y })` and `player.z.set(z)` instead.
+   */
+  set position(position: { x: number; y: number; z?: number }) {
+    if (!position || typeof position.x !== "number" || typeof position.y !== "number") {
+      return;
+    }
+    if (typeof position.z === "number") {
+      this.z.set(position.z);
+    }
+    if (this.map) {
+      void this.teleport({ x: position.x, y: position.y });
+      return;
+    }
+    this.x.set(position.x);
+    this.y.set(position.y);
+  }
+
+  /**
+   * Legacy v4 helper to create a dynamic event from the player's current map.
+   *
+   * Prefer `player.getCurrentMap()?.createDynamicEvent(...)` in new code.
+   *
+   * @deprecated Use `map.createDynamicEvent(...)` instead.
+   * @param eventObj - Event definition and position.
+   * @returns The created event id, or `undefined` if the player is not on a map.
+   */
+  createDynamicEvent(eventObj: any): Promise<string | undefined> | undefined {
+    return this.getCurrentMap()?.createDynamicEvent(eventObj);
+  }
+
+  /**
+   * Legacy v4 list of shapes attached to this player.
+   *
+   * Prefer `player.getShapes()` in new code.
+   *
+   * @deprecated Use `player.getShapes()` instead.
+   * @returns Shapes created with `player.attachShape(...)`.
+   */
+  get shapes(): RpgShape[] {
+    return this.getShapes();
+  }
+
+  /**
+   * Legacy v4 list of Tiled tiles currently covered by the player's hitbox.
+   *
+   * This helper is available only when the current map was loaded through
+   * `@rpgjs/tiledmap` / `@canvasengine/tiled`. For non-Tiled maps, it returns `[]`.
+   *
+   * @deprecated Use Tiled map APIs from `player.getCurrentMap()?.tiled` instead.
+   * @returns Tile information for each Tiled cell touched by the player.
+   */
+  get tiles(): any[] {
+    const map = this.getCurrentMap() as any;
+    const tiled = map?.tiled;
+    if (!tiled || typeof tiled.getTileByPosition !== "function") {
+      return [];
+    }
+
+    const tileWidth = Number(tiled.tilewidth ?? map.tileWidth ?? 32) || 32;
+    const tileHeight = Number(tiled.tileheight ?? map.tileHeight ?? 32) || 32;
+    const hitbox = this.hitbox();
+    const minTileX = Math.floor(this.x() / tileWidth);
+    const minTileY = Math.floor(this.y() / tileHeight);
+    const maxTileX = Math.floor((this.x() + Math.max(hitbox.w, 1) - 1) / tileWidth);
+    const maxTileY = Math.floor((this.y() + Math.max(hitbox.h, 1) - 1) / tileHeight);
+    const tiles: any[] = [];
+
+    for (let tileY = minTileY; tileY <= maxTileY; tileY++) {
+      for (let tileX = minTileX; tileX <= maxTileX; tileX++) {
+        const tile = this.getTile(tileX * tileWidth, tileY * tileHeight);
+        if (tile) {
+          tiles.push(tile);
+        }
+      }
+    }
+
+    return tiles;
+  }
+
+  /**
+   * Legacy v4 list of other players or events currently colliding with this player.
+   *
+   * @deprecated Prefer explicit physics queries on `player.getCurrentMap()`.
+   * @returns Runtime players and events whose physics bodies overlap this player.
+   */
+  get otherPlayersCollision(): Array<RpgPlayer | RpgEvent> {
+    const map = this.getCurrentMap() as any;
+    if (!map || typeof map.getCollisions !== "function") {
+      return [];
+    }
+    return map
+      .getCollisions(this.id)
+      .map((id: string) => map.getPlayer?.(id) ?? map.getEvent?.(id))
+      .filter(Boolean);
+  }
+
+  /**
+   * Legacy v4 size setter.
+   *
+   * In v5, collision size is represented by the hitbox. This bridge maps the
+   * legacy object to `setHitbox(...)`.
+   *
+   * @deprecated Use `player.setHitbox(width, height)` instead.
+   * @param obj - Legacy size object.
+   */
+  setSizes(obj: { width: number; height: number; hitbox?: { width: number; height: number } }): void {
+    if (!obj) {
+      return;
+    }
+    const width = obj.hitbox?.width ?? obj.width;
+    const height = obj.hitbox?.height ?? obj.height;
+    this.setHitbox(width, height);
+  }
+
+  /**
+   * Legacy v4 Tiled tile lookup.
+   *
+   * This helper is available only when the current map was loaded through
+   * `@rpgjs/tiledmap` / `@canvasengine/tiled`. Coordinates are pixel positions,
+   * matching CanvasEngine Tiled's `getTileByPosition(...)` API.
+   *
+   * @deprecated Use `player.getCurrentMap()?.tiled.getTileByPosition(...)` instead.
+   * @param x - X position in pixels.
+   * @param y - Y position in pixels.
+   * @param z - Optional layer index.
+   * @returns Tiled tile information, or `undefined` when unavailable.
+   */
+  getTile(x: number, y: number, z?: number): any {
+    const tiled = (this.getCurrentMap() as any)?.tiled;
+    if (!tiled || typeof tiled.getTileByPosition !== "function") {
+      return undefined;
+    }
+    const layers = typeof z === "number" ? [z, z] : undefined;
+    return tiled.getTileByPosition(x, y, layers, { populateTiles: true });
+  }
+
+  /**
    * Send a custom event to the current player's client.
    *
    * Use this to push arbitrary websocket payloads to one client only.

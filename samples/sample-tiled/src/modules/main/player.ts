@@ -6,7 +6,7 @@ export const player: RpgPlayerHooks = {
     },
     onConnected(player: RpgPlayer) {
         player.changeMap('simplemap')
-        player.name.set('YourName')
+        player.name = 'YourName'
         player.setGraphic('hero')
         player.initializeDefaultStats()
         

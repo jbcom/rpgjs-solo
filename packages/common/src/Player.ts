@@ -108,7 +108,7 @@ export interface AttachShapeOptions {
 
 export class RpgCommonPlayer {
   @id() id: string;
-  @sync() name = signal("");
+  @sync() _name = signal("");
   @sync() type = signal("");
   // x and y must be @sync() to ensure initial positions are sent to client
   // The positions represent TOP-LEFT coordinates of the character's hitbox
@@ -238,6 +238,20 @@ export class RpgCommonPlayer {
   pendingInputs: any[] = [];
 
   /**
+   * Player or event display name.
+   *
+   * The synchronized state is stored internally in `_name`; `name` is exposed as
+   * a plain property for v4 compatibility.
+   */
+  get name(): string {
+    return this._name?.() ?? "";
+  }
+
+  set name(value: string) {
+    this._name.set(value ?? "");
+  }
+
+  /**
    * Change the player's facing direction
    *
    * Updates the direction the player is facing, which affects animations
@@ -289,4 +303,4 @@ export class RpgCommonPlayer {
   }
 }
 
-export type PlayerCtor<T extends RpgCommonPlayer = RpgCommonPlayer> = Constructor<T>
+export type PlayerCtor<T = RpgCommonPlayer> = Constructor<T>

@@ -18,7 +18,7 @@ export const player: RpgPlayerHooks = {
   onConnected(player: RpgPlayer) {
     player.initializeDefaultStats();
     player.changeMap("simplemap");
-    player.name.set("YourName");
+    player.name = "YourName";
     player.setGraphic("hero");
   }
 };
@@ -91,7 +91,7 @@ export const player: RpgPlayerHooks = {
   onStart(player: RpgPlayer) {
     player.initializeDefaultStats();
     player.changeMap("simplemap");
-    player.name.set("YourName");
+    player.name = "YourName";
     player.setGraphic("hero");
   }
 };

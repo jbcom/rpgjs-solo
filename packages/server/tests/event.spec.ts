@@ -57,7 +57,7 @@ test.skip('Player to touch event', async () => {
     const map = player.getCurrentMap()
     const event = map?.getEvents()[0]
     expect(event).toBeDefined()
-    expect(event?.name()).toBe("EV-1")
+    expect(event?.name).toBe("EV-1")
     expect(event?.x()).toBe(100)
     expect(event?.y()).toBe(150)
     await fixture.waitUntil(

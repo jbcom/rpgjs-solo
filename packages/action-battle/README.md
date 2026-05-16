@@ -262,7 +262,7 @@ new BattleAi(event, {
   // Callback when AI is defeated
   onDefeated: ({ event, attacker }) => {
     const name = attacker?.name?.() ?? "Unknown";
-    console.log(`${event.name()} was defeated by ${name}!`);
+    console.log(`${event.name} was defeated by ${name}!`);
   }
 });
 ```
@@ -1036,7 +1036,7 @@ new BattleAi(this, {
   enemyType: EnemyType.Aggressive,
   onDefeated: ({ event, attacker }) => {
     const name = attacker?.name?.() ?? "Unknown";
-    console.log(`${event.name()} was defeated by ${name}!`);
+    console.log(`${event.name} was defeated by ${name}!`);
   }
 });
 ```

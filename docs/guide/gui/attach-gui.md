@@ -66,7 +66,7 @@ The component receives the sprite `object` as a prop automatically, allowing you
 <!-- tooltip.ce -->
 <DOMContainer>
     <div style="background: rgba(0,0,0,0.8); color: white; padding: 8px; border-radius: 4px;">
-        <p>Player: {object.name()}</p>
+        <p>Player: {object.name}</p>
         <p>HP: {object.hp()} / {object.param.maxHp()}</p>
     </div>
 </DOMContainer>
@@ -174,7 +174,7 @@ DOMContainer supports reactive two-way data binding for form elements using sign
 
 <DOMContainer>
     <div style="background: rgba(0,0,0,0.8); color: white; padding: 8px; border-radius: 4px;">
-        <p>Player: {object.name()}</p>
+        <p>Player: {object.name}</p>
         <input 
             type="text" 
             placeholder="Enter message..." 
@@ -209,7 +209,7 @@ DOMContainer supports all standard DOM events. Use the event name directly (with
         mouseover={handleMouseOver}
         mouseout={handleMouseOut}
     >
-        <p>Player: {object.name()}</p>
+        <p>Player: {object.name}</p>
         <button click={() => onInteraction('action', { type: 'heal' })}>
             Heal
         </button>
@@ -233,12 +233,12 @@ You can apply CSS classes using different formats:
 <DOMContainer>
     <!-- String format -->
     <div class="tooltip primary-theme">
-        <p>Player: {object.name()}</p>
+        <p>Player: {object.name}</p>
     </div>
     
     <!-- Array format -->
     <div class={['tooltip', 'primary-theme', 'active']}>
-        <p>Player: {object.name()}</p>
+        <p>Player: {object.name}</p>
     </div>
     
     <!-- Object format (conditional classes) -->
@@ -247,7 +247,7 @@ You can apply CSS classes using different formats:
         'active': isActive(),
         'inactive': !isActive()
     }}>
-        <p>Player: {object.name()}</p>
+        <p>Player: {object.name}</p>
     </div>
 </DOMContainer>
 ```
@@ -261,7 +261,7 @@ You can apply styles using string or object format:
 <DOMContainer>
     <!-- String format -->
     <div style="background-color: rgba(0,0,0,0.8); color: white; padding: 8px;">
-        <p>Player: {object.name()}</p>
+        <p>Player: {object.name}</p>
     </div>
     
     <!-- Object format -->
@@ -272,7 +272,7 @@ You can apply styles using string or object format:
         borderRadius: '4px',
         fontSize: '14px'
     }}>
-        <p>Player: {object.name()}</p>
+        <p>Player: {object.name}</p>
     </div>
 </DOMContainer>
 
@@ -301,7 +301,7 @@ DOMContainer automatically collects form data when a form is submitted:
 
 <DOMContainer>
     <div style="background: rgba(0,0,0,0.8); color: white; padding: 10px; border-radius: 4px;">
-        <p>Player: {object.name()}</p>
+        <p>Player: {object.name}</p>
         <form submit={handleSubmit}>
             <input name="message" type="text" placeholder="Enter message..." />
             <select name="priority">

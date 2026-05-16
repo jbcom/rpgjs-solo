@@ -13,26 +13,34 @@ Core server-side player commands defined on the main Player class.
 - [attachShape](#attachshape)
 - [cameraFollow](#camerafollow)
 - [changeMap](#changemap)
+- [createDynamicEvent](#createdynamicevent)
 - [emit](#emit)
 - [flash](#flash)
 - [getInShapes](#getinshapes)
 - [getShapes](#getshapes)
+- [getTile](#gettile)
 - [initializeDefaultStats](#initializedefaultstats)
 - [lastProcessedInputTs](#lastprocessedinputts)
 - [Listen one-time to data from the client](#listen-one-time-to-data-from-the-client)
 - [Listen to data from the client](#listen-to-data-from-the-client)
+- [name](#name)
+- [otherPlayersCollision](#otherplayerscollision)
 - [playSound](#playsound)
+- [position](#position)
 - [Remove listeners of the client event](#remove-listeners-of-the-client-event)
 - [Run Sync Changes](#run-sync-changes)
 - [setAnimation](#setanimation)
 - [setGraphicAnimation](#setgraphicanimation)
 - [setGraphicAnimation](#setgraphicanimation)
 - [setHitbox](#sethitbox)
+- [setSizes](#setsizes)
 - [setSync](#setsync)
+- [shapes](#shapes)
 - [showAnimation](#showanimation)
 - [showComponentAnimation](#showcomponentanimation)
 - [stopAllSounds](#stopallsounds)
 - [stopSound](#stopsound)
+- [tiles](#tiles)
 - [worldPositionX](#worldpositionx)
 - [worldPositionY](#worldpositiony)
 
@@ -192,6 +200,31 @@ await player.changeMap("town");
 
 When the map is loaded from Tiled, `positions` can be the `name` of a point object.
 If `positions` is omitted, RPGJS tries to use the `start` point.
+
+## createDynamicEvent
+
+Legacy v4 helper to create a dynamic event from the player's current map.
+
+Prefer `player.getCurrentMap()?.createDynamicEvent(...)` in new code.
+
+- Source: `packages/server/src/Player/Player.ts`
+- Kind: `method`
+- Defined in: `RpgPlayer`
+- Deprecated: use `map.createDynamicEvent(...)` instead.
+
+### Signature
+
+```ts
+createDynamicEvent(eventObj: any): Promise<string | undefined> | undefined
+```
+
+### Parameters
+
+- `eventObj`: `any`
+
+### Returns
+
+The created event id, or `undefined` if the player is not on a map.
 
 ## emit
 
@@ -366,6 +399,35 @@ const shapes = player.getShapes();
 console.log(shapes.length); // 2
 ```
 
+## getTile
+
+Legacy v4 Tiled tile lookup.
+
+This helper is available only when the current map was loaded through
+`@rpgjs/tiledmap` / `@canvasengine/tiled`. Coordinates are pixel positions,
+matching CanvasEngine Tiled's `getTileByPosition(...)` API.
+
+- Source: `packages/server/src/Player/Player.ts`
+- Kind: `method`
+- Defined in: `RpgPlayer`
+- Deprecated: use `player.getCurrentMap()?.tiled.getTileByPosition(...)` instead.
+
+### Signature
+
+```ts
+getTile(x: number, y: number, z?: number): any
+```
+
+### Parameters
+
+- `x`: `number`
+- `y`: `number`
+- `z?`: `number`
+
+### Returns
+
+Tiled tile information, or `undefined` when unavailable.
+
 ## initializeDefaultStats
 
 Initialize the built-in default player stats.
@@ -474,6 +536,48 @@ const socket = inject<AbstractWebsocket>(WebSocketToken);
 socket.emit("chat:message", { text: "Hello server" });
 ```
 
+## name
+
+Player or event display name.
+
+The value is exposed as a plain string property for v4 compatibility.
+
+- Source: `packages/common/src/Player.ts`
+- Kind: `getter/setter`
+- Defined in: `RpgCommonPlayer`
+
+### Signature
+
+```ts
+name: string
+```
+
+### Examples
+
+```ts
+player.name = "Hero";
+console.log(player.name);
+```
+
+## otherPlayersCollision
+
+Legacy v4 list of other players or events currently colliding with this player.
+
+- Source: `packages/server/src/Player/Player.ts`
+- Kind: `getter`
+- Defined in: `RpgPlayer`
+- Deprecated: prefer explicit physics queries on `player.getCurrentMap()`.
+
+### Signature
+
+```ts
+otherPlayersCollision: Array<RpgPlayer | RpgEvent>
+```
+
+### Returns
+
+Runtime players and events whose physics bodies overlap this player.
+
 ## playSound
 
 Play a sound on the client side for this player only
@@ -516,6 +620,30 @@ player.playSound("background-music", {
 
 // Play a notification sound at low volume
 player.playSound("notification", { volume: 0.3 });
+```
+
+## position
+
+Legacy v4 position object.
+
+Prefer the reactive `x`, `y`, and `z` signals in new code.
+
+- Source: `packages/server/src/Player/Player.ts`
+- Kind: `getter/setter`
+- Defined in: `RpgPlayer`
+- Deprecated: use `player.x()`, `player.y()`, `player.z()` and `player.teleport()` instead.
+
+### Signature
+
+```ts
+position: { x: number; y: number; z: number }
+```
+
+### Examples
+
+```ts
+const current = player.position;
+player.position = { x: 100, y: 200, z: 0 };
 ```
 
 ## Remove listeners of the client event
@@ -670,6 +798,28 @@ player.setHitbox(20, 20);
 player.setHitbox(40, 40);
 ```
 
+## setSizes
+
+Legacy v4 size setter.
+
+In v5, collision size is represented by the hitbox. This bridge maps the
+legacy object to `setHitbox(...)`.
+
+- Source: `packages/server/src/Player/Player.ts`
+- Kind: `method`
+- Defined in: `RpgPlayer`
+- Deprecated: use `player.setHitbox(width, height)` instead.
+
+### Signature
+
+```ts
+setSizes(obj: { width: number; height: number; hitbox?: { width: number; height: number } }): void
+```
+
+### Parameters
+
+- `obj`: `{ width: number; height: number; hitbox?: { width: number; height: number } }`
+
 ## setSync
 
 Set the sync schema for the map
@@ -687,6 +837,27 @@ setSync(schema: any)
 ### Parameters
 
 - `schema`: `any`
+
+## shapes
+
+Legacy v4 list of shapes attached to this player.
+
+Prefer `player.getShapes()` in new code.
+
+- Source: `packages/server/src/Player/Player.ts`
+- Kind: `getter`
+- Defined in: `RpgPlayer`
+- Deprecated: use `player.getShapes()` instead.
+
+### Signature
+
+```ts
+shapes: RpgShape[]
+```
+
+### Returns
+
+Shapes created with `player.attachShape(...)`.
 
 ## showAnimation
 
@@ -799,6 +970,28 @@ player.playSound("background-music", { loop: true });
 // Later, stop it
 player.stopSound("background-music");
 ```
+
+## tiles
+
+Legacy v4 list of Tiled tiles currently covered by the player's hitbox.
+
+This helper is available only when the current map was loaded through
+`@rpgjs/tiledmap` / `@canvasengine/tiled`. For non-Tiled maps, it returns `[]`.
+
+- Source: `packages/server/src/Player/Player.ts`
+- Kind: `getter`
+- Defined in: `RpgPlayer`
+- Deprecated: use Tiled map APIs from `player.getCurrentMap()?.tiled` instead.
+
+### Signature
+
+```ts
+tiles: any[]
+```
+
+### Returns
+
+Tile information for each Tiled cell touched by the player.
 
 ## worldPositionX
 

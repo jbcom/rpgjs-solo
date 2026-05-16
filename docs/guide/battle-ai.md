@@ -378,7 +378,7 @@ new BattleAi(event, {
   },
   onDefeated: ({ event, attacker }) => {
     const name = attacker?.name?.() ?? "Unknown";
-    console.log(`${event.name()} was defeated by ${name}!`);
+    console.log(`${event.name} was defeated by ${name}!`);
   }
 });
 ```
