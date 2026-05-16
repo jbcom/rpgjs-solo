@@ -64,8 +64,17 @@ const mergePlayerConfig = (
   };
 };
 
+const readGameConfig = (): any => {
+  const globalScope = globalThis as typeof globalThis & {
+    gameConfig?: any;
+    window?: { gameConfig?: any };
+  };
+
+  return globalScope.window?.gameConfig ?? globalScope.gameConfig ?? {};
+};
+
 const resolvePlayerConfig = async (player: RpgPlayer): Promise<ProjectBasic> => {
-  const gameConfig = window.gameConfig ?? {};
+  const gameConfig = readGameConfig();
   const baseHeroConfig = {
     ...(gameConfig.hero ?? {}),
     skillsToLearn:
@@ -214,7 +223,7 @@ const ensureStartingItemsInDatabase = async (
   }, {});
   if (missingIds.length === 0) return startingItems;
 
-  const gameConfig = window.gameConfig ?? {};
+  const gameConfig = readGameConfig();
   const configuredProjectId = getStudioGameRuntimeConfig().projectId?.trim() || null;
   const projectId = configuredProjectId || gameConfig?._id || null;
 
@@ -238,6 +247,12 @@ const ensureStartingItemsInDatabase = async (
 
 const databaseCacheByProjectId = new Map<string, any>();
 const eventsCacheByBundlePath = new Map<string, Promise<any[]>>();
+const projectCacheByKey = new Map<string, Promise<any>>();
+
+type StudioServerConfig = {
+  projectId?: string | null;
+  startMapId?: string;
+};
 
 const ensureLeadingSlash = (value: string): string => {
   if (!value) return "/game-data";
@@ -340,15 +355,134 @@ const resolveMapEventReferences = async (events: unknown): Promise<any[]> => {
   });
 };
 
+const parseJsonValue = (value: unknown, fallback: any): any => {
+  if (typeof value !== "string") return value ?? fallback;
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return fallback;
+  }
+};
+
+const resolveStudioProject = async (
+  mapId?: string,
+  config: StudioServerConfig = {},
+): Promise<any> => {
+  const runtimeConfig = getStudioGameRuntimeConfig();
+  const gameConfig = readGameConfig();
+  const projectId =
+    config.projectId?.trim?.() ||
+    runtimeConfig.projectId?.trim?.() ||
+    gameConfig?._id ||
+    null;
+  const cacheKey = projectId ? `project:${projectId}` : `map:${mapId ?? ""}`;
+
+  if (!projectCacheByKey.has(cacheKey)) {
+    const promise = getGameDataProvider()
+      .getProject(projectId ? { projectId } : { mapId })
+      .catch((error) => {
+        projectCacheByKey.delete(cacheKey);
+        console.warn("[StudioGame] project preload failed", error);
+        return {};
+      });
+    projectCacheByKey.set(cacheKey, promise);
+  }
+
+  return projectCacheByKey.get(cacheKey)!;
+};
+
+const resolveStartMapId = async (config: StudioServerConfig): Promise<string> => {
+  if (config.startMapId) return config.startMapId;
+
+  const gameConfig = readGameConfig();
+  if (gameConfig?.startMapId) return gameConfig.startMapId;
+
+  const project = await resolveStudioProject(undefined, config);
+  return project?.startMapId || "simplemap";
+};
+
+const normalizeStudioMapPayload = async (
+  mapId: string,
+  initialMapData: any,
+  config: StudioServerConfig,
+): Promise<any> => {
+  if (initialMapData?.data?.params) return initialMapData;
+
+  const [project, mapResponse] = await Promise.all([
+    resolveStudioProject(mapId, config),
+    getGameDataProvider().getMap(mapId),
+  ]);
+  const params = mapResponse.params ?? {};
+  const isV2 = mapResponse.creationDetails?.version === "v2";
+  const resolvedEvents = await resolveMapEventReferences(
+    mapResponse.events ?? mapResponse.data?.events,
+  );
+  const mapDataValue = Array.isArray(mapResponse.data)
+    ? mapResponse.data
+    : parseJsonValue(mapResponse.data, []);
+  const mergedHitboxes = [...(mapResponse.hitboxes ?? [])];
+
+  if (Array.isArray(mapResponse.polygons)) {
+    mapResponse.polygons.forEach((polygon: number[][], index: number) => {
+      if (!Array.isArray(polygon) || polygon.length < 3) return;
+      const xs = polygon.map((point) => point[0]);
+      const ys = polygon.map((point) => point[1]);
+      mergedHitboxes.push({
+        id: `polygon_${index}`,
+        points: polygon,
+        x: Math.min(...xs),
+        y: Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs),
+        height: Math.max(...ys) - Math.min(...ys),
+      });
+    });
+  }
+
+  const normalizedMap = {
+    ...mapResponse,
+    id: mapResponse._id ?? mapResponse.id ?? mapId,
+    data: mapDataValue,
+    hitboxes: mergedHitboxes,
+    events: resolvedEvents,
+    params,
+  };
+
+  return {
+    ...initialMapData,
+    id: normalizedMap.id,
+    data: normalizedMap,
+    events: resolvedEvents,
+    hitboxes: mergedHitboxes,
+    width:
+      initialMapData?.width ||
+      (isV2 ? params.width * 48 : params.width) ||
+      mapResponse.width ||
+      1,
+    height:
+      initialMapData?.height ||
+      (isV2 ? params.height * 48 : params.height) ||
+      mapResponse.height ||
+      1,
+    config: {
+      ...project,
+      ...(initialMapData?.config ?? {}),
+      startMapId: config.startMapId ?? project?.startMapId ?? mapId,
+    },
+  };
+};
+
 export default (_config?: unknown) => {
+  const config = (_config ?? {}) as StudioServerConfig;
+
   return defineModule<RpgServer>({
     player: {
       onStart: async (player: RpgPlayer) => {
-        await player.changeMap("simplemap");
+        await player.changeMap(await resolveStartMapId(config));
       },
       onJoinMap: async (player: RpgPlayer, map: RpgMap) => {
         const startMapId = map.globalConfig.startMapId;
-        const isStartMap = map.data().data._id === startMapId;
         const mapExtended = map as RpgMapExtended;
         const heroGraphic = (mapExtended.globalConfig.hero as any)?.graphic;
         const heroGraphicKey = getGraphicKey(heroGraphic);
@@ -408,6 +542,14 @@ export default (_config?: unknown) => {
     map: {
       async onBeforeUpdate(mapData: any, map) {
         const mapExtended = map as RpgMapExtended;
+        const hydratedMapData = await normalizeStudioMapPayload(
+          mapData?.id ?? mapData?.data?._id ?? mapData?.data?.id,
+          mapData,
+          config,
+        );
+        Object.assign(mapData, hydratedMapData);
+        mapExtended.globalConfig = mapData.config ?? {};
+
         const resolvedEvents = await resolveMapEventReferences(
           mapData?.events ?? mapData?.data?.events,
         );
@@ -422,17 +564,19 @@ export default (_config?: unknown) => {
         if (mapData?.data) {
           mapData.data.events = resolvedEvents;
         }
-        mapExtended.startPosition = mapData.data.start;
-        mapExtended.scale = mapData.data.params.scale || 1;
+        mapExtended.startPosition = mapData.data?.start;
+        mapExtended.scale = mapData.data?.params?.scale || 1;
         const normalizedInitialWeather = normalizeWeatherState(
           mapData?.data?.weather,
         );
-        mapData.data.weather = normalizedInitialWeather;
-        mapData.data.lighting = normalizeLightingState(mapData?.data?.lighting);
+        if (mapData?.data) {
+          mapData.data.weather = normalizedInitialWeather;
+          mapData.data.lighting = normalizeLightingState(mapData?.data?.lighting);
+        }
         // Add baseUrl to map context for use in block executors
         (mapExtended as any).apiBaseUrl = apiUrl;
 
-        if (mapData.config.worldMaps) {
+        if (mapData.config?.worldMaps) {
           const worldManager = new WorldMapsManager();
           const worldMaps = mapData.config.worldMaps.map((worldMap: any) => ({
             ...worldMap,
@@ -682,7 +826,7 @@ export default (_config?: unknown) => {
     database: async () => {
       const configuredProjectId =
         getStudioGameRuntimeConfig().projectId?.trim() || null;
-      const gameConfig = window.gameConfig;
+      const gameConfig = readGameConfig();
       const resolvedProjectId = configuredProjectId || gameConfig?._id || "";
 
       if (databaseCacheByProjectId.has(resolvedProjectId)) {

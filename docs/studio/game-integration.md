@@ -49,6 +49,113 @@ export const configServer = {
 
 When `projectId` is set, the runtime uses online Studio data by default.
 
+## MMORPG mode
+
+In MMORPG mode, Studio data is loaded on both sides with different responsibilities:
+
+- the server loads the Studio project, map, database, hitboxes, and events, then synchronizes players and events to clients;
+- the client loads Studio map data only to render the CanvasEngine map component.
+
+Players must not push map definitions to the MMORPG server. Server map rooms hydrate themselves from Studio data when they start, and authorized tools can still update a map through the server-side `/map/update` flow.
+
+### Live map updates from Studio
+
+When Studio pushes a live update to a running MMORPG server, it should call the map room update endpoint:
+
+```http
+POST /parties/main/map-<mapId>/map/update
+Content-Type: application/json
+```
+
+If the server defines `RPGJS_MAP_UPDATE_TOKEN`, Studio must also send one of these credentials:
+
+```http
+X-RPGJS-Map-Update-Token: <token>
+```
+
+or:
+
+```http
+Authorization: Bearer <token>
+```
+
+The payload must describe the authoritative server map state. The minimum valid payload is:
+
+```json
+{
+  "id": "map-id",
+  "width": 960,
+  "height": 576,
+  "events": []
+}
+```
+
+For Studio maps, send the complete normalized map payload whenever possible:
+
+```json
+{
+  "id": "map-id",
+  "width": 960,
+  "height": 576,
+  "config": {
+    "_id": "project-id",
+    "startMapId": "map-id",
+    "hero": {},
+    "worldMaps": []
+  },
+  "data": {
+    "_id": "map-id",
+    "id": "map-id",
+    "data": [],
+    "events": [],
+    "hitboxes": [],
+    "params": {
+      "width": 20,
+      "height": 12,
+      "scale": 1
+    },
+    "weather": null,
+    "lighting": null
+  },
+  "events": [
+    {
+      "id": "event-id",
+      "_id": "event-id",
+      "eventId": "event-id",
+      "x": 96,
+      "y": 144,
+      "eventType": "character",
+      "params": {},
+      "triggers": []
+    }
+  ],
+  "hitboxes": [],
+  "positions": {
+    "start": {
+      "x": 96,
+      "y": 144
+    }
+  },
+  "params": {
+    "backgroundMusic": null
+  },
+  "damageFormulas": {}
+}
+```
+
+Important fields:
+
+- `id`: Studio map id without the `map-` room prefix.
+- `width` and `height`: map dimensions in pixels, used by server movement and viewport logic.
+- `config`: project-level configuration used by server hooks, including `startMapId`, `hero`, and `worldMaps`.
+- `data`: Studio map document used by Studio server hooks. It should include `params`, `start`, `weather`, `lighting`, and map-specific metadata.
+- `events`: placed Studio events. These become authoritative RPGJS dynamic events and are synchronized to clients.
+- `hitboxes`: collision data used by server physics.
+- `positions`: named positions used by `player.changeMap("map-id", "position-name")`.
+- `damageFormulas`: optional formula overrides merged with RPGJS defaults.
+
+Studio may send partial updates during development, but the update endpoint replaces the runtime map state. For consistent MMORPG behavior, send the full map payload after each Studio edit that changes events, collisions, dimensions, weather, lighting, or project-level map configuration.
+
 ## Offline mode
 
 Offline mode lets the game run from exported Studio data without calling the Studio API. Export the project data from Studio into the game public directory, using the default bundle path:
