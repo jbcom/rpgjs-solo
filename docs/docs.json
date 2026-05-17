@@ -103,6 +103,7 @@
           {
             "group": "Advanced",
             "pages": [
+              "roadmap",
               "advanced/mmorpg-entries",
               "advanced/node-server-production",
               "advanced/latency-simulation",
