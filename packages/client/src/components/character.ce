@@ -1,11 +1,11 @@
 <Container x={smoothX} y={smoothY} zIndex={z} viewportFollow={shouldFollowCamera} controls onBeforeDestroy  visible>
   @for (compConfig of normalizedComponentsBehind) {
     <Container>
-      <compConfig.component object ...compConfig.props />
+      <compConfig.component object={sprite} ...compConfig.props />
     </Container>
   } 
-  <PlayerComponents object position="bottom" graphicBounds />
-  <PlayerComponents object position="left" graphicBounds />
+  <PlayerComponents object={sprite} position="bottom" graphicBounds />
+  <PlayerComponents object={sprite} position="left" graphicBounds />
   <Particle emit={emitParticleTrigger} settings={particleSettings} zIndex={1000} name={particleName} />
   <Container>
     @for (graphicObj of graphicsSignals) {
@@ -21,18 +21,18 @@
       </Container>
     }
   </Container>
-  <PlayerComponents object position="center" graphicBounds />
-  <PlayerComponents object position="right" graphicBounds />
-  <PlayerComponents object position="top" graphicBounds />
+  <PlayerComponents object={sprite} position="center" graphicBounds />
+  <PlayerComponents object={sprite} position="right" graphicBounds />
+  <PlayerComponents object={sprite} position="top" graphicBounds />
   @for (compConfig of normalizedComponentsInFront) {
     <Container dependencies={compConfig.dependencies}>
-      <compConfig.component object ...compConfig.props />
+      <compConfig.component object={sprite} ...compConfig.props />
     </Container>
   }
   @for (attachedGui of attachedGuis) {
     @if (shouldDisplayAttachedGui) {
       <Container>
-        <attachedGui.component ...attachedGui.data() dependencies={attachedGui.dependencies} object={object} onFinish={(data) => {
+        <attachedGui.component ...attachedGui.data() dependencies={attachedGui.dependencies} object={sprite} onFinish={(data) => {
           onAttachedGuiFinish(attachedGui, data)
         }} onInteraction={(name, data) => {
           onAttachedGuiInteraction(attachedGui, name, data)
@@ -58,6 +58,7 @@
   import { getCanMoveValue } from "../utils/readPropValue";
 
   const { object, id } = defineProps();
+  const sprite = object();
 
   const client = inject(RpgClientEngine);
   const hooks = inject(ModulesToken);
@@ -71,9 +72,9 @@
     const playerId = client.playerIdSignal();
     const currentPlayer = playerId ? client.sceneMap?.players?.()?.[playerId] : undefined;
     return readProp(id) === playerId
-      || readProp(object?.id) === playerId
-      || object === currentPlayer
-      || object === client.sceneMap?.getCurrentPlayer?.();
+      || readProp(sprite?.id) === playerId
+      || sprite === currentPlayer
+      || sprite === client.sceneMap?.getCurrentPlayer?.();
   };
   const isMe = computed(isCurrentPlayer);
   const shadowsEnabled = computed(() => {
@@ -150,8 +151,8 @@
     // The computed will be created in the template when needed
     return {
       component: componentRef,
-      props: typeof propsValue === 'function' ? propsValue(object) : propsValue || {},
-      dependencies: dependenciesFn ? dependenciesFn(object) : []
+      props: typeof propsValue === 'function' ? propsValue(sprite) : propsValue || {},
+      dependencies: dependenciesFn ? dependenciesFn(sprite) : []
     };
   };
 
@@ -259,7 +260,7 @@
     isConnected,
     graphicsSignals,
     flashTrigger
-  } = object;
+  } = sprite;
 
   /**
    * Flash configuration signals for dynamic options
@@ -304,11 +305,11 @@
 
   const particleSettings = client.particleSettings;
 
-  const canControls = () => isMe() && getCanMoveValue(object)
+  const canControls = () => isMe() && getCanMoveValue(sprite)
   const keyboardControls = client.globalConfig.keyboardControls;
 
   const visible = computed(() => {
-    if (object.isEvent()) {
+    if (sprite.isEvent()) {
       return true
     }
     return isConnected()
@@ -373,7 +374,7 @@
   });
 
   const z = computed(() => {
-    return object.y() + object.z()
+    return sprite.y() + sprite.z()
   });
 
   const realAnimationName = signal(animationName());
@@ -734,8 +735,8 @@
   let beforeRemovePromise = null;
   let beforeRemoveTransitionValue = null;
   const resolveRemoveContext = () => {
-    if (!object._removeTransition) return null;
-    const value = object._removeTransition();
+    if (!sprite._removeTransition) return null;
+    const value = sprite._removeTransition();
     if (!value || typeof value !== 'string') return null;
     try {
       const context = JSON.parse(value);
@@ -764,13 +765,13 @@
     }
     beforeRemoveTransitionValue = context.__transitionValue;
     beforeRemovePromise = withTimeout(
-      lastValueFrom(hooks.callHooks("client-sprite-onBeforeRemove", object, context)),
+      lastValueFrom(hooks.callHooks("client-sprite-onBeforeRemove", sprite, context)),
       context.timeoutMs
     );
     return beforeRemovePromise;
   };
 
-  const removeTransitionSubscription = object._removeTransition?.observable?.subscribe(() => {
+  const removeTransitionSubscription = sprite._removeTransition?.observable?.subscribe(() => {
     if (resolveRemoveContext()) {
       runBeforeRemove();
     }
@@ -786,10 +787,10 @@
     else if (!movementAnimations.includes(curr)) {
       realAnimationName.set(curr);
     }
-    if (!isMoving && object.animationIsPlaying && object.animationIsPlaying()) {
+    if (!isMoving && sprite.animationIsPlaying && sprite.animationIsPlaying()) {
       if (movementAnimations.includes(curr)) {
-        if (typeof object.resetAnimationState === 'function') {
-          object.resetAnimationState();
+        if (typeof sprite.resetAnimationState === 'function') {
+          sprite.resetAnimationState();
         }
       }
     }
@@ -806,7 +807,7 @@
    * await onBeforeDestroy();
    */
   const waitForTemporaryAnimationEnd = (maxDuration = 1200) => {
-    if (!object.animationIsPlaying || !object.animationIsPlaying()) {
+    if (!sprite.animationIsPlaying || !sprite.animationIsPlaying()) {
       return Promise.resolve();
     }
 
@@ -822,7 +823,7 @@
         resolve();
       };
       timeout = setTimeout(finish, maxDuration);
-      subscription = object.animationIsPlaying.observable.subscribe((isPlaying) => {
+      subscription = sprite.animationIsPlaying.observable.subscribe((isPlaying) => {
         if (!isPlaying) finish();
       });
       if (finished) subscription.unsubscribe();
@@ -836,13 +837,13 @@
     animationMovementSubscription.unsubscribe();
     xSubscription.unsubscribe();
     ySubscription.unsubscribe();
-    await lastValueFrom(hooks.callHooks("client-sprite-onDestroy", object)) 
-    await lastValueFrom(hooks.callHooks("client-sceneMap-onRemoveSprite", client.sceneMap, object))
+    await lastValueFrom(hooks.callHooks("client-sprite-onDestroy", sprite)) 
+    await lastValueFrom(hooks.callHooks("client-sceneMap-onRemoveSprite", client.sceneMap, sprite))
   }
 
   mount((element) => {
-    hooks.callHooks("client-sprite-onAdd", object).subscribe()
-    hooks.callHooks("client-sceneMap-onAddSprite", client.sceneMap, object).subscribe()
+    hooks.callHooks("client-sprite-onAdd", sprite).subscribe()
+    hooks.callHooks("client-sceneMap-onAddSprite", client.sceneMap, sprite).subscribe()
     effect(() => {
       if (isCurrentPlayer()) {
         client.setKeyboardControls(element.directives.controls)

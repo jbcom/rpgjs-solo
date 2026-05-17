@@ -31,6 +31,7 @@ const {
   opacitySpeed,
   lightColor
 } = defineProps();
+const sprite = object();
 
 // ====================
 // Props with default values
@@ -92,7 +93,7 @@ const currentOpacity = computed(() => {
 // Position calculations
 // ====================
 
-const hitbox = object.hitbox;
+const hitbox = sprite.hitbox;
 
 const position = computed(() => ({
   x: hitbox().w / 2,
@@ -145,4 +146,3 @@ tick(() => {
   time.update(t => t + 1);
 });
 </script>
-

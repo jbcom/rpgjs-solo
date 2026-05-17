@@ -9,17 +9,18 @@ import { getShapeBox, translatePolygonPoints } from "./shape-utils";
 
 const props = defineProps();
 const { object } = props;
+const sprite = object();
 
 const read = (prop, fallback) => prop ? prop() : fallback;
 
 const toNumber = (value, fallback = 0) => {
-  const resolved = resolveDynamicValue(value, object);
+  const resolved = resolveDynamicValue(value, sprite);
   const num = typeof resolved === 'number' ? resolved : parseFloat(resolved);
   return Number.isFinite(num) ? num : fallback;
 };
 
 const toColor = (value, fallback) => {
-  const resolved = resolveDynamicValue(value, object);
+  const resolved = resolveDynamicValue(value, sprite);
   if (typeof resolved === 'number') return resolved;
   if (typeof resolved === 'string' && resolved.startsWith('#')) {
     return parseInt(resolved.slice(1), 16);

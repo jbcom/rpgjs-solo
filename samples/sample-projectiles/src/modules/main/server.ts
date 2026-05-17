@@ -2,6 +2,34 @@ import { Control, Direction, defineModule } from "@rpgjs/common";
 import type { EventDefinition, RpgPlayerHooks, RpgServer } from "@rpgjs/server";
 import { Components, MAXHP, RpgPlayer } from "@rpgjs/server";
 
+function directionVector(direction: Direction): { x: number; y: number } {
+  switch (direction) {
+    case Direction.Up:
+      return { x: 0, y: -1 };
+    case Direction.Down:
+      return { x: 0, y: 1 };
+    case Direction.Left:
+      return { x: -1, y: 0 };
+    case Direction.Right:
+      return { x: 1, y: 0 };
+    default:
+      return { x: 1, y: 0 };
+  }
+}
+
+function projectileOrigin(player: RpgPlayer, direction: Direction): { x: number; y: number } {
+  const hitbox = player.hitbox();
+  const vector = directionVector(direction);
+  const center = {
+    x: player.x() + hitbox.w / 2,
+    y: player.y() + hitbox.h / 2,
+  };
+  return {
+    x: center.x + vector.x * 34,
+    y: center.y + vector.y * 34,
+  };
+}
+
 function Target(): EventDefinition {
   return {
     onInit() {
@@ -38,21 +66,29 @@ const player: RpgPlayerHooks = {
       return;
     }
 
+    const direction = player.getDirection() ?? Direction.Right;
     player.projectiles.emit({
       type: "bolt",
-      direction: player.getDirection() ?? Direction.Right,
+      origin: projectileOrigin(player, direction),
+      direction,
       trajectory: {
         type: "linear",
-        speed: 520,
-        range: 520,
-        ttl: 1.2,
+        speed: 260,
+        range: 620,
+        ttl: 2.4,
+      },
+      collision: {
+        ignoreOwner: true,
       },
       payload: {
         damage: 10,
       },
       params: {
-        color: "#ff6b35",
-        trailColor: "#ffd166",
+        color: "#ef4444",
+        trailColor: "#f97316",
+      },
+      canHit({ target }) {
+        return target?.id === "target";
       },
     });
   },

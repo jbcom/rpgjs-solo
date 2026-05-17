@@ -10,17 +10,18 @@ import { computed } from "canvasengine";
 import { resolveDynamicValue } from "./parse-value";
 
 const { object, current, max, style, text } = defineProps();
+const sprite = object();
 
 const read = (prop, fallback) => prop ? prop() : fallback;
 
 const toNumber = (value, fallback = 0) => {
-  const resolved = resolveDynamicValue(value, object);
+  const resolved = resolveDynamicValue(value, sprite);
   const num = typeof resolved === 'number' ? resolved : parseFloat(resolved);
   return Number.isFinite(num) ? num : fallback;
 };
 
 const toColor = (value, fallback) => {
-  const resolved = resolveDynamicValue(value, object);
+  const resolved = resolveDynamicValue(value, sprite);
   if (typeof resolved === 'number') return resolved;
   if (typeof resolved === 'string' && resolved.startsWith('#')) {
     return parseInt(resolved.slice(1), 16);
@@ -57,7 +58,7 @@ const labelText = computed(() => {
     .replace(/\{\$max\}/g, String(maxValue()))
     .replace(/\{\$percent\}/g, String(Math.round(percent() * 100)));
 
-  return String(resolveDynamicValue(value, object) ?? '');
+  return String(resolveDynamicValue(value, sprite) ?? '');
 });
 const labelSize = computed(() => toNumber(config().fontSize, 10));
 const hasLabel = computed(() => labelText().length > 0);

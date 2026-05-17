@@ -14,7 +14,7 @@
   }
 
   <Container sortableChildren={true}>
-    @for (projectile of projectiles()) {
+    @for (projectile of projectiles() ; track projectile.props.id) {
       <projectile.component ...projectile.props />
     }
   </Container>
@@ -25,10 +25,11 @@
 </Container>
 
 <script>
-    import { computed } from 'canvasengine'
+    import { computed, effect } from 'canvasengine'
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
     import { Weather } from '@canvasengine/presets'
+
 
     const engine = inject(RpgClientEngine);
     const componentAnimations = engine.componentAnimations

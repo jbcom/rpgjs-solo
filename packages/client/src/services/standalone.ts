@@ -7,6 +7,7 @@ import { LoadMapToken } from "./loadMap";
 import { RpgGui } from "../Gui/Gui";
 import { provideKeyboardControls } from "./keyboardControls";
 import { provideSaveClient } from "./save";
+import { normalizeStandaloneMessage } from "./standalone-message";
 
 type ServerIo = any;
 type ClientIo = any;
@@ -67,7 +68,7 @@ class BridgeWebsocket extends AbstractWebsocket {
 
   on(key: string, callback: (data: any) => void) {
     const handler = (event) => {
-      const object = JSON.parse(event);
+      const object = normalizeStandaloneMessage(event);
       if (object.type === key) {
         callback(object.value);
       }

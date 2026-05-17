@@ -1,25 +1,22 @@
 <Container>
-  <Rect width={640} height={420} color="#182236" />
-  <Rect x={24} y={24} width={592} height={372} color="#22314d" alpha={0.9} />
-  <Rect x={24} y={24} width={592} height={2} color="#5b6f99" alpha={0.45} />
-  <Rect x={24} y={394} width={592} height={2} color="#5b6f99" alpha={0.45} />
-  <Rect x={24} y={24} width={2} height={372} color="#5b6f99" alpha={0.45} />
-  <Rect x={614} y={24} width={2} height={372} color="#5b6f99" alpha={0.45} />
+ 
   <Text
     x={32}
     y={32}
-    text="Action: tir projectile"
-    color="#dce7ff"
+    text="Action: shoot projectile"
+    color="#172033"
     size={16}
   />
   <Text
     x={32}
     y={54}
-    text="Oriente le heros puis appuie sur la touche action"
-    color="#93a4c7"
+    text="Face the target, then press the action key"
+    color="#4d5f7a"
     size={12}
   />
-  <EventLayerComponent />
+  <Container>
+    <EventLayerComponent />
+  </Container>
 </Container>
 
 <script>

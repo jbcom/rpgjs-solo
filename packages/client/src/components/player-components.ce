@@ -29,7 +29,7 @@
           justifyContent="center"
           alignItems="center"
         >
-          <entry.component object ...entry.props />
+          <entry.component object={sprite} ...entry.props />
         </Container>
       }
     </Container>
@@ -54,6 +54,7 @@ const { object, position, graphicBounds } = defineProps({
     default: 'top'
   }
 });
+const sprite = object();
 
 const client = inject(RpgClientEngine);
 const warnedComponents = new Set();
@@ -63,16 +64,16 @@ const readPosition = computed(() => position?.() ?? 'top');
 const componentSource = computed(() => {
   switch (readPosition()) {
     case 'bottom':
-      return object.componentsBottom?.();
+      return sprite.componentsBottom?.();
     case 'center':
-      return object.componentsCenter?.();
+      return sprite.componentsCenter?.();
     case 'left':
-      return object.componentsLeft?.();
+      return sprite.componentsLeft?.();
     case 'right':
-      return object.componentsRight?.();
+      return sprite.componentsRight?.();
     case 'top':
     default:
-      return object.componentsTop?.();
+      return sprite.componentsTop?.();
   }
 });
 
@@ -98,16 +99,16 @@ const componentData = computed(() => {
 
 const layout = computed(() => componentData()?.layout ?? {});
 const rows = computed(() => componentData()?.components ?? []);
-const hitbox = object.hitbox;
+const hitbox = sprite.hitbox;
 
 const toNumber = (value, fallback = 0) => {
-  const resolved = resolveDynamicValue(value, object);
+  const resolved = resolveDynamicValue(value, sprite);
   const num = typeof resolved === 'number' ? resolved : parseFloat(resolved);
   return Number.isFinite(num) ? num : fallback;
 };
 
 const estimateTextWidth = (value, style = {}) => {
-  const text = String(resolveDynamicValue(value ?? '', object) ?? '');
+  const text = String(resolveDynamicValue(value ?? '', sprite) ?? '');
   const fontSize = toNumber(style.fontSize, 12);
   return Math.max(1, Math.ceil(text.length * fontSize * 0.6));
 };
@@ -206,7 +207,7 @@ const renderedRows = computed(() => {
 
       entries.push({
         component,
-        props: resolveDynamicProps(getComponentProps(definition), object),
+        props: resolveDynamicProps(getComponentProps(definition), sprite),
         width: cell.width,
         height: cell.height
       });

@@ -5,11 +5,12 @@ import { computed } from "canvasengine";
 import { resolveDynamicValue } from "./parse-value";
 
 const { object, value, style } = defineProps();
+const sprite = object();
 
 const read = (prop, fallback) => prop ? prop() : fallback;
 
 const parseNumericStyleValue = (value, object) => {
-    value = resolveDynamicValue(value, object);
+    value = resolveDynamicValue(value, sprite);
     if (value === undefined || value === null) return undefined;
     if (typeof value === 'number') return value;
 
@@ -22,15 +23,15 @@ const getTextStyle = (style) => {
     const textStyle = {};
 
     if (style.fontStyle !== undefined) {
-        textStyle.fontStyle = resolveDynamicValue(style.fontStyle, object);
+        textStyle.fontStyle = resolveDynamicValue(style.fontStyle, sprite);
     }
 
     if (style.fontWeight !== undefined) {
-        textStyle.fontWeight = resolveDynamicValue(style.fontWeight, object);
+        textStyle.fontWeight = resolveDynamicValue(style.fontWeight, sprite);
     }
 
     if (style.stroke !== undefined) {
-        textStyle.stroke = resolveDynamicValue(style.stroke, object);
+        textStyle.stroke = resolveDynamicValue(style.stroke, sprite);
     }
 
     if (style.opacity !== undefined) {
@@ -45,16 +46,16 @@ const getTextStyle = (style) => {
     }
 
     if (style.align !== undefined) {
-        textStyle.align = resolveDynamicValue(style.align, object);
+        textStyle.align = resolveDynamicValue(style.align, sprite);
     }
 
     return textStyle;
 };
 
-const textValue = computed(() => String(resolveDynamicValue(read(value, ''), object) ?? ''));
+const textValue = computed(() => String(resolveDynamicValue(read(value, ''), sprite) ?? ''));
 const textColor = computed(() => {
     const currentStyle = read(style, {});
-    return currentStyle.fill !== undefined ? resolveDynamicValue(currentStyle.fill, object) : undefined;
+    return currentStyle.fill !== undefined ? resolveDynamicValue(currentStyle.fill, sprite) : undefined;
 });
 const textSize = computed(() => {
     const currentStyle = read(style, {});
@@ -62,7 +63,7 @@ const textSize = computed(() => {
 });
 const textFontFamily = computed(() => {
     const currentStyle = read(style, {});
-    return currentStyle.fontFamily !== undefined ? resolveDynamicValue(currentStyle.fontFamily, object) : undefined;
+    return currentStyle.fontFamily !== undefined ? resolveDynamicValue(currentStyle.fontFamily, sprite) : undefined;
 });
 const textStyle = computed(() => getTextStyle(read(style, {})));
 </script>

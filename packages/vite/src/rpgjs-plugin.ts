@@ -4,6 +4,8 @@ import { serverPlugin } from "./server-plugin";
 import { entryPointPlugin } from "./entry-point-plugin";
 import { mmorpgBuildPlugin } from "./mmorpg-build-plugin";
 
+const runtimeDedupe = ["@canvasengine/presets", "canvasengine", "pixi.js"];
+
 type MmorpgEntryPoints =
   | string
   | {
@@ -43,6 +45,20 @@ export function rpgjs({
   const mmorpgEntryPoints = normalizeMmorpgEntryPoints(entryPoints?.mmorpg);
 
   return [
+    {
+      name: "rpgjs:runtime-dedupe",
+      config() {
+        return {
+          resolve: {
+            dedupe: runtimeDedupe,
+          },
+          optimizeDeps: {
+            exclude: ["canvasengine"],
+            include: ["pixi.js > eventemitter3"],
+          },
+        };
+      },
+    },
     canvasengine(),
     replaceConfigImport(),
     serverPlugin(server),

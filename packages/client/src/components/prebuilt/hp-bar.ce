@@ -46,6 +46,7 @@
 import { computed, animatedSignal, effect } from "canvasengine";
 
 const { object } = defineProps();
+const sprite = object();
 
 // ====================
 // Configuration
@@ -93,14 +94,14 @@ const highlightHeight = Math.floor(fillHeight / 2);
 // ====================
 
 /** Gets hitbox dimensions for positioning */
-const hitbox = object.hitbox;
+const hitbox = sprite.hitbox;
 
 /**
  * Gets the current HP value from the player object
  * Uses hpSignal which is synchronized from the server
  */
 const currentHp = computed(() => {
-  return object.hpSignal?.() ?? 0;
+  return sprite.hpSignal?.() ?? 0;
 });
 
 /**
@@ -108,7 +109,7 @@ const currentHp = computed(() => {
  * Reads from _param.maxHp which contains calculated stats
  */
 const maxHp = computed(() => {
-  const params = object._param?.() ?? {};
+  const params = sprite._param?.() ?? {};
   return params.maxHp ?? 100;
 });
 
