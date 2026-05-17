@@ -1,5 +1,10 @@
 <Container>
- 
+  <Rect width={640} height={420} color="#ffffff" />
+  <Rect x={24} y={24} width={592} height={372} color="#f6f8fb" />
+  <Rect x={24} y={24} width={592} height={2} color="#c8d2e0" />
+  <Rect x={24} y={394} width={592} height={2} color="#c8d2e0" />
+  <Rect x={24} y={24} width={2} height={372} color="#c8d2e0" />
+  <Rect x={614} y={24} width={2} height={372} color="#c8d2e0" />
   <Text
     x={32}
     y={32}
