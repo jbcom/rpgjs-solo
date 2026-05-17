@@ -28,6 +28,10 @@ export interface ClientProjectileImpact {
 export interface ClientProjectileDestroy {
   id: string;
   reason?: string;
+  targetId?: string;
+  x?: number;
+  y?: number;
+  distance?: number;
 }
 
 export interface RenderedProjectileProps extends ClientProjectileSpawn {
@@ -38,6 +42,8 @@ export interface RenderedProjectileProps extends ClientProjectileSpawn {
   elapsed: number;
   progress: number;
   impact?: ClientProjectileImpact;
+  impactElapsed?: number;
+  impactProgress?: number;
   destroyed?: boolean;
 }
 
@@ -53,6 +59,7 @@ interface RuntimeProjectile {
   component: any;
   createdAt: number;
   impact?: ClientProjectileImpact;
+  impactStartedAt?: number;
   destroyAt?: number;
   destroyReason?: string;
 }
@@ -61,7 +68,7 @@ export class ProjectileManager {
   private readonly components = new Map<string, any>();
   private readonly projectiles = new Map<string, RuntimeProjectile>();
   private readonly version = signal(0);
-  private readonly impactDurationMs = 120;
+  private readonly impactDurationMs = 350;
 
   constructor(private readonly hooks: Hooks) {}
 
@@ -122,8 +129,7 @@ export class ProjectileManager {
       if (!projectile) {
         continue;
       }
-      projectile.impact = impact;
-      projectile.destroyAt = now + this.impactDurationMs;
+      this.setImpact(projectile, impact, now);
       this.hooks.callHooks("client-projectiles-onImpact", this.toProps(projectile, now)).subscribe();
     }
     this.touch();
@@ -136,8 +142,22 @@ export class ProjectileManager {
       if (!projectile) {
         continue;
       }
+      if (destroyed.reason === "hit") {
+        const current = this.toProps(projectile, now);
+        this.setImpact(projectile, {
+          id: destroyed.id,
+          targetId: destroyed.targetId ?? projectile.impact?.targetId,
+          x: destroyed.x ?? projectile.impact?.x ?? current?.x ?? projectile.spawn.origin.x,
+          y: destroyed.y ?? projectile.impact?.y ?? current?.y ?? projectile.spawn.origin.y,
+          distance: destroyed.distance ?? projectile.impact?.distance ?? current?.distance,
+        }, now);
+      }
       projectile.destroyReason = destroyed.reason;
-      projectile.destroyAt = projectile.destroyAt ?? now;
+      projectile.destroyAt = projectile.destroyAt ?? (
+        projectile.impact && projectile.impactStartedAt !== undefined
+          ? projectile.impactStartedAt + this.impactDurationMs
+          : now
+      );
       this.hooks.callHooks("client-projectiles-onDestroy", this.toProps(projectile, now)).subscribe();
     }
     this.touch();
@@ -174,6 +194,9 @@ export class ProjectileManager {
     const progress = Math.min(1, distance / spawn.range);
     const x = projectile.impact?.x ?? spawn.origin.x + spawn.direction.x * distance;
     const y = projectile.impact?.y ?? spawn.origin.y + spawn.direction.y * distance;
+    const impactElapsedMs = projectile.impactStartedAt !== undefined
+      ? Math.max(0, now - projectile.impactStartedAt)
+      : undefined;
     return {
       ...spawn,
       x,
@@ -183,9 +206,20 @@ export class ProjectileManager {
       elapsed,
       progress,
       impact: projectile.impact,
+      impactElapsed: impactElapsedMs === undefined ? undefined : impactElapsedMs / 1000,
+      impactProgress: impactElapsedMs === undefined
+        ? undefined
+        : Math.min(1, impactElapsedMs / this.impactDurationMs),
       destroyed: projectile.destroyAt !== undefined,
       ttl,
     };
+  }
+
+  private setImpact(projectile: RuntimeProjectile, impact: ClientProjectileImpact, now: number): void {
+    projectile.impact = impact;
+    projectile.impactStartedAt = projectile.impactStartedAt ?? now;
+    const impactDestroyAt = projectile.impactStartedAt + this.impactDurationMs;
+    projectile.destroyAt = Math.max(projectile.destroyAt ?? 0, impactDestroyAt);
   }
 
   private touch(force = true): void {

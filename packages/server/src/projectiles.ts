@@ -105,6 +105,23 @@ interface PendingProjectile {
 
 type NetworkProjectile = Omit<ProjectileServerState, "payload">;
 
+interface NetworkProjectileImpact {
+  id: string;
+  targetId?: string;
+  x: number;
+  y: number;
+  distance: number;
+}
+
+interface NetworkProjectileDestroy {
+  id: string;
+  reason: string;
+  targetId?: string;
+  x?: number;
+  y?: number;
+  distance?: number;
+}
+
 function toPlainVector(vector: Vector2 | { x: number; y: number }): { x: number; y: number } {
   return { x: vector.x, y: vector.y };
 }
@@ -195,13 +212,23 @@ function toNetworkProjectile(projectile: ProjectileServerState): NetworkProjecti
   return network;
 }
 
+function toNetworkImpact(projectileId: string, hit: RaycastHit): NetworkProjectileImpact {
+  return {
+    id: projectileId,
+    targetId: hit.entity.uuid,
+    x: hit.point.x,
+    y: hit.point.y,
+    distance: hit.distance,
+  };
+}
+
 export class RpgMapProjectiles {
   private readonly system: ProjectileSystem;
   private readonly pending: PendingProjectile[] = [];
   private readonly runtime = new Map<string, ProjectileServerState>();
   private readonly spawnQueue: NetworkProjectile[] = [];
-  private readonly impactQueue: any[] = [];
-  private readonly destroyQueue: any[] = [];
+  private readonly impactQueue: NetworkProjectileImpact[] = [];
+  private readonly destroyQueue: NetworkProjectileDestroy[] = [];
 
   constructor(private readonly map: RpgMap) {
     this.system = new ProjectileSystem(map.physic);
@@ -395,13 +422,7 @@ export class RpgMapProjectiles {
 
   private handleHitState(projectile: ProjectileServerState, hit: RaycastHit): void {
     const target = this.map.getObjectById(hit.entity.uuid);
-    this.impactQueue.push({
-      id: projectile.id,
-      targetId: hit.entity.uuid,
-      x: hit.point.x,
-      y: hit.point.y,
-      distance: hit.distance,
-    });
+    this.impactQueue.push(toNetworkImpact(projectile.id, hit));
     this.callHook("server-projectiles-onImpact", {
       projectile,
       owner: projectile.ownerId ? this.map.getPlayer(projectile.ownerId) : undefined,
@@ -421,10 +442,14 @@ export class RpgMapProjectiles {
 
   private handleDestroyState(projectile: ProjectileServerState, reason: string, hit?: RaycastHit): void {
     this.runtime.delete(projectile.id);
-    this.destroyQueue.push({
+    const destroyed: NetworkProjectileDestroy = {
       id: projectile.id,
       reason,
-    });
+    };
+    if (hit) {
+      Object.assign(destroyed, toNetworkImpact(projectile.id, hit));
+    }
+    this.destroyQueue.push(destroyed);
     this.callHook("server-projectiles-onDestroy", {
       projectile,
       owner: projectile.ownerId ? this.map.getPlayer(projectile.ownerId) : undefined,

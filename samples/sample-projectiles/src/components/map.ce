@@ -22,23 +22,24 @@
   <Container>
     <EventLayerComponent />
   </Container>
+  <Container>
+    @if (hasPointerTarget()) {
+      <Container x={pointerTarget().x} y={pointerTarget().y} zIndex={1200}>
+        <Circle radius={7} color="#2563eb" alpha={0.16} />
+        <Circle radius={3} color="#2563eb" alpha={0.65} />
+        <Rect x={-10} y={-1} width={20} height={2} color="#2563eb" alpha={0.55} />
+        <Rect x={-1} y={-10} width={2} height={20} color="#2563eb" alpha={0.55} />
+      </Container>
+    }
+  </Container>
   <Rect
     width={640}
     height={420}
     color="#ffffff"
     alpha={0.001}
-    zIndex={1100}
     pointermove={trackPointer}
     pointerdown={shootAtPointer}
   />
-  @if (hasPointerTarget()) {
-    <Container x={pointerTarget().x} y={pointerTarget().y} zIndex={1200}>
-      <Circle radius={7} color="#2563eb" alpha={0.16} />
-      <Circle radius={3} color="#2563eb" alpha={0.65} />
-      <Rect x={-10} y={-1} width={20} height={2} color="#2563eb" alpha={0.55} />
-      <Rect x={-1} y={-10} width={2} height={20} color="#2563eb" alpha={0.55} />
-    </Container>
-  }
 </Container>
 
 <script>

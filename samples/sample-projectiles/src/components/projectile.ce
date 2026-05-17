@@ -1,23 +1,30 @@
 <Container x={x} y={y} rotation={angle} zIndex={1000}>
-  <Circle x={0} y={0} radius={8} color={color} />
-  <Rect x={-32} y={-3} width={28} height={6} color={trailColor} alpha={trailAlpha} />
-  @if (impact()) {
-    <Circle x={0} y={0} radius={impactRadius} color="#1d4ed8" alpha={0.45} />
-  }
+  <Graphics draw={drawProjectile} anchor={redrawAnchor} />
 </Container>
 
 <script>
-  import { computed, mount, effect } from "canvasengine";
+  import { computed } from "canvasengine";
 
   const {
     x,
     y,
     angle,
     progress,
+    impactProgress,
     params,
-    impact,
-    id
+    impact
   } = defineProps({
+    x: Number,
+    y: Number,
+    angle: Number,
+    progress: {
+      type: Number,
+      default: 0,
+    },
+    impactProgress: {
+      type: Number,
+      default: 0,
+    },
     params: {
       type: Object,
       default: () => ({}),
@@ -30,9 +37,32 @@
 
   const projectileParams = computed(() => params() ?? {});
   const progressValue = computed(() => progress() ?? 0);
+  const impactProgressValue = computed(() => impactProgress() ?? 0);
 
   const color = computed(() => projectileParams().color ?? "#ef4444");
   const trailColor = computed(() => projectileParams().trailColor ?? "#f97316");
-  const trailAlpha = computed(() => impact() ? 0 : Math.max(0.2, 1 - progressValue()));
-  const impactRadius = computed(() => 14 + progressValue() * 10);
+  const redrawAnchor = computed(() => [
+    impact() ? 1 : 0,
+    impact() ? impactProgressValue() : progressValue(),
+  ]);
+
+  function drawProjectile(g) {
+    const progress = progressValue();
+    if (impact()) {
+      const life = impactProgressValue();
+      g.circle(0, 0, 18 + life * 24);
+      g.fill({ color: 0x1d4ed8, alpha: Math.max(0, 0.45 * (1 - life)) });
+      g.circle(0, 0, 8 + life * 8);
+      g.fill({ color: 0x60a5fa, alpha: Math.max(0, 0.75 * (1 - life)) });
+      return;
+    }
+
+    g.circle(0, 0, 8);
+    g.fill(color());
+    g.rect(-32, -3, 28, 6);
+    g.fill({
+      color: trailColor(),
+      alpha: Math.max(0.2, 1 - progress),
+    });
+  }
 </script>

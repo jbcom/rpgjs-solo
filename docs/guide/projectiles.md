@@ -270,6 +270,7 @@ Projectile components receive predicted movement props from the client runtime.
     range,
     distance,
     progress,
+    impactProgress,
     elapsed,
     direction,
     params,
@@ -292,9 +293,12 @@ Common props:
 - `id`, `type`, `ownerId`
 - `x`, `y`, `origin`, `direction`, `angle`
 - `speed`, `range`, `ttl`, `distance`, `elapsed`, `progress`
+- `impactProgress` from `0` to `1` while the client keeps an impacted
+  projectile visible for its impact animation
 - `index`, `count` for repeated or patterned projectiles
 - `params` for visual customization
-- `impact` when the server confirms a collision
+- `impact` when the server confirms a collision. While `impact` is present,
+  `x`, `y`, and `distance` are pinned to the authoritative impact point.
 
 Do not apply damage in the component. Components are visual only; gameplay
 effects belong in server projectile hooks.

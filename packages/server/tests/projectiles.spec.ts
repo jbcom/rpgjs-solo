@@ -70,7 +70,19 @@ describe("RpgMapProjectiles", () => {
       },
     });
     expect(broadcasts[0].value.projectiles[0].payload).toBeUndefined();
-    expect(broadcasts.some((message) => message.type === "projectile:impactBatch")).toBe(true);
+    const impactMessage = broadcasts.find((message) => message.type === "projectile:impactBatch");
+    const destroyMessage = broadcasts.find((message) => message.type === "projectile:destroyBatch");
+    expect(impactMessage).toBeTruthy();
+    expect(destroyMessage).toBeTruthy();
+    const impact = impactMessage.value.impacts[0];
+    expect(destroyMessage.value.projectiles[0]).toMatchObject({
+      id: impact.id,
+      reason: "hit",
+      targetId: impact.targetId,
+      x: impact.x,
+      y: impact.y,
+      distance: impact.distance,
+    });
     expect(onImpact).toHaveBeenCalledWith(expect.objectContaining({
       projectile: expect.objectContaining({
         type: "arrow",
