@@ -6,6 +6,7 @@ import {
   ProjectileMovement,
   ProjectileType,
   RpgCommonMap,
+  Control,
   Direction,
   RpgCommonPlayer,
   RpgShape,
@@ -1116,25 +1117,30 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   @Action('action')
   onAction(player: RpgPlayer, action: any) {
-    const direction =
-      typeof player.getDirection === "function"
-        ? player.getDirection()
-        : typeof player.direction === "function"
-          ? player.direction()
-          : undefined;
-    const collisions = new Set<string>((this as any).getCollisions(player.id));
-    const interactionCollisions = (this as any).getInteractionCollisions?.(player.id, direction);
-    if (Array.isArray(interactionCollisions)) {
-      interactionCollisions.forEach(id => collisions.add(id));
-    }
+    const actionName = action?.action ?? action?.input ?? action;
+    const isDefaultAction = actionName === Control.Action || actionName === "action";
 
-    const events = Array.from(collisions)
-      .map(id => this.getEvent<RpgEvent>(id))
-      .filter((event): event is RpgEvent => !!event && this.isEventVisibleForPlayer(event, player));
-    if (events.length > 0) {
-      events.forEach(event => {
-        event.execMethod('onAction', [player, action]);
-      });
+    if (isDefaultAction) {
+      const direction =
+        typeof player.getDirection === "function"
+          ? player.getDirection()
+          : typeof player.direction === "function"
+            ? player.direction()
+            : undefined;
+      const collisions = new Set<string>((this as any).getCollisions(player.id));
+      const interactionCollisions = (this as any).getInteractionCollisions?.(player.id, direction);
+      if (Array.isArray(interactionCollisions)) {
+        interactionCollisions.forEach(id => collisions.add(id));
+      }
+
+      const events = Array.from(collisions)
+        .map(id => this.getEvent<RpgEvent>(id))
+        .filter((event): event is RpgEvent => !!event && this.isEventVisibleForPlayer(event, player));
+      if (events.length > 0) {
+        events.forEach(event => {
+          event.execMethod('onAction', [player, action]);
+        });
+      }
     }
     player.execMethod('onInput', [action]);
   }

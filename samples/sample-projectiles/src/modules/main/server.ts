@@ -2,6 +2,11 @@ import { Control, Direction, defineModule } from "@rpgjs/common";
 import type { EventDefinition, RpgPlayerHooks, RpgServer } from "@rpgjs/server";
 import { Components, MAXHP, RpgPlayer } from "@rpgjs/server";
 
+const MAP_WIDTH = 640;
+const MAP_HEIGHT = 420;
+const PROJECTILE_OFFSET = 34;
+const MIN_TARGET_DISTANCE = 4;
+
 function directionVector(direction: Direction): { x: number; y: number } {
   switch (direction) {
     case Direction.Up:
@@ -17,17 +22,70 @@ function directionVector(direction: Direction): { x: number; y: number } {
   }
 }
 
-function projectileOrigin(player: RpgPlayer, direction: Direction): { x: number; y: number } {
+function normalizeVector(vector: { x: number; y: number }): { x: number; y: number } | null {
+  const length = Math.hypot(vector.x, vector.y);
+  if (!Number.isFinite(length) || length < MIN_TARGET_DISTANCE) {
+    return null;
+  }
+  return {
+    x: vector.x / length,
+    y: vector.y / length,
+  };
+}
+
+function playerCenter(player: RpgPlayer): { x: number; y: number } {
   const hitbox = player.hitbox();
-  const vector = directionVector(direction);
-  const center = {
+  return {
     x: player.x() + hitbox.w / 2,
     y: player.y() + hitbox.h / 2,
   };
+}
+
+function projectileOrigin(player: RpgPlayer, vector: { x: number; y: number }): { x: number; y: number } {
+  const center = playerCenter(player);
   return {
-    x: center.x + vector.x * 34,
-    y: center.y + vector.y * 34,
+    x: center.x + vector.x * PROJECTILE_OFFSET,
+    y: center.y + vector.y * PROJECTILE_OFFSET,
   };
+}
+
+function resolveMouseTarget(input: any): { x: number; y: number } | null {
+  const target = input?.data?.target;
+  if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) {
+    return null;
+  }
+  return {
+    x: Math.max(0, Math.min(MAP_WIDTH, target.x)),
+    y: Math.max(0, Math.min(MAP_HEIGHT, target.y)),
+  };
+}
+
+function shootBolt(player: RpgPlayer, direction: Direction | { x: number; y: number }) {
+  const vector = typeof direction === "object" ? direction : directionVector(direction);
+  player.projectiles.emit({
+    type: "bolt",
+    origin: projectileOrigin(player, vector),
+    direction: vector,
+    trajectory: {
+      type: "linear",
+      speed: 260,
+      range: 620,
+      ttl: 2.4,
+    },
+    collision: {
+      ignoreOwner: true,
+    },
+    payload: {
+      damage: 10,
+    },
+    params: {
+      color: "#ef4444",
+      trailColor: "#f97316",
+    },
+    canHit({ target }) {
+      return target?.id === "target";
+    },
+  });
 }
 
 function Target(): EventDefinition {
@@ -62,35 +120,32 @@ const player: RpgPlayerHooks = {
 
   onInput(player: RpgPlayer, input) {
     const action = input?.action ?? input?.input ?? input;
+
+    console.log(input)
+
+    if (action === "projectile:shoot") {
+      const target = resolveMouseTarget(input);
+      if (!target) {
+        return;
+      }
+      const center = playerCenter(player);
+      const direction = normalizeVector({
+        x: target.x - center.x,
+        y: target.y - center.y,
+      });
+      if (!direction) {
+        return;
+      }
+      shootBolt(player, direction);
+      return;
+    }
+
     if (action !== Control.Action && action !== "action") {
       return;
     }
 
     const direction = player.getDirection() ?? Direction.Right;
-    player.projectiles.emit({
-      type: "bolt",
-      origin: projectileOrigin(player, direction),
-      direction,
-      trajectory: {
-        type: "linear",
-        speed: 260,
-        range: 620,
-        ttl: 2.4,
-      },
-      collision: {
-        ignoreOwner: true,
-      },
-      payload: {
-        damage: 10,
-      },
-      params: {
-        color: "#ef4444",
-        trailColor: "#f97316",
-      },
-      canHit({ target }) {
-        return target?.id === "target";
-      },
-    });
+    shootBolt(player, direction);
   },
 };
 

@@ -2,7 +2,7 @@ import { ComponentFunction, Signal } from 'canvasengine'
 import { RpgClientEngine } from './RpgClientEngine'
 import { Loader, Container } from 'pixi.js'
 import { RpgClientObject } from './Game/Object'
-import { type MapPhysicsEntityContext, type MapPhysicsInitContext } from '@rpgjs/common'
+import { type MapPhysicsEntityContext, type MapPhysicsInitContext, type RpgActionName } from '@rpgjs/common'
 import type {
     ClientProjectileSpawn,
     RenderedProjectileProps,
@@ -50,10 +50,10 @@ export interface RpgClientEngineHooks {
     /**
      * Recover keys from the pressed keyboard
      * 
-     * @prop { (engine: RpgClientEngine, obj: { input: string, playerId: number }) => any } [onInput]
+     * @prop { (engine: RpgClientEngine, obj: { input: string | number, action?: string | number, data?: any, playerId: number }) => any } [onInput]
      * @memberof RpgEngineHooks
      */
-    onInput?: (engine: RpgClientEngine, obj: { input: string, playerId: number }) => any
+    onInput?: (engine: RpgClientEngine, obj: { input: RpgActionName, action?: RpgActionName, data?: any, playerId: number }) => any
 
     /**
      * Called when the user is connected to the server

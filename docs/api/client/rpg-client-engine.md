@@ -22,6 +22,7 @@ Reference for the `RpgClientEngine` class.
 - [getSpriteSheet](#getspritesheet)
 - [mapShakeTrigger](#mapshaketrigger)
 - [playSound](#playsound)
+- [processAction](#processaction)
 - [setCameraFollow](#setcamerafollow)
 - [setKeyboardControls](#setkeyboardcontrols)
 - [setSoundResolver](#setsoundresolver)
@@ -518,6 +519,53 @@ engine.playSound('background-music', { volume: 0.5, loop: true });
 
 // Play a sound asynchronously (when resolver returns Promise)
 await engine.playSound('dynamic-sound', { volume: 0.8 });
+```
+
+## processAction
+
+Send an action input to the server. Use the optional `data` payload for context
+such as a pointer position, selected target, or UI command details. The server
+receives the normalized payload in `player.onInput()`.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+processAction(action: string | number, data?: any): void
+processAction(input: { action: string | number, data?: any }): void
+```
+
+### Parameters
+
+- `action`: Action name or control value
+- `data?`: Optional custom payload sent with the action
+
+### Examples
+
+```ts
+// Existing simple action
+engine.processAction('action')
+
+// Action with custom context
+engine.processAction('projectile:shoot', {
+  target: { x: 320, y: 180 },
+  source: 'map-click'
+})
+```
+
+On the server:
+
+```ts
+const player = {
+  onInput(player, input) {
+    if (input.action === 'projectile:shoot') {
+      const target = input.data?.target
+    }
+  }
+}
 ```
 
 ## setCameraFollow

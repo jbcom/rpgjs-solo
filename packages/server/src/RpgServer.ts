@@ -195,7 +195,7 @@ export interface RpgPlayerHooks {
     /**
     *  When the player presses a key on the client side
     * 
-    * @prop { (player: RpgPlayer, data: { input: Direction | Control | string, moving: boolean }) => any } [onInput]
+    * @prop { (player: RpgPlayer, data: { input?: Direction | Control | string, action?: Direction | Control | string, data?: any, moving?: boolean }) => any } [onInput]
     * @memberof RpgPlayerHooks
     */
     onInput?: (player: RpgPlayer, data: any) => any

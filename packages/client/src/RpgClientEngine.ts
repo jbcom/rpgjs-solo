@@ -22,11 +22,14 @@ import {
   PredictionController,
   type PredictionHistoryEntry,
   type PredictionState,
+  type RpgActionInput,
+  type RpgActionName,
 } from "@rpgjs/common";
 import { NotificationManager } from "./Gui/NotificationManager";
 import { SaveClientService } from "./services/save";
 import { getCanMoveValue } from "./utils/readPropValue";
 import { ProjectileManager } from "./Game/ProjectileManager";
+import { normalizeActionInput } from "./services/actionInput";
 
 interface MovementTrajectoryPoint {
   frame: number;
@@ -1337,7 +1340,9 @@ export class RpgClientEngine<T = any> {
     this.lastInputTime = Date.now();
   }
 
-  processAction({ action }: { action: number }) {
+  processAction(action: RpgActionName, data?: any): void;
+  processAction(action: RpgActionInput): void;
+  processAction(action: RpgActionName | RpgActionInput, data?: any): void {
     if (this.stopProcessingInput) return;
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
     const canMove =
@@ -1345,8 +1350,15 @@ export class RpgClientEngine<T = any> {
       getCanMoveValue(currentPlayer);
     if (!canMove) return;
 
-    this.hooks.callHooks("client-engine-onInput", this, { input: 'action', playerId: this.playerId }).subscribe();
-    this.webSocket.emit('action', { action })
+    const payload = normalizeActionInput(action as any, data);
+
+    this.hooks.callHooks("client-engine-onInput", this, {
+      input: payload.action,
+      action: payload.action,
+      data: payload.data,
+      playerId: this.playerId,
+    }).subscribe();
+    this.webSocket.emit('action', payload)
   }
 
   get PIXI() {

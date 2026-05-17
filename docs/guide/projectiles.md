@@ -66,6 +66,72 @@ map.projectiles.emit({
 })
 ```
 
+## Shoot Toward The Pointer
+
+Projectiles can also use a direction vector. For pointer-based attacks, send the
+target position through the normal action input flow, then validate and resolve
+the shot on the server.
+
+```ts
+// client map component
+client.processAction('projectile:shoot', {
+  source: 'map-click',
+  target: { x, y }
+})
+```
+
+```ts
+// server player hook
+import type { RpgPlayerHooks } from '@rpgjs/server'
+
+function normalize(vector: { x: number, y: number }) {
+  const length = Math.hypot(vector.x, vector.y)
+  if (!Number.isFinite(length) || length <= 0) return null
+  return { x: vector.x / length, y: vector.y / length }
+}
+
+export const player: RpgPlayerHooks = {
+  onInput(player, input) {
+    if (input?.action !== 'projectile:shoot') return
+
+    const target = input.data?.target
+    if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) {
+      return
+    }
+
+    const hitbox = player.hitbox()
+    const origin = {
+      x: player.x() + hitbox.w / 2,
+      y: player.y() + hitbox.h / 2
+    }
+    const direction = normalize({
+      x: target.x - origin.x,
+      y: target.y - origin.y
+    })
+    if (!direction) return
+
+    player.projectiles.emit({
+      type: 'fireball',
+      origin,
+      direction,
+      trajectory: {
+        type: 'linear',
+        speed: 420,
+        range: 600
+      },
+      payload: {
+        damage: 20
+      }
+    })
+  }
+}
+```
+
+This same input shape can be reused for future map or event interactions, for
+example `map:click` with a world position or `event:click` with an event id. The
+client sends intent and context; the server still owns validation, collisions,
+damage, and impacts.
+
 ## Repeats And Patterns
 
 Use `repeat` for a compact burst. The server broadcasts one spawn batch with

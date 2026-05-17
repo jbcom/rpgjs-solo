@@ -99,17 +99,21 @@ const engine: RpgClientEngineHooks = {
 
 ### onInput
 
-**Description:** Called when keyboard input is detected
+**Description:** Called when movement or action input is detected
 
 **Parameters:**
 - `engine: RpgClientEngine` - The client engine instance
-- `obj: { input: string, playerId: number }` - Input data
+- `obj: { input: string | number, action?: string | number, data?: any, playerId: number }` - Input data
 
 **Example:**
 ```ts
 const engine: RpgClientEngineHooks = {
-    onInput(engine: RpgClientEngine, { input, playerId }) {
+    onInput(engine: RpgClientEngine, { input, data, playerId }) {
         console.log(`Input received: ${input} from player ${playerId}`)
+
+        if (input === 'projectile:shoot') {
+            console.log(data?.target)
+        }
         
         // Handle custom key bindings
         switch (input) {

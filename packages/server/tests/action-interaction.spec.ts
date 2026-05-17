@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { testing, TestingFixture } from "@rpgjs/testing";
 import { Control, createModule, defineModule, Direction } from "@rpgjs/common";
 import { RpgClient } from "../../client/src";
@@ -93,5 +93,40 @@ describe("Action interactions", () => {
     await fixture.wait(0);
 
     expect(actionCount).toBe(0);
+  });
+
+  test("dispatches custom action payloads to onInput without triggering event actions", async () => {
+    const map = player.getCurrentMap() as any;
+    const hitbox = player.hitbox();
+
+    await map.createDynamicEvent({
+      id: "front-event",
+      x: player.x(),
+      y: player.y() + hitbox.h + 2,
+      event: {
+        onAction() {
+          actionCount += 1;
+        },
+      },
+    });
+    await fixture.nextTick();
+
+    player.changeDirection(Direction.Down);
+
+    const payload = {
+      action: "projectile:shoot",
+      data: {
+        target: { x: 320, y: 180 },
+      },
+    };
+    const execMethod = vi.spyOn(player as any, "execMethod");
+
+    map.onAction(player, payload);
+    await fixture.wait(0);
+
+    expect(actionCount).toBe(0);
+    expect(execMethod).toHaveBeenCalledWith("onInput", [payload]);
+
+    execMethod.mockRestore();
   });
 });
