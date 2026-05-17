@@ -41,6 +41,7 @@ import { BaseRoom } from "./BaseRoom";
 import { buildSaveSlotMeta, resolveSaveStorageStrategy } from "../services/save";
 import { Log } from "../logs/log";
 import { isMapUpdateAuthorized, MAP_UPDATE_TOKEN_ENV, MAP_UPDATE_TOKEN_HEADER } from "../node/map";
+import { RpgMapProjectiles } from "../projectiles";
 
 function isRpgLog(error: unknown): error is Log {
   return error instanceof Log
@@ -339,6 +340,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   private _eventOwnerById: Map<string, string> = new Map();
   /** Runtime registry of spawned scenario event ids by player id */
   private _scenarioEventIdsByPlayer: Map<string, Set<string>> = new Map();
+  projectiles = new RpgMapProjectiles(this);
 
   autoSync: boolean = true;
 
@@ -382,6 +384,28 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   protected emitPhysicsReset(): void {
     this.hooks.callHooks("server-map-onPhysicsReset", this).subscribe();
+  }
+
+  protected runFixedTicks(
+    deltaMs: number,
+    hooks?: {
+      beforeStep?: () => void;
+      afterStep?: (tick: number) => void;
+    },
+  ): number {
+    const fixedStep = this.physic.getWorld().getTimeStep();
+    return super.runFixedTicks(deltaMs, {
+      beforeStep: hooks?.beforeStep,
+      afterStep: (tick) => {
+        hooks?.afterStep?.(tick);
+        this.projectiles.step(fixedStep);
+      },
+    });
+  }
+
+  clearPhysic(): void {
+    super.clearPhysic();
+    this.projectiles.clear();
   }
 
   private isPositiveNumber(value: unknown): value is number {

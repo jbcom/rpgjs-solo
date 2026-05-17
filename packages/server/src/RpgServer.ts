@@ -5,6 +5,11 @@ import { RpgServerEngine } from "./RpgServerEngine"
 import { WorldMapConfig, RpgShape, type MapPhysicsInitContext, type MapPhysicsEntityContext } from "@rpgjs/common"
 import { RpgEvent } from "./Player/Player"
 import type { SkillChangePayload } from "./Player/SkillManager"
+import type {
+    ProjectileDestroyHookContext,
+    ProjectileHookContext,
+    ProjectileImpactHookContext,
+} from "./projectiles"
 
 type RpgClassMap<T> = new () => T
 type RpgClassEvent<T> = RpgEvent
@@ -632,6 +637,25 @@ export interface RpgMapHooks {
     onPhysicsReset?: (map: RpgMap) => any
 }
 
+export interface RpgProjectileHooks {
+    /**
+     * Called when a projectile is emitted by `map.projectiles.emit()` or
+     * `player.projectiles.emit()`.
+     */
+    onEmit?: (context: ProjectileHookContext) => any
+
+    /**
+     * Called when the authoritative server projectile hits an entity or obstacle.
+     */
+    onImpact?: (context: ProjectileImpactHookContext) => any
+
+    /**
+     * Called when a projectile is destroyed because it hit something, reached its
+     * range, expired, or was removed manually.
+     */
+    onDestroy?: (context: ProjectileDestroyHookContext) => any
+}
+
 export interface RpgServer {
     /**
      * Add hooks to the player or engine. All modules can listen to the hook
@@ -858,6 +882,14 @@ export interface RpgServer {
      * @since 4.0.0
      * */
     map?: RpgMapHooks
+
+    /**
+     * Global projectile hooks.
+     *
+     * Use these hooks to apply gameplay effects from server-authoritative
+     * projectiles without syncing projectile positions every tick.
+     */
+    projectiles?: RpgProjectileHooks
 
     event?: RpgEventHooks
 

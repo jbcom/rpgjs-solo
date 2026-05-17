@@ -13,6 +13,12 @@
     </Container>
   }
 
+  <Container sortableChildren={true}>
+    @for (projectile of projectiles()) {
+      <projectile.component ...projectile.props />
+    }
+  </Container>
+
   @if (weatherProps()) {
     <Weather ...weatherProps() />
   }
@@ -26,6 +32,7 @@
 
     const engine = inject(RpgClientEngine);
     const componentAnimations = engine.componentAnimations
+    const projectiles = engine.projectiles.current
     const map = engine.sceneMap?.data
     const sceneComponent = computed(() => map()?.component)
     const mapParams = map()?.params

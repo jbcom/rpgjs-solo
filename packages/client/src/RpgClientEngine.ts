@@ -26,6 +26,7 @@ import {
 import { NotificationManager } from "./Gui/NotificationManager";
 import { SaveClientService } from "./services/save";
 import { getCanMoveValue } from "./utils/readPropValue";
+import { ProjectileManager } from "./Game/ProjectileManager";
 
 interface MovementTrajectoryPoint {
   frame: number;
@@ -63,6 +64,7 @@ export class RpgClientEngine<T = any> {
   spritesheets: Map<string | number, any> = new Map();
   sounds: Map<string, any> = new Map();
   componentAnimations: any[] = [];
+  projectiles: ProjectileManager;
   private spritesheetResolver?: (id: string | number) => any | Promise<any>;
   private soundResolver?: (id: string) => any | Promise<any>;
   particleSettings: {
@@ -120,6 +122,7 @@ export class RpgClientEngine<T = any> {
     this.guiService = inject(RpgGui);
     this.loadMapService = inject(LoadMapToken);
     this.hooks = inject<Hooks>(ModulesToken);
+    this.projectiles = new ProjectileManager(this.hooks);
     this.globalConfig = inject(GlobalConfigToken)
 
     if (!this.globalConfig) {
@@ -230,6 +233,7 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-gui-load", this).subscribe();
     this.hooks.callHooks("client-particles-load", this).subscribe();
     this.hooks.callHooks("client-componentAnimations-load", this).subscribe();
+    this.hooks.callHooks("client-projectiles-load", this).subscribe();
     this.hooks.callHooks("client-sprite-load", this).subscribe();
 
     await lastValueFrom(this.hooks.callHooks("client-engine-onStart", this));
@@ -242,6 +246,7 @@ export class RpgClientEngine<T = any> {
 
     const tickSubscription = this.tick.subscribe((tick) => {
       this.stepClientPhysicsTick();
+      this.projectiles.step();
       this.flushPendingPredictedStates();
       this.flushPendingMovePath();
       this.hooks.callHooks("client-engine-onStep", this, tick).subscribe();
@@ -380,6 +385,7 @@ export class RpgClientEngine<T = any> {
     this.webSocket.on("changeMap", (data) => {
       this.sceneResetQueued = true;
       this.sceneMap.clearLightSpots();
+      this.projectiles.clear();
       // Reset camera follow to default (follow current player) when changing maps
       this.cameraFollowTargetId.set(null);
       const transferToken = typeof data?.transferToken === "string" ? data.transferToken : undefined;
@@ -393,6 +399,22 @@ export class RpgClientEngine<T = any> {
       }
       const player = object ? this.sceneMap.getObjectById(object) : undefined;
       this.getComponentAnimation(id).displayEffect(params, player || position)
+    });
+
+    this.webSocket.on("projectile:spawnBatch", (data) => {
+      this.projectiles.spawnBatch(data?.projectiles ?? []);
+    });
+
+    this.webSocket.on("projectile:impactBatch", (data) => {
+      this.projectiles.impactBatch(data?.impacts ?? []);
+    });
+
+    this.webSocket.on("projectile:destroyBatch", (data) => {
+      this.projectiles.destroyBatch(data?.projectiles ?? []);
+    });
+
+    this.webSocket.on("projectile:clear", () => {
+      this.projectiles.clear();
     });
 
     this.webSocket.on("notification", (data) => {
@@ -1155,6 +1177,14 @@ export class RpgClientEngine<T = any> {
    */
   getSpriteComponent(id: string) {
     return this.spriteComponents.get(id);
+  }
+
+  registerProjectileComponent(type: string, component: any) {
+    return this.projectiles.register(type, component);
+  }
+
+  getProjectileComponent(type: string) {
+    return this.projectiles.get(type);
   }
 
   /**

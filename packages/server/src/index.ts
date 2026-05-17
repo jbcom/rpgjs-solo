@@ -12,6 +12,7 @@ export * from "@signe/reactive";
 export * from "./Gui";
 export * from "./services/save";
 export * from "./storage";
+export * from "./projectiles";
 export { RpgShape, RpgModule, MAXHP, MAXSP, ATK, PDEF, SDEF, STR, AGI, INT, DEX } from "@rpgjs/common";
 export { Control } from "@rpgjs/common";
 export * from "./decorators/event";

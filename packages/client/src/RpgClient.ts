@@ -3,6 +3,10 @@ import { RpgClientEngine } from './RpgClientEngine'
 import { Loader, Container } from 'pixi.js'
 import { RpgClientObject } from './Game/Object'
 import { type MapPhysicsEntityContext, type MapPhysicsInitContext } from '@rpgjs/common'
+import type {
+    ClientProjectileSpawn,
+    RenderedProjectileProps,
+} from './Game/ProjectileManager'
 
 type RpgClass<T = any> = new (...args: any[]) => T
 type RpgComponent = RpgClientObject
@@ -287,6 +291,28 @@ export interface RpgSceneMapHooks extends RpgSceneHooks<SceneMap> {
      * @memberof RpgSceneMapHooks
      */
     onPhysicsReset?: (scene: SceneMap) => any
+}
+
+export interface RpgProjectileHooks {
+    /**
+     * CanvasEngine components used to render server-authoritative projectiles.
+     */
+    components?: Record<string, ComponentFunction>
+
+    /**
+     * Called when a projectile spawn batch is received from the server.
+     */
+    onSpawn?: (projectile: ClientProjectileSpawn) => any
+
+    /**
+     * Called when the server confirms a projectile impact.
+     */
+    onImpact?: (projectile: RenderedProjectileProps | null) => any
+
+    /**
+     * Called when the server destroys a projectile.
+     */
+    onDestroy?: (projectile: RenderedProjectileProps | null) => any
 }
 
 export interface RpgClient {
@@ -681,4 +707,12 @@ export interface RpgClient {
         id: string,
         component: ComponentFunction
     }[]
+
+    /**
+     * Client-side projectile rendering configuration.
+     *
+     * Register a CanvasEngine component per projectile type. The server sends
+     * compact spawn/impact/destroy events and the client predicts x/y locally.
+     */
+    projectiles?: RpgProjectileHooks
 }

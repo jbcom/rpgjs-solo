@@ -45,6 +45,7 @@ import {
   type SaveSlotIndex,
 } from "../services/save";
 import type { SaveSlotMeta } from "@rpgjs/common";
+import { RpgPlayerProjectiles } from "../projectiles";
 
 /**
  * Combines multiple RpgCommonPlayer mixins into one
@@ -102,6 +103,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   conn: Parameters<RpgMap["$send"]>[0] | null = null;
   touchSide: boolean = false; // Protection against map change loops
   private _clientListeners = new Map<string, Set<(data: any) => void | Promise<void>>>();
+  private _projectiles?: RpgPlayerProjectiles;
 
   /**
    * Computed signal for world X position
@@ -299,6 +301,13 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   // compatibility with v4
   get server() {
     return this.map
+  }
+
+  get projectiles() {
+    if (!this._projectiles) {
+      this._projectiles = new RpgPlayerProjectiles(this);
+    }
+    return this._projectiles;
   }
 
   setMap(map: RpgMap) {

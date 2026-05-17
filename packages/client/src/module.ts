@@ -155,6 +155,19 @@ export function provideClientModules(modules: RpgClientModule[]): FactoryProvide
           },
         };
       }
+      if (module.projectiles) {
+        const projectiles = { ...module.projectiles };
+        module.projectiles = {
+          ...projectiles,
+          load: (engine: RpgClientEngine) => {
+            if (projectiles.components) {
+              Object.entries(projectiles.components).forEach(([type, component]) => {
+                engine.registerProjectileComponent(type, component);
+              });
+            }
+          },
+        };
+      }
       if (module.transitions) {
         const transitions = [...module.transitions];
         module.transitions = {
