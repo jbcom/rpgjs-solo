@@ -4,5 +4,6 @@ packages:
 verifyDepsBeforeRun: false
 allowBuilds:
   esbuild: true
+  sharp: true
   workerd: true
   ws: true

@@ -193,8 +193,16 @@ function getOwnerDirection(owner?: RpgPlayer): Direction | undefined {
     : owner.direction?.();
 }
 
-function toNetworkProjectile(projectile: ProjectileServerState): NetworkProjectile {
-  const network: NetworkProjectile = {
+function toNetworkProjectile(projectile: ProjectileServerState, config?: PendingProjectile["config"]): NetworkProjectile & {
+  collisionMask?: number;
+  ignoreOwner?: boolean;
+  predictImpact?: boolean;
+} {
+  const network: NetworkProjectile & {
+    collisionMask?: number;
+    ignoreOwner?: boolean;
+    predictImpact?: boolean;
+  } = {
     id: projectile.id,
     type: projectile.type,
     origin: projectile.origin,
@@ -209,6 +217,9 @@ function toNetworkProjectile(projectile: ProjectileServerState): NetworkProjecti
   };
   if (projectile.ownerId !== undefined) network.ownerId = projectile.ownerId;
   if (projectile.params !== undefined) network.params = projectile.params;
+  if (config?.collisionMask !== undefined) network.collisionMask = config.collisionMask;
+  if (config?.ignoreOwner !== undefined) network.ignoreOwner = config.ignoreOwner;
+  if (config?.canHit) network.predictImpact = false;
   return network;
 }
 
@@ -231,7 +242,7 @@ export class RpgMapProjectiles {
   private readonly destroyQueue: NetworkProjectileDestroy[] = [];
 
   constructor(private readonly map: RpgMap) {
-    this.system = new ProjectileSystem(map.physic);
+    this.system = new ProjectileSystem((map as any).physic);
     this.system.onHit(({ projectile, hit }) => this.handleHit(projectile, hit));
     this.system.onDestroy(({ projectile, reason, hit }) => this.handleDestroy(projectile, reason, hit));
   }
@@ -249,7 +260,7 @@ export class RpgMapProjectiles {
         remainingDelay: state.delay,
       };
       this.runtime.set(state.id, state);
-      this.spawnQueue.push(toNetworkProjectile(state));
+      this.spawnQueue.push(toNetworkProjectile(state, pending.config));
       this.callHook("server-projectiles-onEmit", {
         projectile: state,
         owner,
@@ -312,7 +323,7 @@ export class RpgMapProjectiles {
       const direction = this.resolveIndexedDirection(baseDirection, options, index, count, random);
       const id = options.id && count === 1
         ? options.id
-        : `${options.id ?? options.type}-${this.map.getTick()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+        : `${options.id ?? options.type}-${(this.map as any).getTick()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
       const speed = trajectory.type === "instant" ? Number.MAX_SAFE_INTEGER : trajectory.speed;
       const ttl = trajectory.type === "instant" ? 0.1 : trajectory.ttl ?? trajectory.range / trajectory.speed;
       return {
@@ -324,7 +335,7 @@ export class RpgMapProjectiles {
         speed,
         range: trajectory.range,
         ttl,
-        spawnTick: this.map.getTick(),
+        spawnTick: (this.map as any).getTick(),
         delay: interval * index,
         index,
         count,
@@ -382,7 +393,7 @@ export class RpgMapProjectiles {
 
   private spawnInstant(pending: PendingProjectile): void {
     const projectile = pending.state;
-    const hit = this.map.physic.raycast(
+    const hit = (this.map as any).physic.raycast(
       new Vector2(projectile.origin.x, projectile.origin.y),
       new Vector2(projectile.direction.x, projectile.direction.y),
       projectile.range,
@@ -402,10 +413,10 @@ export class RpgMapProjectiles {
     if (!pending.config.canHit) {
       return true;
     }
-    const target = this.map.getObjectById(entity.uuid);
+    const target = (this.map as any).getObjectById(entity.uuid);
     return pending.config.canHit({
       projectile,
-      owner: projectile.ownerId ? this.map.getPlayer(projectile.ownerId) : undefined,
+      owner: projectile.ownerId ? (this.map as any).getPlayer(projectile.ownerId) : undefined,
       target,
       entity,
       map: this.map,
@@ -421,11 +432,11 @@ export class RpgMapProjectiles {
   }
 
   private handleHitState(projectile: ProjectileServerState, hit: RaycastHit): void {
-    const target = this.map.getObjectById(hit.entity.uuid);
+    const target = (this.map as any).getObjectById(hit.entity.uuid);
     this.impactQueue.push(toNetworkImpact(projectile.id, hit));
     this.callHook("server-projectiles-onImpact", {
       projectile,
-      owner: projectile.ownerId ? this.map.getPlayer(projectile.ownerId) : undefined,
+      owner: projectile.ownerId ? (this.map as any).getPlayer(projectile.ownerId) : undefined,
       target,
       hit,
       map: this.map,
@@ -452,7 +463,7 @@ export class RpgMapProjectiles {
     this.destroyQueue.push(destroyed);
     this.callHook("server-projectiles-onDestroy", {
       projectile,
-      owner: projectile.ownerId ? this.map.getPlayer(projectile.ownerId) : undefined,
+      owner: projectile.ownerId ? (this.map as any).getPlayer(projectile.ownerId) : undefined,
       reason,
       hit,
       map: this.map,

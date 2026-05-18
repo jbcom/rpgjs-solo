@@ -98,6 +98,8 @@ export class RpgClientEngine<T = any> {
   private pendingPredictionFrames: number[] = [];
   private lastClientPhysicsStepAt = 0;
   private frameOffset = 0;
+  private latestServerTick?: number;
+  private latestServerTickAt = 0;
   // Ping/Pong for RTT measurement
   private rtt: number = 0; // Round-trip time in ms
   private pingInterval: any = null;
@@ -379,6 +381,7 @@ export class RpgClientEngine<T = any> {
       // This helps us estimate which server tick corresponds to each client input frame
       const estimatedTicksInFlight = Math.floor(this.rtt / 2 / (1000 / 60)); // Estimate ticks during half RTT
       const estimatedServerTickNow = data.serverTick + estimatedTicksInFlight;
+      this.updateServerTickEstimate(estimatedServerTickNow, now);
 
       // Update frame offset (only if we have inputs to calibrate with)
       if (this.inputFrameCounter > 0) {
@@ -408,7 +411,10 @@ export class RpgClientEngine<T = any> {
     });
 
     this.webSocket.on("projectile:spawnBatch", (data) => {
-      this.projectiles.spawnBatch(data?.projectiles ?? []);
+      this.projectiles.spawnBatch(data?.projectiles ?? [], {
+        currentServerTick: this.estimateServerTick(),
+        tickDurationMs: this.getPhysicsTickDurationMs(),
+      });
     });
 
     this.webSocket.on("projectile:impactBatch", (data) => {
@@ -1381,11 +1387,37 @@ export class RpgClientEngine<T = any> {
   }
 
   private getPhysicsTick(): number {
-    return this.sceneMap?.getTick?.() ?? 0;
+    return (this.sceneMap as any)?.getTick?.() ?? 0;
+  }
+
+  private getPhysicsTickDurationMs(): number {
+    const timeStep = (this.sceneMap as any)?.physic?.getWorld?.()?.getTimeStep?.();
+    return typeof timeStep === "number" && Number.isFinite(timeStep) && timeStep > 0
+      ? timeStep * 1000
+      : 1000 / 60;
+  }
+
+  private updateServerTickEstimate(serverTick: number | undefined, now = Date.now()): void {
+    if (typeof serverTick !== "number" || !Number.isFinite(serverTick)) {
+      return;
+    }
+    this.latestServerTick = serverTick;
+    this.latestServerTickAt = now;
+  }
+
+  private estimateServerTick(now = Date.now()): number | undefined {
+    if (typeof this.latestServerTick !== "number" || this.latestServerTickAt <= 0) {
+      return undefined;
+    }
+    const elapsedTicks = Math.max(0, (now - this.latestServerTickAt) / this.getPhysicsTickDurationMs());
+    return this.latestServerTick + elapsedTicks;
   }
 
   private predictProjectileImpact(projectile: ClientProjectileSpawn): ClientProjectileImpact | null {
-    const sceneMap = this.sceneMap;
+    if (projectile.predictImpact === false) {
+      return null;
+    }
+    const sceneMap = this.sceneMap as any;
     if (!sceneMap?.physic || !Number.isFinite(projectile.range) || projectile.range <= 0) {
       return null;
     }
@@ -1407,8 +1439,8 @@ export class RpgClientEngine<T = any> {
       new Vector2(origin.x, origin.y),
       new Vector2(direction.x, direction.y),
       projectile.range,
-      undefined,
-      (entity) => !projectile.ownerId || entity.uuid !== projectile.ownerId,
+      projectile.collisionMask,
+      (entity) => projectile.ignoreOwner === false || !projectile.ownerId || entity.uuid !== projectile.ownerId,
     );
     if (!hit) {
       return null;
@@ -1769,6 +1801,7 @@ export class RpgClientEngine<T = any> {
   }
 
   private applyServerAck(ack: { frame: number; serverTick?: number; x?: number; y?: number; direction?: Direction }) {
+    this.updateServerTickEstimate(ack.serverTick);
     if (this.predictionEnabled && this.prediction) {
       const result = this.prediction.applyServerAck({
         frame: ack.frame,

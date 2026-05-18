@@ -15,6 +15,9 @@ export interface ClientProjectileSpawn {
   index?: number;
   count?: number;
   params?: Record<string, unknown>;
+  collisionMask?: number;
+  ignoreOwner?: boolean;
+  predictImpact?: boolean;
 }
 
 export interface ClientProjectileImpact {
@@ -57,6 +60,12 @@ export interface RenderedProjectile {
 export type ProjectilePredictionResolver = (
   projectile: ClientProjectileSpawn,
 ) => ClientProjectileImpact | null | undefined;
+
+export interface ProjectileSpawnClock {
+  now?: number;
+  currentServerTick?: number;
+  tickDurationMs?: number;
+}
 
 interface RuntimeProjectile {
   spawn: ClientProjectileSpawn;
@@ -109,7 +118,8 @@ export class ProjectileManager {
     return this.components.get(type);
   }
 
-  spawnBatch(projectiles: ClientProjectileSpawn[]): void {
+  spawnBatch(projectiles: ClientProjectileSpawn[], clock: ProjectileSpawnClock = {}): void {
+    const now = clock.now ?? Date.now();
     for (const projectile of projectiles) {
       const component = this.components.get(projectile.type);
       if (!component) {
@@ -123,7 +133,7 @@ export class ProjectileManager {
           count: projectile.count ?? 1,
         },
         component,
-        createdAt: Date.now(),
+        createdAt: this.resolveCreatedAt(projectile, now, clock),
       };
       this.setPredictedImpact(runtime);
       this.projectiles.set(projectile.id, runtime);
@@ -229,6 +239,9 @@ export class ProjectileManager {
   }
 
   private setPredictedImpact(projectile: RuntimeProjectile): void {
+    if (projectile.spawn.predictImpact === false) {
+      return;
+    }
     const impact = this.predictionResolver?.(projectile.spawn);
     if (!impact || !Number.isFinite(impact.x) || !Number.isFinite(impact.y)) {
       return;
@@ -293,6 +306,28 @@ export class ProjectileManager {
 
   private isSameTarget(a: ClientProjectileImpact, b: ClientProjectileImpact): boolean {
     return a.targetId !== undefined && a.targetId === b.targetId;
+  }
+
+  private resolveCreatedAt(
+    projectile: ClientProjectileSpawn,
+    now: number,
+    clock: ProjectileSpawnClock,
+  ): number {
+    const currentServerTick = clock.currentServerTick;
+    const tickDurationMs = clock.tickDurationMs ?? (1000 / 60);
+    if (
+      typeof currentServerTick !== "number" ||
+      typeof projectile.spawnTick !== "number" ||
+      !Number.isFinite(currentServerTick) ||
+      !Number.isFinite(projectile.spawnTick) ||
+      !Number.isFinite(tickDurationMs) ||
+      tickDurationMs <= 0
+    ) {
+      return now;
+    }
+
+    const elapsedTicks = Math.max(0, currentServerTick - projectile.spawnTick);
+    return now - elapsedTicks * tickDurationMs;
   }
 
   private touch(force = true): void {

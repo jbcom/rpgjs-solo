@@ -35,6 +35,35 @@ describe("ProjectileManager", () => {
     expect(onSpawn).toHaveBeenCalledWith(expect.objectContaining({ id: "p1", type: "fireball" }));
   });
 
+  test("anchors visual movement to the estimated server spawn tick", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(2000);
+
+    const hooks = new Hooks([], "client");
+    const manager = new ProjectileManager(hooks);
+    manager.register("arrow", () => null);
+    manager.spawnBatch([
+      {
+        id: "p-latency",
+        type: "arrow",
+        origin: { x: 0, y: 0 },
+        direction: { x: 1, y: 0 },
+        speed: 120,
+        range: 500,
+        ttl: 5,
+        spawnTick: 10,
+      },
+    ], {
+      currentServerTick: 16,
+      tickDurationMs: 1000 / 60,
+    });
+
+    const current = manager.current();
+    expect(current).toHaveLength(1);
+    expect(current[0].props.elapsed).toBeCloseTo(0.1, 3);
+    expect(current[0].props.x).toBeCloseTo(12, 3);
+  });
+
   test("keeps impacted projectiles briefly so components can react", () => {
     const hooks = new Hooks([], "client");
     const manager = new ProjectileManager(hooks);
@@ -250,5 +279,28 @@ describe("ProjectileManager", () => {
     manager.destroyBatch([{ id: "p6", reason: "range" }]);
     expect(manager.current()[0].props.x).toBe(30);
     expect(manager.current()[0].props.destroyed).toBe(true);
+  });
+
+  test("skips local impact prediction when the server marks the projectile as non-predictable", () => {
+    const hooks = new Hooks([], "client");
+    const predictionResolver = vi.fn();
+    const manager = new ProjectileManager(hooks, predictionResolver);
+    manager.register("arrow", () => null);
+
+    manager.spawnBatch([
+      {
+        id: "p-no-predict",
+        type: "arrow",
+        origin: { x: 0, y: 0 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        range: 500,
+        ttl: 5,
+        spawnTick: 1,
+        predictImpact: false,
+      },
+    ]);
+
+    expect(predictionResolver).not.toHaveBeenCalled();
   });
 });

@@ -15,6 +15,10 @@ single local raycast at spawn time to avoid drawing projectiles past obvious
 client-side hitboxes while it waits for the server impact, and renders each
 projectile with a registered CanvasEngine component.
 
+When a projectile uses a custom server-side `canHit` filter, the client keeps
+predicting movement but skips local impact raycast clamping because arbitrary
+server gameplay rules cannot be represented safely on the client.
+
 ## Server Usage
 
 Emit a projectile from a player:
@@ -23,8 +27,8 @@ Emit a projectile from a player:
 import { Direction, RpgPlayerHooks } from '@rpgjs/server'
 
 export const player: RpgPlayerHooks = {
-  onInput(player, { input }) {
-    if (input !== 'attack') return
+  onInput(player, input) {
+    if (input.action !== 'attack') return
 
     player.projectiles.emit({
       type: 'fireball',

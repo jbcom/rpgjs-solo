@@ -124,4 +124,32 @@ describe("RpgMapProjectiles", () => {
       },
     });
   });
+
+  test("serializes client-safe prediction hints and disables prediction for custom hit filters", () => {
+    const { map, broadcasts } = createMapStub();
+    const projectiles = new RpgMapProjectiles(map as any);
+
+    projectiles.emit({
+      type: "filtered",
+      origin: { x: 0, y: 0 },
+      direction: { x: 1, y: 0 },
+      trajectory: {
+        type: "linear",
+        speed: 100,
+        range: 200,
+      },
+      collision: {
+        collisionMask: 2,
+        ignoreOwner: false,
+      },
+      canHit: () => true,
+    });
+
+    expect(broadcasts[0].value.projectiles[0]).toMatchObject({
+      type: "filtered",
+      collisionMask: 2,
+      ignoreOwner: false,
+      predictImpact: false,
+    });
+  });
 });
