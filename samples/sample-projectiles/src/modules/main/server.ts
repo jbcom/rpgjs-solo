@@ -6,6 +6,12 @@ const MAP_WIDTH = 640;
 const MAP_HEIGHT = 420;
 const PROJECTILE_OFFSET = 34;
 const MIN_TARGET_DISTANCE = 4;
+const MAP_HITBOXES = [
+  { id: "top-wall", x: 24, y: 24, width: 592, height: 2 },
+  { id: "bottom-wall", x: 24, y: 394, width: 592, height: 2 },
+  { id: "left-wall", x: 24, y: 24, width: 2, height: 372 },
+  { id: "right-wall", x: 614, y: 24, width: 2, height: 372 },
+];
 
 function directionVector(direction: Direction): { x: number; y: number } {
   switch (direction) {
@@ -152,6 +158,9 @@ export default defineModule<RpgServer>({
   maps: [
     {
       id: "projectiles-map",
+      width: MAP_WIDTH,
+      height: MAP_HEIGHT,
+      hitboxes: MAP_HITBOXES,
       events: [
         {
           id: "target",

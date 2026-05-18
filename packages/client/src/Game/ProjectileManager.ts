@@ -63,8 +63,8 @@ interface RuntimeProjectile {
   component: any;
   createdAt: number;
   impact?: ClientProjectileImpact;
+  visualImpact?: ClientProjectileImpact;
   predictedImpact?: ClientProjectileImpact;
-  predictedImpactExpiresAt?: number;
   impactStartedAt?: number;
   destroyAt?: number;
   destroyReason?: string;
@@ -75,7 +75,6 @@ export class ProjectileManager {
   private readonly projectiles = new Map<string, RuntimeProjectile>();
   private readonly version = signal(0);
   private readonly impactDurationMs = 350;
-  private readonly predictionGraceMs = 500;
 
   constructor(
     private readonly hooks: Hooks,
@@ -203,10 +202,11 @@ export class ProjectileManager {
     const ttl = Math.max(0.001, spawn.ttl);
     const rawDistance = Math.min(spawn.speed * elapsed, spawn.range);
     const predictedImpact = this.getActivePredictedImpact(projectile, now, rawDistance);
-    const distance = projectile.impact?.distance ?? predictedImpact?.distance ?? rawDistance;
+    const visualImpact = projectile.visualImpact ?? projectile.impact;
+    const distance = visualImpact?.distance ?? predictedImpact?.distance ?? rawDistance;
     const progress = Math.min(1, distance / spawn.range);
-    const x = projectile.impact?.x ?? predictedImpact?.x ?? spawn.origin.x + spawn.direction.x * distance;
-    const y = projectile.impact?.y ?? predictedImpact?.y ?? spawn.origin.y + spawn.direction.y * distance;
+    const x = visualImpact?.x ?? predictedImpact?.x ?? spawn.origin.x + spawn.direction.x * distance;
+    const y = visualImpact?.y ?? predictedImpact?.y ?? spawn.origin.y + spawn.direction.y * distance;
     const impactElapsedMs = projectile.impactStartedAt !== undefined
       ? Math.max(0, now - projectile.impactStartedAt)
       : undefined;
@@ -243,9 +243,6 @@ export class ProjectileManager {
       ...impact,
       distance,
     };
-    const delayMs = (projectile.spawn.delay ?? 0) * 1000;
-    const travelMs = projectile.spawn.speed > 0 ? (distance / projectile.spawn.speed) * 1000 : 0;
-    projectile.predictedImpactExpiresAt = projectile.createdAt + delayMs + travelMs + this.predictionGraceMs;
   }
 
   private getActivePredictedImpact(
@@ -260,19 +257,42 @@ export class ProjectileManager {
     if (distance === undefined || rawDistance < distance) {
       return undefined;
     }
-    if (projectile.predictedImpactExpiresAt !== undefined && now > projectile.predictedImpactExpiresAt) {
-      return undefined;
-    }
     return projectile.predictedImpact;
   }
 
   private setImpact(projectile: RuntimeProjectile, impact: ClientProjectileImpact, now: number): void {
+    projectile.visualImpact = this.resolveVisualImpact(projectile, impact, now);
     projectile.impact = impact;
     projectile.predictedImpact = undefined;
-    projectile.predictedImpactExpiresAt = undefined;
     projectile.impactStartedAt = projectile.impactStartedAt ?? now;
     const impactDestroyAt = projectile.impactStartedAt + this.impactDurationMs;
     projectile.destroyAt = Math.max(projectile.destroyAt ?? 0, impactDestroyAt);
+  }
+
+  private resolveVisualImpact(
+    projectile: RuntimeProjectile,
+    impact: ClientProjectileImpact,
+    now: number,
+  ): ClientProjectileImpact {
+    const predicted = projectile.predictedImpact;
+    if (!predicted || !this.isSameTarget(predicted, impact)) {
+      return impact;
+    }
+    const distance = predicted.distance;
+    if (distance === undefined) {
+      return impact;
+    }
+    const delayMs = (projectile.spawn.delay ?? 0) * 1000;
+    const elapsedMs = now - projectile.createdAt - delayMs;
+    if (elapsedMs < 0) {
+      return impact;
+    }
+    const rawDistance = Math.min(projectile.spawn.speed * (elapsedMs / 1000), projectile.spawn.range);
+    return rawDistance >= distance ? predicted : impact;
+  }
+
+  private isSameTarget(a: ClientProjectileImpact, b: ClientProjectileImpact): boolean {
+    return a.targetId !== undefined && a.targetId === b.targetId;
   }
 
   private touch(force = true): void {
