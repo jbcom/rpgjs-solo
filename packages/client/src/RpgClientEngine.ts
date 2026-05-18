@@ -30,6 +30,7 @@ import { SaveClientService } from "./services/save";
 import { getCanMoveValue } from "./utils/readPropValue";
 import { ProjectileManager, type ClientProjectileImpact, type ClientProjectileSpawn } from "./Game/ProjectileManager";
 import { normalizeActionInput } from "./services/actionInput";
+import { createClientPointerContext, type ClientPointerContext } from "./services/pointerContext";
 
 interface MovementTrajectoryPoint {
   frame: number;
@@ -68,6 +69,7 @@ export class RpgClientEngine<T = any> {
   sounds: Map<string, any> = new Map();
   componentAnimations: any[] = [];
   projectiles: ProjectileManager;
+  pointer: ClientPointerContext = createClientPointerContext();
   private spritesheetResolver?: (id: string | number) => any | Promise<any>;
   private soundResolver?: (id: string) => any | Promise<any>;
   particleSettings: {
@@ -120,6 +122,8 @@ export class RpgClientEngine<T = any> {
   // Store subscriptions and event listeners for cleanup
   private tickSubscriptions: any[] = [];
   private resizeHandler?: () => void;
+  private pointerMoveHandler?: (event: PointerEvent) => void;
+  private pointerCanvas?: HTMLCanvasElement;
   private notificationManager: NotificationManager = new NotificationManager();
 
   constructor(public context) {
@@ -219,6 +223,7 @@ export class RpgClientEngine<T = any> {
     this.canvasApp = app;
     this.canvasElement = canvasElement;
     this.renderer = app.renderer as PIXI.Renderer;
+    this.setupPointerTracking();
     this.tick = canvasElement?.propObservables?.context['tick'].observable
 
     const inputCheckSubscription = this.tick.subscribe(() => {
@@ -275,6 +280,47 @@ export class RpgClientEngine<T = any> {
       this.guiService._initialize()
       this.startPingPong();
     });
+  }
+
+  private setupPointerTracking() {
+    const renderer = this.renderer as any;
+    const canvas = renderer?.canvas ?? renderer?.view ?? (this.canvasApp as any)?.canvas;
+
+    if (!canvas || typeof canvas.addEventListener !== "function") {
+      return;
+    }
+
+    this.pointerCanvas = canvas;
+    this.pointerMoveHandler = (event: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const screen = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      };
+      const viewport = this.findViewportInstance();
+      let world = screen;
+
+      if (viewport && typeof viewport.toWorld === "function") {
+        const point = viewport.toWorld(screen.x, screen.y);
+        world = { x: Number(point.x), y: Number(point.y) };
+      } else if (viewport && typeof viewport.toLocal === "function") {
+        const point = viewport.toLocal(screen);
+        world = { x: Number(point.x), y: Number(point.y) };
+      }
+
+      this.pointer.update(screen, world);
+    };
+
+    canvas.addEventListener("pointermove", this.pointerMoveHandler);
+    canvas.addEventListener("pointerdown", this.pointerMoveHandler);
+  }
+
+  private findViewportInstance(): any {
+    const children = (this.canvasApp as any)?.stage?.children ?? [];
+    return children.find((child: any) => (
+      typeof child?.toWorld === "function"
+      || child?.constructor?.name === "Viewport"
+    ));
   }
 
   private prepareSyncPayload(data: any): any {
@@ -1961,6 +2007,13 @@ export class RpgClientEngine<T = any> {
       if (this.resizeHandler && typeof window !== 'undefined') {
         window.removeEventListener('resize', this.resizeHandler);
         this.resizeHandler = undefined;
+      }
+
+      if (this.pointerMoveHandler && this.pointerCanvas) {
+        this.pointerCanvas.removeEventListener('pointermove', this.pointerMoveHandler);
+        this.pointerCanvas.removeEventListener('pointerdown', this.pointerMoveHandler);
+        this.pointerMoveHandler = undefined;
+        this.pointerCanvas = undefined;
       }
 
       // Destroy PIXI app and renderer if they exist

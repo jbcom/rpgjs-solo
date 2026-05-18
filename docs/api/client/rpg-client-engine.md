@@ -23,6 +23,7 @@ Reference for the `RpgClientEngine` class.
 - [mapShakeTrigger](#mapshaketrigger)
 - [playSound](#playsound)
 - [processAction](#processaction)
+- [pointer](#pointer)
 - [setCameraFollow](#setcamerafollow)
 - [setKeyboardControls](#setkeyboardcontrols)
 - [setSoundResolver](#setsoundresolver)
@@ -565,6 +566,37 @@ const player = {
       const target = input.data?.target
     }
   }
+}
+```
+
+## pointer
+
+Read the latest pointer position tracked by the client canvas. `world()` returns
+coordinates in map/world space, suitable for action payloads such as projectile
+targets. `screen()` returns the latest canvas/global pointer position.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `property`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+pointer.screen(): { x: number, y: number } | null
+pointer.world(): { x: number, y: number } | null
+pointer.updateFromEvent(event: any): { x: number, y: number } | null
+```
+
+### Examples
+
+```ts
+const target = engine.pointer.world()
+
+if (target) {
+  engine.processAction('projectile:shoot', {
+    target,
+    source: 'keyboard'
+  })
 }
 ```
 

@@ -60,7 +60,7 @@
 <script>
   import { signal, computed, effect } from "canvasengine";
   import { inject } from "@rpgjs/client";
-  import { RpgClientEngine } from "@rpgjs/client";
+  import { getKeyboardControlBind, RpgClientEngine } from "@rpgjs/client";
   import {
     actionBattleTargetingState,
     actionBattleUiOptions,
@@ -299,7 +299,7 @@
         }
       },
       action: {
-        bind: keyboardControls.action,
+        bind: getKeyboardControlBind(keyboardControls.action),
         keyDown() {
           if (isTargeting()) {
             confirmTargeting();

@@ -40,6 +40,7 @@
     import { SaveClientService } from "../../services/save";
     import { PrebuiltGui } from "@rpgjs/common";
     import { RpgGui } from "../../Gui/Gui";
+    import { getKeyboardControlBind } from "../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
     const saveClient = inject(SaveClientService);
@@ -185,7 +186,7 @@
             }
         },
         action: {
-            bind: keyboardControls.action,
+            bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
                 triggerSelect(selectedSlot());
             }

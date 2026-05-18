@@ -31,6 +31,7 @@
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
     import { RpgGui } from "../../Gui/Gui";
+    import { getKeyboardControlBind } from "../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
     const guiService = inject(RpgGui);
@@ -150,7 +151,7 @@
             }
         },
         action: {
-            bind: keyboardControls.action,
+            bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
                 if (guiService.isDisplaying(PrebuiltGui.Save)) return;
                 triggerSelect(selectedEntry());

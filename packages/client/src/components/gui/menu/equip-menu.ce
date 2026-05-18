@@ -90,6 +90,7 @@
     import { signal, computed, createTabindexNavigator, effect } from "canvasengine";
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
+    import { getKeyboardControlBind } from "../../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
     const keyboardControls = engine.globalConfig.keyboardControls;
@@ -380,7 +381,7 @@
             }
         },
         action: {
-            bind: keyboardControls.action,
+            bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
                 if (!listEntries().length) return;
                 commitSelection(selectedItem());

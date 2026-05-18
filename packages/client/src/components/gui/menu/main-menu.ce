@@ -101,6 +101,7 @@
     import ExitMenu from "./exit-menu.ce";
     import { getEntityProp } from "../../../utils/getEntityProp";
     import { delay } from "@rpgjs/common";
+    import { getKeyboardControlBind } from "../../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
     const currentPlayer = engine.scene.currentPlayer;
@@ -259,7 +260,7 @@
             }
         },
         action: {
-            bind: keyboardControls.action,
+            bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
                 if (saveOverlay()) return;
                 if (view() !== "menu") return;

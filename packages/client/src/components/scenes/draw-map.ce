@@ -32,7 +32,6 @@
     import { RpgClientEngine } from "../../RpgClientEngine";
     import { Weather } from '@canvasengine/presets'
 
-
     const engine = inject(RpgClientEngine);
     const componentAnimations = engine.componentAnimations
     const projectiles = engine.projectiles.current

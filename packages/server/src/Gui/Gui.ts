@@ -10,6 +10,7 @@ export class Gui {
     private _close: Function = () => {}
     private _blockPlayerInput: boolean = false
     private _events = new Map<string, (data: any) => void>()
+    private _closed = false
 
     constructor(
         public id: string,
@@ -23,6 +24,7 @@ export class Gui {
         blockPlayerInput = false
     }: GuiOpenOptions = {}): Promise<any> {
         return new Promise((resolve) => {
+            this._closed = false
             this.player.emit('gui.open', {
                 guiId: this.id,
                 data
@@ -54,10 +56,15 @@ export class Gui {
     }
 
     close(data?: unknown) {
+        if (this._closed) {
+            return
+        }
+        this._closed = true
         this.player.emit('gui.exit', this.id)
         if (this._blockPlayerInput) {
             ;(this.player as any).canMove = true
         }
+        delete (this.player as any)._gui?.[this.id]
         this._close(data)
     }
 

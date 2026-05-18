@@ -3,6 +3,7 @@ import {
   DialogGui,
   DialogPosition,
   GameoverGui,
+  Gui,
   MenuGui,
   NotificationGui,
   SaveLoadGui,
@@ -285,6 +286,26 @@ describe("GUI", () => {
 
     await expect(gameoverPending).resolves.toEqual({ id: "retry", index: 0 });
     expect(player.emit).toHaveBeenCalledWith("gui.exit", "rpg-gameover");
+  });
+
+  test("gui close is idempotent and removes the active gui reference", async () => {
+    const player: any = {
+      canMove: true,
+      _gui: {},
+      emit: vi.fn(),
+    };
+    const gui = new Gui("custom-menu", player);
+    player._gui["custom-menu"] = gui;
+    const pending = gui.open({}, { waitingAction: true, blockPlayerInput: true });
+
+    gui.close({ ok: true });
+    gui.close({ ok: false });
+
+    await expect(pending).resolves.toEqual({ ok: true });
+    expect(player._gui["custom-menu"]).toBeUndefined();
+    expect(player.canMove).toBe(true);
+    expect(player.emit).toHaveBeenCalledWith("gui.exit", "custom-menu");
+    expect(player.emit.mock.calls.filter(([type]) => type === "gui.exit")).toHaveLength(1);
   });
 
   test("notification gui opens without blocking for an action", async () => {

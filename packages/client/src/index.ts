@@ -6,6 +6,8 @@ export * from "./services/save";
 export * from "./core/setup";
 export * from "./core/inject";
 export * from "./services/loadMap";
+export * from "./services/actionInput";
+export * from "./services/pointerContext";
 export * from "./module";
 export * from "./Gui/Gui";
 export * from "./components/gui";

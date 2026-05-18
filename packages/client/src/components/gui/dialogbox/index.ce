@@ -53,6 +53,7 @@
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
     import { delay } from "@rpgjs/common";
+    import { getKeyboardControlBind } from "../../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
     const currentPlayer = engine.scene.currentPlayer
@@ -172,7 +173,7 @@
             }
         },
         action: {
-            bind: keyboardControls.action,
+            bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
                 if (isTyping()) {
                     finishTyping();
@@ -189,7 +190,7 @@
     
     const dialogControls = signal({
         action: {
-            bind: keyboardControls.action,
+            bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
                 if (isTyping()) {
                     finishTyping();

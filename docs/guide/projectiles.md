@@ -82,9 +82,37 @@ the shot on the server.
 
 ```ts
 // client map component
-client.processAction('projectile:shoot', {
-  source: 'map-click',
-  target: { x, y }
+const target = client.pointer.world()
+
+if (target) {
+  client.processAction('projectile:shoot', {
+    source: 'map-click',
+    target
+  })
+}
+```
+
+For keyboard attacks, configure the action key to send the same payload:
+
+```ts
+import { provideClientGlobalConfig } from '@rpgjs/client'
+
+provideClientGlobalConfig({
+  keyboardControls: {
+    up: 'up',
+    down: 'down',
+    left: 'left',
+    right: 'right',
+    action: {
+      bind: 'space',
+      action: 'projectile:shoot',
+      data: (client) => ({
+        source: 'keyboard',
+        target: client.pointer.world()
+      })
+    },
+    escape: 'escape'
+  }
 })
 ```
 

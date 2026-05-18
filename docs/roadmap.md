@@ -20,9 +20,11 @@ client.processAction('projectile:shoot', {
 })
 ```
 
-A future improvement is to make built-in input sources, such as map clicks,
-event clicks, and keyboard actions from `character.ce`, able to provide a
-consistent action context without each feature wiring its own pointer state.
+RPGJS now exposes `client.pointer`, and keyboard actions from `character.ce` can
+send custom action data through `keyboardControls.action`. A remaining future
+improvement is to make other built-in input sources, such as map clicks and
+event clicks, provide a consistent action context without each feature wiring
+its own pointer state.
 
 The intended shape is:
 
@@ -68,11 +70,14 @@ send custom action data only if RPGJS exposes a reliable client-side input
 context, such as a pointer world position helper, selected target helper, or
 action context resolver.
 
-Potential follow-up work:
+Implemented:
 
-- Add an official `client.pointer` or `client.inputContext` helper.
-- Let map clicks emit action inputs with world coordinates.
-- Let event clicks emit action inputs with `eventId` and world coordinates.
+- Add an official `client.pointer` helper.
 - Let `keyboardControls.action` accept an object form with `bind`, `action`, and
   optional static or functional `data`.
 - Keep simple string controls compatible with the current behavior.
+
+Potential follow-up work:
+
+- Let map clicks emit action inputs with world coordinates.
+- Let event clicks emit action inputs with `eventId` and world coordinates.

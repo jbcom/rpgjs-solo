@@ -34,15 +34,40 @@ export class LobbyRoom extends BaseRoom {
 
   @Action('gui.interaction')
   async guiInteraction(player: RpgPlayer, value: { guiId: string, name: string, data: any }) {
-    const id = value.data.id
-    if (id === 'start') {
-      player.initializeDefaultStats();
-      try {
-        await lastValueFrom(this.hooks.callHooks("server-player-onStart", player));
-      }
-      catch (error) {
-        console.error("[RPGJS] Error during player onStart hooks:", error);
-      }
+    const gui = player.getGui(value.guiId);
+    if (gui) {
+      await gui.emit(value.name, value.data);
+    }
+
+    if (this.isStartSelection(value.guiId, value.name, value.data)) {
+      await this.startPlayer(player, value.guiId, value.data);
+    }
+  }
+
+  @Action('gui.exit')
+  async guiExit(player: RpgPlayer, value: { guiId: string, data?: any }) {
+    if (this.isStartSelection(value.guiId, "exit", value.data)) {
+      await this.startPlayer(player, value.guiId, value.data);
+      return;
+    }
+
+    player.removeGui(value.guiId, value.data);
+  }
+
+  private isStartSelection(_guiId: string, _name: string, data: any): boolean {
+    return data?.id === "start";
+  }
+
+  private async startPlayer(player: RpgPlayer, guiId: string, data: any) {
+    if (player.getGui(guiId)) {
+      player.removeGui(guiId, data);
+    }
+    player.initializeDefaultStats();
+    try {
+      await lastValueFrom(this.hooks.callHooks("server-player-onStart", player));
+    }
+    catch (error) {
+      console.error("[RPGJS] Error during player onStart hooks:", error);
     }
   }
 }

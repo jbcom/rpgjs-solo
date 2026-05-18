@@ -24,7 +24,7 @@
                 zIndex={lightSpotOverlay.zIndex}
             />
         }
-        @if (hasShadow) {
+        @if (resolvedHasShadow) {
             <Ellipse 
                 x={shadow.x} 
                 y={shadow.y} 
@@ -63,6 +63,8 @@ const {
 })
 
 const engine = inject(RpgClientEngine)
+
+const readValue = (value) => typeof value === "function" ? value() : value
 
 const toFiniteNumber = (value, fallback = null) => {
     if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -110,18 +112,26 @@ const lightStyleRadiusScale = (style) => {
     return 2.02
 }
 
+const rectValue = readValue(rect) || [0, 0, 0, 0]
+const drawInValue = readValue(drawIn) || []
+const hitboxValue = readValue(hitbox) || { x: 0, y: 0, width: 0, height: 0 }
+const scaleValue = readValue(scale)
+const drawRuleValue = readValue(drawRule)
+const lightSpotValue = readValue(lightSpot)
+const resolvedHasShadow = Boolean(readValue(hasShadow))
+
 const rectangle = {
-    x: rect[0],
-    y: rect[1],
-    width: rect[2],
-    height: rect[3]
+    x: rectValue[0],
+    y: rectValue[1],
+    width: rectValue[2],
+    height: rectValue[3]
 }
 
-const drawX = toFiniteNumber(drawIn?.[0], 0) ?? 0
-const drawY = toFiniteNumber(drawIn?.[1], 0) ?? 0
-const drawWidthBase = clampMin(toFiniteNumber(drawIn?.[2], rectangle.width) ?? rectangle.width)
-const drawHeightBase = clampMin(toFiniteNumber(drawIn?.[3], rectangle.height) ?? rectangle.height)
-const normalizedScale = normalizeScale(scale)
+const drawX = toFiniteNumber(drawInValue?.[0], 0) ?? 0
+const drawY = toFiniteNumber(drawInValue?.[1], 0) ?? 0
+const drawWidthBase = clampMin(toFiniteNumber(drawInValue?.[2], rectangle.width) ?? rectangle.width)
+const drawHeightBase = clampMin(toFiniteNumber(drawInValue?.[3], rectangle.height) ?? rectangle.height)
+const normalizedScale = normalizeScale(scaleValue)
 const scaleX = normalizedScale.x
 const scaleY = normalizedScale.y
 const drawWidth = clampMin(drawWidthBase * scaleX)
@@ -174,7 +184,7 @@ const normalizeLightSpot = (value) => {
     return normalized
 }
 
-const resolvedLightSpot = normalizeLightSpot(lightSpot)
+const resolvedLightSpot = normalizeLightSpot(lightSpotValue)
 
 const normalizeRuleRect = (value) => {
     if (!Array.isArray(value) || value.length < 4) return null
@@ -835,7 +845,7 @@ const fallbackSpriteParts = [
     }
 ]
 
-const normalizedRule = normalizeDrawRule(drawRule)
+const normalizedRule = normalizeDrawRule(drawRuleValue)
 
 const mapRange = (value, srcStart, srcSize, destStart, destSize) => {
     if (srcSize <= 0 || destSize <= 0) return destStart
@@ -1033,7 +1043,6 @@ const lightRadius = Math.max(4, resolvedLightSpot.radius * ((lightScaleX + light
 const mappedLightSpot = mapLocalLightSpotToWorld(normalizedRule, resolvedLightSpot.x, resolvedLightSpot.y)
 const lightCenterX = mappedLightSpot.x
 const lightCenterY = mappedLightSpot.y
-const hitboxValue = hitbox || { x: 0, y: 0, width: 0, height: 0 }
 const hitboxX = toFiniteNumber(hitboxValue.x, 0) ?? 0
 const hitboxY = toFiniteNumber(hitboxValue.y, 0) ?? 0
 const hitboxWidth = clampMin(toFiniteNumber(hitboxValue.width, 1) ?? 1)
@@ -1041,7 +1050,7 @@ const hitboxHeight = clampMin(toFiniteNumber(hitboxValue.height, 1) ?? 1)
 const hitboxScaleX = drawWidth / Math.max(1, rectangle.width)
 const hitboxScaleY = drawHeight / Math.max(1, rectangle.height)
 const resolvedZIndexOffset = toFiniteNumber(zIndexOffset(), 0) ?? 0
-const hasSortableHitbox = hitbox && hitbox.type !== "none"
+const hasSortableHitbox = hitboxValue && hitboxValue.type !== "none"
 const elementSortY = hasSortableHitbox
     ? drawY + (hitboxY * hitboxScaleY)
     : drawY + drawHeight
@@ -1060,8 +1069,6 @@ const lightSpotOverlay = {
     style: resolvedLightSpot.style,
     zIndex: resolvedLightSpotZIndex
 }
-
-const readValue = (value) => typeof value === "function" ? value() : value
 
 const studioLightSpotId = [
     "studio-element",

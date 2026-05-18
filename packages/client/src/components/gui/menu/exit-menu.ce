@@ -16,6 +16,7 @@
     import { signal } from "canvasengine";
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
+    import { getKeyboardControlBind } from "../../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
     const keyboardControls = engine.globalConfig.keyboardControls;
@@ -23,7 +24,7 @@
 
     const controls = signal({
         action: {
-            bind: keyboardControls.action,
+            bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
                 if (onConfirm) onConfirm();
             }

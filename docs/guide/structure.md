@@ -155,11 +155,37 @@ If you omit `keyboardControls`, RPGJS injects the default bindings automatically
 }
 ```
 
+The `action` binding also accepts an object when the action key should send a
+custom action input. This keeps the key generic in built-in components while
+letting the game decide which action and payload to send.
+
+```ts
+provideClientGlobalConfig({
+  keyboardControls: {
+    up: "z",
+    down: "s",
+    left: "q",
+    right: "d",
+    action: {
+      bind: "space",
+      action: "projectile:shoot",
+      data: (client, sprite) => ({
+        target: client.pointer.world(),
+        source: "keyboard",
+        playerId: sprite.id
+      })
+    },
+    escape: "escape"
+  }
+})
+```
+
 You can retrieve this global config anywhere on the client with `inject(GlobalConfigToken)`:
 
 ```ts
 import { inject } from "@signe/di";
 import { GlobalConfigToken } from "@rpgjs/client";
+import type { KeyboardActionConfig } from "@rpgjs/client";
 
 const config = inject(GlobalConfigToken) as {
   keyboardControls: {
@@ -167,7 +193,7 @@ const config = inject(GlobalConfigToken) as {
     down: string;
     left: string;
     right: string;
-    action: string;
+    action: string | KeyboardActionConfig;
     escape: string;
   };
   ui?: {

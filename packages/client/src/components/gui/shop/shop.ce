@@ -180,6 +180,7 @@
     import { mount, signal, computed, createTabindexNavigator, effect } from "canvasengine";
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
+    import { getKeyboardControlBind } from "../../../services/actionInput";
 
     const engine = inject(RpgClientEngine)
     const currentPlayer = engine.scene.currentPlayer
@@ -387,7 +388,7 @@
             }
         },
         action: {
-            bind: keyboardControls.action,
+            bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
                 const mode = selectedModeIndex() === 0 ? 'buy' : 'sell'
                 tradeMode.set(mode)
@@ -433,7 +434,7 @@
             }
         },
         action: {
-            bind: keyboardControls.action,
+            bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
                 if (quantityDialogOpen()) {
                     const item = currentItem()

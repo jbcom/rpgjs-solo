@@ -56,6 +56,7 @@
   import PlayerComponents from "./player-components.ce";
   import { RpgGui } from "../Gui/Gui";
   import { getCanMoveValue } from "../utils/readPropValue";
+  import { getKeyboardControlBind, resolveKeyboardActionInput } from "../services/actionInput";
 
   const { object, id } = defineProps();
   const sprite = object();
@@ -345,10 +346,10 @@
       },
     },
     action: {
-      bind: keyboardControls.action,
+      bind: getKeyboardControlBind(keyboardControls.action),
       keyDown() {
         if (canControls()) {
-          client.processAction({ action: 'action' })
+          client.processAction(resolveKeyboardActionInput(keyboardControls.action, client, sprite))
         }
       },
     },

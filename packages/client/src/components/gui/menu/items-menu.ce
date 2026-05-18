@@ -90,6 +90,7 @@
     import { inject } from "../../../core/inject";
     import { RpgClientEngine } from "../../../RpgClientEngine";
     import { delay } from "@rpgjs/common";
+    import { getKeyboardControlBind } from "../../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
     const keyboardControls = engine.globalConfig.keyboardControls;
@@ -226,7 +227,7 @@
             }
         },
         action: {
-            bind: keyboardControls.action,
+            bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
                 if (!confirmOpen()) return;
                 confirmSelect(selectedConfirm())();
@@ -289,7 +290,7 @@
             }
         },
         action: {
-            bind: keyboardControls.action,
+            bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
                 if (confirmOpen()) {
                     confirmSelect(selectedConfirm())();
