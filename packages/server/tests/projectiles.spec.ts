@@ -152,4 +152,29 @@ describe("RpgMapProjectiles", () => {
       predictImpact: false,
     });
   });
+
+  test("allows local prediction when a custom hit filter opts in", () => {
+    const { map, broadcasts } = createMapStub();
+    const projectiles = new RpgMapProjectiles(map as any);
+
+    projectiles.emit({
+      type: "filtered",
+      origin: { x: 0, y: 0 },
+      direction: { x: 1, y: 0 },
+      trajectory: {
+        type: "linear",
+        speed: 100,
+        range: 200,
+      },
+      collision: {
+        predictImpact: true,
+      },
+      canHit: () => true,
+    });
+
+    expect(broadcasts[0].value.projectiles[0]).toMatchObject({
+      type: "filtered",
+      predictImpact: true,
+    });
+  });
 });

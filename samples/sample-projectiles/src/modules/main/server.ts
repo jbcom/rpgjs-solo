@@ -80,6 +80,7 @@ function shootBolt(player: RpgPlayer, direction: Direction | { x: number; y: num
     },
     collision: {
       ignoreOwner: true,
+      predictImpact: true,
     },
     payload: {
       damage: 10,

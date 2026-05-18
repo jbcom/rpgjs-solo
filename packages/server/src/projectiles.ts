@@ -36,6 +36,7 @@ export type ProjectilePatternOptions =
 export interface ProjectileCollisionOptions {
   collisionMask?: number;
   ignoreOwner?: boolean;
+  predictImpact?: boolean;
 }
 
 export interface ProjectileEmitOptions {
@@ -98,6 +99,7 @@ interface PendingProjectile {
   config: {
     collisionMask?: number;
     ignoreOwner?: boolean;
+    predictImpact?: boolean;
     canHit?: (context: ProjectileCanHitContext) => boolean;
   };
   remainingDelay: number;
@@ -219,7 +221,11 @@ function toNetworkProjectile(projectile: ProjectileServerState, config?: Pending
   if (projectile.params !== undefined) network.params = projectile.params;
   if (config?.collisionMask !== undefined) network.collisionMask = config.collisionMask;
   if (config?.ignoreOwner !== undefined) network.ignoreOwner = config.ignoreOwner;
-  if (config?.canHit) network.predictImpact = false;
+  if (config?.predictImpact !== undefined) {
+    network.predictImpact = config.predictImpact;
+  } else if (config?.canHit) {
+    network.predictImpact = false;
+  }
   return network;
 }
 
@@ -255,6 +261,7 @@ export class RpgMapProjectiles {
         config: {
           collisionMask: options.collision?.collisionMask,
           ignoreOwner: options.collision?.ignoreOwner,
+          predictImpact: options.collision?.predictImpact,
           canHit: options.canHit,
         },
         remainingDelay: state.delay,

@@ -35,7 +35,7 @@ describe("ProjectileManager", () => {
     expect(onSpawn).toHaveBeenCalledWith(expect.objectContaining({ id: "p1", type: "fireball" }));
   });
 
-  test("anchors visual movement to the estimated server spawn tick", () => {
+  test("starts visuals at the spawn origin even when a server tick estimate exists", () => {
     vi.useFakeTimers();
     vi.setSystemTime(2000);
 
@@ -60,8 +60,40 @@ describe("ProjectileManager", () => {
 
     const current = manager.current();
     expect(current).toHaveLength(1);
-    expect(current[0].props.elapsed).toBeCloseTo(0.1, 3);
-    expect(current[0].props.x).toBeCloseTo(12, 3);
+    expect(current[0].props.elapsed).toBeCloseTo(0, 3);
+    expect(current[0].props.x).toBeCloseTo(0, 3);
+  });
+
+  test("keeps delayed projectiles until their visual delay has elapsed", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+
+    const hooks = new Hooks([], "client");
+    const manager = new ProjectileManager(hooks);
+    manager.register("spark", () => null);
+    manager.spawnBatch([
+      {
+        id: "p-delayed",
+        type: "spark",
+        origin: { x: 0, y: 0 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        range: 500,
+        ttl: 5,
+        spawnTick: 1,
+        delay: 0.1,
+      },
+    ]);
+
+    vi.setSystemTime(1050);
+    manager.step();
+    expect(manager.current()).toHaveLength(0);
+
+    vi.setSystemTime(1110);
+    manager.step();
+    const current = manager.current();
+    expect(current).toHaveLength(1);
+    expect(current[0].props.elapsed).toBeCloseTo(0.01, 3);
   });
 
   test("keeps impacted projectiles briefly so components can react", () => {

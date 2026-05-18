@@ -133,7 +133,7 @@ export class ProjectileManager {
           count: projectile.count ?? 1,
         },
         component,
-        createdAt: this.resolveCreatedAt(projectile, now, clock),
+        createdAt: now,
       };
       this.setPredictedImpact(runtime);
       this.projectiles.set(projectile.id, runtime);
@@ -193,7 +193,10 @@ export class ProjectileManager {
     let changed = false;
     for (const [id, projectile] of this.projectiles) {
       const props = this.toProps(projectile, now);
-      if (!props || (projectile.destroyAt !== undefined && now >= projectile.destroyAt)) {
+      if (
+        (!props && !this.isWaitingForDelay(projectile, now)) ||
+        (projectile.destroyAt !== undefined && now >= projectile.destroyAt)
+      ) {
         this.projectiles.delete(id);
         changed = true;
       }
@@ -236,6 +239,11 @@ export class ProjectileManager {
       destroyed: projectile.destroyAt !== undefined,
       ttl,
     };
+  }
+
+  private isWaitingForDelay(projectile: RuntimeProjectile, now: number): boolean {
+    const delayMs = (projectile.spawn.delay ?? 0) * 1000;
+    return now - projectile.createdAt - delayMs < 0;
   }
 
   private setPredictedImpact(projectile: RuntimeProjectile): void {
@@ -306,28 +314,6 @@ export class ProjectileManager {
 
   private isSameTarget(a: ClientProjectileImpact, b: ClientProjectileImpact): boolean {
     return a.targetId !== undefined && a.targetId === b.targetId;
-  }
-
-  private resolveCreatedAt(
-    projectile: ClientProjectileSpawn,
-    now: number,
-    clock: ProjectileSpawnClock,
-  ): number {
-    const currentServerTick = clock.currentServerTick;
-    const tickDurationMs = clock.tickDurationMs ?? (1000 / 60);
-    if (
-      typeof currentServerTick !== "number" ||
-      typeof projectile.spawnTick !== "number" ||
-      !Number.isFinite(currentServerTick) ||
-      !Number.isFinite(projectile.spawnTick) ||
-      !Number.isFinite(tickDurationMs) ||
-      tickDurationMs <= 0
-    ) {
-      return now;
-    }
-
-    const elapsedTicks = Math.max(0, currentServerTick - projectile.spawnTick);
-    return now - elapsedTicks * tickDurationMs;
   }
 
   private touch(force = true): void {

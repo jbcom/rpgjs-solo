@@ -16,8 +16,10 @@ client-side hitboxes while it waits for the server impact, and renders each
 projectile with a registered CanvasEngine component.
 
 When a projectile uses a custom server-side `canHit` filter, the client keeps
-predicting movement but skips local impact raycast clamping because arbitrary
-server gameplay rules cannot be represented safely on the client.
+predicting movement but skips local impact raycast clamping by default because
+arbitrary server gameplay rules cannot be represented safely on the client. If
+the filter still matches client-visible physics, opt back in with
+`collision.predictImpact: true`.
 
 ## Server Usage
 
@@ -233,6 +235,28 @@ player.projectiles.emit({
   },
   canHit({ owner, target }) {
     return Boolean(target && target.team !== owner?.team)
+  }
+})
+```
+
+If the `canHit` filter only narrows server gameplay targets and the normal map
+physics hitboxes are still safe for visual prediction, enable local clamping:
+
+```ts
+player.projectiles.emit({
+  type: 'bolt',
+  direction: player.getDirection(),
+  trajectory: {
+    type: 'linear',
+    speed: 450,
+    range: 700
+  },
+  collision: {
+    ignoreOwner: true,
+    predictImpact: true
+  },
+  canHit({ target }) {
+    return target?.id === 'target' || !target
   }
 })
 ```
