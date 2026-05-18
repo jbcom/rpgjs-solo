@@ -5,7 +5,7 @@ import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { RpgSound } from "./Sound";
 import { RpgResource } from "./Resource";
-import { Hooks, ModulesToken, Direction, normalizeLightingState } from "@rpgjs/common";
+import { Hooks, ModulesToken, Direction, normalizeLightingState, Vector2 } from "@rpgjs/common";
 import { load } from "@signe/sync";
 import { RpgClientMap } from "./Game/Map"
 import { RpgGui } from "./Gui/Gui";
@@ -28,7 +28,7 @@ import {
 import { NotificationManager } from "./Gui/NotificationManager";
 import { SaveClientService } from "./services/save";
 import { getCanMoveValue } from "./utils/readPropValue";
-import { ProjectileManager } from "./Game/ProjectileManager";
+import { ProjectileManager, type ClientProjectileImpact, type ClientProjectileSpawn } from "./Game/ProjectileManager";
 import { normalizeActionInput } from "./services/actionInput";
 
 interface MovementTrajectoryPoint {
@@ -125,7 +125,10 @@ export class RpgClientEngine<T = any> {
     this.guiService = inject(RpgGui);
     this.loadMapService = inject(LoadMapToken);
     this.hooks = inject<Hooks>(ModulesToken);
-    this.projectiles = new ProjectileManager(this.hooks);
+    this.projectiles = new ProjectileManager(
+      this.hooks,
+      (projectile) => this.predictProjectileImpact(projectile),
+    );
     this.globalConfig = inject(GlobalConfigToken)
 
     if (!this.globalConfig) {
@@ -1379,6 +1382,44 @@ export class RpgClientEngine<T = any> {
 
   private getPhysicsTick(): number {
     return this.sceneMap?.getTick?.() ?? 0;
+  }
+
+  private predictProjectileImpact(projectile: ClientProjectileSpawn): ClientProjectileImpact | null {
+    const sceneMap = this.sceneMap;
+    if (!sceneMap?.physic || !Number.isFinite(projectile.range) || projectile.range <= 0) {
+      return null;
+    }
+    const origin = projectile.origin;
+    const direction = projectile.direction;
+    if (
+      !origin ||
+      !direction ||
+      !Number.isFinite(origin.x) ||
+      !Number.isFinite(origin.y) ||
+      !Number.isFinite(direction.x) ||
+      !Number.isFinite(direction.y) ||
+      (direction.x === 0 && direction.y === 0)
+    ) {
+      return null;
+    }
+
+    const hit = sceneMap.physic.raycast(
+      new Vector2(origin.x, origin.y),
+      new Vector2(direction.x, direction.y),
+      projectile.range,
+      undefined,
+      (entity) => !projectile.ownerId || entity.uuid !== projectile.ownerId,
+    );
+    if (!hit) {
+      return null;
+    }
+    return {
+      id: projectile.id,
+      targetId: hit.entity.uuid,
+      x: hit.point.x,
+      y: hit.point.y,
+      distance: hit.distance,
+    };
   }
 
   private ensureCurrentPlayerBody(): boolean {

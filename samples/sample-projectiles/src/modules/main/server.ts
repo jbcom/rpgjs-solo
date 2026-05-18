@@ -83,7 +83,7 @@ function shootBolt(player: RpgPlayer, direction: Direction | { x: number; y: num
       trailColor: "#f97316",
     },
     canHit({ target }) {
-      return target?.id === "target";
+      return target?.id === "target" || !target;
     },
   });
 }
@@ -120,8 +120,6 @@ const player: RpgPlayerHooks = {
 
   onInput(player: RpgPlayer, input) {
     const action = input?.action ?? input?.input ?? input;
-
-    console.log(input)
 
     if (action === "projectile:shoot") {
       const target = resolveMouseTarget(input);

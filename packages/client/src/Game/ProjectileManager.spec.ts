@@ -121,4 +121,93 @@ describe("ProjectileManager", () => {
     current = manager.current();
     expect(current).toHaveLength(0);
   });
+
+  test("clamps visual movement at the predicted impact without starting the impact animation", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+
+    const hooks = new Hooks([], "client");
+    const manager = new ProjectileManager(hooks, () => ({
+      id: "p5",
+      targetId: "target",
+      x: 30,
+      y: 0,
+      distance: 30,
+    }));
+    manager.register("arrow", () => null);
+    manager.spawnBatch([
+      {
+        id: "p5",
+        type: "arrow",
+        origin: { x: 0, y: 0 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        range: 500,
+        ttl: 5,
+        spawnTick: 1,
+      },
+    ]);
+
+    vi.setSystemTime(1200);
+    manager.step();
+    let current = manager.current();
+    expect(current).toHaveLength(1);
+    expect(current[0].props.x).toBe(20);
+    expect(current[0].props.impact).toBeUndefined();
+    expect(current[0].props.destroyed).toBe(false);
+
+    vi.setSystemTime(1400);
+    manager.step();
+    current = manager.current();
+    expect(current).toHaveLength(1);
+    expect(current[0].props.x).toBe(30);
+    expect(current[0].props.distance).toBe(30);
+    expect(current[0].props.impact).toBeUndefined();
+    expect(current[0].props.destroyed).toBe(false);
+
+    manager.impactBatch([{ id: "p5", targetId: "target", x: 32, y: 0, distance: 32 }]);
+    current = manager.current();
+    expect(current[0].props.x).toBe(32);
+    expect(current[0].props.impact?.x).toBe(32);
+    expect(current[0].props.destroyed).toBe(true);
+  });
+
+  test("releases an unconfirmed predicted impact after a short grace period", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+
+    const hooks = new Hooks([], "client");
+    const manager = new ProjectileManager(hooks, () => ({
+      id: "p6",
+      targetId: "ignored",
+      x: 30,
+      y: 0,
+      distance: 30,
+    }));
+    manager.register("arrow", () => null);
+    manager.spawnBatch([
+      {
+        id: "p6",
+        type: "arrow",
+        origin: { x: 0, y: 0 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        range: 500,
+        ttl: 5,
+        spawnTick: 1,
+      },
+    ]);
+
+    vi.setSystemTime(1400);
+    manager.step();
+    expect(manager.current()[0].props.x).toBe(30);
+
+    vi.setSystemTime(1900);
+    manager.step();
+    const current = manager.current();
+    expect(current).toHaveLength(1);
+    expect(current[0].props.x).toBe(90);
+    expect(current[0].props.impact).toBeUndefined();
+    expect(current[0].props.destroyed).toBe(false);
+  });
 });

@@ -10,8 +10,10 @@ effects that need server-side impact validation without synchronizing their
 position every frame.
 
 The server is authoritative. It emits compact projectile spawn, impact, and
-destroy batches. The client predicts the visual movement locally and renders
-each projectile with a registered CanvasEngine component.
+destroy batches. The client predicts the visual movement locally, including a
+single local raycast at spawn time to avoid drawing projectiles past obvious
+client-side hitboxes while it waits for the server impact, and renders each
+projectile with a registered CanvasEngine component.
 
 ## Server Usage
 
@@ -299,6 +301,9 @@ Common props:
 - `params` for visual customization
 - `impact` when the server confirms a collision. While `impact` is present,
   `x`, `y`, and `distance` are pinned to the authoritative impact point.
+  Before the server confirmation arrives, the client may also pin `x`, `y`, and
+  `distance` to a locally predicted impact point; `impact` remains undefined
+  until the server confirms the collision.
 
 Do not apply damage in the component. Components are visual only; gameplay
 effects belong in server projectile hooks.

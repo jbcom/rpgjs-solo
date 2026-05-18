@@ -54,11 +54,17 @@ export interface RenderedProjectile {
   props: RenderedProjectileProps;
 }
 
+export type ProjectilePredictionResolver = (
+  projectile: ClientProjectileSpawn,
+) => ClientProjectileImpact | null | undefined;
+
 interface RuntimeProjectile {
   spawn: ClientProjectileSpawn;
   component: any;
   createdAt: number;
   impact?: ClientProjectileImpact;
+  predictedImpact?: ClientProjectileImpact;
+  predictedImpactExpiresAt?: number;
   impactStartedAt?: number;
   destroyAt?: number;
   destroyReason?: string;
@@ -69,8 +75,12 @@ export class ProjectileManager {
   private readonly projectiles = new Map<string, RuntimeProjectile>();
   private readonly version = signal(0);
   private readonly impactDurationMs = 350;
+  private readonly predictionGraceMs = 500;
 
-  constructor(private readonly hooks: Hooks) {}
+  constructor(
+    private readonly hooks: Hooks,
+    private readonly predictionResolver?: ProjectilePredictionResolver,
+  ) {}
 
   current = computed<RenderedProjectile[]>(() => {
     this.version();
@@ -116,6 +126,7 @@ export class ProjectileManager {
         component,
         createdAt: Date.now(),
       };
+      this.setPredictedImpact(runtime);
       this.projectiles.set(projectile.id, runtime);
       this.hooks.callHooks("client-projectiles-onSpawn", runtime.spawn).subscribe();
     }
@@ -190,10 +201,12 @@ export class ProjectileManager {
     }
     const elapsed = elapsedMs / 1000;
     const ttl = Math.max(0.001, spawn.ttl);
-    const distance = projectile.impact?.distance ?? Math.min(spawn.speed * elapsed, spawn.range);
+    const rawDistance = Math.min(spawn.speed * elapsed, spawn.range);
+    const predictedImpact = this.getActivePredictedImpact(projectile, now, rawDistance);
+    const distance = projectile.impact?.distance ?? predictedImpact?.distance ?? rawDistance;
     const progress = Math.min(1, distance / spawn.range);
-    const x = projectile.impact?.x ?? spawn.origin.x + spawn.direction.x * distance;
-    const y = projectile.impact?.y ?? spawn.origin.y + spawn.direction.y * distance;
+    const x = projectile.impact?.x ?? predictedImpact?.x ?? spawn.origin.x + spawn.direction.x * distance;
+    const y = projectile.impact?.y ?? predictedImpact?.y ?? spawn.origin.y + spawn.direction.y * distance;
     const impactElapsedMs = projectile.impactStartedAt !== undefined
       ? Math.max(0, now - projectile.impactStartedAt)
       : undefined;
@@ -215,8 +228,48 @@ export class ProjectileManager {
     };
   }
 
+  private setPredictedImpact(projectile: RuntimeProjectile): void {
+    const impact = this.predictionResolver?.(projectile.spawn);
+    if (!impact || !Number.isFinite(impact.x) || !Number.isFinite(impact.y)) {
+      return;
+    }
+    const distance = typeof impact.distance === "number" && Number.isFinite(impact.distance)
+      ? impact.distance
+      : Math.hypot(impact.x - projectile.spawn.origin.x, impact.y - projectile.spawn.origin.y);
+    if (!Number.isFinite(distance) || distance < 0 || distance > projectile.spawn.range) {
+      return;
+    }
+    projectile.predictedImpact = {
+      ...impact,
+      distance,
+    };
+    const delayMs = (projectile.spawn.delay ?? 0) * 1000;
+    const travelMs = projectile.spawn.speed > 0 ? (distance / projectile.spawn.speed) * 1000 : 0;
+    projectile.predictedImpactExpiresAt = projectile.createdAt + delayMs + travelMs + this.predictionGraceMs;
+  }
+
+  private getActivePredictedImpact(
+    projectile: RuntimeProjectile,
+    now: number,
+    rawDistance: number,
+  ): ClientProjectileImpact | undefined {
+    if (!projectile.predictedImpact || projectile.impact) {
+      return undefined;
+    }
+    const distance = projectile.predictedImpact.distance;
+    if (distance === undefined || rawDistance < distance) {
+      return undefined;
+    }
+    if (projectile.predictedImpactExpiresAt !== undefined && now > projectile.predictedImpactExpiresAt) {
+      return undefined;
+    }
+    return projectile.predictedImpact;
+  }
+
   private setImpact(projectile: RuntimeProjectile, impact: ClientProjectileImpact, now: number): void {
     projectile.impact = impact;
+    projectile.predictedImpact = undefined;
+    projectile.predictedImpactExpiresAt = undefined;
     projectile.impactStartedAt = projectile.impactStartedAt ?? now;
     const impactDestroyAt = projectile.impactStartedAt + this.impactDurationMs;
     projectile.destroyAt = Math.max(projectile.destroyAt ?? 0, impactDestroyAt);

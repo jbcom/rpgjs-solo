@@ -12,3 +12,7 @@ server handles the action payload in `onInput()` before calling
 `player.projectiles.emit()`.
 
 The action key still shoots in the direction the player is facing.
+
+Projectiles collide with both the `target` event and static physics hitboxes
+loaded from the map data. Static hitbox impacts destroy the projectile without
+applying damage because they do not resolve to a gameplay target.
