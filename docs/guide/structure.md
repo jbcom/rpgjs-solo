@@ -36,6 +36,20 @@ new player session on each page load:
 providers: [provideMmorpg({ connectionIdScope: "session" })]
 ```
 
+If your server uses `engine.auth()`, send the token with the MMORPG connection
+query. RPGJS includes this query on the initial lobby connection and on map-room
+reconnects:
+
+```ts
+providers: [
+  provideMmorpg({
+    query: () => ({
+      token: localStorage.getItem("token")
+    })
+  })
+]
+```
+
 ## `server.ts`
 
 `server.ts` creates the game server and registers your providers:

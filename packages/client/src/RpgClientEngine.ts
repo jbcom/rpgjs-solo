@@ -126,6 +126,7 @@ export class RpgClientEngine<T = any> {
   private resizeHandler?: () => void;
   private pointerMoveHandler?: (event: PointerEvent) => void;
   private pointerCanvas?: HTMLCanvasElement;
+  private pendingSyncPackets: any[] = [];
   private notificationManager: NotificationManager = new NotificationManager();
 
   constructor(public context) {
@@ -215,6 +216,21 @@ export class RpgClientEngine<T = any> {
     this.sceneMap.configureClientPrediction(this.predictionEnabled);
     this.sceneMap.loadPhysic();
     this.resolveSceneMapComponent();
+
+    const saveClient = inject(SaveClientService);
+    saveClient.initialize();
+    this.initListeners();
+    this.guiService._initialize();
+
+    try {
+      await this.webSocket.connection();
+    }
+    catch (error) {
+      this.stopPingPong();
+      await this.callConnectError(error);
+      throw error;
+    }
+
     this.selector = document.body.querySelector("#rpg") as HTMLElement;
 
     const bootstrapOptions = (this.globalConfig as any)?.bootstrapCanvasOptions;
@@ -225,9 +241,10 @@ export class RpgClientEngine<T = any> {
     );
     this.canvasApp = app;
     this.canvasElement = canvasElement;
-    this.renderer = app.renderer as PIXI.Renderer;
+    this.renderer = app.renderer as unknown as PIXI.Renderer;
     this.setupPointerTracking();
     this.tick = canvasElement?.propObservables?.context['tick'].observable
+    this.flushPendingSyncPackets();
 
     const inputCheckSubscription = this.tick.subscribe(() => {
       if (Date.now() - this.lastInputTime > 100) {
@@ -243,7 +260,7 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-spritesheetResolver-load", this).subscribe();
     this.hooks.callHooks("client-sounds-load", this).subscribe();
     this.hooks.callHooks("client-soundResolver-load", this).subscribe();
-    
+
     RpgSound.init(this);
     RpgResource.init(this);
     this.hooks.callHooks("client-gui-load", this).subscribe();
@@ -276,13 +293,7 @@ export class RpgClientEngine<T = any> {
     });
     this.tickSubscriptions.push(tickSubscription);
 
-    await this.webSocket.connection(() => {
-      const saveClient = inject(SaveClientService);
-      saveClient.initialize();
-      this.initListeners()
-      this.guiService._initialize()
-      this.startPingPong();
-    });
+    this.startPingPong();
   }
 
   private resolveSceneMapComponent() {
@@ -382,51 +393,11 @@ export class RpgClientEngine<T = any> {
 
   private initListeners() {
     this.webSocket.on("sync", (data) => {
-      if (data.pId) {
-        this.playerIdSignal.set(data.pId);
-        // Signal that player ID was received
-        this.playerIdReceived$.next(true);
+      if (!this.tick) {
+        this.pendingSyncPackets.push(data);
+        return;
       }
-
-      if (this.sceneResetQueued) {
-        this.sceneMap.reset();
-        this.sceneMap.loadPhysic();
-        this.sceneResetQueued = false;
-      }
-
-      // Apply client-side prediction filtering and server reconciliation
-      this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: data }).subscribe();
-
-      const ack = data?.ack;
-      const normalizedAck =
-        ack && typeof ack.frame === "number"
-          ? this.normalizeAckWithSyncState(ack, data)
-          : undefined;
-      const payload = this.prepareSyncPayload(data);
-      load(this.sceneMap, payload, true);
-
-      if (normalizedAck) {
-        this.applyServerAck(normalizedAck);
-      }
-
-      for (const playerId in payload.players ?? {}) {
-        const player = payload.players[playerId]
-        if (!player._param) continue
-        for (const param in player._param) {
-         this.sceneMap.players()[playerId]._param()[param] = player._param[param]
-        }
-      }
-      
-      // Check if players and events are present in sync data
-      const players = payload.players || this.sceneMap.players();
-      if (players && Object.keys(players).length > 0) {
-        this.playersReceived$.next(true);
-      }
-      
-      const events = payload.events || this.sceneMap.events();
-      if (events !== undefined) {
-        this.eventsReceived$.next(true);
-      }
+      this.applySyncPacket(data);
     });
 
     // Handle pong responses for RTT measurement
@@ -596,8 +567,66 @@ export class RpgClientEngine<T = any> {
     })
 
     this.webSocket.on('error', (error) => {
-      this.hooks.callHooks("client-engine-onConnectError", this, error, this.socket).subscribe();
+      void this.callConnectError(error);
     })
+  }
+
+  private async callConnectError(error: any) {
+    await lastValueFrom(this.hooks.callHooks("client-engine-onConnectError", this, error, this.socket));
+  }
+
+  private flushPendingSyncPackets() {
+    const packets = this.pendingSyncPackets;
+    this.pendingSyncPackets = [];
+    packets.forEach((packet) => this.applySyncPacket(packet));
+  }
+
+  private applySyncPacket(data: any) {
+    if (data.pId) {
+      this.playerIdSignal.set(data.pId);
+      // Signal that player ID was received
+      this.playerIdReceived$.next(true);
+    }
+
+    if (this.sceneResetQueued) {
+      this.sceneMap.reset();
+      this.sceneMap.loadPhysic();
+      this.sceneResetQueued = false;
+    }
+
+    // Apply client-side prediction filtering and server reconciliation
+    this.hooks.callHooks("client-sceneMap-onChanges", this.sceneMap, { partial: data }).subscribe();
+
+    const ack = data?.ack;
+    const normalizedAck =
+      ack && typeof ack.frame === "number"
+        ? this.normalizeAckWithSyncState(ack, data)
+        : undefined;
+    const payload = this.prepareSyncPayload(data);
+    load(this.sceneMap, payload, true);
+
+    if (normalizedAck) {
+      this.applyServerAck(normalizedAck);
+    }
+
+    for (const playerId in payload.players ?? {}) {
+      const player = payload.players[playerId]
+      if (!player._param) continue
+      for (const param in player._param) {
+       this.sceneMap.players()[playerId]._param()[param] = player._param[param]
+      }
+    }
+
+    // Check if players and events are present in sync data
+    const players = payload.players || this.sceneMap.players();
+    if (players && Object.keys(players).length > 0) {
+      this.playersReceived$.next(true);
+    }
+
+    const events = payload.events || this.sceneMap.events();
+    if (events !== undefined) {
+      this.eventsReceived$.next(true);
+    }
   }
 
   /**
@@ -696,12 +725,19 @@ export class RpgClientEngine<T = any> {
       room: mapId,
       query: transferToken ? { transferToken } : undefined,
     })
-    await this.webSocket.reconnect(() => {
-      const saveClient = inject(SaveClientService);
-      saveClient.initialize();
-      this.initListeners()
-      this.guiService._initialize()
-    })
+    try {
+      await this.webSocket.reconnect(() => {
+        const saveClient = inject(SaveClientService);
+        saveClient.initialize();
+        this.initListeners()
+        this.guiService._initialize()
+      })
+    }
+    catch (error) {
+      this.stopPingPong();
+      await this.callConnectError(error);
+      throw error;
+    }
     const res = await this.loadMapService.load(mapId)
     this.sceneMap.data.set(res)
     

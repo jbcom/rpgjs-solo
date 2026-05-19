@@ -2,21 +2,25 @@ import { Context } from "@signe/di";
 import { connectionRoom } from "@signe/sync/client";
 import { RpgGui } from "../Gui/Gui";
 import { RpgClientEngine } from "../RpgClientEngine";
-import { AbstractWebsocket, SocketUpdateProperties, WebSocketToken } from "./AbstractSocket";
+import { AbstractWebsocket, SocketQuery, SocketUpdateProperties, WebSocketToken } from "./AbstractSocket";
 import { UpdateMapService, UpdateMapToken } from "@rpgjs/common";
 import { provideKeyboardControls } from "./keyboardControls";
 import { provideSaveClient } from "./save";
+import { isNativeSocketEvent, waitForRpgjsConnected } from "./mmorpg-connection";
 
-interface MmorpgOptions {
+export interface MmorpgOptions {
     host?: string;
     connectionId?: string;
     connectionIdScope?: "local" | "session" | "ephemeral";
+    query?: SocketQuery | (() => SocketQuery | undefined);
+    socketOptions?: Record<string, any>;
 }
 
-class BridgeWebsocket extends AbstractWebsocket {
+export class BridgeWebsocket extends AbstractWebsocket {
   private socket: any;
   private privateId: string;
   private pendingOn: Array<{ event: string; callback: (data: any) => void }> = [];
+  private acceptedOpenListeners = new Set<(data: any) => void>();
   private targetRoom = "lobby-1";
 
   constructor(protected context: Context, private options: MmorpgOptions = {}) {
@@ -51,6 +55,14 @@ class BridgeWebsocket extends AbstractWebsocket {
     return id;
   }
 
+  private resolveQuery(): SocketQuery {
+    const query = typeof this.options.query === "function"
+      ? this.options.query()
+      : this.options.query;
+
+    return query ?? {};
+  }
+
   async connection(listeners?: (data: any) => void) {
     // tmp
     class Room {
@@ -59,17 +71,28 @@ class BridgeWebsocket extends AbstractWebsocket {
     const instance = new Room()
     const host = this.options.host || window.location.host;
     this.socket = await connectionRoom({
+        maxRetries: 0,
+        ...this.options.socketOptions,
         host,
         room: this.targetRoom,
         id: this.privateId,
         query: {
+          ...this.resolveQuery(),
           id: this.privateId,
         },
     }, instance)
 
-    listeners?.(this.socket)
-    this.pendingOn.forEach(({ event, callback }) => this.socket.on(event, callback));
+    const pendingOn = this.pendingOn;
     this.pendingOn = [];
+    pendingOn
+      .filter(({ event }) => !this.isNativeSocketEvent(event))
+      .forEach(({ event, callback }) => this.attachEvent(event, callback));
+    await waitForRpgjsConnected(this.socket.conn);
+    pendingOn
+      .filter(({ event }) => this.isNativeSocketEvent(event))
+      .forEach(({ event, callback }) => this.attachEvent(event, callback));
+    this.emitAcceptedOpen();
+    listeners?.(this.socket)
   }
 
   on(key: string, callback: (data: any) => void) {
@@ -77,16 +100,41 @@ class BridgeWebsocket extends AbstractWebsocket {
       this.pendingOn.push({ event: key, callback });
       return;
     }
-    this.socket.on(key, callback);
+    this.attachEvent(key, callback);
   }
 
   off(event: string, callback: (data: any) => void) {
     if (!this.socket) return;
+    if (event === "open") {
+      this.acceptedOpenListeners.delete(callback);
+      return;
+    }
+    if (this.isNativeSocketEvent(event)) {
+      this.socket.conn.removeEventListener(event, callback);
+      return;
+    }
     this.socket.off(event, callback);
   }
 
   emit(event: string, data: any) {
     this.socket.emit(event, data);
+  }
+
+  private attachEvent(event: string, callback: (data: any) => void) {
+    if (event === "open") {
+      this.acceptedOpenListeners.add(callback);
+      return;
+    }
+    if (this.isNativeSocketEvent(event)) {
+      this.socket.conn.addEventListener(event, callback);
+      return;
+    }
+    this.socket.on(event, callback);
+  }
+
+  private emitAcceptedOpen() {
+    const event = new Event("open");
+    this.acceptedOpenListeners.forEach((callback) => callback(event));
   }
 
   updateProperties({ room, host, query }: SocketUpdateProperties) {
@@ -97,46 +145,24 @@ class BridgeWebsocket extends AbstractWebsocket {
       id: this.privateId,
       host: host || this.options.host || window.location.host,
       query: {
+        ...this.resolveQuery(),
         ...query,
         id: this.privateId,
       },
     })
   }
 
-  private waitForNextOpen(conn: any, timeoutMs = 10000): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let timeoutId: number | undefined;
-      const onOpen = () => {
-        cleanup();
-        resolve();
-      };
-      const onError = () => {
-        cleanup();
-        reject(new Error("WebSocket reconnect failed"));
-      };
-      const cleanup = () => {
-        conn.removeEventListener("open", onOpen);
-        conn.removeEventListener("error", onError);
-        if (timeoutId !== undefined) {
-          window.clearTimeout(timeoutId);
-        }
-      };
-
-      conn.addEventListener("open", onOpen);
-      conn.addEventListener("error", onError);
-      timeoutId = window.setTimeout(() => {
-        cleanup();
-        reject(new Error("WebSocket reconnect timeout"));
-      }, timeoutMs);
-    });
+  private isNativeSocketEvent(event: string) {
+    return isNativeSocketEvent(event);
   }
 
   async reconnect(_listeners?: (data: any) => void): Promise<void> {
     if (!this.socket?.conn) return;
     const conn = this.socket.conn;
-    const opened = this.waitForNextOpen(conn);
+    const connected = waitForRpgjsConnected(conn, 10000, { ignoreCleanClose: true });
     conn.reconnect();
-    await opened;
+    await connected;
+    this.emitAcceptedOpen();
   }
 
   getCurrentRoom(): string {

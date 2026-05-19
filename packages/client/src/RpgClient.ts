@@ -56,7 +56,8 @@ export interface RpgClientEngineHooks {
     onInput?: (engine: RpgClientEngine, obj: { input: RpgActionName, action?: RpgActionName, data?: any, playerId: number }) => any
 
     /**
-     * Called when the user is connected to the server
+     * Called when the user is connected to the server. In MMORPG mode, this
+     * runs after the server sends the RPGJS connection acceptance packet.
      * 
      * @prop { (engine: RpgClientEngine, socket: any) => any } [onConnected]
      * @memberof RpgEngineHooks
@@ -72,7 +73,8 @@ export interface RpgClientEngineHooks {
     onDisconnect?: (engine: RpgClientEngine, reason: any, socket: any) => any
 
     /**
-     * Called when there was a connection error
+     * Called when there was a connection error. In MMORPG mode, this also runs
+     * when server-side auth refuses the connection.
      * 
      * @prop { (engine: RpgClientEngine, err: any, socket: any) => any } [onConnectError]
      * @memberof RpgEngineHooks

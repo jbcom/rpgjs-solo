@@ -46,6 +46,7 @@ const advancedMenu = [{
   text: 'Advanced',
   collapsed: false,
   items: [
+    { text: "Authentication", link: "/advanced/auth" },
     { text: "Provide Load Map", link: "/advanced/provide-load-map" },
     { text: "Latency Simulation", link: "/advanced/latency-simulation" },
     { text: "Packet Loss Simulation", link: "/advanced/packet-loss-simulation" }

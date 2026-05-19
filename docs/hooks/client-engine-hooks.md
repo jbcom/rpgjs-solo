@@ -148,7 +148,9 @@ const engine: RpgClientEngineHooks = {
 
 ### onConnected
 
-**Description:** Called when the client successfully connects to the server
+**Description:** Called when the client successfully connects to the server.
+In MMORPG mode, this hook runs only after the server sends the RPGJS
+acceptance packet, so a refused `auth()` does not trigger it.
 
 **Parameters:**
 - `engine: RpgClientEngine` - The client engine instance
@@ -232,7 +234,7 @@ const engine: RpgClientEngineHooks = {
 
 ### onConnectError
 
-**Description:** Called when there's an error connecting to the server
+**Description:** Called when there's an error connecting to the server. In MMORPG mode, this is also called when server-side `auth()` refuses the WebSocket connection.
 
 **Parameters:**
 - `engine: RpgClientEngine` - The client engine instance
@@ -274,6 +276,11 @@ const engine: RpgClientEngineHooks = {
     }
 }
 ```
+
+`onStart` means the client engine is booting. It does not guarantee that the
+player has been accepted by the server. Use `onConnected` for accepted
+connections and `onConnectError` to show a login screen, refresh a token, or
+redirect the player after an authentication failure.
 
 ### onWindowResize
 

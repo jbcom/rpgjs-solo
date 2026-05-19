@@ -79,17 +79,21 @@ const engine: RpgServerEngineHooks = {
 
 ### auth
 
-**Description:** Flexible authentication function for player connections. This function is called during the player connection phase and should handle credential verification.
+**Description:** Flexible authentication function for player connections. This function is called during each RPGJS room connection and should handle credential verification before the player is allowed to join the room.
 
 **Parameters:**
 - `server: RpgServerEngine` - The server engine instance
 - `socket: any` - The socket instance for the connecting player
 
 **Returns:**
-- `Promise<string> | string | undefined` - Player's unique identifier if authentication succeeds, or undefined to generate an ID automatically
+- `Promise<string> | string | undefined` - Player's stable public identifier if authentication succeeds, or undefined to generate an ID automatically
 
 **Throws:**
 - `string` - Error message if authentication fails
+
+The returned identifier becomes the player `publicId` used by RPGJS and Signe room user collections. In MMORPG mode, the hook is called when the client connects to the lobby and again when it reconnects to map rooms. Send the same token on each connection and return the same id for the same account.
+
+For browser MMORPG clients, pass the token through `provideMmorpg({ query })`; see [Authentication](/advanced/auth).
 
 **Example:**
 ```ts
@@ -110,6 +114,82 @@ const engine: RpgServerEngineHooks = {
         }
     }
 }
+```
+
+## Engine Runtime API
+
+The `server` argument is an `RpgServerEngine` instance. It exposes stable helpers
+for reading the current RPGJS room without depending on low-level Signe internals.
+
+```ts
+const engine: RpgServerEngineHooks = {
+    onStart(server: RpgServerEngine) {
+        const room = server.getCurrentRoom()
+        const roomInfo = server.getCurrentRoomInfo()
+        const globalConfig = server.globalConfig
+
+        console.log(roomInfo?.id, roomInfo?.kind, globalConfig)
+    }
+}
+```
+
+### getCurrentRoom
+
+Returns the current RPGJS room instance, such as `LobbyRoom` or `RpgMap`.
+
+```ts
+const room = server.getCurrentRoom()
+```
+
+This is different from `server.room`, which is the low-level Signe/Party room
+wrapper.
+
+### getCurrentRoomInfo
+
+Returns stable metadata for the current room:
+
+```ts
+const info = server.getCurrentRoomInfo()
+
+if (info?.kind === 'map') {
+    console.log(`Current map room: ${info.name}`)
+}
+```
+
+The returned object contains:
+
+- `id`: full room id, such as `lobby-1` or `map-town`
+- `kind`: `lobby`, `map`, or `unknown`
+- `name`: room id without the RPGJS prefix
+- `className`: runtime room class name
+- `playersCount`: number of players in the room when available
+- `autoSync`: whether automatic sync is enabled
+- `hasDatabase`: whether the room exposes a database signal
+
+You can also use `getCurrentRoomId()` and `getCurrentRoomKind()` when you only
+need one value.
+
+### globalConfig
+
+`server.globalConfig` is provided for compatibility with older server-engine
+usage:
+
+```ts
+const globalConfig = server.globalConfig
+```
+
+In map rooms, it returns the current map's `globalConfig`. In lobby rooms or
+before room initialization, it returns the last assigned value or `{}`.
+
+### app and io
+
+`server.app` and `server.io` are optional compatibility handles. RPGJS v5 does
+not create Express or socket.io automatically, but custom Node entries can assign
+these properties when migrating older code:
+
+```ts
+server.app = app
+server.io = wsServer
 ```
 
 ## Complete Example
@@ -160,4 +240,4 @@ const engine: RpgServerEngineHooks = {
 export default defineModule({
     engine
 })
-``` 
+```

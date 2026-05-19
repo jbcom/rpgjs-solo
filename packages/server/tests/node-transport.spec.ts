@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createServer, provideServerModules } from "../src";
 import { RpgServerEngine } from "../src/RpgServerEngine";
 import {
   MAP_UPDATE_TOKEN_ENV,
@@ -92,6 +93,19 @@ class MockServer extends RpgServerEngine {
 
 class RealServer extends RpgServerEngine {}
 
+class AuthServer extends RpgServerEngine {
+  protected async authenticateConnection(_connection: any, context: any) {
+    const url = new URL(context.request.url);
+    const token = url.searchParams.get("token");
+
+    if (token !== "valid-token") {
+      throw new Error("Authentication failed");
+    }
+
+    return "user-1";
+  }
+}
+
 describe("createRpgServerTransport", () => {
   const originalMapUpdateToken = process.env[MAP_UPDATE_TOKEN_ENV];
 
@@ -100,6 +114,23 @@ describe("createRpgServerTransport", () => {
     PartyConnection.configureBandwidth(false, 100);
     PartyConnection.configureLatency(false, 0);
     delete process.env[MAP_UPDATE_TOKEN_ENV];
+  });
+
+  it("returns safe defaults before the RPGJS room is initialized", () => {
+    const engine = new RpgServerEngine(undefined as any);
+    const app = { name: "express-app" };
+    const io = { name: "ws-server" };
+
+    engine.app = app;
+    engine.io = io;
+
+    expect(engine.getCurrentRoom()).toBeNull();
+    expect(engine.getCurrentRoomId()).toBeNull();
+    expect(engine.getCurrentRoomKind()).toBe("unknown");
+    expect(engine.getCurrentRoomInfo()).toBeNull();
+    expect(engine.globalConfig).toEqual({});
+    expect(engine.app).toBe(app);
+    expect(engine.io).toBe(io);
   });
 
   afterEach(() => {
@@ -217,6 +248,137 @@ describe("createRpgServerTransport", () => {
     expect(second.sent).toContain("hello");
   });
 
+  it("uses the authenticated public id when joining a room", async () => {
+    const transport = createRpgServerTransport(AuthServer as any, {
+      initializeMaps: false,
+    });
+    const ws = new MockWebSocket();
+
+    expect(await transport.acceptWebSocket(ws as any, {
+      url: "http://localhost/parties/main/lobby-1?id=browser-session&token=valid-token",
+      method: "GET",
+      headers: {
+        host: "localhost",
+      },
+    })).toBe(true);
+
+    await wait(10);
+
+    const syncMessage = ws.sent
+      .map((message) => JSON.parse(message))
+      .find((message) => message.type === "sync");
+
+    expect(syncMessage).toMatchObject({
+      type: "sync",
+      value: {
+        pId: "user-1",
+        players: {
+          "user-1": expect.any(Object),
+        },
+      },
+    });
+
+    const room = transport.getRoom("lobby-1")!;
+    expect(await room.storage.get("session:browser-session")).toMatchObject({
+      publicId: "user-1",
+    });
+    expect(await room.storage.get("session-public:user-1")).toEqual(["browser-session"]);
+  });
+
+  it("exposes public room information for the current lobby room", async () => {
+    const transport = createRpgServerTransport(RealServer as any, {
+      initializeMaps: false,
+    });
+    const ws = new MockWebSocket();
+
+    expect(await transport.acceptWebSocket(ws as any, {
+      url: "http://localhost/parties/main/lobby-1?id=browser-session",
+      method: "GET",
+      headers: {
+        host: "localhost",
+      },
+    })).toBe(true);
+
+    await wait(10);
+
+    const server = transport.getServer("lobby-1") as RealServer;
+
+    expect(server.getCurrentRoom()).toBe(server.subRoom);
+    expect(server.getCurrentRoomId()).toBe("lobby-1");
+    expect(server.getCurrentRoomKind()).toBe("lobby");
+    expect(server.globalConfig).toEqual({});
+    expect(server.getCurrentRoomInfo()).toMatchObject({
+      id: "lobby-1",
+      kind: "lobby",
+      name: "1",
+      className: "LobbyRoom",
+      playersCount: 1,
+      autoSync: true,
+      hasDatabase: true,
+    });
+  });
+
+  it("calls the server engine auth hook during room connection", async () => {
+    const GameServer = createServer({
+      providers: [
+        provideServerModules([{
+          engine: {
+            auth(_server: RpgServerEngine, socket: any) {
+              if (socket.handshake.query.token !== "valid-token") {
+                throw new Error("Authentication failed");
+              }
+              return "hook-user";
+            },
+          },
+        }]),
+      ],
+    });
+    const transport = createRpgServerTransport(GameServer as any, {
+      initializeMaps: false,
+    });
+    const ws = new MockWebSocket();
+
+    expect(await transport.acceptWebSocket(ws as any, {
+      url: "http://localhost/parties/main/lobby-1?id=hook-session&token=valid-token",
+      method: "GET",
+      headers: {
+        host: "localhost",
+      },
+    })).toBe(true);
+
+    await wait(10);
+
+    const syncMessage = ws.sent
+      .map((message) => JSON.parse(message))
+      .find((message) => message.type === "sync");
+
+    expect(syncMessage.value.pId).toBe("hook-user");
+    expect(await transport.getRoom("lobby-1")!.storage.get("session:hook-session")).toMatchObject({
+      publicId: "hook-user",
+    });
+  });
+
+  it("rejects a websocket connection when authentication fails", async () => {
+    const transport = createRpgServerTransport(AuthServer as any, {
+      initializeMaps: false,
+    });
+    const ws = new MockWebSocket();
+
+    expect(await transport.acceptWebSocket(ws as any, {
+      url: "http://localhost/parties/main/lobby-1?id=browser-session&token=invalid-token",
+      method: "GET",
+      headers: {
+        host: "localhost",
+      },
+    })).toBe(true);
+
+    await wait(10);
+
+    expect(ws.readyState).toBe(3);
+    expect(ws.sent).toEqual([]);
+    expect(Array.from(transport.getRoom("lobby-1")!.getConnections())).toHaveLength(0);
+  });
+
   it("rejects map/update in production when the token is missing", async () => {
     process.env[MAP_UPDATE_TOKEN_ENV] = "prod-secret";
 
@@ -260,5 +422,43 @@ describe("createRpgServerTransport", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
+  });
+
+  it("exposes public room information and global config for the current map room", async () => {
+    const transport = createRpgServerTransport(RealServer as any, {
+      initializeMaps: false,
+    });
+    const mapConfig = {
+      startMapId: "town",
+      weather: {
+        effect: "rain",
+      },
+    };
+
+    const response = await transport.updateMap("town", {
+      id: "town",
+      width: 320,
+      height: 240,
+      config: mapConfig,
+      events: [],
+    });
+
+    expect(response.status).toBe(200);
+
+    const server = transport.getServer("map-town") as RealServer;
+
+    expect(server.getCurrentRoom()).toBe(server.subRoom);
+    expect(server.getCurrentRoomId()).toBe("map-town");
+    expect(server.getCurrentRoomKind()).toBe("map");
+    expect(server.globalConfig).toEqual(mapConfig);
+    expect(server.getCurrentRoomInfo()).toMatchObject({
+      id: "map-town",
+      kind: "map",
+      name: "town",
+      className: "RpgMap",
+      playersCount: 0,
+      autoSync: true,
+      hasDatabase: true,
+    });
   });
 });

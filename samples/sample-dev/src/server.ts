@@ -1,4 +1,4 @@
-import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, EventMode, MapData, Frequency, ATK, PDEF, LocalStorageSaveStorageStrategy, provideAutoSave } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, EventMode, MapData, Frequency, ATK, PDEF, LocalStorageSaveStorageStrategy, provideAutoSave, RpgServerEngine } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
@@ -258,6 +258,14 @@ export default createServer({
             'fire-armor': FireArmor,
             'fire-skill': fireSkill,
             'basic-potion': BasicPotion,
+           }
+        },
+        engine: {
+          auth(server: RpgServerEngine) {
+            if (server.getCurrentRoomId()?.includes('lobby')) {
+              return undefined
+            }
+            throw 'test'
           }
         },
         player: {
