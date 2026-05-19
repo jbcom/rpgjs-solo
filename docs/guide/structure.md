@@ -180,6 +180,43 @@ provideClientGlobalConfig({
 })
 ```
 
+### Custom action inputs
+
+Custom action inputs use the same client-to-server flow whether they come from
+the configured action key or from code. The client sends a payload shaped like
+`{ action, data }`, and the server receives that payload in the player's
+`onInput()` hook.
+
+```ts
+// Client code
+client.processAction("projectile:shoot", {
+  target: client.pointer.world(),
+  source: "mouse"
+})
+```
+
+```ts
+// Server player hook
+export const player = {
+  onInput(player, input) {
+    if (input.action !== "projectile:shoot") return
+
+    const target = input.data?.target
+    // Validate all client-provided data before using it.
+  }
+}
+```
+
+Only the default `"action"` input, or `Control.Action`, automatically triggers
+nearby event `onAction()` hooks. A custom action such as `"projectile:shoot"`
+goes directly to `player.onInput()` and does not trigger event interactions by
+itself.
+
+Do not confuse this player hook with map movement input processing. Custom
+actions are sent with `client.processAction()` and handled in `player.onInput()`;
+movement inputs are queued separately by the map and processed by the movement
+loop.
+
 You can retrieve this global config anywhere on the client with `inject(GlobalConfigToken)`:
 
 ```ts

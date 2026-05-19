@@ -20,7 +20,7 @@
         displayShadow.set(!!object.graphics()[0]);
     })
 
-    const hitbox = object.hitbox;
+    const hitbox = object().hitbox;
     const widthShadow = 20;
     const shadow = computed(() => ({
         x: hitbox().w / 2 + 8,

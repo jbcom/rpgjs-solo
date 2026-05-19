@@ -13,7 +13,7 @@
 
     const { object } = defineProps();
 
-    const hitbox = object.hitbox;
+    const hitbox = object().hitbox;
     const shadow = computed(() => ({
         x: hitbox().w / 2,
         y: hitbox().h / 2 + 20,

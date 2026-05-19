@@ -32,6 +32,7 @@ import { HudComponent } from "@rpgjs/client";
 
 export default {
   providers: [
+    
     provideLoadMap((id: string) => {
       const colorMap = {
         "center-map": "red",

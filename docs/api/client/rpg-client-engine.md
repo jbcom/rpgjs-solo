@@ -528,6 +528,10 @@ Send an action input to the server. Use the optional `data` payload for context
 such as a pointer position, selected target, or UI command details. The server
 receives the normalized payload in `player.onInput()`.
 
+For the full flow, including keyboard action bindings and the difference between
+custom actions and event interactions, see
+[`Custom action inputs`](../../guide/structure.md#custom-action-inputs).
+
 - Source: `packages/client/src/RpgClientEngine.ts`
 - Kind: `method`
 - Defined in: `RpgClientEngine`
