@@ -1,5 +1,11 @@
 # @rpgjs/vue
 
+## 5.0.0-beta.11
+
+### Patch Changes
+
+- Align the Vue package compiler dependency with the beta.11 CanvasEngine release.
+
 ## 5.0.0-beta.10
 
 ### Patch Changes

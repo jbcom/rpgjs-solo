@@ -1,5 +1,17 @@
 # @rpgjs/client
 
+## 5.0.0-beta.11
+
+### Patch Changes
+
+- Add projectile runtime support with client-side prediction, action input payload handling, pointer context helpers, standalone message handling, and MMORPG connection authentication.
+
+  Add composable CanvasEngine scene map components and update built-in GUI/dynamic components for the current CanvasEngine release.
+
+  - @rpgjs/common@5.0.0-beta.11
+  - @rpgjs/server@5.0.0-beta.11
+  - @rpgjs/ui-css@5.0.0-beta.11
+
 ## 5.0.0-beta.10
 
 ### Patch Changes

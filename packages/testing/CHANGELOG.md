@@ -1,5 +1,14 @@
 # @rpgjs/testing
 
+## 5.0.0-beta.11
+
+### Patch Changes
+
+- Align CanvasEngine and Signe test dependencies with the beta.11 package set.
+
+  - @rpgjs/client@5.0.0-beta.11
+  - @rpgjs/server@5.0.0-beta.11
+
 ## 5.0.0-beta.10
 
 ### Patch Changes

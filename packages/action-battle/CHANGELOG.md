@@ -1,5 +1,16 @@
 # @rpgjs/action-battle
 
+## 5.0.0-beta.11
+
+### Patch Changes
+
+- Update CanvasEngine peer and compiler dependencies for the beta.11 package set.
+
+  - @rpgjs/client@5.0.0-beta.11
+  - @rpgjs/common@5.0.0-beta.11
+  - @rpgjs/server@5.0.0-beta.11
+  - @rpgjs/vite@5.0.0-beta.11
+
 ## 5.0.0-beta.10
 
 ### Patch Changes

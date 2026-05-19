@@ -1,5 +1,15 @@
 # @rpgjs/server
 
+## 5.0.0-beta.11
+
+### Patch Changes
+
+- Add server-authoritative projectile helpers, action input handling, MMORPG lobby authentication, node transport coverage, and related map room integration updates.
+
+  - @rpgjs/common@5.0.0-beta.11
+  - @rpgjs/physic@5.0.0
+  - @rpgjs/testing@5.0.0-beta.11
+
 ## 5.0.0-beta.10
 
 ### Patch Changes

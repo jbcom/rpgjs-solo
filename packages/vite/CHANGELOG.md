@@ -1,5 +1,13 @@
 # @rpgjs/vite
 
+## 5.0.0-beta.11
+
+### Patch Changes
+
+- Update CanvasEngine compiler and tiled integration dependencies, and include the sample projectiles workspace.
+
+  - @rpgjs/server@5.0.0-beta.11
+
 ## 5.0.0-beta.10
 
 ### Patch Changes

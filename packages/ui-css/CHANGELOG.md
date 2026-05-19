@@ -1,5 +1,11 @@
 # @rpgjs/ui-css
 
+## 5.0.0-beta.11
+
+### Patch Changes
+
+- Publish beta.11 to keep the UI CSS package aligned with the RPGJS beta package set.
+
 ## 5.0.0-beta.10
 
 ### Patch Changes

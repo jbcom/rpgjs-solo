@@ -1,5 +1,11 @@
 # @rpgjs/common
 
+## 5.0.0-beta.11
+
+### Patch Changes
+
+- Add shared action input definitions and module metadata updates used by projectile and interaction flows.
+
 ## 5.0.0-beta.10
 
 ### Patch Changes
