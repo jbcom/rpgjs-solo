@@ -39,12 +39,12 @@
   import { computed, effect } from "canvasengine";
   import { inject } from "../../core/inject";
   import { RpgClientEngine } from "../../RpgClientEngine";
-  import SceneMap from './draw-map.ce'
   import { RpgGui } from "../../Gui/Gui";
   import { delay } from "@rpgjs/common";
   import { NightAmbiant, SpriteShadows } from '@canvasengine/presets'
 
   const engine = inject(RpgClientEngine);
+  const SceneMap = engine.sceneMapComponent;
   const guiService = inject(RpgGui);
   const sceneData = engine.sceneMap.data
   const lighting = engine.sceneMap.lighting

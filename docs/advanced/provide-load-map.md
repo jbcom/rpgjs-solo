@@ -122,6 +122,35 @@ The `EventLayerComponent` automatically handles:
 - Character animations and interactions
 - Proper layering and sorting
 
+## Composing the SceneMap
+
+If you want to add scene-level components without changing each map renderer, define a client `sceneMap.component` and wrap the built-in `SceneMap` component:
+
+```ts
+import { RpgClient, defineModule } from '@rpgjs/client'
+import MyScene from './my-scene.ce'
+
+export default defineModule<RpgClient>({
+  sceneMap: {
+    component: MyScene
+  }
+})
+```
+
+```html
+<!-- my-scene.ce -->
+<SceneMap>
+  <MyComponent />
+</SceneMap>
+
+<script>
+  import { SceneMap } from '@rpgjs/client'
+  import MyComponent from './my-component.ce'
+</script>
+```
+
+Use `SceneMap` children for overlays or scene systems that should be mounted around the current map renderer. Use `EventLayerComponent` children when the custom elements must be sorted by `zIndex` with players and events.
+
 ### Adding Custom Elements to EventLayerComponent
 
 You can add custom elements inside `EventLayerComponent` that will be automatically sorted by zIndex with the rest of the elements:

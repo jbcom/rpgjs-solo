@@ -5,7 +5,7 @@ description: "Guide for Client Scene Hooks in RPGJS."
 
 # Client Scene Hooks
 
-Scene hooks allow you to customize the behavior of scenes (maps) on the client side. These hooks are defined in the `scenes` property of your client module.
+Scene hooks allow you to customize the behavior of scenes (maps) on the client side. These hooks are defined in the `sceneMap` property of your client module.
 
 ## Usage
 
@@ -22,11 +22,38 @@ const sceneMap: RpgSceneMapHooks = {
 }
 
 export default defineModule({
-    scenes: {
-        map: sceneMap
+    sceneMap
+})
+```
+
+## Composable SceneMap Component
+
+Use `sceneMap.component` to wrap the default scene renderer and add scene-level CanvasEngine components without replacing the map component returned by `provideLoadMap()`.
+
+```ts
+import { RpgClient, defineModule } from '@rpgjs/client'
+import MyScene from './my-scene.ce'
+
+export default defineModule<RpgClient>({
+    sceneMap: {
+        component: MyScene
     }
 })
 ```
+
+```html
+<!-- my-scene.ce -->
+<SceneMap>
+    <MyComponent />
+</SceneMap>
+
+<script>
+    import { SceneMap } from '@rpgjs/client'
+    import MyComponent from './my-component.ce'
+</script>
+```
+
+Children passed to `SceneMap` are rendered in the map scene after the map renderer and before component animations, projectiles, and weather. If the custom element must be sorted with players and events, put it inside `EventLayerComponent` in the map component instead.
 
 ## Available Hooks
 
@@ -662,7 +689,5 @@ const sceneMap: RpgSceneMapHooks = {
 }
 
 export default defineModule({
-    scenes: {
-        map: sceneMap
-    }
+    sceneMap
 }) 

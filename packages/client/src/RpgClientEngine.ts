@@ -1,4 +1,5 @@
 import Canvas from "./components/scenes/canvas.ce";
+import BuiltinSceneMap from "./components/scenes/draw-map.ce";
 import { inject } from './core/inject'
 import { signal, bootstrapCanvas, Howl, trigger, type Trigger } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
@@ -62,6 +63,7 @@ export class RpgClientEngine<T = any> {
   private selector: HTMLElement;
   public globalConfig: T;
   public sceneComponent: any;
+  public sceneMapComponent: any = BuiltinSceneMap;
   stopProcessingInput = false;
   width = signal("100%");
   height = signal("100%");
@@ -212,6 +214,7 @@ export class RpgClientEngine<T = any> {
     this.sceneMap = new RpgClientMap()
     this.sceneMap.configureClientPrediction(this.predictionEnabled);
     this.sceneMap.loadPhysic();
+    this.resolveSceneMapComponent();
     this.selector = document.body.querySelector("#rpg") as HTMLElement;
 
     const bootstrapOptions = (this.globalConfig as any)?.bootstrapCanvasOptions;
@@ -280,6 +283,14 @@ export class RpgClientEngine<T = any> {
       this.guiService._initialize()
       this.startPingPong();
     });
+  }
+
+  private resolveSceneMapComponent() {
+    const components = this.hooks.getHookFunctions("client-sceneMap-component");
+    const component = components[components.length - 1];
+    if (component) {
+      this.sceneMapComponent = component;
+    }
   }
 
   private setupPointerTracking() {

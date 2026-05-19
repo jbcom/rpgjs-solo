@@ -1,7 +1,8 @@
 import EventLayerComponent from "./scenes/event-layer.ce";
+import SceneMap from "./scenes/draw-map.ce";
 import CharacterComponent from "./character.ce";
 
 // Prebuilt sprite components
 export { HpBar } from "./prebuilt";
 
-export { EventLayerComponent, CharacterComponent } 
+export { EventLayerComponent, SceneMap, CharacterComponent } 

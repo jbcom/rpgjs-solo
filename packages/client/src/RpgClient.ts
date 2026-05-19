@@ -250,6 +250,14 @@ export interface RpgSceneHooks<Scene> {
 
 export interface RpgSceneMapHooks extends RpgSceneHooks<SceneMap> {
     /**
+     * Root CanvasEngine component used to render the RPG scene map.
+     *
+     * Use the exported `SceneMap` component inside your custom component to
+     * keep the default map rendering and compose additional scene children.
+     */
+    component?: ComponentFunction
+
+    /**
      * The map and resources are being loaded
      * 
      * @prop { (scene: RpgSceneMap, loader: PIXI.Loader) => any } [onMapLoading]
@@ -650,32 +658,35 @@ export interface RpgClient {
      * */
     sprite?: RpgSpriteHooks
 
-    /** 
-     * Reference the scenes of the game. Here you can put your own class that inherits RpgSceneMap
+    /**
+     * Reference the scenes of the game.
      * 
      * ```ts
      * import { RpgSceneMapHooks, RpgClient, defineModule } from '@rpgjs/client'
+     * import MyScene from './my-scene.ce'
      * 
      * export const sceneMap: RpgSceneMapHooks = {
-     *     
+     *     component: MyScene
      * }
      * 
      * defineModule<RpgClient>({
-     *      scenes: {
-     *          // If you put the RpgSceneMap scene, Thhe key is called mandatory `map`
-     *          map: sceneMap
-     *      }
+     *      sceneMap
      * })
      * ``` 
      * 
-     * @prop { [sceneName: string]: RpgSceneMapHooks } [scenes]
+     * @prop {RpgSceneMapHooks} [sceneMap]
      * @memberof RpgClient
      * */
+    sceneMap?: RpgSceneMapHooks
+
+    /**
+     * Legacy scene map hook container.
+     *
+     * Prefer `sceneMap` for new code.
+     */
     scenes?: {
         map: RpgSceneMapHooks
     }
-
-    sceneMap?: RpgSceneMapHooks
 
     /** 
      * Array containing the list of component animations

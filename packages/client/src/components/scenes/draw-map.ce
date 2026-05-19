@@ -7,6 +7,10 @@
     }
   </Container>
 
+  @for (child of children) {
+    <child />
+  }
+
   @for (componentAnimation of componentAnimations) {
     <Container>
       @for (animation of componentAnimation.current) {
@@ -32,6 +36,7 @@
     import { RpgClientEngine } from "../../RpgClientEngine";
     import { Weather } from '@canvasengine/presets'
 
+    const { children } = defineProps()
     const engine = inject(RpgClientEngine);
     const componentAnimations = engine.componentAnimations
     const projectiles = engine.projectiles.current

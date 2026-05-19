@@ -147,6 +147,10 @@ export class Hooks {
       }
     });
   }
+
+  public getHookFunctions(hookId: string): Function[] {
+    return [...(this.hookFunctions[hookId] ?? [])];
+  }
 }
 
 /**
