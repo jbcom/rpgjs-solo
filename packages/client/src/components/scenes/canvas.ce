@@ -23,7 +23,15 @@
     <SceneMap />
   </Viewport>
   @for (gui of guiList) {
-      <Container display="flex">
+      <Container
+        positionType="absolute"
+        top={0}
+        left={0}
+        right={0}
+        bottom={0}
+        width={engine.width}
+        height={engine.height}
+      >
         @if (gui.display) {
           <gui.component data={gui.data} dependencies={gui.dependencies} onFinish={(data) => {
             onGuiFinish(gui, data)

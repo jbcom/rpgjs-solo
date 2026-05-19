@@ -265,7 +265,6 @@ export default createServer({
             wood: Number
           },
           onStart: (player: RpgPlayer) => {
-            console.log('ll')
             player.addParameter(MAXHP, {
               start: 100,
               end: 103,

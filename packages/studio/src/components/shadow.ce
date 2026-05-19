@@ -21,11 +21,14 @@
     })
 
     const hitbox = object().hitbox;
-    const widthShadow = 20;
-    const shadow = computed(() => ({
-        x: hitbox().w / 2 + 8,
-        y: hitbox().h - 5,
-        width: hitbox().w,
-        height: hitbox().h / 2,
-    }))
+    const shadow = computed(() => {
+        const width = hitbox().w * 1.15;
+        const height = Math.max(8, hitbox().h * 0.35);
+        return {
+            x: (hitbox().w - width) / 2,
+            y: hitbox().h + 2,
+            width,
+            height,
+        }
+    })
 </script>
