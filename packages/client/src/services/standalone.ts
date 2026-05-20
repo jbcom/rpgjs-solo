@@ -59,10 +59,10 @@ class BridgeWebsocket extends AbstractWebsocket {
       }
     })
     listeners?.(this.socket)
-    await this.serverInstance.onConnect(this.socket.conn as any, { request } as any);
     this.room.clients.set(this.socket.id, this.socket);
     this.pendingOn.forEach(({ event, callback }) => this.socket.addEventListener(event, callback));
     this.pendingOn = [];
+    await this.serverInstance.onConnect(this.socket.conn as any, { request } as any);
     return this.socket
   }
 

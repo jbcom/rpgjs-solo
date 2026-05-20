@@ -261,12 +261,12 @@ export default createServer({
            }
         },
         engine: {
-          auth(server: RpgServerEngine) {
-            if (server.getCurrentRoomId()?.includes('lobby')) {
-              return undefined
-            }
-            throw 'test'
-          }
+          // auth(server: RpgServerEngine) {
+          //   if (server.getCurrentRoomId()?.includes('lobby')) {
+          //     return undefined
+          //   }
+          //   throw 'test'
+          // }
         },
         player: {
           props: {

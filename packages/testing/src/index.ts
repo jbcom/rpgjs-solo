@@ -19,7 +19,6 @@ import {
   RpgPlayer,
 } from "@rpgjs/server";
 import { h, Container } from "canvasengine";
-import { mockComponents } from "@canvasengine/testing";
 import { clearInject as clearClientInject } from "@rpgjs/client";
 import { clearInject as clearServerInject } from "@rpgjs/server";
 import { combineLatest, filter, take, firstValueFrom, Subject, map, throwError, race, timer, switchMap } from "rxjs";
@@ -251,11 +250,9 @@ export async function testing(
         ...clientConfig,
         providers: [
           provideClientGlobalConfig({
-            // TODO
-            // bootstrapCanvasOptions: {
-            //   components: mockComponents,
-            //   autoRegister: false,
-            // },
+            bootstrapCanvasOptions: {
+              enableLayout: false,
+            },
           }),
           ...(hasLoadMap ? [] : [provideTestingLoadMap()]), // Add only if not already provided
           provideClientModules(clientModules),

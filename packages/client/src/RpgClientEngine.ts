@@ -421,6 +421,8 @@ export class RpgClientEngine<T = any> {
 
     this.webSocket.on("changeMap", (data) => {
       this.sceneResetQueued = true;
+      this.sceneMap.weatherState.set(null);
+      this.sceneMap.lightingState.set(null);
       this.sceneMap.clearLightSpots();
       this.projectiles.clear();
       // Reset camera follow to default (follow current player) when changing maps
@@ -589,7 +591,11 @@ export class RpgClientEngine<T = any> {
     }
 
     if (this.sceneResetQueued) {
+      const weatherState = this.sceneMap.weatherState();
+      const lightingState = this.sceneMap.lightingState();
       this.sceneMap.reset();
+      this.sceneMap.weatherState.set(weatherState);
+      this.sceneMap.lightingState.set(lightingState);
       this.sceneMap.loadPhysic();
       this.sceneResetQueued = false;
     }
