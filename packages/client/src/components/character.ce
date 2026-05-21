@@ -345,6 +345,16 @@
     realAnimationName.set('walk');
   };
 
+  const resumeHeldDirectionWalkAnimation = () => {
+    if (!isCurrentPlayer()) return false;
+    if (activeDirectionKeys.size === 0) return false;
+    if (!canControls()) return false;
+    if (sprite.animationFixed) return false;
+    if (sprite.animationIsPlaying && sprite.animationIsPlaying()) return false;
+    realAnimationName.set('walk');
+    return true;
+  };
+
   const processMovementInput = (input) => {
     if (!canControls()) return;
     client.processInput({ input });
@@ -369,6 +379,7 @@
       const keyId = keyboardEventId(event);
       if (event.type === 'keydown') {
         activeDirectionKeys.add(keyId);
+        resumeHeldDirectionWalkAnimation();
       }
       else {
         activeDirectionKeys.delete(keyId);
@@ -863,7 +874,9 @@
     }
 
     if (curr == 'stand' && !isMoving) {
-      realAnimationName.set(curr);
+      if (!resumeHeldDirectionWalkAnimation()) {
+        realAnimationName.set(curr);
+      }
     }
     else if (curr == 'walk' && isMoving) {
       realAnimationName.set(curr);
@@ -879,6 +892,16 @@
       }
     }
   });
+
+  const resumeWalkSubscriptions = [
+    sprite._canMove,
+    sprite._animationFixed,
+    sprite.animationIsPlaying,
+  ]
+    .filter(signal => signal?.observable)
+    .map(signal => signal.observable.subscribe(() => {
+      resumeHeldDirectionWalkAnimation();
+    }));
 
   /**
    * Cleanup subscriptions and call hooks before sprite destruction.
@@ -923,6 +946,7 @@
     }
     removeTransitionSubscription?.unsubscribe();
     animationMovementSubscription.unsubscribe();
+    resumeWalkSubscriptions.forEach(subscription => subscription.unsubscribe());
     xSubscription.unsubscribe();
     ySubscription.unsubscribe();
     await lastValueFrom(hooks.callHooks("client-sprite-onDestroy", sprite)) 
