@@ -130,12 +130,12 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     const restoreState = this.animationRestoreState;
     this.clearAnimationControls();
     this.animationCurrentIndex.set(0);
+    this.animationRestoreState = undefined;
+    this.animationIsPlaying.set(false);
     if (restoreState) {
       this.animationName.set(restoreState.animationName);
       this.graphics.set([...restoreState.graphics]);
     }
-    this.animationRestoreState = undefined;
-    this.animationIsPlaying.set(false);
     this.resolveAnimationWait();
   }
 

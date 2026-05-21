@@ -854,17 +854,25 @@
   });
 
   const animationMovementSubscription = combineLatest([animationChange$, moving$]).subscribe(([[prev, curr], isMoving]) => {
+    const isMovementAnimation = movementAnimations.includes(curr);
+    const isTemporaryAnimationPlaying =
+      sprite.animationIsPlaying && sprite.animationIsPlaying();
+
+    if (sprite.animationFixed && isMovementAnimation && isTemporaryAnimationPlaying) {
+      return;
+    }
+
     if (curr == 'stand' && !isMoving) {
       realAnimationName.set(curr);
     }
     else if (curr == 'walk' && isMoving) {
       realAnimationName.set(curr);
     }
-    else if (!movementAnimations.includes(curr)) {
+    else if (!isMovementAnimation) {
       realAnimationName.set(curr);
     }
-    if (!isMoving && sprite.animationIsPlaying && sprite.animationIsPlaying()) {
-      if (movementAnimations.includes(curr)) {
+    if (!isMoving && isTemporaryAnimationPlaying) {
+      if (isMovementAnimation) {
         if (typeof sprite.resetAnimationState === 'function') {
           sprite.resetAnimationState();
         }

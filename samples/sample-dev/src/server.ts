@@ -1,4 +1,4 @@
-import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, EventMode, MapData, Frequency, ATK, PDEF, LocalStorageSaveStorageStrategy, provideAutoSave, RpgServerEngine } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, MapData, Frequency, ATK, PDEF, LocalStorageSaveStorageStrategy, provideAutoSave, RpgServerEngine } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
@@ -128,7 +128,6 @@ const fireSkill = {
 export function Event() {
   return {
     name: "EV-1",
-    mode: EventMode.Scenario,
     onInit() {
       this.setGraphic("monster");
       this.speed = 2
