@@ -494,6 +494,10 @@ export class BattleAi {
   private poise: number = 0;
   private hitstunMs: number = 150;
   private invincibilityMs: number = 250;
+  private visionShape?: any;
+  private visionSetupRetries: number = 0;
+  private maxVisionSetupRetries: number = 20;
+  private destroyed: boolean = false;
 
   /**
    * Create a new Battle AI Controller
@@ -599,7 +603,7 @@ export class BattleAi {
     }
 
     // Setup AI systems
-    this.setupVision();
+    this.scheduleVisionSetup();
     this.startAiBehaviorLoop();
     if (this.patrolWaypoints.length > 0) {
       this.startPatrol();
@@ -681,14 +685,29 @@ export class BattleAi {
   /**
    * Setup vision detection
    */
-  private setupVision() {
+  private setupVision(): boolean {
+    if (this.visionShape) return true;
     const diameter = this.visionRange * 2;
-    this.event.attachShape(`vision_${this.event.id}`, {
+    const shape = this.event.attachShape(`vision_${this.event.id}`, {
       radius: this.visionRange,
       width: diameter,
       height: diameter,
       angle: 360,
     });
+    if (!shape) return false;
+    this.visionShape = shape;
+    return true;
+  }
+
+  private scheduleVisionSetup() {
+    if (this.destroyed || this.setupVision()) return;
+    if (this.visionSetupRetries >= this.maxVisionSetupRetries) return;
+
+    this.visionSetupRetries++;
+    this.schedule(() => {
+      if (this.destroyed || !this.event.getCurrentMap()) return;
+      this.scheduleVisionSetup();
+    }, 50);
   }
 
   /**
@@ -2044,6 +2063,7 @@ export class BattleAi {
    * Clean up
    */
   destroy() {
+    this.destroyed = true;
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = undefined;

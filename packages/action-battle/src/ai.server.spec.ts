@@ -118,3 +118,33 @@ describe("BattleAi defeat flow", () => {
     });
   });
 });
+
+describe("BattleAi vision setup", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  test("retries vision attachment when the physics body is not ready yet", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    const visionShape = { id: "vision_monster-1" };
+    event.attachShape.mockReturnValueOnce(undefined).mockReturnValueOnce(visionShape);
+
+    const ai = new BattleAi(event as any);
+
+    expect(event.attachShape).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(60);
+
+    expect(event.attachShape).toHaveBeenCalledTimes(2);
+    expect(event.attachShape).toHaveBeenLastCalledWith("vision_monster-1", {
+      radius: 150,
+      width: 300,
+      height: 300,
+      angle: 360,
+    });
+
+    ai.destroy();
+  });
+});
