@@ -23,6 +23,30 @@ import { RpgMap } from "../rooms/map";
 import { Observable, Subscription, takeUntil, Subject, tap, switchMap, of, from, take } from 'rxjs';
 import { RpgPlayer } from "./Player";
 
+const MOVEMENT_ANIMATION_NAMES = ['stand', 'walk'];
+const MOVEMENT_RESOLUTION_ERROR = "unable to resolve entity";
+
+const isMovementResolutionError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return message.includes(MOVEMENT_RESOLUTION_ERROR);
+};
+
+const hasMovementBody = (map: any, id: string): boolean => {
+  return typeof map?.getBody !== 'function' || Boolean(map.getBody(id));
+};
+
+const runMovementOperation = <T>(fallback: T, operation: () => T): T => {
+  try {
+    return operation();
+  }
+  catch (error) {
+    if (isMovementResolutionError(error)) {
+      return fallback;
+    }
+    throw error;
+  }
+};
+
 /**
  * Additive knockback strategy that **adds** an impulse-like velocity on top of the
  * current velocity, instead of overwriting it.
@@ -713,7 +737,14 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       if (!map) return Promise.resolve();
 
       const playerId = (this as unknown as PlayerWithMixins).id;
-      return map.moveManager.add(playerId, strategy, options);
+      if (!hasMovementBody(map, playerId)) {
+        return Promise.resolve();
+      }
+
+      return runMovementOperation(
+        Promise.resolve(),
+        () => map.moveManager.add(playerId, strategy, options)
+      );
     }
 
     removeMovement(strategy: MovementStrategy): boolean {
@@ -721,7 +752,8 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       if (!map) return false;
 
       const playerId = (this as unknown as PlayerWithMixins).id;
-      return map.moveManager.remove(playerId, strategy);
+      if (!hasMovementBody(map, playerId)) return false;
+      return runMovementOperation(false, () => map.moveManager.remove(playerId, strategy));
     }
 
     clearMovements(): void {
@@ -729,21 +761,26 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
       if (!map) return;
 
       const playerId = (this as unknown as PlayerWithMixins).id;
-      map.moveManager.clear(playerId);
+      if (!hasMovementBody(map, playerId)) return;
+      runMovementOperation(undefined, () => map.moveManager.clear(playerId));
     }
 
     hasActiveMovements(): boolean {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return false;
 
-      return map.moveManager.hasActiveStrategies((this as unknown as PlayerWithMixins).id);
+      const playerId = (this as unknown as PlayerWithMixins).id;
+      if (!hasMovementBody(map, playerId)) return false;
+      return runMovementOperation(false, () => map.moveManager.hasActiveStrategies(playerId));
     }
 
     getActiveMovements(): MovementStrategy[] {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
       if (!map) return [];
 
-      return map.moveManager.getStrategies((this as unknown as PlayerWithMixins).id);
+      const playerId = (this as unknown as PlayerWithMixins).id;
+      if (!hasMovementBody(map, playerId)) return [];
+      return runMovementOperation([], () => map.moveManager.getStrategies(playerId));
     }
 
     /**
@@ -770,6 +807,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
       const playerId = (this as unknown as PlayerWithMixins).id;
       const engine = map.physic;
+      if (!hasMovementBody(map, playerId)) return;
 
       // Calculate maxSpeed based on player's speed and frequency
       // Original values: 180 for player target, 80 for position target (with default speed=4)
@@ -801,9 +839,12 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
         };
         // Factor 45: with speed=4 gives 180 (original value)
         const maxSpeed = playerSpeed * 45 * normalizedFrequencyScale;
-        map.moveManager.add(
-          playerId,
-          new SeekAvoid(engine, targetProvider, maxSpeed, 140, 80, 48)
+        runMovementOperation(
+          undefined,
+          () => map.moveManager.add(
+            playerId,
+            new SeekAvoid(engine, targetProvider, maxSpeed, 140, 80, 48)
+          )
         );
         return;
       }
@@ -816,9 +857,12 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
       // Factor 20: with speed=4 gives 80 (original value)
       const maxSpeed = playerSpeed * 20 * normalizedFrequencyScale;
-      map.moveManager.add(
-        playerId,
-        new SeekAvoid(engine, () => staticTarget, maxSpeed, 140, 80, 48)
+      runMovementOperation(
+        undefined,
+        () => map.moveManager.add(
+          playerId,
+          new SeekAvoid(engine, () => staticTarget, maxSpeed, 140, 80, 48)
+        )
       );
     }
 
@@ -963,6 +1007,15 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
         return undefined;
       };
 
+      const resolveRestoredAnimationName = (name: string | undefined): string | undefined => {
+        if (!name) return undefined;
+        if (!MOVEMENT_ANIMATION_NAMES.includes(name)) return name;
+
+        const map = typeof selfAny.getCurrentMap === 'function' ? selfAny.getCurrentMap() : undefined;
+        const isMoving = typeof map?.isMoving === 'function' ? map.isMoving(this.id) : false;
+        return isMoving ? 'walk' : 'stand';
+      };
+
       const restore = (): void => {
         const lock = getLock();
         if (!lock) return;
@@ -970,9 +1023,10 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
         this.directionFixed = lock.prevDirectionFixed;
 
         const prevAnimFixed = lock.prevAnimationFixed;
+        const restoredAnimationName = resolveRestoredAnimationName(lock.prevAnimationName);
         this.animationFixed = false; // temporarily unlock so we can restore animation
-        if (!prevAnimFixed && lock.prevAnimationName) {
-          setAnimationName(lock.prevAnimationName);
+        if (!prevAnimFixed && restoredAnimationName) {
+          setAnimationName(restoredAnimationName);
         }
         this.animationFixed = prevAnimFixed;
 

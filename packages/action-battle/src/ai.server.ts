@@ -19,6 +19,7 @@ import {
   resolveActionBattleHitboxSpeed,
   scheduleActionBattleStartup,
 } from "./core/attack-runtime";
+import { safeActionBattleDash } from "./movement";
 import type { ActionBattleDamageResult } from "./core/contracts";
 import type {
   NormalizedActionBattleAttackProfile,
@@ -1442,7 +1443,7 @@ export class BattleAi {
 
     this.scheduleAttackStartup(profile, () => {
       if (!this.target || this.state !== AiState.Combat) return;
-      this.event.dash({ x: dirX, y: dirY }, 10, 200);
+      safeActionBattleDash(this.event, { x: dirX, y: dirY }, 10, 200);
       this.schedule(() => {
         if (!this.target || this.state !== AiState.Combat) return;
         this.executeMeleeAttack(profile, AttackPattern.DashAttack);
@@ -1561,7 +1562,9 @@ export class BattleAi {
     const side = Math.random() > 0.5 ? 1 : -1;
 
     this.debugLog('dodge', `Dodging (dir=${side > 0 ? 'right' : 'left'})`);
-    this.event.dash({ x: dodgeDirX * side, y: dodgeDirY * side }, 12, 300);
+    if (!safeActionBattleDash(this.event, { x: dodgeDirX * side, y: dodgeDirY * side }, 12, 300)) {
+      return false;
+    }
     this.lastDodgeTime = currentTime;
 
     // Counter-attack for defensive types
@@ -1623,7 +1626,9 @@ export class BattleAi {
 
     if (dist === 0) return;
 
-    this.event.dash({ x: dx / dist, y: dy / dist }, 8, 200);
+    if (!safeActionBattleDash(this.event, { x: dx / dist, y: dy / dist }, 8, 200)) {
+      return;
+    }
     this.lastRetreatTime = currentTime;
   }
 
@@ -2046,6 +2051,7 @@ export class BattleAi {
   private schedule(callback: () => void, delay: number) {
     const timer = setTimeout(() => {
       this.timers = this.timers.filter((entry) => entry !== timer);
+      if (this.destroyed) return;
       callback();
     }, delay);
     this.timers.push(timer);

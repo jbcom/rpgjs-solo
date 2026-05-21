@@ -9,6 +9,11 @@ import {
 import { normalizeActionBattleOptions, setActionBattleOptions } from "./config";
 import { manhattanDistance, parseAoeMask } from "./targeting";
 import { playActionBattleVisual } from "./visual";
+import {
+  applyActionBattleAttackDirection,
+  resolveActionBattleAttackDirection,
+} from "./attack-input";
+import { forceActionBattleLocomotionAnimation } from "./locomotion";
 import { getActionBattleSystems, setActionBattleSystems } from "./core/context";
 import { applyActionBattleHit } from "./core/hit";
 import { DEFAULT_ZELDA_PLAYER_HITBOXES } from "./core/defaults";
@@ -82,6 +87,9 @@ const beginPlayerAttackLock = (
     player.canMove = previousCanMove;
     player.directionFixed = previousDirectionFixed;
     player.animationFixed = previousAnimationFixed;
+    if (locks.movement && !previousAnimationFixed) {
+      forceActionBattleLocomotionAnimation(player, "stand");
+    }
   }, durationMs);
 
   return true;
@@ -648,7 +656,8 @@ export const createActionBattleServer = (
       onInput(player: RpgPlayer, input: any) {
         if (input.action == Control.Action) {
           const map = player.getCurrentMap();
-          const direction = player.getDirection();
+          const direction = resolveActionBattleAttackDirection(player, input);
+          applyActionBattleAttackDirection(player, direction);
           const attackProfile = resolvePlayerAttackProfile(player, options);
 
           // Convert Direction enum to string key

@@ -1,9 +1,13 @@
 import { describe, expect, test } from "vitest";
 import {
   getKeyboardControlBind,
+  keyboardEventMatchesBind,
   normalizeActionInput,
   resolveKeyboardActionInput,
 } from "./actionInput";
+
+const keyboardEvent = (values: Partial<KeyboardEvent>) =>
+  values as KeyboardEvent;
 
 describe("normalizeActionInput", () => {
   test("keeps simple actions compatible", () => {
@@ -97,5 +101,38 @@ describe("keyboard action controls", () => {
     }, {}, {})).toEqual({
       action: "projectile:shoot",
     });
+  });
+
+  test("matches keyboard events against string, numeric, and array binds", () => {
+    expect(
+      keyboardEventMatchesBind(
+        keyboardEvent({ key: " ", code: "Space", keyCode: 32 }),
+        "space"
+      )
+    ).toBe(true);
+    expect(
+      keyboardEventMatchesBind(
+        keyboardEvent({ key: "ArrowUp", code: "ArrowUp", keyCode: 38 }),
+        "up"
+      )
+    ).toBe(true);
+    expect(
+      keyboardEventMatchesBind(
+        keyboardEvent({ key: "x", code: "KeyX", keyCode: 88 }),
+        ["space", "x"]
+      )
+    ).toBe(true);
+    expect(
+      keyboardEventMatchesBind(
+        keyboardEvent({ key: "Escape", code: "Escape", keyCode: 27 }),
+        27
+      )
+    ).toBe(true);
+    expect(
+      keyboardEventMatchesBind(
+        keyboardEvent({ key: "a", code: "KeyA", keyCode: 65 }),
+        "space"
+      )
+    ).toBe(false);
   });
 });

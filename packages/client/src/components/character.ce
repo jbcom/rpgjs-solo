@@ -56,7 +56,11 @@
   import PlayerComponents from "./player-components.ce";
   import { RpgGui } from "../Gui/Gui";
   import { getCanMoveValue } from "../utils/readPropValue";
-  import { getKeyboardControlBind, resolveKeyboardActionInput } from "../services/actionInput";
+  import {
+    getKeyboardControlBind,
+    keyboardEventMatchesBind,
+    resolveKeyboardActionInput,
+  } from "../services/actionInput";
 
   const { object, id } = defineProps();
   const sprite = object();
@@ -308,6 +312,77 @@
 
   const canControls = () => isMe() && getCanMoveValue(sprite)
   const keyboardControls = client.globalConfig.keyboardControls;
+  const activeDirectionKeys = new Set();
+
+  const resolveSpriteDirection = () => {
+    if (typeof sprite.getDirection === 'function') return sprite.getDirection();
+    if (typeof sprite.direction === 'function') return sprite.direction();
+    return direction();
+  };
+
+  const withCurrentDirection = (payload) => {
+    if (payload.action !== 'action') return payload;
+    const data = payload.data && typeof payload.data === 'object'
+      ? { ...payload.data }
+      : {};
+    return {
+      ...payload,
+      data: {
+        ...data,
+        direction: data.direction ?? resolveSpriteDirection(),
+      },
+    };
+  };
+
+  const resolveCurrentActionInput = () =>
+    withCurrentDirection(
+      resolveKeyboardActionInput(keyboardControls.action, client, sprite)
+    );
+
+  const playPredictedWalkAnimation = () => {
+    if (sprite.animationFixed) return;
+    if (sprite.animationIsPlaying && sprite.animationIsPlaying()) return;
+    realAnimationName.set('walk');
+  };
+
+  const processMovementInput = (input) => {
+    if (!canControls()) return;
+    client.processInput({ input });
+    playPredictedWalkAnimation();
+  };
+
+  const directionBinds = () => [
+    keyboardControls.up,
+    keyboardControls.down,
+    keyboardControls.left,
+    keyboardControls.right,
+  ].map(getKeyboardControlBind);
+
+  const actionBind = () => getKeyboardControlBind(keyboardControls.action);
+  const keyboardEventId = (event) => `${event.keyCode}:${event.code}:${event.key}`;
+
+  const isDirectionKeyboardEvent = (event) =>
+    directionBinds().some(bind => keyboardEventMatchesBind(event, bind));
+
+  const handleNativeActionWhileMoving = (event) => {
+    if (isDirectionKeyboardEvent(event)) {
+      const keyId = keyboardEventId(event);
+      if (event.type === 'keydown') {
+        activeDirectionKeys.add(keyId);
+      }
+      else {
+        activeDirectionKeys.delete(keyId);
+      }
+    }
+
+    if (!isCurrentPlayer()) return;
+    if (event.type !== 'keydown' || event.repeat) return;
+    if (activeDirectionKeys.size === 0) return;
+    if (!keyboardEventMatchesBind(event, actionBind())) return;
+    if (!canControls()) return;
+
+    client.processAction(resolveCurrentActionInput());
+  };
 
   const visible = computed(() => {
     if (sprite.isEvent()) {
@@ -321,35 +396,35 @@
       repeat: true,
       bind: keyboardControls.down,
       keyDown() {
-        if (canControls()) client.processInput({ input: Direction.Down })
+        processMovementInput(Direction.Down)
       },
     },
     up: {
       repeat: true,
       bind: keyboardControls.up,
       keyDown() {
-        if (canControls()) client.processInput({ input: Direction.Up })
+        processMovementInput(Direction.Up)
       },
     },
     left: {
       repeat: true,
       bind: keyboardControls.left,
       keyDown() {
-        if (canControls()) client.processInput({ input: Direction.Left })
+        processMovementInput(Direction.Left)
       },
     },
     right: {
       repeat: true,
       bind: keyboardControls.right,
       keyDown() {
-        if (canControls()) client.processInput({ input: Direction.Right })
+        processMovementInput(Direction.Right)
       },
     },
     action: {
       bind: getKeyboardControlBind(keyboardControls.action),
       keyDown() {
         if (canControls()) {
-          client.processAction(resolveKeyboardActionInput(keyboardControls.action, client, sprite))
+          client.processAction(resolveCurrentActionInput())
         }
       },
     },
@@ -834,6 +909,10 @@
   const onBeforeDestroy = async () => {
     await runBeforeRemove();
     await waitForTemporaryAnimationEnd();
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('keydown', handleNativeActionWhileMoving);
+      document.removeEventListener('keyup', handleNativeActionWhileMoving);
+    }
     removeTransitionSubscription?.unsubscribe();
     animationMovementSubscription.unsubscribe();
     xSubscription.unsubscribe();
@@ -843,6 +922,10 @@
   }
 
   mount((element) => {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('keydown', handleNativeActionWhileMoving);
+      document.addEventListener('keyup', handleNativeActionWhileMoving);
+    }
     hooks.callHooks("client-sprite-onAdd", sprite).subscribe()
     hooks.callHooks("client-sceneMap-onAddSprite", client.sceneMap, sprite).subscribe()
     effect(() => {

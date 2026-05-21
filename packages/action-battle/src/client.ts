@@ -8,6 +8,11 @@ import {
 import { ActionBattleOptions } from "./types";
 import { normalizeActionBattleOptions } from "./config";
 import { getNormalizedActionBattleAttackProfile } from "./core/attack-runtime";
+import {
+  applyActionBattleAttackDirection,
+  resolveActionBattleAttackDirection,
+} from "./attack-input";
+import { forceActionBattleLocomotionAnimation } from "./locomotion";
 import { resolveActionBattleUi } from "./ui";
 import {
   ACTION_BATTLE_HIT_FX_COMPONENT_ID,
@@ -63,6 +68,9 @@ const beginLocalPlayerAttackLock = (
     player.canMove = previousCanMove;
     player.directionFixed = previousDirectionFixed;
     player.animationFixed = previousAnimationFixed;
+    if (locks.movement && !previousAnimationFixed) {
+      forceActionBattleLocomotionAnimation(player, "stand");
+    }
   }, durationMs);
 
   return true;
@@ -150,20 +158,23 @@ export const createActionBattleClient = (
       }
     },
     engine: {
-      onInput(engine: RpgClientEngine, { input }: any) {
+      onInput(engine: RpgClientEngine, { input, data }: any) {
         if (input !== "action") return;
         const player = engine.scene?.getCurrentPlayer?.() as any;
         if (!player) return;
+        const direction = resolveActionBattleAttackDirection(player, { data });
+        applyActionBattleAttackDirection(player, direction);
         const attackProfile = getNormalizedActionBattleAttackProfile(normalized);
         const lockDurationMs = Math.max(
           0,
           attackProfile.totalDurationMs ?? DEFAULT_ATTACK_LOCK_DURATION_MS
         );
         if (attackProfile.movementLock || attackProfile.directionLock) {
-          beginLocalPlayerAttackLock(engine, lockDurationMs, {
+          const locked = beginLocalPlayerAttackLock(engine, lockDurationMs, {
             movement: attackProfile.movementLock,
             direction: attackProfile.directionLock,
           });
+          if (!locked) return;
         }
         playLocalPlayerAttackAnimation(player, normalized);
         showLocalAttackPreview(player, normalized);
