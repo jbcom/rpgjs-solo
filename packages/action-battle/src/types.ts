@@ -1,5 +1,6 @@
 import type {
   ActionBattleAiBehavior,
+  ActionBattleAiPreset,
   ActionBattleCombatSystem,
   ActionBattleHitHooks,
   ActionBattleHitbox,
@@ -162,6 +163,7 @@ export interface ActionBattleCombatOptions {
 
 export interface ActionBattleAiOptions {
   behaviors?: Record<string, ActionBattleAiBehavior>;
+  presets?: Record<string, ActionBattleAiPreset>;
 }
 
 export type ActionBattleAiSystemOptions = ActionBattleAiOptions;

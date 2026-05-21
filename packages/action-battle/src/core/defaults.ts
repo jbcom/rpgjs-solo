@@ -1,6 +1,7 @@
 import type { RpgPlayer } from "@rpgjs/server";
 import type {
   ActionBattleAiBehavior,
+  ActionBattleAiPreset,
   ActionBattleAttackContext,
   ActionBattleCombatSystem,
   ActionBattleDamageContext,
@@ -146,10 +147,65 @@ export const defaultEnemyBehaviors: Record<string, ActionBattleAiBehavior> = {
   }),
 };
 
+export const defaultEnemyPresets: Record<string, ActionBattleAiPreset> = {
+  [CoreEnemyType.Aggressive]: {
+    enemyType: CoreEnemyType.Aggressive as any,
+    attackCooldown: 600,
+    visionRange: 150,
+    attackRange: 50,
+    dodgeChance: 0.1,
+    dodgeCooldown: 3000,
+    fleeThreshold: 0.15,
+    behaviorKey: CoreEnemyType.Aggressive,
+  },
+  [CoreEnemyType.Defensive]: {
+    enemyType: CoreEnemyType.Defensive as any,
+    attackCooldown: 1500,
+    visionRange: 120,
+    attackRange: 60,
+    dodgeChance: 0.5,
+    dodgeCooldown: 1500,
+    fleeThreshold: 0.3,
+    behaviorKey: CoreEnemyType.Defensive,
+  },
+  [CoreEnemyType.Ranged]: {
+    enemyType: CoreEnemyType.Ranged as any,
+    attackCooldown: 1200,
+    visionRange: 200,
+    attackRange: 120,
+    dodgeChance: 0.4,
+    dodgeCooldown: 2000,
+    fleeThreshold: 0.25,
+    behaviorKey: CoreEnemyType.Ranged,
+  },
+  [CoreEnemyType.Tank]: {
+    enemyType: CoreEnemyType.Tank as any,
+    attackCooldown: 2000,
+    visionRange: 100,
+    attackRange: 50,
+    dodgeChance: 0,
+    dodgeCooldown: 5000,
+    fleeThreshold: 0.1,
+    poise: 2,
+    behaviorKey: CoreEnemyType.Tank,
+  },
+  [CoreEnemyType.Berserker]: {
+    enemyType: CoreEnemyType.Berserker as any,
+    attackCooldown: 800,
+    visionRange: 180,
+    attackRange: 55,
+    dodgeChance: 0.15,
+    dodgeCooldown: 2500,
+    fleeThreshold: 0.05,
+    behaviorKey: CoreEnemyType.Berserker,
+  },
+};
+
 export const defaultActionBattleSystems: ActionBattleSystems = {
   combat: defaultCombatSystem,
   ai: {
     behaviors: defaultEnemyBehaviors,
+    presets: defaultEnemyPresets,
   },
 };
 

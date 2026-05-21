@@ -7,6 +7,14 @@ export interface ActionBattleEnemyPreset extends BattleAiOptions {
 
 export type ActionBattleEnemyPresetMap = Record<string, ActionBattleEnemyPreset>;
 
+export const defineActionBattleEnemy = <T extends ActionBattleEnemyPreset>(
+  preset: T
+): T => preset;
+
+export const defineActionBattleAiPreset = <T extends BattleAiOptions>(
+  preset: T
+): T => preset;
+
 export const createActionEnemy = (
   event: RpgEvent,
   presetOrOptions: string | BattleAiOptions,

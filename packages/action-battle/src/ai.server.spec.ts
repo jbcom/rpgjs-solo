@@ -1,6 +1,8 @@
 import { MAXHP } from "@rpgjs/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { BattleAi } from "./ai.server";
+import { chase, ifTargetVisible } from "./core/ai-behavior-tree";
+import { setActionBattleSystems } from "./core/context";
 
 const createEvent = () => ({
   id: "monster-1",
@@ -13,11 +15,13 @@ const createEvent = () => ({
   showHit: vi.fn(),
   setGraphicAnimation: vi.fn(),
   stopMoveTo: vi.fn(),
+  moveTo: vi.fn(),
   getCurrentMap: vi.fn(() => ({})),
   remove: vi.fn(),
   x: vi.fn(() => 0),
   y: vi.fn(() => 0),
   direction: vi.fn(() => "down"),
+  changeDirection: vi.fn(),
 });
 
 const createPlayer = () => ({
@@ -37,6 +41,7 @@ describe("BattleAi defeat flow", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    setActionBattleSystems({});
   });
 
   test("awards the attacker and requests a defeated remove transition", () => {
@@ -123,6 +128,7 @@ describe("BattleAi vision setup", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    setActionBattleSystems({});
   });
 
   test("retries vision attachment when the physics body is not ready yet", () => {
@@ -145,6 +151,68 @@ describe("BattleAi vision setup", () => {
       angle: 360,
     });
 
+    ai.destroy();
+  });
+});
+
+describe("BattleAi behavior tree", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    setActionBattleSystems({});
+  });
+
+  test("executes simplified behavior intents", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      simpleBehavior: {
+        when: [ifTargetVisible(chase())],
+      },
+    });
+
+    ai.onDetectInShape(player as any, {});
+    vi.advanceTimersByTime(100);
+
+    expect(event.moveTo).toHaveBeenCalledWith(player);
+    ai.destroy();
+  });
+
+  test("composes named AI presets with local overrides", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    setActionBattleSystems({
+      ai: {
+        presets: {
+          slime: {
+            preset: "aggressive",
+            visionRange: 220,
+            simpleBehavior: {
+              otherwise: chase(),
+            },
+          },
+        },
+      },
+    });
+
+    const ai = new BattleAi(event as any, {
+      preset: "slime",
+      attackRange: 70,
+    });
+
+    expect(event.attachShape).toHaveBeenCalledWith("vision_monster-1", {
+      radius: 220,
+      width: 440,
+      height: 440,
+      angle: 360,
+    });
     ai.destroy();
   });
 });

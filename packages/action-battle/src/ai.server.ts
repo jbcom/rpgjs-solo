@@ -20,7 +20,21 @@ import {
   scheduleActionBattleStartup,
 } from "./core/attack-runtime";
 import { safeActionBattleDash } from "./movement";
-import type { ActionBattleDamageResult } from "./core/contracts";
+import {
+  defineAiBehavior,
+  defineAiTree,
+  type ActionBattleAiIntent,
+  type ActionBattleAiMemory,
+  type ActionBattleAiSimpleBehavior,
+  type ActionBattleAiTreeInput,
+  type ActionBattleAiTreeNode,
+} from "./core/ai-behavior-tree";
+import type {
+  ActionBattleAiBehavior,
+  ActionBattleAiDecision,
+  ActionBattleAiPreset,
+  ActionBattleDamageResult,
+} from "./core/contracts";
 import type {
   NormalizedActionBattleAttackProfile,
   NormalizedActionBattleHitReactionProfile,
@@ -67,6 +81,7 @@ export type BattleAiLegacyDefeatedCallback = (
 ) => void;
 
 export interface BattleAiBaseOptions {
+  preset?: string | ActionBattleAiPreset;
   enemyType?: EnemyType;
   attackCooldown?: number;
   visionRange?: number;
@@ -92,6 +107,9 @@ export interface BattleAiBaseOptions {
     retreatThreshold?: number;
   };
   behaviorKey?: string;
+  tree?: ActionBattleAiTreeInput;
+  behaviorTree?: ActionBattleAiTreeInput;
+  simpleBehavior?: ActionBattleAiSimpleBehavior;
   animations?: ActionBattleAnimationOptions;
   rewards?: BattleAiRewards;
   autoAwardRewards?: boolean;
@@ -364,6 +382,49 @@ export const DEFAULT_KNOCKBACK = {
   duration: 300
 };
 
+const mergeBattleAiPresetOptions = (
+  options: BattleAiOptions | BattleAiLegacyOptions,
+  seen: Set<string> = new Set()
+): BattleAiOptions | BattleAiLegacyOptions => {
+  if (!options.preset) return options;
+
+  if (typeof options.preset === "string") {
+    if (seen.has(options.preset)) {
+      throw new Error(`Circular action battle AI preset: ${options.preset}`);
+    }
+    seen.add(options.preset);
+  }
+
+  const preset =
+    typeof options.preset === "string"
+      ? getActionBattleSystems().ai.presets[options.preset]
+      : options.preset;
+
+  if (!preset) {
+    throw new Error(`Action battle AI preset not found: ${options.preset}`);
+  }
+
+  const resolvedPreset = mergeBattleAiPresetOptions(preset, seen);
+  const { preset: _preset, ...overrides } = options;
+
+  return {
+    ...resolvedPreset,
+    ...overrides,
+    behavior: {
+      ...resolvedPreset.behavior,
+      ...overrides.behavior,
+    },
+    animations: {
+      ...resolvedPreset.animations,
+      ...overrides.animations,
+    },
+    rewards: {
+      ...resolvedPreset.rewards,
+      ...overrides.rewards,
+    },
+  } as BattleAiOptions | BattleAiLegacyOptions;
+};
+
 /**
  * Advanced Battle AI Controller for events
  *
@@ -492,6 +553,8 @@ export class BattleAi {
   private lastRetreatTime: number = 0;
   private timers: ReturnType<typeof setTimeout>[] = [];
   private behaviorKey?: string;
+  private behaviorTree?: ActionBattleAiTreeNode;
+  private aiMemory: ActionBattleAiMemory = {};
   private poise: number = 0;
   private hitstunMs: number = 150;
   private invincibilityMs: number = 250;
@@ -530,6 +593,7 @@ export class BattleAi {
     event: RpgEventWithBattleAi,
     options: BattleAiOptions | BattleAiLegacyOptions = {}
   ) {
+    options = mergeBattleAiPresetOptions(options);
     event.battleAi = this;
     this.event = event;
 
@@ -601,6 +665,11 @@ export class BattleAi {
     }
     if (options.invincibilityMs !== undefined) {
       this.invincibilityMs = Math.max(0, options.invincibilityMs);
+    }
+    if (options.simpleBehavior) {
+      this.behaviorTree = defineAiBehavior(options.simpleBehavior);
+    } else if (options.tree || options.behaviorTree) {
+      this.behaviorTree = defineAiTree(options.tree ?? options.behaviorTree!);
     }
 
     // Setup AI systems
@@ -804,7 +873,11 @@ export class BattleAi {
       this.updateBehavior(currentTime);
     }
 
-    this.applyCustomBehavior(currentTime);
+    const customBehaviorHandled = this.applyCustomBehavior(currentTime);
+    if (customBehaviorHandled) {
+      this.checkDamageTaken();
+      return;
+    }
 
     // State-specific behavior
     switch (this.state) {
@@ -1962,10 +2035,25 @@ export class BattleAi {
     }
   }
 
-  private applyCustomBehavior(currentTime: number) {
-    if (!this.behaviorKey) return;
+  private applyCustomBehavior(currentTime: number): boolean {
+    let handled = false;
+
+    if (this.behaviorTree) {
+      const result = this.behaviorTree.tick(this.createAiTreeContext(currentTime));
+      if (result.decision) {
+        handled = this.applyAiDecision(result.decision, currentTime) || handled;
+      }
+      if (result.intent) {
+        handled = this.executeAiIntents(result.intent, currentTime) || handled;
+      }
+      if (result.status === "running") {
+        handled = true;
+      }
+    }
+
+    if (!this.behaviorKey) return handled;
     const behavior = getActionBattleSystems().ai.behaviors[this.behaviorKey];
-    if (!behavior) return;
+    if (!behavior) return handled;
     const maxHp = this.event.param[MAXHP];
     const decision = behavior({
       event: this.event,
@@ -1976,7 +2064,16 @@ export class BattleAi {
       hpPercent: maxHp ? this.event.hp / maxHp : null,
       now: currentTime,
     });
-    if (!decision) return;
+    if (!decision) return handled;
+    return this.applyAiDecision(decision, currentTime) || handled;
+  }
+
+  private applyAiDecision(
+    decision: ActionBattleAiDecision | ReturnType<ActionBattleAiBehavior>,
+    currentTime: number
+  ): boolean {
+    if (!decision) return false;
+    let handled = false;
     if (decision.attackCooldown !== undefined) {
       this.attackCooldown = decision.attackCooldown;
     }
@@ -1990,6 +2087,162 @@ export class BattleAi {
       this.behaviorMode = decision.mode;
       this.behaviorEnabled = true;
     }
+    if (decision.intent) {
+      handled = this.executeAiIntents(decision.intent, currentTime);
+    }
+    return handled;
+  }
+
+  private createAiTreeContext(currentTime: number) {
+    const maxHp = this.event.param[MAXHP];
+    const distance = this.target ? this.getDistance(this.event, this.target) : null;
+    return {
+      event: this.event,
+      target: this.target,
+      state: this.state,
+      enemyType: this.enemyType,
+      distance,
+      hpPercent: maxHp ? this.event.hp / maxHp : null,
+      now: currentTime,
+      self: {
+        event: this.event,
+        state: this.state,
+        enemyType: this.enemyType,
+        hpPercent: maxHp ? this.event.hp / maxHp : null,
+        attackRange: this.attackRange,
+      },
+      targetInfo:
+        this.target && distance !== null
+          ? {
+              entity: this.target,
+              distance,
+              inAttackRange: distance <= this.attackRange,
+              visible: true,
+            }
+          : null,
+      memory: this.aiMemory,
+    };
+  }
+
+  private executeAiIntents(
+    input: ActionBattleAiIntent | ActionBattleAiIntent[],
+    currentTime: number
+  ): boolean {
+    const intents = Array.isArray(input) ? input : [input];
+    let handled = false;
+    for (const intent of intents) {
+      handled = this.executeAiIntent(intent, currentTime) || handled;
+    }
+    return handled;
+  }
+
+  private executeAiIntent(
+    intent: ActionBattleAiIntent,
+    currentTime: number
+  ): boolean {
+    const consumes = intent.consume !== false;
+
+    switch (intent.type) {
+      case "setMode":
+        this.behaviorMode = intent.mode;
+        this.behaviorEnabled = true;
+        return consumes;
+      case "idle":
+        this.isMovingToTarget = false;
+        this.event.stopMoveTo();
+        return consumes;
+      case "patrol":
+        this.startPatrol();
+        return consumes;
+      case "faceTarget":
+        this.faceTarget();
+        return consumes;
+      case "moveToTarget":
+        if (!this.target) return false;
+        this.isMovingToTarget = true;
+        this.requestMoveTo(this.target);
+        return consumes;
+      case "fleeFromTarget":
+        if (!this.target) return false;
+        this.isMovingToTarget = false;
+        if (this.state === AiState.Combat) {
+          this.changeState(AiState.Flee);
+        } else {
+          this.fleeFromTarget();
+        }
+        return consumes;
+      case "keepDistance":
+        return this.executeKeepDistance(intent, consumes);
+      case "useAttack":
+        return this.executeRequestedAttack(intent.pattern, currentTime, consumes);
+      case "useSkill":
+        return this.executeRequestedSkill(intent.skill, currentTime, consumes);
+    }
+  }
+
+  private executeKeepDistance(
+    intent: Extract<ActionBattleAiIntent, { type: "keepDistance" }>,
+    consumes: boolean
+  ): boolean {
+    if (!this.target) return false;
+    const tolerance = intent.tolerance ?? Math.max(8, intent.distance * 0.15);
+    const distance = this.getDistance(this.event, this.target);
+    if (distance < intent.distance - tolerance) {
+      this.isMovingToTarget = false;
+      this.retreatFromTarget();
+      return consumes;
+    }
+    if (distance > intent.distance + tolerance) {
+      this.isMovingToTarget = true;
+      this.requestMoveTo(this.target);
+      return consumes;
+    }
+    if (this.isMovingToTarget) {
+      this.isMovingToTarget = false;
+      this.event.stopMoveTo();
+    }
+    return consumes;
+  }
+
+  private executeRequestedAttack(
+    pattern: AttackPattern | string | undefined,
+    currentTime: number,
+    consumes: boolean
+  ): boolean {
+    if (!this.target || this.chargingAttack) return false;
+    const distance = this.getDistance(this.event, this.target);
+    if (distance > this.attackRange) return false;
+    if (currentTime - this.lastAttackTime < this.attackCooldown) return false;
+
+    if (pattern) {
+      this.performAttackPattern(pattern as AttackPattern);
+    } else {
+      this.selectAndPerformAttack();
+    }
+    this.lastAttackTime = currentTime;
+    return consumes;
+  }
+
+  private executeRequestedSkill(
+    skill: any,
+    currentTime: number,
+    consumes: boolean
+  ): boolean {
+    if (!this.target || !skill) return false;
+    const distance = this.getDistance(this.event, this.target);
+    if (distance > this.attackRange) return false;
+    if (currentTime - this.lastAttackTime < this.attackCooldown) return false;
+
+    playActionBattleVisual(getActionBattleOptions().visual, {
+      moment: "castSkill",
+      entity: this.event,
+      skill,
+      target: this.target,
+      animations: this.animations,
+    });
+    this.event.useSkill(skill, this.target);
+    this.lastAttackTime = currentTime;
+    return consumes;
   }
 
   private handleTacticalMovement(distance: number) {

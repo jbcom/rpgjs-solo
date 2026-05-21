@@ -9,6 +9,19 @@ import {
   EnemyType,
   AttackPattern,
   provideActionBattle,
+  action,
+  chase,
+  condition,
+  flee,
+  hpBelow,
+  ifDistanceLessThan,
+  ifHpBelow,
+  ifTargetInRange,
+  keepDistance,
+  selector,
+  sequence,
+  targetInRange,
+  useAttack,
 } from "@rpgjs/action-battle/server";
 import { provideSaveStorage } from "@rpgjs/server";
 
@@ -223,6 +236,111 @@ export function Event() {
   };
 }
 
+const setupActionBattleEnemy = (
+  event: RpgEvent,
+  options: {
+    name: string;
+    x: number;
+    y: number;
+    hp: number;
+    atk: number;
+    speed: number;
+    ai: ConstructorParameters<typeof BattleAi>[1];
+  }
+) => {
+  event.setGraphic("monster");
+  event.speed = options.speed;
+  event.teleport({ x: options.x, y: options.y });
+  event.name = options.name;
+  event.through = false;
+  event.hp = options.hp;
+  event.param[MAXHP] = options.hp;
+  event.param[ATK] = options.atk;
+  event.param[PDEF] = 5;
+  event.addItem(EnemyClaw);
+  event.equip(EnemyClaw.id);
+  event.battleAi = new BattleAi(event, options.ai);
+};
+
+export function AiPresetRusher() {
+  return {
+    name: "AI Demo - Preset Rusher",
+    onInit() {
+      setupActionBattleEnemy(this, {
+        name: "Preset Rusher",
+        x: 180,
+        y: 160,
+        hp: 260,
+        atk: 12,
+        speed: 3,
+        ai: {
+          preset: "sample-rusher",
+          rewards: { exp: 15, gold: 5 },
+        },
+      });
+    },
+  };
+}
+
+export function AiSimpleKiter() {
+  return {
+    name: "AI Demo - Simple Kiter",
+    onInit() {
+      setupActionBattleEnemy(this, {
+        name: "Simple Kiter",
+        x: 300,
+        y: 180,
+        hp: 220,
+        atk: 9,
+        speed: 2.5,
+        ai: {
+          preset: "sample-kiter",
+          rewards: { exp: 18, gold: 8 },
+        },
+      });
+    },
+  };
+}
+
+export function AiTreeElite() {
+  return {
+    name: "AI Demo - Tree Elite",
+    onInit() {
+      setupActionBattleEnemy(this, {
+        name: "Tree Elite",
+        x: 240,
+        y: 300,
+        hp: 420,
+        atk: 16,
+        speed: 2,
+        ai: {
+          preset: "tank",
+          attackRange: 60,
+          attackCooldown: 1200,
+          poise: 2,
+          attackPatterns: [
+            AttackPattern.Melee,
+            AttackPattern.Charged,
+            AttackPattern.Zone,
+          ],
+          behaviorTree: selector([
+            sequence([
+              condition(hpBelow(0.18)),
+              action(flee()),
+            ]),
+            sequence([
+              condition(targetInRange(60)),
+              action(useAttack(AttackPattern.Charged)),
+            ]),
+            action(chase()),
+          ]),
+          rewards: { exp: 40, gold: 20 },
+        },
+      });
+    },
+  };
+}
+
 export default createServer({
   providers: [
   //  provideTiledMap(),
@@ -242,6 +360,47 @@ export default createServer({
       },
       visual: createActionBattleVisual("fx"),
       ai: {
+        presets: {
+          "sample-rusher": {
+            preset: "aggressive",
+            attackRange: 54,
+            visionRange: 190,
+            attackCooldown: 750,
+            dodgeChance: 0.2,
+            attackPatterns: [
+              AttackPattern.Melee,
+              AttackPattern.Combo,
+              AttackPattern.DashAttack,
+            ],
+            simpleBehavior: {
+              when: [
+                ifHpBelow(0.2, flee()),
+                ifTargetInRange(useAttack(AttackPattern.Combo)),
+              ],
+              otherwise: chase(),
+            },
+          },
+          "sample-kiter": {
+            preset: "ranged",
+            attackRange: 115,
+            visionRange: 230,
+            attackCooldown: 1100,
+            dodgeChance: 0.45,
+            attackPatterns: [
+              AttackPattern.Melee,
+              AttackPattern.Zone,
+              AttackPattern.DashAttack,
+            ],
+            simpleBehavior: {
+              when: [
+                ifHpBelow(0.3, flee()),
+                ifDistanceLessThan(85, keepDistance(125)),
+                ifTargetInRange(useAttack(AttackPattern.Zone), 115),
+              ],
+              otherwise: chase(),
+            },
+          },
+        },
         behaviors: {
           "sample-aggressive": ({ hpPercent }) => ({
             mode: hpPercent !== null && hpPercent < 0.25 ? "retreat" : "assault",
@@ -418,7 +577,12 @@ export default createServer({
         maps: [
           {
             id: 'center-map',
-            events: [{ event: Event() }]
+            events: [
+              { event: Event() },
+              { event: AiPresetRusher() },
+              { event: AiSimpleKiter() },
+              { event: AiTreeElite() },
+            ]
           }
         ],
         worldMaps: [

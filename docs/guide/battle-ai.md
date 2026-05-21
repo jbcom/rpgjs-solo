@@ -602,6 +602,220 @@ enemy is created from the Studio database. The supported Studio fields are
 `attack`, `hurt`, `die`, and `castSpell`. `castSkill` is also accepted when you
 configure action-battle directly.
 
+## Composable AI behaviors
+
+Action Battle has three AI layers. They all run on the server and end in the
+same authoritative runtime for movement, attacks, skills, cooldowns, hit
+reactions, and rewards.
+
+- **Presets** are the fastest path for common enemies.
+- **Simplified behaviors** are readable rule lists that return intentions.
+- **Behavior trees** are the advanced API for bosses and custom enemy logic.
+
+### Presets
+
+Use a built-in preset and override only what changes:
+
+```ts
+import { BattleAi, AttackPattern } from "@rpgjs/action-battle/server";
+
+new BattleAi(event, {
+  preset: "aggressive",
+  attackRange: 56,
+  attackPatterns: [AttackPattern.Melee, AttackPattern.DashAttack],
+  rewards: { exp: 12, gold: 4 }
+});
+```
+
+Built-in presets are `aggressive`, `defensive`, `ranged`, `tank`, and
+`berserker`. A preset is only behavior configuration. Stats still come from the
+event itself.
+
+Register project presets through `provideActionBattle()`:
+
+```ts
+import {
+  AttackPattern,
+  chase,
+  flee,
+  ifHpBelow,
+  ifTargetInRange,
+  provideActionBattle,
+  useAttack
+} from "@rpgjs/action-battle/server";
+
+export default provideActionBattle({
+  ai: {
+    presets: {
+      slime: {
+        preset: "aggressive",
+        attackCooldown: 900,
+        attackPatterns: [AttackPattern.Melee],
+        simpleBehavior: {
+          when: [
+            ifHpBelow(0.25, flee()),
+            ifTargetInRange(useAttack(AttackPattern.Melee))
+          ],
+          otherwise: chase()
+        }
+      }
+    }
+  }
+});
+```
+
+Then instantiate enemies from the preset:
+
+```ts
+new BattleAi(event, { preset: "slime" });
+```
+
+Presets are composable. A project preset can extend a built-in preset or another
+project preset with `preset: "name"`. Local options passed to `new BattleAi()`
+override the preset values.
+
+### Simplified behaviors
+
+Use `simpleBehavior` when you want expressive rules without writing a full
+behavior tree. Each rule checks a condition and returns an intent:
+
+```ts
+import {
+  AttackPattern,
+  BattleAi,
+  chase,
+  flee,
+  ifDistanceLessThan,
+  ifHpBelow,
+  ifTargetInRange,
+  keepDistance,
+  useAttack
+} from "@rpgjs/action-battle/server";
+
+new BattleAi(event, {
+  preset: "ranged",
+  simpleBehavior: {
+    when: [
+      ifHpBelow(0.3, flee()),
+      ifDistanceLessThan(80, keepDistance(120)),
+      ifTargetInRange(useAttack(AttackPattern.Zone), 115)
+    ],
+    otherwise: chase()
+  }
+});
+```
+
+Common condition helpers:
+
+| Helper | Meaning |
+|---|---|
+| `ifHpBelow(ratio, intent)` | Run an intent when enemy HP is below a ratio. |
+| `ifTargetVisible(intent)` | Run an intent when the AI currently has a target. |
+| `ifTargetInRange(intent, range?)` | Run an intent when the target is within a range. |
+| `ifDistanceLessThan(distance, intent)` | Run an intent when the target is too close. |
+
+Common intention helpers:
+
+| Helper | Runtime behavior |
+|---|---|
+| `chase()` / `moveToTarget()` | Move toward the current target. |
+| `flee()` / `fleeFromTarget()` | Flee from the current target. |
+| `keepDistance(distance, tolerance?)` | Retreat or approach until the target is near the desired distance. |
+| `useAttack(pattern?)` | Use a configured attack pattern when cooldown and range allow it. |
+| `useSkill(skill)` | Cast a skill against the current target when cooldown and range allow it. |
+| `faceTarget()` | Face the current target. |
+| `patrol()` | Continue the configured patrol route. |
+| `idle()` | Stop movement for this AI tick. |
+
+### Behavior trees
+
+Use `behaviorTree` when you need explicit tree control. A tree node returns
+`success`, `failure`, or `running`, optionally with an intent or decision.
+
+```ts
+import {
+  AttackPattern,
+  BattleAi,
+  action,
+  chase,
+  condition,
+  flee,
+  hpBelow,
+  selector,
+  sequence,
+  targetInRange,
+  useAttack
+} from "@rpgjs/action-battle/server";
+
+new BattleAi(event, {
+  preset: "tank",
+  attackRange: 60,
+  attackCooldown: 1200,
+  poise: 2,
+  behaviorTree: selector([
+    sequence([
+      condition(hpBelow(0.18)),
+      action(flee())
+    ]),
+    sequence([
+      condition(targetInRange(60)),
+      action(useAttack(AttackPattern.Charged))
+    ]),
+    action(chase())
+  ])
+});
+```
+
+The built-in tree helpers are intentionally small:
+
+| Helper | Purpose |
+|---|---|
+| `selector([...])` | Try children in order and return the first non-failure result. |
+| `sequence([...])` | Run children in order and fail as soon as one child fails. |
+| `condition(predicate)` | Convert a predicate into a tree node. |
+| `action(intent)` | Convert an intent into a tree action. |
+| `decision(fnOrObject)` | Return low-level AI decisions such as `mode`, cooldowns, or attack patterns. |
+| `defineAiTree(input)` | Wrap a tree function or node. |
+| `defineAiBehavior({ when, otherwise })` | Compile simplified behavior rules to a tree. |
+
+### Dynamic behavior and memory
+
+Intent functions receive the AI context and can use `memory` for per-enemy
+state:
+
+```ts
+import { BattleAi, useAttack } from "@rpgjs/action-battle/server";
+
+new BattleAi(event, {
+  simpleBehavior: {
+    otherwise: ({ memory }) => {
+      memory.comboStep = (memory.comboStep ?? 0) + 1;
+      return useAttack(memory.comboStep % 3 === 0 ? "charged" : "melee");
+    }
+  }
+});
+```
+
+The context includes:
+
+| Field | Description |
+|---|---|
+| `event` / `self.event` | The controlled `RpgEvent`. |
+| `target` | The current `RpgPlayer` target, or `null`. |
+| `targetInfo` | Target distance, visibility, and attack-range status. |
+| `state` / `self.state` | Current `AiState`. |
+| `enemyType` / `self.enemyType` | Current `EnemyType`. |
+| `hpPercent` / `self.hpPercent` | Current HP ratio, or `null` if max HP is unavailable. |
+| `memory` | Mutable per-AI storage for custom behavior state. |
+
+### Sample project
+
+`samples/sample-dev` contains three AI demo enemies on `center-map`:
+
+- `Preset Rusher` uses a named preset.
+- `Simple Kiter` uses `simpleBehavior` and distance control.
+- `Tree Elite` uses a direct `behaviorTree`.
+
 ## Enemy types
 
 Enemy types affect behavior, not stats:

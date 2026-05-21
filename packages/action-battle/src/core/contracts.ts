@@ -1,6 +1,11 @@
 import type { RpgEvent, RpgPlayer } from "@rpgjs/server";
 import type { AttackPattern, EnemyType, AiState } from "../ai.server";
 import type { NormalizedActionBattleHitReactionProfile } from "../types";
+import type {
+  ActionBattleAiIntent,
+  ActionBattleAiSimpleBehavior,
+  ActionBattleAiTreeInput,
+} from "./ai-behavior-tree";
 
 export type ActionBattleEntity = RpgPlayer | RpgEvent;
 
@@ -111,6 +116,7 @@ export interface ActionBattleAiDecision {
   attackPatterns?: AttackPattern[];
   attackCooldown?: number;
   moveToCooldown?: number;
+  intent?: ActionBattleAiIntent | ActionBattleAiIntent[];
   metadata?: Record<string, any>;
 }
 
@@ -118,9 +124,46 @@ export type ActionBattleAiBehavior = (
   context: ActionBattleAiContext
 ) => ActionBattleAiDecision | void;
 
+export interface ActionBattleAiPreset {
+  preset?: string | ActionBattleAiPreset;
+  enemyType?: EnemyType;
+  attackCooldown?: number;
+  visionRange?: number;
+  attackRange?: number;
+  dodgeChance?: number;
+  dodgeCooldown?: number;
+  fleeThreshold?: number;
+  attackSkill?: any;
+  attackPatterns?: AttackPattern[];
+  attackProfiles?: any;
+  patrolWaypoints?: Array<{ x: number; y: number }>;
+  groupBehavior?: boolean;
+  moveToCooldown?: number;
+  retreatCooldown?: number;
+  poise?: number;
+  hitstunMs?: number;
+  invincibilityMs?: number;
+  behavior?: {
+    baseScore?: number;
+    updateInterval?: number;
+    minStateDuration?: number;
+    assaultThreshold?: number;
+    retreatThreshold?: number;
+  };
+  behaviorKey?: string;
+  tree?: ActionBattleAiTreeInput;
+  behaviorTree?: ActionBattleAiTreeInput;
+  simpleBehavior?: ActionBattleAiSimpleBehavior;
+  animations?: any;
+  rewards?: any;
+  autoAwardRewards?: boolean;
+  onDefeated?: any;
+}
+
 export interface ActionBattleSystems {
   combat: ActionBattleCombatSystem;
   ai: {
     behaviors: Record<string, ActionBattleAiBehavior>;
+    presets: Record<string, ActionBattleAiPreset>;
   };
 }
