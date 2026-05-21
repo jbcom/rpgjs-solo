@@ -99,6 +99,185 @@ attacking. The client stops local predicted movement as soon as the action
 input is pressed and shows a short slash preview by default. Disable
 `showPreview` when you provide your own client-side attack effect.
 
+## Recommended composable DX
+
+New action-battle configuration is grouped by responsibility:
+
+- `combat` owns gameplay rules: player attack profile, damage, knockback, and hit hooks.
+- `visual` owns temporary combat feedback: sprite animations, flashes, damage text, CanvasEngine effects, and previews.
+- `ui` owns client components: action bar, targeting overlay, attack preview, and custom GUI or sprite components.
+- `ai` owns reusable AI behavior functions.
+- `skills.targeting` owns action targeting metadata for skills.
+
+Use the same `visual` preset on the server and client when your project splits
+configuration by runtime. The server triggers authoritative hit, hurt, skill,
+and enemy attack feedback. The client triggers local input feedback such as the
+attack preview.
+
+```ts
+// config.server.ts
+import {
+  createActionBattleVisual,
+  provideActionBattle
+} from "@rpgjs/action-battle/server";
+
+export default provideActionBattle({
+  combat: {
+    attack: {
+      lockMovement: true,
+      lockDurationMs: 280,
+      profile: {
+        startupMs: 70,
+        activeMs: 110,
+        recoveryMs: 160,
+        hitPolicy: "oncePerTarget"
+      }
+    },
+    hooks: {
+      afterHit(result) {
+        console.log(`Damage: ${result.damage}`);
+      }
+    }
+  },
+
+  visual: createActionBattleVisual("fx"),
+
+  ai: {
+    behaviors: {
+      aggressive({ hpPercent }) {
+        return {
+          mode: hpPercent !== null && hpPercent < 0.25 ? "retreat" : "assault",
+          attackCooldown: 850
+        };
+      }
+    }
+  }
+});
+```
+
+```ts
+// config.client.ts
+import {
+  createActionBattleUi,
+  createActionBattleVisual,
+  provideActionBattle
+} from "@rpgjs/action-battle/client";
+
+export default provideActionBattle({
+  visual: createActionBattleVisual("fx"),
+  ui: createActionBattleUi({
+    actionBar: false,
+    targeting: true,
+    attackPreview: true
+  })
+});
+```
+
+If your game installs action-battle as a combined module, you can import the
+same helpers from `@rpgjs/action-battle`.
+
+### Visual composition
+
+`createActionBattleVisual()` accepts a preset or a map of visual parts. A visual
+part is a function receiving the current combat context and helper methods.
+
+```ts
+import { createActionBattleVisual } from "@rpgjs/action-battle/server";
+
+const combatVisual = createActionBattleVisual({
+  attack({ entity }, fx) {
+    fx.graphic(entity, "attack");
+  },
+  hit({ target, damage }, fx) {
+    fx.flash(target, { tint: "red", duration: 120 });
+    fx.damageText(target, `-${damage}`);
+    fx.component(target, "action-battle-hit-fx", {
+      name: "hitSpark",
+      scale: 0.8,
+      zIndex: 1000
+    });
+  },
+  hurt({ target }, fx) {
+    fx.graphic(target, "hurt");
+  },
+  preview({ entity }, fx) {
+    fx.preview(entity, { durationMs: 180 });
+  }
+});
+```
+
+Available presets:
+
+```ts
+visual: createActionBattleVisual("classic") // sprite animation + flash + hit text
+visual: createActionBattleVisual("fx")      // classic + CanvasEngine Fx hit spark
+visual: createActionBattleVisual("none")    // no built-in visual feedback
+```
+
+The built-in CanvasEngine effect is registered as the component animation
+`action-battle-hit-fx`. You can also call any component animation registered by
+your own client modules with `fx.component(entity, id, params)`.
+
+The legacy `animations` option still works for sprite animation names and
+temporary graphics. New orchestration should go through `visual`, while
+`animations` remains useful as the data source used by
+`fx.graphic(entity, "attack")`, `fx.graphic(entity, "hurt")`, and
+`fx.graphic(entity, "castSkill")`.
+
+### Composable UI
+
+The UI is client-owned. Keep the defaults, disable them with booleans, or
+replace each component.
+
+```ts
+import {
+  ActionBattleUi,
+  createActionBattleUi,
+  provideActionBattle
+} from "@rpgjs/action-battle/client";
+
+export default provideActionBattle({
+  ui: createActionBattleUi({
+    actionBar: {
+      enabled: true,
+      component: ActionBattleUi.ActionBar,
+      autoOpen: true,
+      mode: "both"
+    },
+    targeting: {
+      enabled: true,
+      component: ActionBattleUi.TargetingOverlay,
+      showGrid: true
+    },
+    attackPreview: {
+      enabled: true,
+      component: ActionBattleUi.AttackPreview
+    },
+    gui: [
+      { id: "my-combat-panel", component: MyCombatPanel }
+    ],
+    spriteComponents: {
+      front: [MySpriteOverlay],
+      back: [MyShadow]
+    }
+  })
+});
+```
+
+Shortcuts are accepted:
+
+```ts
+ui: createActionBattleUi({ actionBar: false })
+ui: createActionBattleUi({ targeting: false, attackPreview: false })
+```
+
+### Compatibility
+
+The legacy `attack`, `systems.combat`, `systems.ai`, and `skills.getTargeting`
+options are still supported. New code should prefer `combat`, `ai`, and
+`skills.targeting` so each part of the action-battle module stays independently
+replaceable.
+
 ### Attack profile model
 
 Use `attack.profile` to describe the timing model of a player attack in one
@@ -190,40 +369,38 @@ Zelda-like sword attack and only replace the pieces your game needs.
 import { provideActionBattle } from "@rpgjs/action-battle/server";
 
 export default provideActionBattle({
-  attack: {
-    lockMovement: true,
-    lockDurationMs: 280,
-    hitboxes: {
-      right: { offsetX: 18, offsetY: -18, width: 42, height: 36 }
-    }
-  },
-  systems: {
-    combat: {
-      damage({ attacker, target, skill }) {
-        const raw = target.applyDamage(attacker, skill);
-        return {
-          damage: raw.damage,
-          defeated: target.hp <= 0,
-          raw
-        };
-      },
-      hooks: {
-        beforeHit(context) {
-          return context;
-        },
-        afterHit(result) {
-          console.log(`Damage: ${result.damage}`);
-        }
+  combat: {
+    attack: {
+      lockMovement: true,
+      lockDurationMs: 280,
+      hitboxes: {
+        right: { offsetX: 18, offsetY: -18, width: 42, height: 36 }
       }
     },
-    ai: {
-      behaviors: {
-        slime({ hpPercent }) {
-          return {
-            mode: hpPercent !== null && hpPercent < 0.25 ? "retreat" : "assault",
-            attackCooldown: 900
-          };
-        }
+    damage({ attacker, target, skill }) {
+      const raw = target.applyDamage(attacker, skill);
+      return {
+        damage: raw.damage,
+        defeated: target.hp <= 0,
+        raw
+      };
+    },
+    hooks: {
+      beforeHit(context) {
+        return context;
+      },
+      afterHit(result) {
+        console.log(`Damage: ${result.damage}`);
+      }
+    }
+  },
+  ai: {
+    behaviors: {
+      slime({ hpPercent }) {
+        return {
+          mode: hpPercent !== null && hpPercent < 0.25 ? "retreat" : "assault",
+          attackCooldown: 900
+        };
       }
     }
   }
@@ -572,7 +749,3 @@ const Warhammer = {
   _type: "weapon" as const
 };
 ```
-
-## Reference source
-
-This guide is based on the package documentation in [packages/action-battle/README.md](https://github.com/RSamaium/RPG-JS/blob/master/packages/action-battle/README.md).

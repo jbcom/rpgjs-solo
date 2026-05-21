@@ -5,10 +5,11 @@ description: "Guide for Display Animations in RPGJS."
 
 # Display Animations
 
-This guide explains how to display animations in RPG-JS. There are two main types of animations you can create and display:
+This guide explains how to display animations in RPG-JS. There are three common types of animations you can create and display:
 
 1. **Spritesheet Animations** - Using image spritesheets with the built-in animation system
 2. **Custom Component Animations** - Creating your own Canvas Engine components for complex effects
+3. **CanvasEngine FX Animations** - Using the prebuilt `Fx` component animation for particle effects
 
 ## Spritesheet Animations
 
@@ -228,7 +229,64 @@ export default defineModule<RpgClient>({
 });
 ```
 
-### 3. Displaying Custom Component Animations
+### 3. Using the Prebuilt FX Component
+
+RPGJS includes a ready-to-use component animation wrapper for the CanvasEngine
+`Fx` preset system. Register it like any other component animation:
+
+```ts
+import { RpgClient, defineModule, PrebuiltComponentAnimations } from "@rpgjs/client";
+
+export default defineModule<RpgClient>({
+  componentAnimations: [
+    {
+      id: "explosion",
+      component: PrebuiltComponentAnimations.Fx
+    },
+    {
+      id: "heal",
+      component: PrebuiltComponentAnimations.Fx
+    }
+  ]
+});
+```
+
+Then call it with `showComponentAnimation()` and pass CanvasEngine `Fx` props:
+
+```ts
+map.showComponentAnimation("explosion", { x: 300, y: 200 }, {
+  name: "explosionSmall",
+  scale: 1.2,
+  zIndex: 1000
+});
+
+player.showComponentAnimation("heal", {
+  name: "healPulse",
+  scale: 0.8
+});
+```
+
+Useful built-in `Fx` names include `hitSpark`, `slashSpark`, `impactBurst`,
+`smokePuff`, `dustStep`, `dashDust`, `magicBurst`, `healPulse`, `pickup`,
+`levelUp`, and `explosionSmall`.
+
+For looped FX, pass `displayDuration` to tell RPGJS when to remove the temporary
+component:
+
+```ts
+player.showComponentAnimation("aura", {
+  name: "magicBurst",
+  loop: true,
+  displayDuration: 1200
+});
+```
+
+You can also pass a custom CanvasEngine `preset` object from client-side code.
+When triggering an animation from the server, keep params serializable; register
+a client wrapper component if the preset uses functions, Pixi textures, or other
+client-only objects.
+
+### 4. Displaying Custom Component Animations
 
 #### On a Player
 

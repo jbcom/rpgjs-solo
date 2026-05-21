@@ -26,6 +26,7 @@ export type {
   ActionBattleAnimationOptions,
   ActionBattleAnimationResolver,
   ActionBattleAnimationResult,
+  ActionBattleAiOptions,
   ActionBattleOptions,
   ActionBattleActionBarData,
   ActionBattleActionBarItem,
@@ -35,6 +36,8 @@ export type {
   ActionBattleAttackOptions,
   ActionBattleUiOptions,
   ActionBattleUiActionBarOptions,
+  ActionBattleUiAttackPreviewOptions,
+  ActionBattleUiGuiEntry,
   ActionBattleUiTargetingOptions,
   ActionBattleAttackDirection,
   ActionBattleAttackHitboxConfig,
@@ -48,6 +51,13 @@ export type {
   ActionBattleCombatOptions,
   ActionBattleSystemOptions,
   ActionBattleAiSystemOptions,
+  ActionBattleVisualComposer,
+  ActionBattleVisualContext,
+  ActionBattleVisualHelpers,
+  ActionBattleVisualInput,
+  ActionBattleVisualMoment,
+  ActionBattleVisualPart,
+  ActionBattleVisualPreset,
 } from "./types";
 export type {
   ActionBattleAiBehavior,
@@ -107,6 +117,20 @@ export {
   getActionBattleSystems,
 } from "./core/context";
 export { applyActionBattleHit } from "./core/hit";
+export {
+  ACTION_BATTLE_HIT_FX_COMPONENT_ID,
+  createActionBattleVisual,
+  createClassicActionBattleVisual,
+  createFxActionBattleVisual,
+  playActionBattleVisual,
+  setActionBattlePreviewStarter,
+} from "./visual";
+export {
+  ActionBattleUi,
+  createActionBattleUi,
+  resolveActionBattleUi,
+  type ResolvedActionBattleUi,
+} from "./ui";
 export {
   createActionEnemy,
   type ActionBattleEnemyPreset,

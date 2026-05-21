@@ -8,7 +8,7 @@ import {
 } from "./types";
 import { normalizeActionBattleOptions, setActionBattleOptions } from "./config";
 import { manhattanDistance, parseAoeMask } from "./targeting";
-import { playActionBattleAnimation } from "./animations";
+import { playActionBattleVisual } from "./visual";
 import { getActionBattleSystems, setActionBattleSystems } from "./core/context";
 import { applyActionBattleHit } from "./core/hit";
 import { DEFAULT_ZELDA_PLAYER_HITBOXES } from "./core/defaults";
@@ -556,7 +556,9 @@ const handleActionBattleSkillUse = (
 
   const map = player.getCurrentMap();
   if (!map) {
-    playActionBattleAnimation("castSkill", player, options.animations, {
+    playActionBattleVisual(options.visual, {
+      moment: "castSkill",
+      entity: player,
       skill: skillData,
     });
     player.useSkill(skillId);
@@ -564,7 +566,9 @@ const handleActionBattleSkillUse = (
   }
   const targeting = resolveSkillTargeting(player, skillId, options);
   if (!targeting || !target) {
-    playActionBattleAnimation("castSkill", player, options.animations, {
+    playActionBattleVisual(options.visual, {
+      moment: "castSkill",
+      entity: player,
       skill: skillData,
     });
     player.useSkill(skillId);
@@ -613,7 +617,9 @@ const handleActionBattleSkillUse = (
     return;
   }
 
-  playActionBattleAnimation("castSkill", player, options.animations, {
+  playActionBattleVisual(options.visual, {
+    moment: "castSkill",
+    entity: player,
     skill: skillData,
     target: targets[0],
   });
@@ -675,7 +681,10 @@ export const createActionBattleServer = (
             return;
           }
 
-          playActionBattleAnimation("attack", player, options.animations);
+          playActionBattleVisual(options.visual, {
+            moment: "attack",
+            entity: player,
+          });
           if (actionLocked) {
             player.animationFixed = true;
           }
@@ -729,7 +738,8 @@ export const createActionBattleServer = (
         }
       },
       onConnected(player: RpgPlayer) {
-        if (options.ui?.actionBar?.enabled && options.ui?.actionBar?.autoOpen) {
+        const actionBar = options.ui?.actionBar as any;
+        if (actionBar?.enabled && actionBar?.autoOpen) {
           openActionBattleActionBar(player, options);
         }
       },

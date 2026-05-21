@@ -27,7 +27,11 @@ import { provideTiledMap } from "@rpgjs/tiledmap/client";
 import { provideMain } from "../modules/main";
 import TooltipComponent from "../components/tooltip.ce";
 import { withMobile } from "@rpgjs/client";
-import { provideActionBattle } from "@rpgjs/action-battle/client";
+import {
+  createActionBattleUi,
+  createActionBattleVisual,
+  provideActionBattle,
+} from "@rpgjs/action-battle/client";
 import { HudComponent } from "@rpgjs/client";
 
 export default {
@@ -59,13 +63,12 @@ export default {
     provideClientGlobalConfig(),
     provideMain(),
     provideActionBattle({
-      ui: {
-        actionBar: {
-          enabled: false,
-          autoOpen: false,
-          mode: "both" // "items" | "skills" | "both"
-        }
-      }
+      visual: createActionBattleVisual("fx"),
+      ui: createActionBattleUi({
+        actionBar: false,
+        targeting: true,
+        attackPreview: true,
+      }),
     }),
     provideClientModules([
       withMobile(),

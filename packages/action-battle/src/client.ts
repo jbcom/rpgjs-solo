@@ -1,11 +1,5 @@
-import { inject, PrebuiltComponentAnimations, RpgClient, RpgClientEngine, RpgGui } from "@rpgjs/client";
+import { PrebuiltComponentAnimations, RpgClient, RpgClientEngine, RpgGui, inject } from "@rpgjs/client";
 import { defineModule } from "@rpgjs/common";
-// @ts-ignore CanvasEngine components are compiled by @canvasengine/compiler.
-import ActionBarComponent from "./components/action-bar.ce";
-// @ts-ignore CanvasEngine components are compiled by @canvasengine/compiler.
-import TargetingOverlayComponent from "./components/targeting-overlay.ce";
-// @ts-ignore CanvasEngine components are compiled by @canvasengine/compiler.
-import AttackPreviewComponent from "./components/attack-preview.ce";
 import {
   setActionBattleOptions,
   startAttackPreview,
@@ -13,8 +7,13 @@ import {
 } from "./ui/state";
 import { ActionBattleOptions } from "./types";
 import { normalizeActionBattleOptions } from "./config";
-import { resolveActionBattleAnimation } from "./animations";
 import { getNormalizedActionBattleAttackProfile } from "./core/attack-runtime";
+import { resolveActionBattleUi } from "./ui";
+import {
+  ACTION_BATTLE_HIT_FX_COMPONENT_ID,
+  playActionBattleVisual,
+  setActionBattlePreviewStarter,
+} from "./visual";
 
 const DEFAULT_ATTACK_LOCK_DURATION_MS = 350;
 
@@ -79,35 +78,19 @@ const playLocalPlayerAttackAnimation = (
   player: any,
   options: ActionBattleOptions
 ) => {
-  if (!player || typeof player.setAnimation !== "function") return;
-  const animation = resolveActionBattleAnimation(
-    "attack",
-    player,
-    options.animations
-  );
-  if (!animation) return;
-
-  if (animation.graphic !== undefined) {
-    player.setAnimation(
-      animation.animationName,
-      animation.graphic,
-      animation.repeat
-    );
-    return;
-  }
-  player.setAnimation(animation.animationName, animation.repeat);
+  playActionBattleVisual(options.visual, {
+    moment: "attack",
+    entity: player,
+  });
 };
 
 const showLocalAttackPreview = (player: any, options: ActionBattleOptions) => {
-  if (!player || options.attack?.showPreview === false) return;
-  const durationMs = Math.max(1, options.attack?.previewDurationMs ?? 180);
-  const previewId = startAttackPreview({
-    direction: resolveLocalPlayerDirection(player),
-    durationMs,
-    color: options.attack?.previewColor,
-    accentColor: options.attack?.previewAccentColor,
+  const attackPreview = options.ui?.attackPreview as any;
+  if (!player || attackPreview?.enabled === false) return;
+  playActionBattleVisual(options.visual, {
+    moment: "preview",
+    entity: player,
   });
-  setTimeout(() => stopAttackPreview(previewId), durationMs);
 };
 
 export const createActionBattleClient = (
@@ -115,47 +98,59 @@ export const createActionBattleClient = (
 ) => {
   const normalized = normalizeActionBattleOptions(options);
   setActionBattleOptions(normalized);
-  const actionBarEnabled = normalized.ui?.actionBar?.enabled;
-  const targetingEnabled = normalized.ui?.targeting?.enabled;
-  const componentsInFront = [
-    ...(targetingEnabled ? [TargetingOverlayComponent] : []),
-    AttackPreviewComponent,
-  ];
+  setActionBattlePreviewStarter((entity, previewOptions = {}) => {
+    const direction = previewOptions.direction ?? resolveLocalPlayerDirection(entity);
+    const durationMs = Math.max(
+      1,
+      previewOptions.durationMs ?? normalized.attack?.previewDurationMs ?? 180
+    );
+    const previewId = startAttackPreview({
+      direction,
+      durationMs,
+      color: previewOptions.color ?? normalized.attack?.previewColor,
+      accentColor:
+        previewOptions.accentColor ?? normalized.attack?.previewAccentColor,
+    });
+    setTimeout(() => stopAttackPreview(previewId), durationMs);
+  });
+  const resolvedUi = resolveActionBattleUi(normalized.ui);
+  const actionBarEnabled = resolvedUi.actionBar.enabled;
   const hitComponent = PrebuiltComponentAnimations?.Hit;
+  const fxComponent = PrebuiltComponentAnimations?.Fx;
   return defineModule<RpgClient>({
-    componentAnimations: hitComponent
-      ? [
-          {
-            id: "hit",
-            component: hitComponent,
-          },
-        ]
-      : [],
-    gui: actionBarEnabled
-      ? [
-          {
-            id: "action-battle-action-bar",
-            component: ActionBarComponent,
-            dependencies: () => {
-              const engine = inject(RpgClientEngine)
-              return [engine.scene.currentPlayer]
+    componentAnimations: [
+      ...(hitComponent
+        ? [
+            {
+              id: "hit",
+              component: hitComponent,
             },
-          },
-        ]
-      : [],
+          ]
+        : []),
+      ...(fxComponent
+        ? [
+            {
+              id: ACTION_BATTLE_HIT_FX_COMPONENT_ID,
+              component: fxComponent,
+            },
+          ]
+        : []),
+    ],
+    gui: resolvedUi.gui,
     sprite: {
-      componentsInFront,
+      componentsBehind: resolvedUi.sprite.componentsBehind,
+      componentsInFront: resolvedUi.sprite.componentsInFront,
     },
     sceneMap: {
       onAfterLoading() {
-        if (actionBarEnabled && normalized.ui?.actionBar?.autoOpen) {
+        if (actionBarEnabled && resolvedUi.actionBar.autoOpen) {
           const gui = inject(RpgGui)
           gui.display('action-battle-action-bar')
         }
       }
     },
     engine: {
-      onInput(engine: RpgClientEngine, { input }: { input: string }) {
+      onInput(engine: RpgClientEngine, { input }: any) {
         if (input !== "action") return;
         const player = engine.scene?.getCurrentPlayer?.() as any;
         if (!player) return;

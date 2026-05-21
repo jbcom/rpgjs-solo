@@ -6,20 +6,24 @@ const mergeSystems = (options: ActionBattleOptions = {}): ActionBattleSystems =>
   combat: {
     ...defaultActionBattleSystems.combat,
     resolveDamage:
+      options.combat?.damage ??
       options.systems?.combat?.damage ??
       defaultActionBattleSystems.combat.resolveDamage,
     resolveKnockback:
+      options.combat?.knockback ??
       options.systems?.combat?.knockback ??
       defaultActionBattleSystems.combat.resolveKnockback,
     hooks: {
       ...defaultActionBattleSystems.combat.hooks,
       ...options.systems?.combat?.hooks,
+      ...options.combat?.hooks,
     },
   },
   ai: {
     behaviors: {
       ...defaultActionBattleSystems.ai.behaviors,
       ...options.systems?.ai?.behaviors,
+      ...options.ai?.behaviors,
     },
   },
 });

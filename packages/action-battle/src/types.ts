@@ -67,28 +67,6 @@ export type ActionBattleSkillTargetingResolver = (
   skill: any
 ) => ActionBattleSkillTargeting | null | undefined;
 
-export interface ActionBattleUiActionBarOptions {
-  enabled?: boolean;
-  autoOpen?: boolean;
-  mode?: ActionBattleActionBarMode;
-}
-
-export interface ActionBattleUiTargetingOptions {
-  enabled?: boolean;
-  showGrid?: boolean;
-  tileSize?: { width: number; height: number };
-  colors?: {
-    area?: number;
-    edge?: number;
-    cursor?: number;
-  };
-}
-
-export interface ActionBattleUiOptions {
-  actionBar?: ActionBattleUiActionBarOptions;
-  targeting?: ActionBattleUiTargetingOptions;
-}
-
 export type ActionBattleAttackDirection =
   | "up"
   | "down"
@@ -145,6 +123,7 @@ export interface NormalizedActionBattleAttackProfile
 }
 
 export interface ActionBattleSkillOptions {
+  targeting?: ActionBattleSkillTargetingResolver;
   getTargeting?: ActionBattleSkillTargetingResolver;
   defaultAoeMask?: ActionBattleAoeMask;
 }
@@ -175,22 +154,118 @@ export interface ActionBattleAttackOptions {
 }
 
 export interface ActionBattleCombatOptions {
+  attack?: ActionBattleAttackOptions;
   damage?: ActionBattleCombatSystem["resolveDamage"];
   knockback?: ActionBattleCombatSystem["resolveKnockback"];
   hooks?: ActionBattleHitHooks;
 }
 
-export interface ActionBattleAiSystemOptions {
+export interface ActionBattleAiOptions {
   behaviors?: Record<string, ActionBattleAiBehavior>;
 }
 
+export type ActionBattleAiSystemOptions = ActionBattleAiOptions;
+
 export interface ActionBattleSystemOptions {
   combat?: ActionBattleCombatOptions;
-  ai?: ActionBattleAiSystemOptions;
+  ai?: ActionBattleAiOptions;
+}
+
+export type ActionBattleVisualMoment =
+  | "attack"
+  | "castSkill"
+  | "hit"
+  | "hurt"
+  | "defeat"
+  | "preview";
+
+export interface ActionBattleVisualContext {
+  moment: ActionBattleVisualMoment;
+  entity?: any;
+  target?: any;
+  attacker?: any;
+  damage?: number;
+  defeated?: boolean;
+  result?: any;
+  skill?: any;
+  pattern?: string;
+  animations?: ActionBattleAnimationOptions;
+  animationDefaults?: {
+    animationName?: string;
+    repeat?: number;
+  };
+}
+
+export interface ActionBattleVisualHelpers {
+  graphic(entity: any, keyOrOptions: ActionBattleAnimationKey | ActionBattleAnimationResult): void;
+  flash(entity: any, options?: Record<string, any>): void;
+  damageText(entity: any, damageOrText?: number | string): void;
+  component(entity: any, id: string, params?: Record<string, any>): void;
+  preview(entity: any, options?: Record<string, any>): void;
+}
+
+export type ActionBattleVisualPart = (
+  context: ActionBattleVisualContext,
+  helpers: ActionBattleVisualHelpers
+) => void;
+
+export type ActionBattleVisualComposer = (
+  context: ActionBattleVisualContext
+) => void;
+
+export type ActionBattleVisualPreset = "classic" | "fx" | "none";
+
+export type ActionBattleVisualInput =
+  | ActionBattleVisualPreset
+  | ActionBattleVisualComposer
+  | Partial<Record<ActionBattleVisualMoment, ActionBattleVisualPart>>;
+
+export interface ActionBattleUiActionBarOptions {
+  enabled?: boolean;
+  autoOpen?: boolean;
+  mode?: ActionBattleActionBarMode;
+  component?: any;
+}
+
+export interface ActionBattleUiTargetingOptions {
+  enabled?: boolean;
+  component?: any;
+  showGrid?: boolean;
+  tileSize?: { width: number; height: number };
+  colors?: {
+    area?: number;
+    edge?: number;
+    cursor?: number;
+  };
+}
+
+export interface ActionBattleUiAttackPreviewOptions {
+  enabled?: boolean;
+  component?: any;
+}
+
+export interface ActionBattleUiGuiEntry {
+  id: string;
+  component: any;
+  dependencies?: Function;
+}
+
+export interface ActionBattleUiOptions {
+  actionBar?: boolean | ActionBattleUiActionBarOptions;
+  targeting?: boolean | ActionBattleUiTargetingOptions;
+  attackPreview?: boolean | ActionBattleUiAttackPreviewOptions;
+  gui?: ActionBattleUiGuiEntry[];
+  spriteComponents?: {
+    front?: any[];
+    back?: any[];
+  } | any[];
 }
 
 export interface ActionBattleOptions {
+  combat?: ActionBattleCombatOptions;
+  visual?: ActionBattleVisualInput;
   ui?: ActionBattleUiOptions;
+  ai?: ActionBattleAiOptions;
   skills?: ActionBattleSkillOptions;
   targeting?: ActionBattleTargetingOptions;
   attack?: ActionBattleAttackOptions;

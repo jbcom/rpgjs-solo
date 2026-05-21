@@ -3,7 +3,13 @@ import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
 import { Direction } from "@rpgjs/common";
-import { provideActionBattle, BattleAi, EnemyType, AttackPattern } from "@rpgjs/action-battle/server";
+import {
+  BattleAi,
+  createActionBattleVisual,
+  EnemyType,
+  AttackPattern,
+  provideActionBattle,
+} from "@rpgjs/action-battle/server";
 import { provideSaveStorage } from "@rpgjs/server";
 
 /**
@@ -152,7 +158,8 @@ export function Event() {
       
       // Initialize AI behavior
       this.battleAi = new BattleAi(this, {
-        enemyType: EnemyType.Defensive,
+        enemyType: EnemyType.Aggressive,
+        behaviorKey: "sample-aggressive",
         visionRange: 150,
         attackRange: 50,
         attackCooldown: 900,
@@ -180,20 +187,6 @@ export function Event() {
      console.log("touch");
     },
     async onAction(player: RpgPlayer) {
-      this.remove({
-        reason: "sample-dev-action",
-        data: {
-          source: "Event.onAction"
-        },
-        transition: {
-          animation: "attack",
-          graphic: "monster",
-          duration: 700,
-          effect: "die"
-        },
-       // timeoutMs: 700
-      });
-
      // this.setAnimation('attack')
 
       // player.gold = 100;
@@ -235,8 +228,30 @@ export default createServer({
   providers: [
   //  provideTiledMap(),
     provideMain(),
-   provideActionBattle(),
-
+    provideActionBattle({
+      combat: {
+        attack: {
+          lockMovement: true,
+          lockDurationMs: 320,
+          profile: {
+            startupMs: 60,
+            activeMs: 120,
+            recoveryMs: 140,
+            hitPolicy: "oncePerTarget",
+          },
+        },
+      },
+      visual: createActionBattleVisual("fx"),
+      ai: {
+        behaviors: {
+          "sample-aggressive": ({ hpPercent }) => ({
+            mode: hpPercent !== null && hpPercent < 0.25 ? "retreat" : "assault",
+            attackCooldown: 850,
+            moveToCooldown: 350,
+          }),
+        },
+      },
+    }),
 
     provideSaveStorage(new LocalStorageSaveStorageStrategy({ key: "save" })),
     provideAutoSave({

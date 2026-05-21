@@ -42,35 +42,89 @@ let currentActionBattleOptions: ActionBattleOptions =
 export function normalizeActionBattleOptions(
   options: ActionBattleOptions = {}
 ): ActionBattleOptions {
+  const combat = {
+    ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.combat,
+    ...options.systems?.combat,
+    ...options.combat,
+    hooks: {
+      ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.combat?.hooks,
+      ...options.systems?.combat?.hooks,
+      ...options.combat?.hooks,
+    },
+  };
   const attack = {
     ...DEFAULT_ACTION_BATTLE_OPTIONS.attack,
     ...options.attack,
+    ...combat.attack,
   };
   const attackProfile = normalizeActionBattleAttackProfile(attack.profile, {
     lockMovement: attack.lockMovement,
     lockDurationMs: attack.lockDurationMs,
     hitboxes: attack.hitboxes,
   });
+  const normalizedAttack = {
+    ...attack,
+    profile: attackProfile,
+  };
+  const skills = {
+    ...DEFAULT_ACTION_BATTLE_OPTIONS.skills,
+    ...options.skills,
+  };
+  skills.targeting = skills.targeting ?? skills.getTargeting;
+  skills.getTargeting = skills.getTargeting ?? skills.targeting;
+
+  const defaultActionBar = DEFAULT_ACTION_BATTLE_OPTIONS.ui?.actionBar as any;
+  const defaultTargeting = DEFAULT_ACTION_BATTLE_OPTIONS.ui?.targeting as any;
+  const optionActionBar = options.ui?.actionBar as any;
+  const optionTargeting = options.ui?.targeting as any;
+  const optionAttackPreview = options.ui?.attackPreview as any;
+  const actionBar =
+    options.ui?.actionBar === false
+      ? { ...defaultActionBar, enabled: false }
+      : {
+          ...defaultActionBar,
+          ...(options.ui?.actionBar === true ? { enabled: true } : optionActionBar),
+        };
+  const legacyPreviewEnabled = normalizedAttack.showPreview !== false;
+  const attackPreview =
+    options.ui?.attackPreview === false
+      ? { enabled: false }
+      : {
+          enabled: options.ui?.attackPreview === true ? true : legacyPreviewEnabled,
+          ...(options.ui?.attackPreview === true ? {} : optionAttackPreview),
+        };
+  const targeting =
+    options.ui?.targeting === false
+      ? { ...defaultTargeting, enabled: false }
+      : {
+          ...defaultTargeting,
+          ...(options.ui?.targeting === true ? { enabled: true } : optionTargeting),
+          colors: {
+            ...defaultTargeting?.colors,
+            ...(typeof options.ui?.targeting === "object"
+              ? optionTargeting?.colors
+              : undefined),
+          },
+        };
+  const ai = {
+    ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.ai,
+    ...options.systems?.ai,
+    ...options.ai,
+    behaviors: {
+      ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.ai?.behaviors,
+      ...options.systems?.ai?.behaviors,
+      ...options.ai?.behaviors,
+    },
+  };
 
   return {
     ui: {
-      actionBar: {
-        ...DEFAULT_ACTION_BATTLE_OPTIONS.ui?.actionBar,
-        ...options.ui?.actionBar,
-      },
-      targeting: {
-        ...DEFAULT_ACTION_BATTLE_OPTIONS.ui?.targeting,
-        ...options.ui?.targeting,
-        colors: {
-          ...DEFAULT_ACTION_BATTLE_OPTIONS.ui?.targeting?.colors,
-          ...options.ui?.targeting?.colors,
-        },
-      },
+      ...options.ui,
+      actionBar,
+      targeting,
+      attackPreview,
     },
-    skills: {
-      ...DEFAULT_ACTION_BATTLE_OPTIONS.skills,
-      ...options.skills,
-    },
+    skills,
     targeting: {
       ...DEFAULT_ACTION_BATTLE_OPTIONS.targeting,
       ...options.targeting,
@@ -79,31 +133,23 @@ export function normalizeActionBattleOptions(
       ...DEFAULT_ACTION_BATTLE_OPTIONS.debug,
       ...options.debug,
     },
-    attack: {
-      ...attack,
-      profile: attackProfile,
+    attack: normalizedAttack,
+    combat: {
+      ...combat,
+      attack: normalizedAttack,
     },
+    ai,
+    visual: options.visual,
     animations: {
       ...DEFAULT_ACTION_BATTLE_OPTIONS.animations,
       ...options.animations,
     },
     systems: {
       combat: {
-        ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.combat,
-        ...options.systems?.combat,
-        hooks: {
-          ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.combat?.hooks,
-          ...options.systems?.combat?.hooks,
-        },
+        ...combat,
+        attack: normalizedAttack,
       },
-      ai: {
-        ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.ai,
-        ...options.systems?.ai,
-        behaviors: {
-          ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.ai?.behaviors,
-          ...options.systems?.ai?.behaviors,
-        },
-      },
+      ai,
     },
   };
 }

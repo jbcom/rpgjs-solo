@@ -1,9 +1,9 @@
 import { MAXHP, RpgEvent, RpgPlayer } from "@rpgjs/server";
 import {
   getActionBattleAnimationRemovalDelay,
-  playActionBattleAnimation,
   resolveActionBattleAnimation,
 } from "./animations";
+import { playActionBattleVisual } from "./visual";
 import { getActionBattleOptions } from "./config";
 import { getActionBattleSystems } from "./core/context";
 import {
@@ -1070,8 +1070,11 @@ export class BattleAi {
 
     this.faceTarget();
     this.telegraphAttack(profile);
-    playActionBattleAnimation("attack", this.event, this.animations, {
+    playActionBattleVisual(getActionBattleOptions().visual, {
+      moment: "attack",
+      entity: this.event,
       target: this.target,
+      animations: this.animations,
     });
 
     this.scheduleAttackStartup(profile, () => {
@@ -1089,9 +1092,12 @@ export class BattleAi {
     // Use skill if available
     if (this.attackSkill) {
       try {
-        playActionBattleAnimation("castSkill", this.event, this.animations, {
+        playActionBattleVisual(getActionBattleOptions().visual, {
+          moment: "castSkill",
+          entity: this.event,
           skill: this.attackSkill,
           target: this.target,
+          animations: this.animations,
         });
         this.event.useSkill(this.attackSkill, this.target);
       } catch (e) {
@@ -1219,13 +1225,14 @@ export class BattleAi {
     }
 
     // Visual feedback
-    target.flash({
-      type: 'tint',
-      tint: 'red',
-      duration: 200,
-      cycles: 1
+    playActionBattleVisual(getActionBattleOptions().visual, {
+      moment: "hit",
+      entity: this.event,
+      target,
+      damage: hitResult.damage,
+      result: hitResult,
+      animations: this.animations,
     });
-    target.showHit(`-${hitResult.damage}`);
     setActionBattleInvincibility(
       target,
       profile.reaction.invincibilityMs
@@ -1296,8 +1303,11 @@ export class BattleAi {
     const profile = this.getAttackProfile(AttackPattern.Combo);
     this.faceTarget();
     this.telegraphAttack(profile);
-    playActionBattleAnimation("attack", this.event, this.animations, {
+    playActionBattleVisual(getActionBattleOptions().visual, {
+      moment: "attack",
+      entity: this.event,
       target: this.target,
+      animations: this.animations,
     });
     this.scheduleAttackStartup(profile, () => {
       this.executeMeleeAttack(profile, AttackPattern.Combo);
@@ -1326,15 +1336,13 @@ export class BattleAi {
     this.chargingAttack = true;
     this.faceTarget();
     this.telegraphAttack(profile);
-    playActionBattleAnimation(
-      "attack",
-      this.event,
-      this.animations,
-      {
-        target: this.target,
-      },
-      { repeat: 2 }
-    );
+    playActionBattleVisual(getActionBattleOptions().visual, {
+      moment: "attack",
+      entity: this.event,
+      target: this.target,
+      animations: this.animations,
+      animationDefaults: { repeat: 2 },
+    });
 
     this.scheduleAttackStartup(profile, () => {
       if (!this.target || this.state !== AiState.Combat) {
@@ -1354,8 +1362,11 @@ export class BattleAi {
   private performZoneAttack() {
     const profile = this.getAttackProfile(AttackPattern.Zone);
     this.telegraphAttack(profile);
-    playActionBattleAnimation("attack", this.event, this.animations, {
+    playActionBattleVisual(getActionBattleOptions().visual, {
+      moment: "attack",
+      entity: this.event,
       target: this.target ?? undefined,
+      animations: this.animations,
     });
 
     const eventX = this.event.x();
@@ -1747,15 +1758,15 @@ export class BattleAi {
     this.debugLog('damage', `Took ${damage} damage from ${attacker.id} (HP: ${this.event.hp}/${this.event.param[MAXHP] || '?'})`);
 
     // Visual feedback
-    this.event.flash({
-      type: 'tint',
-      tint: 'red',
-      duration: 200,
-      cycles: 1
-    });
-    this.event.showHit(`-${damage}`);
-    playActionBattleAnimation("hurt", this.event, this.animations, {
+    playActionBattleVisual(getActionBattleOptions().visual, {
+      moment: "hurt",
+      entity: this.event,
+      target: this.event,
       attacker,
+      damage,
+      defeated: damageResult.defeated,
+      result: damageResult,
+      animations: this.animations,
     });
 
     // Track damage

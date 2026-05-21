@@ -115,4 +115,50 @@ describe("normalizeActionBattleAttackProfile", () => {
     expect(profile.recoveryMs).toBe(380);
     expect(profile.cooldownMs).toBe(500);
   });
+
+  test("normalizes the new combat, ai, skills, and ui option shape", () => {
+    const damage = () => ({ damage: 1, defeated: false });
+    const behavior = () => ({ mode: "assault" as const });
+    const targeting = () => ({ range: 4, aoeMask: ["#"] });
+    const options = normalizeActionBattleOptions({
+      attack: {
+        lockDurationMs: 500,
+      },
+      systems: {
+        combat: {
+          damage: () => ({ damage: 0, defeated: false }),
+        },
+      },
+      combat: {
+        attack: {
+          lockDurationMs: 260,
+        },
+        damage,
+      },
+      ai: {
+        behaviors: {
+          slime: behavior,
+        },
+      },
+      skills: {
+        targeting,
+      },
+      ui: {
+        actionBar: true,
+        targeting: false,
+        attackPreview: false,
+      },
+    });
+
+    expect(options.attack?.lockDurationMs).toBe(260);
+    expect(options.systems?.combat?.damage).toBe(damage);
+    expect(options.combat?.damage).toBe(damage);
+    expect(options.systems?.ai?.behaviors?.slime).toBe(behavior);
+    expect(options.ai?.behaviors?.slime).toBe(behavior);
+    expect(options.skills?.getTargeting).toBe(targeting);
+    expect(options.skills?.targeting).toBe(targeting);
+    expect((options.ui?.actionBar as any).enabled).toBe(true);
+    expect((options.ui?.targeting as any).enabled).toBe(false);
+    expect((options.ui?.attackPreview as any).enabled).toBe(false);
+  });
 });
