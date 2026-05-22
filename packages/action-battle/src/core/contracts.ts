@@ -9,6 +9,28 @@ import type {
 
 export type ActionBattleEntity = RpgPlayer | RpgEvent;
 
+export type ActionBattleTargetSelector =
+  | "players"
+  | "events"
+  | "all"
+  | "hostile"
+  | string[]
+  | ((context: ActionBattleTargetContext) => boolean);
+
+export interface ActionBattleTargetContext {
+  attacker: ActionBattleEntity;
+  target: ActionBattleEntity;
+  attackerFaction?: string;
+  targetFaction?: string;
+}
+
+export interface ActionBattleTargetOptions {
+  faction?: string;
+  targets?: ActionBattleTargetSelector;
+  getFaction?: (entity: ActionBattleEntity) => string | undefined;
+  canTarget?: (context: ActionBattleTargetContext) => boolean;
+}
+
 export interface ActionBattleHitbox {
   x: number;
   y: number;
@@ -103,7 +125,7 @@ export interface ActionBattleCombatSystem {
 
 export interface ActionBattleAiContext {
   event: RpgEvent;
-  target: RpgPlayer | null;
+  target: ActionBattleEntity | null;
   state: AiState;
   enemyType: EnemyType;
   distance: number | null;
@@ -126,6 +148,8 @@ export type ActionBattleAiBehavior = (
 
 export interface ActionBattleAiPreset {
   preset?: string | ActionBattleAiPreset;
+  faction?: string;
+  targets?: ActionBattleTargetSelector;
   enemyType?: EnemyType;
   attackCooldown?: number;
   visionRange?: number;

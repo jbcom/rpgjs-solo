@@ -56,6 +56,66 @@ When you build an object-based event for a map, type the factory as `EventDefini
 The returned object only describes the event behavior. Placement data such as `id`, `x`, and `y`
 still belongs to the outer `maps[].events` wrapper.
 
+## Factions and targets
+
+`BattleAi` can target players, other battle events, every combat entity, hostile
+factions, or an explicit list of factions.
+
+```ts
+new BattleAi(this, {
+  faction: "monsters",
+  targets: "players"
+});
+```
+
+Available target selectors:
+
+- `players`: target all players.
+- `events`: target action-battle events.
+- `all`: target players and action-battle events.
+- `hostile`: target entities with a different faction.
+- `["guards", "bandits"]`: target only these factions.
+- `(context) => boolean`: fully custom target rule.
+
+An allied event can share the player faction and attack only monster groups:
+
+```ts
+new BattleAi(this, {
+  faction: "players",
+  targets: ["monsters", "bandits"]
+});
+```
+
+Two enemy groups can fight each other:
+
+```ts
+new BattleAi(this, {
+  faction: "guards",
+  targets: ["bandits"]
+});
+```
+
+You can change faction and targets at runtime:
+
+```ts
+const ai = new BattleAi(this, {
+  faction: "guards",
+  targets: ["bandits"]
+});
+
+ai.setFaction("bandits");
+ai.setTargets("hostile");
+```
+
+Players keep the previous behavior by default: their action attack targets
+action-battle events. To enable PvP or teams, set the player target selector and
+faction on the server:
+
+```ts
+player.actionBattleFaction = "red-team";
+player.actionBattleTargets = ["blue-team"];
+```
+
 ## Enable the module
 
 Register the module on the server:

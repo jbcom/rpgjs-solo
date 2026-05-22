@@ -27,6 +27,10 @@ import {
 import { normalizeActionBattleAttackProfile } from "./core/attack-profile";
 import { resolveActionBattleWeaponAttackProfile } from "./core/equipment";
 import type { ActionBattleHitbox } from "./core/contracts";
+import {
+  canActionBattleTarget,
+  getActionBattleTargets,
+} from "./core/targets";
 import type {
   ActionBattleAttackProfile,
   NormalizedActionBattleAttackProfile,
@@ -238,8 +242,18 @@ export function applyPlayerHitToEvent(
   hooks?: ApplyHitHooks,
   metadata?: Record<string, any>
 ): HitResult | undefined {
+  if (!(target as any).battleAi) return undefined;
+  return applyActionBattleEntityHit(player, target, hooks, metadata);
+}
+
+export function applyActionBattleEntityHit(
+  attacker: RpgPlayer | RpgEvent,
+  target: RpgPlayer | RpgEvent,
+  hooks?: ApplyHitHooks,
+  metadata?: Record<string, any>
+): HitResult | undefined {
   const ai = (target as any).battleAi as BattleAi;
-  if (!ai) return undefined;
+  if (target instanceof RpgEvent && !ai) return undefined;
 
   const systems = getActionBattleSystems();
   const result = applyActionBattleHit(
@@ -277,15 +291,15 @@ export function applyPlayerHitToEvent(
         : systems.combat.hooks,
     },
     {
-      attacker: player,
+      attacker,
       target,
       metadata,
       reaction: metadata?.reaction,
     }
   );
 
-  if (!result.cancelled) {
-    ai.handleDamage(player, {
+  if (!result.cancelled && ai) {
+    ai.handleDamage(attacker, {
       damage: result.damage,
       defeated: result.defeated,
       raw: result.rawDamage,
@@ -704,6 +718,7 @@ export const createActionBattleServer = (
           const hitTracker = new ActionBattleHitTracker(
             attackProfile.hitPolicy
           );
+          const targetSelector = getActionBattleTargets(player, "events");
           if (options.debug?.attacks) {
             console.log("[ActionBattle] player attack", {
               attackId,
@@ -724,9 +739,19 @@ export const createActionBattleServer = (
               .subscribe({
                 next(hits: any[]) {
                   hits.forEach((hit: any) => {
-                    if (hit instanceof RpgEvent) {
+                    if (hit instanceof RpgEvent || hit instanceof RpgPlayer) {
+                      if (
+                        !canActionBattleTarget(
+                          player,
+                          hit,
+                          targetSelector,
+                          options.combat?.targets
+                        )
+                      ) {
+                        return;
+                      }
                       if (!hitTracker.tryHit(hit)) return;
-                      const result = applyPlayerHitToEvent(
+                      applyActionBattleEntityHit(
                         player,
                         hit,
                         undefined,
@@ -736,9 +761,6 @@ export const createActionBattleServer = (
                           reaction: attackProfile.reaction,
                         }
                       );
-                      if (result?.defeated) {
-                        console.log(`Player ${player.id} defeated AI ${hit.id}`);
-                      }
                     }
                   });
                 },
@@ -813,6 +835,11 @@ export type {
   NormalizedActionBattleHitReactionProfile,
   NormalizedActionBattleAttackProfile,
 } from "./types";
+export type {
+  ActionBattleTargetContext,
+  ActionBattleTargetOptions,
+  ActionBattleTargetSelector,
+} from "./core/contracts";
 export {
   DEFAULT_ACTION_BATTLE_HIT_REACTION,
   isActionBattleEntityInvincible,
@@ -827,6 +854,17 @@ export {
   type NormalizedActionBattleEnemyAttackProfileMap,
 } from "./core/enemy-attack-profiles";
 export { resolveActionBattleWeaponAttackProfile } from "./core/equipment";
+export {
+  ACTION_BATTLE_ENEMY_FACTION,
+  ACTION_BATTLE_PLAYER_FACTION,
+  canActionBattleTarget,
+  getActionBattleFaction,
+  getActionBattleTargets,
+  isActionBattleCombatEntity,
+  isActionBattleEvent,
+  isActionBattlePlayer,
+  matchesActionBattleTargetSelector,
+} from "./core/targets";
 export {
   AiDebug,
   AiState,

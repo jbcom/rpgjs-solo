@@ -70,6 +70,9 @@ export type {
   ActionBattleDamageResult,
   ActionBattleDirection,
   ActionBattleEntity,
+  ActionBattleTargetContext,
+  ActionBattleTargetOptions,
+  ActionBattleTargetSelector,
   ActionBattleHitContext,
   ActionBattleHitHooks,
   ActionBattleHitResult,
@@ -159,6 +162,17 @@ export {
   defaultRpgjsDamageResolver,
 } from "./core/defaults";
 export {
+  ACTION_BATTLE_ENEMY_FACTION,
+  ACTION_BATTLE_PLAYER_FACTION,
+  canActionBattleTarget,
+  getActionBattleFaction,
+  getActionBattleTargets,
+  isActionBattleCombatEntity,
+  isActionBattleEvent,
+  isActionBattlePlayer,
+  matchesActionBattleTargetSelector,
+} from "./core/targets";
+export {
   createActionBattleSystems,
   getActionBattleSystems,
 } from "./core/context";
@@ -189,6 +203,7 @@ export {
 export {
   DEFAULT_PLAYER_ATTACK_HITBOXES,
   getPlayerWeaponKnockbackForce,
+  applyActionBattleEntityHit,
   applyPlayerHitToEvent,
   ACTION_BATTLE_ACTION_BAR_GUI_ID,
   openActionBattleActionBar,

@@ -215,4 +215,76 @@ describe("BattleAi behavior tree", () => {
     });
     ai.destroy();
   });
+
+  test("does not target an already defeated player", () => {
+    const event = createEvent();
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const ai = new BattleAi(event as any);
+    const player = {
+      ...createPlayer(),
+      hp: 0,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+
+    ai.onDetectInShape(player as any, {});
+
+    expect(ai.getTarget()).toBeNull();
+    ai.destroy();
+  });
+
+  test("clears its target when the player is defeated", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any);
+
+    ai.onDetectInShape(player as any, {});
+    expect(ai.getTarget()).toBe(player);
+
+    player.hp = 0;
+    vi.advanceTimersByTime(100);
+
+    expect(ai.getTarget()).toBeNull();
+    expect(event.stopMoveTo).toHaveBeenCalled();
+    ai.destroy();
+  });
+
+  test("can target hostile BattleAi events by faction", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    const hostile = {
+      ...createEvent(),
+      id: "bandit-1",
+      hp: 10,
+      x: vi.fn(() => 30),
+      y: vi.fn(() => 0),
+      battleAi: {
+        getFaction: () => "bandits",
+        getTargets: () => "players",
+      },
+    };
+    const map = {
+      getPlayers: vi.fn(() => []),
+      getEvents: vi.fn(() => [event, hostile]),
+    };
+    event.getCurrentMap.mockReturnValue(map);
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+
+    const ai = new BattleAi(event as any, {
+      faction: "guards",
+      targets: ["bandits"],
+    });
+
+    vi.advanceTimersByTime(100);
+
+    expect(ai.getTarget()).toBe(hostile);
+    ai.destroy();
+  });
 });

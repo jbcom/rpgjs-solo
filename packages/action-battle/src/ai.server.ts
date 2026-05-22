@@ -34,7 +34,13 @@ import type {
   ActionBattleAiDecision,
   ActionBattleAiPreset,
   ActionBattleDamageResult,
+  ActionBattleEntity,
+  ActionBattleTargetSelector,
 } from "./core/contracts";
+import {
+  canActionBattleTarget,
+  isActionBattlePlayer,
+} from "./core/targets";
 import type {
   NormalizedActionBattleAttackProfile,
   NormalizedActionBattleHitReactionProfile,
@@ -66,7 +72,7 @@ export interface BattleAiDefeatReward {
 
 export interface BattleAiDefeatedContext {
   event: RpgEvent;
-  attacker?: RpgPlayer;
+  attacker?: ActionBattleEntity;
   reward: BattleAiDefeatReward;
   remove: () => void;
 }
@@ -77,11 +83,13 @@ export type BattleAiDefeatedCallback = (
 
 export type BattleAiLegacyDefeatedCallback = (
   event: RpgEvent,
-  attacker?: RpgPlayer
+  attacker?: ActionBattleEntity
 ) => void;
 
 export interface BattleAiBaseOptions {
   preset?: string | ActionBattleAiPreset;
+  faction?: string;
+  targets?: ActionBattleTargetSelector;
   enemyType?: EnemyType;
   attackCooldown?: number;
   visionRange?: number;
@@ -469,7 +477,7 @@ const mergeBattleAiPresetOptions = (
  */
 export class BattleAi {
   private event: RpgEvent;
-  private target: InstanceType<typeof RpgPlayer> | null = null;
+  private target: ActionBattleEntity | null = null;
   private lastAttackTime: number = 0;
   private updateInterval?: any;
 
@@ -487,6 +495,8 @@ export class BattleAi {
 
   // Enemy type and behavior
   private enemyType: EnemyType;
+  private faction?: string;
+  private targets: ActionBattleTargetSelector = "players";
   private attackCooldown: number = 1000;
   private visionRange: number = 150;
   private attackRange: number = 60;
@@ -599,6 +609,8 @@ export class BattleAi {
 
     // Set enemy type and apply behavior modifiers
     this.enemyType = options.enemyType || EnemyType.Aggressive;
+    this.faction = options.faction;
+    this.targets = options.targets ?? "players";
     this.behaviorKey = options.behaviorKey ?? this.enemyType;
     this.applyEnemyTypeBehavior(options);
 
@@ -848,6 +860,14 @@ export class BattleAi {
   private updateAiBehavior() {
     const currentTime = Date.now();
 
+    if (this.target && this.isTargetDefeated(this.target)) {
+      this.debugLog('combat', `Target ${this.target.id} is defeated, returning to idle`);
+      this.clearTarget();
+      this.changeState(AiState.Idle);
+      this.checkDamageTaken();
+      return;
+    }
+
     // Update group behavior
     if (this.groupBehavior) {
       this.updateGroupBehavior();
@@ -903,6 +923,12 @@ export class BattleAi {
    * Update idle behavior (patrolling)
    */
   private updateIdleBehavior() {
+    const target = this.findNearestTarget();
+    if (target) {
+      this.engageTarget(target);
+      return;
+    }
+
     if (this.patrolWaypoints.length > 0) {
       const waypoint = this.patrolWaypoints[this.currentPatrolIndex];
       const distance = this.getDistance(this.event, {
@@ -948,9 +974,7 @@ export class BattleAi {
     // Check if target is still in range
     if (distance > this.visionRange * 1.5) {
       this.debugLog('combat', `Target out of range (dist=${distance.toFixed(1)}, maxRange=${(this.visionRange * 1.5).toFixed(1)})`);
-      this.target = null;
-      this.isMovingToTarget = false;
-      this.event.stopMoveTo();
+      this.clearTarget();
       this.changeState(AiState.Idle);
       return;
     }
@@ -1179,7 +1203,7 @@ export class BattleAi {
     profile: NormalizedActionBattleAttackProfile,
     pattern: AttackPattern
   ) {
-    if (!this.target) return;
+    if (!this.target || this.isTargetDefeated(this.target)) return;
     this.debugLog('attack', `Applying ${pattern} hit`);
 
     // Use skill if available
@@ -1211,7 +1235,7 @@ export class BattleAi {
     ),
     pattern: AttackPattern = AttackPattern.Melee
   ) {
-    if (!this.target) return;
+    if (!this.target || this.isTargetDefeated(this.target)) return;
 
     const eventX = this.event.x();
     const eventY = this.event.y();
@@ -1237,7 +1261,12 @@ export class BattleAi {
     }).subscribe({
       next: (hits: any[]) => {
         hits.forEach((hit: any) => {
-          if (hit instanceof RpgPlayer && hit !== this.event) {
+          if (
+            (hit instanceof RpgPlayer || hit instanceof RpgEvent) &&
+            hit !== this.event &&
+            this.canTarget(hit) &&
+            !this.isTargetDefeated(hit)
+          ) {
             this.applyHit(hit, undefined, profile, pattern);
           }
         });
@@ -1274,13 +1303,24 @@ export class BattleAi {
    * ```
    */
   private applyHit(
-    target: RpgPlayer,
+    target: ActionBattleEntity,
     hooks?: ApplyHitHooks,
     profile: NormalizedActionBattleAttackProfile = this.getAttackProfile(
       AttackPattern.Melee
     ),
     pattern: AttackPattern = AttackPattern.Melee
   ): HitResult {
+    if (this.isTargetDefeated(target)) {
+      return {
+        damage: 0,
+        knockbackForce: 0,
+        knockbackDuration: 0,
+        defeated: true,
+        attacker: this.event,
+        target
+      };
+    }
+
     if (isActionBattleEntityInvincible(target)) {
       return {
         damage: 0,
@@ -1349,6 +1389,16 @@ export class BattleAi {
     // Call onAfterHit hook
     if (hooks?.onAfterHit) {
       hooks.onAfterHit(hitResult);
+    }
+
+    const targetAi = (target as any).battleAi as BattleAi | undefined;
+    if (targetAi) {
+      targetAi.handleDamage(this.event, {
+        damage: hitResult.damage,
+        defeated: hitResult.defeated,
+        raw: undefined,
+        reaction: profile.reaction,
+      });
     }
 
     return hitResult;
@@ -1486,7 +1536,12 @@ export class BattleAi {
       }).subscribe({
         next: (hits: any[]) => {
           hits.forEach((hit: any) => {
-            if (hit instanceof RpgPlayer && hit !== this.event) {
+            if (
+              (hit instanceof RpgPlayer || hit instanceof RpgEvent) &&
+              hit !== this.event &&
+              this.canTarget(hit) &&
+              !this.isTargetDefeated(hit)
+            ) {
               this.applyHit(hit, undefined, profile, AttackPattern.Zone);
             }
           });
@@ -1499,7 +1554,7 @@ export class BattleAi {
    * Perform dash attack
    */
   private performDashAttack() {
-    if (!this.target) return;
+    if (!this.target || this.isTargetDefeated(this.target)) return;
     const profile = this.getAttackProfile(AttackPattern.DashAttack);
 
     const dx = this.target.x() - this.event.x();
@@ -1803,9 +1858,14 @@ export class BattleAi {
   /**
    * Handle player entering vision
    */
-  onDetectInShape(player: InstanceType<typeof RpgPlayer>, shape: any) {
-    this.debugLog('vision', `Player ${player.id} entered vision (state=${this.state})`);
-    this.target = player;
+  onDetectInShape(target: ActionBattleEntity, shape: any) {
+    if (!this.canTarget(target) || this.isTargetDefeated(target)) return;
+    this.debugLog('vision', `Target ${target.id} entered vision (state=${this.state})`);
+    this.engageTarget(target);
+  }
+
+  private engageTarget(target: ActionBattleEntity) {
+    this.target = target;
 
     if (this.state === AiState.Idle) {
       this.changeState(AiState.Alert);
@@ -1817,12 +1877,10 @@ export class BattleAi {
   /**
    * Handle player leaving vision
    */
-  onDetectOutShape(player: InstanceType<typeof RpgPlayer>, shape: any) {
-    this.debugLog('vision', `Player ${player.id} left vision (wasTarget=${this.target === player})`);
-    if (this.target === player) {
-      this.target = null;
-      this.isMovingToTarget = false;
-      this.event.stopMoveTo();
+  onDetectOutShape(target: ActionBattleEntity, shape: any) {
+    this.debugLog('vision', `Target ${target.id} left vision (wasTarget=${this.target === target})`);
+    if (this.target === target) {
+      this.clearTarget();
       this.changeState(AiState.Idle);
     }
   }
@@ -1833,7 +1891,7 @@ export class BattleAi {
    * This triggers state changes like stun and flee check.
    * The actual damage is applied externally via RPGJS API.
    */
-  takeDamage(attacker: RpgPlayer): boolean {
+  takeDamage(attacker: ActionBattleEntity): boolean {
     if (this.defeated) return true;
     // Apply damage using RPGJS system
     const raw = this.event.applyDamage(attacker);
@@ -1845,7 +1903,7 @@ export class BattleAi {
   }
 
   handleDamage(
-    attacker: RpgPlayer,
+    attacker: ActionBattleEntity,
     damageResult: ActionBattleDamageResult & {
       reaction?: NormalizedActionBattleHitReactionProfile;
     }
@@ -1902,7 +1960,7 @@ export class BattleAi {
    * Stops all movements, cleans up resources, calls the onDefeated hook,
    * and removes the event from the map.
    */
-  private kill(attacker?: RpgPlayer) {
+  private kill(attacker?: ActionBattleEntity) {
     if (this.defeated) return;
     this.defeated = true;
 
@@ -1936,7 +1994,7 @@ export class BattleAi {
       });
     };
 
-    if (this.autoAwardRewards) {
+    if (this.autoAwardRewards && attacker && isActionBattlePlayer(attacker)) {
       reward.giveTo(attacker);
     }
 
@@ -1954,7 +2012,7 @@ export class BattleAi {
         (
           this.onDefeatedCallback as (
             event: RpgEvent,
-            attacker?: RpgPlayer
+          attacker?: ActionBattleEntity
           ) => void
         )(this.event, attacker);
       } else {
@@ -1975,6 +2033,48 @@ export class BattleAi {
     const dx = entity1.x() - entity2.x();
     const dy = entity1.y() - entity2.y();
     return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  private canTarget(target: ActionBattleEntity): boolean {
+    return canActionBattleTarget(
+      this.event,
+      target,
+      this.targets,
+      getActionBattleOptions().combat?.targets
+    );
+  }
+
+  private findNearestTarget(): ActionBattleEntity | null {
+    const map = this.event.getCurrentMap();
+    if (!map) return null;
+
+    const candidates: ActionBattleEntity[] = [];
+    map.getPlayers?.().forEach((player: RpgPlayer) => candidates.push(player));
+    map.getEvents?.().forEach((event: RpgEvent) => candidates.push(event));
+
+    let nearest: ActionBattleEntity | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const candidate of candidates) {
+      if (!this.canTarget(candidate)) continue;
+      const distance = this.getDistance(this.event, candidate);
+      if (distance > this.visionRange) continue;
+      if (distance < nearestDistance) {
+        nearest = candidate;
+        nearestDistance = distance;
+      }
+    }
+
+    return nearest;
+  }
+
+  private isTargetDefeated(target: ActionBattleEntity | null | undefined): boolean {
+    return !target || target.hp <= 0;
+  }
+
+  private clearTarget() {
+    this.target = null;
+    this.isMovingToTarget = false;
+    this.event.stopMoveTo();
   }
 
   private updateBehavior(currentTime: number) {
@@ -2209,7 +2309,7 @@ export class BattleAi {
     currentTime: number,
     consumes: boolean
   ): boolean {
-    if (!this.target || this.chargingAttack) return false;
+    if (!this.target || this.isTargetDefeated(this.target) || this.chargingAttack) return false;
     const distance = this.getDistance(this.event, this.target);
     if (distance > this.attackRange) return false;
     if (currentTime - this.lastAttackTime < this.attackCooldown) return false;
@@ -2228,7 +2328,7 @@ export class BattleAi {
     currentTime: number,
     consumes: boolean
   ): boolean {
-    if (!this.target || !skill) return false;
+    if (!this.target || this.isTargetDefeated(this.target) || !skill) return false;
     const distance = this.getDistance(this.event, this.target);
     if (distance > this.attackRange) return false;
     if (currentTime - this.lastAttackTime < this.attackCooldown) return false;
@@ -2314,8 +2414,24 @@ export class BattleAi {
   // Public getters
   getHealth(): number { return this.event.hp; }
   getMaxHealth(): number { return this.event.param[MAXHP]; }
-  getTarget(): InstanceType<typeof RpgPlayer> | null { return this.target; }
+  getTarget(): ActionBattleEntity | null { return this.target; }
   getState(): AiState { return this.state; }
+  getFaction(): string | undefined {
+    return this.faction;
+  }
+  setFaction(faction: string | undefined): void {
+    this.faction = faction;
+  }
+  getTargets(): ActionBattleTargetSelector {
+    return this.targets;
+  }
+  setTargets(targets: ActionBattleTargetSelector): void {
+    this.targets = targets;
+    if (this.target && !this.canTarget(this.target)) {
+      this.clearTarget();
+      this.changeState(AiState.Idle);
+    }
+  }
   getEnemyType(): EnemyType { return this.enemyType; }
 
   /**

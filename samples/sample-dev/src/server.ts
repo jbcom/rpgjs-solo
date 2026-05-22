@@ -1,9 +1,10 @@
-import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, MapData, Frequency, ATK, PDEF, LocalStorageSaveStorageStrategy, provideAutoSave, RpgServerEngine } from "@rpgjs/server";
+import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, MapData, Frequency, ATK, PDEF, LocalStorageSaveStorageStrategy, provideAutoSave, RpgServerEngine, EventDefinition } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
 import { provideMain } from "./modules/main";
 import { Direction } from "@rpgjs/common";
 import {
+  ACTION_BATTLE_HIT_FX_COMPONENT_ID,
   BattleAi,
   createActionBattleVisual,
   EnemyType,
@@ -24,6 +25,59 @@ import {
   useAttack,
 } from "@rpgjs/action-battle/server";
 import { provideSaveStorage } from "@rpgjs/server";
+
+const playSampleSlashFx = (
+  target: any,
+  fx: {
+    component(entity: any, id: string, params?: Record<string, any>): void;
+  },
+  scale = 1
+) => {
+  fx.component(target, ACTION_BATTLE_HIT_FX_COMPONENT_ID, {
+    name: "slashSpark",
+    scale,
+    rotation: Math.random() > 0.5 ? -0.25 : 0.25,
+    zIndex: 2000,
+  });
+  fx.component(target, ACTION_BATTLE_HIT_FX_COMPONENT_ID, {
+    name: "impactBurst",
+    scale: scale * 0.55,
+    alpha: 0.85,
+    zIndex: 1999,
+  });
+};
+
+const sampleActionBattleVisual = createActionBattleVisual({
+  attack({ entity }, fx) {
+    fx.graphic(entity, "attack");
+  },
+  castSkill({ entity }, fx) {
+    fx.graphic(entity, "castSkill");
+  },
+  hit({ target, damage }, fx) {
+    fx.flash(target, {
+      tint: "white",
+      duration: 110,
+      cycles: 1,
+    });
+    fx.damageText(target, damage);
+    playSampleSlashFx(target, fx, 1.05);
+  },
+  hurt({ entity, target, damage }, fx) {
+    const hurtTarget = target ?? entity;
+    fx.flash(hurtTarget, {
+      tint: "white",
+      duration: 130,
+      cycles: 1,
+    });
+    fx.damageText(hurtTarget, damage);
+    fx.graphic(hurtTarget, "hurt");
+    playSampleSlashFx(hurtTarget, fx, 1.25);
+  },
+  defeat({ entity, target }, fx) {
+    fx.graphic(target ?? entity, "die");
+  },
+});
 
 /**
  * Basic Sword weapon
@@ -138,7 +192,7 @@ const fireSkill = {
   // }
 };
 
-export function Event() {
+export function Event(): EventDefinition {
   return {
     name: "EV-1",
     onInit() {
@@ -146,59 +200,12 @@ export function Event() {
       this.speed = 2
       this.teleport({ x: 100, y: 200 })
       this.name = "John Doe";
-      
-      this.through = false;
-      // this.infiniteMoveRoute([
-      //   Move.tileRandom()
-      // ], {
-      //   onStuck: (player, target, currentPos) => {
-      //     console.log("stuck");
-      //     return true;
-      //   }
-      // })
-      
-      // Configure enemy stats
-      this.hp = 1000;
-      this.param[MAXHP] = 1000;
-      this.param[ATK] = 10;
-      this.param[PDEF] = 5;
-      
-      // Equip enemy weapon
-      this.addItem(EnemyClaw);
-     
-      this.equip(EnemyClaw.id);
-      
-      // Initialize AI behavior
-      this.battleAi = new BattleAi(this, {
-        enemyType: EnemyType.Aggressive,
-        behaviorKey: "sample-aggressive",
-        visionRange: 150,
-        attackRange: 50,
-        attackCooldown: 900,
-        dodgeChance: 0.35,
-        dodgeCooldown: 2000,
-        fleeThreshold: 0.2,
-        attackPatterns: [
-          AttackPattern.Melee,
-          AttackPattern.Combo,
-          AttackPattern.DashAttack,
-          AttackPattern.Charged
-        ],
-        moveToCooldown: 450,
-        retreatCooldown: 700,
-        behavior: {
-          baseScore: 55,
-          updateInterval: 450,
-          minStateDuration: 700,
-          assaultThreshold: 70,
-          retreatThreshold: 30
-        },
-      });
     },
     onPlayerTouch(player: RpgPlayer) {
      console.log("touch");
     },
     async onAction(player: RpgPlayer) {
+      this.moveTo(player)
      // this.setAnimation('attack')
 
       // player.gold = 100;
@@ -276,6 +283,7 @@ export function AiPresetRusher() {
         ai: {
           preset: "sample-rusher",
           rewards: { exp: 15, gold: 5 },
+          targets: 'events'
         },
       });
     },
@@ -296,26 +304,29 @@ export function AiSimpleKiter() {
         ai: {
           preset: "sample-kiter",
           rewards: { exp: 18, gold: 8 },
+          targets: 'events'
         },
       });
     },
   };
 }
 
-export function AiTreeElite() {
+export function AiTreeElite(x, y, faction = "elite-a") {
   return {
     name: "AI Demo - Tree Elite",
     onInit() {
       setupActionBattleEnemy(this, {
         name: "Tree Elite",
-        x: 240,
-        y: 300,
+        x,
+        y,
         hp: 420,
         atk: 16,
         speed: 2,
         ai: {
           preset: "tank",
-          attackRange: 60,
+          faction,
+          targets: "hostile",
+          attackRange: 200,
           attackCooldown: 1200,
           poise: 2,
           attackPatterns: [
@@ -358,7 +369,7 @@ export default createServer({
           },
         },
       },
-      visual: createActionBattleVisual("fx"),
+      visual: sampleActionBattleVisual,
       ai: {
         presets: {
           "sample-rusher": {
@@ -503,6 +514,12 @@ export default createServer({
 
           },
           async onDead(player: RpgPlayer) {
+            const runtimePlayer = player as RpgPlayer & {
+              __sampleGameoverOpen?: boolean;
+            };
+            if (runtimePlayer.__sampleGameoverOpen) return;
+            runtimePlayer.__sampleGameoverOpen = true;
+
             const selection = await player.callGameover({
                 title: 'Game Over',
                   subtitle: 'Choose your fate',
@@ -518,6 +535,10 @@ export default createServer({
       
               if (selection?.id === 'load') {
                   await player.showLoad()
+              }
+
+              if (player.hp > 0) {
+                runtimePlayer.__sampleGameoverOpen = false;
               }
           },
           async onInput(player: RpgPlayer, input: any) {
@@ -578,10 +599,10 @@ export default createServer({
           {
             id: 'center-map',
             events: [
-              { event: Event() },
-              { event: AiPresetRusher() },
-              { event: AiSimpleKiter() },
-              { event: AiTreeElite() },
+              // { event: Event() },
+              //{ event: Event() },
+              { event: AiTreeElite(200, 300, "elite-a") },
+              { event: AiTreeElite(300, 200, "elite-b") },
             ]
           }
         ],

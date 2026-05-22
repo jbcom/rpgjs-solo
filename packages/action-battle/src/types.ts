@@ -1,6 +1,7 @@
 import type {
   ActionBattleAiBehavior,
   ActionBattleAiPreset,
+  ActionBattleTargetOptions,
   ActionBattleCombatSystem,
   ActionBattleHitHooks,
   ActionBattleHitbox,
@@ -159,6 +160,7 @@ export interface ActionBattleCombatOptions {
   damage?: ActionBattleCombatSystem["resolveDamage"];
   knockback?: ActionBattleCombatSystem["resolveKnockback"];
   hooks?: ActionBattleHitHooks;
+  targets?: ActionBattleTargetOptions;
 }
 
 export interface ActionBattleAiOptions {
