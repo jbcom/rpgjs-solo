@@ -65,6 +65,7 @@ export interface ProjectileSpawnClock {
   now?: number;
   currentServerTick?: number;
   tickDurationMs?: number;
+  mapId?: string;
 }
 
 interface RuntimeProjectile {
@@ -84,6 +85,7 @@ export class ProjectileManager {
   private readonly projectiles = new Map<string, RuntimeProjectile>();
   private readonly version = signal(0);
   private readonly impactDurationMs = 350;
+  private mapId?: string;
 
   constructor(
     private readonly hooks: Hooks,
@@ -118,7 +120,18 @@ export class ProjectileManager {
     return this.components.get(type);
   }
 
+  setMapId(mapId: string | undefined): void {
+    if (this.mapId === mapId) return;
+    this.mapId = mapId;
+    this.clear();
+  }
+
+  getMapId(): string | undefined {
+    return this.mapId;
+  }
+
   spawnBatch(projectiles: ClientProjectileSpawn[], clock: ProjectileSpawnClock = {}): void {
+    if (!this.acceptsMap(clock.mapId)) return;
     const now = clock.now ?? Date.now();
     for (const projectile of projectiles) {
       const component = this.components.get(projectile.type);
@@ -142,7 +155,8 @@ export class ProjectileManager {
     this.touch();
   }
 
-  impactBatch(impacts: ClientProjectileImpact[]): void {
+  impactBatch(impacts: ClientProjectileImpact[], context: { mapId?: string } = {}): void {
+    if (!this.acceptsMap(context.mapId)) return;
     const now = Date.now();
     for (const impact of impacts) {
       const projectile = this.projectiles.get(impact.id);
@@ -155,7 +169,8 @@ export class ProjectileManager {
     this.touch();
   }
 
-  destroyBatch(projectiles: ClientProjectileDestroy[]): void {
+  destroyBatch(projectiles: ClientProjectileDestroy[], context: { mapId?: string } = {}): void {
+    if (!this.acceptsMap(context.mapId)) return;
     const now = Date.now();
     for (const destroyed of projectiles) {
       const projectile = this.projectiles.get(destroyed.id);
@@ -239,6 +254,10 @@ export class ProjectileManager {
       destroyed: projectile.destroyAt !== undefined,
       ttl,
     };
+  }
+
+  private acceptsMap(mapId: string | undefined): boolean {
+    return !mapId || !this.mapId || mapId === this.mapId;
   }
 
   private isWaitingForDelay(projectile: RuntimeProjectile, now: number): boolean {

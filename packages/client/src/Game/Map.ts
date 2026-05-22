@@ -88,6 +88,16 @@ export class RpgClientMap extends RpgCommonMap<any> {
     const currentPlayer = !force && currentPlayerId
       ? this.players()[currentPlayerId]
       : undefined;
+    const players = this.players();
+    const events = this.events();
+
+    Object.entries(players).forEach(([id, player]) => {
+      if (!player || (!force && id === currentPlayerId)) return;
+      (player as any).resetAnimationState?.();
+    });
+    Object.values(events).forEach((event) => {
+      (event as any)?.resetAnimationState?.();
+    });
 
     this.players.set(
       currentPlayerId && currentPlayer ? { [currentPlayerId]: currentPlayer } : {}

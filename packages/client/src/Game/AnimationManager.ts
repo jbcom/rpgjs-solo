@@ -4,6 +4,10 @@ import { signal } from "canvasengine";
 export class AnimationManager {
   current = signal<any[]>([]);
 
+  clear(): void {
+    this.current.set([]);
+  }
+
   displayEffect(params: any, player: RpgCommonPlayer | { x: number, y: number }): Promise<void> {
     const id = generateUID();
     const effectParams = params ?? {};

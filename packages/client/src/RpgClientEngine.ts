@@ -120,6 +120,9 @@ export class RpgClientEngine<T = any> {
   private eventsReceived$ = new BehaviorSubject<boolean>(false);
   private onAfterLoadingSubscription?: any;
   private sceneResetQueued = false;
+  private mapTransitionInProgress = false;
+  private currentMapRoomId?: string;
+  private socketListenersInitialized = false;
   
   // Store subscriptions and event listeners for cleanup
   private tickSubscriptions: any[] = [];
@@ -392,6 +395,9 @@ export class RpgClientEngine<T = any> {
   }
 
   private initListeners() {
+    if (this.socketListenersInitialized) return;
+    this.socketListenersInitialized = true;
+
     this.webSocket.on("sync", (data) => {
       if (!this.tick) {
         this.pendingSyncPackets.push(data);
@@ -420,13 +426,8 @@ export class RpgClientEngine<T = any> {
     });
 
     this.webSocket.on("changeMap", (data) => {
-      this.sceneResetQueued = true;
-      this.sceneMap.weatherState.set(null);
-      this.sceneMap.lightingState.set(null);
-      this.sceneMap.clearLightSpots();
-      this.projectiles.clear();
-      // Reset camera follow to default (follow current player) when changing maps
-      this.cameraFollowTargetId.set(null);
+      const nextMapId = typeof data?.mapId === "string" ? data.mapId : undefined;
+      this.beginMapTransfer(nextMapId);
       const transferToken = typeof data?.transferToken === "string" ? data.transferToken : undefined;
       this.loadScene(data.mapId, transferToken);
     });
@@ -441,21 +442,30 @@ export class RpgClientEngine<T = any> {
     });
 
     this.webSocket.on("projectile:spawnBatch", (data) => {
+      if (!this.shouldProcessProjectilePacket(data)) return;
       this.projectiles.spawnBatch(data?.projectiles ?? [], {
+        mapId: data?.mapId,
         currentServerTick: this.estimateServerTick(),
         tickDurationMs: this.getPhysicsTickDurationMs(),
       });
     });
 
     this.webSocket.on("projectile:impactBatch", (data) => {
-      this.projectiles.impactBatch(data?.impacts ?? []);
+      if (!this.shouldProcessProjectilePacket(data)) return;
+      this.projectiles.impactBatch(data?.impacts ?? [], {
+        mapId: data?.mapId,
+      });
     });
 
     this.webSocket.on("projectile:destroyBatch", (data) => {
-      this.projectiles.destroyBatch(data?.projectiles ?? []);
+      if (!this.shouldProcessProjectilePacket(data)) return;
+      this.projectiles.destroyBatch(data?.projectiles ?? [], {
+        mapId: data?.mapId,
+      });
     });
 
-    this.webSocket.on("projectile:clear", () => {
+    this.webSocket.on("projectile:clear", (data) => {
+      if (!this.shouldProcessProjectilePacket(data)) return;
       this.projectiles.clear();
     });
 
@@ -571,6 +581,34 @@ export class RpgClientEngine<T = any> {
     this.webSocket.on('error', (error) => {
       void this.callConnectError(error);
     })
+  }
+
+  private beginMapTransfer(nextMapId?: string) {
+    this.mapTransitionInProgress = true;
+    this.currentMapRoomId = nextMapId;
+    this.sceneResetQueued = false;
+    this.clearClientPredictionStates();
+    this.sceneMap.weatherState.set(null);
+    this.sceneMap.lightingState.set(null);
+    this.sceneMap.clearLightSpots();
+    this.clearComponentAnimations();
+    this.projectiles.setMapId(nextMapId);
+    this.cameraFollowTargetId.set(null);
+    this.sceneMap.reset();
+    this.sceneMap.loadPhysic();
+  }
+
+  private clearComponentAnimations() {
+    this.componentAnimations.forEach((componentAnimation) => {
+      componentAnimation.instance?.clear?.();
+    });
+  }
+
+  private shouldProcessProjectilePacket(data: any): boolean {
+    if (this.mapTransitionInProgress) return false;
+    const packetMapId =
+      typeof data?.mapId === "string" ? data.mapId : undefined;
+    return !packetMapId || !this.currentMapRoomId || packetMapId === this.currentMapRoomId;
   }
 
   private async callConnectError(error: any) {
@@ -732,14 +770,10 @@ export class RpgClientEngine<T = any> {
       query: transferToken ? { transferToken } : undefined,
     })
     try {
-      await this.webSocket.reconnect(() => {
-        const saveClient = inject(SaveClientService);
-        saveClient.initialize();
-        this.initListeners()
-        this.guiService._initialize()
-      })
+      await this.webSocket.reconnect()
     }
     catch (error) {
+      this.mapTransitionInProgress = false;
       this.stopPingPong();
       await this.callConnectError(error);
       throw error;
@@ -765,6 +799,8 @@ export class RpgClientEngine<T = any> {
     
     // Signal that map loading is completed (this should be last to ensure other checks are done)
     this.mapLoadCompleted$.next(true);
+    this.currentMapRoomId = mapId;
+    this.mapTransitionInProgress = false;
     this.sceneMap.configureClientPrediction(this.predictionEnabled);
     this.sceneMap.loadPhysic()
   }

@@ -35,6 +35,70 @@ describe("ProjectileManager", () => {
     expect(onSpawn).toHaveBeenCalledWith(expect.objectContaining({ id: "p1", type: "fireball" }));
   });
 
+  test("ignores projectile packets from another map", () => {
+    const hooks = new Hooks([], "client");
+    const manager = new ProjectileManager(hooks);
+    const component = () => null;
+
+    manager.register("fireball", component);
+    manager.setMapId("map-town");
+    manager.spawnBatch([
+      {
+        id: "old-map-projectile",
+        type: "fireball",
+        origin: { x: 10, y: 20 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        range: 500,
+        ttl: 5,
+        spawnTick: 1,
+      },
+    ], { mapId: "map-dungeon" });
+
+    expect(manager.current()).toHaveLength(0);
+
+    manager.spawnBatch([
+      {
+        id: "current-map-projectile",
+        type: "fireball",
+        origin: { x: 10, y: 20 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        range: 500,
+        ttl: 5,
+        spawnTick: 1,
+      },
+    ], { mapId: "map-town" });
+
+    expect(manager.current()).toHaveLength(1);
+  });
+
+  test("clears projectiles when switching map ids", () => {
+    const hooks = new Hooks([], "client");
+    const manager = new ProjectileManager(hooks);
+
+    manager.register("fireball", () => null);
+    manager.setMapId("map-town");
+    manager.spawnBatch([
+      {
+        id: "p1",
+        type: "fireball",
+        origin: { x: 10, y: 20 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        range: 500,
+        ttl: 5,
+        spawnTick: 1,
+      },
+    ], { mapId: "map-town" });
+
+    expect(manager.current()).toHaveLength(1);
+
+    manager.setMapId("map-dungeon");
+
+    expect(manager.current()).toHaveLength(0);
+  });
+
   test("starts visuals at the spawn origin even when a server tick estimate exists", () => {
     vi.useFakeTimers();
     vi.setSystemTime(2000);

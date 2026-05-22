@@ -19,7 +19,12 @@ interface StandaloneOptions {
 class BridgeWebsocket extends AbstractWebsocket {
   private room: ServerIo;
   private socket: ClientIo;
-  private pendingOn: Array<{ event: string; callback: (data: any) => void }> = [];
+  private socketRoom?: ServerIo;
+  private listeners: Array<{
+    event: string;
+    callback: (data: any) => void;
+    handler: (event: any) => void;
+  }> = [];
   private rooms = {
     partyFn: async (roomId: string) => {
       this.room = new ServerIo(roomId, this.rooms);
@@ -49,6 +54,7 @@ class BridgeWebsocket extends AbstractWebsocket {
   }
 
   private async _connection(listeners?: (data: any) => void) {
+    this.detachCurrentSocket();
     this.serverInstance = this.context.get('server')
     this.socket = new ClientIo(this.serverInstance, 'player-client-id');
     const url = new URL('http://localhost')
@@ -60,29 +66,42 @@ class BridgeWebsocket extends AbstractWebsocket {
     })
     listeners?.(this.socket)
     this.room.clients.set(this.socket.id, this.socket);
-    this.pendingOn.forEach(({ event, callback }) => this.socket.addEventListener(event, callback));
-    this.pendingOn = [];
+    this.socketRoom = this.room;
+    this.listeners.forEach(({ handler }) => {
+      this.socket.addEventListener("message", handler);
+    });
     await this.serverInstance.onConnect(this.socket.conn as any, { request } as any);
     return this.socket
   }
 
   on(key: string, callback: (data: any) => void) {
+    if (
+      this.listeners.some(
+        (listener) => listener.event === key && listener.callback === callback
+      )
+    ) {
+      return;
+    }
     const handler = (event) => {
       const object = normalizeStandaloneMessage(event);
       if (object.type === key) {
         callback(object.value);
       }
     };
-    if (!this.socket) {
-      this.pendingOn.push({ event: "message", callback: handler });
-      return;
-    }
-    this.socket.addEventListener("message", handler);
+    this.listeners.push({ event: key, callback, handler });
+    this.socket?.addEventListener("message", handler);
   }
 
   off(event: string, callback: (data: any) => void) {
-    if (!this.socket) return;
-    this.socket.removeEventListener(event, callback);
+    const remaining: typeof this.listeners = [];
+    for (const listener of this.listeners) {
+      if (listener.event === event && listener.callback === callback) {
+        this.socket?.removeEventListener("message", listener.handler);
+        continue;
+      }
+      remaining.push(listener);
+    }
+    this.listeners = remaining;
   }
 
   emit(event: string, data: any) {
@@ -133,6 +152,16 @@ class BridgeWebsocket extends AbstractWebsocket {
     await this._connection((socket) => {
       listeners?.(socket)
     })
+  }
+
+  private detachCurrentSocket() {
+    if (!this.socket) return;
+    this.listeners.forEach(({ handler }) => {
+      this.socket.removeEventListener("message", handler);
+    });
+    this.socketRoom?.clients?.delete?.(this.socket.id);
+    this.socket = undefined as any;
+    this.socketRoom = undefined;
   }
 
   getServer() {

@@ -332,7 +332,9 @@ export class RpgMapProjectiles {
     this.system.clear();
     this.map.$broadcast({
       type: "projectile:clear",
-      value: {},
+      value: {
+        mapId: this.map.id,
+      },
     });
   }
 
@@ -511,6 +513,7 @@ export class RpgMapProjectiles {
       this.map.$broadcast({
         type: "projectile:spawnBatch",
         value: {
+          mapId: this.map.id,
           projectiles: this.spawnQueue.splice(0),
         },
       });
@@ -519,6 +522,7 @@ export class RpgMapProjectiles {
       this.map.$broadcast({
         type: "projectile:impactBatch",
         value: {
+          mapId: this.map.id,
           impacts: this.impactQueue.splice(0),
         },
       });
@@ -527,6 +531,7 @@ export class RpgMapProjectiles {
       this.map.$broadcast({
         type: "projectile:destroyBatch",
         value: {
+          mapId: this.map.id,
           projectiles: this.destroyQueue.splice(0),
         },
       });
