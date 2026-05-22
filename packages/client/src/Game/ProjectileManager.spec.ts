@@ -73,6 +73,53 @@ describe("ProjectileManager", () => {
     expect(manager.current()).toHaveLength(1);
   });
 
+  test("accepts server map ids without the client room prefix", () => {
+    const hooks = new Hooks([], "client");
+    const manager = new ProjectileManager(hooks);
+    const component = () => null;
+
+    manager.register("fireball", component);
+    manager.setMapId("map-town");
+    manager.spawnBatch([
+      {
+        id: "server-map-projectile",
+        type: "fireball",
+        origin: { x: 10, y: 20 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        range: 500,
+        ttl: 5,
+        spawnTick: 1,
+      },
+    ], { mapId: "town" });
+
+    expect(manager.getMapId()).toBe("town");
+    expect(manager.current()).toHaveLength(1);
+  });
+
+  test("accepts prefixed map ids when the manager stores the logical map id", () => {
+    const hooks = new Hooks([], "client");
+    const manager = new ProjectileManager(hooks);
+    const component = () => null;
+
+    manager.register("fireball", component);
+    manager.setMapId("town");
+    manager.spawnBatch([
+      {
+        id: "prefixed-map-projectile",
+        type: "fireball",
+        origin: { x: 10, y: 20 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        range: 500,
+        ttl: 5,
+        spawnTick: 1,
+      },
+    ], { mapId: "map-town" });
+
+    expect(manager.current()).toHaveLength(1);
+  });
+
   test("clears projectiles when switching map ids", () => {
     const hooks = new Hooks([], "client");
     const manager = new ProjectileManager(hooks);

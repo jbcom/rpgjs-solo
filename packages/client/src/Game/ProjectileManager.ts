@@ -1,5 +1,6 @@
 import { computed, signal } from "canvasengine";
 import { Hooks } from "@rpgjs/common";
+import { normalizeRoomMapId } from "../utils/mapId";
 
 export interface ClientProjectileSpawn {
   id: string;
@@ -121,8 +122,9 @@ export class ProjectileManager {
   }
 
   setMapId(mapId: string | undefined): void {
-    if (this.mapId === mapId) return;
-    this.mapId = mapId;
+    const normalizedMapId = normalizeRoomMapId(mapId);
+    if (this.mapId === normalizedMapId) return;
+    this.mapId = normalizedMapId;
     this.clear();
   }
 
@@ -257,7 +259,8 @@ export class ProjectileManager {
   }
 
   private acceptsMap(mapId: string | undefined): boolean {
-    return !mapId || !this.mapId || mapId === this.mapId;
+    const normalizedMapId = normalizeRoomMapId(mapId);
+    return !normalizedMapId || !this.mapId || normalizedMapId === this.mapId;
   }
 
   private isWaitingForDelay(projectile: RuntimeProjectile, now: number): boolean {

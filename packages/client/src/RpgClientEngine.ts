@@ -32,6 +32,7 @@ import { getCanMoveValue } from "./utils/readPropValue";
 import { ProjectileManager, type ClientProjectileImpact, type ClientProjectileSpawn } from "./Game/ProjectileManager";
 import { normalizeActionInput } from "./services/actionInput";
 import { createClientPointerContext, type ClientPointerContext } from "./services/pointerContext";
+import { normalizeRoomMapId } from "./utils/mapId";
 
 interface MovementTrajectoryPoint {
   frame: number;
@@ -606,9 +607,11 @@ export class RpgClientEngine<T = any> {
 
   private shouldProcessProjectilePacket(data: any): boolean {
     if (this.mapTransitionInProgress) return false;
-    const packetMapId =
-      typeof data?.mapId === "string" ? data.mapId : undefined;
-    return !packetMapId || !this.currentMapRoomId || packetMapId === this.currentMapRoomId;
+    const packetMapId = normalizeRoomMapId(
+      typeof data?.mapId === "string" ? data.mapId : undefined,
+    );
+    const currentMapId = normalizeRoomMapId(this.currentMapRoomId);
+    return !packetMapId || !currentMapId || packetMapId === currentMapId;
   }
 
   private async callConnectError(error: any) {
