@@ -410,16 +410,6 @@ const Dagger = {
 };
 ```
 
-Enable lightweight attack logs while tuning profiles:
-
-```ts
-provideActionBattle({
-  debug: {
-    attacks: true
-  }
-});
-```
-
 ## Skill and weapon actions
 
 Skills and weapons can define an `action` block for action-battle selection,

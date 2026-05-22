@@ -134,10 +134,6 @@ export function normalizeActionBattleOptions(
       ...DEFAULT_ACTION_BATTLE_OPTIONS.targeting,
       ...options.targeting,
     },
-    debug: {
-      ...DEFAULT_ACTION_BATTLE_OPTIONS.debug,
-      ...options.debug,
-    },
     attack: normalizedAttack,
     combat: {
       ...combat,

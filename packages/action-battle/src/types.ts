@@ -131,10 +131,6 @@ export interface ActionBattleTargetingOptions {
   allowEmptyTarget?: boolean;
 }
 
-export interface ActionBattleDebugOptions {
-  attacks?: boolean;
-}
-
 export interface ActionBattleAttackOptions {
   profile?: ActionBattleAttackProfile;
   lockMovement?: boolean;
@@ -269,7 +265,6 @@ export interface ActionBattleOptions {
   skills?: ActionBattleSkillOptions;
   targeting?: ActionBattleTargetingOptions;
   attack?: ActionBattleAttackOptions;
-  debug?: ActionBattleDebugOptions;
   animations?: ActionBattleAnimationOptions;
   systems?: ActionBattleSystemOptions;
 }

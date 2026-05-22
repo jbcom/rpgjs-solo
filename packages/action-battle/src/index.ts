@@ -44,7 +44,6 @@ export type {
   ActionBattleAttackHitboxMap,
   ActionBattleAttackHitPolicy,
   ActionBattleAttackProfile,
-  ActionBattleDebugOptions,
   ActionBattleHitReactionProfile,
   NormalizedActionBattleHitReactionProfile,
   NormalizedActionBattleAttackProfile,
