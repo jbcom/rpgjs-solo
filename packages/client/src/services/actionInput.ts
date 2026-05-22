@@ -1,4 +1,4 @@
-import type { RpgActionInput, RpgActionName } from "@rpgjs/common";
+import { Direction, type RpgActionInput, type RpgActionName } from "@rpgjs/common";
 
 export type KeyboardActionDataResolver<TClient = any, TSprite = any> = (
   client: TClient,
@@ -97,4 +97,24 @@ export function resolveKeyboardActionInput(
   return data === undefined
     ? { action }
     : { action, data };
+}
+
+export function resolveKeyboardDirectionInput(
+  event: KeyboardEvent,
+  keyboardControls: any
+): Direction | undefined {
+  const directions: Array<[any, Direction]> = [
+    [keyboardControls?.up, Direction.Up],
+    [keyboardControls?.down, Direction.Down],
+    [keyboardControls?.left, Direction.Left],
+    [keyboardControls?.right, Direction.Right],
+  ];
+
+  for (const [control, direction] of directions) {
+    if (keyboardEventMatchesBind(event, getKeyboardControlBind(control))) {
+      return direction;
+    }
+  }
+
+  return undefined;
 }

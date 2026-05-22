@@ -12,7 +12,10 @@ import {
   applyActionBattleAttackDirection,
   resolveActionBattleAttackDirection,
 } from "./attack-input";
-import { forceActionBattleLocomotionAnimation } from "./locomotion";
+import {
+  forceActionBattleLocomotionAnimation,
+  withActionBattleAnimationUnlocked,
+} from "./locomotion";
 import { resolveActionBattleUi } from "./ui";
 import {
   ACTION_BATTLE_HIT_FX_COMPONENT_ID,
@@ -86,9 +89,11 @@ const playLocalPlayerAttackAnimation = (
   player: any,
   options: ActionBattleOptions
 ) => {
-  playActionBattleVisual(options.visual, {
-    moment: "attack",
-    entity: player,
+  withActionBattleAnimationUnlocked(player, () => {
+    playActionBattleVisual(options.visual, {
+      moment: "attack",
+      entity: player,
+    });
   });
 };
 

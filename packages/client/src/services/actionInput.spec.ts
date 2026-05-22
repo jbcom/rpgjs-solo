@@ -4,6 +4,7 @@ import {
   keyboardEventMatchesBind,
   normalizeActionInput,
   resolveKeyboardActionInput,
+  resolveKeyboardDirectionInput,
 } from "./actionInput";
 
 const keyboardEvent = (values: Partial<KeyboardEvent>) =>
@@ -134,5 +135,21 @@ describe("keyboard action controls", () => {
         "space"
       )
     ).toBe(false);
+  });
+
+  test("resolves directional keyboard controls from a native keyboard event", () => {
+    const controls = {
+      up: "up",
+      down: "down",
+      left: "left",
+      right: "right",
+    };
+
+    expect(
+      resolveKeyboardDirectionInput(
+        keyboardEvent({ key: "ArrowRight", code: "ArrowRight", keyCode: 39 }),
+        controls
+      )
+    ).toBe("right");
   });
 });

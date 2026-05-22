@@ -60,6 +60,7 @@
     getKeyboardControlBind,
     keyboardEventMatchesBind,
     resolveKeyboardActionInput,
+    resolveKeyboardDirectionInput,
   } from "../services/actionInput";
 
   const { object, id } = defineProps();
@@ -312,9 +313,16 @@
 
   const canControls = () => isMe() && getCanMoveValue(sprite)
   const keyboardControls = client.globalConfig.keyboardControls;
-  const activeDirectionKeys = new Set();
+  const activeDirectionKeys = new Map();
+
+  const resolveHeldDirection = () => {
+    const directions = Array.from(activeDirectionKeys.values());
+    return directions[directions.length - 1];
+  };
 
   const resolveSpriteDirection = () => {
+    const heldDirection = resolveHeldDirection();
+    if (heldDirection) return heldDirection;
     if (typeof sprite.getDirection === 'function') return sprite.getDirection();
     if (typeof sprite.direction === 'function') return sprite.direction();
     return direction();
@@ -361,24 +369,16 @@
     playPredictedWalkAnimation();
   };
 
-  const directionBinds = () => [
-    keyboardControls.up,
-    keyboardControls.down,
-    keyboardControls.left,
-    keyboardControls.right,
-  ].map(getKeyboardControlBind);
-
   const actionBind = () => getKeyboardControlBind(keyboardControls.action);
   const keyboardEventId = (event) => `${event.keyCode}:${event.code}:${event.key}`;
 
-  const isDirectionKeyboardEvent = (event) =>
-    directionBinds().some(bind => keyboardEventMatchesBind(event, bind));
-
   const handleNativeActionWhileMoving = (event) => {
-    if (isDirectionKeyboardEvent(event)) {
+    const inputDirection = resolveKeyboardDirectionInput(event, keyboardControls);
+    if (inputDirection) {
       const keyId = keyboardEventId(event);
       if (event.type === 'keydown') {
-        activeDirectionKeys.add(keyId);
+        activeDirectionKeys.delete(keyId);
+        activeDirectionKeys.set(keyId, inputDirection);
         resumeHeldDirectionWalkAnimation();
       }
       else {

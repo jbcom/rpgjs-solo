@@ -34,4 +34,18 @@ describe("action battle attack input", () => {
 
     expect(entity.changeDirection).toHaveBeenCalledWith("down");
   });
+
+  test("temporarily unlocks direction so attack intent can face while knocked back", () => {
+    const entity = {
+      directionFixed: true,
+      changeDirection: vi.fn(function (this: { directionFixed: boolean }) {
+        expect(this.directionFixed).toBe(false);
+      }),
+    };
+
+    applyActionBattleAttackDirection(entity, "right");
+
+    expect(entity.changeDirection).toHaveBeenCalledWith("right");
+    expect(entity.directionFixed).toBe(true);
+  });
 });

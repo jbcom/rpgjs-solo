@@ -13,7 +13,10 @@ import {
   applyActionBattleAttackDirection,
   resolveActionBattleAttackDirection,
 } from "./attack-input";
-import { forceActionBattleLocomotionAnimation } from "./locomotion";
+import {
+  forceActionBattleLocomotionAnimation,
+  withActionBattleAnimationUnlocked,
+} from "./locomotion";
 import { getActionBattleSystems, setActionBattleSystems } from "./core/context";
 import { applyActionBattleHit } from "./core/hit";
 import { DEFAULT_ZELDA_PLAYER_HITBOXES } from "./core/defaults";
@@ -756,14 +759,15 @@ export const createActionBattleServer = (
           // Convert Direction enum to string key
           const directionKey = direction as string;
 
-          const hitboxes = resolvePlayerAttackHitboxes(
+          const resolveActiveHitboxes = () => resolvePlayerAttackHitboxes(
             player,
             directionKey,
             options,
             attackProfile
           );
+          const initialHitboxes = resolveActiveHitboxes();
 
-          if (isActionReservedForNormalEvent(player, map, hitboxes)) {
+          if (isActionReservedForNormalEvent(player, map, initialHitboxes)) {
             return;
           }
 
@@ -783,9 +787,11 @@ export const createActionBattleServer = (
             return;
           }
 
-          playActionBattleVisual(options.visual, {
-            moment: "attack",
-            entity: player,
+          withActionBattleAnimationUnlocked(player, () => {
+            playActionBattleVisual(options.visual, {
+              moment: "attack",
+              entity: player,
+            });
           });
           if (actionLocked) {
             player.animationFixed = true;
@@ -804,7 +810,7 @@ export const createActionBattleServer = (
               attackId,
               playerId: player.id,
               profile: attackProfile.id,
-              hitboxes,
+              hitboxes: initialHitboxes,
             });
           }
 
@@ -842,7 +848,7 @@ export const createActionBattleServer = (
 
           runActionBattleActiveHitbox(
             attackProfile,
-            () => hitboxes,
+            resolveActiveHitboxes,
             (activeHitboxes) => {
               processHits(
                 getActionBattleHitboxCandidates(map, activeHitboxes, {

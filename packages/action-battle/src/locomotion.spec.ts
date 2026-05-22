@@ -1,5 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
-import { forceActionBattleLocomotionAnimation } from "./locomotion";
+import {
+  forceActionBattleLocomotionAnimation,
+  withActionBattleAnimationUnlocked,
+} from "./locomotion";
 
 describe("action battle locomotion helpers", () => {
   test("temporarily unlocks animation to restore locomotion state", () => {
@@ -33,5 +36,16 @@ describe("action battle locomotion helpers", () => {
     expect(entity.resetAnimationState.mock.invocationCallOrder[0]).toBeLessThan(
       setAnimationName.mock.invocationCallOrder[0]
     );
+  });
+
+  test("temporarily unlocks action animations while preserving the current lock", () => {
+    const entity = { animationFixed: true };
+    const callback = vi.fn(() => {
+      expect(entity.animationFixed).toBe(false);
+      return "played";
+    });
+
+    expect(withActionBattleAnimationUnlocked(entity, callback)).toBe("played");
+    expect(entity.animationFixed).toBe(true);
   });
 });

@@ -44,6 +44,16 @@ export const applyActionBattleAttackDirection = (
   direction: ActionBattleResolvedDirection
 ) => {
   if (typeof entity?.changeDirection === "function") {
-    entity.changeDirection(direction);
+    const previousDirectionFixed = entity.directionFixed;
+    if (previousDirectionFixed === true) {
+      entity.directionFixed = false;
+    }
+    try {
+      entity.changeDirection(direction);
+    } finally {
+      if (previousDirectionFixed === true) {
+        entity.directionFixed = previousDirectionFixed;
+      }
+    }
   }
 };

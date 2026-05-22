@@ -20,11 +20,13 @@ import {
   runActionBattleActiveHitbox,
   scheduleActionBattleStartup,
 } from "./core/attack-runtime";
+import { applyActionBattleAttackDirection } from "./attack-input";
 import {
   executeActionBattleUse,
   getActionBattleActionRange,
 } from "./core/action-use";
 import { resolveActionBattleWeapon } from "./core/equipment";
+import { withActionBattleAnimationUnlocked } from "./locomotion";
 import { safeActionBattleDash } from "./movement";
 import {
   defineAiBehavior,
@@ -1199,13 +1201,15 @@ export class BattleAi {
     if (!this.target) return;
     const profile = this.getAttackProfile(AttackPattern.Melee);
 
-    this.faceTarget();
+    this.faceTarget({ force: true });
     this.telegraphAttack(profile);
-    playActionBattleVisual(getActionBattleOptions().visual, {
-      moment: "attack",
-      entity: this.event,
-      target: this.target,
-      animations: this.animations,
+    withActionBattleAnimationUnlocked(this.event, () => {
+      playActionBattleVisual(getActionBattleOptions().visual, {
+        moment: "attack",
+        entity: this.event,
+        target: this.target,
+        animations: this.animations,
+      });
     });
 
     this.scheduleAttackStartup(profile, () => {
@@ -1417,13 +1421,15 @@ export class BattleAi {
     }
 
     // Visual feedback
-    playActionBattleVisual(getActionBattleOptions().visual, {
-      moment: "hit",
-      entity: this.event,
-      target,
-      damage: hitResult.damage,
-      result: hitResult,
-      animations: this.animations,
+    withActionBattleAnimationUnlocked(target, () => {
+      playActionBattleVisual(getActionBattleOptions().visual, {
+        moment: "hit",
+        entity: this.event,
+        target,
+        damage: hitResult.damage,
+        result: hitResult,
+        animations: this.animations,
+      });
     });
     setActionBattleInvincibility(
       target,
@@ -1503,13 +1509,15 @@ export class BattleAi {
 
     this.comboCount++;
     const profile = this.getAttackProfile(AttackPattern.Combo);
-    this.faceTarget();
+    this.faceTarget({ force: true });
     this.telegraphAttack(profile);
-    playActionBattleVisual(getActionBattleOptions().visual, {
-      moment: "attack",
-      entity: this.event,
-      target: this.target,
-      animations: this.animations,
+    withActionBattleAnimationUnlocked(this.event, () => {
+      playActionBattleVisual(getActionBattleOptions().visual, {
+        moment: "attack",
+        entity: this.event,
+        target: this.target,
+        animations: this.animations,
+      });
     });
     this.scheduleAttackStartup(profile, () => {
       this.executeMeleeAttack(profile, AttackPattern.Combo);
@@ -1536,14 +1544,16 @@ export class BattleAi {
     const profile = this.getAttackProfile(AttackPattern.Charged);
 
     this.chargingAttack = true;
-    this.faceTarget();
+    this.faceTarget({ force: true });
     this.telegraphAttack(profile);
-    playActionBattleVisual(getActionBattleOptions().visual, {
-      moment: "attack",
-      entity: this.event,
-      target: this.target,
-      animations: this.animations,
-      animationDefaults: { repeat: 2 },
+    withActionBattleAnimationUnlocked(this.event, () => {
+      playActionBattleVisual(getActionBattleOptions().visual, {
+        moment: "attack",
+        entity: this.event,
+        target: this.target,
+        animations: this.animations,
+        animationDefaults: { repeat: 2 },
+      });
     });
 
     this.scheduleAttackStartup(profile, () => {
@@ -1564,11 +1574,13 @@ export class BattleAi {
   private performZoneAttack() {
     const profile = this.getAttackProfile(AttackPattern.Zone);
     this.telegraphAttack(profile);
-    playActionBattleVisual(getActionBattleOptions().visual, {
-      moment: "attack",
-      entity: this.event,
-      target: this.target ?? undefined,
-      animations: this.animations,
+    withActionBattleAnimationUnlocked(this.event, () => {
+      playActionBattleVisual(getActionBattleOptions().visual, {
+        moment: "attack",
+        entity: this.event,
+        target: this.target ?? undefined,
+        animations: this.animations,
+      });
     });
 
     const eventX = this.event.x();
@@ -1622,7 +1634,7 @@ export class BattleAi {
     const dirX = dx / dist;
     const dirY = dy / dist;
 
-    this.faceTarget();
+    this.faceTarget({ force: true });
     this.telegraphAttack(profile);
 
     this.scheduleAttackStartup(profile, () => {
@@ -1670,7 +1682,7 @@ export class BattleAi {
    * 2. When near diagonal, require significant difference to change
    * 3. Only change if direction is clearly wrong (opposite)
    */
-  private faceTarget() {
+  private faceTarget(options: { force?: boolean } = {}) {
     if (!this.target) return;
 
     const dx = this.target.x() - this.event.x();
@@ -1679,11 +1691,12 @@ export class BattleAi {
     const absY = Math.abs(dy);
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // When very close to target (in collision range), don't change direction
-    // This prevents flickering when in melee combat
-    const minDistanceForDirectionChange = 40;
+    // Avoid undefined facing only when both entities are effectively stacked.
+    // A larger dead-zone makes close melee targets keep stale directions after
+    // knockback, so keep this threshold intentionally tiny.
+    const minDistanceForDirectionChange = 4;
     if (this.lastFacingDirection && distance < minDistanceForDirectionChange) {
-      return; // Keep current direction when in collision
+      return;
     }
 
     // Calculate the "ideal" direction
@@ -1715,7 +1728,11 @@ export class BattleAi {
     }
 
     this.lastFacingDirection = newDirection;
-    this.event.changeDirection(newDirection as any);
+    if (options.force) {
+      applyActionBattleAttackDirection(this.event, newDirection as any);
+    } else {
+      this.event.changeDirection(newDirection as any);
+    }
   }
 
   /**
@@ -1969,15 +1986,17 @@ export class BattleAi {
     this.debugLog('damage', `Took ${damage} damage from ${attacker.id} (HP: ${this.event.hp}/${this.event.param[MAXHP] || '?'})`);
 
     // Visual feedback
-    playActionBattleVisual(getActionBattleOptions().visual, {
-      moment: "hurt",
-      entity: this.event,
-      target: this.event,
-      attacker,
-      damage,
-      defeated: damageResult.defeated,
-      result: damageResult,
-      animations: this.animations,
+    withActionBattleAnimationUnlocked(this.event, () => {
+      playActionBattleVisual(getActionBattleOptions().visual, {
+        moment: "hurt",
+        entity: this.event,
+        target: this.event,
+        attacker,
+        damage,
+        defeated: damageResult.defeated,
+        result: damageResult,
+        animations: this.animations,
+      });
     });
 
     // Track damage
