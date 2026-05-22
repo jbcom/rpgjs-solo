@@ -3,6 +3,7 @@ import type {
   ActionBattleOptions,
   NormalizedActionBattleAttackProfile,
 } from "../types";
+import type { ActionBattleHitbox } from "./contracts";
 import { normalizeActionBattleAttackProfile } from "./attack-profile";
 
 export const ACTION_BATTLE_HITBOX_FRAME_MS = 16;
@@ -40,6 +41,37 @@ export function scheduleActionBattleStartup(
     return null;
   }
   return scheduler(callback, profile.startupMs);
+}
+
+export function runActionBattleActiveHitbox(
+  profile: NormalizedActionBattleAttackProfile,
+  resolveHitboxes: () => ActionBattleHitbox[],
+  onHitboxes: (hitboxes: ActionBattleHitbox[]) => void,
+  scheduler: (callback: () => void, delayMs: number) => unknown = setTimeout
+) {
+  const frames = Math.max(
+    1,
+    Math.ceil(profile.activeMs / ACTION_BATTLE_HITBOX_FRAME_MS)
+  );
+  let frame = 0;
+
+  const step = () => {
+    const hitboxes = resolveHitboxes();
+    if (hitboxes.length > 0) {
+      onHitboxes(hitboxes);
+    }
+    frame++;
+    if (frame < frames) {
+      scheduler(step, ACTION_BATTLE_HITBOX_FRAME_MS);
+    }
+  };
+
+  if (profile.startupMs <= 0) {
+    step();
+    return null;
+  }
+
+  return scheduler(step, profile.startupMs);
 }
 
 let attackIdCounter = 0;

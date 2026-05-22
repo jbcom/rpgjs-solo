@@ -16,7 +16,8 @@ import {
   type NormalizedActionBattleEnemyAttackProfileMap,
 } from "./core/enemy-attack-profiles";
 import {
-  resolveActionBattleHitboxSpeed,
+  ActionBattleHitTracker,
+  runActionBattleActiveHitbox,
   scheduleActionBattleStartup,
 } from "./core/attack-runtime";
 import {
@@ -40,6 +41,7 @@ import type {
   ActionBattleAiPreset,
   ActionBattleDamageResult,
   ActionBattleEntity,
+  ActionBattleHitbox,
   ActionBattleTargetSelector,
 } from "./core/contracts";
 import {
@@ -1264,41 +1266,71 @@ export class BattleAi {
   ) {
     if (!this.target || this.isTargetDefeated(this.target)) return;
 
+    const hitTracker = new ActionBattleHitTracker(profile.hitPolicy);
+    runActionBattleActiveHitbox(
+      { ...profile, startupMs: 0 },
+      () => this.resolveBasicHitboxes(),
+      (hitboxes) => {
+        this.processHitboxHits(hitboxes, hitTracker, profile, pattern);
+      },
+      (scheduled, delay) => this.schedule(scheduled, delay)
+    );
+  }
+
+  private resolveBasicHitboxes(): ActionBattleHitbox[] {
+    if (!this.target || this.isTargetDefeated(this.target)) return [];
+
     const eventX = this.event.x();
     const eventY = this.event.y();
     const dx = this.target.x() - eventX;
     const dy = this.target.y() - eventY;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist === 0) return;
+    if (dist === 0) return [];
 
     const dirX = dx / dist;
     const dirY = dy / dist;
 
-    const hitboxes = [{
+    return [{
       x: eventX + dirX * 30,
       y: eventY + dirY * 30,
       width: 40,
       height: 40,
     }];
+  }
 
+  private queryHitboxCandidates(hitboxes: ActionBattleHitbox[]) {
     const map = this.event.getCurrentMap();
-    map?.createMovingHitbox(hitboxes, {
-      speed: resolveActionBattleHitboxSpeed(profile, hitboxes.length),
-    }).subscribe({
-      next: (hits: any[]) => {
-        hits.forEach((hit: any) => {
-          if (
-            (hit instanceof RpgPlayer || hit instanceof RpgEvent) &&
-            hit !== this.event &&
-            this.canTarget(hit) &&
-            !this.isTargetDefeated(hit)
-          ) {
-            this.applyHit(hit, undefined, profile, pattern);
-          }
-        });
-      },
-    });
+    if (!map || typeof (map as any).queryHitbox !== "function") return [];
+
+    const candidates = new Map<string, ActionBattleEntity>();
+    for (const hitbox of hitboxes) {
+      for (const hit of (map as any).queryHitbox(hitbox, {
+        excludeIds: [this.event.id],
+        kinds: ["players", "events"],
+      })) {
+        if (hit?.id) candidates.set(hit.id, hit);
+      }
+    }
+    return Array.from(candidates.values());
+  }
+
+  private processHitboxHits(
+    hitboxes: ActionBattleHitbox[],
+    hitTracker: ActionBattleHitTracker,
+    profile: NormalizedActionBattleAttackProfile,
+    pattern: AttackPattern
+  ) {
+    for (const hit of this.queryHitboxCandidates(hitboxes)) {
+      if (
+        hit !== this.event &&
+        this.canTarget(hit) &&
+        !this.isTargetDefeated(hit) &&
+        hitTracker.tryHit(hit)
+      ) {
+        this.applyHit(hit, undefined, profile, pattern);
+      }
+    }
   }
 
   /**
@@ -1557,23 +1589,20 @@ export class BattleAi {
     });
 
     this.scheduleAttackStartup(profile, () => {
-      const map = this.event.getCurrentMap();
-      map?.createMovingHitbox(hitboxes, {
-        speed: resolveActionBattleHitboxSpeed(profile, hitboxes.length),
-      }).subscribe({
-        next: (hits: any[]) => {
-          hits.forEach((hit: any) => {
-            if (
-              (hit instanceof RpgPlayer || hit instanceof RpgEvent) &&
-              hit !== this.event &&
-              this.canTarget(hit) &&
-              !this.isTargetDefeated(hit)
-            ) {
-              this.applyHit(hit, undefined, profile, AttackPattern.Zone);
-            }
-          });
+      const hitTracker = new ActionBattleHitTracker(profile.hitPolicy);
+      runActionBattleActiveHitbox(
+        { ...profile, startupMs: 0 },
+        () => hitboxes,
+        (activeHitboxes) => {
+          this.processHitboxHits(
+            activeHitboxes,
+            hitTracker,
+            profile,
+            AttackPattern.Zone
+          );
         },
-      });
+        (scheduled, delay) => this.schedule(scheduled, delay)
+      );
     });
   }
 

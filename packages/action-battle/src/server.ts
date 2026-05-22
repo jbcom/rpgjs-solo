@@ -21,8 +21,7 @@ import {
   ActionBattleHitTracker,
   createActionBattleAttackId,
   getNormalizedActionBattleAttackProfile,
-  resolveActionBattleHitboxSpeed,
-  scheduleActionBattleStartup,
+  runActionBattleActiveHitbox,
 } from "./core/attack-runtime";
 import {
   canActionBattleUseTarget,
@@ -363,20 +362,34 @@ const resolvePlayerAttackHitboxes = (
 
 const getActionBattleHitboxCandidates = (
   map: ReturnType<RpgPlayer["getCurrentMap"]> | undefined,
-  hitboxes: ActionBattleHitbox[]
+  hitboxes: ActionBattleHitbox[],
+  options: { excludeIds?: string[]; kinds?: Array<"players" | "events"> } = {}
 ) => {
   if (!map) return [];
+  if (typeof (map as any).queryHitbox === "function") {
+    const candidates = new Map<string, RpgPlayer | RpgEvent>();
+    for (const hitbox of hitboxes) {
+      for (const entity of (map as any).queryHitbox(hitbox, options)) {
+        if (entity?.id) candidates.set(entity.id, entity);
+      }
+    }
+    return Array.from(candidates.values());
+  }
+
   const candidates = new Map<string, RpgPlayer | RpgEvent>();
+  const excluded = new Set(options.excludeIds ?? []);
   const add = (entity: RpgPlayer | RpgEvent | undefined) => {
     if (!entity?.id) return;
+    if (excluded.has(entity.id)) return;
     const rect = entityRect(entity);
     if (hitboxes.some((hitbox) => rectsOverlap(hitbox, rect))) {
       candidates.set(entity.id, entity);
     }
   };
 
-  map.getPlayers?.().forEach(add);
-  map.getEvents?.().forEach(add);
+  const kinds = new Set(options.kinds ?? ["players", "events"]);
+  if (kinds.has("players")) map.getPlayers?.().forEach(add);
+  if (kinds.has("events")) map.getEvents?.().forEach(add);
   return Array.from(candidates.values());
 };
 
@@ -827,21 +840,18 @@ export const createActionBattleServer = (
             });
           };
 
-          scheduleActionBattleStartup(attackProfile, () => {
-            processHits(getActionBattleHitboxCandidates(map, hitboxes));
-            map
-              ?.createMovingHitbox(hitboxes, {
-                speed: resolveActionBattleHitboxSpeed(
-                  attackProfile,
-                  hitboxes.length
-                ),
-              })
-              .subscribe({
-                next(hits: any[]) {
-                  processHits(hits);
-                },
-              });
-          });
+          runActionBattleActiveHitbox(
+            attackProfile,
+            () => hitboxes,
+            (activeHitboxes) => {
+              processHits(
+                getActionBattleHitboxCandidates(map, activeHitboxes, {
+                  excludeIds: [player.id],
+                  kinds: ["players", "events"],
+                })
+              );
+            }
+          );
         }
       },
       onConnected(player: RpgPlayer) {
@@ -910,6 +920,7 @@ export {
   createActionBattleAttackId,
   getNormalizedActionBattleAttackProfile,
   resolveActionBattleHitboxSpeed,
+  runActionBattleActiveHitbox,
   scheduleActionBattleStartup,
 } from "./core/attack-runtime";
 export {

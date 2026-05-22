@@ -143,6 +143,7 @@ export {
   createActionBattleAttackId,
   getNormalizedActionBattleAttackProfile,
   resolveActionBattleHitboxSpeed,
+  runActionBattleActiveHitbox,
   scheduleActionBattleStartup,
 } from "./core/attack-runtime";
 export {

@@ -51,6 +51,7 @@ Reference for the `RpgMap` class.
 - [players](#players)
 - [playSound](#playsound)
 - [processInput](#processinput)
+- [queryHitbox](#queryhitbox)
 - [removeEvent](#removeevent)
 - [removeInDatabase](#removeindatabase)
 - [removeShape](#removeshape)
@@ -427,6 +428,42 @@ const player: RpgPlayerHooks = {
     console.log('out', player.name, shape.name);
   }
 };
+```
+
+## queryHitbox
+
+Return players and events whose physics bodies currently overlap a rectangular
+area. This is an immediate server-side query, useful for melee attacks,
+server-authoritative AoE checks, and gameplay logic that must hit entities
+already inside the area.
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+queryHitbox(
+  rect: { x: number; y: number; width: number; height: number },
+  options?: {
+    excludeIds?: string[];
+    kinds?: Array<"players" | "events">;
+  }
+): Array<RpgPlayer | RpgEvent>
+```
+
+### Examples
+
+```ts
+const hits = map.queryHitbox(
+  { x: player.x() + 16, y: player.y() - 8, width: 48, height: 48 },
+  { excludeIds: [player.id], kinds: ["events"] }
+);
+
+for (const target of hits) {
+  target.applyDamage(player);
+}
 ```
 
 ## damageFormulas

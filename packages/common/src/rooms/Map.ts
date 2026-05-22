@@ -36,6 +36,20 @@ interface ZoneOptions {
   limitedByWalls?: boolean;
 }
 
+export interface MapHitboxQueryRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type MapHitboxQueryKind = "players" | "events";
+
+export interface MapHitboxQueryOptions {
+  excludeIds?: string[];
+  kinds?: MapHitboxQueryKind[];
+}
+
 const COLLISION_PROXIMITY_MARGIN = 1;
 const DEFAULT_INTERACTION_RANGE = 16;
 const INTERACTION_SIDE_PADDING = 4;
@@ -902,7 +916,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    * 
    * Allows to create a temporary hitbox that moves through multiple positions sequentially.
    * For example, you can use it to explode a bomb and find all the affected players, 
-   * or during a sword strike, you can create a moving hitbox and find the affected players.
+   * or for a gameplay effect that should emit when entities enter a moving area.
+   * For instant melee/combat checks, prefer `queryHitbox()`.
    * 
    * The method creates a zone sensor that moves through the specified hitbox positions
    * at the given speed, detecting collisions with players and events at each step.
@@ -1029,6 +1044,48 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         this.removeZone(zoneId);
       };
     });
+  }
+
+  /**
+   * Query players and events whose physics bodies overlap a rectangular hitbox.
+   *
+   * Unlike `createMovingHitbox()`, this is an immediate deterministic query. It
+   * is intended for melee attacks, AoE checks, and other server-authoritative
+   * gameplay that needs to hit entities already inside the area.
+   */
+  queryHitbox(
+    rect: MapHitboxQueryRect,
+    options: MapHitboxQueryOptions = {}
+  ): Array<T | any> {
+    const width = Math.max(0, rect.width);
+    const height = Math.max(0, rect.height);
+    if (width <= 0 || height <= 0) return [];
+
+    const bounds = new AABB(rect.x, rect.y, rect.x + width, rect.y + height);
+    const excluded = new Set(options.excludeIds ?? []);
+    const kinds = new Set<MapHitboxQueryKind>(
+      options.kinds ?? ["players", "events"]
+    );
+    const players = this.players();
+    const events = this.events();
+    const results = new Map<string, T | any>();
+
+    for (const entity of this.physic.queryAABB(bounds)) {
+      const id = entity.uuid;
+      if (!id || excluded.has(id)) continue;
+
+      const owner = players[id] ?? events[id];
+      if (!owner) continue;
+      if (players[id] && !kinds.has("players")) continue;
+      if (events[id] && !kinds.has("events")) continue;
+
+      const collider = createCollider(entity);
+      if (!collider?.getBounds().intersects(bounds)) continue;
+
+      results.set(id, owner);
+    }
+
+    return Array.from(results.values());
   }
 
   /**

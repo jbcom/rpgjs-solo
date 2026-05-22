@@ -4,6 +4,7 @@ import {
   createActionBattleAttackId,
   getNormalizedActionBattleAttackProfile,
   resolveActionBattleHitboxSpeed,
+  runActionBattleActiveHitbox,
   scheduleActionBattleStartup,
 } from "./attack-runtime";
 
@@ -74,6 +75,40 @@ describe("attack runtime helpers", () => {
     expect(timer).toBe("timer-id");
     expect(callback).not.toHaveBeenCalled();
     expect(scheduler).toHaveBeenCalledWith(callback, 120);
+  });
+
+  test("runs hitbox queries across the active window", () => {
+    const callbacks: Array<() => void> = [];
+    const scheduler = vi.fn((callback: () => void) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    const onHitboxes = vi.fn();
+    const profile = getNormalizedActionBattleAttackProfile({
+      attack: {
+        profile: {
+          startupMs: 20,
+          activeMs: 32,
+        },
+      },
+    });
+
+    runActionBattleActiveHitbox(
+      profile,
+      () => [{ x: 0, y: 0, width: 10, height: 10 }],
+      onHitboxes,
+      scheduler
+    );
+
+    expect(onHitboxes).not.toHaveBeenCalled();
+    expect(scheduler).toHaveBeenCalledWith(expect.any(Function), 20);
+
+    callbacks.shift()?.();
+    expect(onHitboxes).toHaveBeenCalledTimes(1);
+    expect(scheduler).toHaveBeenLastCalledWith(expect.any(Function), 16);
+
+    callbacks.shift()?.();
+    expect(onHitboxes).toHaveBeenCalledTimes(2);
   });
 
   test("creates stable unique attack ids", () => {

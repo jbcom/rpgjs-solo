@@ -179,6 +179,20 @@ describe("Map Shapes", () => {
     const hits = await hitsPromise;
     expect(hits.map((hit) => hit.id)).toContain(player.id);
   });
+
+  test("should query entities already inside a hitbox", () => {
+    const map = player.getCurrentMap() as any;
+    const hitbox = player.hitbox();
+
+    const hits = map.queryHitbox({
+      x: player.x(),
+      y: player.y(),
+      width: hitbox.w,
+      height: hitbox.h,
+    });
+
+    expect(hits.map((hit: any) => hit.id)).toContain(player.id);
+  });
 });
 
 describe("Move Routes - Move Helper Functions", () => {
