@@ -19,6 +19,11 @@ import {
   resolveActionBattleHitboxSpeed,
   scheduleActionBattleStartup,
 } from "./core/attack-runtime";
+import {
+  executeActionBattleUse,
+  getActionBattleActionRange,
+} from "./core/action-use";
+import { resolveActionBattleWeapon } from "./core/equipment";
 import { safeActionBattleDash } from "./movement";
 import {
   defineAiBehavior,
@@ -684,6 +689,13 @@ export class BattleAi {
       this.behaviorTree = defineAiTree(options.tree ?? options.behaviorTree!);
     }
 
+    if (options.attackRange === undefined) {
+      const actionRange = this.getCurrentActionRange();
+      if (actionRange !== undefined) {
+        this.attackRange = actionRange;
+      }
+    }
+
     // Setup AI systems
     this.scheduleVisionSetup();
     this.startAiBehaviorLoop();
@@ -1206,24 +1218,39 @@ export class BattleAi {
     if (!this.target || this.isTargetDefeated(this.target)) return;
     this.debugLog('attack', `Applying ${pattern} hit`);
 
-    // Use skill if available
     if (this.attackSkill) {
       try {
-        playActionBattleVisual(getActionBattleOptions().visual, {
-          moment: "castSkill",
-          entity: this.event,
-          skill: this.attackSkill,
+        executeActionBattleUse({
+          attacker: this.event,
           target: this.target,
-          animations: this.animations,
+          usable: this.resolveUsable(this.attackSkill),
+          skill: this.resolveUsable(this.attackSkill),
+          pattern,
+          profile,
         });
-        this.event.useSkill(this.attackSkill, this.target);
       } catch (e) {
         // Skill failed (no SP, etc.) - fall back to basic attack
         this.performBasicHitbox(profile, pattern);
       }
-    } else {
-      this.performBasicHitbox(profile, pattern);
+      return;
     }
+
+    const weapon = resolveActionBattleWeapon(this.event);
+    if (
+      weapon &&
+      executeActionBattleUse({
+        attacker: this.event,
+        target: this.target,
+        usable: weapon,
+        weapon,
+        pattern,
+        profile,
+      })
+    ) {
+      return;
+    }
+
+    this.performBasicHitbox(profile, pattern);
   }
 
   /**
@@ -2035,6 +2062,26 @@ export class BattleAi {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  private resolveUsable(usable: any) {
+    if (!usable) return usable;
+    const id = typeof usable === "string" ? usable : usable.id;
+    const learned = id ? (this.event as any).getSkill?.(id) : undefined;
+    if (learned) return learned;
+    try {
+      return id ? (this.event as any).databaseById?.(id) ?? usable : usable;
+    } catch {
+      return usable;
+    }
+  }
+
+  private getCurrentActionRange(): number | undefined {
+    const skillRange = this.attackSkill
+      ? getActionBattleActionRange(this.resolveUsable(this.attackSkill))
+      : undefined;
+    if (skillRange !== undefined) return skillRange;
+    return getActionBattleActionRange(resolveActionBattleWeapon(this.event));
+  }
+
   private canTarget(target: ActionBattleEntity): boolean {
     return canActionBattleTarget(
       this.event,
@@ -2330,17 +2377,18 @@ export class BattleAi {
   ): boolean {
     if (!this.target || this.isTargetDefeated(this.target) || !skill) return false;
     const distance = this.getDistance(this.event, this.target);
-    if (distance > this.attackRange) return false;
+    const resolvedSkill = this.resolveUsable(skill);
+    const range = getActionBattleActionRange(resolvedSkill) ?? this.attackRange;
+    if (distance > range) return false;
     if (currentTime - this.lastAttackTime < this.attackCooldown) return false;
 
-    playActionBattleVisual(getActionBattleOptions().visual, {
-      moment: "castSkill",
-      entity: this.event,
-      skill,
+    executeActionBattleUse({
+      attacker: this.event,
       target: this.target,
-      animations: this.animations,
+      usable: resolvedSkill,
+      skill: resolvedSkill,
+      profile: this.getAttackProfile(AttackPattern.Melee),
     });
-    this.event.useSkill(skill, this.target);
     this.lastAttackTime = currentTime;
     return consumes;
   }

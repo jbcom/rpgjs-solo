@@ -420,6 +420,111 @@ provideActionBattle({
 });
 ```
 
+## Skill and weapon actions
+
+Skills and weapons can define an `action` block for action-battle selection,
+while their effect stays automatic by default.
+`BattleAi` uses this block when it casts `attackSkill` or attacks with an
+equipped weapon. Player action-bar skills and configured equipped weapons use
+the same executor, so `onUse` receives the same context in both cases.
+
+```ts
+const Fireball = {
+  id: "fireball",
+  name: "Fireball",
+  _type: "skill" as const,
+  spCost: 10,
+  power: 40,
+  hitRate: 0.95,
+  action: {
+    target: "enemy",
+    range: 300,
+    mode: "projectile",
+    projectile: {
+      type: "fireball",
+      speed: 220,
+      range: 300,
+      spreadDegrees: 8
+    }
+  }
+};
+```
+
+With no `onUse`, action-battle applies the standard RPGJS skill effect:
+SP cost, hit rate, states, and damage formulas. For weapons, the default effect
+is a physical hit using the equipped weapon stats and action-battle hit hooks.
+`action.target` can be `"enemy"`, `"ally"`, `"self"`, or `"any"`; enemy
+resolution uses the attacker's action-battle faction and `targets` selector.
+Projectile direction uses the same generic projectile options as
+`map.projectiles.emit()`, including `spreadDegrees` and `accuracy`.
+
+Use `onUse(user, target, ctx)` only when the action needs custom logic:
+
+```ts
+const PoisonArrow = {
+  id: "poison-arrow",
+  _type: "skill" as const,
+  spCost: 12,
+  power: 20,
+  action: {
+    target: "enemy",
+    range: 320,
+    mode: "projectile",
+    projectile: {
+      type: "arrow",
+      speed: 260,
+      range: 320
+    }
+  },
+  onUse(user, target, ctx) {
+    ctx.projectile({
+      type: "arrow",
+      speed: 260,
+      range: 320,
+      onImpact({ target }) {
+        ctx.defaultEffect(target);
+        target?.addState?.("poison");
+      }
+    });
+  }
+};
+```
+
+For full custom actions, skip `ctx.defaultEffect()`:
+
+```ts
+const Heal = {
+  id: "heal",
+  _type: "skill" as const,
+  spCost: 8,
+  action: {
+    target: "ally",
+    range: 180,
+    mode: "instant"
+  },
+  onUse(user, target, ctx) {
+    ctx.heal(target, 35);
+  }
+};
+```
+
+Weapons use the same model:
+
+```ts
+const Claw = {
+  id: "claw",
+  _type: "weapon" as const,
+  action: {
+    target: "enemy",
+    range: 45,
+    mode: "instant"
+  },
+  onUse(user, target, ctx) {
+    ctx.defaultEffect(target);
+  }
+};
+```
+
 ## Plugin-first extension points
 
 Action battle is structured as replaceable systems. You can keep the default

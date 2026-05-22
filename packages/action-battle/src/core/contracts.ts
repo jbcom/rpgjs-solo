@@ -31,6 +31,84 @@ export interface ActionBattleTargetOptions {
   canTarget?: (context: ActionBattleTargetContext) => boolean;
 }
 
+export type ActionBattleActionMode = "instant" | "melee" | "projectile";
+
+export type ActionBattleActionTarget = "enemy" | "ally" | "self" | "any";
+
+export interface ActionBattleProjectileOptions {
+  type: string;
+  speed?: number;
+  range?: number;
+  /**
+   * Random direction offset in degrees, applied as +/- half this value.
+   * Useful for less accurate ranged attacks.
+   */
+  spreadDegrees?: number;
+  /**
+   * Convenience precision value from 0 to 1. Ignored when `spreadDegrees` is set.
+   * `1` is perfectly accurate, `0` can deviate up to 30 degrees.
+   */
+  accuracy?: number;
+  trajectory?: any;
+  direction?: { x: number; y: number };
+  origin?: { x: number; y: number };
+  collision?: any;
+  repeat?: any;
+  pattern?: any;
+  payload?: Record<string, unknown>;
+  params?: Record<string, unknown>;
+  onImpact?: (
+    context: ActionBattleProjectileImpactContext,
+    action: ActionBattleUseContext
+  ) => void;
+}
+
+export interface ActionBattleActionConfig {
+  target?: ActionBattleActionTarget;
+  range?: number;
+  cooldownMs?: number;
+  mode?: ActionBattleActionMode;
+  projectile?: Omit<ActionBattleProjectileOptions, "onImpact">;
+}
+
+export interface ActionBattleProjectileImpactContext {
+  attacker: ActionBattleEntity;
+  target?: ActionBattleEntity;
+  projectile: any;
+  hit: any;
+  map: any;
+}
+
+export interface ActionBattleUseContext {
+  attacker: ActionBattleEntity;
+  user: ActionBattleEntity;
+  target?: ActionBattleEntity | ActionBattleEntity[] | null;
+  usable: any;
+  skill?: any;
+  weapon?: any;
+  action?: ActionBattleActionConfig;
+  pattern?: AttackPattern | string;
+  defaultEffect(target?: ActionBattleEntity | ActionBattleEntity[] | null): any;
+  damage(target?: ActionBattleEntity | null): any;
+  heal(
+    target: ActionBattleEntity | ActionBattleEntity[] | null | undefined,
+    amount: number
+  ): number;
+  projectile(options?: ActionBattleProjectileOptions): any[];
+}
+
+export interface ActionBattleUsable {
+  id?: string;
+  _type?: string;
+  action?: ActionBattleActionConfig;
+  actionBattle?: ActionBattleActionConfig;
+  onUse?: (
+    user: ActionBattleEntity,
+    target: ActionBattleEntity | ActionBattleEntity[] | null | undefined,
+    action: ActionBattleUseContext
+  ) => any;
+}
+
 export interface ActionBattleHitbox {
   x: number;
   y: number;

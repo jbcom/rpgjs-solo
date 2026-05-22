@@ -13,6 +13,7 @@ import {
   action,
   chase,
   condition,
+  distanceLessThan,
   flee,
   hpBelow,
   ifDistanceLessThan,
@@ -23,6 +24,7 @@ import {
   sequence,
   targetInRange,
   useAttack,
+  useSkill,
 } from "@rpgjs/action-battle/server";
 import { provideSaveStorage } from "@rpgjs/server";
 
@@ -192,6 +194,36 @@ const fireSkill = {
   // }
 };
 
+const EliteBoltSkill = {
+  id: "elite-bolt",
+  name: "Elite Bolt",
+  description: "A ranged action-battle projectile used by the kiter monster",
+  spCost: 0,
+  hitRate: 1,
+  power: 18,
+  coefficient: { [ATK]: 1, [PDEF]: 0.4 },
+  _type: "skill" as const,
+  action: {
+    target: "enemy" as const,
+    range: 230,
+    mode: "projectile" as const,
+    projectile: {
+      type: "elite-bolt",
+      speed: 210,
+      range: 230,
+      spreadDegrees: 14,
+      collision: {
+        ignoreOwner: true,
+        predictImpact: false,
+      },
+      params: {
+        color: "#38bdf8",
+        trailColor: "#0f766e",
+      },
+    },
+  },
+};
+
 export function Event(): EventDefinition {
   return {
     name: "EV-1",
@@ -311,41 +343,73 @@ export function AiSimpleKiter() {
   };
 }
 
-export function AiTreeElite(x, y, faction = "elite-a") {
+type EliteMonsterStyle = "brute" | "skirmisher";
+
+export function AiTreeElite(
+  x,
+  y,
+  faction = "elite-a",
+  style: EliteMonsterStyle = "brute"
+) {
+  const isSkirmisher = style === "skirmisher";
   return {
-    name: "AI Demo - Tree Elite",
+    name: isSkirmisher
+      ? "AI Demo - Projectile Skirmisher"
+      : "AI Demo - Aggressive Brute",
     onInit() {
       setupActionBattleEnemy(this, {
-        name: "Tree Elite",
+        name: isSkirmisher ? "Projectile Skirmisher" : "Aggressive Brute",
         x,
         y,
-        hp: 420,
-        atk: 16,
-        speed: 2,
+        hp: isSkirmisher ? 300 : 460,
+        atk: isSkirmisher ? 12 : 18,
+        speed: isSkirmisher ? 2.6 : 2.25,
         ai: {
-          preset: "tank",
+          preset: isSkirmisher ? "ranged" : "tank",
           faction,
           targets: "hostile",
-          attackRange: 200,
-          attackCooldown: 1200,
-          poise: 2,
-          attackPatterns: [
-            AttackPattern.Melee,
-            AttackPattern.Charged,
-            AttackPattern.Zone,
-          ],
-          behaviorTree: selector([
-            sequence([
-              condition(hpBelow(0.18)),
-              action(flee()),
-            ]),
-            sequence([
-              condition(targetInRange(60)),
-              action(useAttack(AttackPattern.Charged)),
-            ]),
-            action(chase()),
-          ]),
-          rewards: { exp: 40, gold: 20 },
+          attackSkill: isSkirmisher ? EliteBoltSkill : undefined,
+          attackRange: isSkirmisher ? 230 : 68,
+          attackCooldown: isSkirmisher ? 1450 : 650,
+          poise: isSkirmisher ? 1 : 3,
+          dodgeChance: isSkirmisher ? 0.35 : 0.08,
+          attackPatterns: isSkirmisher
+            ? [AttackPattern.Melee, AttackPattern.Zone]
+            : [
+                AttackPattern.Melee,
+                AttackPattern.Combo,
+                AttackPattern.Charged,
+              ],
+          behaviorTree: isSkirmisher
+            ? selector([
+                sequence([
+                  condition(hpBelow(0.35)),
+                  action(flee()),
+                ]),
+                sequence([
+                  condition(distanceLessThan(115)),
+                  action(keepDistance(165)),
+                ]),
+                sequence([
+                  condition(targetInRange(230)),
+                  action(useSkill(EliteBoltSkill)),
+                ]),
+                action(chase()),
+              ])
+            : selector([
+                sequence([
+                  condition(hpBelow(0.12)),
+                  action(useAttack(AttackPattern.Charged)),
+                ]),
+                sequence([
+                  condition(targetInRange(72)),
+                  action(useAttack(AttackPattern.Combo)),
+                ]),
+                action(chase()),
+              ]),
+          rewards: isSkirmisher
+            ? { exp: 45, gold: 25 }
+            : { exp: 50, gold: 28 },
         },
       });
     },
@@ -362,10 +426,17 @@ export default createServer({
           lockMovement: true,
           lockDurationMs: 320,
           profile: {
-            startupMs: 60,
-            activeMs: 120,
+            startupMs: 0,
+            activeMs: 180,
             recoveryMs: 140,
             hitPolicy: "oncePerTarget",
+          },
+          hitboxes: {
+            up: { offsetX: -24, offsetY: -66, width: 48, height: 58 },
+            down: { offsetX: -24, offsetY: 8, width: 48, height: 58 },
+            left: { offsetX: -66, offsetY: -24, width: 58, height: 48 },
+            right: { offsetX: 8, offsetY: -24, width: 58, height: 48 },
+            default: { offsetX: -24, offsetY: -48, width: 48, height: 58 },
           },
         },
       },
@@ -441,6 +512,7 @@ export default createServer({
             'basic-helmet': BasicHelmet,
             'fire-armor': FireArmor,
             'fire-skill': fireSkill,
+            'elite-bolt': EliteBoltSkill,
             'basic-potion': BasicPotion,
            }
         },
@@ -601,8 +673,8 @@ export default createServer({
             events: [
               // { event: Event() },
               //{ event: Event() },
-              { event: AiTreeElite(200, 300, "elite-a") },
-              { event: AiTreeElite(300, 200, "elite-b") },
+              { event: AiTreeElite(200, 300, "elite-a", "brute") },
+              { event: AiTreeElite(300, 200, "elite-b", "skirmisher") },
             ]
           }
         ],

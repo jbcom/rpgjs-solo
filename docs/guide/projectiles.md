@@ -35,6 +35,7 @@ export const player: RpgPlayerHooks = {
     player.projectiles.emit({
       type: 'fireball',
       direction: player.getDirection(),
+      spreadDegrees: 8,
       trajectory: {
         type: 'linear',
         speed: 420,
@@ -54,6 +55,10 @@ export const player: RpgPlayerHooks = {
   }
 }
 ```
+
+`spreadDegrees` applies a random direction offset of `+/- spreadDegrees / 2`.
+You can use `accuracy` instead when you prefer a normalized precision value
+from `0` to `1`; `1` is perfectly accurate, `0` can deviate up to 30 degrees.
 
 `payload` stays server-side and is useful for damage, states, knockback, or any
 other gameplay data. `params` is sent to clients and should contain only visual

@@ -125,6 +125,28 @@ describe("RpgMapProjectiles", () => {
     });
   });
 
+  test("applies top-level precision spread to projectile directions", () => {
+    vi.spyOn(Math, "random").mockReturnValue(1);
+    const { map, broadcasts } = createMapStub();
+    const projectiles = new RpgMapProjectiles(map as any);
+
+    projectiles.emit({
+      type: "arrow",
+      origin: { x: 0, y: 0 },
+      direction: { x: 1, y: 0 },
+      spreadDegrees: 20,
+      trajectory: {
+        type: "linear",
+        speed: 100,
+        range: 200,
+      },
+    });
+
+    const direction = broadcasts[0].value.projectiles[0].direction;
+    expect(direction.x).toBeCloseTo(Math.cos((10 * Math.PI) / 180), 4);
+    expect(direction.y).toBeCloseTo(Math.sin((10 * Math.PI) / 180), 4);
+  });
+
   test("serializes client-safe prediction hints and disables prediction for custom hit filters", () => {
     const { map, broadcasts } = createMapStub();
     const projectiles = new RpgMapProjectiles(map as any);

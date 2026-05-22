@@ -24,8 +24,18 @@ import {
   resolveActionBattleHitboxSpeed,
   scheduleActionBattleStartup,
 } from "./core/attack-runtime";
+import {
+  canActionBattleUseTarget,
+  executeActionBattleUse,
+  getActionBattleActionConfig,
+  handleActionBattleProjectileDestroy,
+  handleActionBattleProjectileImpact,
+} from "./core/action-use";
 import { normalizeActionBattleAttackProfile } from "./core/attack-profile";
-import { resolveActionBattleWeaponAttackProfile } from "./core/equipment";
+import {
+  resolveActionBattleWeapon,
+  resolveActionBattleWeaponAttackProfile,
+} from "./core/equipment";
 import type { ActionBattleHitbox } from "./core/contracts";
 import {
   canActionBattleTarget,
@@ -110,12 +120,12 @@ const rectsOverlap = (
   a.y < b.y + b.height &&
   a.y + a.height > b.y;
 
-const eventRect = (event: RpgEvent) => {
+const entityRect = (entity: RpgPlayer | RpgEvent | any) => {
   const hitbox =
-    typeof event.hitbox === "function" ? event.hitbox() : (event as any).hitbox;
+    typeof entity.hitbox === "function" ? entity.hitbox() : entity.hitbox;
   return {
-    x: event.x(),
-    y: event.y(),
+    x: entity.x(),
+    y: entity.y(),
     width: hitbox?.w ?? 32,
     height: hitbox?.h ?? 32,
   };
@@ -155,7 +165,7 @@ const getVisibleActionEvents = (
   }
 
   for (const event of map.getEvents()) {
-    const rect = eventRect(event);
+    const rect = entityRect(event);
     if (hitboxes.some((hitbox) => rectsOverlap(hitbox, rect))) {
       addEvent(event);
     }
@@ -351,6 +361,25 @@ const resolvePlayerAttackHitboxes = (
   );
 };
 
+const getActionBattleHitboxCandidates = (
+  map: ReturnType<RpgPlayer["getCurrentMap"]> | undefined,
+  hitboxes: ActionBattleHitbox[]
+) => {
+  if (!map) return [];
+  const candidates = new Map<string, RpgPlayer | RpgEvent>();
+  const add = (entity: RpgPlayer | RpgEvent | undefined) => {
+    if (!entity?.id) return;
+    const rect = entityRect(entity);
+    if (hitboxes.some((hitbox) => rectsOverlap(hitbox, rect))) {
+      candidates.set(entity.id, entity);
+    }
+  };
+
+  map.getPlayers?.().forEach(add);
+  map.getEvents?.().forEach(add);
+  return Array.from(candidates.values());
+};
+
 const mergeAttackProfileOverrides = (
   base: NormalizedActionBattleAttackProfile,
   override: ActionBattleAttackProfile
@@ -400,6 +429,16 @@ const resolveSkillData = (player: RpgPlayer, skillId: string) => {
     return (player as any).databaseById?.(skillId);
   } catch {
     return null;
+  }
+};
+
+const resolvePlayerSkillUsable = (player: RpgPlayer, skillId: string) => {
+  try {
+    return (
+      (player as any).getSkill?.(skillId) ?? resolveSkillData(player, skillId)
+    );
+  } catch {
+    return resolveSkillData(player, skillId);
   }
 };
 
@@ -574,7 +613,18 @@ const handleActionBattleSkillUse = (
   target: { x: number; y: number } | undefined,
   options: ActionBattleOptions
 ) => {
-  const skillData = resolveSkillData(player, skillId);
+  const skillData = resolvePlayerSkillUsable(player, skillId);
+  const actionConfig = getActionBattleActionConfig(skillData);
+
+  if (actionConfig?.target === "self") {
+    executeActionBattleUse({
+      attacker: player,
+      target: player,
+      usable: skillData,
+      skill: skillData,
+    });
+    return;
+  }
 
   const map = player.getCurrentMap();
   if (!map) {
@@ -616,11 +666,20 @@ const handleActionBattleSkillUse = (
   });
 
   const targets: any[] = [];
+  const actionTarget = actionConfig?.target ?? "enemy";
   const affects = options.targeting?.affects || "events";
   if (affects === "events" || affects === "both") {
     map.getEvents().forEach((event: RpgEvent) => {
       const tile = getEntityTile(event, tileSize);
-      if (affected.has(`${tile.x},${tile.y}`)) {
+      if (
+        affected.has(`${tile.x},${tile.y}`) &&
+        canActionBattleUseTarget(
+          player,
+          event,
+          actionTarget,
+          options.combat?.targets
+        )
+      ) {
         targets.push(event);
       }
     });
@@ -629,7 +688,15 @@ const handleActionBattleSkillUse = (
     map.getPlayers().forEach((other: RpgPlayer) => {
       if (other.id === player.id) return;
       const tile = getEntityTile(other, tileSize);
-      if (affected.has(`${tile.x},${tile.y}`)) {
+      if (
+        affected.has(`${tile.x},${tile.y}`) &&
+        canActionBattleUseTarget(
+          player,
+          other,
+          actionTarget,
+          options.combat?.targets
+        )
+      ) {
         targets.push(other);
       }
     });
@@ -639,13 +706,12 @@ const handleActionBattleSkillUse = (
     return;
   }
 
-  playActionBattleVisual(options.visual, {
-    moment: "castSkill",
-    entity: player,
+  executeActionBattleUse({
+    attacker: player,
+    target: targets,
+    usable: skillData,
     skill: skillData,
-    target: targets[0],
   });
-  player.useSkill(skillId, targets as any);
 };
 
 export const createActionBattleServer = (
@@ -715,6 +781,7 @@ export const createActionBattleServer = (
             player.id,
             attackProfile.id
           );
+          const weapon = resolveActionBattleWeapon(player);
           const hitTracker = new ActionBattleHitTracker(
             attackProfile.hitPolicy
           );
@@ -728,7 +795,40 @@ export const createActionBattleServer = (
             });
           }
 
+          const processHits = (hits: any[]) => {
+            hits.forEach((hit: any) => {
+              if (
+                !canActionBattleTarget(
+                  player,
+                  hit,
+                  targetSelector,
+                  options.combat?.targets
+                )
+              ) {
+                return;
+              }
+              if (!hitTracker.tryHit(hit)) return;
+              const handledByWeapon =
+                weapon &&
+                executeActionBattleUse({
+                  attacker: player,
+                  target: hit,
+                  usable: weapon,
+                  weapon,
+                  profile: attackProfile,
+                  playVisual: false,
+                });
+              if (handledByWeapon) return;
+              applyActionBattleEntityHit(player, hit, undefined, {
+                attackId,
+                attackProfileId: attackProfile.id,
+                reaction: attackProfile.reaction,
+              });
+            });
+          };
+
           scheduleActionBattleStartup(attackProfile, () => {
+            processHits(getActionBattleHitboxCandidates(map, hitboxes));
             map
               ?.createMovingHitbox(hitboxes, {
                 speed: resolveActionBattleHitboxSpeed(
@@ -738,31 +838,7 @@ export const createActionBattleServer = (
               })
               .subscribe({
                 next(hits: any[]) {
-                  hits.forEach((hit: any) => {
-                    if (hit instanceof RpgEvent || hit instanceof RpgPlayer) {
-                      if (
-                        !canActionBattleTarget(
-                          player,
-                          hit,
-                          targetSelector,
-                          options.combat?.targets
-                        )
-                      ) {
-                        return;
-                      }
-                      if (!hitTracker.tryHit(hit)) return;
-                      applyActionBattleEntityHit(
-                        player,
-                        hit,
-                        undefined,
-                        {
-                          attackId,
-                          attackProfileId: attackProfile.id,
-                          reaction: attackProfile.reaction,
-                        }
-                      );
-                    }
-                  });
+                  processHits(hits);
                 },
               });
           });
@@ -806,6 +882,23 @@ export const createActionBattleServer = (
         ai?.onDetectOutShape(player, shape);
       },
     },
+    projectiles: {
+      onImpact(context: any) {
+        handleActionBattleProjectileImpact({
+          attacker:
+            context.projectile?.payload?.attackerId
+              ? context.map?.getObjectById?.(context.projectile.payload.attackerId)
+              : undefined,
+          target: context.target,
+          projectile: context.projectile,
+          hit: context.hit,
+          map: context.map,
+        } as any);
+      },
+      onDestroy(context: any) {
+        handleActionBattleProjectileDestroy(context.projectile?.id);
+      },
+    },
   });
 };
 
@@ -836,10 +929,26 @@ export type {
   NormalizedActionBattleAttackProfile,
 } from "./types";
 export type {
+  ActionBattleActionConfig,
+  ActionBattleActionMode,
+  ActionBattleActionTarget,
+  ActionBattleProjectileImpactContext,
+  ActionBattleProjectileOptions,
   ActionBattleTargetContext,
   ActionBattleTargetOptions,
   ActionBattleTargetSelector,
+  ActionBattleUsable,
+  ActionBattleUseContext,
 } from "./core/contracts";
+export {
+  canActionBattleUseTarget,
+  executeActionBattleUse,
+  getActionBattleActionConfig,
+  getActionBattleActionRange,
+  handleActionBattleProjectileDestroy,
+  handleActionBattleProjectileImpact,
+  shouldUseActionBattleUsable,
+} from "./core/action-use";
 export {
   DEFAULT_ACTION_BATTLE_HIT_REACTION,
   isActionBattleEntityInvincible,
@@ -853,7 +962,10 @@ export {
   type ActionBattleEnemyAttackProfileMap,
   type NormalizedActionBattleEnemyAttackProfileMap,
 } from "./core/enemy-attack-profiles";
-export { resolveActionBattleWeaponAttackProfile } from "./core/equipment";
+export {
+  resolveActionBattleWeapon,
+  resolveActionBattleWeaponAttackProfile,
+} from "./core/equipment";
 export {
   ACTION_BATTLE_ENEMY_FACTION,
   ACTION_BATTLE_PLAYER_FACTION,

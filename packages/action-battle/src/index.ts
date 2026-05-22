@@ -70,9 +70,16 @@ export type {
   ActionBattleDamageResult,
   ActionBattleDirection,
   ActionBattleEntity,
+  ActionBattleActionConfig,
+  ActionBattleActionMode,
+  ActionBattleActionTarget,
   ActionBattleTargetContext,
   ActionBattleTargetOptions,
   ActionBattleTargetSelector,
+  ActionBattleProjectileImpactContext,
+  ActionBattleProjectileOptions,
+  ActionBattleUsable,
+  ActionBattleUseContext,
   ActionBattleHitContext,
   ActionBattleHitHooks,
   ActionBattleHitResult,
@@ -139,6 +146,15 @@ export {
   scheduleActionBattleStartup,
 } from "./core/attack-runtime";
 export {
+  canActionBattleUseTarget,
+  executeActionBattleUse,
+  getActionBattleActionConfig,
+  getActionBattleActionRange,
+  handleActionBattleProjectileDestroy,
+  handleActionBattleProjectileImpact,
+  shouldUseActionBattleUsable,
+} from "./core/action-use";
+export {
   DEFAULT_ACTION_BATTLE_HIT_REACTION,
   isActionBattleEntityInvincible,
   normalizeActionBattleHitReaction,
@@ -151,7 +167,10 @@ export {
   type ActionBattleEnemyAttackProfileMap,
   type NormalizedActionBattleEnemyAttackProfileMap,
 } from "./core/enemy-attack-profiles";
-export { resolveActionBattleWeaponAttackProfile } from "./core/equipment";
+export {
+  resolveActionBattleWeapon,
+  resolveActionBattleWeaponAttackProfile,
+} from "./core/equipment";
 export {
   DEFAULT_ZELDA_PLAYER_HITBOXES,
   createDefaultPlayerHitboxResolver,

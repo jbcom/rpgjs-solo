@@ -44,6 +44,16 @@ export interface ProjectileEmitOptions {
   type: string;
   origin?: { x: number; y: number };
   direction?: Direction | { x: number; y: number };
+  /**
+   * Random direction offset in degrees, applied as +/- half this value.
+   * Use it for inaccurate shots, arrows, spells, or bullets.
+   */
+  spreadDegrees?: number;
+  /**
+   * Convenience precision value from 0 to 1. Ignored when `spreadDegrees` is set.
+   * `1` is perfectly accurate, `0` can deviate up to 30 degrees.
+   */
+  accuracy?: number;
   trajectory: ProjectileTrajectory;
   collision?: ProjectileCollisionOptions;
   repeat?: ProjectileRepeatOptions;
@@ -158,6 +168,9 @@ function normalizeDirection(direction: { x: number; y: number }): { x: number; y
 }
 
 function rotateDirection(direction: { x: number; y: number }, degrees: number): { x: number; y: number } {
+  if (!Number.isFinite(degrees) || degrees === 0) {
+    return direction;
+  }
   const radians = degrees * Math.PI / 180;
   const cos = Math.cos(radians);
   const sin = Math.sin(radians);
@@ -165,6 +178,16 @@ function rotateDirection(direction: { x: number; y: number }, degrees: number): 
     x: direction.x * cos - direction.y * sin,
     y: direction.x * sin + direction.y * cos,
   });
+}
+
+function resolvePrecisionSpread(options: ProjectileEmitOptions): number {
+  if (typeof options.spreadDegrees === "number") {
+    return Math.max(0, options.spreadDegrees);
+  }
+  if (typeof options.accuracy === "number") {
+    return (1 - Math.max(0, Math.min(1, options.accuracy))) * 30;
+  }
+  return 0;
 }
 
 function createRandom(seed: number): () => number {
@@ -359,19 +382,25 @@ export class RpgMapProjectiles {
     count: number,
     random: () => number,
   ): { x: number; y: number } {
+    let direction = baseDirection;
     if (options.pattern?.type === "circle") {
-      return rotateDirection(baseDirection, (360 / count) * index);
-    }
-    if (options.pattern?.type === "cone") {
+      direction = rotateDirection(baseDirection, (360 / count) * index);
+    } else if (options.pattern?.type === "cone") {
       const total = options.pattern.angle;
       const step = count <= 1 ? 0 : total / (count - 1);
-      return rotateDirection(baseDirection, -total / 2 + step * index);
+      direction = rotateDirection(baseDirection, -total / 2 + step * index);
+    } else {
+      const spread = options.repeat?.spread ?? 0;
+      if (spread > 0) {
+        direction = rotateDirection(baseDirection, (random() - 0.5) * spread);
+      }
     }
-    const spread = options.repeat?.spread ?? 0;
-    if (spread > 0) {
-      return rotateDirection(baseDirection, (random() - 0.5) * spread);
+
+    const precisionSpread = resolvePrecisionSpread(options);
+    if (precisionSpread > 0) {
+      direction = rotateDirection(direction, (random() - 0.5) * precisionSpread);
     }
-    return baseDirection;
+    return direction;
   }
 
   private spawnNow(pending: PendingProjectile): void {

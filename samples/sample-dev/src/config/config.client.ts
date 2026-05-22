@@ -21,6 +21,7 @@ import VueComponent from "../vue-component-with-injections.vue";
 import VueTooltipComponent from "../tooltip.vue";
 import FadeComponent from "../components/fade.ce";
 import PlayerStatsComponent from "../components/player-stats.ce";
+import ProjectileComponent from "../components/projectile.ce";
 import { signal, effect } from 'canvasengine'
 import { provideVueGui } from "@rpgjs/vue";
 import { provideTiledMap } from "@rpgjs/tiledmap/client";
@@ -174,6 +175,11 @@ export default {
             ...Presets.AnimationSpritesheetPreset(4, 4),
           }
         ],
+        projectiles: {
+          components: {
+            "elite-bolt": ProjectileComponent,
+          },
+        },
         gui: [
           {
             id: "rpg-title-screen",
