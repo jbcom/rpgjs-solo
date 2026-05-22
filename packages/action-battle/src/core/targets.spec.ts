@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
+import { RpgEvent } from "@rpgjs/server";
 import { BattleAi } from "../ai.server";
 import {
   canActionBattleTarget,
+  getActionBattleEntityKind,
   getActionBattleFaction,
   getActionBattleTargets,
 } from "./targets";
@@ -33,6 +35,21 @@ describe("action battle targets", () => {
     expect(getActionBattleTargets(attacker, "events")).toBe("events");
     expect(canActionBattleTarget(attacker, target, "events")).toBe(true);
     expect(canActionBattleTarget(attacker, player("player-2"), "events")).toBe(false);
+  });
+
+  test("classifies runtime RpgEvent enemies before their RpgPlayer base class", () => {
+    const attacker = player("player-1");
+    const target = new RpgEvent() as any;
+    target.id = "enemy-1";
+    target.hp = 100;
+    target.battleAi = {
+      getFaction: () => "enemies",
+      getTargets: () => "players",
+    };
+
+    expect(getActionBattleEntityKind(target)).toBe("event");
+    expect(canActionBattleTarget(attacker, target, "events")).toBe(true);
+    expect(canActionBattleTarget(attacker, target, "players")).toBe(false);
   });
 
   test("supports player targets explicitly", () => {

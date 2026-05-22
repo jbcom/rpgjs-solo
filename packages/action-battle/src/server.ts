@@ -805,14 +805,6 @@ export const createActionBattleServer = (
             attackProfile.hitPolicy
           );
           const targetSelector = getActionBattleTargets(player, "events");
-          if (options.debug?.attacks) {
-            console.log("[ActionBattle] player attack", {
-              attackId,
-              playerId: player.id,
-              profile: attackProfile.id,
-              hitboxes: initialHitboxes,
-            });
-          }
 
           const processHits = (hits: any[]) => {
             hits.forEach((hit: any) => {
@@ -850,12 +842,11 @@ export const createActionBattleServer = (
             attackProfile,
             resolveActiveHitboxes,
             (activeHitboxes) => {
-              processHits(
-                getActionBattleHitboxCandidates(map, activeHitboxes, {
-                  excludeIds: [player.id],
-                  kinds: ["players", "events"],
-                })
-              );
+              const candidates = getActionBattleHitboxCandidates(map, activeHitboxes, {
+                excludeIds: [player.id],
+                kinds: ["players", "events"],
+              });
+              processHits(candidates);
             }
           );
         }

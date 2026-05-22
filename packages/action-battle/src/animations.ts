@@ -20,6 +20,36 @@ export interface ActionBattleAnimationDefaults {
   repeat?: number;
 }
 
+const playResolvedAnimation = (
+  entity: ActionBattleAnimationEntity,
+  animation: ResolvedActionBattleAnimation
+) => {
+  if (typeof entity.setGraphicAnimation === "function") {
+    if (animation.graphic !== undefined) {
+      entity.setGraphicAnimation(
+        animation.animationName,
+        animation.graphic,
+        animation.repeat
+      );
+    } else {
+      entity.setGraphicAnimation(animation.animationName, animation.repeat);
+    }
+    return;
+  }
+
+  if (typeof entity.setAnimation === "function") {
+    if (animation.graphic !== undefined) {
+      entity.setAnimation(
+        animation.animationName,
+        animation.graphic,
+        animation.repeat
+      );
+    } else {
+      entity.setAnimation(animation.animationName, animation.repeat);
+    }
+  }
+};
+
 const DEFAULT_ANIMATION_BY_KEY: Record<ActionBattleAnimationKey, string> = {
   attack: "attack",
   hurt: "hurt",
@@ -127,15 +157,7 @@ export function playActionBattleAnimation(
   );
   if (!animation) return null;
 
-  if (animation.graphic !== undefined) {
-    entity.setGraphicAnimation(
-      animation.animationName,
-      animation.graphic,
-      animation.repeat
-    );
-  } else {
-    entity.setGraphicAnimation(animation.animationName, animation.repeat);
-  }
+  playResolvedAnimation(entity, animation);
 
   return animation;
 }

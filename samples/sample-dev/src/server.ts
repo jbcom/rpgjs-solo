@@ -529,22 +529,12 @@ export default createServer({
             wood: Number
           },
           onStart: (player: RpgPlayer) => {
-            player.addParameter(MAXHP, {
-              start: 100,
-              end: 103,
-            });
-            player.expCurve = {
-              basis: 30,
-              extra: 10,
-              accelerationA: 30,
-              accelerationB: 30
-            };
+          
+            player.level = 5
 
-            player.exp = 1000
-
-            player.paramsModifier = {
-              [MAXHP]: { value: 100 }
-            };
+            // player.paramsModifier = {
+            //   [MAXHP]: { value: 100 }
+            // };
 
             if (!player.getSkill(fireSkill)) {
               player.learnSkill(fireSkill);
@@ -554,6 +544,8 @@ export default createServer({
               x: 100,
               y: 100,
             });
+
+            player.allRecovery()
           },
           onConnected: (player: RpgPlayer) => {
             player.addItem(BasicPotion);

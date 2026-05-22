@@ -33,12 +33,8 @@ export type ActionBattleAnimationResult =
   | undefined;
 
 export type ActionBattleAnimationEntity = {
-  setGraphicAnimation(animationName: string, repeat: number): void;
-  setGraphicAnimation(
-    animationName: string,
-    graphic: string | string[],
-    repeat: number
-  ): void;
+  setGraphicAnimation?: (...args: any[]) => unknown;
+  setAnimation?: (...args: any[]) => unknown;
   [key: string]: any;
 };
 

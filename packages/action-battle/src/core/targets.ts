@@ -16,10 +16,10 @@ const getBattleAi = (entity: ActionBattleEntity) => (entity as any)?.battleAi;
 export const getActionBattleEntityKind = (
   entity: ActionBattleEntity
 ): EntityKind => {
-  if ((entity as any) instanceof RpgPlayer) return "player";
-  if ((entity as any) instanceof RpgEvent) return "event";
   if (getBattleAi(entity)) return "event";
+  if ((entity as any) instanceof RpgEvent) return "event";
   if (typeof (entity as any)?.attachShape === "function") return "event";
+  if ((entity as any) instanceof RpgPlayer) return "player";
   return "player";
 };
 
