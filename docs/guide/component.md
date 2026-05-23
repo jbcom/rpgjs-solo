@@ -294,6 +294,58 @@ Custom props must be serializable: strings, numbers, booleans, arrays and plain
 objects. They can contain placeholders, so the component receives updated values
 when synchronized player properties change.
 
+## Custom Event Renderers
+
+Events can also be rendered by a client-side CanvasEngine component instead of
+the default graphic renderer. Register a resolver on the client:
+
+```ts
+// client.ts
+import { defineModule, RpgClient } from '@rpgjs/client'
+import ChestEvent from './components/chest-event.ce'
+
+export default defineModule<RpgClient>({
+  sprite: {
+    eventComponent(sprite) {
+      if (sprite.name === 'CHEST') {
+        return ChestEvent
+      }
+
+      return null
+    }
+  }
+})
+```
+
+The custom component always receives the synced event object as the `sprite`
+prop:
+
+```html
+<!-- components/chest-event.ce -->
+<Container>
+  <Text text={sprite.name} />
+</Container>
+
+<script>
+  const { sprite } = defineProps()
+</script>
+```
+
+Return a config object to add props or keep the regular graphic visible behind
+the custom component:
+
+```ts
+eventComponent(sprite) {
+  if (sprite.name !== 'CHEST') return null
+
+  return {
+    component: ChestEvent,
+    props: { variant: 'wood' },
+    renderGraphic: true
+  }
+}
+```
+
 ## Graphic IDs And Legacy Tile IDs
 
 `player.setGraphic()` accepts a spritesheet id, a legacy tile id, or an array

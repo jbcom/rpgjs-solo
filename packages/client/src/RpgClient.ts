@@ -2,6 +2,7 @@ import { ComponentFunction, Signal } from 'canvasengine'
 import { RpgClientEngine } from './RpgClientEngine'
 import { Loader, Container } from 'pixi.js'
 import { RpgClientObject } from './Game/Object'
+import type { RpgClientEvent } from './Game/Event'
 import { type MapPhysicsEntityContext, type MapPhysicsInitContext, type RpgActionName } from '@rpgjs/common'
 import type {
     ClientProjectileSpawn,
@@ -16,6 +17,16 @@ export type SpriteComponentConfig = ComponentFunction | {
     props?: Record<string, any> | ((object: RpgClientObject) => Record<string, any>)
     data?: Record<string, any> | ((object: RpgClientObject) => Record<string, any>)
     dependencies?: (object: RpgClientObject) => any[]
+}
+
+export type EventComponentSprite = RpgClientEvent & Record<string, any>
+
+export type EventComponentConfig = ComponentFunction | {
+    component: ComponentFunction
+    props?: Record<string, any> | ((event: EventComponentSprite) => Record<string, any>)
+    data?: Record<string, any> | ((event: EventComponentSprite) => Record<string, any>)
+    dependencies?: (event: EventComponentSprite) => any[]
+    renderGraphic?: boolean
 }
 
 export interface RpgSpriteBeforeRemoveContext {
@@ -142,6 +153,31 @@ export interface RpgSpriteHooks {
      * ```
      */
     components?: Record<string, ComponentFunction>
+
+    /**
+     * Resolve a custom CanvasEngine component for a specific event.
+     *
+     * The component always receives the synced event object as the `sprite` prop.
+     * Custom props are merged in addition to `sprite`, but cannot replace it.
+     * Return `null` or `undefined` to keep the default graphic renderer.
+     *
+     * @prop { (event: EventComponentSprite) => EventComponentConfig | null | undefined } [eventComponent]
+     * @memberof RpgSpriteHooks
+     * @example
+     * ```ts
+     * import ChestEvent from './components/chest-event.ce'
+     *
+     * const sprite: RpgSpriteHooks = {
+     *   eventComponent(sprite) {
+     *     if (sprite.name === 'CHEST') {
+     *       return ChestEvent
+     *     }
+     *     return null
+     *   }
+     * }
+     * ```
+     */
+    eventComponent?: (event: EventComponentSprite) => EventComponentConfig | null | undefined
     
     /**
      * As soon as the sprite is initialized

@@ -213,6 +213,9 @@ export function provideClientModules(modules: RpgClientModule[]): FactoryProvide
                 engine.registerSpriteComponent(id, component);
               });
             }
+            if (sprite.eventComponent) {
+              engine.addEventComponentResolver(sprite.eventComponent);
+            }
           },
         };
       }

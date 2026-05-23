@@ -7,6 +7,8 @@ import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { RpgSound } from "./Sound";
 import { RpgResource } from "./Resource";
 import { Hooks, ModulesToken, Direction, normalizeLightingState, Vector2 } from "@rpgjs/common";
+import type { EventComponentConfig } from "./RpgClient";
+import type { RpgClientEvent } from "./Game/Event";
 import { load } from "@signe/sync";
 import { RpgClientMap } from "./Game/Map"
 import { RpgGui } from "./Gui/Gui";
@@ -33,6 +35,7 @@ import { ProjectileManager, type ClientProjectileImpact, type ClientProjectileSp
 import { normalizeActionInput } from "./services/actionInput";
 import { createClientPointerContext, type ClientPointerContext } from "./services/pointerContext";
 import { normalizeRoomMapId } from "./utils/mapId";
+import { EventComponentResolverRegistry, type EventComponentResolver } from "./Game/EventComponentResolver";
 
 interface MovementTrajectoryPoint {
   frame: number;
@@ -88,6 +91,7 @@ export class RpgClientEngine<T = any> {
   spriteComponentsBehind = signal<any[]>([]);
   spriteComponentsInFront = signal<any[]>([]);
   spriteComponents: Map<string, any> = new Map();
+  private eventComponentResolvers = new EventComponentResolverRegistry();
   /** ID of the sprite that the camera should follow. null means follow the current player */
   cameraFollowTargetId = signal<string | null>(null);
   /** Trigger for map shake animation */
@@ -1329,6 +1333,29 @@ export class RpgClientEngine<T = any> {
     return this.spriteComponents.get(id);
   }
 
+  /**
+   * Register a custom event component resolver.
+   *
+   * The last resolver returning a component wins. This lets later modules
+   * override earlier defaults without replacing the whole map scene.
+   *
+   * @param resolver - Function receiving the synced event object
+   * @returns The registered resolver
+   */
+  addEventComponentResolver(resolver: EventComponentResolver) {
+    return this.eventComponentResolvers.add(resolver);
+  }
+
+  /**
+   * Resolve the custom CanvasEngine component for an event, if any.
+   *
+   * @param event - Synced client event object
+   * @returns The component/config returned by the last matching resolver
+   */
+  resolveEventComponent(event: RpgClientEvent): EventComponentConfig | null {
+    return this.eventComponentResolvers.resolve(event);
+  }
+
   registerProjectileComponent(type: string, component: any) {
     return this.projectiles.register(type, component);
   }
@@ -2181,6 +2208,7 @@ export class RpgClientEngine<T = any> {
       this.cameraFollowTargetId.set(null);
       this.spriteComponentsBehind.set([]);
       this.spriteComponentsInFront.set([]);
+      this.eventComponentResolvers.clear();
       
       // Clear maps and arrays
       this.spritesheets.clear();

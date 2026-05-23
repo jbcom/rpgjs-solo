@@ -8,7 +8,7 @@
   <PlayerComponents object={sprite} position="left" graphicBounds />
   <Particle emit={emitParticleTrigger} settings={particleSettings} zIndex={1000} name={particleName} />
   <Container>
-    @for (graphicObj of graphicsSignals) {
+    @for (graphicObj of renderedGraphics) {
       <Container scale={graphicScale(graphicObj)}>
         <Sprite 
           sheet={sheet(graphicObj)} 
@@ -18,6 +18,11 @@
           shadowCaster={shadowCaster(graphicObj)}
           flash={flashConfig}
         />
+      </Container>
+    }
+    @for (eventComponent of resolvedEventComponents) {
+      <Container dependencies={eventComponent.dependencies}>
+        <eventComponent.component ...eventComponent.props />
       </Container>
     }
   </Container>
@@ -52,6 +57,7 @@
   import { RpgClientEngine } from "../RpgClientEngine";
   import { inject } from "../core/inject";  
   import { Direction, Animation } from "@rpgjs/common";
+  import { normalizeEventComponent } from "../Game/EventComponentResolver";
   import Hit from "./effects/hit.ce";
   import PlayerComponents from "./player-components.ce";
   import { RpgGui } from "../Gui/Gui";
@@ -218,6 +224,18 @@
   const normalizedComponentsInFront = computed(() => {
     return normalizeComponents(componentsInFront());
   });
+
+  const isEventSprite = () => {
+    return typeof sprite?.isEvent === 'function'
+      ? sprite.isEvent()
+      : sprite?._type === 'event';
+  };
+
+  const resolvedEventComponents = computed(() => {
+    if (!isEventSprite()) return [];
+    const eventComponent = normalizeEventComponent(client.resolveEventComponent(sprite), sprite);
+    return eventComponent ? [eventComponent] : [];
+  });
   
   /**
    * Determine if the camera should follow this sprite
@@ -267,6 +285,12 @@
     graphicsSignals,
     flashTrigger
   } = sprite;
+
+  const renderedGraphics = computed(() => {
+    const eventComponent = resolvedEventComponents()[0];
+    if (eventComponent && !eventComponent.renderGraphic) return [];
+    return graphicsSignals();
+  });
 
   /**
    * Flash configuration signals for dynamic options
@@ -734,6 +758,10 @@
   const graphicBounds = computed(() => {
     const box = hitbox();
     const fallback = hitboxBounds();
+    const customEventComponent = resolvedEventComponents()[0];
+    if (customEventComponent && !customEventComponent.renderGraphic) {
+      return fallback;
+    }
     const dimensions = imageDimensions();
     const graphics = graphicsSignals();
     let bounds = null;
