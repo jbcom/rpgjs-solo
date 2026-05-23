@@ -176,6 +176,25 @@ export function provideClientModules(modules: RpgClientModule[]): FactoryProvide
           },
         };
       }
+      if (module.interactions) {
+        const interactions = module.interactions;
+        module.interactions = {
+          ...interactions,
+          load: (engine: RpgClientEngine) => {
+            if (typeof interactions === "function") {
+              interactions(engine);
+              return;
+            }
+            interactions.load?.(engine);
+            interactions.setup?.(engine);
+            if (Array.isArray(interactions.use)) {
+              interactions.use.forEach(([matcher, behavior]) => {
+                engine.interactions.use(matcher, behavior);
+              });
+            }
+          },
+        };
+      }
       if (module.transitions) {
         const transitions = [...module.transitions];
         module.transitions = {

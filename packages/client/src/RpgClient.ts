@@ -9,6 +9,10 @@ import type {
     RenderedProjectileProps,
 } from './Game/ProjectileManager'
 import type { ClientVisualMap } from './Game/ClientVisuals'
+import type {
+    RpgInteractionBehavior,
+    RpgInteractionMatcher,
+} from './services/interactions'
 
 type RpgClass<T = any> = new (...args: any[]) => T
 type RpgComponent = RpgClientObject
@@ -796,4 +800,19 @@ export interface RpgClient {
      * compact spawn/impact/destroy events and the client predicts x/y locally.
      */
     projectiles?: RpgProjectileHooks
+
+    /**
+     * Client-only pointer interactions attached to sprites.
+     *
+     * Use this for hover popovers, selection, drag previews, cursor changes, and
+     * explicit mouse-driven gameplay actions. Pointer feedback stays local unless
+     * the behavior calls `ctx.action(...)`.
+     */
+    interactions?:
+        | ((engine: RpgClientEngine) => void)
+        | {
+            setup?: (engine: RpgClientEngine) => void
+            load?: (engine: RpgClientEngine) => void
+            use?: Array<[RpgInteractionMatcher, RpgInteractionBehavior | ComponentFunction]>
+        }
 }

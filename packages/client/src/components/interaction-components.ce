@@ -1,0 +1,23 @@
+<Container>
+  @for (entry of renderedComponents) {
+    <Container dependencies={entry.dependencies}>
+      <entry.component ...entry.props />
+    </Container>
+  }
+</Container>
+
+<script>
+  import { computed } from "canvasengine";
+  import { RpgClientEngine } from "../RpgClientEngine";
+  import { inject } from "../core/inject";
+
+  const { object, bounds, hitboxBounds, graphicBounds } = defineProps();
+  const client = inject(RpgClientEngine);
+  const sprite = object();
+
+  const renderedComponents = computed(() => client.interactions.getRenderedComponents(sprite, {
+    bounds: typeof bounds === "function" ? bounds() : undefined,
+    hitbox: typeof hitboxBounds === "function" ? hitboxBounds() : undefined,
+    graphic: typeof graphicBounds === "function" ? graphicBounds() : undefined,
+  }));
+</script>

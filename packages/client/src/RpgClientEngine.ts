@@ -35,6 +35,7 @@ import { ProjectileManager, type ClientProjectileImpact, type ClientProjectileSp
 import { ClientVisualRegistry, type ClientVisualHandler, type ClientVisualMap, type ClientVisualPacket } from "./Game/ClientVisuals";
 import { normalizeActionInput } from "./services/actionInput";
 import { createClientPointerContext, type ClientPointerContext } from "./services/pointerContext";
+import { RpgClientInteractions } from "./services/interactions";
 import { normalizeRoomMapId } from "./utils/mapId";
 import { EventComponentResolverRegistry, type EventComponentResolver } from "./Game/EventComponentResolver";
 
@@ -78,6 +79,7 @@ export class RpgClientEngine<T = any> {
   clientVisuals = new ClientVisualRegistry();
   projectiles: ProjectileManager;
   pointer: ClientPointerContext = createClientPointerContext();
+  interactions: RpgClientInteractions = new RpgClientInteractions(this);
   private spritesheetResolver?: (id: string | number) => any | Promise<any>;
   private soundResolver?: (id: string) => any | Promise<any>;
   particleSettings: {
@@ -135,6 +137,8 @@ export class RpgClientEngine<T = any> {
   private tickSubscriptions: any[] = [];
   private resizeHandler?: () => void;
   private pointerMoveHandler?: (event: PointerEvent) => void;
+  private pointerUpHandler?: (event: PointerEvent) => void;
+  private pointerCancelHandler?: (event: PointerEvent) => void;
   private pointerCanvas?: HTMLCanvasElement;
   private pendingSyncPackets: any[] = [];
   private notificationManager: NotificationManager = new NotificationManager();
@@ -324,7 +328,7 @@ export class RpgClientEngine<T = any> {
     }
 
     this.pointerCanvas = canvas;
-    this.pointerMoveHandler = (event: PointerEvent) => {
+    const updatePointer = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
       const screen = {
         x: event.clientX - rect.left,
@@ -344,8 +348,24 @@ export class RpgClientEngine<T = any> {
       this.pointer.update(screen, world);
     };
 
+    this.pointerMoveHandler = (event: PointerEvent) => {
+      updatePointer(event);
+      this.interactions.handlePointerMove(event);
+    };
+    this.pointerUpHandler = (event: PointerEvent) => {
+      updatePointer(event);
+      this.interactions.handlePointerUp(event);
+    };
+    this.pointerCancelHandler = (event: PointerEvent) => {
+      updatePointer(event);
+      this.interactions.cancelDrag(event);
+    };
+
     canvas.addEventListener("pointermove", this.pointerMoveHandler);
     canvas.addEventListener("pointerdown", this.pointerMoveHandler);
+    canvas.addEventListener("pointerup", this.pointerUpHandler);
+    canvas.addEventListener("pointercancel", this.pointerCancelHandler);
+    canvas.addEventListener("pointerleave", this.pointerCancelHandler);
   }
 
   private findViewportInstance(): any {
@@ -2178,7 +2198,16 @@ export class RpgClientEngine<T = any> {
       if (this.pointerMoveHandler && this.pointerCanvas) {
         this.pointerCanvas.removeEventListener('pointermove', this.pointerMoveHandler);
         this.pointerCanvas.removeEventListener('pointerdown', this.pointerMoveHandler);
+        if (this.pointerUpHandler) {
+          this.pointerCanvas.removeEventListener('pointerup', this.pointerUpHandler);
+        }
+        if (this.pointerCancelHandler) {
+          this.pointerCanvas.removeEventListener('pointercancel', this.pointerCancelHandler);
+          this.pointerCanvas.removeEventListener('pointerleave', this.pointerCancelHandler);
+        }
         this.pointerMoveHandler = undefined;
+        this.pointerUpHandler = undefined;
+        this.pointerCancelHandler = undefined;
         this.pointerCanvas = undefined;
       }
 

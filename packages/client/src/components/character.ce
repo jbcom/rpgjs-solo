@@ -1,4 +1,19 @@
-<Container x={smoothX} y={smoothY} zIndex={z} viewportFollow={shouldFollowCamera} controls onBeforeDestroy  visible>
+<Container
+  x={smoothX}
+  y={smoothY}
+  zIndex={z}
+  viewportFollow={shouldFollowCamera}
+  controls
+  onBeforeDestroy
+  visible
+  cursor={interactionCursor}
+  pointerover={interactionPointerOver}
+  pointerout={interactionPointerOut}
+  pointerdown={interactionPointerDown}
+  pointerup={interactionPointerUp}
+  pointermove={interactionPointerMove}
+  click={interactionClick}
+>
   @for (compConfig of normalizedComponentsBehind) {
     <Container>
       <compConfig.component object={sprite} ...compConfig.props />
@@ -34,6 +49,12 @@
       <compConfig.component object={sprite} ...compConfig.props />
     </Container>
   }
+  <InteractionComponents
+    object={sprite}
+    bounds={graphicBounds}
+    hitboxBounds={hitboxBounds}
+    graphicBounds={graphicBounds}
+  />
   @for (attachedGui of attachedGuis) {
     @if (shouldDisplayAttachedGui) {
       <Container>
@@ -60,6 +81,7 @@
   import { normalizeEventComponent } from "../Game/EventComponentResolver";
   import Hit from "./effects/hit.ce";
   import PlayerComponents from "./player-components.ce";
+  import InteractionComponents from "./interaction-components.ce";
   import { RpgGui } from "../Gui/Gui";
   import { getCanMoveValue } from "../utils/readPropValue";
   import {
@@ -823,6 +845,31 @@
       centerY: bounds.top + height / 2
     };
   });
+
+  const interactionBounds = () => ({
+    bounds: graphicBounds(),
+    hitbox: hitboxBounds(),
+    graphic: graphicBounds()
+  });
+
+  const interactionCursor = computed(() =>
+    client.interactions.cursorFor(sprite, interactionBounds())
+  );
+
+  const handleInteraction = (type) => (event) => {
+    client.pointer.updateFromEvent(event);
+    client.interactions.handle(sprite, type, {
+      event,
+      bounds: interactionBounds()
+    });
+  };
+
+  const interactionPointerOver = handleInteraction('pointerover');
+  const interactionPointerOut = handleInteraction('pointerout');
+  const interactionPointerDown = handleInteraction('pointerdown');
+  const interactionPointerUp = handleInteraction('pointerup');
+  const interactionPointerMove = handleInteraction('pointermove');
+  const interactionClick = handleInteraction('click');
 
   // Combine animation change detection with movement state from smoothX/smoothY
   const movementAnimations = ['walk', 'stand'];
