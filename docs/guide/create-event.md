@@ -16,6 +16,7 @@ import { RpgPlayer, type EventDefinition } from "@rpgjs/server";
 
 export function ChestEvent(): EventDefinition {
   return {
+    mass: 100,
     onInit() {
       this.setGraphic("chest-closed");
     },
@@ -64,6 +65,12 @@ export default defineModule<RpgServer>({
 
 `EventDefinition` only describes the event behavior. Map placement fields such as `id`, `x`, and `y` belong to the outer wrapper in `maps[].events`.
 Inside object-based hooks, `this` is typed as `RpgEvent`, so methods like `this.setGraphic()` are inferred correctly by TypeScript.
+
+Use `mass` when an event participates in physical collision response. Higher values make the event harder to push; `0` or `Infinity` makes it immovable. You can also change it at runtime:
+
+```ts
+this.setMass(20);
+```
 
 When using Tiled, you can omit `x` and `y` and place the event with a point object.
 Set the point name to the event name, for example `chest-1`, and RPGJS will use

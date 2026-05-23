@@ -94,6 +94,41 @@ describe('Entity', () => {
     expect(entity.isDynamic()).toBe(true);
   });
 
+  it('should update mass and inverse mass together', () => {
+    const entity = new Entity({ mass: 1 });
+    entity.setMass(4);
+
+    expect(entity.mass).toBe(4);
+    expect(entity.invMass).toBe(0.25);
+    expect(entity.isStatic()).toBe(false);
+  });
+
+  it('should make entity static when setMass receives 0 or Infinity', () => {
+    const entity = new Entity({ mass: 1 });
+
+    entity.setMass(0);
+    expect(entity.mass).toBe(0);
+    expect(entity.invMass).toBe(0);
+    expect(entity.isStatic()).toBe(true);
+
+    entity.setMass(2);
+    expect(entity.mass).toBe(2);
+    expect(entity.invMass).toBe(0.5);
+    expect(entity.isStatic()).toBe(false);
+
+    entity.setMass(Infinity);
+    expect(entity.mass).toBe(Infinity);
+    expect(entity.invMass).toBe(0);
+    expect(entity.isStatic()).toBe(true);
+  });
+
+  it('should reject invalid mass values', () => {
+    const entity = new Entity({ mass: 1 });
+
+    expect(() => entity.setMass(-1)).toThrow('setMass: mass must be a non-negative number');
+    expect(() => entity.setMass(Number.NaN)).toThrow('setMass: mass must be a non-negative number');
+  });
+
   describe('onMovementChange', () => {
     it('should fire movement change event with intensity when entity starts moving', () => {
       const entity = new Entity({ mass: 1 });
@@ -197,4 +232,3 @@ describe('Entity', () => {
     });
   });
 });
-

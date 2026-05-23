@@ -159,6 +159,8 @@ export type EventDefinition = EventHooks & {
   name?: string;
   /** Shared or scenario event mode */
   mode?: EventMode | "shared" | "scenario";
+  /** Physical mass of the event. `0` or `Infinity` makes it immovable. */
+  mass?: number;
   /** Allow custom event metadata while keeping placement fields typed separately */
   [key: string]: unknown;
   /** Disallow placement fields on the event definition itself */
@@ -473,6 +475,28 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       ?? eventObj.event?.scenarioOwnerId
       ?? eventObj.event?._scenarioOwnerId;
     return typeof ownerId === "string" && ownerId.length > 0 ? ownerId : undefined;
+  }
+
+  private resolveEventMass(eventObj: any): number | undefined {
+    const eventDef = eventObj?.event ?? eventObj;
+
+    const readMass = (value: unknown): number | undefined => (
+      typeof value === "number" && !Number.isNaN(value) && value >= 0
+        ? value
+        : undefined
+    );
+
+    const objectMass = readMass(eventDef?.mass);
+    if (objectMass !== undefined) {
+      return objectMass;
+    }
+
+    if (typeof eventDef === "function") {
+      return readMass((eventDef as any).mass)
+        ?? readMass((eventDef as any).prototype?._eventDataMass);
+    }
+
+    return undefined;
   }
 
   private normalizeEventObject(eventObj: EventPosOption | any): EventPosOption {
@@ -2013,6 +2037,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     const event = eventObj.event;
     const x = typeof eventObj.x === "number" ? eventObj.x : 0;
     const y = typeof eventObj.y === "number" ? eventObj.y : 0;
+    const mass = this.resolveEventMass(eventObj);
 
     const requestedMode = options.mode ?? this.resolveEventMode(eventObj);
     const mode = this.normalizeEventMode(requestedMode);
@@ -2037,7 +2062,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     // Check if event is a constructor function (class)
     if (typeof event === 'function') {
       eventInstance = new event();
-      if (event.prototype.name) eventInstance.name = event.prototype.name;
+      const eventName = (event as any).prototype?._name ?? (event as any)._name;
+      if (typeof eventName === "string" && eventName.length > 0) {
+        eventInstance.name = eventName;
+      }
     }
     // Handle event as an object with hooks
     else {
@@ -2073,6 +2101,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
 
     eventInstance.id = id;
+    eventInstance.setMass(mass ?? 100);
     (eventInstance as any).mode = effectiveMode;
     if (effectiveMode === EventMode.Scenario && scenarioOwnerId) {
       (eventInstance as any)._scenarioOwnerId = scenarioOwnerId;

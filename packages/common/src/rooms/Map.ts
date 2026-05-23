@@ -379,7 +379,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       if (type === "add") {
         event.id = key;
         this.createCharacterHitbox(event, "npc", {
-          mass: 100,
+          mass: this.resolveCharacterMass(event, 100),
         });
       } else if (type === "remove") {
         // Clean up movement event subscriptions
@@ -396,7 +396,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         }
         if (!this.getBody(key)) {
           this.createCharacterHitbox(event, "npc", {
-            mass: 100,
+            mass: this.resolveCharacterMass(event, 100),
           });
           return;
         }
@@ -407,7 +407,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
           if (!_event) continue;
           _event.id = _event.id ?? id;
           this.createCharacterHitbox(_event, "npc", {
-            mass: 100,
+            mass: this.resolveCharacterMass(_event, 100),
           });
         }
       }
@@ -429,7 +429,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       if (!event) continue;
       event.id = event.id ?? id;
       this.createCharacterHitbox(event, "npc", {
-        mass: 100,
+        mass: this.resolveCharacterMass(event, 100),
       });
     }
 
@@ -706,6 +706,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const height = hitbox?.h ?? 32;
     const topLeftX = this.resolveNumeric(owner.x);
     const topLeftY = this.resolveNumeric(owner.y);
+    entity.setMass(this.resolveCharacterMass(owner, entity.mass));
     this.updateHitbox(owner.id, topLeftX, topLeftY, width, height);
     this.setCharacterCollisionEnabled(owner.id, !this.shouldDisableCharacterCollisions(owner));
   }
@@ -722,6 +723,15 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       return source;
     }
     return fallback;
+  }
+
+  private resolveCharacterMass(owner: any, fallback = 1): number {
+    const mass = typeof owner?.mass === "function"
+      ? owner.mass()
+      : owner?.mass;
+    return typeof mass === "number" && !Number.isNaN(mass) && mass >= 0
+      ? mass
+      : fallback;
   }
 
   private bindCharacterSignalSync(entity: Entity, owner: any): void {

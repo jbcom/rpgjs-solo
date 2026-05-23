@@ -160,6 +160,14 @@ export class RpgCommonPlayer {
   // Direction and animation locking (server-side only, not synced)
   private _directionFixed = signal(false);
   private _animationFixed = signal(false);
+  protected _mass = signal(1);
+
+  /**
+   * Physical mass used by the server-side physics body.
+   */
+  get mass(): number {
+    return this._mass();
+  }
 
   /**
    * Get whether direction changes are locked

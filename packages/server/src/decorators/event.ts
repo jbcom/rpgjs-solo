@@ -27,6 +27,8 @@ export interface EventOptions {
 
     width?: number,
     height?: number,
+    /** Physical mass of the event. `0` or `Infinity` makes it immovable. */
+    mass?: number,
 
     /** 
      * The hitbox of the event. By default, this is the size of the tile of the map
@@ -54,6 +56,8 @@ export function EventData(options: EventOptions) {
         target.width = options.width
         target.height = options.height
         target.hitbox = options.hitbox
+        target.mass = options.mass
+        target.prototype._eventDataMass = options.mass
         target._name = options.name
         target.prototype._name = options.name
         target.prototype.mode = target.mode

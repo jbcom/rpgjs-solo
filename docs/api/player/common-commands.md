@@ -35,6 +35,7 @@ Core server-side player commands defined on the main Player class.
 - [setGraphicAnimation](#setgraphicanimation)
 - [setGraphicAnimation](#setgraphicanimation)
 - [setHitbox](#sethitbox)
+- [setMass](#setmass)
 - [setSizes](#setsizes)
 - [setSync](#setsync)
 - [shapes](#shapes)
@@ -832,6 +833,35 @@ player.setHitbox(20, 20);
 
 // Set a larger hitbox for easier collision detection
 player.setHitbox(40, 40);
+```
+
+## setMass
+
+Set the physical mass for this player or event.
+
+Mass is used by the server-side physics body for collision response. Higher
+values make the body harder to push. A mass of `0` or `Infinity` makes the body
+immovable.
+
+- Source: `packages/server/src/Player/Player.ts`
+- Kind: `method`
+- Defined in: `RpgPlayer`
+
+### Signature
+
+```ts
+setMass(mass: number): void
+```
+
+### Parameters
+
+- `mass`: `number`
+
+### Examples
+
+```ts
+event.setMass(20);
+event.setMass(Infinity);
 ```
 
 ## setSizes

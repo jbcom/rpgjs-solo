@@ -1762,6 +1762,30 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   }
 
   /**
+   * Set the physical mass for this player or event.
+   *
+   * A mass of `0` or `Infinity` makes the physics body immovable.
+   *
+   * @param mass - New mass value
+   */
+  setMass(mass: number): void {
+    if (typeof mass !== 'number' || Number.isNaN(mass) || mass < 0) {
+      throw new Error('setMass: mass must be a non-negative number');
+    }
+
+    this._mass.set(mass);
+
+    const map = this.getCurrentMap() as any;
+    const body = map?.getBody?.(this.id);
+    if (!body) {
+      return;
+    }
+
+    body.setMass(mass);
+    map?.physic?.updateEntity?.(body);
+  }
+
+  /**
    * Set the sync schema for the map
    * @param schema - The schema to set
    */

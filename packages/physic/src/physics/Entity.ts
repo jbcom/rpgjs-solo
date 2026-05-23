@@ -708,6 +708,31 @@ export class Entity {
   }
 
   /**
+   * Sets the entity mass and keeps the cached inverse mass in sync.
+   *
+   * A mass of `0` or `Infinity` makes the entity immovable/static.
+   *
+   * @param mass - New mass value
+   * @returns This entity for chaining
+   */
+  public setMass(mass: number): Entity {
+    if (typeof mass !== 'number' || Number.isNaN(mass) || mass < 0) {
+      throw new Error('setMass: mass must be a non-negative number');
+    }
+
+    this.mass = mass;
+    this.invMass = mass > 0 && Number.isFinite(mass) ? 1 / mass : 0;
+
+    if (this.invMass === 0) {
+      this.freeze();
+    } else if ((this.state & EntityState.Static) !== 0) {
+      this.unfreeze();
+    }
+
+    return this;
+  }
+
+  /**
    * Applies a force at a specific point (creates torque)
    * 
    * @param force - Force vector to apply
@@ -1307,5 +1332,4 @@ export interface EntityTileEvent {
 
 export type EntityTileHandler = (event: EntityTileEvent) => void;
 export type EntityCanEnterTileHandler = (event: EntityTileEvent) => boolean;
-
 
