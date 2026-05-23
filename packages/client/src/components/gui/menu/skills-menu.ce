@@ -1,6 +1,6 @@
 <DOMContainer width="100%" height="100%">
     <div class="rpg-ui-menu-panel rpg-ui-panel">
-        <div class="rpg-ui-menu-panel-header">Skills</div>
+        <div class="rpg-ui-menu-panel-header">{t("rpg.menu.skills")}</div>
         <div class="rpg-ui-menu-panel-body rpg-ui-menu-panel-body-stacked">
             <div class="rpg-ui-menu-panel-details rpg-ui-panel">
                 @if (currentSkill) {
@@ -38,6 +38,7 @@
     import { RpgClientEngine } from "../../../RpgClientEngine";
 
     const engine = inject(RpgClientEngine);
+    const { t } = engine.i18n();
     const keyboardControls = engine.globalConfig.keyboardControls;
 
     const selectedSkill = signal(0);

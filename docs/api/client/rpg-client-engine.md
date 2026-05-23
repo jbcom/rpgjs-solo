@@ -708,15 +708,20 @@ The component receives:
 - `pointer`: the client pointer helper
 - `client`: the current `RpgClientEngine`
 
+In CanvasEngine components, values returned by `defineProps()` are prop accessors.
+Read the sprite with `sprite()` or `target()` before accessing its fields.
+Component bounds are local to the sprite, so `bounds()` can be used directly to
+draw overlays attached to that sprite.
+
 Example:
 
 ```html
 <!-- GuardPopover.ce -->
 <Container>
-  @if (state.hovered) {
-    <DOMContainer x={bounds.centerX} y={bounds.top - 32} zIndex={10000}>
+  @if (state().hovered) {
+    <DOMContainer x={bounds().centerX} y={bounds().top - 32} zIndex={10000}>
       <div class="guard-popover">
-        Parler a {target.name}
+        Parler a {target().name}
       </div>
     </DOMContainer>
   }
@@ -739,11 +744,11 @@ import { selectable } from '@rpgjs/client'
 engine.interactions.use('Chest', selectable())
 ```
 
-The overlay component can read `state.selected`:
+The overlay component can read `state().selected`:
 
 ```html
 <Container>
-  @if (state.selected) {
+  @if (state().selected) {
     <Graphics draw={drawRing} />
   }
 </Container>
@@ -752,7 +757,8 @@ The overlay component can read `state.selected`:
   const { state, bounds } = defineProps()
 
   const drawRing = (g) => {
-    g.ellipse(bounds.centerX, bounds.bottom - 4, bounds.width / 2, 6)
+    const box = bounds()
+    g.ellipse(box.centerX, box.bottom - 4, box.width / 2, 6)
       .stroke({ color: 0xffd166, width: 2 })
   }
 </script>
@@ -782,6 +788,8 @@ action. The client-sent `eventId` should be treated as intent, not authority.
 
 Use `hitTest()` to choose the clickable or draggable area. This is useful when a
 sprite graphic is larger than its gameplay body.
+Inside handlers and `hitTest()`, `ctx.bounds()` returns world-space bounds so it
+can be compared directly with `ctx.pointer.world()`.
 
 ```ts
 engine.interactions.use('Tree', {
@@ -933,7 +941,7 @@ The overlay component can use any CanvasEngine primitive, including
 ```html
 <!-- CrateGhost.ce -->
 <Container>
-  @if (position) {
+  @if (position()) {
     <Graphics draw={drawPreview} zIndex={10000} />
   }
 </Container>
@@ -942,12 +950,15 @@ The overlay component can use any CanvasEngine primitive, including
   const { position, tile } = defineProps()
 
   const drawPreview = (g) => {
-    if (tile) {
-      g.rect(tile.worldX, tile.worldY, tile.width, tile.height)
+    const currentTile = tile()
+    const currentPosition = position()
+
+    if (currentTile) {
+      g.rect(currentTile.worldX, currentTile.worldY, currentTile.width, currentTile.height)
         .stroke({ color: 0x66ff99, width: 2 })
     }
-    if (position) {
-      g.circle(position.x, position.y, 6)
+    if (currentPosition) {
+      g.circle(currentPosition.x, currentPosition.y, 6)
         .fill({ color: 0xffffff, alpha: 0.6 })
     }
   }

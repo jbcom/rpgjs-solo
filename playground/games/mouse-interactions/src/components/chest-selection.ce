@@ -1,0 +1,20 @@
+<Container>
+  @if (state().hovered || state().selected) {
+    <Graphics draw={drawRing} zIndex={1000} />
+  }
+  @if (state().selected) {
+    <Text x={-12} y={-24} text="SELECTED" color="#7c2d12" size={11} fontFamily="Arial" />
+  }
+</Container>
+
+<script>
+  const { state, bounds } = defineProps();
+
+  const drawRing = (g) => {
+    const currentState = state();
+    const box = bounds();
+    const color = currentState.selected ? 0xf59e0b : 0x64748b;
+    g.ellipse(box.centerX, box.bottom - 2, Math.max(18, box.width / 2 + 8), 8)
+      .stroke({ color, width: currentState.selected ? 3 : 2 });
+  };
+</script>

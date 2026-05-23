@@ -1,11 +1,11 @@
 <DOMContainer width="100%" height="100%" controls={controls}>
     <div class="rpg-ui-menu-panel rpg-ui-panel">
-        <div class="rpg-ui-menu-panel-header">Options</div>
+        <div class="rpg-ui-menu-panel-header">{t("rpg.menu.options")}</div>
         <div class="rpg-ui-menu-panel-body">
             <div class="rpg-ui-menu-panel-details">
-                <div class="rpg-ui-menu-panel-details-title">Options</div>
+                <div class="rpg-ui-menu-panel-details-title">{t("rpg.menu.options")}</div>
                 <div class="rpg-ui-menu-panel-details-desc">
-                    Configure your preferences here.
+                    {t("rpg.menu.options-help")}
                 </div>
             </div>
         </div>
@@ -18,6 +18,7 @@
     import { RpgClientEngine } from "../../../RpgClientEngine";
 
     const engine = inject(RpgClientEngine);
+    const { t } = engine.i18n();
     const keyboardControls = engine.globalConfig.keyboardControls;
     const { onBack } = defineProps();
 

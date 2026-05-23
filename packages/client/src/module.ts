@@ -1,4 +1,4 @@
-import { findModules, provideModules } from "@rpgjs/common";
+import { findModules, provideModules, registerI18nMessages } from "@rpgjs/common";
 import { FactoryProvider } from "@signe/di";
 import { RpgClientEngine } from "./RpgClientEngine";
 import { RpgClient } from "./RpgClient";
@@ -66,6 +66,9 @@ export function provideClientModules(modules: RpgClientModule[]): FactoryProvide
       }
       if ('client' in module) {
         module = module.client as any;
+      }
+      if (module.i18n) {
+        registerI18nMessages(context, module.i18n, "client-module", 10);
       }
       if (module.spritesheets) {
         const spritesheets = [...module.spritesheets];

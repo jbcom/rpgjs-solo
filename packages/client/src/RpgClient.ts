@@ -3,7 +3,7 @@ import { RpgClientEngine } from './RpgClientEngine'
 import { Loader, Container } from 'pixi.js'
 import { RpgClientObject } from './Game/Object'
 import type { RpgClientEvent } from './Game/Event'
-import { type MapPhysicsEntityContext, type MapPhysicsInitContext, type RpgActionName } from '@rpgjs/common'
+import { type I18nMessages, type MapPhysicsEntityContext, type MapPhysicsInitContext, type RpgActionName } from '@rpgjs/common'
 import type {
     ClientProjectileSpawn,
     RenderedProjectileProps,
@@ -367,6 +367,14 @@ export interface RpgProjectileHooks {
 }
 
 export interface RpgClient {
+    /**
+     * Default translations owned by this client module.
+     *
+     * Game-level translations provided with `provideI18n()` override module
+     * translations when they share the same locale and key.
+     */
+    i18n?: I18nMessages
+
     /**
      * Add hooks to the player or engine. All modules can listen to the hook
      * 

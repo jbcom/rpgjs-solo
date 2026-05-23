@@ -79,6 +79,7 @@
               "guide/create-database",
               "guide/items",
               "guide/save-load",
+              "guide/i18n",
               "guide/synchronization",
               "guide/battle-ai",
               "guide/create-sounds",

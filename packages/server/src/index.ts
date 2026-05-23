@@ -13,6 +13,7 @@ export * from "./Gui";
 export * from "./services/save";
 export * from "./storage";
 export * from "./projectiles";
+export * from "./i18n";
 export { AreaShape, RpgShape, RpgModule, MAXHP, MAXSP, ATK, PDEF, SDEF, STR, AGI, INT, DEX } from "@rpgjs/common";
 export type {
   AreaShapeCircleOptions,

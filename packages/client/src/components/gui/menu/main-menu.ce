@@ -2,7 +2,7 @@
     <div class="rpg-ui-main-menu rpg-anim-fade-in">
         <div class="rpg-ui-main-menu-layout">
             <div class="rpg-ui-main-menu-left rpg-ui-menu rpg-ui-panel">
-                <div class="rpg-ui-menu-header">Menu</div>
+                <div class="rpg-ui-menu-header">{t("rpg.menu.title")}</div>
                 <div class="rpg-ui-main-menu-list">
                     @for ((entry,index) of menuEntries()) {
                         <div
@@ -18,14 +18,14 @@
             <div class="rpg-ui-main-menu-right">
                 @if (view() === "menu") {
                     <div class="rpg-ui-panel">
-                        <div class="rpg-ui-main-menu-section-title">Status</div>
+                        <div class="rpg-ui-main-menu-section-title">{t("rpg.menu.status")}</div>
                         <div class="rpg-ui-main-menu-status-card">
                             <div class="rpg-ui-main-menu-status-block">
-                                <div class="rpg-ui-main-menu-status-label">Level</div>
+                                <div class="rpg-ui-main-menu-status-label">{t("rpg.menu.level")}</div>
                                 <div class="rpg-ui-main-menu-status-value">{level()}</div>
                             </div>
                             <div class="rpg-ui-main-menu-status-block">
-                                <div class="rpg-ui-main-menu-status-label">Gold</div>
+                                <div class="rpg-ui-main-menu-status-label">{t("rpg.menu.gold")}</div>
                                 <div class="rpg-ui-main-menu-status-value">{gold()}</div>
                             </div>
                             <div class="rpg-ui-main-menu-status-block">
@@ -47,7 +47,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="rpg-ui-main-menu-section-title">Parameters</div>
+                        <div class="rpg-ui-main-menu-section-title">{t("rpg.menu.parameters")}</div>
                         <div class="rpg-ui-main-menu-params">
                             @for ((param,index) of paramsList) {
                                 <div class="rpg-ui-main-menu-param">
@@ -104,6 +104,7 @@
     import { getKeyboardControlBind } from "../../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
+    const { t } = engine.i18n();
     const currentPlayer = engine.scene.currentPlayer;
     const keyboardControls = engine.globalConfig.keyboardControls;
 
@@ -111,12 +112,12 @@
     const { menus, items, skills, equips, saveLoad } = data();
 
     const defaultMenus = [
-        { id: "items", label: "Items" },
-        { id: "skills", label: "Skills" },
-        { id: "equip", label: "Equip" },
-        { id: "options", label: "Options" },
-        { id: "save", label: "Save" },
-        { id: "exit", label: "Exit" }
+        { id: "items", label: t("rpg.menu.items") },
+        { id: "skills", label: t("rpg.menu.skills") },
+        { id: "equip", label: t("rpg.menu.equip") },
+        { id: "options", label: t("rpg.menu.options") },
+        { id: "save", label: t("rpg.menu.save") },
+        { id: "exit", label: t("rpg.menu.exit") }
     ];
 
     const menuEntries = computed(() => {

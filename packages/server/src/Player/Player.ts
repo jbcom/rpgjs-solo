@@ -9,6 +9,8 @@ import {
   AttachShapeOptions,
   RpgShape,
   ShapePositioning,
+  getOrCreateI18nService,
+  type I18nParams,
 } from "@rpgjs/common";
 import { Entity, Vector2 } from "@rpgjs/physic";
 import { IComponentManager, WithComponentManager } from "./ComponentManager";
@@ -104,6 +106,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   touchSide: boolean = false; // Protection against map change loops
   private _clientListeners = new Map<string, Set<(data: any) => void | Promise<void>>>();
   private _projectiles?: RpgPlayerProjectiles;
+  private locale?: string;
 
   /**
    * Computed signal for world X position
@@ -308,6 +311,25 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       this._projectiles = new RpgPlayerProjectiles(this);
     }
     return this._projectiles;
+  }
+
+  setLocale(locale: string) {
+    this.locale = locale;
+  }
+
+  getLocale(): string {
+    return this.locale || getOrCreateI18nService(this.context).defaultLocale;
+  }
+
+  t(key: string, params?: I18nParams): string {
+    return getOrCreateI18nService(this.context).t(key, params, this.getLocale());
+  }
+
+  i18n() {
+    return {
+      locale: this.getLocale(),
+      t: (key: string, params?: I18nParams) => this.t(key, params),
+    };
   }
 
   setMap(map: RpgMap) {
@@ -770,11 +792,15 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     if (expCurve) {
       snapshot.expCurve = { ...expCurve };
     }
+    snapshot.locale = this.getLocale();
     return snapshot;
   }
 
   async applySnapshot(snapshot: string | object) {
     const data = typeof snapshot === "string" ? JSON.parse(snapshot) : snapshot;
+    if (data && typeof data === "object" && typeof (data as any).locale === "string") {
+      this.setLocale((data as any).locale);
+    }
     if (data && typeof data === "object" && (data as any).name !== undefined && (data as any)._name === undefined) {
       (data as any)._name = (data as any).name;
     }

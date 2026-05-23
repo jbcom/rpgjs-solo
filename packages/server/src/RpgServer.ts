@@ -2,7 +2,7 @@ import { MapOptions } from "./decorators/map"
 import { RpgPlayer } from "./Player/Player"
 import { type RpgMap } from "./rooms/map"
 import { RpgServerEngine } from "./RpgServerEngine"
-import { WorldMapConfig, RpgShape, type MapPhysicsInitContext, type MapPhysicsEntityContext } from "@rpgjs/common"
+import { WorldMapConfig, RpgShape, type I18nMessages, type MapPhysicsInitContext, type MapPhysicsEntityContext } from "@rpgjs/common"
 import { RpgEvent } from "./Player/Player"
 import type { SkillChangePayload } from "./Player/SkillManager"
 import type {
@@ -657,6 +657,14 @@ export interface RpgProjectileHooks {
 }
 
 export interface RpgServer {
+    /**
+     * Default translations owned by this server module.
+     *
+     * Game-level translations provided with `provideI18n()` override module
+     * translations when they share the same locale and key.
+     */
+    i18n?: I18nMessages
+
     /**
      * Add hooks to the player or engine. All modules can listen to the hook
      * 

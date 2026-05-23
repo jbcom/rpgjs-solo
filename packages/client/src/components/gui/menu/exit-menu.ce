@@ -1,11 +1,11 @@
 <DOMContainer width="100%" height="100%" controls={controls}>
     <div class="rpg-ui-menu-panel rpg-ui-panel">
-        <div class="rpg-ui-menu-panel-header">Exit</div>
+        <div class="rpg-ui-menu-panel-header">{t("rpg.menu.exit")}</div>
         <div class="rpg-ui-menu-panel-body">
             <div class="rpg-ui-menu-panel-details">
-                <div class="rpg-ui-menu-panel-details-title">Leave the game?</div>
+                <div class="rpg-ui-menu-panel-details-title">{t("rpg.menu.leave-game")}</div>
                 <div class="rpg-ui-menu-panel-details-desc">
-                    Press Action to confirm or Escape to go back.
+                    {t("rpg.menu.exit-help")}
                 </div>
             </div>
         </div>
@@ -19,6 +19,7 @@
     import { getKeyboardControlBind } from "../../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
+    const { t } = engine.i18n();
     const keyboardControls = engine.globalConfig.keyboardControls;
     const { onConfirm, onBack } = defineProps();
 

@@ -88,6 +88,64 @@ describe("RpgClientInteractions", () => {
     })).toBeUndefined();
   });
 
+  test("exposes handler bounds in world coordinates", () => {
+    const client = createClient();
+    const sprite = { id: "crate-1", name: "Crate", x: () => 100, y: () => 80 };
+
+    client.pointer.update({ x: 0, y: 0 }, { x: 112, y: 92 });
+    client.interactions.use("Crate", {
+      component: () => null,
+      cursor: "grab",
+      hitTest(ctx) {
+        return ctx.bounds("hitbox").contains(ctx.pointer.world());
+      },
+    });
+
+    client.interactions.handle(sprite, "pointerover", {
+      bounds: {
+        hitbox: { left: 0, top: 0, right: 16, bottom: 16, width: 16, height: 16, centerX: 8, centerY: 8 } as any,
+      },
+    });
+
+    expect(client.interactions.getState(sprite).hovered).toBe(true);
+    expect(client.interactions.cursorFor(sprite, {
+      hitbox: { left: 0, top: 0, right: 16, bottom: 16, width: 16, height: 16, centerX: 8, centerY: 8 } as any,
+    })).toBe("grab");
+
+    const [entry] = client.interactions.getRenderedComponents(sprite, {
+      hitbox: { left: 0, top: 0, right: 16, bottom: 16, width: 16, height: 16, centerX: 8, centerY: 8 } as any,
+    });
+    expect(entry?.props.bounds.centerX).toBe(8);
+  });
+
+  test("updates hit-tested hover while moving inside an already hovered sprite", () => {
+    const client = createClient();
+    const sprite = { id: "crate-1", name: "Crate", x: () => 100, y: () => 80 };
+
+    client.interactions.use("Crate", {
+      hitTest(ctx) {
+        return ctx.bounds("hitbox").contains(ctx.pointer.world());
+      },
+    });
+
+    client.pointer.update({ x: 0, y: 0 }, { x: 140, y: 120 });
+    client.interactions.handle(sprite, "pointerover", {
+      bounds: {
+        hitbox: { left: 0, top: 0, right: 16, bottom: 16, width: 16, height: 16, centerX: 8, centerY: 8 } as any,
+      },
+    });
+    expect(client.interactions.getState(sprite).hovered).toBe(false);
+
+    client.pointer.update({ x: 0, y: 0 }, { x: 112, y: 92 });
+    client.interactions.handle(sprite, "pointermove", {
+      bounds: {
+        hitbox: { left: 0, top: 0, right: 16, bottom: 16, width: 16, height: 16, centerX: 8, centerY: 8 } as any,
+      },
+    });
+
+    expect(client.interactions.getState(sprite).hovered).toBe(true);
+  });
+
   test("runs drag lifecycle and resolves pointer tile on drop", () => {
     const client = createClient();
     const sprite = { id: "crate-1", name: "Crate" };

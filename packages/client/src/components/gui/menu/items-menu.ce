@@ -1,6 +1,6 @@
 <DOMContainer width="100%" height="100%">
     <div class="rpg-ui-menu-panel rpg-ui-panel">
-        <div class="rpg-ui-menu-panel-header">Items</div>
+        <div class="rpg-ui-menu-panel-header">{t("rpg.menu.items")}</div>
         <div class="rpg-ui-menu-panel-body rpg-ui-menu-panel-body-stacked">
             <div>
                 @if (currentItem) {
@@ -65,7 +65,7 @@
         @if (confirmOpen) {
             <div class="rpg-ui-menu-confirm">
                 <div class="rpg-ui-menu-confirm-card">
-                    <div class="rpg-ui-menu-confirm-title">Use {confirmItem()?.name}?</div>
+                    <div class="rpg-ui-menu-confirm-title">{t("rpg.menu.use")} {confirmItem()?.name}?</div>
                     <Navigation tabindex={selectedConfirm} controls={confirmControls}>
                         <div class="rpg-ui-menu-confirm-actions">
                             @for ((option,index) of confirmOptions) {
@@ -93,6 +93,7 @@
     import { getKeyboardControlBind } from "../../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
+    const { t } = engine.i18n();
     const keyboardControls = engine.globalConfig.keyboardControls;
 
     const selectedItem = signal(0);
@@ -106,9 +107,9 @@
     const items = computed(() => data().items);
 
     const tabs = [
-        { id: "item", label: "Items" },
-        { id: "weapon", label: "Weapons" },
-        { id: "armor", label: "Armor" }
+        { id: "item", label: t("rpg.menu.items") },
+        { id: "weapon", label: t("rpg.menu.weapons") },
+        { id: "armor", label: t("rpg.menu.armor") }
     ];
 
     const resolveProp = (value) => typeof value === "function" ? value() : value;
@@ -125,8 +126,8 @@
     });
 
     const confirmOptions = [
-        { id: "use", label: "Use" },
-        { id: "cancel", label: "Cancel" }
+        { id: "use", label: t("rpg.menu.use") },
+        { id: "cancel", label: t("rpg.menu.cancel") }
     ];
 
     const nav = createTabindexNavigator(selectedItem, { count: () => filteredItems().length }, "wrap");

@@ -1,4 +1,10 @@
-<DOMContainer width="100%" height="100%" zIndex={100} class="notification">
+<DOMContainer
+    width="100%"
+    height="100%"
+    zIndex={100}
+    class="notification"
+    style="pointer-events: none !important;"
+>
     <div class="rpg-ui-notifications">
         @for ((notif,index) of notifications) {
             <div

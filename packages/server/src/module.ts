@@ -1,4 +1,4 @@
-import { findModules, provideModules } from "@rpgjs/common";
+import { findModules, provideModules, registerI18nMessages } from "@rpgjs/common";
 import { FactoryProvider } from "@signe/di";
 import { RpgServerEngine } from "./RpgServerEngine";
 import { RpgMap } from "./rooms/map";
@@ -65,6 +65,9 @@ export function provideServerModules(modules: RpgServerModule[]): FactoryProvide
       }
       if ('server' in module) {
         module = module.server as any;
+      }
+      if (module.i18n) {
+        registerI18nMessages(context, module.i18n, "server-module", 10);
       }
       if (module.player?.props) {
         module = {

@@ -6,7 +6,7 @@ import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { RpgSound } from "./Sound";
 import { RpgResource } from "./Resource";
-import { Hooks, ModulesToken, Direction, normalizeLightingState, Vector2 } from "@rpgjs/common";
+import { getOrCreateI18nService, Hooks, ModulesToken, Direction, normalizeLightingState, Vector2, type I18nParams, type I18nService } from "@rpgjs/common";
 import type { EventComponentConfig } from "./RpgClient";
 import type { RpgClientEvent } from "./Game/Event";
 import { load } from "@signe/sync";
@@ -38,6 +38,7 @@ import { createClientPointerContext, type ClientPointerContext } from "./service
 import { RpgClientInteractions } from "./services/interactions";
 import { normalizeRoomMapId } from "./utils/mapId";
 import { EventComponentResolverRegistry, type EventComponentResolver } from "./Game/EventComponentResolver";
+import { RpgClientBuiltinI18n } from "./i18n";
 
 interface MovementTrajectoryPoint {
   frame: number;
@@ -142,12 +143,16 @@ export class RpgClientEngine<T = any> {
   private pointerCanvas?: HTMLCanvasElement;
   private pendingSyncPackets: any[] = [];
   private notificationManager: NotificationManager = new NotificationManager();
+  private i18nService: I18nService;
+  private locale?: string;
 
   constructor(public context) {
     this.webSocket = inject(WebSocketToken);
     this.guiService = inject(RpgGui);
     this.loadMapService = inject(LoadMapToken);
     this.hooks = inject<Hooks>(ModulesToken);
+    this.i18nService = getOrCreateI18nService(context);
+    this.i18nService.addMessages(RpgClientBuiltinI18n, "rpgjs-client", 0);
     this.projectiles = new ProjectileManager(
       this.hooks,
       (projectile) => this.predictProjectileImpact(projectile),
@@ -181,6 +186,25 @@ export class RpgClientEngine<T = any> {
 
     this.predictionEnabled = (this.globalConfig as any)?.prediction?.enabled !== false;
     this.initializePredictionController();
+  }
+
+  setLocale(locale: string) {
+    this.locale = locale;
+  }
+
+  getLocale(): string {
+    return this.locale || this.i18nService.defaultLocale;
+  }
+
+  t(key: string, params?: I18nParams): string {
+    return this.i18nService.t(key, params, this.getLocale());
+  }
+
+  i18n() {
+    return {
+      locale: this.getLocale(),
+      t: (key: string, params?: I18nParams) => this.t(key, params),
+    };
   }
 
   /**
@@ -282,6 +306,7 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-componentAnimations-load", this).subscribe();
     this.hooks.callHooks("client-clientVisuals-load", this).subscribe();
     this.hooks.callHooks("client-projectiles-load", this).subscribe();
+    this.hooks.callHooks("client-interactions-load", this).subscribe();
     this.hooks.callHooks("client-sprite-load", this).subscribe();
 
     await lastValueFrom(this.hooks.callHooks("client-engine-onStart", this));
@@ -368,12 +393,47 @@ export class RpgClientEngine<T = any> {
     canvas.addEventListener("pointerleave", this.pointerCancelHandler);
   }
 
+  updatePointerFromInteractionEvent(event: any): void {
+    const global = event?.global ?? event?.data?.global;
+
+    if (!global) {
+      this.pointer.updateFromEvent(event);
+      return;
+    }
+
+    const screen = {
+      x: Number(global.x),
+      y: Number(global.y),
+    };
+    if (!Number.isFinite(screen.x) || !Number.isFinite(screen.y)) {
+      this.pointer.updateFromEvent(event);
+      return;
+    }
+
+    const viewport = this.findViewportInstance();
+    if (viewport && typeof viewport.toWorld === "function") {
+      const point = viewport.toWorld(screen.x, screen.y);
+      this.pointer.update(screen, { x: Number(point.x), y: Number(point.y) });
+      return;
+    }
+
+    this.pointer.update(screen);
+  }
+
   private findViewportInstance(): any {
-    const children = (this.canvasApp as any)?.stage?.children ?? [];
-    return children.find((child: any) => (
-      typeof child?.toWorld === "function"
-      || child?.constructor?.name === "Viewport"
-    ));
+    const find = (node: any): any => {
+      if (!node) return undefined;
+      if (typeof node?.toWorld === "function" || node?.constructor?.name === "Viewport") {
+        return node;
+      }
+      for (const child of node.children ?? []) {
+        const viewport = find(child);
+        if (viewport) return viewport;
+      }
+      return undefined;
+    };
+
+    return find((this.canvasApp as any)?.stage);
   }
 
   private prepareSyncPayload(data: any): any {

@@ -30,7 +30,7 @@
                         <div class="rpg-shop-details rpg-shop-details-mode">
                             <div class="rpg-shop-details-header">
                             <div class="rpg-shop-details-icon">🛒</div>
-                            <h2 style="margin: 0;">Choose an action</h2>
+                            <h2 style="margin: 0;">{t("rpg.shop.choose-action")}</h2>
                         </div>
                         <div class="rpg-shop-trade">
                             <Navigation tabindex={selectedModeIndex} controls={modeControls}>
@@ -39,12 +39,12 @@
                                         class="rpg-shop-tab"
                                         class={{active: selectedModeIndex() === 0}}
                                         click={selectMode('buy')}
-                                    >Buy</div>
+                                    >{t("rpg.shop.buy")}</div>
                                     <div
                                         class="rpg-shop-tab"
                                         class={{active: selectedModeIndex() === 1}}
                                         click={selectMode('sell')}
-                                    >Sell</div>
+                                    >{t("rpg.shop.sell")}</div>
                                 </div>
                             </Navigation>
                         </div>
@@ -88,7 +88,7 @@
                                             <div class="rpg-shop-card-qty">x{{ item.quantity }}</div>
                                         }
                                         @if (item.equipped) {
-                                            <div class="rpg-shop-card-tag">Equipped</div>
+                                            <div class="rpg-shop-card-tag">{t("rpg.shop.equipped")}</div>
                                         }
                                     </div>
                                 }
@@ -109,12 +109,12 @@
                                 <h2 style="margin: 0;">{{ currentItem()?.name || "" }}</h2>
                                 <p style="color: #ffd700; font-weight: bold; margin: 8px 0;">{{ currentItem()?.price ?? 0 }} {{ goldTerm }}</p>
                                 @if (currentItem()?.quantity !== undefined) {
-                                    <div class="rpg-shop-details-qty">Qty: x{{ currentItem()?.quantity }}</div>
+                                    <div class="rpg-shop-details-qty">{t("rpg.shop.qty")}: x{{ currentItem()?.quantity }}</div>
                                 }
                             </div>
                             <div>
                                 @if (currentItem()?.equipped) {
-                                    <div class="rpg-shop-equipped">Already equipped</div>
+                                    <div class="rpg-shop-equipped">{t("rpg.shop.already-equipped")}</div>
                                 }
                             </div>
                             <div class="rpg-shop-details-desc">
@@ -137,7 +137,7 @@
                                     </div>
                                 }
                             </div>
-                            <button class="rpg-shop-btn" click={backToMode()}>Back</button>
+                            <button class="rpg-shop-btn" click={backToMode()}>{t("rpg.shop.back")}</button>
                         </div>
                     </div>
                     </div>
@@ -148,10 +148,10 @@
                             <div class="rpg-shop-modal-title">{{ actionLabel }}</div>
                             <div class="rpg-shop-modal-item">{{ currentItem()?.name || "" }}</div>
                             @if (currentItem()?.quantity !== undefined) {
-                                <div class="rpg-shop-modal-qty">Available: x{{ currentItem()?.quantity }}</div>
+                                <div class="rpg-shop-modal-qty">{t("rpg.shop.available")}: x{{ currentItem()?.quantity }}</div>
                             }
                             <div class="rpg-shop-quantity">
-                                <div class="rpg-shop-quantity-label">Quantity</div>
+                                <div class="rpg-shop-quantity-label">{t("rpg.shop.quantity")}</div>
                                 <div class="rpg-shop-quantity-controls">
                                     <button class="rpg-shop-btn" click={changeQuantity(-1)}>-</button>
                                     <div class="rpg-shop-quantity-value">{{ quantity }}</div>
@@ -159,11 +159,11 @@
                                 </div>
                             </div>
                             <div class="rpg-shop-modal-total">
-                                <span>Total</span>
+                                <span>{t("rpg.shop.total")}</span>
                                 <span>{{ totalPrice() }} {{ goldTerm }}</span>
                             </div>
                             <div class="rpg-shop-modal-actions">
-                                <button class="rpg-shop-btn rpg-shop-btn-secondary" click={closeQuantityDialog()}>Cancel</button>
+                                <button class="rpg-shop-btn rpg-shop-btn-secondary" click={closeQuantityDialog()}>{t("rpg.menu.cancel")}</button>
                                 <button class="rpg-shop-btn" click={confirmTrade()}>
                                     {{ actionLabel() }} x{{ quantity() }}
                                 </button>
@@ -183,6 +183,7 @@
     import { getKeyboardControlBind } from "../../../services/actionInput";
 
     const engine = inject(RpgClientEngine)
+    const { t } = engine.i18n()
     const currentPlayer = engine.scene.currentPlayer
     const keyboardControls = engine.globalConfig.keyboardControls
     const iconSheet = (iconId) => ({
@@ -198,11 +199,11 @@
     const selectedModeIndex = signal(0)
     const quantity = signal(1)
     const quantityDialogOpen = signal(false)
-    const defaultMessage = 'Welcome to my shop!'
+    const defaultMessage = t("rpg.shop.default-message")
     const tabs = [
-        { id: 'item', label: 'Items' },
-        { id: 'weapon', label: 'Weapons' },
-        { id: 'armor', label: 'Armor' }
+        { id: 'item', label: t("rpg.menu.items") },
+        { id: 'weapon', label: t("rpg.menu.weapons") },
+        { id: 'armor', label: t("rpg.menu.armor") }
     ]
 
     const { data, onInteraction , onFinish } = defineProps()
@@ -229,7 +230,7 @@
     })
     const currentItem = computed(() => filteredItems()[selectedItem()])
     const gold = computed(() => currentPlayer()._gold())
-    const actionLabel = computed(() => tradeMode() === 'buy' ? 'Buy' : 'Sell')
+    const actionLabel = computed(() => tradeMode() === 'buy' ? t("rpg.shop.buy") : t("rpg.shop.sell"))
     const faceSheet = (graphicId, animationName) => ({
         definition: engine.getSpriteSheet(graphicId),
         playing: animationName || "default"

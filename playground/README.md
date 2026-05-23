@@ -30,11 +30,13 @@ starts each game dev server for you:
 - Tiled Maps: `http://localhost:5183/`
 - V4 Compatibility: `http://localhost:5184/`
 - Vue GUI: `http://localhost:5185/`
+- Mouse Interactions: `http://localhost:5186/`
 
 Run a game directly when you only want one server:
 
 ```bash
 pnpm --dir playground dev:action-battle
+pnpm --dir playground dev:mouse-interactions
 pnpm --dir playground dev:projectiles
 pnpm --dir playground dev:studio
 pnpm --dir playground dev:tiled
@@ -77,6 +79,7 @@ Use a unique `port` for each game. The current reserved ports are:
 - `5183`: Tiled Maps
 - `5184`: V4 Compatibility
 - `5185`: Vue GUI
+- `5186`: Mouse Interactions
 
 The game Vite config should read the port from `playground.config.json`:
 

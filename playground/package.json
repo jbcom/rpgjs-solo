@@ -12,6 +12,8 @@
     "build:action-battle": "pnpm --dir games/action-battle build",
     "dev:projectiles": "pnpm --dir games/projectiles dev",
     "build:projectiles": "pnpm --dir games/projectiles build",
+    "dev:mouse-interactions": "pnpm --dir games/mouse-interactions dev",
+    "build:mouse-interactions": "pnpm --dir games/mouse-interactions build",
     "dev:studio": "pnpm --dir games/studio dev",
     "build:studio": "pnpm --dir games/studio build",
     "dev:tiled": "pnpm --dir games/tiled dev",

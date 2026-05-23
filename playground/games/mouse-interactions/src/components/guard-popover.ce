@@ -1,0 +1,43 @@
+<Container>
+  @if (state().hovered) {
+    <DOMContainer x={bounds().centerX - 56} y={bounds().top - 48} zIndex={10000} class="mouse-popover-wrap">
+      <div class="mouse-popover">
+        <strong>Guard</strong>
+        <span>Click to ask what is server-owned.</span>
+      </div>
+    </DOMContainer>
+  }
+</Container>
+
+<style>
+  .mouse-popover-wrap {
+    pointer-events: none;
+  }
+
+  .mouse-popover {
+    min-width: 112px;
+    padding: 8px 10px;
+    border: 1px solid rgba(15, 23, 42, 0.18);
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.94);
+    color: white;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.25;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  }
+
+  .mouse-popover strong,
+  .mouse-popover span {
+    display: block;
+  }
+
+  .mouse-popover span {
+    margin-top: 3px;
+    color: rgba(255, 255, 255, 0.75);
+  }
+</style>
+
+<script>
+  const { state, bounds } = defineProps();
+</script>

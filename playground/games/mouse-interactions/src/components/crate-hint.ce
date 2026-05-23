@@ -1,0 +1,27 @@
+<Container>
+  @if (state().hovered && !state().dragging) {
+    <DOMContainer x={bounds().centerX - 42} y={bounds().top - 36} zIndex={10000} class="crate-hint-wrap">
+      <div class="crate-hint">Drag the hitbox</div>
+    </DOMContainer>
+  }
+</Container>
+
+<style>
+  .crate-hint-wrap {
+    pointer-events: none;
+  }
+
+  .crate-hint {
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(113, 63, 18, 0.94);
+    color: #fef3c7;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+</style>
+
+<script>
+  const { state, bounds } = defineProps();
+</script>

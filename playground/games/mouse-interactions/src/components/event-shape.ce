@@ -1,0 +1,36 @@
+<Container>
+  @if (kind() === "Guard") {
+    <Circle x={17} y={13} radius={13} color="#3b82f6" />
+    <Rect x={4} y={24} width={26} height={20} color="#1d4ed8" />
+    <Rect x={9} y={30} width={16} height={8} color="#bfdbfe" />
+  }
+
+  @if (kind() === "Chest") {
+    <Rect x={0} y={8} width={38} height={22} color="#92400e" />
+    <Rect x={3} y={4} width={32} height={10} color="#b45309" />
+    <Rect x={17} y={12} width={5} height={8} color="#facc15" />
+  }
+
+  @if (kind() === "Crate") {
+    <Rect x={0} y={0} width={34} height={34} color="#a16207" />
+    <Rect x={3} y={3} width={28} height={28} color="#ca8a04" />
+    <Rect x={15} y={3} width={4} height={28} color="#854d0e" alpha={0.55} />
+    <Rect x={3} y={15} width={28} height={4} color="#854d0e" alpha={0.55} />
+  }
+
+  @if (kind() === "Tree") {
+    <Circle x={24} y={-20} radius={34} color="#15803d" />
+    <Circle x={2} y={-8} radius={24} color="#16a34a" />
+    <Circle x={46} y={-8} radius={24} color="#22c55e" />
+    <Rect x={17} y={0} width={14} height={32} color="#854d0e" />
+    <Rect x={0} y={26} width={48} height={8} color="#166534" alpha={0.2} />
+  }
+</Container>
+
+<script>
+  import { computed } from "canvasengine";
+
+  const { sprite } = defineProps();
+  const read = (value) => typeof value === "function" ? value() : value;
+  const kind = computed(() => read(sprite().name) ?? read(sprite().id) ?? "");
+</script>

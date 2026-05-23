@@ -857,7 +857,7 @@
   );
 
   const handleInteraction = (type) => (event) => {
-    client.pointer.updateFromEvent(event);
+    client.updatePointerFromInteractionEvent(event);
     client.interactions.handle(sprite, type, {
       event,
       bounds: interactionBounds()

@@ -17,14 +17,14 @@
                         <div class="rpg-ui-save-load-slot-index">{item.label}</div>
                         @if (item.slot) {
                             <div class="rpg-ui-save-load-slot-meta">
-                                <div class="rpg-ui-save-load-slot-line">Level: {item.slot.level ?? "-"}</div>
-                                <div class="rpg-ui-save-load-slot-line">Exp: {item.slot.exp ?? "-"}</div>
-                                <div class="rpg-ui-save-load-slot-line">Map: {item.slot.map ?? "-"}</div>
-                                <div class="rpg-ui-save-load-slot-line">Date: {item.slot.date ?? "-"}</div>
+                                <div class="rpg-ui-save-load-slot-line">{t("rpg.save.level")}: {item.slot.level ?? "-"}</div>
+                                <div class="rpg-ui-save-load-slot-line">{t("rpg.save.exp")}: {item.slot.exp ?? "-"}</div>
+                                <div class="rpg-ui-save-load-slot-line">{t("rpg.save.map")}: {item.slot.map ?? "-"}</div>
+                                <div class="rpg-ui-save-load-slot-line">{t("rpg.save.date")}: {item.slot.date ?? "-"}</div>
                             </div>
                         }
                         @else {
-                            <div class="rpg-ui-save-load-slot-empty">Empty Slot</div>
+                            <div class="rpg-ui-save-load-slot-empty">{t("rpg.save.empty-slot")}</div>
                         }
                     </div>
                 }
@@ -43,6 +43,7 @@
     import { getKeyboardControlBind } from "../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
+    const { t } = engine.i18n();
     const saveClient = inject(SaveClientService);
     const gui = inject(RpgGui);
     const keyboardControls = engine.globalConfig.keyboardControls;
@@ -54,10 +55,10 @@
 
     const { data, onFinish } = defineProps();
 
-    const title = computed(() => data().mode === "save" ? "Save Game" : "Load Game");
+    const title = computed(() => data().mode === "save" ? t("rpg.save.title") : t("rpg.load.title"));
     const subtitle = computed(() => data().mode === "save"
-        ? "Choose a slot to overwrite or create."
-        : "Select a slot to load your progress."
+        ? t("rpg.save.subtitle")
+        : t("rpg.load.subtitle")
     );
 
     const slotsValue = computed(() => localSlots());
@@ -67,7 +68,7 @@
             kind: "slot",
             slot,
             slotIndex: index,
-            label: `Slot ${index + 1}`,
+            label: t("rpg.save.slot", { index: index + 1 }),
             readonly: false
         }));
         if (!data().showAutoSlot) return items;
@@ -79,7 +80,7 @@
                 kind: "auto",
                 slot: autoSlot,
                 slotIndex: index,
-                label: data().autoSlotLabel || "Auto Save",
+                label: data().autoSlotLabel || t("rpg.save.auto"),
                 readonly
             },
             ...items

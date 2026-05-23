@@ -198,6 +198,35 @@ function normalizeBounds(bounds?: RpgInteractionBoundsSet): RpgInteractionBounds
   }, {});
 }
 
+function readNumber(value: any, fallback = 0): number {
+  const resolved = readValue(value);
+  const number = Number(resolved);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function offsetBounds(bounds: RpgInteractionBounds, x: number, y: number): RpgInteractionBounds {
+  return createBounds({
+    left: bounds.left + x,
+    top: bounds.top + y,
+    right: bounds.right + x,
+    bottom: bounds.bottom + y,
+    width: bounds.width,
+    height: bounds.height,
+    centerX: bounds.centerX + x,
+    centerY: bounds.centerY + y,
+  });
+}
+
+function toWorldBounds(sprite: any, bounds: RpgInteractionBoundsSet): RpgInteractionBoundsSet {
+  const x = readNumber(sprite?.x);
+  const y = readNumber(sprite?.y);
+
+  return Object.entries(bounds).reduce<RpgInteractionBoundsSet>((next, [key, value]) => {
+    if (value) next[key] = offsetBounds(value, x, y);
+    return next;
+  }, {});
+}
+
 function normalizeBehavior(behavior: RpgInteractionBehavior | any): RpgInteractionBehavior {
   if (typeof behavior === "function") {
     return { component: behavior };
@@ -274,6 +303,7 @@ export class RpgClientInteractions {
   }
 
   cursorFor(sprite: any, bounds?: RpgInteractionBoundsSet): string | undefined {
+    this.states();
     for (const registration of this.getMatches(sprite)) {
       const cursor = registration.behavior.cursor;
       if (!cursor) continue;
@@ -314,6 +344,9 @@ export class RpgClientInteractions {
       if (entries.length > 0) {
         this.patchState(sprite, { pressed: true });
       }
+    }
+    if (type === "pointermove" && matches.length > 0) {
+      this.patchState(sprite, { hovered: entries.length > 0 });
     }
     if (type === "pointerup") {
       if (matches.length > 0) {
@@ -408,7 +441,7 @@ export class RpgClientInteractions {
     registration: Pick<InteractionRegistration, "id" | "behavior">,
     input: InteractionEventInput = {},
   ): RpgInteractionContext {
-    const bounds = normalizeBounds(input.bounds);
+    const bounds = toWorldBounds(sprite, normalizeBounds(input.bounds));
 
     const ctx = {
       client: this.client,

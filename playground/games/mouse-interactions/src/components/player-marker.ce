@@ -1,0 +1,14 @@
+<Container>
+  @if (isPlayer()) {
+    <Circle x={14} y={10} radius={10} color="#0f766e" />
+    <Rect x={3} y={20} width={22} height={16} color="#14b8a6" />
+    <Rect x={9} y={25} width={10} height={5} color="#ccfbf1" />
+  }
+</Container>
+
+<script>
+  import { computed } from "canvasengine";
+
+  const { object } = defineProps();
+  const isPlayer = computed(() => object()?._type === "player");
+</script>

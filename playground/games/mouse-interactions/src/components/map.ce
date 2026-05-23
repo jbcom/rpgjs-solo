@@ -1,0 +1,91 @@
+<Container>
+  <Rect width={720} height={480} color="#f8fafc" />
+  <Rect
+    x={24}
+    y={24}
+    width={672}
+    height={432}
+    color="#edf3f8"
+    cursor="crosshair"
+    click={movePlayerToPointer}
+  />
+  <Rect x={24} y={24} width={672} height={2} color="#9fb2c3" />
+  <Rect x={24} y={454} width={672} height={2} color="#9fb2c3" />
+  <Rect x={24} y={24} width={2} height={432} color="#9fb2c3" />
+  <Rect x={694} y={24} width={2} height={432} color="#9fb2c3" />
+
+  @for (line of gridLines) {
+    <Rect x={line.x} y={24} width={1} height={432} color="#dbe5ee" alpha={0.45} />
+    <Rect x={24} y={line.y} width={672} height={1} color="#dbe5ee" alpha={0.45} />
+  }
+
+  <Text x={36} y={34} text="Mouse Interactions" color="#111827" size={18} fontFamily="Arial" />
+  <Text x={36} y={60} text="Map: click empty ground to move the player with moveTo()" color="#41516a" size={12} fontFamily="Arial" />
+  <Text x={36} y={78} text="Guard: hover + server click" color="#41516a" size={12} fontFamily="Arial" />
+  <Text x={36} y={96} text="Chest: client-only selection" color="#41516a" size={12} fontFamily="Arial" />
+  <Text x={36} y={114} text="Crate: drag preview, server move on drop" color="#41516a" size={12} fontFamily="Arial" />
+  <Text x={36} y={132} text="Tree: only the highlighted trunk hitbox reacts" color="#41516a" size={12} fontFamily="Arial" />
+
+  <EventLayerComponent />
+  @if (hasMoveTarget()) {
+    <Container x={moveTargetX()} y={moveTargetY()} zIndex={20000}>
+      <Circle radius={10} color="#2563eb" alpha={0.14} />
+      <Circle radius={4} color="#2563eb" alpha={0.7} />
+      <Rect x={-14} y={-1} width={28} height={2} color="#2563eb" alpha={0.65} />
+      <Rect x={-1} y={-14} width={2} height={28} color="#2563eb" alpha={0.65} />
+    </Container>
+  }
+</Container>
+
+<script>
+  import { computed, mount, signal } from "canvasengine";
+  import { EventLayerComponent, inject, RpgClientEngine } from "@rpgjs/client";
+
+  const gridLines = Array.from({ length: 14 }, (_, index) => ({
+    x: 56 + index * 32,
+    y: 56 + index * 32,
+  }));
+
+  const client = inject(RpgClientEngine);
+  const moveTarget = signal(null);
+  const hasMoveTarget = computed(() => moveTarget() !== null);
+  const moveTargetX = computed(() => moveTarget()?.x ?? -1000);
+  const moveTargetY = computed(() => moveTarget()?.y ?? -1000);
+  let mapContainer = null;
+  let markerTimeout;
+
+  mount((element) => {
+    mapContainer = element.componentInstance;
+  });
+
+  function getMapPointer(event) {
+    const global = event?.global ?? event?.data?.global;
+    const local =
+      mapContainer && global
+        ? mapContainer.toLocal(global)
+        : event?.getLocalPosition?.(event?.currentTarget ?? event?.target) ??
+          event?.data?.getLocalPosition?.(event?.currentTarget ?? event?.target);
+
+    if (!local || !Number.isFinite(local.x) || !Number.isFinite(local.y)) {
+      return null;
+    }
+
+    return {
+      x: Math.max(24, Math.min(696, local.x)),
+      y: Math.max(24, Math.min(456, local.y)),
+    };
+  }
+
+  function movePlayerToPointer(event) {
+    const position = getMapPointer(event);
+    if (!position) return;
+
+    moveTarget.set(position);
+    clearTimeout(markerTimeout);
+    markerTimeout = setTimeout(() => moveTarget.set(null), 1200);
+
+    client.processAction("mouse:move-player", {
+      position,
+    });
+  }
+</script>

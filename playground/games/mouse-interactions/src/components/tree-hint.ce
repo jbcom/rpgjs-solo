@@ -1,0 +1,32 @@
+<Container>
+  <Rect x={14} y={2} width={20} height={32} color="#facc15" alpha={state().hovered ? 0.32 : 0.1} />
+  <Rect x={14} y={2} width={20} height={2} color="#ca8a04" alpha={state().hovered ? 0.95 : 0.42} />
+  <Rect x={14} y={32} width={20} height={2} color="#ca8a04" alpha={state().hovered ? 0.95 : 0.42} />
+  <Rect x={14} y={2} width={2} height={32} color="#ca8a04" alpha={state().hovered ? 0.95 : 0.42} />
+  <Rect x={32} y={2} width={2} height={32} color="#ca8a04" alpha={state().hovered ? 0.95 : 0.42} />
+  @if (state().hovered) {
+    <DOMContainer x={bounds().centerX - 58} y={bounds().bottom + 8} zIndex={10000} class="tree-hint-wrap">
+      <div class="tree-hint">Trunk hitbox active</div>
+    </DOMContainer>
+  }
+</Container>
+
+<style>
+  .tree-hint-wrap {
+    pointer-events: none;
+  }
+
+  .tree-hint {
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(20, 83, 45, 0.94);
+    color: #dcfce7;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+</style>
+
+<script>
+  const { state, bounds } = defineProps();
+</script>

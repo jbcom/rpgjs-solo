@@ -31,3 +31,4 @@ export * from "./Game/ProjectileManager";
 export * from "./Game/ClientVisuals";
 export { withMobile } from "./components/gui/mobile";
 export * from "./services/AbstractSocket";
+export * from "./i18n";

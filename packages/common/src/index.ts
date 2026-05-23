@@ -15,3 +15,4 @@ export * from "./Presets";
 export * from "./weather";
 export * from "./lighting";
 export * from "./input";
+export * from "./i18n";

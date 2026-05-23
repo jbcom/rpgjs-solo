@@ -1,6 +1,6 @@
 <DOMContainer width="100%" height="100%">
     <div class="rpg-ui-menu-panel rpg-ui-panel">
-        <div class="rpg-ui-menu-panel-header">Equip</div>
+        <div class="rpg-ui-menu-panel-header">{t("rpg.menu.equip")}</div>
         <div class="rpg-ui-menu-panel-body rpg-ui-menu-panel-body-stacked">
             <div>
                 <div class="rpg-ui-menu-panel-details rpg-ui-panel">
@@ -16,7 +16,7 @@
                         </div>
                         <div>
                             <div class="rpg-ui-menu-panel-details-title">
-                                {detailsItem()?.name || currentSlot()?.label || "Equip"}
+                                {detailsItem()?.name || currentSlot()?.label || t("rpg.menu.equip")}
                             </div>
                             <div class="rpg-ui-menu-panel-details-desc">
                                 {detailsItem()?.description || ""}
@@ -93,6 +93,7 @@
     import { getKeyboardControlBind } from "../../../services/actionInput";
 
     const engine = inject(RpgClientEngine);
+    const { t } = engine.i18n();
     const keyboardControls = engine.globalConfig.keyboardControls;
     const currentPlayer = engine.scene.currentPlayer;
 
@@ -104,8 +105,8 @@
     const slots = computed(() => data().slots);
 
     const defaultSlots = [
-        { id: "weapon", label: "Weapon", types: ["weapon"] },
-        { id: "armor", label: "Armor", types: ["armor"] }
+        { id: "weapon", label: t("rpg.menu.weapons"), types: ["weapon"] },
+        { id: "armor", label: t("rpg.menu.armor"), types: ["armor"] }
     ];
     const resolveProp = (value) => typeof value === "function" ? value() : value;
     const safeEquips = computed(() => {
@@ -170,15 +171,15 @@
         const items = slotItems().map((item) => ({
             ...item,
             kind: "item",
-            tag: itemEquipped(item) ? "Equipped" : ""
+            tag: itemEquipped(item) ? t("rpg.shop.equipped") : ""
         }));
         const equipped = currentEquippedItem();
         if (!equipped) return items;
         return [
             {
                 id: "__unequip__",
-                name: "Unequip",
-                description: "Remove the current equipment",
+                name: t("rpg.menu.unequip"),
+                description: t("rpg.menu.remove-equipment"),
                 kind: "unequip",
                 tag: ""
             },
@@ -197,7 +198,7 @@
         const slot = currentSlot();
         if (!slot) return "";
         const equipped = currentEquippedItem();
-        return equipped ? `${slot.label}: ${equipped.name}` : `${slot.label}: Empty`;
+        return equipped ? `${slot.label}: ${equipped.name}` : `${slot.label}: ${t("rpg.menu.empty")}`;
     });
     const listEmpty = computed(() => listEntries().length === 0);
 

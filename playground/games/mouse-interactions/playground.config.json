@@ -1,0 +1,8 @@
+{
+  "id": "mouse-interactions",
+  "title": "Mouse Interactions",
+  "description": "Client-only hover, selection, hit testing, and drag/drop with explicit server actions.",
+  "tags": ["mouse", "interactions", "drag-drop"],
+  "modes": ["standalone", "mmorpg"],
+  "port": 5186
+}
