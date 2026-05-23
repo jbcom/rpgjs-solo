@@ -14,32 +14,43 @@ Reference for the `RpgMap` class.
 - [broadcast](#broadcast)
 - [clear](#clear)
 - [clearLighting](#clearlighting)
+- [clearPhysic](#clearphysic)
 - [clearWeather](#clearweather)
 - [createDynamicEvent](#createdynamicevent)
 - [createDynamicWorldMaps](#createdynamicworldmaps)
+- [createMovingHitbox](#createmovinghitbox)
 - [createShape](#createshape)
 - [damageFormulas](#damageformulas)
 - [database](#database)
 - [dataIsReady$](#dataisready)
 - [deleteWorldMaps](#deleteworldmaps)
 - [events](#events)
+- [getBody](#getbody)
+- [getBodyPosition](#getbodyposition)
 - [getEvent](#getevent)
 - [getEventBy](#geteventby)
 - [getEvents](#getevents)
 - [getEventsBy](#geteventsby)
+- [getInWorldMaps](#getinworldmaps)
+- [getLighting](#getlighting)
 - [getPlayer](#getplayer)
 - [getPlayers](#getplayers)
 - [getShape](#getshape)
 - [getShapes](#getshapes)
-- [getLighting](#getlighting)
+- [getTick](#gettick)
 - [getWeather](#getweather)
 - [getWorldMaps](#getworldmaps)
+- [getWorldMapsManager](#getworldmapsmanager)
 - [globalConfig](#globalconfig)
 - [guiExit](#guiexit)
 - [guiInteraction](#guiinteraction)
+- [heightPx](#heightpx)
 - [hooks](#hooks)
+- [id](#id)
 - [interceptorPacket](#interceptorpacket)
+- [isMoving](#ismoving)
 - [maps](#maps)
+- [nextTick](#nexttick)
 - [off](#off)
 - [on](#on)
 - [onAction](#onaction)
@@ -51,12 +62,16 @@ Reference for the `RpgMap` class.
 - [players](#players)
 - [playSound](#playsound)
 - [processInput](#processinput)
+- [queryArea](#queryarea)
 - [queryHitbox](#queryhitbox)
 - [removeEvent](#removeevent)
+- [removeFromWorldMaps](#removefromworldmaps)
 - [removeInDatabase](#removeindatabase)
 - [removeShape](#removeshape)
 - [setAutoTick](#setautotick)
+- [setBodyPosition](#setbodyposition)
 - [setDay](#setday)
+- [setInWorldMaps](#setinworldmaps)
 - [setLighting](#setlighting)
 - [setNight](#setnight)
 - [setSync](#setsync)
@@ -66,10 +81,15 @@ Reference for the `RpgMap` class.
 - [showComponentAnimation](#showcomponentanimation)
 - [sounds](#sounds)
 - [stopSound](#stopsound)
+- [tick$](#tick)
 - [transitionLighting](#transitionlighting)
+- [updateHitbox](#updatehitbox)
 - [updateMap](#updatemap)
 - [updateWorld](#updateworld)
 - [updateWorldMaps](#updateworldmaps)
+- [widthPx](#widthpx)
+- [worldX](#worldx)
+- [worldY](#worldy)
 
 ## addInDatabase
 
@@ -209,6 +229,59 @@ afterEach(() => {
 });
 ```
 
+## clearLighting
+
+Clear lighting for this map.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+clearLighting(options?: LightingSetOptions): void
+```
+
+### Parameters
+
+- `options?`: `LightingSetOptions`
+
+## clearPhysic
+
+Clear all physics content and reset to initial state
+
+This method completely clears the physics system by:
+- Removing all hitboxes (static and movable)
+- Removing all zones
+- Clearing all collision data and events
+- Clearing all movement events and sliding data
+- Unsubscribing from the tick subscription
+- Resetting the physics engine to a clean state
+
+Use this method when you need to completely reset the map's physics
+system, such as when changing maps or restarting a level.
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+clearPhysic()
+```
+
+### Examples
+
+```ts
+// Clear all physics when changing maps
+map.clearPhysic();
+
+// Then reload physics for the new map
+map.loadPhysic();
+```
+
 ## clearWeather
 
 Clear weather for this map.
@@ -226,24 +299,6 @@ clearWeather(options?: WeatherSetOptions): void
 ### Parameters
 
 - `options?`: `WeatherSetOptions`
-
-## clearLighting
-
-Clear lighting for this map.
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `method`
-- Defined in: `RpgMap`
-
-### Signature
-
-```ts
-clearLighting(options?: { sync?: boolean }): void
-```
-
-### Parameters
-
-- `options?`: `{ sync?: boolean }`
 
 ## createDynamicEvent
 
@@ -338,6 +393,55 @@ const manager = map.createDynamicWorldMaps({
 });
 ```
 
+## createMovingHitbox
+
+Create a temporary and moving hitbox on the map
+
+Allows to create a temporary hitbox that moves through multiple positions sequentially.
+For example, you can use it to explode a bomb and find all the affected players,
+or for a gameplay effect that should emit when entities enter a moving area.
+For instant melee/combat checks, prefer `queryHitbox()`.
+
+The method creates a zone sensor that moves through the specified hitbox positions
+at the given speed, detecting collisions with players and events at each step.
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+createMovingHitbox(hitboxes: Array<{ x: number; y: number; width: number; height: number }>, options?: { speed?: number }): Observable<(T | any)[]>
+```
+
+### Parameters
+
+- `hitboxes`: `Array<{ x: number; y: number; width: number; height: number }>`
+- `options?`: `{ speed?: number }`
+
+### Returns
+
+Observable that emits arrays of hit entities and completes when movement is finished
+
+### Examples
+
+```ts
+// Create a sword slash effect that moves through two positions
+map.createMovingHitbox([
+  { x: 100, y: 100, width: 50, height: 50 },
+  { x: 120, y: 100, width: 50, height: 50 }
+], { speed: 2 }).subscribe({
+  next(hits) {
+    // hits contains RpgPlayer or RpgEvent objects that were hit
+    console.log('Hit entities:', hits);
+  },
+  complete() {
+    console.log('Movement finished');
+  }
+});
+```
+
 ## createShape
 
 Create a shape dynamically on the map
@@ -428,42 +532,6 @@ const player: RpgPlayerHooks = {
     console.log('out', player.name, shape.name);
   }
 };
-```
-
-## queryHitbox
-
-Return players and events whose physics bodies currently overlap a rectangular
-area. This is an immediate server-side query, useful for melee attacks,
-server-authoritative AoE checks, and gameplay logic that must hit entities
-already inside the area.
-
-- Source: `packages/common/src/rooms/Map.ts`
-- Kind: `method`
-- Defined in: `RpgMap`
-
-### Signature
-
-```ts
-queryHitbox(
-  rect: { x: number; y: number; width: number; height: number },
-  options?: {
-    excludeIds?: string[];
-    kinds?: Array<"players" | "events">;
-  }
-): Array<RpgPlayer | RpgEvent>
-```
-
-### Examples
-
-```ts
-const hits = map.queryHitbox(
-  { x: player.x() + 16, y: player.y() - 8, width: 48, height: 48 },
-  { excludeIds: [player.id], kinds: ["events"] }
-);
-
-for (const target of hits) {
-  target.applyDamage(player);
-}
 ```
 
 ## damageFormulas
@@ -597,6 +665,47 @@ const allEvents = map.events();
 // Get a specific event
 const event = map.events()['event-id'];
 ```
+
+## getBody
+
+Get physics body (entity) for an id
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+getBody(id: string): Entity | undefined
+```
+
+### Parameters
+
+- `id`: `string`
+
+## getBodyPosition
+
+Get body position in different modes
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+getBodyPosition(id: string, mode?: "center" | "top-left"): { x: number; y: number } | undefined
+```
+
+### Parameters
+
+- `id`: `string`
+- `mode?`: `"center" | "top-left"`
+
+### Returns
+
+Position coordinates or undefined if entity not found
 
 ## getEvent
 
@@ -743,6 +852,50 @@ const nearbyEvents = map.getEventsBy(event =>
 );
 ```
 
+## getInWorldMaps
+
+Get attached World
+
+Recover the world attached to this map (undefined if no world attached)
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+- Since: `3.0.0-beta.8`
+
+### Signature
+
+```ts
+getInWorldMaps(): RpgWorldMaps | undefined
+```
+
+### Returns
+
+The world maps manager instance if attached, otherwise undefined
+
+### Examples
+
+```ts
+const world = map.getInWorldMaps();
+if (world) {
+  console.log(world.getAllMaps());
+}
+```
+
+## getLighting
+
+Get the current map lighting state.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+getLighting(): LightingState | null
+```
+
 ## getPlayer
 
 Get a player by their ID
@@ -884,23 +1037,23 @@ const allShapes = map.getShapes();
 console.log(allShapes.length); // 2
 ```
 
-## getLighting
+## getTick
 
-Get the current map lighting state.
+Get the current physics tick
 
-- Source: `packages/server/src/rooms/map.ts`
+- Source: `packages/common/src/rooms/Map.ts`
 - Kind: `method`
-- Defined in: `RpgMap`
+- Defined in: `RpgCommonMap`
 
 ### Signature
 
 ```ts
-getLighting(): LightingState | null
+getTick(): number
 ```
 
 ### Returns
 
-The current lighting state, or `null` when lighting is disabled.
+Current tick number
 
 ## getWeather
 
@@ -947,6 +1100,33 @@ The WorldMapsManager instance, or null if not initialized
 const worldManager = map.getWorldMaps('my-world');
 if (worldManager) {
   const mapInfo = worldManager.getMapInfo('map1');
+}
+```
+
+## getWorldMapsManager
+
+Get the world maps manager
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+getWorldMapsManager(): WorldMapsManager | null
+```
+
+### Returns
+
+WorldMapsManager instance or null if not configured
+
+### Examples
+
+```ts
+const worldMaps = map.getWorldMapsManager();
+if (worldMaps) {
+  const adjacentMaps = worldMaps.getAdjacentMaps(currentMap, coordinates);
 }
 ```
 
@@ -1025,6 +1205,31 @@ guiInteraction(player: RpgPlayer, value: { guiId: string, name: string, data: an
 // The interaction data is sent from the client
 ```
 
+## heightPx
+
+Get the height of the map in pixels
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `getter`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+heightPx
+```
+
+### Returns
+
+The height of the map in pixels, or 0 if not loaded
+
+### Examples
+
+```ts
+const height = map.heightPx;
+console.log(`Map height: ${height}px`);
+```
+
 ## hooks
 
 Get the hooks system for this map
@@ -1053,6 +1258,31 @@ The Hooks instance for this map
 map.hooks.callHooks('custom-event', data).subscribe();
 ```
 
+## id
+
+Get the unique identifier of the map
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `getter`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+id
+```
+
+### Returns
+
+The map ID, or empty string if not loaded
+
+### Examples
+
+```ts
+const mapId = map.id;
+console.log(`Current map: ${mapId}`);
+```
+
 ## interceptorPacket
 
 Intercepts and modifies packets before they are sent to clients
@@ -1066,14 +1296,14 @@ This method is automatically called by
 ### Signature
 
 ```ts
-interceptorPacket(player: RpgPlayer, packet: any, conn: MockConnection)
+interceptorPacket(player: RpgPlayer, packet: any, conn: Parameters<RoomMethods["$send"]>[0])
 ```
 
 ### Parameters
 
 - `player`: `RpgPlayer`
 - `packet`: `any`
-- `conn`: `MockConnection`
+- `conn`: `Parameters<RoomMethods["$send"]>[0]`
 
 ### Returns
 
@@ -1084,6 +1314,37 @@ Modified packet with timestamp and ack info, or null if player is invalid
 ```ts
 // This method is called automatically by the framework
 // You typically don't call it directly
+```
+
+## isMoving
+
+Check if an entity is currently moving
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+isMoving(id: string): boolean
+```
+
+### Parameters
+
+- `id`: `string`
+
+### Returns
+
+Boolean indicating if the entity is in motion
+
+### Examples
+
+```ts
+// Check if player is moving
+if (map.isMoving('player1')) {
+  // Player is in motion
+}
 ```
 
 ## maps
@@ -1101,6 +1362,60 @@ It's populated when the map is loaded via `updateMap()`.
 
 ```ts
 maps: (MapOptions | any)[]
+```
+
+## nextTick
+
+Manually trigger a single game tick
+
+This method allows you to manually advance the game by one tick (16ms at 60fps).
+It's primarily useful for testing where you need precise control over when
+physics updates occur, rather than relying on the automatic tick$ subscription.
+
+## Use Cases
+
+- **Testing**: Control exactly when physics steps occur in unit tests
+- **Manual control**: Step through game state manually for debugging
+- **Deterministic testing**: Ensure consistent timing in test scenarios
+
+## Important
+
+This method should NOT be used in production code alongside the automatic `tick$`
+subscription, as it will cause double-stepping. Use either:
+- Automatic ticks (via `loadPhysic()` which subscribes to `tick$`)
+- Manual ticks (via `nextTick()` without `loadPhysic()` subscription)
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+nextTick(deltaMs?: number): number
+```
+
+### Parameters
+
+- `deltaMs?`: `number`
+
+### Returns
+
+Number of physics ticks executed
+
+### Examples
+
+```ts
+// In tests: manually advance game by one tick
+map.nextTick(); // Advances by 16ms (one frame at 60fps)
+
+// With custom delta
+map.nextTick(32); // Advances by 32ms (two frames at 60fps)
+
+// In a test loop
+for (let i = 0; i < 60; i++) {
+  map.nextTick(); // Simulate 1 second of game time
+}
 ```
 
 ## off
@@ -1236,13 +1551,13 @@ This method is automatically called by
 ### Signature
 
 ```ts
-onJoin(player: RpgPlayer, conn: MockConnection)
+onJoin(player: RpgPlayer, conn: Parameters<RoomMethods["$send"]>[0])
 ```
 
 ### Parameters
 
 - `player`: `RpgPlayer`
-- `conn`: `MockConnection`
+- `conn`: `Parameters<RoomMethods["$send"]>[0]`
 
 ### Examples
 
@@ -1267,13 +1582,13 @@ This method is automatically called by
 ### Signature
 
 ```ts
-onLeave(player: RpgPlayer, conn: MockConnection)
+onLeave(player: RpgPlayer, conn: Parameters<RoomMethods["$send"]>[0])
 ```
 
 ### Parameters
 
 - `player`: `RpgPlayer`
-- `conn`: `MockConnection`
+- `conn`: `Parameters<RoomMethods["$send"]>[0]`
 
 ### Examples
 
@@ -1289,7 +1604,7 @@ console.log(`Player ${player.id} left map ${map.id}`);
 
 Patch the current lighting state.
 
-Nested `ambient`, `sun`, and `shadows` values are merged. `spots` is replaced when provided.
+Nested `ambient`, `sun`, and `shadows` values are merged.
 
 - Source: `packages/server/src/rooms/map.ts`
 - Kind: `method`
@@ -1298,13 +1613,13 @@ Nested `ambient`, `sun`, and `shadows` values are merged. `spots` is replaced wh
 ### Signature
 
 ```ts
-patchLighting(patch: Partial<LightingState>, options?: { sync?: boolean }): LightingState | null
+patchLighting(patch: Partial<LightingState>, options?: LightingSetOptions): LightingState | null
 ```
 
 ### Parameters
 
 - `patch`: `Partial<LightingState>`
-- `options?`: `{ sync?: boolean }`
+- `options?`: `LightingSetOptions`
 
 ## patchWeather
 
@@ -1457,6 +1772,105 @@ const result = await map.processInput('player1', {
 });
 ```
 
+## queryArea
+
+Query players, events, and optional custom targets inside an arbitrary area.
+
+`queryArea()` is a low-level selection primitive. It uses the shape bounds as
+a broad phase, then delegates the precise inclusion logic to
+`shape.contains()`. Built-in helpers such as `AreaShape.circle()` and
+`AreaShape.cross()` are conveniences over the same shape contract.
+
+The method does not apply gameplay effects. Use the returned hits for damage,
+healing, target selection, AI, traps, previews, or any custom gameplay.
+
+Built-in shape helpers:
+- `AreaShape.circle({ radius, offset? })`
+- `AreaShape.rect({ width, height, offset?, angle? })`
+- `AreaShape.line({ length, thickness, direction, offset? })`
+- `AreaShape.cross({ armLength, thickness, offset? })`
+- `AreaShape.composite([shapeA, shapeB])`
+- `AreaShape.custom({ bounds, contains, distance?, maxDistance? })`
+
+Each hit includes `target`, `id`, `kind`, `x`, `y`, `bounds`, `distance`,
+`distanceRatio`, and `falloff`.
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+queryArea(options: MapAreaQueryOptions<TCustom>): Array<MapAreaHit<TCustom | T | any>>
+```
+
+### Parameters
+
+- `options`: `MapAreaQueryOptions<TCustom>`
+
+### Examples
+
+```ts
+import { AreaShape } from "@rpgjs/server";
+
+const hits = map.queryArea({
+  center: player,
+  shape: AreaShape.circle({ radius: 120 }),
+  targets: ["players", "events"],
+  excludeIds: [player.id],
+});
+
+for (const hit of hits) {
+  const damage = Math.round(80 * hit.falloff.linear());
+  hit.target.hp -= damage;
+}
+```
+
+```ts
+const hits = map.queryArea({
+  center: { x: 320, y: 240 },
+  shape: AreaShape.custom({
+    bounds: ({ center }) => ({
+      x: center.x - 160,
+      y: center.y - 160,
+      width: 320,
+      height: 320,
+    }),
+    contains: (target, { center }) => {
+      const distance = Math.hypot(target.x - center.x, target.y - center.y);
+      return distance >= 64 && distance <= 160;
+    },
+    maxDistance: () => 160,
+  }),
+  targets: "custom",
+  customTargets: projectiles,
+});
+```
+
+## queryHitbox
+
+Query players and events whose physics bodies overlap a rectangular hitbox.
+
+Unlike `createMovingHitbox()`, this is an immediate deterministic query. It
+is intended for melee attacks, AoE checks, and other server-authoritative
+gameplay that needs to hit entities already inside the area.
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+queryHitbox(rect: MapHitboxQueryRect, options?: MapHitboxQueryOptions): Array<T | any>
+```
+
+### Parameters
+
+- `rect`: `MapHitboxQueryRect`
+- `options?`: `MapHitboxQueryOptions`
+
 ## removeEvent
 
 Remove an event from the map
@@ -1491,6 +1905,33 @@ if (chest) {
   // ... do something with chest ...
   map.removeEvent('chest-1');
 }
+```
+
+## removeFromWorldMaps
+
+Remove this map from the world
+
+Remove this map from the world
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+- Since: `3.0.0-beta.8`
+
+### Signature
+
+```ts
+removeFromWorldMaps(): boolean | undefined
+```
+
+### Returns
+
+True if removed, false if not found, undefined if no world attached
+
+### Examples
+
+```ts
+const removed = map.removeFromWorldMaps();
 ```
 
 ## removeInDatabase
@@ -1603,6 +2044,117 @@ map.setAutoTick(false);
 await map.processInput('player1');
 ```
 
+## setBodyPosition
+
+Set body position
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+setBodyPosition(id: string, x: number, y: number, mode?: "center" | "top-left"): Entity | undefined
+```
+
+### Parameters
+
+- `id`: `string`
+- `x`: `number`
+- `y`: `number`
+- `mode?`: `"center" | "top-left"`
+
+### Returns
+
+True if position was set successfully
+
+## setDay
+
+Apply the default daytime lighting preset.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+setDay(options?: LightingSetOptions): LightingState | null
+```
+
+### Parameters
+
+- `options?`: `LightingSetOptions`
+
+## setInWorldMaps
+
+Assign the map to a world
+
+Assign the map to a world
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+- Since: `3.0.0-beta.8`
+
+### Signature
+
+```ts
+setInWorldMaps(worldMap: RpgWorldMaps): void
+```
+
+### Parameters
+
+- `worldMap`: `RpgWorldMaps`
+
+### Examples
+
+```ts
+const world = new WorldMapsManager();
+world.configure([{ id: 'm1', worldX: 0, worldY: 0, width: 1024, height: 1024 }]);
+map.setInWorldMaps(world);
+```
+
+## setLighting
+
+Set the full lighting state for this map.
+
+When `sync` is true (default), all connected clients receive the new lighting.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+setLighting(next: LightingState | null, options?: LightingSetOptions): LightingState | null
+```
+
+### Parameters
+
+- `next`: `LightingState | null`
+- `options?`: `LightingSetOptions`
+
+## setNight
+
+Apply the default nighttime lighting preset.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+setNight(options?: LightingSetOptions): LightingState | null
+```
+
+### Parameters
+
+- `options?`: `LightingSetOptions`
+
 ## setSync
 
 Configure runtime synchronized properties on the map
@@ -1650,55 +2202,6 @@ $permanent: false
 // Use the properties
 map.weather.set('rainy');
 const currentWeather = map.weather();
-```
-
-## setDay
-
-Apply the default daytime lighting preset.
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `method`
-- Defined in: `RpgMap`
-
-### Signature
-
-```ts
-setDay(options?: { sync?: boolean }): LightingState | null
-```
-
-## setLighting
-
-Set the full lighting state for this map.
-
-When `sync` is true (default), all connected clients receive the new lighting.
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `method`
-- Defined in: `RpgMap`
-
-### Signature
-
-```ts
-setLighting(next: LightingState | null, options?: { sync?: boolean }): LightingState | null
-```
-
-### Parameters
-
-- `next`: `LightingState | null`
-- `options?`: `{ sync?: boolean }`
-
-## setNight
-
-Apply the default nighttime lighting preset.
-
-- Source: `packages/server/src/rooms/map.ts`
-- Kind: `method`
-- Defined in: `RpgMap`
-
-### Signature
-
-```ts
-setNight(options?: { sync?: boolean }): LightingState | null
 ```
 
 ## setWeather
@@ -1934,6 +2437,55 @@ map.playSound("battle-theme", { loop: true });
 map.stopSound("battle-theme");
 ```
 
+## tick$
+
+Observable representing the game loop tick
+
+This observable emits the current timestamp every 16ms (approximately 60fps).
+It's shared using the share() operator, meaning that all subscribers will receive
+events from a single interval rather than creating multiple intervals.
+
+## Physics Loop Architecture
+
+The physics simulation is centralized in this game loop:
+
+1. **Input Processing** (`processInput`): Only updates entity velocities, does NOT step physics
+2. **Game Loop** (`tick$` -> `runFixedTicks`): Executes physics simulation with fixed timestep
+3. **Fixed Timestep Pattern**: Accumulator-based approach ensures deterministic physics
+
+```
+Input Events ─────────────────────────────────────────────────────────────►
+    │
+    ▼ (update velocity only)
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Game Loop (tick$)                                │
+│  ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐       │
+│  │ updateMovements │ → │  stepOneTick    │ → │ postTickUpdates │       │
+│  │ (apply velocity)│   │ (physics step)  │   │ (zones, sync)   │       │
+│  └─────────────────┘   └─────────────────┘   └─────────────────┘       │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `property`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+tick$
+```
+
+### Examples
+
+```ts
+// Subscribe to the game tick for custom updates
+map.tick$.subscribe(({ delta, timestamp }) => {
+  // Custom game logic runs alongside physics
+  this.updateCustomEntities(delta);
+});
+```
+
 ## transitionLighting
 
 Transition lighting over time by broadcasting intermediate lighting states.
@@ -1945,16 +2497,39 @@ Transition lighting over time by broadcasting intermediate lighting states.
 ### Signature
 
 ```ts
-transitionLighting(
-  toLighting: Partial<LightingState>,
-  options?: { duration?: number, easing?: 'linear' | 'easeInOut', sync?: boolean }
-): LightingState | null
+transitionLighting(toLighting: Partial<LightingState>, options?: LightingTransitionOptions & LightingSetOptions): LightingState | null
 ```
 
 ### Parameters
 
 - `toLighting`: `Partial<LightingState>`
-- `options?`: transition options
+- `options?`: `LightingTransitionOptions & LightingSetOptions`
+
+## updateHitbox
+
+Update hitbox position and size
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+updateHitbox(id: string, x: number, y: number, width?: number, height?: number): boolean
+```
+
+### Parameters
+
+- `id`: `string`
+- `x`: `number`
+- `y`: `number`
+- `width?`: `number`
+- `height?`: `number`
+
+### Returns
+
+True if hitbox was updated successfully
 
 ## updateMap
 
@@ -2079,4 +2654,85 @@ await map.updateWorldMaps('my-world', [
   { id: 'map1', worldX: 0, worldY: 0, width: 800, height: 600 },
   { id: 'map2', worldX: 800, worldY: 0, width: 800, height: 600 }
 ]);
+```
+
+## widthPx
+
+Get the width of the map in pixels
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `getter`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+widthPx
+```
+
+### Returns
+
+The width of the map in pixels, or 0 if not loaded
+
+### Examples
+
+```ts
+const width = map.widthPx;
+console.log(`Map width: ${width}px`);
+```
+
+## worldX
+
+Get the X position of this map in the world coordinate system
+
+This is used when maps are part of a larger world map. The world position
+indicates where this map is located relative to other maps.
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `getter`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+worldX
+```
+
+### Returns
+
+The X position in world coordinates, or 0 if not in a world
+
+### Examples
+
+```ts
+const worldX = map.worldX;
+console.log(`Map is at world position (${worldX}, ${map.worldY})`);
+```
+
+## worldY
+
+Get the Y position of this map in the world coordinate system
+
+This is used when maps are part of a larger world map. The world position
+indicates where this map is located relative to other maps.
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `getter`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+worldY
+```
+
+### Returns
+
+The Y position in world coordinates, or 0 if not in a world
+
+### Examples
+
+```ts
+const worldY = map.worldY;
+console.log(`Map is at world position (${map.worldX}, ${worldY})`);
 ```

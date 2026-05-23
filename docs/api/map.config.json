@@ -5,15 +5,15 @@
   "index": {
     "title": "Map API",
     "description": "Reference for RpgMap, world map helpers, controls, and event hooks used by created events.",
-    "intro": "This reference is generated from the JSDoc comments in `packages/server/src/rooms/map.ts` and `packages/common/src/rooms/WorldMaps.ts`."
+    "intro": "This reference is generated from the JSDoc comments in `packages/server/src/rooms/map.ts`, `packages/common/src/rooms/Map.ts`, and `packages/common/src/rooms/WorldMaps.ts`."
   },
   "sections": [
     {
       "title": "RpgMap",
       "description": "Reference for the `RpgMap` class.",
       "output": "rpg-map.md",
-      "ownerNames": ["RpgMap"],
-      "sourceFiles": ["packages/server/src/rooms/map.ts"]
+      "ownerNames": ["RpgMap", "RpgCommonMap"],
+      "sourceFiles": ["packages/server/src/rooms/map.ts", "packages/common/src/rooms/Map.ts"]
     },
     {
       "title": "World Maps",

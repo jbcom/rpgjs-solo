@@ -5,7 +5,7 @@ description: "Reference for RpgMap, world map helpers, controls, and event hooks
 
 # Map API
 
-This reference is generated from the JSDoc comments in `packages/server/src/rooms/map.ts` and `packages/common/src/rooms/WorldMaps.ts`.
+This reference is generated from the JSDoc comments in `packages/server/src/rooms/map.ts`, `packages/common/src/rooms/Map.ts`, and `packages/common/src/rooms/WorldMaps.ts`.
 
 ## Pages
 

@@ -55,8 +55,8 @@ Supports three search modes:
 - Direction: collect maps adjacent in the given direction
 - Point: collect the map containing the given world point
 
-The given `map` can be any object exposing `worldX`, `worldY`, `width`, `height` properties
-(e.g. your `RpgMap` instance or a `WorldMapInfo`).
+The given `map` can be any object exposing `worldX`, `worldY`, `widthPx`, `heightPx`
+and optional `tileWidth`, `tileHeight` properties (e.g. your `RpgMap` instance or a `WorldMapInfo`).
 
 - Source: `packages/common/src/rooms/WorldMaps.ts`
 - Kind: `method`
@@ -65,14 +65,14 @@ The given `map` can be any object exposing `worldX`, `worldY`, `width`, `height`
 ### Signature
 
 ```ts
-getAdjacentMaps(map: { worldX: number; worldY: number; widthPx: number; heightPx: number }, search: | { minX: number; minY: number; maxX: number; maxY: number }
+getAdjacentMaps(map: WorldMapSource, search: | { minX: number; minY: number; maxX: number; maxY: number }
       | { x: number; y: number }
       | number): WorldMapInfo[]
 ```
 
 ### Parameters
 
-- `map`: `{ worldX: number; worldY: number; widthPx: number; heightPx: number }`
+- `map`: `WorldMapSource`
 - `search`: `| { minX: number; minY: number; maxX: number; maxY: number }
       | { x: number; y: number }
       | number`
