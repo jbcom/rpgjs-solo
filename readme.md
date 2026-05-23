@@ -11,7 +11,7 @@
 
 RPGJS is a TypeScript framework for building 2D browser RPGs and MMORPGs.
 
-You write gameplay once, then run it either as a standalone RPG or as a networked MMORPG. RPGJS gives you the RPG-specific pieces that a generic web stack does not provide out of the box: maps, players, events, server/client synchronization, GUI, save/load, movement, collision, and multiplayer room flow.
+You write gameplay once, then run it either as a standalone RPG or as a networked MMORPG. RPGJS gives you the RPG-specific pieces that a generic web stack does not provide out of the box: maps, players, events, server/client synchronization, GUI, save/load, i18n, movement, collision, and multiplayer room flow.
 
 The goal is not to be a generic 3D game engine. RPGJS focuses on the architecture and runtime needed to build RPG-style games on the web, while keeping the project extensible through TypeScript, Vite, dependency injection, and modular packages.
 
@@ -29,6 +29,7 @@ RPGJS is useful when you want to build a game with RPG mechanics without assembl
 - Client-side prediction and reconciliation for responsive MMORPG movement
 - Map-based world structure where each map can act as a room
 - Built-in player, event, GUI, inventory, skill, save/load, and movement concepts
+- Shared i18n for gameplay text, client menus, and reusable modules with game-level overrides
 - Rendering with CanvasEngine, plus Vue overlays when DOM UI is a better fit
 - Extensible services through dependency injection
 - Vite-based development and build pipeline
@@ -52,6 +53,7 @@ Core ideas:
 - **Maps are runtime rooms**: in MMORPG mode, players connect to map rooms and can move between them.
 - **Events are world entities**: NPCs, enemies, chests, triggers, and scripted interactions are modeled as events.
 - **Modules extend the game**: features are added through modules and providers instead of hard-coded global setup.
+- **Translations follow the runtime**: server gameplay text and client UI labels can share the same i18n catalog, while modules can ship defaults that each game overrides.
 - **Services are replaceable**: storage, map loading, networking, GUI, and other behaviors can be overridden.
 
 ## Getting Started
@@ -166,6 +168,7 @@ It is probably not the right tool if you mainly need:
 - Shared events for global world state, and scenario events for per-player progression
 - Save/load system with replaceable storage
 - Prebuilt GUI screens: title screen, game over, dialog box, HUD, main menu, shop, and save/load
+- Internationalization for server-side gameplay text, client-side menus, and module defaults
 - Action RPG combat package where events can become enemies
 
 ### Multiplayer
@@ -205,7 +208,8 @@ Start here:
 5. [Create an event](https://v5.rpgjs.dev/guide/create-event)
 6. [GUI](https://v5.rpgjs.dev/gui/)
 7. [Save and Load](https://v5.rpgjs.dev/guide/save-load)
-8. [V4 Compatibility](https://v5.rpgjs.dev/guide/v4-compatibility)
+8. [Internationalization](https://v5.rpgjs.dev/guide/i18n)
+9. [V4 Compatibility](https://v5.rpgjs.dev/guide/v4-compatibility)
 
 ## V4 Compatibility
 

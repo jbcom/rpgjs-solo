@@ -578,7 +578,7 @@ export const Move = new MoveList();
  * - `Knockback`: Push effect with decay
  * - `PathFollow`: Follow waypoint sequences
  * - `Oscillate`: Back-and-forth patterns
- * - `SeekAvoid`: AI pathfinding with obstacle avoidance
+ * - `SeekAvoid`: AI target seeking with local obstacle avoidance
  * - `LinearRepulsion`: Smoother obstacle avoidance
  * - `IceMovement`: Slippery surface physics
  * - `ProjectileMovement`: Ballistic trajectories
@@ -618,7 +618,7 @@ export const Move = new MoveList();
  * Move Manager Mixin
  * 
  * Provides comprehensive movement management capabilities to any class. This mixin handles
- * various types of movement including pathfinding, physics-based movement, route following,
+ * various types of movement including target seeking, physics-based movement, route following,
  * and advanced movement strategies like dashing, knockback, and projectile movement.
  * 
  * @param Base - The base class to extend with movement management
@@ -784,9 +784,10 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
     }
 
     /**
-     * Move toward a target player or position using AI pathfinding
+     * Move toward a target player or position using local obstacle avoidance
      * 
-     * Uses the `SeekAvoid` strategy to navigate toward the target while avoiding obstacles.
+     * Uses the `SeekAvoid` strategy to navigate toward the target while avoiding blocking
+     * hitboxes and events locally. It does not compute a full path.
      * The movement speed is based on the player's current `speed` and `frequency` settings,
      * scaled appropriately.
      * 
@@ -1875,7 +1876,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 /**
  * Interface for Move Manager functionality
  * 
- * Provides comprehensive movement management capabilities including pathfinding,
+ * Provides comprehensive movement management capabilities including target seeking,
  * physics-based movement, route following, and advanced movement strategies.
  * This interface defines the public API of the MoveManager mixin.
  */
@@ -1986,7 +1987,7 @@ export interface IMoveManager {
   getActiveMovements(): MovementStrategy[];
 
   /**
-   * Move toward a target player or position using AI pathfinding
+   * Move toward a target player or position using local obstacle avoidance
    * 
    * @param target - Target player or position to move toward
    */

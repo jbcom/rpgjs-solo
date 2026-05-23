@@ -323,14 +323,78 @@ describe('Movement strategies', () => {
       const body = createBody(follower);
 
       strategy.update(body, 1 / 60);
-      const baselineVelocity = follower.velocity.clone();
 
       follower.setVelocity({ x: 0, y: 0 });
       strategy.update(body, 1 / 60);
 
       expect(query).toHaveBeenCalledTimes(2);
-      expect(follower.velocity.length()).toBeLessThanOrEqual(baselineVelocity.length());
+      expect(follower.velocity.length()).toBeGreaterThan(0);
       expect(Math.abs(follower.velocity.y)).toBeGreaterThan(0);
+    });
+
+    it('steers around static obstacles while seeking', () => {
+      const follower = new Entity({
+        position: { x: 0, y: 0 },
+        width: 2,
+        height: 2,
+        mass: 1,
+      });
+      const target = new Entity({
+        position: { x: 10, y: 0 },
+        width: 2,
+        height: 2,
+        mass: 1,
+      });
+      const wall = new Entity({
+        position: { x: 4, y: 100 },
+        width: 2,
+        height: 220,
+        mass: 0,
+      });
+
+      const fakeEngine = {
+        queryAABB: vi.fn().mockReturnValue([follower, target, wall]),
+      } as unknown as PhysicsEngine;
+      const strategy = new SeekAvoid(fakeEngine, () => target, 3, 6, 12);
+      const body = createBody(follower);
+
+      strategy.update(body, 1 / 60);
+
+      expect(follower.velocity.x).toBeGreaterThan(0);
+      expect(Math.abs(follower.velocity.y)).toBeGreaterThan(0);
+    });
+
+    it('does not avoid entities that collision resolution ignores', () => {
+      const follower = new Entity({
+        position: { x: 0, y: 0 },
+        width: 2,
+        height: 2,
+        mass: 1,
+      });
+      const target = new Entity({
+        position: { x: 10, y: 0 },
+        width: 2,
+        height: 2,
+        mass: 1,
+      });
+      const passthroughEvent = new Entity({
+        position: { x: 4, y: 0 },
+        width: 2,
+        height: 8,
+        mass: 1,
+      });
+      follower.addResolutionFilter((_self, other) => other !== passthroughEvent);
+
+      const fakeEngine = {
+        queryAABB: vi.fn().mockReturnValue([follower, target, passthroughEvent]),
+      } as unknown as PhysicsEngine;
+      const strategy = new SeekAvoid(fakeEngine, () => target, 3, 6, 12);
+      const body = createBody(follower);
+
+      strategy.update(body, 1 / 60);
+
+      expect(follower.velocity.x).toBeGreaterThan(0);
+      expect(Math.abs(follower.velocity.y)).toBeLessThan(0.0001);
     });
   });
 

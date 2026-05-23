@@ -195,9 +195,11 @@ player.oscillate({ x: 0, y: 1 }, 50, 2000);
 player.oscillate({ x: 1, y: 0 }, 100, 4000, 'circular');
 ```
 
-### 6. AI Pathfinding
+### 6. AI Target Seeking
 
-Intelligent movement toward targets with obstacle avoidance.
+Intelligent movement toward targets with local obstacle avoidance. `moveTo`
+does not compute a full path; it steers around nearby blocking hitboxes and
+events while moving toward the target.
 
 ```typescript
 // Move toward another player
