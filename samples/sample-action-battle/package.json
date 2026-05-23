@@ -1,0 +1,26 @@
+{
+  "name": "sample-action-battle",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@canvasengine/presets": "2.0.0-rc.4",
+    "@rpgjs/action-battle": "workspace:*",
+    "@rpgjs/client": "workspace:*",
+    "@rpgjs/common": "workspace:*",
+    "@rpgjs/server": "workspace:*",
+    "@rpgjs/ui-css": "workspace:*",
+    "@rpgjs/vite": "workspace:*",
+    "@signe/di": "3.0.1",
+    "canvasengine": "2.0.0-rc.4",
+    "pixi.js": "^8.18.1"
+  },
+  "devDependencies": {
+    "@canvasengine/compiler": "2.0.0-rc.4",
+    "vite": "^8.0.13"
+  }
+}

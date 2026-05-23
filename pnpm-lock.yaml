@@ -361,6 +361,18 @@ importers:
       '@rpgjs/server':
         specifier: workspace:*
         version: link:../server
+      '@signe/di':
+        specifier: 3.0.1
+        version: 3.0.1
+      '@signe/reactive':
+        specifier: 3.0.1
+        version: 3.0.1
+      '@signe/room':
+        specifier: 3.0.1
+        version: 3.0.1
+      '@signe/sync':
+        specifier: 3.0.1
+        version: 3.0.1
       '@types/node':
         specifier: ^25.8.0
         version: 25.8.0
@@ -376,6 +388,9 @@ importers:
       magic-string:
         specifier: ^0.30.21
         version: 0.30.21
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -429,6 +444,46 @@ importers:
       vue:
         specifier: ^3.5.33
         version: 3.5.33(typescript@6.0.3)
+
+  samples/sample-action-battle:
+    dependencies:
+      '@canvasengine/presets':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
+      '@rpgjs/action-battle':
+        specifier: workspace:*
+        version: link:../../packages/action-battle
+      '@rpgjs/client':
+        specifier: workspace:*
+        version: link:../../packages/client
+      '@rpgjs/common':
+        specifier: workspace:*
+        version: link:../../packages/common
+      '@rpgjs/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@rpgjs/ui-css':
+        specifier: workspace:*
+        version: link:../../packages/ui-css
+      '@rpgjs/vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
+      '@signe/di':
+        specifier: 3.0.1
+        version: 3.0.1
+      canvasengine:
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
+      pixi.js:
+        specifier: ^8.18.1
+        version: 8.18.1
+    devDependencies:
+      '@canvasengine/compiler':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+      vite:
+        specifier: ^8.0.13
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
 
   samples/sample-dev:
     dependencies:

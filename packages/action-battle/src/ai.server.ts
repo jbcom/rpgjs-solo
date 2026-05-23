@@ -785,6 +785,14 @@ export class BattleAi {
    */
   private setupVision(): boolean {
     if (this.visionShape) return true;
+    const map = this.event.getCurrentMap?.();
+    if (
+      map?.physic?.getEntityByUUID &&
+      !map.physic.getEntityByUUID(this.event.id)
+    ) {
+      return false;
+    }
+
     const diameter = this.visionRange * 2;
     const shape = this.event.attachShape(`vision_${this.event.id}`, {
       radius: this.visionRange,

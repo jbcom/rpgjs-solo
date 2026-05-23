@@ -422,6 +422,7 @@ export default createServer({
     provideMain(),
     provideActionBattle({
       combat: {
+        pvp: true,
         attack: {
           lockMovement: true,
           lockDurationMs: 320,
