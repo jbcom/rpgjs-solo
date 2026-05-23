@@ -35,7 +35,6 @@ import { provideActionBattle, BattleAi, EnemyType } from "@rpgjs/action-battle/s
 function GoblinEnemy(): EventDefinition {
   return {
     name: "Goblin",
-    mode: EventMode.Scenario,
     onInit() {
       this.setGraphic("goblin");
 

@@ -1,7 +1,7 @@
 import { MAXHP } from "@rpgjs/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { BattleAi } from "./ai.server";
-import { chase, ifTargetVisible } from "./core/ai-behavior-tree";
+import { chase, idle, ifTargetVisible } from "./core/ai-behavior-tree";
 import { setActionBattleSystems } from "./core/context";
 
 const createEvent = () => ({
@@ -216,6 +216,41 @@ describe("BattleAi behavior tree", () => {
     ai.destroy();
   });
 
+  test("local behavior tree overrides preset simple behavior", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    setActionBattleSystems({
+      ai: {
+        presets: {
+          ranged: {
+            simpleBehavior: {
+              otherwise: chase(),
+            },
+          },
+        },
+      },
+    });
+
+    const ai = new BattleAi(event as any, {
+      preset: "ranged",
+      behaviorTree: () => ({ status: "success", intent: idle() }),
+    });
+
+    ai.onDetectInShape(player as any, {});
+    vi.advanceTimersByTime(100);
+
+    expect(event.moveTo).not.toHaveBeenCalled();
+    expect(event.stopMoveTo).toHaveBeenCalled();
+    ai.destroy();
+  });
+
   test("does not target an already defeated player", () => {
     const event = createEvent();
     event.attachShape.mockReturnValue({ id: "vision_monster-1" });
@@ -230,6 +265,34 @@ describe("BattleAi behavior tree", () => {
     ai.onDetectInShape(player as any, {});
 
     expect(ai.getTarget()).toBeNull();
+    ai.destroy();
+  });
+
+  test("behavior tree idle fallback does not block target acquisition", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 30),
+      y: vi.fn(() => 0),
+    };
+    const map = {
+      getPlayers: vi.fn(() => [player]),
+      getEvents: vi.fn(() => [event]),
+    };
+    event.getCurrentMap.mockReturnValue(map);
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+
+    const ai = new BattleAi(event as any, {
+      simpleBehavior: {
+        otherwise: idle(),
+      },
+    });
+
+    vi.advanceTimersByTime(100);
+
+    expect(ai.getTarget()).toBe(player);
     ai.destroy();
   });
 

@@ -687,10 +687,10 @@ export class BattleAi {
     if (options.invincibilityMs !== undefined) {
       this.invincibilityMs = Math.max(0, options.invincibilityMs);
     }
-    if (options.simpleBehavior) {
-      this.behaviorTree = defineAiBehavior(options.simpleBehavior);
-    } else if (options.tree || options.behaviorTree) {
+    if (options.tree || options.behaviorTree) {
       this.behaviorTree = defineAiTree(options.tree ?? options.behaviorTree!);
+    } else if (options.simpleBehavior) {
+      this.behaviorTree = defineAiBehavior(options.simpleBehavior);
     }
 
     if (options.attackRange === undefined) {
@@ -915,6 +915,13 @@ export class BattleAi {
     // Update behavior gauge and state decision
     if (this.behaviorEnabled) {
       this.updateBehavior(currentTime);
+    }
+
+    if (!this.target && this.state === AiState.Idle) {
+      const target = this.findNearestTarget();
+      if (target) {
+        this.engageTarget(target);
+      }
     }
 
     const customBehaviorHandled = this.applyCustomBehavior(currentTime);
@@ -1233,12 +1240,13 @@ export class BattleAi {
     this.debugLog('attack', `Applying ${pattern} hit`);
 
     if (this.attackSkill) {
+      const resolvedSkill = this.resolveUsable(this.attackSkill);
       try {
         executeActionBattleUse({
           attacker: this.event,
           target: this.target,
-          usable: this.resolveUsable(this.attackSkill),
-          skill: this.resolveUsable(this.attackSkill),
+          usable: resolvedSkill,
+          skill: resolvedSkill,
           pattern,
           profile,
         });
@@ -2435,8 +2443,9 @@ export class BattleAi {
     const distance = this.getDistance(this.event, this.target);
     const resolvedSkill = this.resolveUsable(skill);
     const range = getActionBattleActionRange(resolvedSkill) ?? this.attackRange;
+    const cooldownRemaining = this.attackCooldown - (currentTime - this.lastAttackTime);
     if (distance > range) return false;
-    if (currentTime - this.lastAttackTime < this.attackCooldown) return false;
+    if (cooldownRemaining > 0) return false;
 
     executeActionBattleUse({
       attacker: this.event,

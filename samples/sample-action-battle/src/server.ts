@@ -142,8 +142,8 @@ const buildBehaviorTree = (behavior: SpawnBehavior, skill?: any) => {
   if (behavior === "ranged" && skill) {
     return selector([
       sequence([condition(hpBelow(0.25)), action(flee())]),
-      sequence([condition(distanceLessThan(95)), action(keepDistance(145))]),
-      sequence([condition(targetInRange(skill.action.range)), action(useSkill(skill.id))]),
+      sequence([condition(targetInRange(skill.action.range)), action(useSkill(skill))]),
+      sequence([condition(targetInRange(320)), action(keepDistance(145))]),
       action(() => ({ type: "idle" })),
     ]);
   }
@@ -233,7 +233,7 @@ function createSpawnedEnemy(payload: Required<SpawnEnemyPayload>): EventDefiniti
               : EnemyType.Aggressive,
         faction: payload.faction,
         targets: payload.targets,
-        attackSkill: skill?.id,
+        attackSkill: skill,
         attackRange: skill?.action?.range ?? 62,
         attackCooldown: skill
           ? SKILL_ATTACK_COOLDOWN[payload.enemyType as keyof typeof SKILL_ATTACK_COOLDOWN]
