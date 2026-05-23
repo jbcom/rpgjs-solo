@@ -1,11 +1,11 @@
 import { signal } from "@signe/reactive";
 import { describe, expect, test, vi } from "vitest";
 import {
-  AreaShape,
+  RpgCommonMap,
   type MapHitboxQueryOptions,
   type MapHitboxQueryRect,
-  RpgCommonMap,
-} from "./Map";
+} from "../Map";
+import { AreaShape } from ".";
 
 class TestMap extends RpgCommonMap<any> {
   players = signal<Record<string, any>>({});

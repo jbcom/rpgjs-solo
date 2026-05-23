@@ -1,6 +1,7 @@
 export * from "./Player";
 export * from "./Shape";
 export * from "./rooms/Map";
+export * from "./rooms/area";
 export * from "./rooms/WorldMaps";
 export * from "./modules";
 export * from "./services/updateMap";
