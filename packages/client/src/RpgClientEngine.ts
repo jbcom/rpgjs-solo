@@ -258,7 +258,6 @@ export class RpgClientEngine<T = any> {
     this.renderer = app.renderer as unknown as PIXI.Renderer;
     this.setupPointerTracking();
     this.tick = canvasElement?.propObservables?.context['tick'].observable
-    this.flushPendingSyncPackets();
 
     const inputCheckSubscription = this.tick.subscribe(() => {
       if (Date.now() - this.lastInputTime > 100) {
@@ -272,6 +271,7 @@ export class RpgClientEngine<T = any> {
 
     this.hooks.callHooks("client-spritesheets-load", this).subscribe();
     this.hooks.callHooks("client-spritesheetResolver-load", this).subscribe();
+    this.flushPendingSyncPackets();
     this.hooks.callHooks("client-sounds-load", this).subscribe();
     this.hooks.callHooks("client-soundResolver-load", this).subscribe();
 
