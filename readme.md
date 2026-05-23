@@ -84,6 +84,24 @@ If you use an AI coding assistant and want it to understand RPGJS v5 better, you
 npx skills add https://github.com/RSamaium/RPG-JS#v5
 ```
 
+## Playground
+
+The repository includes a playground for trying RPGJS gameplay demos from one
+screen. It keeps the game list on the left and loads the selected game in an
+iframe on the right.
+
+```bash
+pnpm install
+pnpm playground
+```
+
+Open `http://localhost:5174`.
+
+Each game in `playground/games/*` is independent and has its own assets, RPGJS
+configuration, Vite config, and `playground.config.json`. Add a new gameplay by
+creating a new folder in `playground/games/<game-id>` and assigning it a unique
+port in `playground.config.json`.
+
 ## Tiny Example
 
 Server-side gameplay can stay close to RPG vocabulary:
@@ -193,7 +211,7 @@ Start here:
 
 RPGJS v5 has a different runtime architecture from RPGJS v4, but a compatibility layer exists for v4-style project layouts.
 
-Use `compatibilityV4Plugin()` from `@rpgjs/vite` to run a v4 module structure on the v5 runtime. See the [V4 compatibility guide](https://v5.rpgjs.dev/guide/v4-compatibility) and the `samples/sample-v4-compat` project.
+Use `compatibilityV4Plugin()` from `@rpgjs/vite` to run a v4 module structure on the v5 runtime. See the [V4 compatibility guide](https://v5.rpgjs.dev/guide/v4-compatibility) and the `playground/games/v4-compat` project.
 
 ## Contribute to developments
 

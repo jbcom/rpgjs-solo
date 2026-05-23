@@ -1,0 +1,95 @@
+<Container>
+  <Rect width={640} height={420} color="#ffffff" />
+  <Rect x={24} y={24} width={592} height={372} color="#f6f8fb" />
+  <Rect x={24} y={24} width={592} height={2} color="#c8d2e0" />
+  <Rect x={24} y={394} width={592} height={2} color="#c8d2e0" />
+  <Rect x={24} y={24} width={2} height={372} color="#c8d2e0" />
+  <Rect x={614} y={24} width={2} height={372} color="#c8d2e0" />
+  <Text
+    x={32}
+    y={32}
+    text="Click: shoot toward pointer"
+    color="#172033"
+    size={16}
+  />
+  <Text
+    x={32}
+    y={54}
+    text="Action key: shoot in facing direction"
+    color="#4d5f7a"
+    size={12}
+  />
+  <Container>
+    <EventLayerComponent />
+  </Container>
+  <Container>
+    @if (hasPointerTarget()) {
+      <Container x={pointerTarget().x} y={pointerTarget().y} zIndex={1200}>
+        <Circle radius={7} color="#2563eb" alpha={0.16} />
+        <Circle radius={3} color="#2563eb" alpha={0.65} />
+        <Rect x={-10} y={-1} width={20} height={2} color="#2563eb" alpha={0.55} />
+        <Rect x={-1} y={-10} width={2} height={20} color="#2563eb" alpha={0.55} />
+      </Container>
+    }
+  </Container>
+  <Rect
+    width={640}
+    height={420}
+    color="#ffffff"
+    alpha={0.001}
+    pointermove={trackPointer}
+    pointerdown={shootAtPointer}
+  />
+</Container>
+
+<script>
+  import { computed, mount, signal } from "canvasengine";
+  import { EventLayerComponent, inject, RpgClientEngine } from "@rpgjs/client";
+
+  const client = inject(RpgClientEngine);
+  const pointerTarget = signal(null);
+  const hasPointerTarget = computed(() => pointerTarget() !== null);
+  let mapContainer = null;
+
+  mount((element) => {
+    mapContainer = element.componentInstance;
+  });
+
+  function getPointerPosition(event) {
+    const global = event?.global ?? event?.data?.global;
+    const local =
+      mapContainer && global
+        ? mapContainer.toLocal(global)
+        : event?.getLocalPosition?.(event?.currentTarget ?? event?.target) ??
+          event?.data?.getLocalPosition?.(event?.currentTarget ?? event?.target);
+
+    if (!local || !Number.isFinite(local.x) || !Number.isFinite(local.y)) {
+      return null;
+    }
+
+    return {
+      x: Math.max(0, Math.min(640, local.x)),
+      y: Math.max(0, Math.min(420, local.y)),
+    };
+  }
+
+  function trackPointer(event) {
+    const position = getPointerPosition(event);
+    if (position) {
+      pointerTarget.set(position);
+    }
+  }
+
+  function shootAtPointer(event) {
+    const position = getPointerPosition(event) ?? pointerTarget();
+    if (!position) {
+      return;
+    }
+
+    pointerTarget.set(position);
+    client.processAction("projectile:shoot", {
+      source: "map-click",
+      target: position,
+    });
+  }
+</script>

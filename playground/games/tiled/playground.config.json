@@ -1,0 +1,8 @@
+{
+  "id": "tiled",
+  "title": "Tiled Maps",
+  "description": "Tiled map loading, tileset assets, map compilation, and RPGJS map integration.",
+  "tags": ["maps", "tiled", "assets"],
+  "modes": ["standalone", "mmorpg"],
+  "port": 5183
+}

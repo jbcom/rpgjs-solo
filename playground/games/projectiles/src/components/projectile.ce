@@ -1,0 +1,68 @@
+<Container x={x} y={y} rotation={angle} zIndex={1000}>
+  <Graphics draw={drawProjectile} anchor={redrawAnchor} />
+</Container>
+
+<script>
+  import { computed } from "canvasengine";
+
+  const {
+    x,
+    y,
+    angle,
+    progress,
+    impactProgress,
+    params,
+    impact
+  } = defineProps({
+    x: Number,
+    y: Number,
+    angle: Number,
+    progress: {
+      type: Number,
+      default: 0,
+    },
+    impactProgress: {
+      type: Number,
+      default: 0,
+    },
+    params: {
+      type: Object,
+      default: () => ({}),
+    },
+    impact: {
+      type: Object,
+      default: null,
+    },
+  });
+
+  const projectileParams = computed(() => params() ?? {});
+  const progressValue = computed(() => progress() ?? 0);
+  const impactProgressValue = computed(() => impactProgress() ?? 0);
+
+  const color = computed(() => projectileParams().color ?? "#ef4444");
+  const trailColor = computed(() => projectileParams().trailColor ?? "#f97316");
+  const redrawAnchor = computed(() => [
+    impact() ? 1 : 0,
+    impact() ? impactProgressValue() : progressValue(),
+  ]);
+
+  function drawProjectile(g) {
+    const progress = progressValue();
+    if (impact()) {
+      const life = impactProgressValue();
+      g.circle(0, 0, 18 + life * 24);
+      g.fill({ color: 0x1d4ed8, alpha: Math.max(0, 0.45 * (1 - life)) });
+      g.circle(0, 0, 8 + life * 8);
+      g.fill({ color: 0x60a5fa, alpha: Math.max(0, 0.75 * (1 - life)) });
+      return;
+    }
+
+    g.circle(0, 0, 8);
+    g.fill(color());
+    g.rect(-32, -3, 28, 6);
+    g.fill({
+      color: trailColor(),
+      alpha: Math.max(0.2, 1 - progress),
+    });
+  }
+</script>

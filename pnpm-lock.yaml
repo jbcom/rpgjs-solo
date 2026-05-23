@@ -445,29 +445,35 @@ importers:
         specifier: ^3.5.33
         version: 3.5.33(typescript@6.0.3)
 
-  samples/sample-action-battle:
+  playground:
+    devDependencies:
+      vite:
+        specifier: ^8.0.13
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+
+  playground/games/action-battle:
     dependencies:
       '@canvasengine/presets':
         specifier: 2.0.0-rc.4
         version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
       '@rpgjs/action-battle':
         specifier: workspace:*
-        version: link:../../packages/action-battle
+        version: link:../../../packages/action-battle
       '@rpgjs/client':
         specifier: workspace:*
-        version: link:../../packages/client
+        version: link:../../../packages/client
       '@rpgjs/common':
         specifier: workspace:*
-        version: link:../../packages/common
+        version: link:../../../packages/common
       '@rpgjs/server':
         specifier: workspace:*
-        version: link:../../packages/server
+        version: link:../../../packages/server
       '@rpgjs/ui-css':
         specifier: workspace:*
-        version: link:../../packages/ui-css
+        version: link:../../../packages/ui-css
       '@rpgjs/vite':
         specifier: workspace:*
-        version: link:../../packages/vite
+        version: link:../../../packages/vite
       '@signe/di':
         specifier: 3.0.1
         version: 3.0.1
@@ -481,6 +487,239 @@ importers:
       '@canvasengine/compiler':
         specifier: 2.0.0-rc.4
         version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+      vite:
+        specifier: ^8.0.13
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+
+  playground/games/projectiles:
+    dependencies:
+      '@canvasengine/presets':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
+      '@rpgjs/client':
+        specifier: workspace:*
+        version: link:../../../packages/client
+      '@rpgjs/common':
+        specifier: workspace:*
+        version: link:../../../packages/common
+      '@rpgjs/server':
+        specifier: workspace:*
+        version: link:../../../packages/server
+      '@rpgjs/ui-css':
+        specifier: workspace:*
+        version: link:../../../packages/ui-css
+      '@rpgjs/vite':
+        specifier: workspace:*
+        version: link:../../../packages/vite
+      '@signe/di':
+        specifier: 3.0.1
+        version: 3.0.1
+      canvasengine:
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
+      pixi.js:
+        specifier: ^8.18.1
+        version: 8.18.1
+    devDependencies:
+      '@canvasengine/compiler':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+      vite:
+        specifier: ^8.0.13
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+
+  playground/games/studio:
+    dependencies:
+      '@canvasengine/presets':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
+      '@rpgjs/action-battle':
+        specifier: workspace:*
+        version: link:../../../packages/action-battle
+      '@rpgjs/client':
+        specifier: workspace:*
+        version: link:../../../packages/client
+      '@rpgjs/common':
+        specifier: workspace:*
+        version: link:../../../packages/common
+      '@rpgjs/server':
+        specifier: workspace:*
+        version: link:../../../packages/server
+      '@rpgjs/studio':
+        specifier: workspace:*
+        version: link:../../../packages/studio
+      '@rpgjs/tiledmap':
+        specifier: workspace:*
+        version: link:../../../packages/tiledmap
+      '@rpgjs/ui-css':
+        specifier: workspace:*
+        version: link:../../../packages/ui-css
+      '@signe/di':
+        specifier: 3.0.1
+        version: 3.0.1
+      canvasengine:
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
+      pixi.js:
+        specifier: 8.18.1
+        version: 8.18.1
+      vite-plugin-dts:
+        specifier: ^5.0.0
+        version: 5.0.0(@microsoft/api-extractor@7.52.3(@types/node@25.8.0))(esbuild@0.28.0)(rolldown@1.0.1)(typescript@6.0.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3))
+    devDependencies:
+      '@canvasengine/compiler':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+      '@rpgjs/testing':
+        specifier: workspace:*
+        version: link:../../../packages/testing
+      '@rpgjs/vite':
+        specifier: workspace:*
+        version: link:../../../packages/vite
+      vite:
+        specifier: ^8.0.13
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+      vitest:
+        specifier: ^4.1.6
+        version: 4.1.6(@types/node@25.8.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3))
+
+  playground/games/tiled:
+    dependencies:
+      '@canvasengine/presets':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
+      '@rpgjs/action-battle':
+        specifier: workspace:*
+        version: link:../../../packages/action-battle
+      '@rpgjs/client':
+        specifier: workspace:*
+        version: link:../../../packages/client
+      '@rpgjs/common':
+        specifier: workspace:*
+        version: link:../../../packages/common
+      '@rpgjs/server':
+        specifier: workspace:*
+        version: link:../../../packages/server
+      '@rpgjs/tiledmap':
+        specifier: workspace:*
+        version: link:../../../packages/tiledmap
+      '@rpgjs/ui-css':
+        specifier: workspace:*
+        version: link:../../../packages/ui-css
+      '@rpgjs/vite':
+        specifier: workspace:*
+        version: link:../../../packages/vite
+      '@rpgjs/vue':
+        specifier: workspace:*
+        version: link:../../../packages/vue
+      '@signe/di':
+        specifier: 3.0.1
+        version: 3.0.1
+      canvasengine:
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
+      pixi.js:
+        specifier: ^8.18.1
+        version: 8.18.1
+    devDependencies:
+      '@canvasengine/compiler':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.7
+        version: 6.0.7(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3))(vue@3.5.34(typescript@6.0.3))
+      path-browserify:
+        specifier: ^1.0.1
+        version: 1.0.1
+      vite:
+        specifier: ^8.0.13
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+
+  playground/games/v4-compat:
+    dependencies:
+      '@canvasengine/presets':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
+      '@rpgjs/client':
+        specifier: workspace:*
+        version: link:../../../packages/client
+      '@rpgjs/common':
+        specifier: workspace:*
+        version: link:../../../packages/common
+      '@rpgjs/server':
+        specifier: workspace:*
+        version: link:../../../packages/server
+      '@rpgjs/tiledmap':
+        specifier: workspace:*
+        version: link:../../../packages/tiledmap
+      '@rpgjs/ui-css':
+        specifier: workspace:*
+        version: link:../../../packages/ui-css
+      '@rpgjs/vite':
+        specifier: workspace:*
+        version: link:../../../packages/vite
+      '@signe/di':
+        specifier: 2.9.2
+        version: 2.9.2
+      canvasengine:
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
+      pixi.js:
+        specifier: ^8.18.1
+        version: 8.18.1
+    devDependencies:
+      '@canvasengine/compiler':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+      vite:
+        specifier: ^8.0.11
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+
+  playground/games/vue-gui:
+    dependencies:
+      '@canvasengine/presets':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
+      '@rpgjs/client':
+        specifier: workspace:*
+        version: link:../../../packages/client
+      '@rpgjs/common':
+        specifier: workspace:*
+        version: link:../../../packages/common
+      '@rpgjs/server':
+        specifier: workspace:*
+        version: link:../../../packages/server
+      '@rpgjs/ui-css':
+        specifier: workspace:*
+        version: link:../../../packages/ui-css
+      '@rpgjs/vite':
+        specifier: workspace:*
+        version: link:../../../packages/vite
+      '@rpgjs/vue':
+        specifier: workspace:*
+        version: link:../../../packages/vue
+      '@signe/di':
+        specifier: 3.0.1
+        version: 3.0.1
+      canvasengine:
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
+      pixi.js:
+        specifier: ^8.18.1
+        version: 8.18.1
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.34(typescript@6.0.3)
+    devDependencies:
+      '@canvasengine/compiler':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.7
+        version: 6.0.7(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3))(vue@3.5.34(typescript@6.0.3))
+      path-browserify:
+        specifier: ^1.0.1
+        version: 1.0.1
       vite:
         specifier: ^8.0.13
         version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
@@ -548,239 +787,6 @@ importers:
       partykit:
         specifier: ^0.0.115
         version: 0.0.115
-      path-browserify:
-        specifier: ^1.0.1
-        version: 1.0.1
-      vite:
-        specifier: ^8.0.13
-        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
-
-  samples/sample-projectiles:
-    dependencies:
-      '@canvasengine/presets':
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
-      '@rpgjs/client':
-        specifier: workspace:*
-        version: link:../../packages/client
-      '@rpgjs/common':
-        specifier: workspace:*
-        version: link:../../packages/common
-      '@rpgjs/server':
-        specifier: workspace:*
-        version: link:../../packages/server
-      '@rpgjs/ui-css':
-        specifier: workspace:*
-        version: link:../../packages/ui-css
-      '@rpgjs/vite':
-        specifier: workspace:*
-        version: link:../../packages/vite
-      '@signe/di':
-        specifier: 3.0.1
-        version: 3.0.1
-      canvasengine:
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
-      pixi.js:
-        specifier: ^8.18.1
-        version: 8.18.1
-    devDependencies:
-      '@canvasengine/compiler':
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
-      vite:
-        specifier: ^8.0.13
-        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
-
-  samples/sample-studio:
-    dependencies:
-      '@canvasengine/presets':
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
-      '@rpgjs/action-battle':
-        specifier: workspace:*
-        version: link:../../packages/action-battle
-      '@rpgjs/client':
-        specifier: workspace:*
-        version: link:../../packages/client
-      '@rpgjs/common':
-        specifier: workspace:*
-        version: link:../../packages/common
-      '@rpgjs/server':
-        specifier: workspace:*
-        version: link:../../packages/server
-      '@rpgjs/studio':
-        specifier: workspace:*
-        version: link:../../packages/studio
-      '@rpgjs/tiledmap':
-        specifier: workspace:*
-        version: link:../../packages/tiledmap
-      '@rpgjs/ui-css':
-        specifier: workspace:*
-        version: link:../../packages/ui-css
-      '@signe/di':
-        specifier: 3.0.1
-        version: 3.0.1
-      canvasengine:
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
-      pixi.js:
-        specifier: 8.18.1
-        version: 8.18.1
-      vite-plugin-dts:
-        specifier: ^5.0.0
-        version: 5.0.0(@microsoft/api-extractor@7.52.3(@types/node@25.8.0))(esbuild@0.28.0)(rolldown@1.0.1)(typescript@6.0.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3))
-    devDependencies:
-      '@canvasengine/compiler':
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
-      '@rpgjs/testing':
-        specifier: workspace:*
-        version: link:../../packages/testing
-      '@rpgjs/vite':
-        specifier: workspace:*
-        version: link:../../packages/vite
-      vite:
-        specifier: ^8.0.13
-        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@types/node@25.8.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3))
-
-  samples/sample-tiled:
-    dependencies:
-      '@canvasengine/presets':
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
-      '@rpgjs/action-battle':
-        specifier: workspace:*
-        version: link:../../packages/action-battle
-      '@rpgjs/client':
-        specifier: workspace:*
-        version: link:../../packages/client
-      '@rpgjs/common':
-        specifier: workspace:*
-        version: link:../../packages/common
-      '@rpgjs/server':
-        specifier: workspace:*
-        version: link:../../packages/server
-      '@rpgjs/tiledmap':
-        specifier: workspace:*
-        version: link:../../packages/tiledmap
-      '@rpgjs/ui-css':
-        specifier: workspace:*
-        version: link:../../packages/ui-css
-      '@rpgjs/vite':
-        specifier: workspace:*
-        version: link:../../packages/vite
-      '@rpgjs/vue':
-        specifier: workspace:*
-        version: link:../../packages/vue
-      '@signe/di':
-        specifier: 3.0.1
-        version: 3.0.1
-      canvasengine:
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
-      pixi.js:
-        specifier: ^8.18.1
-        version: 8.18.1
-    devDependencies:
-      '@canvasengine/compiler':
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.7
-        version: 6.0.7(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3))(vue@3.5.34(typescript@6.0.3))
-      path-browserify:
-        specifier: ^1.0.1
-        version: 1.0.1
-      vite:
-        specifier: ^8.0.13
-        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
-
-  samples/sample-v4-compat:
-    dependencies:
-      '@canvasengine/presets':
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
-      '@rpgjs/client':
-        specifier: workspace:*
-        version: link:../../packages/client
-      '@rpgjs/common':
-        specifier: workspace:*
-        version: link:../../packages/common
-      '@rpgjs/server':
-        specifier: workspace:*
-        version: link:../../packages/server
-      '@rpgjs/tiledmap':
-        specifier: workspace:*
-        version: link:../../packages/tiledmap
-      '@rpgjs/ui-css':
-        specifier: workspace:*
-        version: link:../../packages/ui-css
-      '@rpgjs/vite':
-        specifier: workspace:*
-        version: link:../../packages/vite
-      '@signe/di':
-        specifier: 2.9.2
-        version: 2.9.2
-      canvasengine:
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
-      pixi.js:
-        specifier: ^8.18.1
-        version: 8.18.1
-    devDependencies:
-      '@canvasengine/compiler':
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
-      vite:
-        specifier: ^8.0.11
-        version: 8.0.11(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
-
-  samples/sample-vue-gui:
-    dependencies:
-      '@canvasengine/presets':
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
-      '@rpgjs/client':
-        specifier: workspace:*
-        version: link:../../packages/client
-      '@rpgjs/common':
-        specifier: workspace:*
-        version: link:../../packages/common
-      '@rpgjs/server':
-        specifier: workspace:*
-        version: link:../../packages/server
-      '@rpgjs/ui-css':
-        specifier: workspace:*
-        version: link:../../packages/ui-css
-      '@rpgjs/vite':
-        specifier: workspace:*
-        version: link:../../packages/vite
-      '@rpgjs/vue':
-        specifier: workspace:*
-        version: link:../../packages/vue
-      '@signe/di':
-        specifier: 3.0.1
-        version: 3.0.1
-      canvasengine:
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
-      pixi.js:
-        specifier: ^8.18.1
-        version: 8.18.1
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.34(typescript@6.0.3)
-    devDependencies:
-      '@canvasengine/compiler':
-        specifier: 2.0.0-rc.4
-        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.7
-        version: 6.0.7(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3))(vue@3.5.34(typescript@6.0.3))
       path-browserify:
         specifier: ^1.0.1
         version: 1.0.1

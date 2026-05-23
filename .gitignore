@@ -16,6 +16,7 @@ docs/others/*
 !docs/api/client/*.md
 !docs/others/readme.md
 docs/.generated/
+playground/src/generated-games.ts
 cache
 packages/**/browser
 vitest.config.ts.timestamp*

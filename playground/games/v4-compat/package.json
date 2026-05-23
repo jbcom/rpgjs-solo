@@ -1,0 +1,27 @@
+{
+  "name": "@rpgjs/playground-v4-compat",
+  "version": "1.0.3-beta.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:mmorpg": "RPG_TYPE=mmorpg vite build"
+  },
+  "dependencies": {
+    "@canvasengine/presets": "2.0.0-rc.4",
+    "@rpgjs/client": "workspace:*",
+    "@rpgjs/common": "workspace:*",
+    "@rpgjs/server": "workspace:*",
+    "@rpgjs/tiledmap": "workspace:*",
+    "@rpgjs/ui-css": "workspace:*",
+    "@rpgjs/vite": "workspace:*",
+    "@signe/di": "2.9.2",
+    "canvasengine": "2.0.0-rc.4",
+    "pixi.js": "^8.18.1"
+  },
+  "devDependencies": {
+    "@canvasengine/compiler": "2.0.0-rc.4",
+    "vite": "^8.0.11"
+  }
+}

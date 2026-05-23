@@ -1,0 +1,8 @@
+{
+  "id": "projectiles",
+  "title": "Projectiles",
+  "description": "Projectile movement, collision feedback, cooldowns, and server-owned gameplay state.",
+  "tags": ["combat", "collision", "server-authoritative"],
+  "modes": ["standalone", "mmorpg"],
+  "port": 5181
+}

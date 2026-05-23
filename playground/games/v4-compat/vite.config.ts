@@ -1,0 +1,21 @@
+import { defineConfig } from "vite";
+import { compatibilityV4Plugin } from "@rpgjs/vite";
+import path from "path";
+import playgroundConfig from "./playground.config.json";
+
+export default defineConfig({
+  server: {
+    port: playgroundConfig.port,
+    strictPort: true,
+  },
+  plugins: [
+    ...compatibilityV4Plugin({
+      type: "rpg"
+    })
+  ],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src")
+    }
+  }
+});

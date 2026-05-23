@@ -1,0 +1,8 @@
+{
+  "id": "vue-gui",
+  "title": "Vue GUI",
+  "description": "Detached Vue GUI overlays, modals, panels, sprite-attached components, and server interactions.",
+  "tags": ["gui", "vue", "ui"],
+  "modes": ["standalone", "mmorpg"],
+  "port": 5185
+}

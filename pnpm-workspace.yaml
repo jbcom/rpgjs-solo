@@ -1,6 +1,7 @@
 packages:
   - 'packages/**'
   - samples/**
+  - playground/**
 verifyDepsBeforeRun: false
 allowBuilds:
   esbuild: true

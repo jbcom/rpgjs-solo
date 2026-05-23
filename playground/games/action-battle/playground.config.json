@@ -1,0 +1,8 @@
+{
+  "id": "action-battle",
+  "title": "Action Battle",
+  "description": "Real-time RPG combat with attacks, rewards, player stats, and battle-oriented UI.",
+  "tags": ["combat", "rewards", "stats"],
+  "modes": ["standalone", "mmorpg"],
+  "port": 5180
+}

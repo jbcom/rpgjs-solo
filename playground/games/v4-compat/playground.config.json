@@ -1,0 +1,8 @@
+{
+  "id": "v4-compat",
+  "title": "V4 Compatibility",
+  "description": "Compatibility flow for RPGJS v4-style configuration, modules, maps, and GUI packages.",
+  "tags": ["compatibility", "migration", "v4"],
+  "modes": ["standalone"],
+  "port": 5184
+}

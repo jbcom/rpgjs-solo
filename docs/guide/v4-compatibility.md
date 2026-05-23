@@ -95,7 +95,7 @@ The image files are imported through Vite, so they work in both development and 
 
 ## Example
 
-See `samples/sample-v4-compat` for a minimal v4-style project running on the v5 packages. The sample keeps the v4 module layout and only uses `vite.config.ts` to enable `compatibilityV4Plugin()`.
+See `playground/games/v4-compat` for a minimal v4-style project running on the v5 packages. The playground game keeps the v4 module layout and only uses `vite.config.ts` to enable `compatibilityV4Plugin()`.
 
 ## Tiled Files
 
