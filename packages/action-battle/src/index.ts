@@ -197,10 +197,13 @@ export {
 } from "./core/context";
 export { applyActionBattleHit } from "./core/hit";
 export {
+  ACTION_BATTLE_CLIENT_VISUAL_ID,
   ACTION_BATTLE_HIT_FX_COMPONENT_ID,
+  createActionBattleClientVisuals,
   createActionBattleVisual,
   createClassicActionBattleVisual,
   createFxActionBattleVisual,
+  emitActionBattleClientVisual,
   playActionBattleVisual,
   setActionBattlePreviewStarter,
 } from "./visual";

@@ -1,6 +1,6 @@
 import { MAXHP } from "@rpgjs/server";
 import { getActionBattleOptions } from "../config";
-import { playActionBattleVisual } from "../visual";
+import { emitActionBattleClientVisual } from "../visual";
 import { applyActionBattleHit } from "./hit";
 import { getActionBattleSystems } from "./context";
 import {
@@ -116,7 +116,7 @@ const applyDamageEffect = (
   });
 
   if (!result.cancelled) {
-    playActionBattleVisual(getActionBattleOptions().visual, {
+    emitActionBattleClientVisual({
       moment: "hit",
       entity: attacker,
       target,
@@ -199,7 +199,7 @@ const buildActionContext = (input: {
         const maxHp = rawParams?.[MAXHP] ?? Number.POSITIVE_INFINITY;
         const nextHp = Math.min(maxHp, currentHp + amount);
         (entry as any).hp = nextHp;
-        playActionBattleVisual(getActionBattleOptions().visual, {
+        emitActionBattleClientVisual({
           moment: "hurt",
           entity: entry,
           target: entry,
@@ -345,7 +345,7 @@ export const executeActionBattleUse = (input: {
   const hook = getUseHook(input.usable);
 
   if (input.playVisual !== false) {
-    playActionBattleVisual(getActionBattleOptions().visual, {
+    emitActionBattleClientVisual({
       moment: input.skill ? "castSkill" : "attack",
       entity: input.attacker,
       skill: input.skill,

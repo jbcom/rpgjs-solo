@@ -8,6 +8,7 @@ import type {
     ClientProjectileSpawn,
     RenderedProjectileProps,
 } from './Game/ProjectileManager'
+import type { ClientVisualMap } from './Game/ClientVisuals'
 
 type RpgClass<T = any> = new (...args: any[]) => T
 type RpgComponent = RpgClientObject
@@ -756,6 +757,37 @@ export interface RpgClient {
         id: string,
         component: ComponentFunction
     }[]
+
+    /**
+     * Named client-side visual macros.
+     *
+     * Use client visuals when the server needs to trigger a group of existing
+     * client visual primitives at once, such as a flash, damage text, sound,
+     * component animation, and camera shake. The server sends only the visual
+     * name and a serializable payload; the rendering details live on the client.
+     *
+     * For a single sound, flash, or component animation, prefer the direct
+     * server APIs (`playSound`, `flash`, `showComponentAnimation`). Client
+     * visuals are meant to group several visual operations and reduce bandwidth.
+     *
+     * ```ts
+     * import { defineModule, RpgClient } from '@rpgjs/client'
+     *
+     * export default defineModule<RpgClient>({
+     *   clientVisuals: {
+     *     hit({ target, data }, helpers) {
+     *       helpers.flash(target, { type: 'tint', tint: 'red' })
+     *       helpers.showHit(target, `-${data.damage}`)
+     *       helpers.sound('hit')
+     *     }
+     *   }
+     * })
+     * ```
+     *
+     * @prop {Record<string, ClientVisualHandler>} [clientVisuals]
+     * @memberof RpgClient
+     */
+    clientVisuals?: ClientVisualMap
 
     /**
      * Client-side projectile rendering configuration.

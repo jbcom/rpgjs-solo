@@ -19,6 +19,7 @@ import {
 import { resolveActionBattleUi } from "./ui";
 import {
   ACTION_BATTLE_HIT_FX_COMPONENT_ID,
+  createActionBattleClientVisuals,
   playActionBattleVisual,
   setActionBattlePreviewStarter,
 } from "./visual";
@@ -149,6 +150,7 @@ export const createActionBattleClient = (
           ]
         : []),
     ],
+    clientVisuals: createActionBattleClientVisuals(normalized),
     gui: resolvedUi.gui,
     sprite: {
       componentsBehind: resolvedUi.sprite.componentsBehind,

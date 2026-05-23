@@ -1784,6 +1784,21 @@ a broad phase, then delegates the precise inclusion logic to
 The method does not apply gameplay effects. Use the returned hits for damage,
 healing, target selection, AI, traps, previews, or any custom gameplay.
 
+In a networked game, apply those gameplay effects on the server so the
+authoritative state remains synchronized.
+
+Options:
+- `center`: point or object with `x`, `y`, and optional `hitbox`; objects
+  are resolved to their hitbox center.
+- `shape`: area shape used for broad-phase bounds and precise inclusion.
+- `targets`: `"players"`, `"events"`, `"custom"`, an array of them, or
+  `"all"`. Defaults to players and events, plus custom targets when
+  `customTargets` is provided.
+- `customTargets`: plain objects to include in the query. They should expose
+  `x` and `y`, and may expose `id`, `width`/`height`, or `hitbox`.
+- `excludeIds`: target ids to ignore, typically the caster or owner.
+- `filter`: final predicate called before `shape.contains()`.
+
 Built-in shape helpers:
 - `AreaShape.circle({ radius, offset? })`
 - `AreaShape.rect({ width, height, offset?, angle? })`
@@ -1794,6 +1809,10 @@ Built-in shape helpers:
 
 Each hit includes `target`, `id`, `kind`, `x`, `y`, `bounds`, `distance`,
 `distanceRatio`, and `falloff`.
+
+`distanceRatio` is clamped between `0` and `1`. `falloff.linear()` returns
+strong values near the center and weaker values near the edge, which is useful
+for explosions and other radial effects.
 
 - Source: `packages/common/src/rooms/Map.ts`
 - Kind: `method`
@@ -1824,6 +1843,25 @@ const hits = map.queryArea({
 for (const hit of hits) {
   const damage = Math.round(80 * hit.falloff.linear());
   hit.target.hp -= damage;
+}
+```
+
+```ts
+import { AreaShape } from "@rpgjs/server";
+
+function explodeBomb(map, bomb, ownerId?: string) {
+  const hits = map.queryArea({
+    center: bomb,
+    shape: AreaShape.circle({ radius: 96 }),
+    targets: ["players", "events"],
+    excludeIds: ownerId ? [ownerId] : [],
+    filter: (target) => target.id !== bomb.id,
+  });
+
+  for (const hit of hits) {
+    const damage = Math.round(120 * hit.falloff.linear());
+    hit.target.hp = Math.max(0, hit.target.hp - damage);
+  }
 }
 ```
 

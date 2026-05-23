@@ -8,7 +8,7 @@ import {
 } from "./types";
 import { normalizeActionBattleOptions, setActionBattleOptions } from "./config";
 import { manhattanDistance, parseAoeMask } from "./targeting";
-import { playActionBattleVisual } from "./visual";
+import { emitActionBattleClientVisual } from "./visual";
 import {
   applyActionBattleAttackDirection,
   resolveActionBattleAttackDirection,
@@ -644,7 +644,7 @@ const handleActionBattleSkillUse = (
 
   const map = player.getCurrentMap();
   if (!map) {
-    playActionBattleVisual(options.visual, {
+    emitActionBattleClientVisual({
       moment: "castSkill",
       entity: player,
       skill: skillData,
@@ -654,7 +654,7 @@ const handleActionBattleSkillUse = (
   }
   const targeting = resolveSkillTargeting(player, skillId, options);
   if (!targeting || !target) {
-    playActionBattleVisual(options.visual, {
+    emitActionBattleClientVisual({
       moment: "castSkill",
       entity: player,
       skill: skillData,
@@ -788,7 +788,7 @@ export const createActionBattleServer = (
           }
 
           withActionBattleAnimationUnlocked(player, () => {
-            playActionBattleVisual(options.visual, {
+            emitActionBattleClientVisual({
               moment: "attack",
               entity: player,
             });

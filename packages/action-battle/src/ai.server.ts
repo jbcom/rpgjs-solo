@@ -3,7 +3,7 @@ import {
   getActionBattleAnimationRemovalDelay,
   resolveActionBattleAnimation,
 } from "./animations";
-import { playActionBattleVisual } from "./visual";
+import { emitActionBattleClientVisual } from "./visual";
 import { getActionBattleOptions } from "./config";
 import { getActionBattleSystems } from "./core/context";
 import {
@@ -1212,7 +1212,7 @@ export class BattleAi {
     this.faceTarget({ force: true });
     this.telegraphAttack(profile);
     withActionBattleAnimationUnlocked(this.event, () => {
-      playActionBattleVisual(getActionBattleOptions().visual, {
+      emitActionBattleClientVisual({
         moment: "attack",
         entity: this.event,
         target: this.target,
@@ -1430,7 +1430,7 @@ export class BattleAi {
 
     // Visual feedback
     withActionBattleAnimationUnlocked(target, () => {
-      playActionBattleVisual(getActionBattleOptions().visual, {
+      emitActionBattleClientVisual({
         moment: "hit",
         entity: this.event,
         target,
@@ -1520,7 +1520,7 @@ export class BattleAi {
     this.faceTarget({ force: true });
     this.telegraphAttack(profile);
     withActionBattleAnimationUnlocked(this.event, () => {
-      playActionBattleVisual(getActionBattleOptions().visual, {
+      emitActionBattleClientVisual({
         moment: "attack",
         entity: this.event,
         target: this.target,
@@ -1555,7 +1555,7 @@ export class BattleAi {
     this.faceTarget({ force: true });
     this.telegraphAttack(profile);
     withActionBattleAnimationUnlocked(this.event, () => {
-      playActionBattleVisual(getActionBattleOptions().visual, {
+      emitActionBattleClientVisual({
         moment: "attack",
         entity: this.event,
         target: this.target,
@@ -1583,7 +1583,7 @@ export class BattleAi {
     const profile = this.getAttackProfile(AttackPattern.Zone);
     this.telegraphAttack(profile);
     withActionBattleAnimationUnlocked(this.event, () => {
-      playActionBattleVisual(getActionBattleOptions().visual, {
+      emitActionBattleClientVisual({
         moment: "attack",
         entity: this.event,
         target: this.target ?? undefined,
@@ -1995,7 +1995,7 @@ export class BattleAi {
 
     // Visual feedback
     withActionBattleAnimationUnlocked(this.event, () => {
-      playActionBattleVisual(getActionBattleOptions().visual, {
+      emitActionBattleClientVisual({
         moment: "hurt",
         entity: this.event,
         target: this.event,

@@ -32,6 +32,7 @@ import { NotificationManager } from "./Gui/NotificationManager";
 import { SaveClientService } from "./services/save";
 import { getCanMoveValue } from "./utils/readPropValue";
 import { ProjectileManager, type ClientProjectileImpact, type ClientProjectileSpawn } from "./Game/ProjectileManager";
+import { ClientVisualRegistry, type ClientVisualHandler, type ClientVisualMap, type ClientVisualPacket } from "./Game/ClientVisuals";
 import { normalizeActionInput } from "./services/actionInput";
 import { createClientPointerContext, type ClientPointerContext } from "./services/pointerContext";
 import { normalizeRoomMapId } from "./utils/mapId";
@@ -74,6 +75,7 @@ export class RpgClientEngine<T = any> {
   spritesheets: Map<string | number, any> = new Map();
   sounds: Map<string, any> = new Map();
   componentAnimations: any[] = [];
+  clientVisuals = new ClientVisualRegistry();
   projectiles: ProjectileManager;
   pointer: ClientPointerContext = createClientPointerContext();
   private spritesheetResolver?: (id: string | number) => any | Promise<any>;
@@ -274,6 +276,7 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-gui-load", this).subscribe();
     this.hooks.callHooks("client-particles-load", this).subscribe();
     this.hooks.callHooks("client-componentAnimations-load", this).subscribe();
+    this.hooks.callHooks("client-clientVisuals-load", this).subscribe();
     this.hooks.callHooks("client-projectiles-load", this).subscribe();
     this.hooks.callHooks("client-sprite-load", this).subscribe();
 
@@ -444,6 +447,10 @@ export class RpgClientEngine<T = any> {
       }
       const player = object ? this.sceneMap.getObjectById(object) : undefined;
       this.getComponentAnimation(id).displayEffect(params, player || position)
+    });
+
+    this.webSocket.on("clientVisual", (data) => {
+      this.playClientVisual(data);
     });
 
     this.webSocket.on("projectile:spawnBatch", (data) => {
@@ -1365,6 +1372,42 @@ export class RpgClientEngine<T = any> {
   }
 
   /**
+   * Register a named client visual macro.
+   *
+   * Client visuals are small client-side functions that group existing visual
+   * primitives such as flash, sound, component animations, sprite animation, or
+   * map shake. The server sends only the visual name and a serializable payload.
+   *
+   * @param name - Stable visual name sent by the server
+   * @param handler - Client-side visual handler
+   * @returns The registered handler
+   */
+  registerClientVisual(name: string, handler: ClientVisualHandler) {
+    return this.clientVisuals.register(name, handler);
+  }
+
+  /**
+   * Register several named client visual macros.
+   *
+   * @param visuals - Map of visual names to client-side handlers
+   */
+  registerClientVisuals(visuals: ClientVisualMap) {
+    this.clientVisuals.registerMany(visuals);
+  }
+
+  /**
+   * Play a registered client visual locally.
+   *
+   * This is also used by the websocket listener when the server calls
+   * `player.clientVisual()` or `map.clientVisual()`.
+   *
+   * @param packet - Visual name and serializable payload
+   */
+  playClientVisual(packet: ClientVisualPacket) {
+    return this.clientVisuals.play(packet, this);
+  }
+
+  /**
    * Add a component animation to the engine
    * 
    * Component animations are temporary visual effects that can be displayed
@@ -1549,6 +1592,10 @@ export class RpgClientEngine<T = any> {
 
   get scene() {
     return this.sceneMap
+  }
+
+  getObjectById(id: string) {
+    return this.sceneMap?.getObjectById(id);
   }
 
   private getPhysicsTick(): number {

@@ -170,9 +170,14 @@ New action-battle configuration is grouped by responsibility:
 - `skills.targeting` owns action targeting metadata for skills.
 
 Use the same `visual` preset on the server and client when your project splits
-configuration by runtime. The server triggers authoritative hit, hurt, skill,
-and enemy attack feedback. The client triggers local input feedback such as the
-attack preview.
+configuration by runtime. The server still decides when authoritative hit, hurt,
+skill, and enemy attack feedback should happen, but it sends one compact
+action-battle client visual event. The client resolves that visual locally and
+groups the flash, hit text, sound, component animation, or sprite animation.
+
+This keeps gameplay authority on the server while avoiding several visual
+packets for one combat moment. The client also triggers local input feedback
+such as the attack preview.
 
 ```ts
 // config.server.ts
@@ -277,6 +282,12 @@ visual: createActionBattleVisual("none")    // no built-in visual feedback
 The built-in CanvasEngine effect is registered as the component animation
 `action-battle-hit-fx`. You can also call any component animation registered by
 your own client modules with `fx.component(entity, id, params)`.
+
+Action-battle visual composition runs through the general
+[Client Visuals](/guide/client-visuals) mechanism for server-triggered combat
+feedback. Use direct server visual APIs for isolated one-off effects, and use
+`visual` here when you want action-battle to group combat presentation on the
+client.
 
 The legacy `animations` option still works for sprite animation names and
 temporary graphics. New orchestration should go through `visual`, while

@@ -719,6 +719,38 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     });
   }
 
+  /**
+   * Trigger a named client visual for this player only.
+   *
+   * Client visuals are registered in the client module with `clientVisuals`.
+   * They group existing client-side visual primitives such as flash, sound,
+   * component animations, sprite animations, or camera shake. The server sends
+   * only the visual name and a serializable payload, which keeps rendering
+   * details on the client and avoids sending several visual packets for one
+   * gameplay moment.
+   *
+   * Use direct APIs like `playSound()`, `flash()`, or
+   * `showComponentAnimation()` for one-off visuals. Use `clientVisual()` when
+   * several visuals should be orchestrated together by the client.
+   *
+   * @param name - Visual name registered on the client
+   * @param data - Serializable payload passed to the client visual handler
+   *
+   * @example
+   * ```ts
+   * player.clientVisual("hit", {
+   *   targetId: enemy.id,
+   *   damage: 25,
+   * });
+   * ```
+   */
+  clientVisual(name: string, data: Record<string, any> = {}): void {
+    this.emit("clientVisual", {
+      name,
+      data,
+    });
+  }
+
   snapshot() {
     const snapshot = createStatesSnapshotDeep(this);
     delete (snapshot as any).pendingMapPosition;

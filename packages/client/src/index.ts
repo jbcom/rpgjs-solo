@@ -27,5 +27,6 @@ export { RpgClientObject } from "./Game/Object";
 export { RpgClientPlayer } from "./Game/Player";
 export { RpgClientEvent } from "./Game/Event";
 export * from "./Game/ProjectileManager";
+export * from "./Game/ClientVisuals";
 export { withMobile } from "./components/gui/mobile";
 export * from "./services/AbstractSocket";

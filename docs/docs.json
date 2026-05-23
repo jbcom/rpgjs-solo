@@ -52,6 +52,7 @@
               "advanced/provide-load-map",
               "guide/create-shape",
               "guide/display-animations",
+              "guide/client-visuals",
               "guide/spritesheets",
               "guide/lighting",
               "guide/weather"

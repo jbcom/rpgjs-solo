@@ -2904,6 +2904,40 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 
   /**
+   * Trigger a named client visual for all players on the map.
+   *
+   * Client visuals are registered in the client module with `clientVisuals`.
+   * They are client-side macros for grouping existing visual primitives such as
+   * flash, sound, component animations, sprite animations, or camera shake.
+   * The map broadcasts one compact packet containing the visual name and a
+   * serializable payload; each client resolves and renders the visual locally.
+   *
+   * Prefer direct APIs such as `playSound()`, `showComponentAnimation()`, or
+   * `flash()` for a single visual operation. Use `clientVisual()` when one
+   * gameplay moment should trigger several client-side visuals together.
+   *
+   * @param name - Visual name registered on the client
+   * @param data - Serializable payload passed to the client visual handler
+   *
+   * @example
+   * ```ts
+   * map.clientVisual("explosion", {
+   *   position: { x: 320, y: 180 },
+   *   power: 2,
+   * });
+   * ```
+   */
+  clientVisual(name: string, data: Record<string, any> = {}): void {
+    this.$broadcast({
+      type: "clientVisual",
+      value: {
+        name,
+        data,
+      },
+    });
+  }
+
+  /**
    * Stop a sound for all players on the map
    * 
    * This method stops a sound that was previously started with `map.playSound()`

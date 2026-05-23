@@ -11,6 +11,11 @@ This guide explains how to display animations in RPG-JS. There are three common 
 2. **Custom Component Animations** - Creating your own Canvas Engine components for complex effects
 3. **CanvasEngine FX Animations** - Using the prebuilt `Fx` component animation for particle effects
 
+If one server-side gameplay moment should trigger several client visuals at
+once, such as a flash, sound, hit text, and component animation, use
+[Client Visuals](/guide/client-visuals) to group those primitives on the client
+and send only one compact server event.
+
 ## Spritesheet Animations
 
 > **See also:** [Spritesheets Guide](/guide/spritesheets) for comprehensive information about spritesheets, including dynamic spritesheet resolution.

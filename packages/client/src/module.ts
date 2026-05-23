@@ -155,6 +155,14 @@ export function provideClientModules(modules: RpgClientModule[]): FactoryProvide
           },
         };
       }
+      if (module.clientVisuals) {
+        const clientVisuals = { ...module.clientVisuals };
+        module.clientVisuals = {
+          load: (engine: RpgClientEngine) => {
+            engine.registerClientVisuals(clientVisuals);
+          },
+        };
+      }
       if (module.projectiles) {
         const projectiles = { ...module.projectiles };
         module.projectiles = {

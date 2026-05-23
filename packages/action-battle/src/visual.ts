@@ -9,6 +9,9 @@ import type {
 import { getActionBattleOptions } from "./config";
 import { playActionBattleAnimation } from "./animations";
 
+export const ACTION_BATTLE_CLIENT_VISUAL_ID = "action-battle.visual";
+export const ACTION_BATTLE_HIT_FX_COMPONENT_ID = "action-battle-hit-fx";
+
 type PreviewStarter = (
   entity: any,
   options?: Record<string, any>
@@ -16,10 +19,89 @@ type PreviewStarter = (
 
 let previewStarter: PreviewStarter | undefined;
 
-export const ACTION_BATTLE_HIT_FX_COMPONENT_ID = "action-battle-hit-fx";
-
 export function setActionBattlePreviewStarter(starter?: PreviewStarter) {
   previewStarter = starter;
+}
+
+const entityId = (entity: any): string | undefined =>
+  typeof entity?.id === "string" ? entity.id : undefined;
+
+const serializeSkill = (skill: any) => {
+  const id = skill?.id;
+  if (typeof id === "string") return { id };
+  if (typeof id === "function") {
+    const value = id.call(skill);
+    if (typeof value === "string") return { id: value };
+  }
+  return undefined;
+};
+
+const serializeResult = (result: any) => {
+  if (!result) return undefined;
+  return {
+    damage: result.damage,
+    knockbackForce: result.knockbackForce,
+    knockbackDuration: result.knockbackDuration,
+    defeated: result.defeated,
+    attackerId: entityId(result.attacker),
+    targetId: entityId(result.target),
+    rawDamage: result.rawDamage,
+    reaction: result.reaction,
+    cancelled: result.cancelled,
+    metadata: result.metadata,
+  };
+};
+
+const serializeActionBattleVisualContext = (
+  context: ActionBattleVisualContext
+) => ({
+  moment: context.moment,
+  objectId: entityId(context.entity),
+  sourceId: entityId(context.attacker ?? context.entity),
+  targetId: entityId(context.target),
+  damage: context.damage,
+  defeated: context.defeated,
+  result: serializeResult(context.result),
+  skill: serializeSkill(context.skill),
+  pattern: context.pattern,
+  animations: context.animations,
+  animationDefaults: context.animationDefaults,
+});
+
+export function emitActionBattleClientVisual(
+  context: ActionBattleVisualContext
+) {
+  if (getActionBattleOptions().visual === "none") return;
+  const anchor = context.entity ?? context.target ?? context.attacker;
+  const map = anchor?.getCurrentMap?.();
+  if (!map?.clientVisual) return;
+  map.clientVisual(
+    ACTION_BATTLE_CLIENT_VISUAL_ID,
+    serializeActionBattleVisualContext(context)
+  );
+}
+
+export function createActionBattleClientVisuals(
+  options = getActionBattleOptions()
+) {
+  return {
+    [ACTION_BATTLE_CLIENT_VISUAL_ID]: (context: any) => {
+      const data = context.data ?? {};
+      playActionBattleVisual(options.visual, {
+        moment: data.moment,
+        entity: context.object ?? context.source ?? context.target,
+        target: context.target,
+        attacker: context.source,
+        damage: data.damage,
+        defeated: data.defeated,
+        result: data.result,
+        skill: data.skill,
+        pattern: data.pattern,
+        animations: data.animations ?? options.animations,
+        animationDefaults: data.animationDefaults,
+      });
+    },
+  };
 }
 
 const callGraphic = (
@@ -79,14 +161,28 @@ const createHelpers = (context: ActionBattleVisualContext): ActionBattleVisualHe
     });
   },
   damageText(entity, damageOrText) {
-    if (!entity?.showHit) return;
     if (typeof damageOrText === "string") {
-      entity.showHit(damageOrText);
+      if (entity?.showHit) {
+        entity.showHit(damageOrText);
+        return;
+      }
+      entity?.showComponentAnimation?.("hit", {
+        text: damageOrText,
+        direction: entity?.direction?.() ?? entity?.direction,
+      });
       return;
     }
     const damage = damageOrText ?? context.damage ?? context.result?.damage;
     if (damage === undefined) return;
-    entity.showHit(`-${damage}`);
+    const text = `-${damage}`;
+    if (entity?.showHit) {
+      entity.showHit(text);
+      return;
+    }
+    entity?.showComponentAnimation?.("hit", {
+      text,
+      direction: entity?.direction?.() ?? entity?.direction,
+    });
   },
   component(entity, id, params = {}) {
     entity?.showComponentAnimation?.(id, params);
