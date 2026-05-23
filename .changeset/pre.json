@@ -1,0 +1,27 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "@rpgjs/action-battle": "5.0.0-beta.11",
+    "@rpgjs/client": "5.0.0-beta.11",
+    "@rpgjs/common": "5.0.0-beta.11",
+    "@rpgjs/physic": "5.0.0",
+    "@rpgjs/server": "5.0.0-beta.11",
+    "@rpgjs/studio": "5.0.0-beta.11",
+    "@rpgjs/testing": "5.0.0-beta.11",
+    "@rpgjs/tiledmap": "5.0.0-beta.11",
+    "@rpgjs/ui-css": "5.0.0-beta.11",
+    "@rpgjs/vite": "5.0.0-beta.11",
+    "@rpgjs/vue": "5.0.0-beta.11",
+    "sample-action-battle": "1.0.0",
+    "sample": "1.0.0",
+    "sample-projectiles": "1.0.0",
+    "sample-studio": "1.0.0",
+    "myrpg": "1.0.0",
+    "sample-v4-compat": "1.0.2",
+    "sample-vue-gui": "1.0.2"
+  },
+  "changesets": [
+    "bright-battles-move"
+  ]
+}

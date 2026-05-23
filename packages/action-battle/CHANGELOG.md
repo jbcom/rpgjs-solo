@@ -1,5 +1,16 @@
 # @rpgjs/action-battle
 
+## 5.0.0-beta.12
+
+### Patch Changes
+
+- Prepare beta.12 with action battle AI, area queries, client visuals, event component resolvers, projectile handling, and related Vite/runtime updates.
+- Updated dependencies
+  - @rpgjs/client@5.0.0-beta.12
+  - @rpgjs/common@5.0.0-beta.12
+  - @rpgjs/server@5.0.0-beta.12
+  - @rpgjs/vite@5.0.0-beta.12
+
 ## 5.0.0-beta.11
 
 ### Patch Changes
