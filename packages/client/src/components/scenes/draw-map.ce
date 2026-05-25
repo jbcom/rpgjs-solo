@@ -1,5 +1,11 @@
-<Container sound={backgroundMusic} shake={shakeConfig} freeze={engine.gamePause}>
-  <Container sound={backgroundAmbientSound} />
+<Container shake={shakeConfig} freeze={engine.gamePause}>
+  @if (backgroundMusic()) {
+    <Container sound={backgroundMusic()} />
+  }
+
+  @if (backgroundAmbientSound()) {
+    <Container sound={backgroundAmbientSound()} />
+  }
 
   <Container>
     @if (map() && sceneComponent()) {
@@ -42,10 +48,15 @@
     const projectiles = engine.projectiles.current
     const map = engine.sceneMap?.data
     const sceneComponent = computed(() => map()?.component)
-    const mapParams = map()?.params
     const weather = engine.sceneMap.weather
-    const backgroundMusic = { src: mapParams?.backgroundMusic, autoplay: true, loop: true }
-    const backgroundAmbientSound = { src: mapParams?.backgroundAmbientSound, autoplay: true, loop: true }
+    const backgroundMusic = computed(() => {
+      const src = map()?.params?.backgroundMusic
+      return src ? { src, autoplay: true, loop: true } : undefined
+    })
+    const backgroundAmbientSound = computed(() => {
+      const src = map()?.params?.backgroundAmbientSound
+      return src ? { src, autoplay: true, loop: true } : undefined
+    })
 
     const shakeConfig = {
       trigger: engine.mapShakeTrigger,

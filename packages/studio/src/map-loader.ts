@@ -302,6 +302,38 @@ export const loadMap = async (mapId: string) => {
     return Promise.all(values.map((entry) => resolveMediaReference(entry)));
   };
 
+  const isAudioAssetSource = (value: string): boolean => {
+    return (
+      /^(https?:\/\/|\/|data:|blob:)/.test(value) ||
+      /\.(aac|flac|m4a|mp3|oga|ogg|opus|wav|webm)(\?.*)?$/i.test(value)
+    );
+  };
+
+  const resolveAudioSource = async (value: unknown): Promise<string> => {
+    const parsedValue = parseJsonValue(value);
+    if (!parsedValue) return "";
+    if (typeof parsedValue === "string") {
+      const source = parsedValue.trim();
+      if (!source) return "";
+      if (isAudioAssetSource(source)) return resolveAssetSource(source);
+    }
+    if (typeof parsedValue === "object") {
+      const media = parsedValue as Record<string, unknown>;
+      const source = media.fileName ?? media.src ?? media.url;
+      if (typeof source === "string") return resolveAssetSource(source);
+    }
+
+    const resolved = await resolveMediaReference(value);
+    if (!resolved) return "";
+    if (typeof resolved === "string") return resolveAssetSource(resolved);
+    if (typeof resolved === "object") {
+      const media = resolved as Record<string, unknown>;
+      const source = media.fileName ?? media.src ?? media.url;
+      return typeof source === "string" ? resolveAssetSource(source) : "";
+    }
+    return "";
+  };
+
   params.tileset = await resolveMediaReference(params.tileset);
   params.primaryElementTileset = await resolveMediaReference(params.primaryElementTileset);
   params.baseTerrain = await resolveMediaReference(params.baseTerrain);
@@ -309,9 +341,8 @@ export const loadMap = async (mapId: string) => {
   params.elementTilesets = await resolveMediaList(params.elementTilesets);
   params.terrainTilesets = await resolveMediaList(params.terrainTilesets);
 
-  if (params.backgroundMusic && typeof params.backgroundMusic === "string") {
-    params.backgroundMusic = resolveAssetSource(params.backgroundMusic);
-  }
+  params.backgroundMusic = await resolveAudioSource(params.backgroundMusic);
+  params.backgroundAmbientSound = await resolveAudioSource(params.backgroundAmbientSound);
   // Merge polygons with hitboxes to create polygon-based hitboxes
   const mergedHitboxes = [...(mapResponse.hitboxes ?? [])];
   
@@ -902,6 +933,7 @@ export const loadMap = async (mapId: string) => {
     height: isV2 ? map.params.height * 48 : map.params.height,
     params: {
       backgroundMusic: map.params.backgroundMusic,
+      backgroundAmbientSound: map.params.backgroundAmbientSound,
     }
   };
 };
