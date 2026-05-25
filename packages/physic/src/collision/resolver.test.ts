@@ -137,5 +137,34 @@ describe('CollisionResolver', () => {
       expect(wall.velocity.y).toBe(0);
     }
   });
-});
 
+  it('respects canBePushedBy without making the entity static', () => {
+    const resolver = new CollisionResolver();
+    const player = new Entity({
+      position: { x: 0, y: 0 },
+      radius: 5,
+      mass: 1,
+      velocity: { x: 10, y: 0 },
+    });
+    const event = new Entity({
+      position: { x: 8, y: 0 },
+      radius: 5,
+      mass: 20,
+    });
+    event.canBePushedBy = () => false;
+
+    const initialEventPosition = event.position.clone();
+    const collider1 = new CircleCollider(player);
+    const collider2 = new CircleCollider(event);
+    const collision = collider1.testCollision(collider2);
+
+    if (collision) {
+      resolver.resolve(collision);
+
+      expect(event.isStatic()).toBe(false);
+      expect(event.position.x).toBe(initialEventPosition.x);
+      expect(event.position.y).toBe(initialEventPosition.y);
+      expect(player.position.x).toBeLessThan(0);
+    }
+  });
+});

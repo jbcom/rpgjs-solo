@@ -839,9 +839,11 @@ player.setHitbox(40, 40);
 
 Set the physical mass for this player or event.
 
-Mass is used by the server-side physics body for collision response. Higher
-values make the body harder to push. A mass of `0` or `Infinity` makes the body
-immovable.
+Mass is used by the server-side physics body for collision response. For
+events, mass only lets player collisions push the event when `event.pushable` is
+`true`; non-pushable events can still move through scripted movement such as
+`moveRoutes()`. Higher values make a pushable body harder to push. A mass of
+`0` or `Infinity` makes the body immovable.
 
 - Source: `packages/server/src/Player/Player.ts`
 - Kind: `method`
@@ -860,6 +862,7 @@ setMass(mass: number): void
 ### Examples
 
 ```ts
+event.pushable = true;
 event.setMass(20);
 event.setMass(Infinity);
 ```

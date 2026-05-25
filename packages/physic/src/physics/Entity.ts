@@ -261,6 +261,14 @@ export class Entity {
   public collisionCategory: number;
 
   /**
+   * Optional per-pair collision response guard.
+   *
+   * Return `false` when this entity should be detected in a collision but should
+   * not be moved or receive collision impulse from the other entity.
+   */
+  public canBePushedBy?: (other: Entity) => boolean;
+
+  /**
    * Time since last movement (for sleep detection)
    */
   public timeSinceMovement: number;
@@ -1332,4 +1340,3 @@ export interface EntityTileEvent {
 
 export type EntityTileHandler = (event: EntityTileEvent) => void;
 export type EntityCanEnterTileHandler = (event: EntityTileEvent) => boolean;
-

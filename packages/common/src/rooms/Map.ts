@@ -706,7 +706,9 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const height = hitbox?.h ?? 32;
     const topLeftX = this.resolveNumeric(owner.x);
     const topLeftY = this.resolveNumeric(owner.y);
+    const kind = this.resolvePhysicsEntityKind(owner, owner.id);
     entity.setMass(this.resolveCharacterMass(owner, entity.mass));
+    this.configureCharacterPushability(entity, owner, kind);
     this.updateHitbox(owner.id, topLeftX, topLeftY, width, height);
     this.setCharacterCollisionEnabled(owner.id, !this.shouldDisableCharacterCollisions(owner));
   }
@@ -732,6 +734,32 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     return typeof mass === "number" && !Number.isNaN(mass) && mass >= 0
       ? mass
       : fallback;
+  }
+
+  private isPushableCharacter(owner: any): boolean {
+    if (typeof owner?._pushable === "function") {
+      try {
+        return !!owner._pushable();
+      } catch {
+        return false;
+      }
+    }
+    return owner?.pushable === true;
+  }
+
+  private configureCharacterPushability(entity: Entity, owner: any, kind: PhysicsEntityKind): void {
+    if (kind !== "npc") {
+      delete entity.canBePushedBy;
+      return;
+    }
+
+    entity.canBePushedBy = (other: Entity) => {
+      const currentOwner = (entity as any).owner ?? owner;
+      if (this.isPushableCharacter(currentOwner)) {
+        return true;
+      }
+      return !this.players()?.[other.uuid];
+    };
   }
 
   private bindCharacterSignalSync(entity: Entity, owner: any): void {
@@ -776,6 +804,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     subscribeSignal(owner.y);
     subscribeSignal(owner.hitbox);
     subscribeSignal(owner._through);
+    subscribeSignal(owner._pushable);
+    subscribeSignal(owner._mass);
   }
 
   private unbindCharacterSignalSync(entity: Entity): void {
@@ -1425,6 +1455,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       }
       // If moving with high intensity, keep current animation (e.g., already running)
     });
+
+    this.configureCharacterPushability(entity, owner, options.kind ?? "generic");
 
     // Register position sync handler to update owner.x and owner.y.
     // Read owner dynamically from entity to avoid stale references after map transfer.

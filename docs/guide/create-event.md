@@ -16,7 +16,6 @@ import { RpgPlayer, type EventDefinition } from "@rpgjs/server";
 
 export function ChestEvent(): EventDefinition {
   return {
-    mass: 100,
     onInit() {
       this.setGraphic("chest-closed");
     },
@@ -66,9 +65,29 @@ export default defineModule<RpgServer>({
 `EventDefinition` only describes the event behavior. Map placement fields such as `id`, `x`, and `y` belong to the outer wrapper in `maps[].events`.
 Inside object-based hooks, `this` is typed as `RpgEvent`, so methods like `this.setGraphic()` are inferred correctly by TypeScript.
 
-Use `mass` when an event participates in physical collision response. Higher values make the event harder to push; `0` or `Infinity` makes it immovable. You can also change it at runtime:
+Events block players without being pushed by player collisions by default. They
+can still move through scripted movement such as `moveRoutes()`. Set
+`pushable: true` when an event should move from physical collision response,
+then use `mass` to tune how hard it is to push. A mass of `0` or `Infinity`
+still makes the body immovable.
 
 ```ts
+{
+  id: "crate-1",
+  x: 200,
+  y: 120,
+  event: {
+    name: "Crate",
+    pushable: true,
+    mass: 20
+  }
+}
+```
+
+You can also change these values at runtime:
+
+```ts
+this.pushable = true;
 this.setMass(20);
 ```
 

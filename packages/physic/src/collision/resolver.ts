@@ -92,7 +92,9 @@ export class CollisionResolver {
     normal: Vector2,
     depth: number
   ): void {
-    const totalInvMass = entityA.invMass + entityB.invMass;
+    const invMassA = this.getResolutionInvMass(entityA, entityB);
+    const invMassB = this.getResolutionInvMass(entityB, entityA);
+    const totalInvMass = invMassA + invMassB;
     if (totalInvMass === 0) {
       return; // Both static
     }
@@ -104,16 +106,16 @@ export class CollisionResolver {
     );
 
     // Distribute correction based on inverse mass
-    const correctionA = normal.mul(-correction * (entityA.invMass / totalInvMass));
-    const correctionB = normal.mul(correction * (entityB.invMass / totalInvMass));
+    const correctionA = normal.mul(-correction * (invMassA / totalInvMass));
+    const correctionB = normal.mul(correction * (invMassB / totalInvMass));
 
     // Apply corrections and notify position change handlers
     // This ensures that owner.x/y signals are updated after collision resolution
-    if (!entityA.isStatic()) {
+    if (invMassA > 0 && !entityA.isStatic()) {
       entityA.position.addInPlace(correctionA);
       entityA.notifyPositionChange();
     }
-    if (!entityB.isStatic()) {
+    if (invMassB > 0 && !entityB.isStatic()) {
       entityB.position.addInPlace(correctionB);
       entityB.notifyPositionChange();
     }
@@ -144,7 +146,9 @@ export class CollisionResolver {
     const restitution = Math.min(entityA.restitution, entityB.restitution);
 
     // Calculate impulse scalar
-    const totalInvMass = entityA.invMass + entityB.invMass;
+    const invMassA = this.getResolutionInvMass(entityA, entityB);
+    const invMassB = this.getResolutionInvMass(entityB, entityA);
+    const totalInvMass = invMassA + invMassB;
     if (totalInvMass === 0) {
       return; // Both static
     }
@@ -154,15 +158,15 @@ export class CollisionResolver {
     const impulse = normal.mul(impulseScalar);
 
     // Apply impulse
-    if (!entityA.isStatic()) {
-      entityA.velocity.addInPlace(impulse.mul(-entityA.invMass));
+    if (invMassA > 0 && !entityA.isStatic()) {
+      entityA.velocity.addInPlace(impulse.mul(-invMassA));
       entityA.notifyMovementChange();
       // Note: We don't call notifyDirectionChange() here because collision response
       // should not change the entity's intended direction (visual orientation).
       // Direction changes should only come from intentional movement (player input, AI).
     }
-    if (!entityB.isStatic()) {
-      entityB.velocity.addInPlace(impulse.mul(entityB.invMass));
+    if (invMassB > 0 && !entityB.isStatic()) {
+      entityB.velocity.addInPlace(impulse.mul(invMassB));
       entityB.notifyMovementChange();
       // Note: We don't call notifyDirectionChange() here because collision response
       // should not change the entity's intended direction (visual orientation).
@@ -184,14 +188,14 @@ export class CollisionResolver {
         frictionImpulse.normalizeInPlace().mulInPlace(maxFriction);
       }
 
-      if (!entityA.isStatic()) {
-        entityA.velocity.addInPlace(frictionImpulse.mul(-entityA.invMass));
+      if (invMassA > 0 && !entityA.isStatic()) {
+        entityA.velocity.addInPlace(frictionImpulse.mul(-invMassA));
         entityA.notifyMovementChange();
         // Note: We don't call notifyDirectionChange() here because friction adjustments
         // should not change the entity's intended direction (visual orientation).
       }
-      if (!entityB.isStatic()) {
-        entityB.velocity.addInPlace(frictionImpulse.mul(entityB.invMass));
+      if (invMassB > 0 && !entityB.isStatic()) {
+        entityB.velocity.addInPlace(frictionImpulse.mul(invMassB));
         entityB.notifyMovementChange();
         // Note: We don't call notifyDirectionChange() here because friction adjustments
         // should not change the entity's intended direction (visual orientation).
@@ -209,5 +213,11 @@ export class CollisionResolver {
       this.resolve(collision);
     }
   }
-}
 
+  private getResolutionInvMass(entity: Entity, other: Entity): number {
+    if (entity.canBePushedBy?.(other) === false) {
+      return 0;
+    }
+    return entity.invMass;
+  }
+}

@@ -159,7 +159,9 @@ export type EventDefinition = EventHooks & {
   name?: string;
   /** Shared or scenario event mode */
   mode?: EventMode | "shared" | "scenario";
-  /** Physical mass of the event. `0` or `Infinity` makes it immovable. */
+  /** Whether players can physically push this event. `false` by default. */
+  pushable?: boolean;
+  /** Physical mass used when the event is pushable. `0` or `Infinity` makes it immovable. */
   mass?: number;
   /** Allow custom event metadata while keeping placement fields typed separately */
   [key: string]: unknown;
@@ -497,6 +499,27 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
 
     return undefined;
+  }
+
+  private resolveEventPushable(eventObj: any): boolean {
+    const eventDef = eventObj?.event ?? eventObj;
+
+    const readPushable = (value: unknown): boolean | undefined => (
+      typeof value === "boolean" ? value : undefined
+    );
+
+    const objectPushable = readPushable(eventDef?.pushable);
+    if (objectPushable !== undefined) {
+      return objectPushable;
+    }
+
+    if (typeof eventDef === "function") {
+      return readPushable((eventDef as any).pushable)
+        ?? readPushable((eventDef as any).prototype?._eventDataPushable)
+        ?? false;
+    }
+
+    return false;
   }
 
   private normalizeEventObject(eventObj: EventPosOption | any): EventPosOption {
@@ -2038,6 +2061,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     const x = typeof eventObj.x === "number" ? eventObj.x : 0;
     const y = typeof eventObj.y === "number" ? eventObj.y : 0;
     const mass = this.resolveEventMass(eventObj);
+    const pushable = this.resolveEventPushable(eventObj);
 
     const requestedMode = options.mode ?? this.resolveEventMode(eventObj);
     const mode = this.normalizeEventMode(requestedMode);
@@ -2102,6 +2126,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     eventInstance.id = id;
     eventInstance.setMass(mass ?? 100);
+    eventInstance.pushable = pushable;
     (eventInstance as any).mode = effectiveMode;
     if (effectiveMode === EventMode.Scenario && scenarioOwnerId) {
       (eventInstance as any)._scenarioOwnerId = scenarioOwnerId;

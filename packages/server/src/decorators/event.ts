@@ -27,7 +27,13 @@ export interface EventOptions {
 
     width?: number,
     height?: number,
-    /** Physical mass of the event. `0` or `Infinity` makes it immovable. */
+    /**
+     * Whether players can physically push this event.
+     *
+     * `false` by default. Use `mass` to tune resistance once pushing is enabled.
+     */
+    pushable?: boolean,
+    /** Physical mass used when the event is pushable. `0` or `Infinity` makes it immovable. */
     mass?: number,
 
     /** 
@@ -56,7 +62,9 @@ export function EventData(options: EventOptions) {
         target.width = options.width
         target.height = options.height
         target.hitbox = options.hitbox
+        target.pushable = options.pushable
         target.mass = options.mass
+        target.prototype._eventDataPushable = options.pushable
         target.prototype._eventDataMass = options.mass
         target._name = options.name
         target.prototype._name = options.name

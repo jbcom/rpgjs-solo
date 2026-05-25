@@ -142,6 +142,7 @@ export class RpgCommonPlayer {
   @sync() _through = signal(false);
   @sync() _throughOtherPlayer = signal(true);
   @sync() _throughEvent = signal(false);
+  @sync() _pushable = signal(false);
   @sync() _frequency = signal(0);
   @sync() _frames = signal<{ x: number; y: number; ts: number }[]>([]);
   @sync() componentsTop = signal<string | null>(null);
@@ -160,13 +161,27 @@ export class RpgCommonPlayer {
   // Direction and animation locking (server-side only, not synced)
   private _directionFixed = signal(false);
   private _animationFixed = signal(false);
-  protected _mass = signal(1);
+  @sync() protected _mass = signal(1);
 
   /**
    * Physical mass used by the server-side physics body.
    */
   get mass(): number {
     return this._mass();
+  }
+
+  /**
+   * Whether this character can be physically pushed by another character.
+   *
+   * This is mainly intended for events. Mass controls how hard a pushable body
+   * is to move; this flag controls whether gameplay allows pushing at all.
+   */
+  get pushable(): boolean {
+    return this._pushable();
+  }
+
+  set pushable(value: boolean) {
+    this._pushable.set(!!value);
   }
 
   /**
