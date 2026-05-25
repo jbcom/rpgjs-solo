@@ -95,6 +95,31 @@ describe("Action interactions", () => {
     expect(actionCount).toBe(0);
   });
 
+  test("ignores default action during GUI close cooldown", async () => {
+    const map = player.getCurrentMap() as any;
+    const hitbox = player.hitbox();
+
+    await map.createDynamicEvent({
+      id: "front-event",
+      x: player.x(),
+      y: player.y() + hitbox.h + 2,
+      event: {
+        onAction() {
+          actionCount += 1;
+        },
+      },
+    });
+    await fixture.nextTick();
+
+    player.changeDirection(Direction.Down);
+    (player as any).__guiActionBlockUntil = Date.now() + 1000;
+
+    map.onAction(player, { action: Control.Action });
+    await fixture.wait(0);
+
+    expect(actionCount).toBe(0);
+  });
+
   test("dispatches custom action payloads to onInput without triggering event actions", async () => {
     const map = player.getCurrentMap() as any;
     const hitbox = player.hitbox();

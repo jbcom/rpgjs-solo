@@ -6,6 +6,7 @@ import {
   Gui,
   MenuGui,
   NotificationGui,
+  RpgPlayer,
   SaveLoadGui,
   ShopGui,
   TitleGui,
@@ -177,7 +178,10 @@ describe("GUI", () => {
 
     await expect(pending).resolves.toBe("exit");
     expect(player.canMove).toBe(true);
-    expect(player.emit).toHaveBeenCalledWith("gui.exit", "rpg-main-menu");
+    expect(player.emit).toHaveBeenCalledWith("gui.exit", {
+      guiId: "rpg-main-menu",
+      guiOpenId: expect.any(String),
+    });
   });
 
   test("save/load gui opens sanitized slot data and loads a selected slot", async () => {
@@ -201,6 +205,7 @@ describe("GUI", () => {
       type: "gui.open",
       value: {
         guiId: "rpg-save",
+        guiOpenId: expect.any(String),
         data: {
           mode: "load",
           slots: [{ id: "slot-0", map: "start" }, null, null],
@@ -274,7 +279,10 @@ describe("GUI", () => {
     await titleGui.emit("select", { id: "new", index: 0 });
 
     await expect(titlePending).resolves.toEqual({ id: "new", index: 0 });
-    expect(player.emit).toHaveBeenCalledWith("gui.exit", "rpg-title-screen");
+    expect(player.emit).toHaveBeenCalledWith("gui.exit", {
+      guiId: "rpg-title-screen",
+      guiOpenId: expect.any(String),
+    });
 
     const gameoverGui = new GameoverGui(player);
     const gameoverPending = gameoverGui.open({
@@ -285,7 +293,10 @@ describe("GUI", () => {
     await gameoverGui.emit("select", { id: "retry", index: 0 });
 
     await expect(gameoverPending).resolves.toEqual({ id: "retry", index: 0 });
-    expect(player.emit).toHaveBeenCalledWith("gui.exit", "rpg-gameover");
+    expect(player.emit).toHaveBeenCalledWith("gui.exit", {
+      guiId: "rpg-gameover",
+      guiOpenId: expect.any(String),
+    });
   });
 
   test("gui close is idempotent and removes the active gui reference", async () => {
@@ -304,8 +315,65 @@ describe("GUI", () => {
     await expect(pending).resolves.toEqual({ ok: true });
     expect(player._gui["custom-menu"]).toBeUndefined();
     expect(player.canMove).toBe(true);
-    expect(player.emit).toHaveBeenCalledWith("gui.exit", "custom-menu");
+    expect(player.__guiActionBlockUntil).toBeGreaterThan(Date.now());
+    expect(player.emit).toHaveBeenCalledWith("gui.exit", {
+      guiId: "custom-menu",
+      guiOpenId: expect.any(String),
+    });
     expect(player.emit.mock.calls.filter(([type]) => type === "gui.exit")).toHaveLength(1);
+  });
+
+  test("ignores stale gui exits from an older open instance", async () => {
+    const player: any = new RpgPlayer();
+    player.emit = vi.fn();
+    player.canMove = true;
+
+    const firstGui = new Gui("custom-menu", player);
+    player._gui["custom-menu"] = firstGui;
+    firstGui.open({}, { waitingAction: true });
+    const staleOpenId = firstGui.openId;
+
+    const secondGui = new Gui("custom-menu", player);
+    player._gui["custom-menu"] = secondGui;
+    const pending = secondGui.open({}, { waitingAction: true });
+
+    player.removeGui("custom-menu", { stale: true }, staleOpenId);
+    expect(player._gui["custom-menu"]).toBe(secondGui);
+
+    player.removeGui("custom-menu", { ok: true }, secondGui.openId);
+
+    await expect(pending).resolves.toEqual({ ok: true });
+    expect(player._gui["custom-menu"]).toBeUndefined();
+  });
+
+  test("accepts legacy gui exits without a valid open id", async () => {
+    const player: any = new RpgPlayer();
+    player.emit = vi.fn();
+    player.canMove = true;
+
+    const gui = new Gui("custom-menu", player);
+    player._gui["custom-menu"] = gui;
+    const pending = gui.open({}, { waitingAction: true });
+
+    player.removeGui("custom-menu", { ok: true }, undefined);
+
+    await expect(pending).resolves.toEqual({ ok: true });
+    expect(player._gui["custom-menu"]).toBeUndefined();
+  });
+
+  test("accepts malformed gui open ids as legacy exits", async () => {
+    const player: any = new RpgPlayer();
+    player.emit = vi.fn();
+    player.canMove = true;
+
+    const gui = new Gui("custom-menu", player);
+    player._gui["custom-menu"] = gui;
+    const pending = gui.open({}, { waitingAction: true });
+
+    player.removeGui("custom-menu", { ok: true }, (() => gui.openId) as any);
+
+    await expect(pending).resolves.toEqual({ ok: true });
+    expect(player._gui["custom-menu"]).toBeUndefined();
   });
 
   test("notification gui opens without blocking for an action", async () => {
@@ -318,6 +386,7 @@ describe("GUI", () => {
 
     expect(player.emit).toHaveBeenCalledWith("gui.open", {
       guiId: "rpg-notification",
+      guiOpenId: expect.any(String),
       data: { message: "Saved" },
     });
   });
@@ -352,6 +421,7 @@ describe("GUI", () => {
       type: "gui.open",
       value: {
         guiId: "rpg-dialog",
+        guiOpenId: expect.any(String),
         data: {
           message: "Hello",
           autoClose: false,
@@ -369,6 +439,7 @@ describe("GUI", () => {
 
     await expect(pending).resolves.toBe("yes");
     expect(player.canMove).toBe(true);
+    expect(player.__guiActionBlockUntil).toBeGreaterThan(Date.now());
     expect(talkWith.replayRoutes).toHaveBeenCalled();
     expect(talkWith.changeDirection).toHaveBeenCalledWith(3);
   });

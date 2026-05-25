@@ -64,6 +64,73 @@ const VueTooltip = {
 };
 
 describe("RpgGui Vue integration", () => {
+  test("tracks GUI open ids and sends them back when closing", async () => {
+    const { gui, socket } = await createGui();
+    await gui._initialize();
+    const openHandler = socket.on.mock.calls.find(([event]) => event === "gui.open")?.[1];
+
+    openHandler({
+      guiId: PrebuiltGui.Dialog,
+      guiOpenId: "open-1",
+      data: { message: "Hello" },
+    });
+
+    expect(gui.get(PrebuiltGui.Dialog)?.openId).toBe("open-1");
+
+    gui.guiClose(PrebuiltGui.Dialog, 0, gui.get(PrebuiltGui.Dialog)?.openId);
+
+    expect(socket.emit).toHaveBeenCalledWith("gui.exit", {
+      guiId: PrebuiltGui.Dialog,
+      guiOpenId: "open-1",
+      data: 0,
+    });
+  });
+
+  test("does not emit malformed GUI open ids", async () => {
+    const { gui, socket } = await createGui();
+
+    gui.guiClose(PrebuiltGui.Dialog, 0, (() => "open-1") as any);
+
+    expect(socket.emit).toHaveBeenCalledWith("gui.exit", {
+      guiId: PrebuiltGui.Dialog,
+      guiOpenId: undefined,
+      data: 0,
+    });
+  });
+
+  test("ignores stale server close events for previous GUI opens", async () => {
+    const { gui, socket } = await createGui();
+    await gui._initialize();
+    const openHandler = socket.on.mock.calls.find(([event]) => event === "gui.open")?.[1];
+    const exitHandler = socket.on.mock.calls.find(([event]) => event === "gui.exit")?.[1];
+
+    openHandler({
+      guiId: PrebuiltGui.Dialog,
+      guiOpenId: "open-1",
+      data: { message: "First" },
+    });
+    openHandler({
+      guiId: PrebuiltGui.Dialog,
+      guiOpenId: "open-2",
+      data: { message: "Second" },
+    });
+
+    exitHandler({
+      guiId: PrebuiltGui.Dialog,
+      guiOpenId: "open-1",
+    });
+
+    expect(gui.isDisplaying(PrebuiltGui.Dialog)).toBe(true);
+    expect(gui.get(PrebuiltGui.Dialog)?.data()).toEqual({ message: "Second" });
+
+    exitHandler({
+      guiId: PrebuiltGui.Dialog,
+      guiOpenId: "open-2",
+    });
+
+    expect(gui.isDisplaying(PrebuiltGui.Dialog)).toBe(false);
+  });
+
   test("separates CanvasEngine and Vue GUI registries", async () => {
     const { gui } = await createGui();
 

@@ -1,5 +1,7 @@
 import { RpgPlayer } from '../Player/Player'
 
+export const GUI_ACTION_COOLDOWN_MS = 250
+
 export interface GuiOpenOptions {
     waitingAction?: boolean
     blockPlayerInput?: boolean
@@ -7,10 +9,12 @@ export interface GuiOpenOptions {
 
 export class Gui {
 
+    private static _openSequence = 0
     private _close: Function = () => {}
     private _blockPlayerInput: boolean = false
     private _events = new Map<string, (data: any) => void>()
     private _closed = false
+    openId: string | null = null
 
     constructor(
         public id: string,
@@ -25,8 +29,10 @@ export class Gui {
     }: GuiOpenOptions = {}): Promise<any> {
         return new Promise((resolve) => {
             this._closed = false
+            this.openId = `${Date.now()}-${++Gui._openSequence}`
             this.player.emit('gui.open', {
                 guiId: this.id,
+                guiOpenId: this.openId,
                 data
             })
             this._blockPlayerInput = blockPlayerInput
@@ -40,6 +46,13 @@ export class Gui {
                 this._close = resolve
             }
         })
+    }
+
+    matchesOpenId(openId?: unknown): boolean {
+        if (typeof openId !== 'string' || openId.length === 0) {
+            return true
+        }
+        return this.openId === openId
     }
 
     on(event: string, callback: (data: any) => void) {
@@ -60,11 +73,16 @@ export class Gui {
             return
         }
         this._closed = true
-        this.player.emit('gui.exit', this.id)
+        this.player.emit('gui.exit', {
+            guiId: this.id,
+            guiOpenId: this.openId
+        })
         if (this._blockPlayerInput) {
             ;(this.player as any).canMove = true
+            ;(this.player as any).__guiActionBlockUntil = Date.now() + GUI_ACTION_COOLDOWN_MS
         }
         delete (this.player as any)._gui?.[this.id]
+        this.openId = null
         this._close(data)
     }
 

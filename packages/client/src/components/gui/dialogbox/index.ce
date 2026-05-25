@@ -17,7 +17,7 @@
                     @if (hasChoices()) {
                         <Navigation tabindex={selectedItem} controls={controls}>
                             <div class="rpg-ui-dialog-choices">
-                                @for ((choice,index) of choices) {
+                                @for ((choice,index) of dialogChoices()) {
                                     <div
                                         class="rpg-ui-dialog-choice"
                                         class={{active: selectedItem() === index}}
@@ -62,27 +62,38 @@
     engine.stopProcessingInput = true;
 
     const selectedItem = signal(0)
-    let isDestroyed = false;
+    const ACTION_OPEN_GUARD_MS = 150;
+    const openedAt = Date.now();
 
     const {
         data,
         onFinish,
-        onInteraction
+        onInteraction,
+        guiOpenId
     } = defineProps();
 
-    const { message, choices, face, speaker, position, typewriterEffect, autoClose } = data();
-    const fullWidth = computed(() => data().fullWidth || false);
+    const dialogData = computed(() => data() || {});
+    const dialogChoices = computed(() => Array.isArray(dialogData().choices) ? dialogData().choices : []);
+    const message = computed(() => dialogData().message);
+    const speaker = computed(() => dialogData().speaker);
+    const position = computed(() => dialogData().position);
+    const typewriterEffect = computed(() => dialogData().typewriterEffect);
+    const fullWidth = computed(() => dialogData().fullWidth || false);
 
     const resolveProp = (value) => typeof value === "function" ? value() : value;
+    const normalizeOpenId = (value) => {
+        const resolved = resolveProp(value);
+        return typeof resolved === "string" && resolved.length > 0 ? resolved : undefined;
+    };
 
     const speakerName = computed(() => {
-        const value = resolveProp(speaker);
+        const value = resolveProp(speaker());
         return value ? String(value) : "";
     });
 
-    const dialogPosition = computed(() => resolveProp(position) || "bottom");
+    const dialogPosition = computed(() => resolveProp(position()) || "bottom");
     const isFullWidth = computed(() => resolveProp(fullWidth) !== false);
-    const dialogFace = computed(() => resolveProp(face));
+    const dialogFace = computed(() => resolveProp(dialogData().face));
     const hasFace = computed(() => {
         const value = dialogFace();
         return !!(value && value.id);
@@ -123,9 +134,9 @@
     };
 
     effect(() => {
-        const text = resolveProp(message) || "";
+        const text = resolveProp(message()) || "";
         fullMessage.set(text);
-        const useTypewriter = resolveProp(typewriterEffect) !== false;
+        const useTypewriter = resolveProp(typewriterEffect()) !== false;
         if (!useTypewriter) {
             finishTyping();
             return;
@@ -134,9 +145,9 @@
     });
 
 
-    const hasChoices = computed(() => choices.length > 0);
+    const hasChoices = computed(() => dialogChoices().length > 0);
     const showIndicator = computed(() => !hasChoices() && !isTyping());
-    const nav = createTabindexNavigator(selectedItem, { count: () => choices.length }, 'wrap');
+    const nav = createTabindexNavigator(selectedItem, { count: () => dialogChoices().length }, 'wrap');
 
     function selectChoice(index) {
         return function() {
@@ -146,12 +157,14 @@
     }
 
     function _onFinish(value) {
-        if (onFinish) onFinish(value);
+        if (onFinish) onFinish(value, normalizeOpenId(guiOpenId));
     }
 
     const onSelect = (index) => {
         _onFinish(index);
     };
+
+    const canAcceptAction = () => Date.now() - openedAt >= ACTION_OPEN_GUARD_MS;
 
     const controls = signal({
         up: {
@@ -175,6 +188,9 @@
         action: {
             bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
+                if (!canAcceptAction()) {
+                    return;
+                }
                 if (isTyping()) {
                     finishTyping();
                     return;
@@ -192,6 +208,9 @@
         action: {
             bind: getKeyboardControlBind(keyboardControls.action),
             keyDown() {
+                if (!canAcceptAction()) {
+                    return;
+                }
                 if (isTyping()) {
                     finishTyping();
                     return;
@@ -203,6 +222,9 @@
     })
 
     const faceSheet = (faceValue) => {
+        if (!faceValue || !faceValue.id) {
+            return undefined;
+        }
         return {
             definition: engine.getSpriteSheet(faceValue.id),
             playing: faceValue.expression || "default",
@@ -211,7 +233,6 @@
 
     mount((element) => {
         return () => {
-            isDestroyed = true;
             // Wait destroy is finished before start processing input
             delay(() => {
                 engine.stopProcessingInput = false;

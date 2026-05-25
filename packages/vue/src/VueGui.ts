@@ -17,6 +17,7 @@ interface GuiState {
     name: string
     component: any
     data: any
+    openId?: string
     attachToSprite: boolean
     display: boolean
 }
@@ -378,7 +379,7 @@ export class VueGui {
             rpgObjects: this.createObjectsObservable(),
             rpgCurrentPlayer: this.createCurrentPlayerObservable(),
             rpgGuiClose: (name: string, data?: any) => {
-                this.parentGui.guiClose(name, data)
+                this.parentGui.guiClose(name, data, this.guiState[name]?.openId)
             },
             rpgGuiInteraction: (guiId: string, name: string, data: any = {}) => {
                 this.parentGui.guiInteraction(guiId, name, data)

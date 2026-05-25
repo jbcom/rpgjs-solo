@@ -33,8 +33,8 @@
         height={engine.height}
       >
         @if (gui.display) {
-          <gui.component data={gui.data} dependencies={gui.dependencies} onFinish={(data) => {
-            onGuiFinish(gui, data)
+          <gui.component data={gui.data} dependencies={gui.dependencies} guiOpenId={gui.openId} onFinish={(data, guiOpenId) => {
+            onGuiFinish(gui, data, guiOpenId)
           }} onInteraction={(name, data) => {
             onGuiInteraction(gui, name, data)
           }} /> 
@@ -48,7 +48,6 @@
   import { inject } from "../../core/inject";
   import { RpgClientEngine } from "../../RpgClientEngine";
   import { RpgGui } from "../../Gui/Gui";
-  import { delay } from "@rpgjs/common";
   import { NightAmbiant, SpriteShadows } from '@canvasengine/presets'
 
   const engine = inject(RpgClientEngine);
@@ -76,10 +75,16 @@
      }
   })
 
-  const onGuiFinish = (gui, data) => {
-    delay(() => {
-      guiService.guiClose(gui.name, data)
-    })
+  const normalizeOpenId = (value) => {
+    const resolved = typeof value === "function" ? value() : value
+    return typeof resolved === "string" && resolved.length > 0 ? resolved : undefined
+  }
+
+  const onGuiFinish = (gui, data, guiOpenId) => {
+    const completedOpenId = normalizeOpenId(guiOpenId)
+    const currentOpenId = normalizeOpenId(gui.openId)
+    if (completedOpenId && currentOpenId && completedOpenId !== currentOpenId) return
+    guiService.guiClose(gui.name, data, completedOpenId ?? currentOpenId)
   }
 
   const onGuiInteraction = (gui, name, data) => {

@@ -39,6 +39,7 @@ export interface GuiInstance {
   component: any;
   display: WritableSignal<boolean>;
   data: WritableSignal<any>;
+  openId?: string;
   autoDisplay: boolean;
   dependencies?: Signal[];
   subscription?: Subscription;
@@ -50,6 +51,7 @@ type GuiState = {
   component: any;
   display: boolean;
   data: any;
+  openId?: string;
   attachToSprite: boolean;
 };
 
@@ -179,12 +181,18 @@ export class RpgGui {
   }
 
   async _initialize() {
-    this.webSocket.on("gui.open", (data: { guiId: string; data: any }) => {
+    this.webSocket.on("gui.open", (data: { guiId: string; data: any; guiOpenId?: string }) => {
       this.clearPendingActions(data.guiId);
-      this.display(data.guiId, data.data);
+      this.display(data.guiId, data.data, [], data.guiOpenId);
     });
 
-    this.webSocket.on("gui.exit", (guiId: string) => {
+    this.webSocket.on("gui.exit", (payload: string | { guiId: string; guiOpenId?: string }) => {
+      const guiId = typeof payload === "string" ? payload : payload.guiId;
+      const guiOpenId = typeof payload === "string" ? undefined : payload.guiOpenId;
+      const current = this.get(guiId);
+      if (guiOpenId && current?.openId && current.openId !== guiOpenId) {
+        return;
+      }
       this.hide(guiId);
     });
 
@@ -256,9 +264,12 @@ export class RpgGui {
     });
   }
 
-  guiClose(guiId: string, data?: any) {
+  guiClose(guiId: string, data?: any, guiOpenId?: unknown) {
+    const normalizedOpenId =
+      typeof guiOpenId === "string" && guiOpenId.length > 0 ? guiOpenId : undefined;
     this.webSocket.emit("gui.exit", {
       guiId,
+      guiOpenId: normalizedOpenId,
       data,
     });
   }
@@ -308,6 +319,7 @@ export class RpgGui {
       component,
       display: signal<boolean>(gui.display || false),
       data: signal<any>(gui.data || {}),
+      openId: undefined,
       autoDisplay: gui.autoDisplay || false,
       dependencies: gui.dependencies ? gui.dependencies() : [],
       attachToSprite,
@@ -431,7 +443,7 @@ export class RpgGui {
    * gui.display('shop', { shopId: 1 }, [playerSignal, shopSignal]);
    * ```
    */
-  display(id: string, data = {}, dependencies: Signal[] = []) {
+  display(id: string, data = {}, dependencies: Signal[] = [], openId?: string) {
     if (!this.exists(id)) {
       throw throwError(id);
     }
@@ -443,8 +455,9 @@ export class RpgGui {
     
     if (isVueComponent) {
       // Handle Vue component display
-      this._handleVueComponentDisplay(id, data, dependencies, guiInstance);
+      this._handleVueComponentDisplay(id, data, dependencies, guiInstance, openId);
     } else {
+      guiInstance.openId = openId;
       guiInstance.data.set(data);
       guiInstance.display.set(true);
     }
@@ -464,7 +477,7 @@ export class RpgGui {
    * @param dependencies - Runtime dependencies
    * @param guiInstance - GUI instance
    */
-  private _handleVueComponentDisplay(id: string, data: any, dependencies: Signal[], guiInstance: GuiInstance) {
+  private _handleVueComponentDisplay(id: string, data: any, dependencies: Signal[], guiInstance: GuiInstance, openId?: string) {
     // Unsubscribe from previous subscription if exists
     if (guiInstance.subscription) {
       guiInstance.subscription.unsubscribe();
@@ -482,6 +495,7 @@ export class RpgGui {
         deps.map(dependency => dependency.observable)
       ).subscribe((values) => {
         if (values.every(value => value !== undefined)) {
+          guiInstance.openId = openId;
           guiInstance.data.set(data);
           guiInstance.display.set(true);
           this._notifyVueGui(id, true, data);
@@ -491,6 +505,7 @@ export class RpgGui {
     }
 
     // No dependencies, display immediately
+    guiInstance.openId = openId;
     guiInstance.data.set(data);
     guiInstance.display.set(true);
     this._notifyVueGui(id, true, data);
@@ -523,6 +538,7 @@ export class RpgGui {
     }
 
     guiInstance.display.set(false)
+    guiInstance.openId = undefined;
     
     // Check if it's a Vue component and notify VueGui
     const isVueComponent = this.extraGuis.some(gui => gui.name === id);
@@ -573,6 +589,7 @@ export class RpgGui {
       component: gui.component,
       display,
       data,
+      openId: gui.openId,
       attachToSprite: gui.attachToSprite || false,
     };
   }

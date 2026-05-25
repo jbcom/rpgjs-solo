@@ -1137,8 +1137,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   @Action('gui.exit')
-  guiExit(player: RpgPlayer, { guiId, data }) {
-    player.removeGui(guiId, data)
+  guiExit(player: RpgPlayer, { guiId, data, guiOpenId }) {
+    player.removeGui(guiId, data, guiOpenId)
   }
 
   /**
@@ -1168,6 +1168,13 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     const isDefaultAction = actionName === Control.Action || actionName === "action";
 
     if (isDefaultAction) {
+      const guiActionBlockUntil = (player as any).__guiActionBlockUntil;
+      if ((player as any).canMove === false) {
+        return;
+      }
+      if (typeof guiActionBlockUntil === "number" && Date.now() < guiActionBlockUntil) {
+        return;
+      }
       const direction =
         typeof player.getDirection === "function"
           ? player.getDirection()

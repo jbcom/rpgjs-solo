@@ -172,8 +172,11 @@ export function WithGuiManager<TBase extends PlayerCtor>(
      * @returns {Gui}
      * @memberof GuiManager
      */
-    removeGui(guiId: string, data?: any) {
+    removeGui(guiId: string, data?: any, guiOpenId?: unknown) {
       if (this._gui[guiId]) {
+        if (!this._gui[guiId].matchesOpenId(guiOpenId)) {
+          return;
+        }
         this._gui[guiId].close(data);
         delete this._gui[guiId];
       }
@@ -469,7 +472,7 @@ export interface IGuiManager {
   }): void;
   gui(guiId: string): Gui;
   getGui(guiId: string): Gui;
-  removeGui(guiId: string, data?: any): void;
+  removeGui(guiId: string, data?: any, guiOpenId?: unknown): void;
   showAttachedGui(players?: RpgPlayer[] | RpgPlayer): void;
   hideAttachedGui(players?: RpgPlayer[] | RpgPlayer): void;
 }

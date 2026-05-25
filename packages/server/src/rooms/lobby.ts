@@ -45,13 +45,13 @@ export class LobbyRoom extends BaseRoom {
   }
 
   @Action('gui.exit')
-  async guiExit(player: RpgPlayer, value: { guiId: string, data?: any }) {
+  async guiExit(player: RpgPlayer, value: { guiId: string, data?: any, guiOpenId?: unknown }) {
     if (this.isStartSelection(value.guiId, "exit", value.data)) {
       await this.startPlayer(player, value.guiId, value.data);
       return;
     }
 
-    player.removeGui(value.guiId, value.data);
+    player.removeGui(value.guiId, value.data, value.guiOpenId);
   }
 
   private isStartSelection(_guiId: string, _name: string, data: any): boolean {

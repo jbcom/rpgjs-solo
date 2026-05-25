@@ -58,8 +58,8 @@
   @for (attachedGui of attachedGuis) {
     @if (shouldDisplayAttachedGui) {
       <Container>
-        <attachedGui.component ...attachedGui.data() dependencies={attachedGui.dependencies} object={sprite} onFinish={(data) => {
-          onAttachedGuiFinish(attachedGui, data)
+        <attachedGui.component ...attachedGui.data() dependencies={attachedGui.dependencies} object={sprite} guiOpenId={attachedGui.openId} onFinish={(data, guiOpenId) => {
+          onAttachedGuiFinish(attachedGui, data, guiOpenId)
         }} onInteraction={(name, data) => {
           onAttachedGuiInteraction(attachedGui, name, data)
         }} />
@@ -1048,8 +1048,16 @@
    * @param gui - The GUI instance
    * @param data - Data passed from the GUI component
    */
-  const onAttachedGuiFinish = (gui, data) => {
-    guiService.guiClose(gui.name, data);
+  const normalizeOpenId = (value) => {
+    const resolved = typeof value === "function" ? value() : value;
+    return typeof resolved === "string" && resolved.length > 0 ? resolved : undefined;
+  };
+
+  const onAttachedGuiFinish = (gui, data, guiOpenId) => {
+    const completedOpenId = normalizeOpenId(guiOpenId);
+    const currentOpenId = normalizeOpenId(gui.openId);
+    if (completedOpenId && currentOpenId && completedOpenId !== currentOpenId) return;
+    guiService.guiClose(gui.name, data, completedOpenId ?? currentOpenId);
   };
 
   /**
