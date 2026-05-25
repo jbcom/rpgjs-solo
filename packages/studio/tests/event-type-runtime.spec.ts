@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { AttackPattern, EnemyType } from "@rpgjs/action-battle/server";
-import { getGraphicKey } from "../src/graphic-key";
-import { resolveEnemyBattleAiOptions } from "../src/event-type-runtime";
+import { getGraphicKey, getGraphicScale } from "../src/graphic-key";
+import { applyTriggerSettings, resolveEnemyBattleAiOptions } from "../src/event-type-runtime";
 
 describe("Studio event runtime", () => {
   test("uses the media id before fileName for Studio media graphics", () => {
@@ -22,6 +22,15 @@ describe("Studio event runtime", () => {
         fileName: "characters/hero.png",
       }),
     ).toBe("characters/hero.png");
+  });
+
+  test("keeps Studio instance scale from params", () => {
+    expect(
+      getGraphicScale(
+        { scale: 0.5 },
+        { metadata: { scale: 2 } },
+      ),
+    ).toBe(0.5);
   });
 
   test("maps Studio enemy behavior payload to action battle AI options", () => {
@@ -83,5 +92,128 @@ describe("Studio event runtime", () => {
       updateInterval: 300,
       assaultThreshold: 70,
     });
+  });
+
+  test("applies Studio movement speed before starting approach movement", () => {
+    const observed: Array<{ speed: number; frequency: number }> = [];
+    const event: any = {
+      speed: 4,
+      frequency: 0,
+      getCurrentMap: () => ({ getPlayers: () => [{ id: "player" }] }),
+      moveTo: () => {
+        observed.push({ speed: event.speed, frequency: event.frequency });
+      },
+      stopMoveTo: () => {},
+      infiniteMoveRoute: () => {},
+      setGraphicAnimation: () => {},
+      changeDirection: () => {},
+    };
+
+    applyTriggerSettings({
+      event,
+      trigger: {
+        movement: {
+          type: "approach",
+          speed: "slower",
+          frequency: "normal",
+        },
+      },
+      fallbackParams: {},
+      eventType: "character",
+      object: {},
+    });
+
+    expect(observed).toEqual([{ speed: 0.5, frequency: 100 }]);
+  });
+
+  test("starts Studio random movement with stuck recovery", () => {
+    const calls: any[] = [];
+    const event: any = {
+      speed: 4,
+      frequency: 0,
+      stopMoveTo: () => calls.push(["stopMoveTo"]),
+      infiniteMoveRoute: (...args: any[]) => calls.push(["infiniteMoveRoute", ...args]),
+      setGraphicAnimation: (...args: any[]) => calls.push(["setGraphicAnimation", ...args]),
+      changeDirection: () => {},
+    };
+
+    applyTriggerSettings({
+      event,
+      trigger: {
+        movement: {
+          type: "random",
+          speed: "faster",
+          frequency: "normal",
+        },
+        pattern: "initial",
+      },
+      fallbackParams: {},
+      eventType: "character",
+      object: {},
+    });
+
+    const randomCall = calls.find(([name]) => name === "infiniteMoveRoute");
+    expect(randomCall).toBeTruthy();
+    expect(randomCall[2]?.onStuck?.()).toBe(true);
+    expect(randomCall[2]?.frequencyRatio).toBe(1);
+    expect(calls).toContainEqual(["setGraphicAnimation", "walk"]);
+    expect(calls).not.toContainEqual(["setGraphicAnimation", "stand", Infinity]);
+    expect(event.speed).toBeGreaterThan(4);
+    expect(event.frequency).toBe(100);
+  });
+
+  test("applies Studio event params scale separately from graphic id", () => {
+    const calls: any[] = [];
+    const scaleCalls: any[] = [];
+    const event: any = {
+      setGraphic: (graphic: any) => calls.push(graphic),
+      _graphicScale: {
+        set: (scale: any) => scaleCalls.push(scale),
+      },
+      changeDirection: () => {},
+      stopMoveTo: () => {},
+      setGraphicAnimation: () => {},
+    };
+
+    applyTriggerSettings({
+      event,
+      trigger: {
+        graphic: "characters/hero.png",
+      },
+      fallbackParams: {
+        scale: 0.5,
+      },
+      eventType: "character",
+      object: {},
+    });
+
+    expect(scaleCalls).toContain(0.5);
+    expect(calls).toContain("characters/hero.png");
+  });
+
+  test("locks animated Studio event patterns as continuous walk animations", () => {
+    const calls: any[] = [];
+    const event: any = {
+      animationFixed: false,
+      speed: 4,
+      frequency: 0,
+      setGraphicAnimation: (...args: any[]) => calls.push(args),
+      changeDirection: () => {},
+      stopMoveTo: () => {},
+    };
+
+    applyTriggerSettings({
+      event,
+      trigger: {
+        pattern: "animate",
+        movement: { type: "fixed" },
+      },
+      fallbackParams: {},
+      eventType: "character",
+      object: {},
+    });
+
+    expect(calls).toContainEqual(["walk", Infinity]);
+    expect(event.animationFixed).toBe(true);
   });
 });

@@ -180,6 +180,14 @@ export interface MoveRoutesOptions {
    * If the player moves less than this distance over the stuckTimeout period, they are considered stuck.
    */
   stuckThreshold?: number;
+
+  /**
+   * Multiplier applied to the player's frequency delay between route segments.
+   *
+   * The default keeps legacy route timing. Lower values are useful for generated
+   * routes that need smoother visual motion, such as Studio random movement.
+   */
+  frequencyRatio?: number;
 }
 
 export enum Frequency {
@@ -1298,6 +1306,10 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             this.onStuck = options?.onStuck;
             this.stuckTimeout = options?.stuckTimeout ?? 500; // Default 500ms
             this.stuckThreshold = options?.stuckThreshold ?? 1; // Default 1 pixel
+            this.ratioFrequency =
+              typeof options?.frequencyRatio === 'number' && options.frequencyRatio >= 0
+                ? options.frequencyRatio
+                : 15;
 
             // Process initial route
             this.processNextRoute();

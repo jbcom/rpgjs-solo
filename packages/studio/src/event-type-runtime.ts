@@ -1,5 +1,5 @@
 import { show_text } from "@common/blocks/executors/show-text";
-import { Move, RpgEvent, RpgMap, RpgPlayer } from "@rpgjs/server";
+import { Frequency, Move, RpgEvent, RpgMap, RpgPlayer, Speed } from "@rpgjs/server";
 import {
   AttackPattern,
   BattleAi,
@@ -9,8 +9,8 @@ import {
 import { normalizeEventType } from "@common/event-types";
 import { assignParams } from "./assign-params";
 import { createStudioActionBattleAnimations } from "./action-battle-animations";
-import { getGraphicKey } from "./graphic-key";
-export { getGraphicKey } from "./graphic-key";
+import { getGraphicKey, getGraphicScale } from "./graphic-key";
+export { getGraphicKey, getGraphicScale } from "./graphic-key";
 
 /**
  * Extended RpgMap interface with studio-specific properties
@@ -79,10 +79,14 @@ const applyGraphicSetting: TriggerSettingsApplier = ({
   event,
   trigger,
   fallbackParams,
+  object,
 }) => {
   const graphic = trigger?.graphic ?? fallbackParams?.graphic;
   const graphicKey = getGraphicKey(graphic);
   if (graphicKey) {
+    (event as any)._graphicScale?.set(
+      getGraphicScale(trigger, fallbackParams, object, graphic) ?? null,
+    );
     event.setGraphic(graphicKey);
   }
 };
@@ -341,6 +345,10 @@ const applyEnemyGraphicSetting: TriggerSettingsApplier = ({
   if (!enemy) return;
   const graphicKey = getGraphicKey(enemy.graphic ?? enemy.params?.graphic);
   if (graphicKey) {
+    (event as any)._graphicScale?.set(
+      getGraphicScale(trigger, fallbackParams, object, enemy.params, enemy) ??
+        null,
+    );
     event.setGraphic(graphicKey);
   }
 };
@@ -356,60 +364,79 @@ const applyMovementSetting: TriggerSettingsApplier = ({ event, trigger }) => {
   const movement = trigger?.movement;
   if (!movement) return;
 
-  switch (movement.type) {
-    case "fixed":
-      event.stopMoveTo();
-      break;
-    case "random":
-      event.infiniteMoveRoute([Move.tileRandom()]);
-      break;
-    case "approach": {
-      const map = event.getCurrentMap();
-      const [player] = map?.getPlayers() ?? [];
-      if (player) {
-        event.moveTo(player);
-      }
-      break;
-    }
-  }
-
   const speedMap = {
-    slowest: 1,
-    slower: 2,
-    slow: 3,
-    normal: 4,
-    fast: 5,
-    faster: 6,
-    fastest: 7,
+    slowest: Speed.Slowest,
+    slower: Speed.Slower,
+    slow: Speed.Slow,
+    normal: Speed.Normal,
+    fast: Speed.Fast,
+    faster: Speed.Faster,
+    fastest: Speed.Fastest,
   };
 
   if (movement.speed) {
-    event.speed = speedMap[movement.speed as keyof typeof speedMap];
+    event.speed = speedMap[movement.speed as keyof typeof speedMap] ?? Speed.Normal;
   }
 
   const frequencyMap = {
-    lowest: 1,
-    lower: 2,
-    low: 3,
-    normal: 4,
-    high: 5,
-    higher: 6,
-    highest: 7,
+    lowest: Frequency.Lowest,
+    lower: Frequency.Lower,
+    low: Frequency.Low,
+    normal: Frequency.High,
+    high: Frequency.High,
+    higher: Frequency.Higher,
+    highest: Frequency.Highest,
   };
 
   if (movement.frequency) {
     event.frequency =
-      frequencyMap[movement.frequency as keyof typeof frequencyMap] * 100;
+      frequencyMap[movement.frequency as keyof typeof frequencyMap] ?? Frequency.High;
+  }
+
+  switch (movement.type) {
+    case "fixed":
+      event.breakRoutes?.(true);
+      event.stopMoveTo();
+      break;
+    case "random":
+      event.stopMoveTo();
+      event.setGraphicAnimation?.("walk");
+      event.infiniteMoveRoute([Move.tileRandom()], {
+        onStuck: () => true,
+        frequencyRatio: 1,
+      });
+      break;
+    case "approach": {
+      event.breakRoutes?.(true);
+      const map = event.getCurrentMap();
+      const [player] = map?.getPlayers() ?? [];
+      if (player) {
+        event.setGraphicAnimation?.("walk");
+        event.moveTo(player);
+      }
+      break;
+    }
   }
 };
 
 const applyPatternSetting: TriggerSettingsApplier = ({ event, trigger }) => {
   const pattern = trigger?.pattern;
   if (!pattern) return;
-  if (pattern === "loop") {
-    event.setGraphicAnimation("walk", 1);
+  event.animationFixed = false;
+  if (
+    pattern === "initial" &&
+    (trigger?.movement?.type === "random" || trigger?.movement?.type === "approach")
+  ) {
+    return;
+  }
+  if (pattern === "loop" || pattern === "animate") {
+    event.setGraphicAnimation("walk", Infinity);
+    event.animationFixed = true;
+  } else if (pattern === "stop") {
+    event.setGraphicAnimation("stand", Infinity);
+    event.animationFixed = true;
   } else {
-    event.setGraphicAnimation("stand", 1);
+    event.setGraphicAnimation("stand", Infinity);
   }
 };
 
