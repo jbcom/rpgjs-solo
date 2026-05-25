@@ -1,14 +1,21 @@
-<Container positionType="absolute" top={0} left={0} right={0} bottom={0} alpha={opacity}>
+<Container positionType="absolute" top={0} left={0} right={0} bottom={0} alpha={opacity} zIndex={100000}>
     <Rect
       x={0} 
       y={0} 
       width={width}
       height={height}
-      color="black"
+      fill={overlayColor}
     />
-    <Container justifyContent="center"  alignItems="center" x={width()/2}  height="100%">
-      <Loading />
-    </Container>
+    <Loading
+      x={centerX}
+      y={centerY}
+      size={loaderSize}
+      color={loaderColor}
+      speed={220}
+      segments={10}
+      segmentWidth={4}
+      inactiveAlpha={0.25}
+    />
 </Container>
 
 
@@ -22,9 +29,11 @@
       data
     } = defineProps();
 
-    const duration = computed(() => data().duration)
-    const color = computed(() => data().color)
-    const fadeIn = computed(() => data().fadeIn)
+    const duration = computed(() => data().duration ?? 350)
+    const overlayColor = computed(() => data().color ?? 'black')
+    const loaderColor = computed(() => data().loaderColor ?? '#ffffff')
+    const loaderSize = computed(() => data().loaderSize ?? 42)
+    const fadeIn = computed(() => data().fadeIn ?? false)
     const fadeTrigger = data().fadeTrigger
 
     const engine = inject(RpgClientEngine);
@@ -32,6 +41,8 @@
   
     const width = signal(0)
     const height = signal(0)
+    const centerX = computed(() => width() / 2)
+    const centerY = computed(() => height() / 2)
 
     let loader = null;
   

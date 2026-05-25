@@ -107,6 +107,107 @@ const normalizeBundlePath = (value?: string): string => {
   return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
 };
 
+const imageLoadCache = new Map<string, Promise<void>>();
+
+const waitForImageLoad = (source: string): Promise<void> => {
+  if (!source || typeof window === "undefined" || typeof Image === "undefined") {
+    return Promise.resolve();
+  }
+
+  if (!imageLoadCache.has(source)) {
+    const promise = new Promise<void>((resolve) => {
+      const image = new Image();
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      let finished = false;
+
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        if (timeout) clearTimeout(timeout);
+        resolve();
+      };
+
+      const complete = async () => {
+        try {
+          await image.decode?.();
+        } catch {
+          // A loaded image can still fail decode in some browsers; keep rendering fallback behavior.
+        }
+        finish();
+      };
+
+      image.onload = complete;
+      image.onerror = finish;
+      timeout = setTimeout(finish, 15000);
+      image.src = source;
+
+      if (image.complete) {
+        void complete();
+      }
+    });
+
+    imageLoadCache.set(source, promise);
+  }
+
+  return imageLoadCache.get(source)!;
+};
+
+const collectMediaImageSource = (media: any): string => {
+  if (!media) return "";
+  if (typeof media === "string") return resolveAssetSource(media);
+  if (typeof media !== "object") return "";
+
+  const source = media.fileName ?? media.src ?? media.url ?? media.image;
+  return typeof source === "string" ? resolveAssetSource(source) : "";
+};
+
+const normalizeImageMediaList = (value: unknown): any[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed[0] !== "[" && trimmed[0] !== "{") return [trimmed];
+    try {
+      const parsed = JSON.parse(trimmed);
+      return normalizeImageMediaList(parsed);
+    } catch {
+      return [value];
+    }
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (Array.isArray(record.items)) return record.items;
+    if (Array.isArray(record.data)) return record.data;
+    if (Array.isArray(record.values)) return record.values;
+  }
+
+  return [value];
+};
+
+const waitForMapImages = async (map: any): Promise<void> => {
+  const imageSources = new Set<string>();
+  const addSource = (source?: string) => {
+    if (source) imageSources.add(source);
+  };
+  const addMedia = (media: any) => {
+    addSource(collectMediaImageSource(media));
+  };
+
+  addSource(map.fullImage);
+  addSource(map.gridImage);
+  addMedia(map.params?.tileset);
+  addMedia(map.params?.primaryElementTileset);
+  addMedia(map.params?.baseTerrain);
+  addMedia(map.params?.primaryTerrainTileset);
+  normalizeImageMediaList(map.params?.elementTilesets).forEach(addMedia);
+  normalizeImageMediaList(map.params?.terrainTilesets).forEach(addMedia);
+
+  await Promise.all(Array.from(imageSources).map((source) => waitForImageLoad(source)));
+};
+
 const fetchBundleEvents = async (): Promise<any[]> => {
   const basePath = normalizeBundlePath(getStudioGameRuntimeConfig().bundleBasePath);
   if (!eventsCacheByBundlePath.has(basePath)) {
@@ -914,6 +1015,8 @@ export const loadMap = async (mapId: string) => {
   const allHitboxes = [...finalHitboxes, ...wangsetsCollisionHitboxes];
 
   firstMapLoaded = true;
+
+  await waitForMapImages(map);
 
   return {
     id: finalMapId,
