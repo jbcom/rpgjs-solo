@@ -22,6 +22,7 @@ export const configClient = {
         left: 'left',
         right: 'right',
         action: 'space',
+        dash: 'shift',
         escape: 'escape'
       }
     }),

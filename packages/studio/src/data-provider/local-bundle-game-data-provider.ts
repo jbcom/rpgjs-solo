@@ -49,6 +49,7 @@ const createPlaceholderProject = (): any => ({
     left: 'left',
     right: 'right',
     action: 'space',
+    dash: 'shift',
     escape: 'escape',
     back: 'escape',
   },

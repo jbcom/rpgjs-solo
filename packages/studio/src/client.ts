@@ -25,6 +25,7 @@ import { StudioGameModuleConfig } from ".";
 interface GlobalConfig {
   projectId?: string;
   startMapId?: string;
+  keyboardControls?: Record<string, any>;
   hero?: {
     graphic?: any;
     faceset?: any;
@@ -38,6 +39,33 @@ interface RpgClientEngineWithConfig extends RpgClientEngine {
 }
 
 const fadeTrigger = trigger();
+
+const DEFAULT_STUDIO_KEYBOARD_CONTROLS = {
+  up: "up",
+  down: "down",
+  left: "left",
+  right: "right",
+  action: "space",
+  dash: "shift",
+  escape: "escape",
+};
+
+const normalizeStudioKeyboardControls = (
+  current?: Record<string, any>,
+  incoming?: Record<string, any>,
+) => {
+  const merged = {
+    ...DEFAULT_STUDIO_KEYBOARD_CONTROLS,
+    ...(current ?? {}),
+    ...(incoming ?? {}),
+  };
+
+  if (incoming?.back && !incoming.escape) {
+    merged.escape = incoming.back;
+  }
+
+  return merged;
+};
 
 const resolveMediaId = (value: unknown): string | null => {
   if (!value) return null;
@@ -142,15 +170,15 @@ export default (config: StudioGameModuleConfig) => {
           response = await provider.getProject({ projectId });
         }
 
-        if (response.keyboardControls) {
-          response.keyboardControls.escape = response.keyboardControls.back;
-        }
-
         window.gameConfig = response;
 
         engine.globalConfig = {
           ...engine.globalConfig,
           ...response,
+          keyboardControls: normalizeStudioKeyboardControls(
+            engine.globalConfig?.keyboardControls,
+            response.keyboardControls,
+          ),
           projectId: response._id || engine.globalConfig?.projectId,
           startMapId: config.startMapId !== undefined ? config.startMapId : (response.startMapId || engine.globalConfig?.startMapId),
         };
