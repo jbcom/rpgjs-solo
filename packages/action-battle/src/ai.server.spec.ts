@@ -1,8 +1,9 @@
 import { MAXHP } from "@rpgjs/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { BattleAi } from "./ai.server";
+import { AttackPattern, BattleAi } from "./ai.server";
 import { chase, idle, ifTargetVisible } from "./core/ai-behavior-tree";
 import { setActionBattleSystems } from "./core/context";
+import { ACTION_BATTLE_CLIENT_VISUAL_ID } from "./visual";
 
 const createEvent = () => ({
   id: "monster-1",
@@ -290,6 +291,20 @@ describe("BattleAi behavior tree", () => {
     ai.destroy();
   });
 
+  test("normalizes position move targets before calling RPGJS moveTo", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+
+    const ai = new BattleAi(event as any, {
+      patrolWaypoints: [{ x: 32, y: 48 }],
+      moveToCooldown: 0,
+    });
+
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 32, y: 48 });
+    ai.destroy();
+  });
+
   test("targets its attacker after taking non-lethal damage", () => {
     vi.useFakeTimers();
     const event = createEvent();
@@ -309,6 +324,34 @@ describe("BattleAi behavior tree", () => {
     ai.handleDamage(player as any, { damage: 1, defeated: false });
 
     expect(ai.getTarget()).toBe(player);
+    ai.destroy();
+  });
+
+  test("waits for damage recovery before chasing its attacker", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const event = createEvent();
+    event.hp = 9;
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 120),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackRange: 50,
+      visionRange: 150,
+      hitstunMs: 100,
+      moveToCooldown: 0,
+    });
+
+    ai.handleDamage(player as any, { damage: 1, defeated: false });
+    vi.advanceTimersByTime(200);
+    expect(event.moveTo).not.toHaveBeenCalledWith(player);
+
+    vi.advanceTimersByTime(100);
+    expect(event.moveTo).toHaveBeenCalledWith(player);
     ai.destroy();
   });
 
@@ -418,6 +461,39 @@ describe("BattleAi behavior tree", () => {
     vi.advanceTimersByTime(100);
 
     expect(ai.getTarget()).toBe(hostile);
+    ai.destroy();
+  });
+
+  test("dash attacks emit an attack visual before the dash hit", () => {
+    vi.useFakeTimers();
+    const clientVisual = vi.fn();
+    const event = createEvent();
+    event.getCurrentMap.mockReturnValue({ clientVisual });
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackPatterns: [AttackPattern.DashAttack],
+      attackRange: 50,
+      moveToCooldown: 0,
+    });
+
+    ai.onDetectInShape(player as any, {});
+    (ai as any).performDashAttack();
+
+    expect(clientVisual).toHaveBeenCalledWith(
+      ACTION_BATTLE_CLIENT_VISUAL_ID,
+      expect.objectContaining({
+        moment: "attack",
+        objectId: "monster-1",
+        targetId: "player-1",
+        pattern: AttackPattern.DashAttack,
+      })
+    );
     ai.destroy();
   });
 });

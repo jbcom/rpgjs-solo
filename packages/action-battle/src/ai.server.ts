@@ -60,6 +60,31 @@ type RpgEventWithBattleAi = RpgEvent & {
   battleAi?: BattleAi;
 };
 
+type ResolvedMoveTarget =
+  | {
+      kind: "entity";
+      target: ActionBattleEntity;
+      id?: string;
+      x?: number;
+      y?: number;
+      signature: string;
+    }
+  | {
+      kind: "position";
+      target: { x: number; y: number };
+      x: number;
+      y: number;
+      signature: string;
+    };
+
+const resolveMoveCoordinate = (value: unknown): number | undefined => {
+  const raw = typeof value === "function" ? (value as () => unknown)() : value;
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
+};
+
+const createMoveSignature = (x: number, y: number): string =>
+  `position:${Math.round(x)}:${Math.round(y)}`;
+
 export interface BattleAiRewardItem {
   item?: any;
   itemId?: string;
@@ -501,6 +526,31 @@ export class BattleAi {
     console.log(`[BattleAiTrace:${category}] [${this.event.id}] ${message}`, data ?? {});
   }
 
+  private lockActionUntil(until: number, reason: string, data?: any): void {
+    if (until <= this.actionLockedUntil) return;
+    this.actionLockedUntil = until;
+    this.traceLog("state", "action locked", {
+      reason,
+      lockedMs: Math.max(0, until - Date.now()),
+      ...data,
+    });
+  }
+
+  private lockForAttack(
+    profile: NormalizedActionBattleAttackProfile,
+    pattern: AttackPattern
+  ): void {
+    this.isMovingToTarget = false;
+    this.event.stopMoveTo();
+    this.lockActionUntil(Date.now() + profile.totalDurationMs, "attack", {
+      pattern,
+      totalDurationMs: profile.totalDurationMs,
+      startupMs: profile.startupMs,
+      activeMs: profile.activeMs,
+      recoveryMs: profile.recoveryMs,
+    });
+  }
+
   // State machine
   private state: AiState = AiState.Idle;
   private stateStartTime: number = 0;
@@ -574,6 +624,11 @@ export class BattleAi {
   private lastMoveToTime: number = 0;
   private retreatCooldown: number = 600;
   private lastRetreatTime: number = 0;
+  private actionLockedUntil: number = 0;
+  private lastActionLockTraceTime: number = 0;
+  private lastMoveToCooldownTraceTime: number = 0;
+  private lastMoveToCooldownTraceSignature: string | null = null;
+  private lastTargetMovementSkipTraceTime: number = 0;
   private timers: ReturnType<typeof setTimeout>[] = [];
   private behaviorKey?: string;
   private behaviorTree?: ActionBattleAiTreeNode;
@@ -938,6 +993,20 @@ export class BattleAi {
       return;
     }
 
+    if (currentTime < this.actionLockedUntil) {
+      if (this.target) this.faceTarget();
+      if (currentTime - this.lastActionLockTraceTime > 250) {
+        this.lastActionLockTraceTime = currentTime;
+        this.traceLog("state", "waiting action recovery", {
+          remainingMs: this.actionLockedUntil - currentTime,
+          state: this.state,
+          targetId: this.target?.id,
+        });
+      }
+      this.checkDamageTaken();
+      return;
+    }
+
     // Berserker: faster attacks when HP is low
     if (this.enemyType === EnemyType.Berserker && this.event.param[MAXHP]) {
       const hpPercent = this.event.hp / this.event.param[MAXHP];
@@ -1277,15 +1346,9 @@ export class BattleAi {
     const profile = this.getAttackProfile(AttackPattern.Melee);
 
     this.faceTarget({ force: true });
+    this.lockForAttack(profile, AttackPattern.Melee);
     this.telegraphAttack(profile);
-    withActionBattleAnimationUnlocked(this.event, () => {
-      emitActionBattleClientVisual({
-        moment: "attack",
-        entity: this.event,
-        target: this.target,
-        animations: this.animations,
-      });
-    });
+    this.playAttackVisual(profile, AttackPattern.Melee);
 
     this.scheduleAttackStartup(profile, () => {
       this.executeMeleeAttack(profile, AttackPattern.Melee);
@@ -1499,12 +1562,12 @@ export class BattleAi {
     // Visual feedback
     withActionBattleAnimationUnlocked(target, () => {
       emitActionBattleClientVisual({
-        moment: "hit",
+        moment: "hurt",
         entity: this.event,
         target,
+        attacker: this.event,
         damage: hitResult.damage,
         result: hitResult,
-        animations: this.animations,
       });
     });
     setActionBattleInvincibility(
@@ -1586,15 +1649,9 @@ export class BattleAi {
     this.comboCount++;
     const profile = this.getAttackProfile(AttackPattern.Combo);
     this.faceTarget({ force: true });
+    this.lockForAttack(profile, AttackPattern.Combo);
     this.telegraphAttack(profile);
-    withActionBattleAnimationUnlocked(this.event, () => {
-      emitActionBattleClientVisual({
-        moment: "attack",
-        entity: this.event,
-        target: this.target,
-        animations: this.animations,
-      });
-    });
+    this.playAttackVisual(profile, AttackPattern.Combo);
     this.scheduleAttackStartup(profile, () => {
       this.executeMeleeAttack(profile, AttackPattern.Combo);
     });
@@ -1621,16 +1678,9 @@ export class BattleAi {
 
     this.chargingAttack = true;
     this.faceTarget({ force: true });
+    this.lockForAttack(profile, AttackPattern.Charged);
     this.telegraphAttack(profile);
-    withActionBattleAnimationUnlocked(this.event, () => {
-      emitActionBattleClientVisual({
-        moment: "attack",
-        entity: this.event,
-        target: this.target,
-        animations: this.animations,
-        animationDefaults: { repeat: 2 },
-      });
-    });
+    this.playAttackVisual(profile, AttackPattern.Charged, { repeat: 2 });
 
     this.scheduleAttackStartup(profile, () => {
       if (!this.target || this.state !== AiState.Combat) {
@@ -1649,15 +1699,9 @@ export class BattleAi {
    */
   private performZoneAttack() {
     const profile = this.getAttackProfile(AttackPattern.Zone);
+    this.lockForAttack(profile, AttackPattern.Zone);
     this.telegraphAttack(profile);
-    withActionBattleAnimationUnlocked(this.event, () => {
-      emitActionBattleClientVisual({
-        moment: "attack",
-        entity: this.event,
-        target: this.target ?? undefined,
-        animations: this.animations,
-      });
-    });
+    this.playAttackVisual(profile, AttackPattern.Zone);
 
     const eventX = this.event.x();
     const eventY = this.event.y();
@@ -1711,7 +1755,9 @@ export class BattleAi {
     const dirY = dy / dist;
 
     this.faceTarget({ force: true });
+    this.lockForAttack(profile, AttackPattern.DashAttack);
     this.telegraphAttack(profile);
+    this.playAttackVisual(profile, AttackPattern.DashAttack);
 
     this.scheduleAttackStartup(profile, () => {
       if (!this.target || this.state !== AiState.Combat) return;
@@ -1729,6 +1775,28 @@ export class BattleAi {
     return this.attackProfiles[
       pattern as keyof NormalizedActionBattleEnemyAttackProfileMap
     ] ?? this.attackProfiles.melee;
+  }
+
+  private playAttackVisual(
+    profile: NormalizedActionBattleAttackProfile,
+    pattern: AttackPattern,
+    animationDefaults?: { animationName?: string; repeat?: number }
+  ): void {
+    const moment =
+      profile.animationKey === "castSkill" || profile.animationKey === "castSpell"
+        ? "castSkill"
+        : "attack";
+
+    withActionBattleAnimationUnlocked(this.event, () => {
+      emitActionBattleClientVisual({
+        moment,
+        entity: this.event,
+        target: this.target ?? undefined,
+        pattern,
+        animations: this.animations,
+        animationDefaults,
+      });
+    });
   }
 
   private telegraphAttack(profile: NormalizedActionBattleAttackProfile) {
@@ -1880,8 +1948,8 @@ export class BattleAi {
     if (dist === 0) return;
 
     const fleeTarget = {
-      x: () => this.event.x() + (dx / dist) * 200,
-      y: () => this.event.y() + (dy / dist) * 200
+      x: this.event.x() + (dx / dist) * 200,
+      y: this.event.y() + (dy / dist) * 200
     };
 
     this.requestMoveTo(fleeTarget as any);
@@ -1928,7 +1996,7 @@ export class BattleAi {
     if (this.patrolWaypoints.length === 0) return;
 
     const waypoint = this.patrolWaypoints[this.currentPatrolIndex];
-    this.requestMoveTo({ x: () => waypoint.x, y: () => waypoint.y } as any);
+    this.requestMoveTo({ x: waypoint.x, y: waypoint.y } as any);
   }
 
   /**
@@ -2000,7 +2068,7 @@ export class BattleAi {
     );
 
     if (distanceToFormation > 20) {
-      this.requestMoveTo({ x: () => formationX, y: () => formationY } as any);
+      this.requestMoveTo({ x: formationX, y: formationY } as any);
     }
   }
 
@@ -2080,7 +2148,7 @@ export class BattleAi {
     }
   ): boolean {
     if (this.defeated) return true;
-    const damage = damageResult.damage;
+    const damage = Number.isFinite(damageResult.damage) ? damageResult.damage : 0;
     this.debugLog('damage', `Took ${damage} damage from ${attacker.id} (HP: ${this.event.hp}/${this.event.param[MAXHP] || '?'})`);
     const canRetaliate = attacker ? this.canTarget(attacker) : false;
     const attackerDefeated = this.isTargetDefeated(attacker);
@@ -2134,7 +2202,15 @@ export class BattleAi {
     const reaction = damageResult.reaction;
     const staggerPower = reaction?.staggerPower ?? damage;
     const hitstunMs = reaction?.hitstunMs ?? this.hitstunMs;
-    const shouldStun = staggerPower >= this.poise && hitstunMs > 0;
+    const shouldStun =
+      (damage > 0 || (reaction?.staggerPower ?? 0) > 0) &&
+      staggerPower >= this.poise &&
+      hitstunMs > 0;
+    this.lockActionUntil(Date.now() + Math.max(220, hitstunMs + 120), "damage recovery", {
+      attackerId: attacker?.id,
+      damage,
+      hitstunMs,
+    });
     setActionBattleInvincibility(
       this.event,
       reaction?.invincibilityMs ?? this.invincibilityMs
@@ -2641,14 +2717,67 @@ export class BattleAi {
     }
   }
 
+  private resolveMoveTarget(target: any): ResolvedMoveTarget | null {
+    if (!target) return null;
+
+    const targetId =
+      target.id !== undefined && target.id !== null ? String(target.id) : undefined;
+    const x = resolveMoveCoordinate(target.x);
+    const y = resolveMoveCoordinate(target.y);
+
+    if (targetId) {
+      return {
+        kind: "entity",
+        target,
+        id: targetId,
+        x,
+        y,
+        signature: `entity:${targetId}`,
+      };
+    }
+
+    if (x === undefined || y === undefined) {
+      return null;
+    }
+
+    return {
+      kind: "position",
+      target: { x, y },
+      x,
+      y,
+      signature: createMoveSignature(x, y),
+    };
+  }
+
   private requestMoveTo(target: any): boolean {
     const currentTime = Date.now();
-    if (currentTime - this.lastMoveToTime < this.moveToCooldown) {
-      this.traceLog("movement", "moveTo skipped: cooldown", {
-        targetId: target?.id,
-        elapsed: currentTime - this.lastMoveToTime,
-        moveToCooldown: this.moveToCooldown,
+    const resolvedTarget = this.resolveMoveTarget(target);
+    if (!resolvedTarget) {
+      this.traceLog("movement", "moveTo skipped: invalid target", {
+        target,
       });
+      return false;
+    }
+
+    if (currentTime - this.lastMoveToTime < this.moveToCooldown) {
+      if (
+        this.lastMoveToCooldownTraceSignature !== resolvedTarget.signature ||
+        currentTime - this.lastMoveToCooldownTraceTime > 1000
+      ) {
+        this.lastMoveToCooldownTraceTime = currentTime;
+        this.lastMoveToCooldownTraceSignature = resolvedTarget.signature;
+        this.traceLog("movement", "moveTo skipped: cooldown", {
+          targetKind: resolvedTarget.kind,
+          targetId:
+            resolvedTarget.kind === "entity" ? resolvedTarget.id : undefined,
+          targetPosition: {
+            x: resolvedTarget.x,
+            y: resolvedTarget.y,
+          },
+          elapsed: currentTime - this.lastMoveToTime,
+          moveToCooldown: this.moveToCooldown,
+        });
+      }
       return false;
     }
     const map = this.event.getCurrentMap?.() as any;
@@ -2656,19 +2785,21 @@ export class BattleAi {
       !!map?.physic?.getEntityByUUID?.(this.event.id) ||
       !!map?.getBody?.(this.event.id);
     this.traceLog("movement", "moveTo requested", {
-      targetId: target?.id,
+      targetKind: resolvedTarget.kind,
+      targetId:
+        resolvedTarget.kind === "entity" ? resolvedTarget.id : undefined,
       eventPosition: {
         x: this.event.x?.(),
         y: this.event.y?.(),
       },
       targetPosition: {
-        x: target?.x?.(),
-        y: target?.y?.(),
+        x: resolvedTarget.x,
+        y: resolvedTarget.y,
       },
       hasMap: !!map,
       hasMovementBody: hasBody,
     });
-    this.event.moveTo(target as any);
+    this.event.moveTo(resolvedTarget.target as any);
     this.lastMoveToTime = currentTime;
     return true;
   }
@@ -2682,10 +2813,14 @@ export class BattleAi {
     if (started) {
       this.isMovingToTarget = true;
     } else {
-      this.traceLog("movement", "target movement did not start", {
-        targetId: target.id,
-        isMovingToTarget: this.isMovingToTarget,
-      });
+      const now = Date.now();
+      if (now - this.lastTargetMovementSkipTraceTime > 1000) {
+        this.lastTargetMovementSkipTraceTime = now;
+        this.traceLog("movement", "target movement did not start", {
+          targetId: target.id,
+          isMovingToTarget: this.isMovingToTarget,
+        });
+      }
     }
     return started;
   }

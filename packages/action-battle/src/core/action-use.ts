@@ -117,9 +117,10 @@ const applyDamageEffect = (
 
   if (!result.cancelled) {
     emitActionBattleClientVisual({
-      moment: "hit",
+      moment: "hurt",
       entity: attacker,
       target,
+      attacker,
       damage: result.damage,
       result,
       skill,

@@ -30,6 +30,7 @@ interface GlobalConfig {
     faceset?: any;
   };
   animations?: Record<string, any>;
+  database?: any[];
 }
 
 interface RpgClientEngineWithConfig extends RpgClientEngine {
@@ -70,6 +71,48 @@ const resolveHeroMediaSpritesheet = async (value: unknown): Promise<any | null> 
   }
 
   return null;
+};
+
+const getMediaRefKey = (value: unknown): string | null => {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (typeof value !== "object") return null;
+  const candidate = value as Record<string, unknown>;
+  const key =
+    candidate.id ?? candidate._id ?? candidate.mediaId ?? candidate.fileName;
+  return typeof key === "string" && key.trim().length > 0 ? key : null;
+};
+
+const collectStudioCombatAnimationRefs = (database: any[] = []): unknown[] => {
+  const refs: unknown[] = [];
+  const seen = new Set<string>();
+  const add = (value: unknown) => {
+    const key = getMediaRefKey(value);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    refs.push(value);
+  };
+
+  for (const entry of database) {
+    const animations = entry?.animations ?? entry?.combatAnimations;
+    if (!animations || typeof animations !== "object") continue;
+    Object.values(animations).forEach(add);
+  }
+
+  return refs;
+};
+
+const resolveStudioDatabaseForPreload = async (
+  projectId?: string,
+): Promise<any[]> => {
+  if (!projectId) return [];
+  try {
+    const database = await getGameDataProvider().getDatabase(projectId);
+    return Array.isArray(database) ? database : [];
+  } catch (error) {
+    console.warn("[StudioGame] combat animation preload database fetch failed", error);
+    return [];
+  }
 };
 
 export default (config: StudioGameModuleConfig) => {
@@ -115,14 +158,25 @@ export default (config: StudioGameModuleConfig) => {
         const animationMediaRefs = Object.values(
           engine.globalConfig.animations ?? {},
         ).filter(Boolean);
+        const database = await resolveStudioDatabaseForPreload(
+          engine.globalConfig.projectId,
+        );
+        if (database.length > 0) {
+          engine.globalConfig.database = database;
+        }
+        const databaseAnimationMediaRefs =
+          collectStudioCombatAnimationRefs(database);
 
         const heroMediaRefs = [
           engine.globalConfig.hero?.graphic,
           engine.globalConfig.hero?.faceset,
           ...animationMediaRefs,
+          ...databaseAnimationMediaRefs,
         ].filter(Boolean);
 
         // Load hero and combat animation spritesheets from either direct media objects or media IDs.
+        // Preloading database combat animations avoids lazy-load races when a temporary
+        // attack/hurt graphic is restored while Pixi is still resolving the spritesheet.
         const heroSpritesheets = await Promise.all(
           heroMediaRefs.map((mediaRef) => resolveHeroMediaSpritesheet(mediaRef)),
         );

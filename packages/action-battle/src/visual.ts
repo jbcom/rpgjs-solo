@@ -68,6 +68,10 @@ const serializeActionBattleVisualContext = (
   animationDefaults: context.animationDefaults,
 });
 
+const logVisualTrace = (message: string, data?: Record<string, unknown>) => {
+  console.log(`[ActionBattleVisualTrace] ${message}`, data ?? {});
+};
+
 export function emitActionBattleClientVisual(
   context: ActionBattleVisualContext
 ) {
@@ -112,7 +116,7 @@ const callGraphic = (
   if (!entity || keyOrOptions == null) return;
 
   if (typeof keyOrOptions === "string") {
-    playActionBattleAnimation(
+    const animation = playActionBattleAnimation(
       keyOrOptions as ActionBattleAnimationKey,
       entity,
       context?.animations ?? getActionBattleOptions().animations,
@@ -123,6 +127,16 @@ const callGraphic = (
       },
       context?.animationDefaults
     );
+    logVisualTrace("graphic", {
+      moment: context?.moment,
+      key: keyOrOptions,
+      entityId: entity?.id,
+      targetId: context?.target?.id,
+      played: !!animation,
+      animationName: animation?.animationName,
+      graphic: animation?.graphic,
+      repeat: animation?.repeat,
+    });
     return;
   }
 
@@ -130,6 +144,15 @@ const callGraphic = (
   if (!animationName) return;
   const repeat = keyOrOptions.repeat ?? 1;
   const graphic = keyOrOptions.graphic;
+  logVisualTrace("graphic", {
+    moment: context?.moment,
+    entityId: entity?.id,
+    targetId: context?.target?.id,
+    played: true,
+    animationName,
+    graphic,
+    repeat,
+  });
   if (typeof entity.setGraphicAnimation === "function") {
     if (graphic !== undefined) {
       entity.setGraphicAnimation(animationName, graphic, repeat);
