@@ -17,9 +17,12 @@ export const getActionBattleEntityKind = (
   entity: ActionBattleEntity
 ): EntityKind => {
   if (getBattleAi(entity)) return "event";
+  if (typeof (entity as any)?.isEvent === "function") {
+    return (entity as any).isEvent() ? "event" : "player";
+  }
   if ((entity as any) instanceof RpgEvent) return "event";
-  if (typeof (entity as any)?.attachShape === "function") return "event";
   if ((entity as any) instanceof RpgPlayer) return "player";
+  if (typeof (entity as any)?.attachShape === "function") return "event";
   return "player";
 };
 

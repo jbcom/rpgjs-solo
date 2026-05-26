@@ -497,6 +497,10 @@ export class BattleAi {
     AiDebug.log(category, this.event.id, message, data);
   }
 
+  private traceLog(category: string, message: string, data?: any): void {
+    console.log(`[BattleAiTrace:${category}] [${this.event.id}] ${message}`, data ?? {});
+  }
+
   // State machine
   private state: AiState = AiState.Idle;
   private stateStartTime: number = 0;
@@ -581,6 +585,7 @@ export class BattleAi {
   private visionSetupRetries: number = 0;
   private maxVisionSetupRetries: number = 20;
   private destroyed: boolean = false;
+  private lastNoTargetTraceTime: number = 0;
 
   /**
    * Create a new Battle AI Controller
@@ -790,6 +795,10 @@ export class BattleAi {
       map?.physic?.getEntityByUUID &&
       !map.physic.getEntityByUUID(this.event.id)
     ) {
+      this.traceLog("vision", "physics body not ready", {
+        retries: this.visionSetupRetries,
+        hasMap: !!map,
+      });
       return false;
     }
 
@@ -800,14 +809,29 @@ export class BattleAi {
       height: diameter,
       angle: 360,
     });
-    if (!shape) return false;
+    if (!shape) {
+      this.traceLog("vision", "attachShape returned no shape", {
+        retries: this.visionSetupRetries,
+        visionRange: this.visionRange,
+      });
+      return false;
+    }
     this.visionShape = shape;
+    this.traceLog("vision", "vision attached", {
+      shapeId: (shape as any)?.id,
+      visionRange: this.visionRange,
+    });
     return true;
   }
 
   private scheduleVisionSetup() {
     if (this.destroyed || this.setupVision()) return;
-    if (this.visionSetupRetries >= this.maxVisionSetupRetries) return;
+    if (this.visionSetupRetries >= this.maxVisionSetupRetries) {
+      this.traceLog("vision", "vision setup gave up", {
+        retries: this.visionSetupRetries,
+      });
+      return;
+    }
 
     this.visionSetupRetries++;
     this.schedule(() => {
@@ -848,10 +872,19 @@ export class BattleAi {
 
     if (!validTransitions[this.state].includes(newState)) {
       this.debugLog('state', `INVALID transition ${this.state} -> ${newState}`);
+      this.traceLog("state", "invalid transition", {
+        from: this.state,
+        to: newState,
+      });
       return;
     }
 
     this.debugLog('state', `STATE change: ${this.state} -> ${newState}`);
+    this.traceLog("state", "state change", {
+      from: this.state,
+      to: newState,
+      targetId: this.target?.id,
+    });
     this.state = newState;
     this.stateStartTime = Date.now();
 
@@ -982,8 +1015,28 @@ export class BattleAi {
       this.faceTarget();
       
       const distance = this.getDistance(this.event, this.target);
+      this.traceLog("movement", "alert update", {
+        targetId: this.target.id,
+        distance,
+        attackRange: this.attackRange,
+        visionRange: this.visionRange,
+        isMovingToTarget: this.isMovingToTarget,
+      });
       if (distance <= this.attackRange * 1.5) {
+        if (this.isMovingToTarget) {
+          this.isMovingToTarget = false;
+          this.event.stopMoveTo();
+        }
         this.changeState(AiState.Combat);
+      } else if (distance <= this.visionRange * 1.5) {
+        if (!this.isMovingToTarget) {
+          this.debugLog('movement', `Alert approach (dist=${distance.toFixed(1)}, attackRange=${this.attackRange})`);
+          this.requestTargetMovement();
+        }
+      } else {
+        this.debugLog('combat', `Alert target out of range (dist=${distance.toFixed(1)})`);
+        this.clearTarget();
+        this.changeState(AiState.Idle);
       }
     } else {
       this.changeState(AiState.Idle);
@@ -1001,6 +1054,15 @@ export class BattleAi {
     }
 
     const distance = this.getDistance(this.event, this.target);
+    this.traceLog("combat", "combat update", {
+      targetId: this.target.id,
+      distance,
+      attackRange: this.attackRange,
+      visionRange: this.visionRange,
+      isMovingToTarget: this.isMovingToTarget,
+      behaviorEnabled: this.behaviorEnabled,
+      behaviorMode: this.behaviorMode,
+    });
 
     // Check if target is still in range
     if (distance > this.visionRange * 1.5) {
@@ -1055,8 +1117,7 @@ export class BattleAi {
       } else if (distance > this.attackRange) {
         if (!this.isMovingToTarget) {
           this.debugLog('movement', `Moving to target (dist=${distance.toFixed(1)}, attackRange=${this.attackRange})`);
-          this.isMovingToTarget = true;
-          this.requestMoveTo(this.target);
+          this.requestTargetMovement();
         }
       } else {
         if (this.isMovingToTarget) {
@@ -1069,8 +1130,7 @@ export class BattleAi {
       if (distance > this.attackRange) {
         if (!this.isMovingToTarget) {
           this.debugLog('movement', `Moving to target (dist=${distance.toFixed(1)}, attackRange=${this.attackRange})`);
-          this.isMovingToTarget = true;
-          this.requestMoveTo(this.target);
+          this.requestTargetMovement();
         }
       } else {
         if (this.isMovingToTarget) {
@@ -1948,12 +2008,28 @@ export class BattleAi {
    * Handle player entering vision
    */
   onDetectInShape(target: ActionBattleEntity, shape: any) {
-    if (!this.canTarget(target) || this.isTargetDefeated(target)) return;
+    const canTarget = this.canTarget(target);
+    const defeated = this.isTargetDefeated(target);
+    this.traceLog("vision", "detect in shape", {
+      targetId: target?.id,
+      shapeId: shape?.id,
+      canTarget,
+      defeated,
+      state: this.state,
+      targetHp: (target as any)?.hp,
+    });
+    if (!canTarget || defeated) return;
     this.debugLog('vision', `Target ${target.id} entered vision (state=${this.state})`);
     this.engageTarget(target);
   }
 
   private engageTarget(target: ActionBattleEntity) {
+    this.traceLog("target", "engage target", {
+      targetId: target.id,
+      previousTargetId: this.target?.id,
+      state: this.state,
+      distance: this.getDistance(this.event, target),
+    });
     this.target = target;
 
     if (this.state === AiState.Idle) {
@@ -1968,6 +2044,12 @@ export class BattleAi {
    */
   onDetectOutShape(target: ActionBattleEntity, shape: any) {
     this.debugLog('vision', `Target ${target.id} left vision (wasTarget=${this.target === target})`);
+    this.traceLog("vision", "detect out shape", {
+      targetId: target?.id,
+      shapeId: shape?.id,
+      wasTarget: this.target === target,
+      state: this.state,
+    });
     if (this.target === target) {
       this.clearTarget();
       this.changeState(AiState.Idle);
@@ -2000,6 +2082,19 @@ export class BattleAi {
     if (this.defeated) return true;
     const damage = damageResult.damage;
     this.debugLog('damage', `Took ${damage} damage from ${attacker.id} (HP: ${this.event.hp}/${this.event.param[MAXHP] || '?'})`);
+    const canRetaliate = attacker ? this.canTarget(attacker) : false;
+    const attackerDefeated = this.isTargetDefeated(attacker);
+    this.traceLog("damage", "handle damage", {
+      attackerId: attacker?.id,
+      damage,
+      defeated: damageResult.defeated,
+      eventHp: this.event.hp,
+      maxHp: this.event.param[MAXHP],
+      state: this.state,
+      canRetaliate,
+      attackerDefeated,
+      currentTargetId: this.target?.id,
+    });
 
     // Visual feedback
     withActionBattleAnimationUnlocked(this.event, () => {
@@ -2017,6 +2112,24 @@ export class BattleAi {
 
     // Track damage
     this.recentDamageTaken += damage;
+
+    if (
+      attacker &&
+      this.canTarget(attacker) &&
+      !this.isTargetDefeated(attacker) &&
+      this.state !== AiState.Flee
+    ) {
+      this.traceLog("target", "retaliate against attacker", {
+        attackerId: attacker.id,
+        previousTargetId: this.target?.id,
+        state: this.state,
+      });
+      this.target = attacker;
+      if (this.state === AiState.Idle || this.state === AiState.Alert) {
+        this.isMovingToTarget = false;
+        this.changeState(AiState.Combat);
+      }
+    }
 
     const reaction = damageResult.reaction;
     const staggerPower = reaction?.staggerPower ?? damage;
@@ -2157,7 +2270,10 @@ export class BattleAi {
 
   private findNearestTarget(): ActionBattleEntity | null {
     const map = this.event.getCurrentMap();
-    if (!map) return null;
+    if (!map) {
+      this.traceLog("target", "find nearest skipped: no map");
+      return null;
+    }
 
     const candidates: ActionBattleEntity[] = [];
     map.getPlayers?.().forEach((player: RpgPlayer) => candidates.push(player));
@@ -2173,6 +2289,31 @@ export class BattleAi {
         nearest = candidate;
         nearestDistance = distance;
       }
+    }
+
+    const now = Date.now();
+    if (nearest) {
+      this.traceLog("target", "nearest target found", {
+        targetId: nearest.id,
+        distance: nearestDistance,
+        visionRange: this.visionRange,
+        candidates: candidates.length,
+      });
+    } else if (now - this.lastNoTargetTraceTime > 1000) {
+      this.lastNoTargetTraceTime = now;
+      this.traceLog("target", "no target found", {
+        visionRange: this.visionRange,
+        candidates: candidates.map((candidate) => {
+          const distance = this.getDistance(this.event, candidate);
+          return {
+            id: candidate.id,
+            hp: (candidate as any).hp,
+            canTarget: this.canTarget(candidate),
+            defeated: this.isTargetDefeated(candidate),
+            distance,
+          };
+        }),
+      });
     }
 
     return nearest;
@@ -2370,8 +2511,7 @@ export class BattleAi {
         return consumes;
       case "moveToTarget":
         if (!this.target) return false;
-        this.isMovingToTarget = true;
-        this.requestMoveTo(this.target);
+        this.requestTargetMovement();
         return consumes;
       case "fleeFromTarget":
         if (!this.target) return false;
@@ -2404,8 +2544,7 @@ export class BattleAi {
       return consumes;
     }
     if (distance > intent.distance + tolerance) {
-      this.isMovingToTarget = true;
-      this.requestMoveTo(this.target);
+      this.requestTargetMovement();
       return consumes;
     }
     if (this.isMovingToTarget) {
@@ -2473,8 +2612,7 @@ export class BattleAi {
     if (distance > maxRange) {
       if (!this.isMovingToTarget) {
         this.debugLog('movement', `Tactical approach (dist=${distance.toFixed(1)}, maxRange=${maxRange.toFixed(1)})`);
-        this.isMovingToTarget = true;
-        this.requestMoveTo(this.target);
+        this.requestTargetMovement();
       }
       return;
     }
@@ -2491,8 +2629,7 @@ export class BattleAi {
     if (distance > this.attackRange) {
       if (!this.isMovingToTarget) {
         this.debugLog('movement', `Assault approach (dist=${distance.toFixed(1)}, attackRange=${this.attackRange})`);
-        this.isMovingToTarget = true;
-        this.requestMoveTo(this.target);
+        this.requestTargetMovement();
       }
       return;
     }
@@ -2507,11 +2644,50 @@ export class BattleAi {
   private requestMoveTo(target: any): boolean {
     const currentTime = Date.now();
     if (currentTime - this.lastMoveToTime < this.moveToCooldown) {
+      this.traceLog("movement", "moveTo skipped: cooldown", {
+        targetId: target?.id,
+        elapsed: currentTime - this.lastMoveToTime,
+        moveToCooldown: this.moveToCooldown,
+      });
       return false;
     }
+    const map = this.event.getCurrentMap?.() as any;
+    const hasBody =
+      !!map?.physic?.getEntityByUUID?.(this.event.id) ||
+      !!map?.getBody?.(this.event.id);
+    this.traceLog("movement", "moveTo requested", {
+      targetId: target?.id,
+      eventPosition: {
+        x: this.event.x?.(),
+        y: this.event.y?.(),
+      },
+      targetPosition: {
+        x: target?.x?.(),
+        y: target?.y?.(),
+      },
+      hasMap: !!map,
+      hasMovementBody: hasBody,
+    });
     this.event.moveTo(target as any);
     this.lastMoveToTime = currentTime;
     return true;
+  }
+
+  private requestTargetMovement(target: ActionBattleEntity | null = this.target): boolean {
+    if (!target) {
+      this.traceLog("movement", "target movement skipped: no target");
+      return false;
+    }
+    const started = this.requestMoveTo(target);
+    if (started) {
+      this.isMovingToTarget = true;
+    } else {
+      this.traceLog("movement", "target movement did not start", {
+        targetId: target.id,
+        isMovingToTarget: this.isMovingToTarget,
+      });
+    }
+    return started;
   }
 
   private schedule(callback: () => void, delay: number) {

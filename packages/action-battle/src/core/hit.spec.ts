@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { applyActionBattleHit } from "./hit";
+import { defaultRpgjsDamageResolver } from "./defaults";
 import type { ActionBattleCombatSystem } from "./contracts";
 import { setActionBattleInvincibility } from "./hit-reaction";
 
@@ -107,5 +108,25 @@ describe("applyActionBattleHit", () => {
       attacker: attacker as any,
       target: target as any,
     }).cancelled).toBe(true);
+  });
+
+  test("normalizes invalid RPGJS damage without poisoning target hp", () => {
+    const attacker = entity();
+    const target = {
+      ...entity(100),
+      applyDamage() {
+        this.hp = Number.NaN;
+        return { damage: Number.NaN };
+      },
+    };
+
+    const result = defaultRpgjsDamageResolver({
+      attacker: attacker as any,
+      target: target as any,
+    });
+
+    expect(result.damage).toBe(0);
+    expect(result.defeated).toBe(false);
+    expect(target.hp).toBe(100);
   });
 });

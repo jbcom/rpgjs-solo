@@ -1,5 +1,5 @@
 import { show_text } from "@common/blocks/executors/show-text";
-import { Frequency, Move, RpgEvent, RpgMap, RpgPlayer, Speed } from "@rpgjs/server";
+import { ATK, Frequency, MAXHP, MAXSP, Move, RpgEvent, RpgMap, RpgPlayer, STR, Speed } from "@rpgjs/server";
 import {
   AttackPattern,
   BattleAi,
@@ -206,6 +206,36 @@ const learnEnemySkills = (event: RpgEvent, enemy: any): string | undefined => {
   return firstSkillId;
 };
 
+const hasStudioParameter = (config: any, parameter: string): boolean => {
+  return Object.prototype.hasOwnProperty.call(config?.parameters ?? {}, parameter);
+};
+
+const hasConfiguredEnemyWeapon = (enemy: any): boolean => {
+  const equipment = enemy?.startingEquipment;
+  if (!equipment || typeof equipment !== "object") return false;
+  const weaponId = equipment.weaponId ?? equipment.weapon ?? equipment.weapon_id;
+  return typeof weaponId === "string" ? weaponId.trim().length > 0 : !!weaponId;
+};
+
+const setEnemyNaturalAttackModifier = (
+  event: RpgEvent,
+  naturalAttack: number,
+): void => {
+  const currentModifier = (event as any).paramsModifier ?? {};
+  const currentAttackModifier = currentModifier[ATK] ?? {};
+  (event as any).paramsModifier = {
+    ...currentModifier,
+    [ATK]: {
+      ...currentAttackModifier,
+      value: (currentAttackModifier.value ?? 0) + naturalAttack,
+    },
+  };
+};
+
+const logStudioEnemyDebug = (message: string, data?: Record<string, unknown>): void => {
+  console.log(`[StudioEnemyDebug] ${message}`, data ?? {});
+};
+
 const battleAiBehaviorOptionKeys = [
   "enemyType",
   "behaviorKey",
@@ -258,6 +288,7 @@ export const resolveEnemyBattleAiOptions = (
       normalizeEnemyType(aiBehavior.enemyType) ??
       normalizeEnemyType(legacyAiBehavior.enemyType) ??
       EnemyType.Aggressive,
+    targets: "players",
     visionRange: 150,
     attackRange: 50,
     animations: createStudioActionBattleAnimations(enemy.animations),
@@ -326,6 +357,31 @@ export const resolveEnemyBattleAiOptions = (
   }
 
   return options;
+};
+
+export const initializeEnemyVitalsFromParameters = (event: RpgEvent): void => {
+  const maxHp = toNumber((event as any).param?.[MAXHP]);
+  if (maxHp !== undefined) {
+    (event as any).hp = maxHp;
+  }
+
+  const maxSp = toNumber((event as any).param?.[MAXSP]);
+  if (maxSp !== undefined) {
+    (event as any).sp = maxSp;
+  }
+};
+
+export const initializeEnemyNaturalAttackFromStudioConfig = (
+  event: RpgEvent,
+  enemy: any,
+): void => {
+  if (hasStudioParameter(enemy, ATK)) return;
+  if (hasConfiguredEnemyWeapon(enemy)) return;
+  if (resolveEnemySkillIds(enemy).length > 0) return;
+
+  const strength = toNumber((event as any).param?.[STR]);
+  if (strength === undefined) return;
+  setEnemyNaturalAttackModifier(event, strength);
 };
 
 const applyEnemyGraphicSetting: TriggerSettingsApplier = ({
@@ -553,12 +609,40 @@ const enemyRuntime: EventTypeRuntime = {
       const enemyId = resolveEnemyId(trigger, context.params, context.object);
       const map = context.map ?? context.event.getCurrentMap?.();
       const enemy = map?.database?.()?.[enemyId];
+      logStudioEnemyDebug("onInit", {
+        eventId: context.event.id,
+        enemyId,
+        enemyFound: !!enemy,
+        triggerType: trigger?.type,
+        eventPosition: {
+          x: context.object?.x,
+          y: context.object?.y,
+        },
+        mapId: (map as any)?.id,
+      });
       if (enemy) {
         assignParams(context.event, enemy);
         context.event.level = trigger?.typeData?.level ?? enemy.initialLevel ?? 1;
+        initializeEnemyNaturalAttackFromStudioConfig(context.event, enemy);
+        initializeEnemyVitalsFromParameters(context.event);
         const attackSkill = learnEnemySkills(context.event, enemy);
+        const aiOptions = resolveEnemyBattleAiOptions(enemy, attackSkill);
+        logStudioEnemyDebug("battleAi create", {
+          eventId: context.event.id,
+          enemyId,
+          name: enemy.name,
+          level: context.event.level,
+          hp: (context.event as any).hp,
+          sp: (context.event as any).sp,
+          maxHp: (context.event as any).param?.[MAXHP],
+          maxSp: (context.event as any).param?.[MAXSP],
+          str: (context.event as any).param?.[STR],
+          atk: (context.event as any).param?.[ATK],
+          attackSkill,
+          aiOptions,
+        });
         (context.event as any).battleAi = new BattleAi(context.event, {
-          ...resolveEnemyBattleAiOptions(enemy, attackSkill),
+          ...aiOptions,
           rewards: {
             ...enemy.reward,
             showNotification: true,

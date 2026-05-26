@@ -1,7 +1,13 @@
 import { describe, expect, test } from "vitest";
+import { ATK, MAXHP, MAXSP, STR } from "@rpgjs/server";
 import { AttackPattern, EnemyType } from "@rpgjs/action-battle/server";
 import { getGraphicKey, getGraphicScale } from "../src/graphic-key";
-import { applyTriggerSettings, resolveEnemyBattleAiOptions } from "../src/event-type-runtime";
+import {
+  applyTriggerSettings,
+  initializeEnemyNaturalAttackFromStudioConfig,
+  initializeEnemyVitalsFromParameters,
+  resolveEnemyBattleAiOptions,
+} from "../src/event-type-runtime";
 
 describe("Studio event runtime", () => {
   test("uses the media id before fileName for Studio media graphics", () => {
@@ -58,6 +64,7 @@ describe("Studio event runtime", () => {
 
     expect(options).toMatchObject({
       enemyType: EnemyType.Aggressive,
+      targets: "players",
       attackCooldown: 1000,
       visionRange: 150,
       attackRange: 60,
@@ -73,6 +80,76 @@ describe("Studio event runtime", () => {
       groupBehavior: false,
     });
     expect(options.behavior).toBeUndefined();
+  });
+
+  test("initializes Studio enemy vitals from configured parameters", () => {
+    const event: any = {
+      hp: 0,
+      sp: 0,
+      param: {
+        [MAXHP]: 32,
+        [MAXSP]: 11,
+      },
+    };
+
+    initializeEnemyVitalsFromParameters(event);
+
+    expect(event.hp).toBe(32);
+    expect(event.sp).toBe(11);
+  });
+
+  test("uses Studio strength as natural attack for enemies without weapon or skill", () => {
+    const event: any = {
+      param: {
+        [STR]: 10,
+      },
+    };
+
+    initializeEnemyNaturalAttackFromStudioConfig(event, {
+      parameters: {
+        [STR]: { start: 10, end: 635 },
+      },
+      startingEquipment: {
+        weaponId: "",
+      },
+      skills: [],
+    });
+
+    expect(event.paramsModifier[ATK]).toEqual({ value: 10 });
+    expect(event.param[ATK]).toBeUndefined();
+  });
+
+  test("does not synthesize natural attack when Studio already configured an attack source", () => {
+    const event: any = {
+      param: {
+        [STR]: 10,
+      },
+    };
+
+    initializeEnemyNaturalAttackFromStudioConfig(event, {
+      parameters: {
+        [ATK]: { start: 5, end: 50 },
+        [STR]: { start: 10, end: 100 },
+      },
+    });
+
+    initializeEnemyNaturalAttackFromStudioConfig(event, {
+      parameters: {
+        [STR]: { start: 10, end: 100 },
+      },
+      startingEquipment: {
+        weaponId: "weapon-id",
+      },
+    });
+
+    initializeEnemyNaturalAttackFromStudioConfig(event, {
+      parameters: {
+        [STR]: { start: 10, end: 100 },
+      },
+      skills: ["slash"],
+    });
+
+    expect(event.paramsModifier).toBeUndefined();
   });
 
   test("still maps behavior gauge settings when present", () => {

@@ -268,6 +268,76 @@ describe("BattleAi behavior tree", () => {
     ai.destroy();
   });
 
+  test("approaches a visible target while alert but not yet in combat range", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 120),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackRange: 50,
+      visionRange: 150,
+    });
+
+    ai.onDetectInShape(player as any, {});
+    vi.advanceTimersByTime(100);
+
+    expect(event.moveTo).toHaveBeenCalledWith(player);
+    ai.destroy();
+  });
+
+  test("targets its attacker after taking non-lethal damage", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.hp = 9;
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 120),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackRange: 50,
+      visionRange: 150,
+    });
+
+    ai.handleDamage(player as any, { damage: 1, defeated: false });
+
+    expect(ai.getTarget()).toBe(player);
+    ai.destroy();
+  });
+
+  test("chases its attacker after hitstun ends", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const event = createEvent();
+    event.hp = 9;
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 120),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackRange: 50,
+      visionRange: 150,
+      hitstunMs: 100,
+      moveToCooldown: 0,
+    });
+
+    ai.handleDamage(player as any, { damage: 1, defeated: false });
+    vi.advanceTimersByTime(300);
+
+    expect(event.moveTo).toHaveBeenCalledWith(player);
+    ai.destroy();
+  });
+
   test("behavior tree idle fallback does not block target acquisition", () => {
     vi.useFakeTimers();
     const event = createEvent();

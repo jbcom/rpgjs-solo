@@ -85,9 +85,24 @@ export const defaultRpgjsDamageResolver = (
   context: ActionBattleDamageContext
 ) => {
   const target = context.target as any;
+  const previousHp =
+    typeof target.hp === "number" && Number.isFinite(target.hp)
+      ? target.hp
+      : undefined;
   const raw = target.applyDamage(context.attacker as any, context.skill);
+  const resolvedDamage = Number(raw?.damage ?? 0);
+  if (!Number.isFinite(resolvedDamage)) {
+    if (previousHp !== undefined) {
+      target.hp = previousHp;
+    }
+    return {
+      damage: 0,
+      defeated: false,
+      raw,
+    };
+  }
   return {
-    damage: raw?.damage ?? 0,
+    damage: resolvedDamage,
     defeated: target.hp <= 0,
     raw,
   };

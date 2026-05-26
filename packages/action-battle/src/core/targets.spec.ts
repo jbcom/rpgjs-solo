@@ -52,6 +52,18 @@ describe("action battle targets", () => {
     expect(canActionBattleTarget(attacker, target, "players")).toBe(false);
   });
 
+  test("classifies runtime players with shape helpers as players", () => {
+    const attacker = battleEvent("enemy-1", "enemies");
+    const target = {
+      ...player("player-1"),
+      attachShape() {},
+      isEvent: () => false,
+    };
+
+    expect(getActionBattleEntityKind(target as any)).toBe("player");
+    expect(canActionBattleTarget(attacker, target as any, "players")).toBe(true);
+  });
+
   test("supports player targets explicitly", () => {
     const attacker = player("player-1");
     const target = player("player-2");

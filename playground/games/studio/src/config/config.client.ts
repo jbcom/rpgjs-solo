@@ -2,12 +2,13 @@ import { provideGlobalConfig, Presets } from "@rpgjs/client";
 import { provideClientModules } from "@rpgjs/client";
 import { configCommon, studio } from "./config.common";
 import { provideActionBattle } from "@rpgjs/action-battle/client";
-import { provideStudioGame } from "@rpgjs/studio/client";
+import { createStudioActionBattleAnimations, provideStudioGame } from "@rpgjs/studio/client";
 
 export const configClient = {
   providers: [
     provideStudioGame(studio),
     provideActionBattle({
+      animations: createStudioActionBattleAnimations(),
       ui: {
         actionBar: {
           enabled: false
