@@ -3,7 +3,7 @@ import { Animation, Direction } from "./types";
 export const LPCSpritesheetPreset = (options: {
   id: string;
   imageSource: string;
-  scale: [number, number];
+  scale?: [number, number];
   includeAttack3?: boolean;
 }) => {
   const frameY = (direction: Direction) => {

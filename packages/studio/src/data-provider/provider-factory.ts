@@ -1,7 +1,12 @@
 import { apiUrl } from '../constants';
 import { HttpGameDataProvider } from './http-game-data-provider';
 import { LocalBundleGameDataProvider } from './local-bundle-game-data-provider';
-import type { GameDataProvider, GameRuntimeMode, ProviderConfig } from './types';
+import type {
+  GameDataProvider,
+  GameRuntimeMode,
+  PlayerStartConfigQuery,
+  ProviderConfig,
+} from './types';
 import { resolveRuntimeModeOrNull } from './runtime-mode';
 
 const getDefaultConfig = (): ProviderConfig => ({
@@ -69,6 +74,47 @@ class AutoFallbackGameDataProvider implements GameDataProvider {
     return this.http.getDatabase(projectId);
   }
 }
+
+class CachedGameDataProvider implements GameDataProvider {
+  readonly kind: GameDataProvider['kind'];
+  private mediaById = new Map<string, Promise<any>>();
+
+  constructor(private readonly source: GameDataProvider) {
+    this.kind = source.kind;
+  }
+
+  getProject(query: { projectId?: string | null; mapId?: string | null }): Promise<any> {
+    return this.source.getProject(query);
+  }
+
+  getMap(mapId: string): Promise<any> {
+    return this.source.getMap(mapId);
+  }
+
+  getMedia(mediaId: string): Promise<any> {
+    const key = String(mediaId);
+    if (!this.mediaById.has(key)) {
+      const promise = this.source.getMedia(mediaId).catch((error) => {
+        this.mediaById.delete(key);
+        throw error;
+      });
+      this.mediaById.set(key, promise);
+    }
+    return this.mediaById.get(key)!;
+  }
+
+  getDatabase(projectId?: string): Promise<any[]> {
+    return this.source.getDatabase(projectId);
+  }
+
+  getPlayerStartConfig?(query: PlayerStartConfigQuery): Promise<any> {
+    return this.source.getPlayerStartConfig?.(query) ?? Promise.resolve(null);
+  }
+}
+
+export const createCachedGameDataProvider = (source: GameDataProvider): GameDataProvider => {
+  return new CachedGameDataProvider(source);
+};
 
 let providerInstance: GameDataProvider | null = null;
 type StudioGameRuntimeConfig = {
@@ -140,6 +186,8 @@ export const resetGameDataProvider = (): void => {
 export const getGameDataProvider = (): GameDataProvider => {
   if (providerInstance) return providerInstance;
   const mode = resolveRuntimeModeFromConfig();
-  providerInstance = createGameDataProvider(mode, resolveProviderConfig());
+  providerInstance = createCachedGameDataProvider(
+    createGameDataProvider(mode, resolveProviderConfig())
+  );
   return providerInstance;
 };

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { signal } from "canvasengine";
-import { RpgClientObject } from "./Object";
+import { appendFramePayload, RpgClientObject, withGraphicDisplayScale } from "./Object";
 
 vi.mock("../RpgClientEngine", () => ({
   RpgClientEngine: class RpgClientEngine {},
@@ -20,6 +20,19 @@ function createObject() {
 }
 
 describe("RpgClientObject animations", () => {
+  test("accepts a single frame payload without requiring iterable spread", () => {
+    expect(
+      appendFramePayload({ stale: true }, { x: 10, y: 20, ts: 1 }),
+    ).toEqual([{ x: 10, y: 20, ts: 1 }]);
+  });
+
+  test("keeps instance scale outside the spritesheet transform scale", () => {
+    expect(withGraphicDisplayScale({ id: "hero" }, 0.5)).toEqual({
+      id: "hero",
+      displayScale: 0.5,
+    });
+  });
+
   test("marks temporary animation as finished before restoring locomotion animation", async () => {
     const object = createObject();
     const animationChanges: Array<{ name: string; isPlaying: boolean }> = [];

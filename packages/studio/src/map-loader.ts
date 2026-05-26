@@ -187,6 +187,19 @@ const normalizeImageMediaList = (value: unknown): any[] => {
   return [value];
 };
 
+const parseArrayValue = (value: unknown): any[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
 const waitForMapImages = async (map: any): Promise<void> => {
   const imageSources = new Set<string>();
   const addSource = (source?: string) => {
@@ -230,10 +243,11 @@ const resolveMapEventReferences = async (
   events: unknown,
   options: { useLocalBundleEvents: boolean }
 ): Promise<any[]> => {
-  if (!Array.isArray(events) || events.length === 0) return [];
-  if (!options.useLocalBundleEvents) return events as any[];
+  const list = parseArrayValue(events);
+  if (list.length === 0) return [];
+  if (!options.useLocalBundleEvents) return list;
 
-  const hasEventIdReference = events.some(
+  const hasEventIdReference = list.some(
     (entry) =>
       entry &&
       typeof entry === "object" &&
@@ -241,12 +255,12 @@ const resolveMapEventReferences = async (
   );
 
   if (!hasEventIdReference) {
-    return events as any[];
+    return list;
   }
 
   const bundledEvents = await fetchBundleEvents();
   if (bundledEvents.length === 0) {
-    return events as any[];
+    return list;
   }
 
   const eventsById = new Map<string, any>();
@@ -260,7 +274,7 @@ const resolveMapEventReferences = async (
     ids.forEach((id) => eventsById.set(id, entry));
   });
 
-  return events.map((entry) => {
+  return list.map((entry) => {
     if (!entry || typeof entry !== "object") return entry;
     const candidate = entry as Record<string, unknown>;
     const refId = typeof candidate.eventId === "string" ? candidate.eventId : "";
@@ -303,6 +317,10 @@ const resolveMapEventReferences = async (
 export const loadMap = async (mapId: string) => {
   const client = inject(RpgClientEngine) as RpgClientEngineWithConfig;
   const hasProjectId = Boolean(client.globalConfig.projectId && client.globalConfig.projectId.trim().length > 0);
+  const runtimeMode =
+    getStudioGameRuntimeConfig().runtimeMode ??
+    (client.globalConfig as Record<string, unknown>).runtimeMode;
+  const useLocalBundleEvents = runtimeMode !== "online" && !hasProjectId;
 
   let finalMapId = mapId;
   if (!firstMapLoaded) {
@@ -311,9 +329,6 @@ export const loadMap = async (mapId: string) => {
   }
 
   const mapResponse = await getGameDataProvider().getMap(finalMapId);
-  const resolvedMapEvents = await resolveMapEventReferences(mapResponse.events, {
-    useLocalBundleEvents: !hasProjectId,
-  });
   
   const params = mapResponse.params ?? {};
   const isV2 = mapResponse.creationDetails?.version === 'v2';
@@ -403,6 +418,30 @@ export const loadMap = async (mapId: string) => {
     return Promise.all(values.map((entry) => resolveMediaReference(entry)));
   };
 
+  const hydrateEventMediaReferences = async (events: any[]): Promise<any[]> => {
+    return Promise.all(events.map(async (event) => {
+      if (!event || typeof event !== "object") return event;
+      const nextEvent = { ...event };
+      if (nextEvent.params?.graphic) {
+        nextEvent.params = {
+          ...nextEvent.params,
+          graphic: await resolveMediaReference(nextEvent.params.graphic),
+        };
+      }
+      if (Array.isArray(nextEvent.triggers)) {
+        nextEvent.triggers = await Promise.all(nextEvent.triggers.map(async (trigger: any) => {
+          if (!trigger || typeof trigger !== "object") return trigger;
+          if (!trigger.graphic) return trigger;
+          return {
+            ...trigger,
+            graphic: await resolveMediaReference(trigger.graphic),
+          };
+        }));
+      }
+      return nextEvent;
+    }));
+  };
+
   const isAudioAssetSource = (value: string): boolean => {
     return (
       /^(https?:\/\/|\/|data:|blob:)/.test(value) ||
@@ -444,6 +483,12 @@ export const loadMap = async (mapId: string) => {
 
   params.backgroundMusic = await resolveAudioSource(params.backgroundMusic);
   params.backgroundAmbientSound = await resolveAudioSource(params.backgroundAmbientSound);
+
+  const resolvedMapEvents = await hydrateEventMediaReferences(
+    await resolveMapEventReferences(mapResponse.events, {
+      useLocalBundleEvents,
+    })
+  );
   // Merge polygons with hitboxes to create polygon-based hitboxes
   const mergedHitboxes = [...(mapResponse.hitboxes ?? [])];
   

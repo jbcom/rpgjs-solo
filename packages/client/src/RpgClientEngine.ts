@@ -75,6 +75,7 @@ export class RpgClientEngine<T = any> {
   width = signal("100%");
   height = signal("100%");
   spritesheets: Map<string | number, any> = new Map();
+  private spritesheetPromises: Map<string | number, Promise<any>> = new Map();
   sounds: Map<string, any> = new Map();
   componentAnimations: any[] = [];
   clientVisuals = new ClientVisualRegistry();
@@ -963,17 +964,29 @@ export class RpgClientEngine<T = any> {
 
     // If not in cache and resolver exists, use it
     if (this.spritesheetResolver) {
+      if (this.spritesheetPromises.has(id)) {
+        return this.spritesheetPromises.get(id);
+      }
+
       const result = this.spritesheetResolver(id);
 
       // Check if result is a Promise
       if (result instanceof Promise) {
-        return result.then((spritesheet) => {
-          if (spritesheet) {
-            // Cache the resolved spritesheet
-            this.spritesheets.set(id, spritesheet);
-          }
-          return spritesheet;
-        });
+        const promise = result
+          .then((spritesheet) => {
+            if (spritesheet) {
+              // Cache the resolved spritesheet
+              this.spritesheets.set(id, spritesheet);
+            }
+            this.spritesheetPromises.delete(id);
+            return spritesheet;
+          })
+          .catch((error) => {
+            this.spritesheetPromises.delete(id);
+            throw error;
+          });
+        this.spritesheetPromises.set(id, promise);
+        return promise;
       } else {
         // Synchronous result
         if (result) {

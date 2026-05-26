@@ -120,7 +120,7 @@ export const pageSchema = {
     pattern: {
       type: "string",
       title: "Pattern",
-      enum: ["initial", "loop", "stop"],
+      enum: ["initial", "animate", "loop", "stop"],
       default: "initial"
     },
     movement: {

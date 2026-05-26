@@ -1,6 +1,6 @@
 import { Hooks, ModulesToken, RpgCommonPlayer } from "@rpgjs/common";
 import { trigger, signal, type Trigger } from "canvasengine";
-import { from, map, of, Subscription, switchMap } from "rxjs";
+import { combineLatest, from, map, of, startWith, Subscription, switchMap } from "rxjs";
 import { inject } from "../core/inject";
 import { RpgClientEngine } from "../RpgClientEngine";
 type Frame = { x: number; y: number; ts: number };
@@ -29,6 +29,24 @@ type ConfigurableTrigger<T> = Omit<Trigger<T>, "start"> & {
   start(config?: T): Promise<void>;
 };
 
+export const withGraphicDisplayScale = (spritesheet: any, scale: unknown): any => {
+  if (!spritesheet || typeof spritesheet !== "object") return spritesheet;
+  if (scale === undefined || scale === null) return spritesheet;
+  return {
+    ...spritesheet,
+    displayScale: scale,
+  };
+};
+
+export const appendFramePayload = (current: unknown, items: unknown): Frame[] => {
+  const frameItems = Array.isArray(items) ? items : items ? [items] : [];
+  const nextFrames = frameItems.flatMap((item): Frame[] =>
+    Array.isArray(item) ? item : [item as Frame]
+  );
+  const currentFrames = Array.isArray(current) ? current as Frame[] : [];
+  return currentFrames.concat(nextFrames);
+};
+
 export abstract class RpgClientObject extends RpgCommonPlayer {
   abstract _type: string;
   emitParticleTrigger = trigger();
@@ -51,18 +69,24 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     this._frames.observable.subscribe(({ items }) => {
       if (!this.id) return;
       //if (this.id == this.engine.playerIdSignal()!) return;
-      const nextFrames = items.flatMap((item): Frame[] =>
-        Array.isArray(item) ? item : [item]
-      );
-      this.frames = [...this.frames, ...nextFrames];
+      this.frames = appendFramePayload(this.frames, items);
     });
 
-    this.graphics.observable
+    const graphics$ = this.graphics.observable.pipe(map(({ items }) => items));
+    const graphicScale$ = this._graphicScale.observable.pipe(
+      startWith({ value: this._graphicScale() }),
+      map((payload: any) => payload?.value ?? payload),
+    );
+
+    combineLatest([graphics$, graphicScale$])
     .pipe(
-      map(({ items }) => items),
-      switchMap(graphics => {
-        if (graphics.length === 0) return of([]);
-        return from(Promise.all(graphics.map(graphic => this.engine.getSpriteSheet(graphic))));
+      switchMap(([graphics, scale]) => {
+        const graphicRefs = Array.isArray(graphics) ? graphics : [];
+        if (graphicRefs.length === 0) return of([]);
+        return from(Promise.all(graphicRefs.map(async (graphic) => {
+          const spritesheet = await this.engine.getSpriteSheet(graphic);
+          return withGraphicDisplayScale(spritesheet, scale);
+        })));
       })
     )
     .subscribe((sheets) => {  

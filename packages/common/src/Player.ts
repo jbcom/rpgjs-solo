@@ -120,6 +120,7 @@ export class RpgCommonPlayer {
   @sync() direction = signal(Direction.Down);
   @sync() _speed = signal(4);
   @sync() graphics = signal<any>([]);
+  @sync() _graphicScale = signal<any>(null);
   @sync({
     persist: false
   }) _canMove = signal(true);

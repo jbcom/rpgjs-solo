@@ -534,7 +534,7 @@
   }
 
   const graphicScale = (graphicObject) => {
-    const scale = graphicObject?.scale;
+    const scale = graphicObject?.displayScale ?? graphicObject?.scale;
     if (Array.isArray(scale)) return scale;
     if (typeof scale === 'number') return [scale, scale];
     if (scale && typeof scale === 'object') {
@@ -944,7 +944,8 @@
     const isTemporaryAnimationPlaying =
       sprite.animationIsPlaying && sprite.animationIsPlaying();
 
-    if (sprite.animationFixed && isMovementAnimation && isTemporaryAnimationPlaying) {
+    if (sprite.animationFixed && isMovementAnimation) {
+      realAnimationName.set(curr);
       return;
     }
 

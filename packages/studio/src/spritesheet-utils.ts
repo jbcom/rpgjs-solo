@@ -5,6 +5,8 @@ import { LPCSpritesheetPreset } from "./spritesheets/lpc";
 import { CharacterSpritesheet } from "./spritesheets/character";
 import { getGameDataProvider } from "./data-provider";
 
+export const STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE = 0.7;
+
 const isAbsolutePath = (value: string): boolean => {
   return (
     value.startsWith("http://") ||
@@ -86,23 +88,41 @@ export const createSpriteSheetObject = async (
     case "character":
     case "spritesheet":
       if (media.metadata?.lpc) {
-        const scale = media.metadata.scale || 1.5;
-        return LPCSpritesheetPreset({
+        const scale =
+          typeof media.metadata?.scale === "number"
+            ? media.metadata.scale
+            : undefined;
+        const spritesheet = LPCSpritesheetPreset({
           id,
           imageSource: url,
-          scale: [scale, scale],
+          scale: scale !== undefined ? [scale, scale] : undefined,
         });
+        return scale === undefined
+          ? {
+              ...spritesheet,
+              displayScale: STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE,
+            }
+          : spritesheet;
       } else {
-        const scale = media.metadata?.scale || 0.5;
+        const scale =
+          typeof media.metadata?.scale === "number"
+            ? media.metadata.scale
+            : undefined;
         
-        return CharacterSpritesheet({
+        const spritesheet = CharacterSpritesheet({
           id,
           imageSource: url,
           framesWidth: media.metadata?.frameWidth ?? 4,
           framesHeight: media.metadata?.frameHeight ?? 4,
-          scale: [scale, scale],
+          scale: scale !== undefined ? [scale, scale] : undefined,
           anchor: [0.35, 0.65],
         });
+        return scale === undefined
+          ? {
+              ...spritesheet,
+              displayScale: STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE,
+            }
+          : spritesheet;
 
       }
     case "faceset":
@@ -181,6 +201,15 @@ export const resolveSpritesheet = async (id: string): Promise<any> => {
     const rawId = id.startsWith('#') ? id.slice(1) : id;
     const normalizedId = rawId.startsWith('spritesheet_') ? rawId.slice('spritesheet_'.length) : rawId;
 
+    try {
+      const media = await getGameDataProvider().getMedia(normalizedId);
+      if (media && !media.__placeholder) {
+        return await createSpriteSheetObject(media, normalizedId);
+      }
+    } catch {
+      // File-name graphics can be direct asset references rather than media ids.
+    }
+
     if (normalizedId.includes('.') || normalizedId.includes('/')) {
       const media = {
         type: "spritesheet",
@@ -193,8 +222,7 @@ export const resolveSpritesheet = async (id: string): Promise<any> => {
       return await createSpriteSheetObject(media, normalizedId);
     }
 
-    const media = await getGameDataProvider().getMedia(normalizedId);
-    return await createSpriteSheetObject(media, normalizedId);
+    return null;
   } catch (error) {
     console.error(`Error resolving spritesheet ${id}:`, error);
     return null;

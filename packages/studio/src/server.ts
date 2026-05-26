@@ -9,6 +9,7 @@ import {
   applyTriggerSettings,
   getEventTypeRuntime,
   getGraphicKey,
+  getGraphicScale,
   RpgMapExtended,
 } from "./event-type-runtime";
 import { normalizeEventType } from "@common/event-types";
@@ -17,6 +18,7 @@ import {
   getGameDataProvider,
   getStudioGameRuntimeConfig,
 } from "./data-provider";
+import type { GameRuntimeMode } from "./data-provider";
 import {
   normalizeStudioDatabase,
   normalizeStudioDatabaseRecord,
@@ -252,6 +254,7 @@ const projectCacheByKey = new Map<string, Promise<any>>();
 type StudioServerConfig = {
   projectId?: string | null;
   startMapId?: string;
+  runtimeMode?: GameRuntimeMode;
 };
 
 const ensureLeadingSlash = (value: string): string => {
@@ -294,9 +297,95 @@ const fetchBundleEvents = async (): Promise<any[]> => {
   return eventsCacheByBundlePath.get(basePath)!;
 };
 
-const resolveMapEventReferences = async (events: unknown): Promise<any[]> => {
+const toIdentifierString = (value: unknown): string => {
+  if (typeof value === "string" || typeof value === "number") {
+    const result = String(value).trim();
+    return result.startsWith("#") ? result.slice(1) : result;
+  }
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  return (
+    toIdentifierString(record._id) ||
+    toIdentifierString(record.id) ||
+    toIdentifierString(record.mediaId) ||
+    toIdentifierString(record.referenceId)
+  );
+};
+
+const resolveMediaReference = async (value: unknown): Promise<unknown> => {
+  if (!value) return value;
+  const referenceId = toIdentifierString(value);
+  if (!referenceId) return value;
+
+  const candidateIds = Array.from(
+    new Set([
+      referenceId,
+      referenceId.startsWith("#") ? referenceId.slice(1) : referenceId,
+    ].filter(Boolean)),
+  );
+
+  for (const candidateId of candidateIds) {
+    try {
+      const media = await getGameDataProvider().getMedia(candidateId);
+      if (media && !media.__placeholder) {
+        return value && typeof value === "object"
+          ? { ...(value as Record<string, unknown>), ...media }
+          : media;
+      }
+    } catch {
+      // Keep the original reference when Studio cannot resolve it as media.
+    }
+  }
+
+  return value;
+};
+
+const hydrateEventMediaReferences = async (events: any[]): Promise<any[]> => {
+  return Promise.all(events.map(async (event) => {
+    if (!event || typeof event !== "object") return event;
+    const nextEvent = { ...event };
+    if (nextEvent.params?.graphic) {
+      nextEvent.params = {
+        ...nextEvent.params,
+        graphic: await resolveMediaReference(nextEvent.params.graphic),
+      };
+    }
+    if (Array.isArray(nextEvent.triggers)) {
+      nextEvent.triggers = await Promise.all(nextEvent.triggers.map(async (trigger: any) => {
+        if (!trigger || typeof trigger !== "object") return trigger;
+        if (!trigger.graphic) return trigger;
+        return {
+          ...trigger,
+          graphic: await resolveMediaReference(trigger.graphic),
+        };
+      }));
+    }
+    return nextEvent;
+  }));
+};
+
+const shouldUseLocalBundleEvents = (config: StudioServerConfig = {}): boolean => {
+  const runtimeConfig = getStudioGameRuntimeConfig();
+  const runtimeMode = config.runtimeMode ?? runtimeConfig.runtimeMode;
+  if (runtimeMode === "online") return false;
+
+  const gameConfig = readGameConfig();
+  const projectId =
+    config.projectId?.trim?.() ||
+    runtimeConfig.projectId?.trim?.() ||
+    gameConfig?._id ||
+    null;
+
+  return !projectId;
+};
+
+const resolveMapEventReferences = async (
+  events: unknown,
+  options: { useLocalBundleEvents: boolean },
+): Promise<any[]> => {
   const list = parseArrayValue(events);
   if (list.length === 0) return [];
+  if (!options.useLocalBundleEvents) return list;
 
   const hasEventIdReference = list.some(
     (entry) =>
@@ -414,11 +503,14 @@ const normalizeStudioMapPayload = async (
     resolveStudioProject(mapId, config),
     getGameDataProvider().getMap(mapId),
   ]);
+  const useLocalBundleEvents = shouldUseLocalBundleEvents(config);
   const params = mapResponse.params ?? {};
   const isV2 = mapResponse.creationDetails?.version === "v2";
   const resolvedEvents = await resolveMapEventReferences(
     mapResponse.events ?? mapResponse.data?.events,
+    { useLocalBundleEvents },
   );
+  const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents);
   const mapDataValue = Array.isArray(mapResponse.data)
     ? mapResponse.data
     : parseJsonValue(mapResponse.data, []);
@@ -445,7 +537,7 @@ const normalizeStudioMapPayload = async (
     id: mapResponse._id ?? mapResponse.id ?? mapId,
     data: mapDataValue,
     hitboxes: mergedHitboxes,
-    events: resolvedEvents,
+    events: hydratedEvents,
     params,
   };
 
@@ -453,7 +545,7 @@ const normalizeStudioMapPayload = async (
     ...initialMapData,
     id: normalizedMap.id,
     data: normalizedMap,
-    events: resolvedEvents,
+    events: hydratedEvents,
     hitboxes: mergedHitboxes,
     width:
       initialMapData?.width ||
@@ -487,8 +579,16 @@ export default (_config?: unknown) => {
         const heroGraphic = (mapExtended.globalConfig.hero as any)?.graphic;
         const heroGraphicKey = getGraphicKey(heroGraphic);
         if (heroGraphicKey) {
+          (player as any)._graphicScale?.set(
+            getGraphicScale(
+              (mapExtended.globalConfig.hero as any)?.params,
+              mapExtended.globalConfig.hero,
+              heroGraphic,
+            ) ?? null,
+          );
           player.setGraphic(heroGraphicKey);
         } else {
+          (player as any)._graphicScale?.set(null);
           player.setGraphic("default_character");
         }
         if (player.x() == 0 && player.y() == 0) {
@@ -542,6 +642,7 @@ export default (_config?: unknown) => {
     map: {
       async onBeforeUpdate(mapData: any, map) {
         const mapExtended = map as RpgMapExtended;
+        const useLocalBundleEvents = shouldUseLocalBundleEvents(config);
         const hydratedMapData = await normalizeStudioMapPayload(
           mapData?.id ?? mapData?.data?._id ?? mapData?.data?.id,
           mapData,
@@ -552,17 +653,19 @@ export default (_config?: unknown) => {
 
         const resolvedEvents = await resolveMapEventReferences(
           mapData?.events ?? mapData?.data?.events,
+          { useLocalBundleEvents },
         );
+        const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents);
         const resolvedEventsById = new Map<string, any>();
-        resolvedEvents.forEach((entry) => {
+        hydratedEvents.forEach((entry) => {
           const id = String(entry?.eventId ?? entry?.id ?? entry?._id ?? "");
           if (id) resolvedEventsById.set(id, entry);
         });
         (mapExtended as any).__resolvedEventsById = resolvedEventsById;
 
-        mapData.events = resolvedEvents;
+        mapData.events = hydratedEvents;
         if (mapData?.data) {
-          mapData.data.events = resolvedEvents;
+          mapData.data.events = hydratedEvents;
         }
         mapExtended.startPosition = mapData.data?.start;
         mapExtended.scale = mapData.data?.params?.scale || 1;

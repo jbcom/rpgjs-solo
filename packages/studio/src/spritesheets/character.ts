@@ -5,7 +5,7 @@ export const CharacterSpritesheet = (options: {
   imageSource: string;
   framesWidth: number;
   framesHeight: number;
-  scale: [number, number];
+  scale?: [number, number];
   anchor: [number, number];
 }) => {
   const frameY = (direction: Direction) => {
