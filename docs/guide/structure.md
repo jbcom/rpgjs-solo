@@ -165,13 +165,21 @@ If you omit `keyboardControls`, RPGJS injects the default bindings automatically
   left: "left",
   right: "right",
   action: "space",
+  dash: "shift",
   escape: "escape"
 }
 ```
 
+Partial `keyboardControls` objects are merged with these defaults, so a game can
+override one key without redefining every movement/action binding.
+
 The `action` binding also accepts an object when the action key should send a
 custom action input. This keeps the key generic in built-in components while
 letting the game decide which action and payload to send.
+
+The `dash` binding is a movement input. In MMORPG mode the client predicts it
+locally through the same movement queue as directional inputs, while the server
+validates and acknowledges the dash position.
 
 ```ts
 provideClientGlobalConfig({

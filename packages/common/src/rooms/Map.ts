@@ -7,6 +7,7 @@ import {
   Entity,
   EntityState,
   AABB,
+  Dash,
   assignPolygonCollider,
   createCollider,
 } from "@rpgjs/physic";
@@ -1667,6 +1668,44 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     const speed = player.speed * this.speedScalar;
     this.physic.moveEntity(entity, direction, speed);
+    entity.wakeUp();
+    return true;
+  }
+
+  private dashBody(
+    player: any,
+    input: {
+      direction: { x: number; y: number };
+      additionalSpeed?: number;
+      duration?: number;
+    }
+  ): boolean {
+    const entity = this.physic.getEntityByUUID(player.id);
+    if (!entity) return false;
+
+    const rawX = Number(input.direction?.x ?? 0);
+    const rawY = Number(input.direction?.y ?? 0);
+    const magnitude = Math.hypot(rawX, rawY);
+    if (!Number.isFinite(magnitude) || magnitude <= 0) return false;
+
+    const direction = {
+      x: rawX / magnitude,
+      y: rawY / magnitude,
+    };
+    const additionalSpeed =
+      typeof input.additionalSpeed === "number" && Number.isFinite(input.additionalSpeed)
+        ? Math.max(0, Math.min(input.additionalSpeed, 64))
+        : 4;
+    const durationMs =
+      typeof input.duration === "number" && Number.isFinite(input.duration)
+        ? Math.max(1, Math.min(input.duration, 1000))
+        : 200;
+    const speed = (player.speed + additionalSpeed) * this.speedScalar;
+
+    this.moveManager.add(
+      player.id,
+      new Dash(speed, direction, durationMs / 1000)
+    );
     entity.wakeUp();
     return true;
   }

@@ -4,7 +4,10 @@ export interface PredictionState<DirectionType = unknown> {
   direction?: DirectionType;
 }
 
-export interface PredictionControllerConfig<DirectionType = unknown> {
+export interface PredictionControllerConfig<
+  InputType = unknown,
+  DirectionType = InputType,
+> {
   correctionThreshold?: number;
   historyTtlMs?: number;
   maxHistoryEntries?: number;
@@ -13,19 +16,25 @@ export interface PredictionControllerConfig<DirectionType = unknown> {
   setAuthoritativeState: (state: PredictionState<DirectionType>) => void;
 }
 
-export interface PredictionHistoryEntry<DirectionType> {
+export interface PredictionHistoryEntry<
+  InputType,
+  DirectionType = InputType,
+> {
   frame: number;
   tick: number;
   timestamp: number;
-  direction: DirectionType;
+  direction: InputType;
   state?: PredictionState<DirectionType>;
 }
 
-export interface PredictionAckResult<DirectionType = unknown> {
+export interface PredictionAckResult<
+  InputType = unknown,
+  DirectionType = InputType,
+> {
   acknowledgedFrame: number;
   acknowledgedTick: number;
   state?: PredictionState<DirectionType>;
-  pendingInputs: PredictionHistoryEntry<DirectionType>[];
+  pendingInputs: PredictionHistoryEntry<InputType, DirectionType>[];
   needsReconciliation: boolean;
 }
 
@@ -34,23 +43,28 @@ export interface PredictionAckResult<DirectionType = unknown> {
  *
  * Handles input history, pending server snapshots and reconciliation.
  */
-export class PredictionController<DirectionType = unknown> {
+export class PredictionController<
+  InputType = unknown,
+  DirectionType = InputType,
+> {
   private readonly correctionThreshold: number;
   private readonly historyTtlMs: number;
   private readonly maxHistoryEntries: number;
   private frameCounter = 0;
-  private history: PredictionHistoryEntry<DirectionType>[] = [];
+  private history: PredictionHistoryEntry<InputType, DirectionType>[] = [];
   private pendingSnapshot: PredictionState<DirectionType> | null = null;
   private lastAckFrame = 0;
   private lastAckTick = 0;
 
-  constructor(private readonly config: PredictionControllerConfig<DirectionType>) {
+  constructor(
+    private readonly config: PredictionControllerConfig<InputType, DirectionType>
+  ) {
     this.correctionThreshold = config.correctionThreshold ?? 5;
     this.historyTtlMs = config.historyTtlMs ?? 10000;
     this.maxHistoryEntries = config.maxHistoryEntries ?? 1200;
   }
 
-  recordInput(direction: DirectionType, timestamp: number): { frame: number; tick: number } {
+  recordInput(direction: InputType, timestamp: number): { frame: number; tick: number } {
     const frame = ++this.frameCounter;
     const tick = this.config.getPhysicsTick();
     this.history.push({ frame, tick, timestamp, direction });
@@ -69,7 +83,7 @@ export class PredictionController<DirectionType = unknown> {
     return this.history.length > 0;
   }
 
-  getPendingInputs(): PredictionHistoryEntry<DirectionType>[] {
+  getPendingInputs(): PredictionHistoryEntry<InputType, DirectionType>[] {
     return [...this.history];
   }
 
@@ -103,9 +117,9 @@ export class PredictionController<DirectionType = unknown> {
       serverTick?: number;
       state?: PredictionState<DirectionType>;
     },
-  ): PredictionAckResult<DirectionType> {
+  ): PredictionAckResult<InputType, DirectionType> {
     if (typeof ack.frame !== "number") {
-      const result: PredictionAckResult<DirectionType> = {
+      const result: PredictionAckResult<InputType, DirectionType> = {
         acknowledgedFrame: this.lastAckFrame,
         acknowledgedTick: this.lastAckTick,
         pendingInputs: [...this.history],
@@ -117,7 +131,7 @@ export class PredictionController<DirectionType = unknown> {
       return result;
     }
     if (ack.frame < this.lastAckFrame) {
-      const result: PredictionAckResult<DirectionType> = {
+      const result: PredictionAckResult<InputType, DirectionType> = {
         acknowledgedFrame: this.lastAckFrame,
         acknowledgedTick: this.lastAckTick,
         pendingInputs: [...this.history],
@@ -156,7 +170,7 @@ export class PredictionController<DirectionType = unknown> {
       this.pendingSnapshot = null;
     }
 
-    const result: PredictionAckResult<DirectionType> = {
+    const result: PredictionAckResult<InputType, DirectionType> = {
       acknowledgedFrame: this.lastAckFrame,
       acknowledgedTick: this.lastAckTick,
       pendingInputs: [...this.history],

@@ -23,6 +23,7 @@ Reference for the `RpgClientEngine` class.
 - [mapShakeTrigger](#mapshaketrigger)
 - [playSound](#playsound)
 - [processAction](#processaction)
+- [processDash](#processdash)
 - [pointer](#pointer)
 - [setCameraFollow](#setcamerafollow)
 - [setKeyboardControls](#setkeyboardcontrols)
@@ -571,6 +572,42 @@ const player = {
     }
   }
 }
+```
+
+## processDash
+
+Start a predicted dash for the current player. The dash is sent through the
+movement channel, so the client can simulate it immediately and the server can
+validate the authoritative result.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+processDash(input?: {
+  direction?: { x: number, y: number },
+  additionalSpeed?: number,
+  duration?: number,
+  cooldown?: number
+}): Promise<void>
+```
+
+### Examples
+
+```ts
+// Dash in the current facing direction
+await engine.processDash()
+
+// Dash to the right with custom tuning
+await engine.processDash({
+  direction: { x: 1, y: 0 },
+  additionalSpeed: 10,
+  duration: 220,
+  cooldown: 600
+})
 ```
 
 ## pointer

@@ -27,6 +27,8 @@ import {
   type PredictionState,
   type RpgActionInput,
   type RpgActionName,
+  type RpgDashInput,
+  type RpgMovementInput,
 } from "@rpgjs/common";
 import { NotificationManager } from "./Gui/NotificationManager";
 import { SaveClientService } from "./services/save";
@@ -44,11 +46,87 @@ interface MovementTrajectoryPoint {
   frame: number;
   tick: number;
   timestamp: number;
-  input: Direction;
+  input: RpgMovementInput;
   x: number;
   y: number;
   direction?: Direction;
 }
+
+const DEFAULT_DASH_ADDITIONAL_SPEED = 8;
+const DEFAULT_DASH_DURATION_MS = 180;
+const DEFAULT_DASH_COOLDOWN_MS = 450;
+
+const isDashInput = (input: RpgMovementInput): input is RpgDashInput =>
+  typeof input === "object" && input !== null && input.type === "dash";
+
+const isMoveInput = (
+  input: RpgMovementInput
+): input is { type: "move"; direction: Direction } =>
+  typeof input === "object" && input !== null && input.type === "move";
+
+const resolveMoveDirection = (input: RpgMovementInput): Direction | undefined => {
+  if (isMoveInput(input)) return input.direction;
+  if (typeof input === "string" || typeof input === "number") {
+    return input as Direction;
+  }
+  return undefined;
+};
+
+const directionToVector = (direction: Direction | undefined) => {
+  switch (direction) {
+    case Direction.Left:
+      return { x: -1, y: 0 };
+    case Direction.Right:
+      return { x: 1, y: 0 };
+    case Direction.Up:
+      return { x: 0, y: -1 };
+    case Direction.Down:
+    default:
+      return { x: 0, y: 1 };
+  }
+};
+
+const vectorToDirection = (direction: { x: number; y: number }): Direction => {
+  if (Math.abs(direction.x) > Math.abs(direction.y)) {
+    return direction.x < 0 ? Direction.Left : Direction.Right;
+  }
+  return direction.y < 0 ? Direction.Up : Direction.Down;
+};
+
+const normalizeDashInput = (
+  input: Partial<RpgDashInput>,
+  fallbackDirection: Direction | undefined
+): RpgDashInput | null => {
+  const rawDirection = input.direction ?? directionToVector(fallbackDirection);
+  const rawX = Number(rawDirection?.x ?? 0);
+  const rawY = Number(rawDirection?.y ?? 0);
+  const magnitude = Math.hypot(rawX, rawY);
+  if (!Number.isFinite(magnitude) || magnitude <= 0) return null;
+
+  const additionalSpeed =
+    typeof input.additionalSpeed === "number" && Number.isFinite(input.additionalSpeed)
+      ? Math.max(0, Math.min(input.additionalSpeed, 64))
+      : DEFAULT_DASH_ADDITIONAL_SPEED;
+  const duration =
+    typeof input.duration === "number" && Number.isFinite(input.duration)
+      ? Math.max(1, Math.min(input.duration, 1000))
+      : DEFAULT_DASH_DURATION_MS;
+  const cooldown =
+    typeof input.cooldown === "number" && Number.isFinite(input.cooldown)
+      ? Math.max(0, Math.min(input.cooldown, 5000))
+      : DEFAULT_DASH_COOLDOWN_MS;
+
+  return {
+    type: "dash",
+    direction: {
+      x: rawX / magnitude,
+      y: rawY / magnitude,
+    },
+    additionalSpeed,
+    duration,
+    cooldown,
+  };
+};
 
 type ConfigurableTrigger<T> = Omit<Trigger<T>, "start"> & {
   start(config?: T): Promise<void>;
@@ -107,7 +185,7 @@ export class RpgClientEngine<T = any> {
   gamePause = signal(false);
 
   private predictionEnabled = false;
-  private prediction?: PredictionController<Direction>;
+  private prediction?: PredictionController<RpgMovementInput, Direction>;
   private readonly SERVER_CORRECTION_THRESHOLD = 30;
   private inputFrameCounter = 0;
   private pendingPredictionFrames: number[] = [];
@@ -115,6 +193,7 @@ export class RpgClientEngine<T = any> {
   private frameOffset = 0;
   private latestServerTick?: number;
   private latestServerTickAt = 0;
+  private dashLockedUntil = 0;
   // Ping/Pong for RTT measurement
   private rtt: number = 0; // Round-trip time in ms
   private pingInterval: any = null;
@@ -1608,7 +1687,7 @@ export class RpgClientEngine<T = any> {
     });
   }
 
-  async processInput({ input }: { input: Direction }) {
+  async processInput({ input }: { input: RpgMovementInput }) {
     if (this.stopProcessingInput) return;
 
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
@@ -1621,10 +1700,20 @@ export class RpgClientEngine<T = any> {
     }
 
     const timestamp = Date.now();
+    const movementInput = isDashInput(input)
+      ? normalizeDashInput(input, currentPlayer?.direction?.())
+      : input;
+    if (!movementInput) return;
+    if (isDashInput(movementInput)) {
+      const cooldown = movementInput.cooldown ?? DEFAULT_DASH_COOLDOWN_MS;
+      if (timestamp < this.dashLockedUntil) return;
+      this.dashLockedUntil = timestamp + cooldown;
+    }
+
     let frame: number;
     let tick: number;
     if (this.predictionEnabled && this.prediction) {
-      const meta = this.prediction.recordInput(input, timestamp);
+      const meta = this.prediction.recordInput(movementInput, timestamp);
       frame = meta.frame;
       tick = meta.tick;
     } else {
@@ -1632,12 +1721,11 @@ export class RpgClientEngine<T = any> {
       tick = this.getPhysicsTick();
     }
     this.inputFrameCounter = frame;
-    this.hooks.callHooks("client-engine-onInput", this, { input, playerId: this.playerId }).subscribe();
+    this.hooks.callHooks("client-engine-onInput", this, { input: movementInput, playerId: this.playerId }).subscribe();
 
     const bodyReady = this.ensureCurrentPlayerBody();
     if (currentPlayer && bodyReady) {
-      currentPlayer.changeDirection(input);
-      (this.sceneMap as any).moveBody(currentPlayer, input);
+      this.applyPredictedMovementInput(currentPlayer, movementInput);
       if (this.predictionEnabled && this.prediction) {
         this.pendingPredictionFrames.push(frame);
         if (this.pendingPredictionFrames.length > 240) {
@@ -1646,8 +1734,21 @@ export class RpgClientEngine<T = any> {
       }
     }
 
-    this.emitMovePacket(input, frame, tick, timestamp, true);
-    this.lastInputTime = Date.now();
+    this.emitMovePacket(movementInput, frame, tick, timestamp, true);
+    this.lastInputTime = isDashInput(movementInput)
+      ? Date.now() + (movementInput.duration ?? DEFAULT_DASH_DURATION_MS)
+      : Date.now();
+  }
+
+  async processDash(input: Partial<RpgDashInput> = {}) {
+    const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
+    const fallbackDirection =
+      typeof currentPlayer?.direction === "function"
+        ? currentPlayer.direction()
+        : currentPlayer?.direction;
+    const dashInput = normalizeDashInput(input, fallbackDirection);
+    if (!dashInput) return;
+    await this.processInput({ input: dashInput });
   }
 
   processAction(action: RpgActionName, data?: any): void;
@@ -1823,7 +1924,7 @@ export class RpgClientEngine<T = any> {
         input: entry.direction,
         x: state.x,
         y: state.y,
-        direction: state.direction ?? entry.direction,
+        direction: state.direction ?? resolveMoveDirection(entry.direction),
       });
     }
     if (trajectory.length > this.MAX_MOVE_TRAJECTORY_POINTS) {
@@ -1833,7 +1934,7 @@ export class RpgClientEngine<T = any> {
   }
 
   private emitMovePacket(
-    input: Direction,
+    input: RpgMovementInput,
     frame: number,
     tick: number,
     timestamp: number,
@@ -1888,6 +1989,22 @@ export class RpgClientEngine<T = any> {
     this.emitMovePacket(latest.direction, latest.frame, latest.tick, now, false);
   }
 
+  private applyPredictedMovementInput(
+    player: any,
+    input: RpgMovementInput
+  ): boolean {
+    if (isDashInput(input)) {
+      const direction = vectorToDirection(input.direction);
+      player.changeDirection(direction);
+      return Boolean((this.sceneMap as any).dashBody?.(player, input));
+    }
+
+    const direction = resolveMoveDirection(input);
+    if (!direction) return false;
+    player.changeDirection(direction);
+    return Boolean((this.sceneMap as any).moveBody?.(player, direction));
+  }
+
   private getLocalPlayerState(): PredictionState<Direction> {
     const currentPlayer = this.sceneMap?.getCurrentPlayer();
     if (!currentPlayer) {
@@ -1931,7 +2048,7 @@ export class RpgClientEngine<T = any> {
         ? configuredMaxEntries
         : Math.max(600, Math.ceil(historyTtlMs / 16) + 120);
     this.sceneMap?.configureClientPrediction?.(true);
-    this.prediction = new PredictionController<Direction>({
+    this.prediction = new PredictionController<RpgMovementInput, Direction>({
       correctionThreshold: (this.globalConfig as any)?.prediction?.correctionThreshold ?? this.SERVER_CORRECTION_THRESHOLD,
       historyTtlMs,
       maxHistoryEntries,
@@ -2146,7 +2263,7 @@ export class RpgClientEngine<T = any> {
 
   private reconcilePrediction(
     authoritativeState: PredictionState<Direction>,
-    pendingInputs: PredictionHistoryEntry<Direction>[],
+    pendingInputs: PredictionHistoryEntry<RpgMovementInput, Direction>[],
   ): void {
     const player = this.getCurrentPlayer() as any;
     if (!player) {
@@ -2168,7 +2285,7 @@ export class RpgClientEngine<T = any> {
     const replayInputs = pendingInputs.slice(-600);
     for (const entry of replayInputs) {
       if (!entry?.direction) continue;
-      (this.sceneMap as any).moveBody(player, entry.direction);
+      this.applyPredictedMovementInput(player, entry.direction);
       this.sceneMap.stepPredictionTick();
       this.prediction?.attachPredictedState(entry.frame, this.getLocalPlayerState());
     }

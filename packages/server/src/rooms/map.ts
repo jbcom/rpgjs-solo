@@ -44,6 +44,69 @@ import { Log } from "../logs/log";
 import { isMapUpdateAuthorized, MAP_UPDATE_TOKEN_ENV, MAP_UPDATE_TOKEN_HEADER } from "../node/map";
 import { RpgMapProjectiles } from "../projectiles";
 
+const DEFAULT_DASH_COOLDOWN_MS = 450;
+
+const isDashMovementInput = (input: any): input is {
+  type: "dash";
+  direction: { x: number; y: number };
+  additionalSpeed?: number;
+  duration?: number;
+  cooldown?: number;
+} => input && typeof input === "object" && input.type === "dash";
+
+const isMoveMovementInput = (input: any): input is {
+  type: "move";
+  direction: Direction;
+} => input && typeof input === "object" && input.type === "move";
+
+const normalizeServerMovementInput = (input: any): Direction | {
+  type: "dash";
+  direction: { x: number; y: number };
+  additionalSpeed: number;
+  duration: number;
+  cooldown: number;
+} | null => {
+  if (isMoveMovementInput(input)) {
+    return input.direction;
+  }
+  if (!isDashMovementInput(input)) {
+    if (typeof input !== "string" && typeof input !== "number") return null;
+    return input as Direction;
+  }
+
+  const rawX = Number(input.direction?.x ?? 0);
+  const rawY = Number(input.direction?.y ?? 0);
+  const magnitude = Math.hypot(rawX, rawY);
+  if (!Number.isFinite(magnitude) || magnitude <= 0) return null;
+
+  return {
+    type: "dash",
+    direction: {
+      x: rawX / magnitude,
+      y: rawY / magnitude,
+    },
+    additionalSpeed:
+      typeof input.additionalSpeed === "number" && Number.isFinite(input.additionalSpeed)
+        ? Math.max(0, Math.min(input.additionalSpeed, 64))
+        : 8,
+    duration:
+      typeof input.duration === "number" && Number.isFinite(input.duration)
+        ? Math.max(1, Math.min(input.duration, 1000))
+        : 180,
+    cooldown:
+      typeof input.cooldown === "number" && Number.isFinite(input.cooldown)
+        ? Math.max(0, Math.min(input.cooldown, 5000))
+        : DEFAULT_DASH_COOLDOWN_MS,
+  };
+};
+
+const vectorToDirection = (direction: { x: number; y: number }): Direction => {
+  if (Math.abs(direction.x) > Math.abs(direction.y)) {
+    return direction.x < 0 ? Direction.Left : Direction.Right;
+  }
+  return direction.y < 0 ? Direction.Up : Direction.Down;
+};
+
 function isRpgLog(error: unknown): error is Log {
   return error instanceof Log
     || (typeof error === "object"
@@ -1639,7 +1702,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * 
    * @param playerId - The ID of the player to process inputs for
    * @param controls - Optional anti-cheat configuration
-   * @returns Promise containing the player and processed input strings
+   * @returns Promise containing the player and processed movement inputs
    * 
    * @example
    * ```ts
@@ -1658,7 +1721,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   async processInput(playerId: string, controls?: Controls): Promise<{
     player: RpgPlayer,
-    inputs: string[]
+    inputs: any[]
   }> {
     const player = this.getPlayer(playerId);
     if (!player) {
@@ -1683,7 +1746,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       }
     }
 
-    const processedInputs: string[] = [];
+    const processedInputs: any[] = [];
     const defaultControls: Required<Controls> = {
       maxTimeDelta: 1000, // 1 second max between inputs
       maxFrameDelta: 10,  // Max 10 frames skipped
@@ -1740,12 +1803,27 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         continue;
       }
 
+      const movementInput = normalizeServerMovementInput(input.input);
+
       // Process the input - update velocity based on the latest input
-      if (input.input) {
-        await this.movePlayer(player, input.input);
+      if (movementInput) {
+        let idleHoldMs = 0;
+        if (isDashMovementInput(movementInput)) {
+          const now = Date.now();
+          const lockedUntil = (player as any).__rpgDashLockedUntil;
+          if (!(typeof lockedUntil === "number" && now < lockedUntil)) {
+            (player as any).__rpgDashLockedUntil =
+              now + (movementInput.cooldown ?? DEFAULT_DASH_COOLDOWN_MS);
+            player.changeDirection(vectorToDirection(movementInput.direction));
+            (this as any).dashBody(player, movementInput);
+            idleHoldMs = movementInput.duration ?? 0;
+          }
+        } else {
+          await this.movePlayer(player, movementInput);
+        }
         processedInputs.push(input.input);
         hasProcessedInputs = true;
-        lastProcessedTime = input.timestamp || Date.now();
+        lastProcessedTime = (input.timestamp || Date.now()) + idleHoldMs;
         processedThisTick += 1;
 
         const bodyPos = this.getBodyPosition(player.id, "top-left");

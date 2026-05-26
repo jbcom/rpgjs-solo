@@ -52,6 +52,7 @@ export enum Control {
   Attack = 'attack',
   Defense = 'defense',
   Skill = 'skill',
+  Dash = 'dash',
   Back = 'back',
   Up = 1,
   Down = 3,

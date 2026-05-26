@@ -265,15 +265,15 @@ export function provideGlobalConfig(config: any) {
 }
 
 export function provideClientGlobalConfig(config: any = {}) {
-  if (!config.keyboardControls) {
-    config.keyboardControls = {
-      up: 'up',
-      down: 'down',
-      left: 'left',
-      right: 'right',
-      action: 'space',
-      escape: 'escape'
-    }
+  config.keyboardControls = {
+    up: 'up',
+    down: 'down',
+    left: 'left',
+    right: 'right',
+    action: 'space',
+    dash: 'shift',
+    escape: 'escape',
+    ...(config.keyboardControls ?? {}),
   }
   return provideGlobalConfig(config)
 }

@@ -374,6 +374,20 @@
     return direction();
   };
 
+  const directionToDashVector = (currentDirection) => {
+    switch (currentDirection) {
+      case Direction.Left:
+        return { x: -1, y: 0 };
+      case Direction.Right:
+        return { x: 1, y: 0 };
+      case Direction.Up:
+        return { x: 0, y: -1 };
+      case Direction.Down:
+      default:
+        return { x: 0, y: 1 };
+    }
+  };
+
   const withCurrentDirection = (payload) => {
     if (payload.action !== 'action') return payload;
     const data = payload.data && typeof payload.data === 'object'
@@ -413,6 +427,13 @@
     if (!canControls()) return;
     client.processInput({ input });
     playPredictedWalkAnimation();
+  };
+
+  const processDashInput = () => {
+    if (!canControls()) return;
+    client.processDash({
+      direction: directionToDashVector(resolveSpriteDirection()),
+    });
   };
 
   const actionBind = () => getKeyboardControlBind(keyboardControls.action);
@@ -483,6 +504,12 @@
         if (canControls()) {
           client.processAction(resolveCurrentActionInput())
         }
+      },
+    },
+    dash: {
+      bind: keyboardControls.dash,
+      keyDown() {
+        processDashInput()
       },
     },
     escape: {

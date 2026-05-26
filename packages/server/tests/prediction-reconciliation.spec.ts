@@ -179,4 +179,39 @@ describe("Prediction + Reconciliation Server Protocol", () => {
     expect(player._lastFramePositions?.position?.x).toBe(103);
     expect(player.pendingInputs).toHaveLength(0);
   });
+
+  test("should process dash inputs through the movement queue", async () => {
+    const dashBody = vi.spyOn(serverMap, "dashBody" as any);
+    const frame = 11;
+    const timestamp = Date.now();
+
+    await serverMap.onInput(player, {
+      input: {
+        type: "dash",
+        direction: { x: 1, y: 0 },
+        additionalSpeed: 8,
+        duration: 180,
+        cooldown: 450,
+      },
+      frame,
+      tick: 0,
+      timestamp,
+    });
+
+    await serverMap.processInput(player.id);
+
+    expect(dashBody).toHaveBeenCalledWith(
+      player,
+      expect.objectContaining({
+        type: "dash",
+        direction: { x: 1, y: 0 },
+        additionalSpeed: 8,
+        duration: 180,
+        cooldown: 450,
+      }),
+    );
+    expect(player._lastFramePositions?.frame).toBe(frame);
+    expect(player._lastFramePositions?.position?.direction).toBe(Direction.Right);
+    expect(player.lastProcessedInputTs).toBeGreaterThanOrEqual(timestamp + 180);
+  });
 });
