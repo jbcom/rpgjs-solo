@@ -19,9 +19,18 @@
     "sample-studio": "1.0.0",
     "myrpg": "1.0.0",
     "sample-v4-compat": "1.0.2",
-    "sample-vue-gui": "1.0.2"
+    "sample-vue-gui": "1.0.2",
+    "@rpgjs/playground-action-battle": "1.0.1-beta.0",
+    "@rpgjs/playground-dash": "1.0.0-beta.0",
+    "@rpgjs/playground-mouse-interactions": "1.0.0-beta.0",
+    "@rpgjs/playground-projectiles": "1.0.1-beta.0",
+    "@rpgjs/playground-studio": "1.0.0",
+    "@rpgjs/playground-tiled": "1.0.0",
+    "@rpgjs/playground-v4-compat": "1.0.3-beta.0",
+    "@rpgjs/playground-vue-gui": "1.0.3-beta.0"
   },
   "changesets": [
-    "bright-battles-move"
+    "bright-battles-move",
+    "next-beta-latest"
   ]
 }

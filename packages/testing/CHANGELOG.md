@@ -1,5 +1,14 @@
 # @rpgjs/testing
 
+## 5.0.0-beta.13
+
+### Patch Changes
+
+- Release the next RPGJS beta with client interactions, i18n support, movement and physics improvements, Studio fixes, action battle updates, playground migration, and related runtime documentation.
+- Updated dependencies
+  - @rpgjs/client@5.0.0-beta.13
+  - @rpgjs/server@5.0.0-beta.13
+
 ## 5.0.0-beta.12
 
 ### Patch Changes

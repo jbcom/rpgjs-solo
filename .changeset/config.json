@@ -8,5 +8,15 @@
   "baseBranch": "v5",
   "updateInternalDependencies": "patch",
   "bumpVersionsWithWorkspaceProtocolOnly": true,
-  "ignore": ["sample", "sample-studio", "myrpg"]
+  "ignore": [
+    "sample",
+    "@rpgjs/playground-action-battle",
+    "@rpgjs/playground-dash",
+    "@rpgjs/playground-mouse-interactions",
+    "@rpgjs/playground-projectiles",
+    "@rpgjs/playground-studio",
+    "@rpgjs/playground-tiled",
+    "@rpgjs/playground-v4-compat",
+    "@rpgjs/playground-vue-gui"
+  ]
 }
