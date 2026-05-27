@@ -12,8 +12,9 @@
     "docs:player-api": "tsx bin/extract-jsdoc.ts extract --package @rpgjs/server --entry packages/server/src --output docs/.generated/server-api.json && tsx bin/extract-jsdoc.ts render --input docs/.generated/server-api.json --config docs/api/player.config.json --output docs/api/player",
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm install --lockfile-only",
-    "publish-packages": "pnpm run rpgjs:version && changeset publish --tag latest",
+    "publish-packages": "pnpm run rpgjs:version && changeset publish && pnpm run rpgjs:tag-latest",
     "rpgjs:version": "tsx bin/version.ts",
+    "rpgjs:tag-latest": "tsx bin/tag-latest.ts",
     "rpgjs:publish": "pnpm run publish-packages",
     "test": "vitest"
   },
