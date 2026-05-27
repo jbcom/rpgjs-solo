@@ -359,16 +359,10 @@ export const AiDebug = {
    * @param data - Optional additional data
    */
   log(category: string, eventId: string | undefined, message: string, data?: any): void {
-    if (!this.enabled) return;
-    if (this.filterEventId && eventId !== this.filterEventId) return;
-    if (this.categories.length > 0 && !this.categories.includes(category)) return;
-    
-    const prefix = `[AI:${category}]${eventId ? ` [${eventId.substring(0, 8)}]` : ''}`;
-    if (data !== undefined) {
-      console.log(prefix, message, data);
-    } else {
-      console.log(prefix, message);
-    }
+    void category;
+    void eventId;
+    void message;
+    void data;
   }
 };
 
@@ -523,7 +517,9 @@ export class BattleAi {
   }
 
   private traceLog(category: string, message: string, data?: any): void {
-    console.log(`[BattleAiTrace:${category}] [${this.event.id}] ${message}`, data ?? {});
+    void category;
+    void message;
+    void data;
   }
 
   private lockActionUntil(until: number, reason: string, data?: any): void {

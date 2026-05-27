@@ -1,0 +1,8 @@
+{
+  "id": "dash",
+  "title": "Player Dash",
+  "description": "Minimal player movement playground showing the native predicted dash input.",
+  "tags": ["movement", "dash", "prediction"],
+  "modes": ["standalone", "mmorpg"],
+  "port": 5187
+}

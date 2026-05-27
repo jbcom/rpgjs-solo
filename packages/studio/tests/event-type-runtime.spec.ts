@@ -82,6 +82,17 @@ describe("Studio event runtime", () => {
     expect(options.behavior).toBeUndefined();
   });
 
+  test("normalizes a single Studio attack pattern string", () => {
+    const options = resolveEnemyBattleAiOptions({
+      behavior: {
+        attackPatterns: "dashAttack",
+      },
+      animations: {},
+    });
+
+    expect(options.attackPatterns).toEqual([AttackPattern.DashAttack]);
+  });
+
   test("initializes Studio enemy vitals from configured parameters", () => {
     const event: any = {
       hp: 0,

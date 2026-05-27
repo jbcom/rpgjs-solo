@@ -122,6 +122,9 @@ const normalizeEnemyType = (value: unknown): EnemyType | undefined => {
 };
 
 const normalizeAttackPatterns = (value: unknown): AttackPattern[] | undefined => {
+  if (typeof value === "string") {
+    return attackPatterns.has(value) ? [value as AttackPattern] : undefined;
+  }
   if (!Array.isArray(value)) return undefined;
   const patterns = value.filter(
     (pattern): pattern is AttackPattern =>
@@ -230,10 +233,6 @@ const setEnemyNaturalAttackModifier = (
       value: (currentAttackModifier.value ?? 0) + naturalAttack,
     },
   };
-};
-
-const logStudioEnemyDebug = (message: string, data?: Record<string, unknown>): void => {
-  console.log(`[StudioEnemyDebug] ${message}`, data ?? {});
 };
 
 const battleAiBehaviorOptionKeys = [
@@ -609,17 +608,6 @@ const enemyRuntime: EventTypeRuntime = {
       const enemyId = resolveEnemyId(trigger, context.params, context.object);
       const map = context.map ?? context.event.getCurrentMap?.();
       const enemy = map?.database?.()?.[enemyId];
-      logStudioEnemyDebug("onInit", {
-        eventId: context.event.id,
-        enemyId,
-        enemyFound: !!enemy,
-        triggerType: trigger?.type,
-        eventPosition: {
-          x: context.object?.x,
-          y: context.object?.y,
-        },
-        mapId: (map as any)?.id,
-      });
       if (enemy) {
         assignParams(context.event, enemy);
         context.event.level = trigger?.typeData?.level ?? enemy.initialLevel ?? 1;
@@ -627,20 +615,6 @@ const enemyRuntime: EventTypeRuntime = {
         initializeEnemyVitalsFromParameters(context.event);
         const attackSkill = learnEnemySkills(context.event, enemy);
         const aiOptions = resolveEnemyBattleAiOptions(enemy, attackSkill);
-        logStudioEnemyDebug("battleAi create", {
-          eventId: context.event.id,
-          enemyId,
-          name: enemy.name,
-          level: context.event.level,
-          hp: (context.event as any).hp,
-          sp: (context.event as any).sp,
-          maxHp: (context.event as any).param?.[MAXHP],
-          maxSp: (context.event as any).param?.[MAXSP],
-          str: (context.event as any).param?.[STR],
-          atk: (context.event as any).param?.[ATK],
-          attackSkill,
-          aiOptions,
-        });
         (context.event as any).battleAi = new BattleAi(context.event, {
           ...aiOptions,
           rewards: {
