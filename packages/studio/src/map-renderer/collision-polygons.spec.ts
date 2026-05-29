@@ -183,4 +183,52 @@ describe("buildStudioTerrainCollisionPolygons", () => {
     expect(polygons.some((polygon) => polygon.type === "morphology_wall_edge_collision")).toBe(true);
     expect(polygons.every((polygon) => polygon.points.length >= 4)).toBe(true);
   });
+
+  it("pushes the far wall border collision down to allow visual overlap with the top surface", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        params: {
+          ...createMap().params,
+          width: 5,
+          height: 4,
+        },
+        terrain: JSON.stringify([
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+        ]),
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 240,
+          height: 192,
+          tileSize: 48,
+          features: [
+            {
+              id: "wall-offset",
+              kind: "wall",
+              params: { height: 56 },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [
+                    { x: 72, y: 72 },
+                    { x: 168, y: 72 },
+                  ],
+                  radius: 42,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    const wallPolygons = polygons.filter((polygon) => polygon.type === "morphology_wall_edge_collision");
+
+    expect(wallPolygons.length).toBeGreaterThan(0);
+    expect(wallPolygons.some((polygon) => polygon.y === 0)).toBe(false);
+    expect(wallPolygons.some((polygon) => polygon.y >= 48)).toBe(true);
+  });
 });

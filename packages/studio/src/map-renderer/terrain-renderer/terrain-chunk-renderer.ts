@@ -68,6 +68,17 @@ interface TerrainMorphologyMaskBuffer {
   bounds: { x: number; y: number; width: number; height: number };
 }
 
+interface TerrainWallRenderParts {
+  mask: TerrainMorphologyMaskBuffer;
+  topEdge: TerrainMorphologyMaskBuffer;
+  bottomEdge: TerrainMorphologyMaskBuffer;
+  faceMask: TerrainMorphologyMaskBuffer;
+  leftEdge: TerrainMorphologyMaskBuffer;
+  rightEdge: TerrainMorphologyMaskBuffer;
+  smoothness: number;
+  height: number;
+}
+
 interface RgbaColor {
   r: number;
   g: number;
@@ -78,6 +89,7 @@ interface RgbaColor {
 export interface StudioTerrainChunkRendererOptions {
   chunkSize?: number;
   debugCollisions?: boolean;
+  splitWallForeground?: boolean;
 }
 
 export class StudioTerrainChunkRenderer {
@@ -103,7 +115,8 @@ export class StudioTerrainChunkRenderer {
       ? map.terrainRenderData
       : createStudioTerrainRenderData(map);
     const debugCollisions = options.debugCollisions === true;
-    const version = `${data.version}|debug:${debugCollisions}|chunk:${this.chunkSize}`;
+    const splitWallForeground = options.splitWallForeground === true;
+    const version = `${data.version}|debug:${debugCollisions}|chunk:${this.chunkSize}|splitWall:${splitWallForeground}`;
     if (version === this.renderVersion && this.chunks.size > 0) return;
     this.renderVersion = version;
 
@@ -125,7 +138,7 @@ export class StudioTerrainChunkRenderer {
         const height = Math.min(this.chunkSize, data.height - y);
         const key = `${column}:${row}`;
         nextKeys.add(key);
-        this.renderChunk(key, data, image, controlImage, { x, y, width, height }, collisions);
+        this.renderChunk(key, data, image, controlImage, { x, y, width, height }, collisions, splitWallForeground);
       }
     }
 
@@ -184,13 +197,40 @@ export class StudioTerrainChunkRenderer {
     this.world.removeChildren();
   }
 
+  async createWallOcclusionSprites(map: any, options: { sliceWidth?: number } = {}): Promise<Sprite[]> {
+    if (this.destroyed || typeof document === "undefined") return [];
+    const data = isStudioTerrainRenderData(map?.terrainRenderData)
+      ? map.terrainRenderData
+      : createStudioTerrainRenderData(map);
+    const image = data.sourceTexture ? await this.loadImage(data.sourceTexture) : null;
+    const sliceWidth = Math.max(12, Math.round(options.sliceWidth ?? data.tileSize / 2));
+    const sprites: Sprite[] = [];
+
+    for (const feature of data.morphologyFeatures) {
+      if (feature.kind !== "wall") continue;
+      const parts = this.createTerrainWallRenderParts(data, feature);
+      if (!parts) continue;
+      const rendered = this.createCanvasBuffer(parts.mask.canvas.width, parts.mask.canvas.height, true);
+      rendered.ctx.save();
+      rendered.ctx.translate(-parts.mask.bounds.x, -parts.mask.bounds.y);
+      this.drawWallBase(rendered.ctx, data, image, feature, parts);
+      this.drawWallForeground(rendered.ctx, data, image, feature, parts);
+      rendered.ctx.restore();
+
+      sprites.push(...this.createWallOcclusionSliceSprites(rendered.canvas, parts.mask, feature, sliceWidth));
+    }
+
+    return sprites;
+  }
+
   private renderChunk(
     key: string,
     data: StudioTerrainRenderData,
     image: HTMLImageElement | null,
     controlImage: HTMLImageElement | null,
     bounds: { x: number; y: number; width: number; height: number },
-    collisions: StudioCollisionPolygon[]
+    collisions: StudioCollisionPolygon[],
+    splitWallForeground: boolean
   ): void {
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.ceil(bounds.width));
@@ -205,7 +245,7 @@ export class StudioTerrainChunkRenderer {
       this.drawBaseTerrain(ctx, data, image, bounds);
       this.drawTerrainTransitions(ctx, data, bounds);
     }
-    this.drawMorphology(ctx, data, image, bounds);
+    this.drawMorphology(ctx, data, image, bounds, splitWallForeground);
     this.drawDebugCollisions(ctx, collisions, bounds);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
@@ -322,14 +362,19 @@ export class StudioTerrainChunkRenderer {
     ctx: CanvasRenderingContext2D,
     data: StudioTerrainRenderData,
     image: HTMLImageElement | null,
-    bounds: { x: number; y: number; width: number; height: number }
+    bounds: { x: number; y: number; width: number; height: number },
+    splitWallForeground: boolean
   ): void {
     for (const feature of data.morphologyFeatures) {
       if (!featureIntersectsBounds(feature, bounds)) continue;
       if (feature.kind === "hole") {
         this.drawHole(ctx, data, image, feature);
       } else {
-        this.drawWall(ctx, data, image, feature);
+        if (splitWallForeground) {
+          continue;
+        } else {
+          this.drawWall(ctx, data, image, feature);
+        }
       }
     }
   }
@@ -611,8 +656,69 @@ export class StudioTerrainChunkRenderer {
     image: HTMLImageElement | null,
     feature: StudioTerrainMorphologyFeature
   ): void {
+    const parts = this.createTerrainWallRenderParts(data, feature);
+    if (!parts) return;
+
+    this.drawWallBase(ctx, data, image, feature, parts);
+    this.drawWallForeground(ctx, data, image, feature, parts);
+  }
+
+  private drawWallBase(
+    ctx: CanvasRenderingContext2D,
+    data: StudioTerrainRenderData,
+    image: HTMLImageElement | null,
+    feature: StudioTerrainMorphologyFeature,
+    parts = this.createTerrainWallRenderParts(data, feature)
+  ): void {
+    if (!parts) return;
+    this.drawTerrainMorphologyTextureFill(
+      ctx,
+      parts.mask,
+      stringParam(feature.params.surfaceTextureId),
+      data,
+      image,
+      "#050505",
+      stringParam(feature.params.surfaceTextureId) ? 0.92 : 0
+    );
+  }
+
+  private drawWallForeground(
+    ctx: CanvasRenderingContext2D,
+    data: StudioTerrainRenderData,
+    image: HTMLImageElement | null,
+    feature: StudioTerrainMorphologyFeature,
+    parts = this.createTerrainWallRenderParts(data, feature)
+  ): void {
+    if (!parts) return;
+    this.drawTerrainMorphologyMaskedColor(
+      ctx,
+      parts.faceMask,
+      "#17110d",
+      0.38 - parts.smoothness * 0.08,
+      "multiply",
+      parts.smoothness > 0.6 ? "blur(4px)" : "blur(5px)",
+      0,
+      7
+    );
+    this.drawTerrainMorphologyTextureFill(ctx, parts.faceMask, stringParam(feature.params.textureId), data, image, "#7d6f58", 0.86);
+    this.drawTerrainMorphologySideDepthShading(ctx, parts.faceMask, parts.leftEdge, parts.rightEdge, feature, "raised");
+    this.drawTerrainMorphologyDepthBands(ctx, parts.bottomEdge, feature);
+    this.drawTerrainMorphologyMaskedColor(ctx, parts.bottomEdge, "#090705", 0.48 - parts.smoothness * 0.12, "multiply", "blur(1px)", 0, 3);
+    this.drawTerrainMorphologyMaskedColor(ctx, parts.leftEdge, "#f0dbad", 0.18 - parts.smoothness * 0.05, "screen", "blur(1px)", -3, 0);
+    this.drawTerrainMorphologyMaskedColor(ctx, parts.rightEdge, "#100c09", 0.34 - parts.smoothness * 0.1, "multiply", "blur(1px)", 4, 0);
+    this.drawTerrainMorphologyMaskedColor(ctx, parts.faceMask, "#0f0b08", 0.34 - parts.smoothness * 0.08, "multiply", "blur(2px)", 0, parts.height - 2);
+    this.drawTerrainMorphologyElevationRiserLines(ctx, parts.topEdge, parts.faceMask, feature);
+    this.drawTerrainMorphologyMaskedColor(ctx, parts.bottomEdge, "#f0dfb9", 0.11 + parts.smoothness * 0.05, "screen", "none", 0, -1);
+    this.drawTerrainMorphologyMaskedColor(ctx, parts.bottomEdge, "#211812", 0.5 - parts.smoothness * 0.12, "multiply", "none", 0, 2);
+    this.drawTerrainMorphologyMaskedColor(ctx, parts.bottomEdge, "#120d09", 0.58 - parts.smoothness * 0.12, "multiply", "none", 0, parts.height);
+  }
+
+  private createTerrainWallRenderParts(
+    data: StudioTerrainRenderData,
+    feature: StudioTerrainMorphologyFeature
+  ): TerrainWallRenderParts | null {
     const mask = this.buildTerrainMorphologyMask(data, feature);
-    if (!mask) return;
+    if (!mask) return null;
 
     const smoothness = getTerrainMorphologySmoothness(feature);
     const height = getTerrainMorphologyHeight(feature);
@@ -622,36 +728,67 @@ export class StudioTerrainChunkRenderer {
     const leftEdge = this.createTerrainMorphologyDirectionalEdgeMask(faceMask, "left", Math.round(16 - smoothness * 6));
     const rightEdge = this.createTerrainMorphologyDirectionalEdgeMask(faceMask, "right", Math.round(16 - smoothness * 6));
 
-    this.drawTerrainMorphologyMaskedColor(
-      ctx,
-      faceMask,
-      "#17110d",
-      0.38 - smoothness * 0.08,
-      "multiply",
-      smoothness > 0.6 ? "blur(4px)" : "blur(5px)",
-      0,
-      7
-    );
-    this.drawTerrainMorphologyTextureFill(ctx, faceMask, stringParam(feature.params.textureId), data, image, "#7d6f58", 0.86);
-    this.drawTerrainMorphologyTextureFill(
-      ctx,
+    return {
       mask,
-      stringParam(feature.params.surfaceTextureId),
-      data,
-      image,
-      "#050505",
-      stringParam(feature.params.surfaceTextureId) ? 0.92 : 0
-    );
-    this.drawTerrainMorphologySideDepthShading(ctx, faceMask, leftEdge, rightEdge, feature, "raised");
-    this.drawTerrainMorphologyDepthBands(ctx, bottomEdge, feature);
-    this.drawTerrainMorphologyMaskedColor(ctx, bottomEdge, "#090705", 0.48 - smoothness * 0.12, "multiply", "blur(1px)", 0, 3);
-    this.drawTerrainMorphologyMaskedColor(ctx, leftEdge, "#f0dbad", 0.18 - smoothness * 0.05, "screen", "blur(1px)", -3, 0);
-    this.drawTerrainMorphologyMaskedColor(ctx, rightEdge, "#100c09", 0.34 - smoothness * 0.1, "multiply", "blur(1px)", 4, 0);
-    this.drawTerrainMorphologyMaskedColor(ctx, faceMask, "#0f0b08", 0.34 - smoothness * 0.08, "multiply", "blur(2px)", 0, height - 2);
-    this.drawTerrainMorphologyElevationRiserLines(ctx, topEdge, faceMask, feature);
-    this.drawTerrainMorphologyMaskedColor(ctx, bottomEdge, "#f0dfb9", 0.11 + smoothness * 0.05, "screen", "none", 0, -1);
-    this.drawTerrainMorphologyMaskedColor(ctx, bottomEdge, "#211812", 0.5 - smoothness * 0.12, "multiply", "none", 0, 2);
-    this.drawTerrainMorphologyMaskedColor(ctx, bottomEdge, "#120d09", 0.58 - smoothness * 0.12, "multiply", "none", 0, height);
+      topEdge,
+      bottomEdge,
+      faceMask,
+      leftEdge,
+      rightEdge,
+      smoothness,
+      height,
+    };
+  }
+
+  private createWallOcclusionSliceSprites(
+    canvas: HTMLCanvasElement,
+    mask: TerrainMorphologyMaskBuffer,
+    feature: StudioTerrainMorphologyFeature,
+    sliceWidth: number
+  ): Sprite[] {
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const maskCtx = mask.canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx || !maskCtx) return [];
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const maskData = maskCtx.getImageData(0, 0, mask.canvas.width, mask.canvas.height).data;
+    const sprites: Sprite[] = [];
+
+    for (let sliceX = 0; sliceX < canvas.width; sliceX += sliceWidth) {
+      const width = Math.min(sliceWidth, canvas.width - sliceX);
+      const alphaBounds = findAlphaBounds(imageData, canvas.width, canvas.height, {
+        x: sliceX,
+        y: 0,
+        width,
+        height: canvas.height,
+      });
+      if (!alphaBounds) continue;
+
+      const slice = this.createCanvasBuffer(alphaBounds.width, alphaBounds.height, true);
+      slice.ctx.drawImage(
+        canvas,
+        alphaBounds.x,
+        alphaBounds.y,
+        alphaBounds.width,
+        alphaBounds.height,
+        0,
+        0,
+        alphaBounds.width,
+        alphaBounds.height
+      );
+
+      const texture = Texture.from(slice.canvas);
+      setNearestTextureScale(texture);
+      const sprite = new Sprite(texture);
+      sprite.x = Math.round(mask.bounds.x + alphaBounds.x);
+      sprite.y = Math.round(mask.bounds.y + alphaBounds.y);
+      sprite.zIndex = Math.round(mask.bounds.y + findSurfaceBottomY(maskData, mask.canvas.width, mask.canvas.height, sliceX, width) + 1);
+      sprite.roundPixels = true;
+      sprite.label = `StudioWallOcclusion:${feature.id}:${sliceX}`;
+      sprites.push(sprite);
+    }
+
+    return sprites;
   }
 
   private buildTerrainMorphologyMask(
@@ -1262,6 +1399,43 @@ export class StudioTerrainChunkRenderer {
   }
 }
 
+export class StudioTerrainWallOcclusionRenderer {
+  private readonly renderer = new StudioTerrainChunkRenderer(new PixiContainer());
+  private sprites: Sprite[] = [];
+  private renderVersion = "";
+
+  async renderMap(map: any): Promise<Sprite[]> {
+    const data = isStudioTerrainRenderData(map?.terrainRenderData)
+      ? map.terrainRenderData
+      : createStudioTerrainRenderData(map);
+    const version = `${data.version}|wall-occlusion:v1`;
+    if (version === this.renderVersion) {
+      return this.sprites;
+    }
+
+    const nextSprites = await this.renderer.createWallOcclusionSprites(map);
+    this.clearSprites();
+    this.sprites = nextSprites;
+    this.renderVersion = version;
+    return this.sprites;
+  }
+
+  destroy(): void {
+    this.clearSprites();
+    this.renderer.destroy();
+  }
+
+  private clearSprites(): void {
+    for (const sprite of this.sprites) {
+      if (!sprite.destroyed) {
+        sprite.destroy({ texture: true });
+      }
+    }
+    this.sprites = [];
+    this.renderVersion = "";
+  }
+}
+
 function createTerrainControlRenderLayers(
   asset: TerrainAssetMetadata,
   palette: string[]
@@ -1846,6 +2020,68 @@ function clampByte(value: number): number {
 
 function clampInteger(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
+}
+
+function findAlphaBounds(
+  data: Uint8ClampedArray,
+  canvasWidth: number,
+  canvasHeight: number,
+  bounds: { x: number; y: number; width: number; height: number },
+  threshold = 4
+): { x: number; y: number; width: number; height: number } | null {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  const startX = clampInteger(Math.floor(bounds.x), 0, canvasWidth - 1);
+  const startY = clampInteger(Math.floor(bounds.y), 0, canvasHeight - 1);
+  const endX = clampInteger(Math.ceil(bounds.x + bounds.width), startX + 1, canvasWidth);
+  const endY = clampInteger(Math.ceil(bounds.y + bounds.height), startY + 1, canvasHeight);
+
+  for (let y = startY; y < endY; y += 1) {
+    for (let x = startX; x < endX; x += 1) {
+      const alpha = data[(y * canvasWidth + x) * 4 + 3];
+      if (alpha <= threshold) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return null;
+  }
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1,
+  };
+}
+
+function findSurfaceBottomY(
+  maskData: Uint8ClampedArray,
+  canvasWidth: number,
+  canvasHeight: number,
+  sliceX: number,
+  sliceWidth: number
+): number {
+  const startX = clampInteger(sliceX, 0, canvasWidth - 1);
+  const endX = clampInteger(sliceX + sliceWidth, startX + 1, canvasWidth);
+  let bottomY = 0;
+
+  for (let x = startX; x < endX; x += 1) {
+    for (let y = canvasHeight - 1; y >= 0; y -= 1) {
+      if (maskData[(y * canvasWidth + x) * 4 + 3] > 8) {
+        bottomY = Math.max(bottomY, y);
+        break;
+      }
+    }
+  }
+
+  return bottomY;
 }
 
 const TRANSPARENT: RgbaColor = { r: 0, g: 0, b: 0, a: 0 };

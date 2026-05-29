@@ -53,6 +53,10 @@ function createMorphologyEdgeMask(
   height: number,
   tileSize: number
 ): BooleanMask {
+  if (feature.kind === "wall") {
+    return createWallMorphologyEdgeMask(feature, width, height, tileSize);
+  }
+
   const mask = createEmptyMask(width, height);
   const edgeWidth = Math.max(tileSize * 0.72, 18);
 
@@ -74,6 +78,48 @@ function createMorphologyEdgeMask(
   });
 
   return mask;
+}
+
+function createWallMorphologyEdgeMask(
+  feature: StudioTerrainMorphologyFeature,
+  width: number,
+  height: number,
+  tileSize: number
+): BooleanMask {
+  const mask = createEmptyMask(width, height);
+  const edgeWidth = Math.max(tileSize * 0.72, 18);
+  const backCollisionOffset = resolveWallBackCollisionOffset(feature, tileSize);
+
+  feature.strokes.forEach((stroke) => {
+    if (stroke.points.length === 1) {
+      markWallSegmentEdge(mask, tileSize, stroke.points[0], stroke.points[0], stroke.radius, edgeWidth, backCollisionOffset);
+      return;
+    }
+    for (let index = 1; index < stroke.points.length; index += 1) {
+      markWallSegmentEdge(
+        mask,
+        tileSize,
+        stroke.points[index - 1],
+        stroke.points[index],
+        stroke.radius,
+        edgeWidth,
+        backCollisionOffset
+      );
+    }
+  });
+
+  return mask;
+}
+
+function resolveWallBackCollisionOffset(feature: StudioTerrainMorphologyFeature, tileSize: number): number {
+  const explicitOffset = Number(feature.params.backCollisionOffset ?? feature.params.collisionOffsetY);
+  if (Number.isFinite(explicitOffset) && explicitOffset >= 0) {
+    return Math.min(tileSize * 2, explicitOffset);
+  }
+
+  const wallHeight = Number(feature.params.height);
+  const resolvedHeight = Number.isFinite(wallHeight) && wallHeight > 0 ? wallHeight : tileSize;
+  return Math.max(tileSize * 0.45, Math.min(tileSize * 1.25, resolvedHeight * 0.55));
 }
 
 function markSegmentEdge(
@@ -103,6 +149,48 @@ function markSegmentEdge(
       }
     }
   }
+}
+
+function markWallSegmentEdge(
+  mask: BooleanMask,
+  tileSize: number,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  radius: number,
+  edgeWidth: number,
+  backCollisionOffset: number
+): void {
+  const outer = Math.max(1, radius + tileSize * 0.5);
+  const inner = Math.max(0, radius - edgeWidth);
+  const minX = Math.max(0, Math.floor((Math.min(from.x, to.x) - outer) / tileSize));
+  const minY = Math.max(0, Math.floor((Math.min(from.y, to.y) - outer) / tileSize));
+  const maxX = Math.min(mask.width - 1, Math.floor((Math.max(from.x, to.x) + outer) / tileSize));
+  const maxY = Math.min(mask.height - 1, Math.floor((Math.max(from.y, to.y) + outer + backCollisionOffset) / tileSize));
+  const backThreshold = tileSize * 0.1;
+
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const center = {
+        x: x * tileSize + tileSize / 2,
+        y: y * tileSize + tileSize / 2,
+      };
+      const closest = closestPointOnSegment(center, from, to);
+      const distance = Math.hypot(center.x - closest.x, center.y - closest.y);
+      if (distance > outer || distance < inner) continue;
+
+      const targetY = center.y < closest.y - backThreshold
+        ? center.y + backCollisionOffset
+        : center.y;
+      markMaskCellAtWorld(mask, tileSize, center.x, targetY);
+    }
+  }
+}
+
+function markMaskCellAtWorld(mask: BooleanMask, tileSize: number, x: number, y: number): void {
+  const tileX = Math.floor(x / tileSize);
+  const tileY = Math.floor(y / tileSize);
+  if (tileX < 0 || tileY < 0 || tileX >= mask.width || tileY >= mask.height) return;
+  mask.cells[tileY][tileX] = true;
 }
 
 function maskToRectangles(mask: BooleanMask): Array<{ x: number; y: number; width: number; height: number }> {
@@ -183,12 +271,24 @@ function distanceToSegment(
   from: { x: number; y: number },
   to: { x: number; y: number }
 ): number {
+  const closest = closestPointOnSegment(point, from, to);
+  return Math.hypot(point.x - closest.x, point.y - closest.y);
+}
+
+function closestPointOnSegment(
+  point: { x: number; y: number },
+  from: { x: number; y: number },
+  to: { x: number; y: number }
+): { x: number; y: number } {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const lengthSquared = dx * dx + dy * dy;
   if (lengthSquared === 0) {
-    return Math.hypot(point.x - from.x, point.y - from.y);
+    return from;
   }
   const ratio = Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared));
-  return Math.hypot(point.x - (from.x + dx * ratio), point.y - (from.y + dy * ratio));
+  return {
+    x: from.x + dx * ratio,
+    y: from.y + dy * ratio,
+  };
 }

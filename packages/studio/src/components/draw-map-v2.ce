@@ -1,11 +1,11 @@
 <Container scale>
-    <StudioTerrainMap data />
+    <StudioTerrainMap data splitWallForeground={true} />
     <Container>
         @for (obj of elementsAlwaysLow) {
             <ElementMap ...obj image={getElementImage(obj)} /> 
         }
     </Container>
-    <EventLayerComponent>
+    <EventLayerComponent pixiChildren={terrainWallOcclusionChildren}>
       @for (obj of elementsLow) {
           <ElementMap ...obj image={getElementImage(obj)} /> 
       }
@@ -37,22 +37,48 @@
 }
 
   <script>
-    import { computed, effect } from 'canvasengine'
+    import { computed, effect, mount, signal } from 'canvasengine'
     import { Weather } from "@canvasengine/presets";
     import { EventLayerComponent, RpgClientEngine, inject } from "@rpgjs/client";
     import ElementMap from './element-map.ce'
     import StudioTerrainMap from '../map-renderer/components/studio-terrain-map.ce'
+    import { StudioTerrainWallOcclusionRenderer } from '../map-renderer/terrain-renderer/terrain-chunk-renderer'
     import { toCanvasWeatherOptions } from '@common/weather';
     import { assetsUrl } from "../constants";
 
     const { data } = defineProps()
 
     const engine = inject(RpgClientEngine);
+    const terrainWallOcclusionChildren = signal([])
+    const terrainWallOcclusionRenderer = new StudioTerrainWallOcclusionRenderer()
+    let terrainWallOcclusionSerial = 0
 
     const tilesetImage = computed(() => {
       const params = data().params
       if (!params?.tileset?.fileName) return ''
       return `${assetsUrl}/${params.tileset.fileName}`
+    })
+
+    const renderTerrainWallOcclusion = async () => {
+      const mapData = data()
+      if (!mapData) return
+      const currentSerial = ++terrainWallOcclusionSerial
+      const children = await terrainWallOcclusionRenderer.renderMap(mapData)
+      if (currentSerial !== terrainWallOcclusionSerial) return
+      terrainWallOcclusionChildren.set(children)
+    }
+
+    effect(() => {
+      data()
+      void renderTerrainWallOcclusion()
+    })
+
+    mount(() => {
+      return () => {
+        terrainWallOcclusionSerial += 1
+        terrainWallOcclusionChildren.set([])
+        terrainWallOcclusionRenderer.destroy()
+      }
     })
 
     const terrainImage = computed(() => {

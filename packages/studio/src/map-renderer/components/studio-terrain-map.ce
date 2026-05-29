@@ -10,8 +10,12 @@ import { computed, effect } from "canvasengine"
 import { Container as PixiContainer } from "pixi.js"
 import { StudioTerrainChunkRenderer } from "../terrain-renderer/terrain-chunk-renderer"
 
-const { data, debugCollisions } = defineProps({
+const { data, debugCollisions, splitWallForeground } = defineProps({
   debugCollisions: {
+    type: Boolean,
+    default: false
+  },
+  splitWallForeground: {
     type: Boolean,
     default: false
   }
@@ -42,7 +46,8 @@ const renderTerrain = async () => {
   if (!mapData) return
   const currentSerial = ++renderSerial
   await terrainRenderer.renderMap(mapData, {
-    debugCollisions: readValue(debugCollisions) === true
+    debugCollisions: readValue(debugCollisions) === true,
+    splitWallForeground: readValue(splitWallForeground) === true
   })
   if (currentSerial !== renderSerial) {
     terrainRenderer.invalidateTerrain()
@@ -52,6 +57,7 @@ const renderTerrain = async () => {
 effect(() => {
   readValue(data)
   readValue(debugCollisions)
+  readValue(splitWallForeground)
   void renderTerrain()
 })
 
