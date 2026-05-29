@@ -1,5 +1,5 @@
 <Container scale>
-    <TiledMap map />
+    <StudioTerrainMap data />
     <Container>
         @for (obj of elementsAlwaysLow) {
             <ElementMap ...obj image={getElementImage(obj)} /> 
@@ -38,9 +38,10 @@
 
   <script>
     import { computed, effect } from 'canvasengine'
-    import { TiledMap, Weather } from "@canvasengine/presets";
+    import { Weather } from "@canvasengine/presets";
     import { EventLayerComponent, RpgClientEngine, inject } from "@rpgjs/client";
     import ElementMap from './element-map.ce'
+    import StudioTerrainMap from '../map-renderer/components/studio-terrain-map.ce'
     import { toCanvasWeatherOptions } from '@common/weather';
     import { assetsUrl } from "../constants";
 
