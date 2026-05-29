@@ -1,5 +1,5 @@
 import { Context, inject } from "@signe/di";
-import { UpdateMapToken, UpdateMapService } from "@rpgjs/common";
+import { UpdateMapToken, UpdateMapService, type LightingState } from "@rpgjs/common";
 
 export const LoadMapToken = 'LoadMapToken'
 
@@ -24,6 +24,8 @@ type MapData = {
   positions?: Record<string, { x: number; y: number; z?: number }>;
   /** Optional map identifier, defaults to the mapId parameter if not provided */
   id?: string;
+  /** Optional initial lighting state for the loaded map */
+  lighting?: LightingState | null;
 }
 
 /**

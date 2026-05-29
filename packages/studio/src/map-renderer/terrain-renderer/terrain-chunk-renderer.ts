@@ -1,4 +1,5 @@
 import { Container as PixiContainer, Sprite, Texture } from "pixi.js";
+import { hasAutoLightingSunShadows, type LightingColor, type LightingState } from "@rpgjs/common";
 import { buildStudioTerrainCollisionPolygons } from "../collision-polygons";
 import { createStudioTerrainRenderData } from "../map-normalizer";
 import {
@@ -84,6 +85,14 @@ interface RgbaColor {
   g: number;
   b: number;
   a: number;
+}
+
+export interface StudioTerrainWallShadowStyle {
+  offsetX: number;
+  offsetY: number;
+  blur: number;
+  alpha: number;
+  color: string;
 }
 
 export interface StudioTerrainChunkRendererOptions {
@@ -218,6 +227,28 @@ export class StudioTerrainChunkRenderer {
       rendered.ctx.restore();
 
       sprites.push(...this.createWallOcclusionSliceSprites(rendered.canvas, parts.mask, feature, sliceWidth));
+    }
+
+    return sprites;
+  }
+
+  async createWallShadowSprites(map: any, lighting: LightingState | null | undefined): Promise<Sprite[]> {
+    if (this.destroyed || typeof document === "undefined") return [];
+    const data = isStudioTerrainRenderData(map?.terrainRenderData)
+      ? map.terrainRenderData
+      : createStudioTerrainRenderData(map);
+    const style = resolveStudioTerrainWallShadowStyle(data, lighting);
+    if (!style) return [];
+
+    const sprites: Sprite[] = [];
+    for (const feature of data.morphologyFeatures) {
+      if (feature.kind !== "wall") continue;
+      const parts = this.createTerrainWallRenderParts(data, feature);
+      if (!parts) continue;
+      const sprite = this.createWallShadowSprite(parts, feature, style);
+      if (sprite) {
+        sprites.push(sprite);
+      }
     }
 
     return sprites;
@@ -789,6 +820,59 @@ export class StudioTerrainChunkRenderer {
     }
 
     return sprites;
+  }
+
+  private createWallShadowSprite(
+    parts: TerrainWallRenderParts,
+    feature: StudioTerrainMorphologyFeature,
+    style: StudioTerrainWallShadowStyle
+  ): Sprite | null {
+    const mask = parts.mask;
+    const baseEdge = this.createTerrainMorphologyDirectionalEdgeMask(parts.faceMask, "bottom", 10);
+    const spreadX = Math.ceil(Math.abs(style.offsetX) + style.blur * 2);
+    const spreadY = Math.ceil(Math.abs(style.offsetY) + style.blur * 2 + 12);
+    const canvas = this.createCanvasBuffer(
+      Math.max(1, mask.canvas.width + spreadX * 2),
+      Math.max(1, mask.canvas.height + spreadY * 2),
+      true
+    );
+    const originX = spreadX;
+    const originY = spreadY;
+
+    canvas.ctx.save();
+    canvas.ctx.globalAlpha = style.alpha * 1.35;
+    for (let y = 0; y <= 5; y += 1) {
+      canvas.ctx.drawImage(baseEdge.canvas, originX, originY + y);
+    }
+    canvas.ctx.restore();
+
+    canvas.ctx.save();
+    canvas.ctx.filter = `blur(${style.blur}px)`;
+    for (let step = 1; step <= 5; step += 1) {
+      const ratio = step / 5;
+      canvas.ctx.globalAlpha = style.alpha * (0.58 - ratio * 0.32);
+      canvas.ctx.drawImage(
+        baseEdge.canvas,
+        originX + style.offsetX * ratio,
+        originY + 4 + style.offsetY * ratio
+      );
+    }
+    canvas.ctx.restore();
+
+    canvas.ctx.globalCompositeOperation = "source-in";
+    canvas.ctx.fillStyle = style.color;
+    canvas.ctx.fillRect(0, 0, canvas.canvas.width, canvas.canvas.height);
+    canvas.ctx.globalCompositeOperation = "source-over";
+
+    const texture = Texture.from(canvas.canvas);
+    const sprite = new Sprite(texture);
+    sprite.x = Math.round(mask.bounds.x - originX);
+    sprite.y = Math.round(mask.bounds.y - originY);
+    sprite.zIndex = 0;
+    sprite.roundPixels = true;
+    sprite.eventMode = "none";
+    sprite.label = `StudioWallShadow:${feature.id}`;
+    return sprite;
   }
 
   private buildTerrainMorphologyMask(
@@ -1434,6 +1518,67 @@ export class StudioTerrainWallOcclusionRenderer {
     this.sprites = [];
     this.renderVersion = "";
   }
+}
+
+export class StudioTerrainWallShadowRenderer {
+  private readonly renderer = new StudioTerrainChunkRenderer(new PixiContainer());
+  private sprites: Sprite[] = [];
+  private renderVersion = "";
+
+  async renderMap(map: any, lighting: LightingState | null | undefined): Promise<Sprite[]> {
+    const data = isStudioTerrainRenderData(map?.terrainRenderData)
+      ? map.terrainRenderData
+      : createStudioTerrainRenderData(map);
+    const style = resolveStudioTerrainWallShadowStyle(data, lighting);
+    const version = `${data.version}|wall-shadow:v4|${JSON.stringify(style)}`;
+    if (version === this.renderVersion) {
+      return this.sprites;
+    }
+
+    const nextSprites = style ? await this.renderer.createWallShadowSprites(map, lighting) : [];
+    this.clearSprites();
+    this.sprites = nextSprites;
+    this.renderVersion = version;
+    return this.sprites;
+  }
+
+  destroy(): void {
+    this.clearSprites();
+    this.renderer.destroy();
+  }
+
+  private clearSprites(): void {
+    for (const sprite of this.sprites) {
+      if (!sprite.destroyed) {
+        sprite.destroy({ texture: true });
+      }
+    }
+    this.sprites = [];
+    this.renderVersion = "";
+  }
+}
+
+export function resolveStudioTerrainWallShadowStyle(
+  data: StudioTerrainRenderData,
+  lighting: LightingState | null | undefined
+): StudioTerrainWallShadowStyle | null {
+  if (!hasAutoLightingSunShadows(lighting)) return null;
+
+  const sun = lighting?.sun ?? {};
+  const shadows = lighting?.shadows ?? {};
+  const intensity = clampNumber(sun.intensity ?? 0.85, 0, 1.5);
+  if (intensity <= 0) return null;
+
+  const shadowWeight = clampNumber(sun.shadowWeight ?? 1, 0, 3);
+  const projection = clampNumber(data.tileSize * 0.62 * Math.max(0.55, shadowWeight), 14, data.tileSize * 1.15);
+
+  return {
+    offsetX: Math.round(projection * 0.58),
+    offsetY: Math.round(projection),
+    blur: clampNumber(data.tileSize * 0.13, 4, 10),
+    alpha: clampNumber(0.22 + intensity * 0.2 * Math.max(0.65, shadowWeight), 0.12, 0.52),
+    color: formatLightingColor(shadows.shadowColor, "#05070d"),
+  };
 }
 
 function createTerrainControlRenderLayers(
@@ -2144,6 +2289,20 @@ function setNearestTextureScale(texture: Texture): void {
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
+}
+
+function formatLightingColor(value: LightingColor | undefined, fallback: string): string {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return `#${Math.max(0, Math.min(0xffffff, Math.round(value))).toString(16).padStart(6, "0")}`;
+  }
+  if (Array.isArray(value) && value.length >= 3) {
+    const [r, g, b] = value.map((channel) => clampNumber(Math.round(Number(channel)), 0, 255));
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  return fallback;
 }
 
 function fallbackTerrainColor(textureId: string): string {

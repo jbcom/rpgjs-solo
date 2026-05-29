@@ -50,6 +50,7 @@ Useful fields from `mapSchema` when a full map update is needed:
 - `data?: string`
 - `params?: object`
 - `weather?: object | null`
+- `lighting?: { sun: { enabled: boolean, intensity: number } } | null`
 - `events?: Array<{ eventId: string, x: number, y: number }>`
 - `elementsAlwaysLow?: string`
 - `elementsLow?: string`
@@ -64,6 +65,8 @@ Useful fields from `mapSchema` when a full map update is needed:
 `terrainLayer` is the shader terrain V1 contract. The control texture is stored as an RGBA8 media/storage file, with the terrain palette index encoded as `R + G * 256`. `B` is optional light data and treats `128` as neutral when present. `A` is terrain mask coverage for pixel brush strokes, with `255` as fully covered. Soft edges are computed from transition/blend metadata at render time. Legacy tile grids are normalized into `tileSize x tileSize` blocks at load time, but editor brush edits may update the control texture at world-pixel resolution.
 
 `terrainMorphologyLayer` stores hole and wall strokes in world pixels. Hole params support `depth`, `roundness`, `roughness`, optional facade `textureId`, optional bottom-fill `fillTextureId`, and `fillHeight` clamped to `0..100`; `textureId` is not used as the bottom-fill fallback. Wall params support `height`, `roundness`, `roughness`, and optional facade `textureId`. The editor wall smoothness control maps to `roughness = 1 - smoothness`. The brush tool modifies the terrain surface; hole/wall tools use the selected terrain texture as the vertical facade while the top surface remains the already-painted base terrain. The renderer merges hole/wall masks as signed terrain levels before drawing, so overlapping strokes are clipped or neutralized instead of being rendered as independent overlays. The editor renders this layer after `terrainLayer` and treats intersecting hole/wall cells as blocking collision.
+
+`lighting.sun` controls the map-level sun option. `enabled` toggles automatic sunlight shadows for walls, characters, and elements. `intensity` is clamped to `0..1`.
 
 ## Example: read all maps
 

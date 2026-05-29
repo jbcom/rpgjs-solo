@@ -1,19 +1,10 @@
 <Container scale>
     <StudioTerrainMap data splitWallForeground={true} />
-    <Container>
-        @for (obj of elementsAlwaysLow) {
-            <ElementMap ...obj image={getElementImage(obj)} /> 
-        }
-    </Container>
-    <EventLayerComponent pixiChildren={terrainWallOcclusionChildren}>
-      @for (obj of elementsLow) {
-          <ElementMap ...obj image={getElementImage(obj)} /> 
-      }
-    </EventLayerComponent>
+    <Container sortableChildren={true} pixiChildren={terrainWallShadowPixiChildren} />
+    <Container sortableChildren={true} pixiChildren={elementsAlwaysLowPixiChildren} />
+    <EventLayerComponent pixiChildren={eventLayerPixiChildren} />
     
-    @for (obj of elementsHigh) {
-        <ElementMap ...obj image={getElementImage(obj)} /> 
-    }
+    <Container sortableChildren={true} pixiChildren={elementsHighPixiChildren} />
 </Container>
 
 @if (weatherOptions) {
@@ -37,21 +28,69 @@
 }
 
   <script>
-    import { computed, effect, mount, signal } from 'canvasengine'
+    import { computed, effect, mount, signal, tick } from 'canvasengine'
     import { Weather } from "@canvasengine/presets";
     import { EventLayerComponent, RpgClientEngine, inject } from "@rpgjs/client";
-    import ElementMap from './element-map.ce'
+    import { Container as PixiContainer } from "pixi.js";
     import StudioTerrainMap from '../map-renderer/components/studio-terrain-map.ce'
-    import { StudioTerrainWallOcclusionRenderer } from '../map-renderer/terrain-renderer/terrain-chunk-renderer'
+    import { StudioTerrainWallOcclusionRenderer, StudioTerrainWallShadowRenderer } from '../map-renderer/terrain-renderer/terrain-chunk-renderer'
+    import { StudioElementRenderer } from '../map-renderer/studio-element-renderer'
     import { toCanvasWeatherOptions } from '@common/weather';
     import { assetsUrl } from "../constants";
 
     const { data } = defineProps()
 
     const engine = inject(RpgClientEngine);
+    const terrainWallShadowWorld = new PixiContainer()
+    const elementsAlwaysLowWorld = new PixiContainer()
+    const elementsHighWorld = new PixiContainer()
+    terrainWallShadowWorld.sortableChildren = true
+    elementsAlwaysLowWorld.sortableChildren = true
+    elementsHighWorld.sortableChildren = true
+    const terrainWallShadowPixiChildren = [terrainWallShadowWorld]
+    const elementsAlwaysLowPixiChildren = [elementsAlwaysLowWorld]
+    const elementsHighPixiChildren = [elementsHighWorld]
+    let terrainWallShadowChildren = []
+    let elementsAlwaysLowChildren = []
     const terrainWallOcclusionChildren = signal([])
+    const elementsLowPixiChildren = signal([])
+    let elementsHighChildren = []
+    const eventLayerPixiChildren = computed(() => [
+      ...elementsLowPixiChildren(),
+      ...terrainWallOcclusionChildren()
+    ])
     const terrainWallOcclusionRenderer = new StudioTerrainWallOcclusionRenderer()
+    const terrainWallShadowRenderer = new StudioTerrainWallShadowRenderer()
+    const elementsAlwaysLowRenderer = new StudioElementRenderer()
+    const elementsLowRenderer = new StudioElementRenderer()
+    const elementsHighRenderer = new StudioElementRenderer()
     let terrainWallOcclusionSerial = 0
+    let terrainWallShadowSerial = 0
+    let studioElementRenderSerial = 0
+    const STUDIO_ELEMENT_SHADOW_CASTER_LIMIT = 1000
+
+    tick(({ deltaTime }) => {
+      elementsAlwaysLowRenderer.update(deltaTime)
+      elementsLowRenderer.update(deltaTime)
+      elementsHighRenderer.update(deltaTime)
+    })
+
+    const syncPixiWorldChildren = (world, children) => {
+      const nextChildren = Array.isArray(children) ? children.filter(Boolean) : []
+      const currentChildren = [...world.children]
+      currentChildren.forEach((child) => {
+        if (!nextChildren.includes(child)) {
+          world.removeChild(child)
+        }
+      })
+      nextChildren.forEach((child) => {
+        if (child.parent === world) return
+        if (child.parent) {
+          child.parent.removeChild(child)
+        }
+        world.addChild(child)
+      })
+    }
 
     const tilesetImage = computed(() => {
       const params = data().params
@@ -68,16 +107,50 @@
       terrainWallOcclusionChildren.set(children)
     }
 
+    const mapLighting = computed(() => {
+      const mapData = data()
+      return mapData?.lighting ?? engine.sceneMap.lighting?.() ?? null
+    })
+
+    const renderTerrainWallShadows = async () => {
+      const mapData = data()
+      if (!mapData) return
+      const currentSerial = ++terrainWallShadowSerial
+      const children = await terrainWallShadowRenderer.renderMap(mapData, mapLighting())
+      if (currentSerial !== terrainWallShadowSerial) return
+      terrainWallShadowChildren = children
+      syncPixiWorldChildren(terrainWallShadowWorld, terrainWallShadowChildren)
+    }
+
     effect(() => {
       data()
       void renderTerrainWallOcclusion()
     })
 
+    effect(() => {
+      data()
+      mapLighting()
+      void renderTerrainWallShadows()
+    })
+
     mount(() => {
       return () => {
         terrainWallOcclusionSerial += 1
+        terrainWallShadowSerial += 1
+        studioElementRenderSerial += 1
+        terrainWallShadowChildren = []
         terrainWallOcclusionChildren.set([])
+        elementsAlwaysLowChildren = []
+        elementsLowPixiChildren.set([])
+        elementsHighChildren = []
+        syncPixiWorldChildren(terrainWallShadowWorld, terrainWallShadowChildren)
+        syncPixiWorldChildren(elementsAlwaysLowWorld, elementsAlwaysLowChildren)
+        syncPixiWorldChildren(elementsHighWorld, elementsHighChildren)
         terrainWallOcclusionRenderer.destroy()
+        terrainWallShadowRenderer.destroy()
+        elementsAlwaysLowRenderer.destroy(engine.sceneMap)
+        elementsLowRenderer.destroy(engine.sceneMap)
+        elementsHighRenderer.destroy(engine.sceneMap)
       }
     })
 
@@ -221,6 +294,13 @@
       return tilesetImage()
     }
 
+    const withElementImages = (elements) => {
+      return elements.map((element) => ({
+        ...element,
+        image: getElementImage(element)
+      }))
+    }
+
     const map = computed(() => {
       const params = data().params
       const terrain = parseArrayData(data().terrain)
@@ -349,6 +429,49 @@
       return data().elementsLow || []
     })
     const elementsHigh = computed(() => data().elementsHigh || [])
+
+    const renderStudioElements = async () => {
+      const currentSerial = ++studioElementRenderSerial
+      const shadowBudget = { remaining: STUDIO_ELEMENT_SHADOW_CASTER_LIMIT }
+      const renderOptions = {
+        sceneMap: engine.sceneMap,
+        lighting: mapLighting(),
+        shadowBudget,
+        shadowCasterLimit: STUDIO_ELEMENT_SHADOW_CASTER_LIMIT
+      }
+
+      const alwaysLowChildren = await elementsAlwaysLowRenderer.renderElements(
+        withElementImages(elementsAlwaysLow()),
+        renderOptions
+      )
+      if (currentSerial !== studioElementRenderSerial) return
+
+      const lowChildren = await elementsLowRenderer.renderElements(
+        withElementImages(elementsLow()),
+        renderOptions
+      )
+      if (currentSerial !== studioElementRenderSerial) return
+
+      const highChildren = await elementsHighRenderer.renderElements(
+        withElementImages(elementsHigh()),
+        renderOptions
+      )
+      if (currentSerial !== studioElementRenderSerial) return
+
+      elementsAlwaysLowChildren = alwaysLowChildren
+      syncPixiWorldChildren(elementsAlwaysLowWorld, elementsAlwaysLowChildren)
+      elementsLowPixiChildren.set(lowChildren)
+      elementsHighChildren = highChildren
+      syncPixiWorldChildren(elementsHighWorld, elementsHighChildren)
+    }
+
+    effect(() => {
+      data()
+      tilesetImageById()
+      tilesetImage()
+      mapLighting()
+      void renderStudioElements()
+    })
 
     const players = computed(() => engine.sceneMap.players)
     const events = computed(() => engine.sceneMap.events)

@@ -104,6 +104,7 @@ export const lightingStateSchema = {
     sun: {
       type: "object",
       title: "Sun",
+      description: "Directional sunlight. When enabled with positive intensity, it automatically enables sprite and Studio wall shadows unless shadows.enabled is false.",
       properties: {
         x: { type: "number", title: "X" },
         y: { type: "number", title: "Y" },
@@ -117,6 +118,7 @@ export const lightingStateSchema = {
     shadows: {
       type: "object",
       title: "Shadows",
+      description: "Shadow rendering options. Set enabled to false to opt out of automatic sun shadows.",
       properties: {
         enabled: {
           type: "boolean",
