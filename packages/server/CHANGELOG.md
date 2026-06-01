@@ -1,5 +1,14 @@
 # @rpgjs/server
 
+## 5.0.0-beta.14
+
+### Patch Changes
+
+- c96b31a: Add generic event touch hooks, shared map variables, and automatic variable change synchronization.
+- Updated dependencies [c96b31a]
+  - @rpgjs/common@5.0.0-beta.14
+  - @rpgjs/testing@5.0.0-beta.14
+
 ## 5.0.0-beta.13
 
 ### Patch Changes
