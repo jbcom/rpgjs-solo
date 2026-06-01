@@ -39,6 +39,7 @@
   "type": "module",
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
+    "@canvasengine/compiler": "2.0.0-rc.4",
     "@types/node": "^25.8.0",
     "jsdom": "^29.1.1",
     "ts-morph": "^28.0.0",
