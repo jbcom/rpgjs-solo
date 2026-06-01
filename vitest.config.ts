@@ -1,7 +1,11 @@
 import { defineConfig } from "vitest/config";
+import canvasengine from "@canvasengine/compiler";
 import path from "path";
 
 export default defineConfig({
+  plugins: [
+    canvasengine(),
+  ],
   resolve: {
     alias: {
       "@rpgjs/testing": path.resolve(__dirname, "packages/testing/src"),

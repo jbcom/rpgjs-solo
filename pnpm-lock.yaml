@@ -21,6 +21,9 @@ importers:
         specifier: ^9.0.10
         version: 9.0.10
     devDependencies:
+      '@canvasengine/compiler':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
       '@changesets/cli':
         specifier: ^2.31.0
         version: 2.31.0(@types/node@25.8.0)
