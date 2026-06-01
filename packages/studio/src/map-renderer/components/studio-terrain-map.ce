@@ -1,0 +1,68 @@
+<Container
+  width={terrainSize().width}
+  height={terrainSize().height}
+  pixiChildren={terrainPixiChildren}
+  onBeforeDestroy={destroyTerrainRenderer}
+/>
+
+<script>
+import { computed, effect } from "canvasengine"
+import { Container as PixiContainer } from "pixi.js"
+import { StudioTerrainChunkRenderer } from "../terrain-renderer/terrain-chunk-renderer"
+
+const { data, debugCollisions, splitWallForeground } = defineProps({
+  debugCollisions: {
+    type: Boolean,
+    default: false
+  },
+  splitWallForeground: {
+    type: Boolean,
+    default: false
+  }
+})
+
+const readValue = (value) => typeof value === "function" ? value() : value
+const terrainWorld = new PixiContainer()
+terrainWorld.sortableChildren = true
+terrainWorld.roundPixels = true
+const terrainPixiChildren = [terrainWorld]
+let terrainRenderer = new StudioTerrainChunkRenderer(terrainWorld)
+let renderSerial = 0
+
+const terrainSize = computed(() => {
+  const mapData = readValue(data)
+  const renderData = mapData?.terrainRenderData
+  const width =
+    Number(renderData?.width) ||
+    Math.max(1, Math.floor(Number(mapData?.params?.width) || 50)) * 48
+  const height =
+    Number(renderData?.height) ||
+    Math.max(1, Math.floor(Number(mapData?.params?.height) || 50)) * 48
+  return { width, height }
+})
+
+const renderTerrain = async () => {
+  const mapData = readValue(data)
+  if (!mapData) return
+  const currentSerial = ++renderSerial
+  await terrainRenderer.renderMap(mapData, {
+    debugCollisions: readValue(debugCollisions) === true,
+    splitWallForeground: readValue(splitWallForeground) === true
+  })
+  if (currentSerial !== renderSerial) {
+    terrainRenderer.invalidateTerrain()
+  }
+}
+
+effect(() => {
+  readValue(data)
+  readValue(debugCollisions)
+  readValue(splitWallForeground)
+  void renderTerrain()
+})
+
+function destroyTerrainRenderer() {
+  renderSerial += 1
+  terrainRenderer.destroy()
+}
+</script>

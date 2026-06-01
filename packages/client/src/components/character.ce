@@ -74,7 +74,7 @@
 
   import { lastValueFrom, combineLatest, pairwise, filter, map, startWith } from "rxjs";
   import { Particle } from "@canvasengine/presets";
-  import { GameEngineToken, ModulesToken } from "@rpgjs/common";
+  import { GameEngineToken, ModulesToken, shouldRenderLightingShadows } from "@rpgjs/common";
   import { RpgClientEngine } from "../RpgClientEngine";
   import { inject } from "../core/inject";  
   import { Direction, Animation } from "@rpgjs/common";
@@ -113,7 +113,7 @@
   const isMe = computed(isCurrentPlayer);
   const shadowsEnabled = computed(() => {
     const lighting = client.sceneMap?.lighting?.();
-    return Boolean(lighting?.shadows?.enabled || (lighting?.spots?.length ?? 0) > 0);
+    return shouldRenderLightingShadows(lighting);
   });
 
   /**

@@ -953,6 +953,12 @@ export class RpgClientEngine<T = any> {
       throw error;
     }
     const res = await this.loadMapService.load(mapId)
+    const loadedLighting = typeof res?.lighting !== "undefined"
+      ? res.lighting
+      : res?.data?.lighting;
+    if (typeof loadedLighting !== "undefined") {
+      this.sceneMap.lightingState.set(normalizeLightingState(loadedLighting));
+    }
     this.sceneMap.data.set(res)
     
     // Check if playerId is already present

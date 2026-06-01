@@ -1,4 +1,4 @@
-<Container sortableChildren={true}>
+<Container sortableChildren={true} onBeforeDestroy={detachPixiChildren}>
     @for ((event,id) of events) {
         <Character id={id} object={event}  />
     }
@@ -13,14 +13,66 @@
 </Container>
 
 <script>
+    import { effect, mount } from "canvasengine";
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
     import Character from "../character.ce";
     import LightHalo from "../prebuilt/light-halo.ce";
    
     const engine = inject(RpgClientEngine);
-    const { children } = defineProps()
+    const { children, pixiChildren } = defineProps({
+        pixiChildren: {
+            default: []
+        }
+    })
+    const readValue = (value) => typeof value === "function" ? value() : value
+    let rootContainer = null
+    let mountedPixiChildren = []
     
     const players = engine.sceneMap.players
     const events = engine.sceneMap.events
+
+    const getPixiChildren = () => {
+        const value = readValue(pixiChildren)
+        return Array.isArray(value) ? value.filter(Boolean) : []
+    }
+
+    const syncPixiChildren = () => {
+        if (!rootContainer) return
+        const nextPixiChildren = getPixiChildren()
+        mountedPixiChildren.forEach((child) => {
+            if (!nextPixiChildren.includes(child) && child.parent === rootContainer) {
+                rootContainer.removeChild(child)
+            }
+        })
+        nextPixiChildren.forEach((child) => {
+            if (child.parent === rootContainer) return
+            if (child.parent) {
+                child.parent.removeChild(child)
+            }
+            rootContainer.addChild(child)
+        })
+        mountedPixiChildren = nextPixiChildren
+    }
+
+    const detachPixiChildren = () => {
+        if (!rootContainer) return
+        mountedPixiChildren.forEach((child) => {
+            if (child.parent === rootContainer) {
+                rootContainer.removeChild(child)
+            }
+        })
+        mountedPixiChildren = []
+    }
+
+    effect(() => {
+        readValue(pixiChildren)
+        syncPixiChildren()
+    })
+
+    mount((element) => {
+        rootContainer = element.componentInstance
+        syncPixiChildren()
+        return detachPixiChildren
+    })
 </script>

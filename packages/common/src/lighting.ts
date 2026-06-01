@@ -67,6 +67,26 @@ export interface LightingTransitionOptions {
   easing?: "linear" | "easeInOut";
 }
 
+export function hasActiveLightingSun(lighting: LightingState | null | undefined): boolean {
+  const sun = lighting?.sun;
+  if (!sun || sun.enabled === false) {
+    return false;
+  }
+  return (sun.intensity ?? 1) > 0;
+}
+
+export function hasAutoLightingSunShadows(lighting: LightingState | null | undefined): boolean {
+  return Boolean(hasActiveLightingSun(lighting) && lighting?.shadows?.enabled !== false);
+}
+
+export function shouldRenderLightingShadows(lighting: LightingState | null | undefined): boolean {
+  return Boolean(
+    lighting?.shadows?.enabled ||
+      (lighting?.spots?.length ?? 0) > 0 ||
+      hasAutoLightingSunShadows(lighting)
+  );
+}
+
 export const DEFAULT_DAY_LIGHTING: LightingState = {
   ambient: {
     darkness: 0,

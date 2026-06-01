@@ -1,0 +1,1778 @@
+import { Assets, Container as PixiContainer, Rectangle, Sprite, Texture } from "pixi.js";
+import { hasAutoLightingSunShadows, shouldRenderLightingShadows, type LightingState } from "@rpgjs/common";
+
+const DEFAULT_SHADOW_CASTER_LIMIT = 1000;
+const LIGHT_SPOT_TEXTURE_SIZE = 256;
+
+type ScaleValue = number | [number, number] | { x?: number; y?: number } | null | undefined;
+
+export interface StudioElementRenderOptions {
+  sceneMap?: any;
+  lighting?: LightingState | null;
+  shadowBudget?: { remaining: number };
+  shadowCasterLimit?: number;
+}
+
+export interface StudioElementSegment {
+  key: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sourceRect: StudioElementRect;
+}
+
+export interface StudioElementRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface StudioElementMetrics {
+  drawX: number;
+  drawY: number;
+  drawWidth: number;
+  drawHeight: number;
+  hitboxX: number;
+  hitboxY: number;
+  hitboxWidth: number;
+  hitboxHeight: number;
+  hitboxScaleX: number;
+  hitboxScaleY: number;
+  resolvedZIndex: number;
+  hasSortableHitbox: boolean;
+}
+
+export interface StudioElementShapeShadowStyle {
+  enabled: boolean;
+  contactX: number;
+  contactY: number;
+  contactWidth: number;
+  direction: { x: number; y: number };
+  height: number;
+  length: number;
+  alpha: number;
+  blur: number;
+  widthScale: number;
+  contactAlpha: number;
+  contactBlur: number;
+  contactWidthScale: number;
+  shadowColor: string;
+}
+
+export interface StudioElementLightSpotOverlay {
+  id: string;
+  enabled: boolean;
+  x: number;
+  y: number;
+  radius: number;
+  renderRadius: number;
+  intensity: number;
+  flicker: boolean;
+  flickerSpeed: number;
+  style: "soft" | "normal" | "intense";
+}
+
+interface StudioElementShadowContactMetrics {
+  x: number;
+  width: number;
+  minX: number;
+  maxX: number;
+  bandHeight: number;
+  measured: boolean;
+}
+
+interface StudioElementLightSpotSprite {
+  sprite: Sprite;
+  baseAlpha: number;
+  flicker: boolean;
+  flickerSpeed: number;
+  pulseAmplitude: number;
+  waveSpeed: number;
+  phase: number;
+  noise: number;
+}
+
+interface NormalizedDrawRule {
+  id: string;
+  type: "repeat-axis" | "edge-repeat" | "frame-9slice";
+  axis: "x" | "y";
+  rects: Record<string, [number, number, number, number]>;
+}
+
+const readValue = <T>(value: T | (() => T)): T => (typeof value === "function" ? (value as () => T)() : value);
+
+const resolveLighting = (options: StudioElementRenderOptions): LightingState | null | undefined => {
+  return options.lighting ?? options.sceneMap?.lighting?.();
+};
+
+const toFiniteNumber = (value: unknown, fallback: number | null = null): number | null => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+  return value;
+};
+
+const clampMin = (value: number, min = 1): number => Math.max(min, Math.round(value));
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
+const normalizeScale = (value: ScaleValue): { x: number; y: number } => {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return { x: value, y: value };
+  }
+  if (Array.isArray(value)) {
+    const x = toFiniteNumber(value[0], 1) ?? 1;
+    const y = toFiniteNumber(value[1], x) ?? x;
+    return {
+      x: x > 0 ? x : 1,
+      y: y > 0 ? y : 1,
+    };
+  }
+  if (value && typeof value === "object") {
+    const x = toFiniteNumber(value.x, 1) ?? 1;
+    const y = toFiniteNumber(value.y, x) ?? x;
+    return {
+      x: x > 0 ? x : 1,
+      y: y > 0 ? y : 1,
+    };
+  }
+  return { x: 1, y: 1 };
+};
+
+const normalizeLightStyle = (value: unknown): "soft" | "normal" | "intense" => {
+  if (value === "soft" || value === "normal" || value === "intense") {
+    return value;
+  }
+  return "normal";
+};
+
+const lightStyleRadiusScale = (style: string): number => {
+  if (style === "soft") return 1.65;
+  if (style === "intense") return 2.35;
+  return 2.02;
+};
+
+const lightStyleColor = (style: string): [number, number, number] => {
+  if (style === "soft") return [252, 214, 148];
+  if (style === "intense") return [255, 189, 77];
+  return [255, 201, 102];
+};
+
+const lightStylePulse = (style: string): { pulseAmplitude: number; waveSpeed: number; noiseAmount: number } => {
+  if (style === "soft") {
+    return { pulseAmplitude: 0.08, waveSpeed: 1.9, noiseAmount: 0.08 };
+  }
+  if (style === "intense") {
+    return { pulseAmplitude: 0.2, waveSpeed: 3.2, noiseAmount: 0.22 };
+  }
+  return { pulseAmplitude: 0.14, waveSpeed: 2.45, noiseAmount: 0.14 };
+};
+
+const lightTextureCache = new Map<string, Texture>();
+
+const getLightSpotTexture = (style: "soft" | "normal" | "intense"): Texture => {
+  const cached = lightTextureCache.get(style);
+  if (cached && !cached.destroyed) return cached;
+  if (typeof document === "undefined") return Texture.WHITE;
+
+  const [r, g, b] = lightStyleColor(style);
+  const canvas = document.createElement("canvas");
+  canvas.width = LIGHT_SPOT_TEXTURE_SIZE;
+  canvas.height = LIGHT_SPOT_TEXTURE_SIZE;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return Texture.WHITE;
+
+  const center = LIGHT_SPOT_TEXTURE_SIZE / 2;
+  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+  gradient.addColorStop(0, `rgba(255, 248, 218, 1)`);
+  gradient.addColorStop(0.18, `rgba(${r}, ${g}, ${b}, 0.92)`);
+  gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.42)`);
+  gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, LIGHT_SPOT_TEXTURE_SIZE, LIGHT_SPOT_TEXTURE_SIZE);
+
+  const texture = Texture.from(canvas, true);
+  lightTextureCache.set(style, texture);
+  return texture;
+};
+
+const normalizeRuleRect = (value: unknown): [number, number, number, number] | null => {
+  if (!Array.isArray(value) || value.length < 4) return null;
+  const x = toFiniteNumber(value[0], null);
+  const y = toFiniteNumber(value[1], null);
+  const width = toFiniteNumber(value[2], null);
+  const height = toFiniteNumber(value[3], null);
+  if (x === null || y === null || width === null || height === null) return null;
+  return [Math.round(x), Math.round(y), clampMin(width), clampMin(height)];
+};
+
+export function normalizeStudioElementDrawRule(value: unknown): NormalizedDrawRule | null {
+  if (!value) return null;
+  let source = value;
+
+  if (typeof source === "string") {
+    try {
+      source = JSON.parse(source);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  if (!source || typeof source !== "object") return null;
+  const sourceRecord = source as Record<string, any>;
+  const type = sourceRecord.type;
+  if (type !== "repeat-axis" && type !== "edge-repeat" && type !== "frame-9slice") {
+    return null;
+  }
+  if (!sourceRecord.rects || typeof sourceRecord.rects !== "object") {
+    return null;
+  }
+
+  const rects: Record<string, [number, number, number, number]> = {};
+  Object.entries(sourceRecord.rects).forEach(([key, rawRect]) => {
+    const normalized = normalizeRuleRect(rawRect);
+    if (normalized) {
+      rects[key] = normalized;
+    }
+  });
+
+  return {
+    id: typeof sourceRecord.id === "string" ? sourceRecord.id : "",
+    type,
+    axis: type === "frame-9slice" ? "x" : sourceRecord.axis === "y" ? "y" : "x",
+    rects,
+  };
+}
+
+export function resolveStudioElementMetrics(element: any): StudioElementMetrics {
+  const rectValue = readValue(element?.rect) || [0, 0, 0, 0];
+  const drawInValue = readValue(element?.drawIn) || [];
+  const hitboxValue = readValue(element?.hitbox) || { x: 0, y: 0, width: 0, height: 0 };
+  const scaleValue = readValue(element?.scale);
+  const normalizedScale = normalizeScale(scaleValue);
+  const scaleX = normalizedScale.x;
+  const scaleY = normalizedScale.y;
+
+  const rectangle = {
+    width: toFiniteNumber(rectValue[2], 0) ?? 0,
+    height: toFiniteNumber(rectValue[3], 0) ?? 0,
+  };
+
+  const drawX = toFiniteNumber(drawInValue?.[0], 0) ?? 0;
+  const drawY = toFiniteNumber(drawInValue?.[1], 0) ?? 0;
+  const drawWidthBase = clampMin(toFiniteNumber(drawInValue?.[2], rectangle.width) ?? rectangle.width);
+  const drawHeightBase = clampMin(toFiniteNumber(drawInValue?.[3], rectangle.height) ?? rectangle.height);
+  const drawWidth = clampMin(drawWidthBase * scaleX);
+  const drawHeight = clampMin(drawHeightBase * scaleY);
+  const hitboxX = toFiniteNumber(hitboxValue.x, 0) ?? 0;
+  const hitboxY = toFiniteNumber(hitboxValue.y, 0) ?? 0;
+  const hitboxWidth = clampMin(toFiniteNumber(hitboxValue.width, 1) ?? 1);
+  const hitboxHeight = clampMin(toFiniteNumber(hitboxValue.height, 1) ?? 1);
+  const hitboxScaleX = drawWidth / Math.max(1, rectangle.width);
+  const hitboxScaleY = drawHeight / Math.max(1, rectangle.height);
+  const resolvedZIndexOffset = toFiniteNumber(readValue(element?.zIndexOffset), 0) ?? 0;
+  const hasSortableHitbox = hitboxValue && hitboxValue.type !== "none";
+  const elementSortY = hasSortableHitbox ? drawY + hitboxY * hitboxScaleY : drawY + drawHeight;
+
+  return {
+    drawX,
+    drawY,
+    drawWidth,
+    drawHeight,
+    hitboxX,
+    hitboxY,
+    hitboxWidth,
+    hitboxHeight,
+    hitboxScaleX,
+    hitboxScaleY,
+    resolvedZIndex: Math.round(elementSortY + resolvedZIndexOffset),
+    hasSortableHitbox,
+  };
+}
+
+const getSourceRect = (
+  rectangle: StudioElementRect,
+  localRect: [number, number, number, number] | undefined
+): StudioElementRect | null => {
+  if (!localRect) return null;
+  const [rawX, rawY, rawW, rawH] = localRect;
+  const localX = Math.max(0, Math.min(rectangle.width - 1, Math.round(rawX)));
+  const localY = Math.max(0, Math.min(rectangle.height - 1, Math.round(rawY)));
+  const localW = Math.max(1, Math.min(rectangle.width - localX, Math.round(rawW)));
+  const localH = Math.max(1, Math.min(rectangle.height - localY, Math.round(rawH)));
+
+  return {
+    x: rectangle.x + localX,
+    y: rectangle.y + localY,
+    width: localW,
+    height: localH,
+  };
+};
+
+const pushSegment = (
+  segments: StudioElementSegment[],
+  sourceRect: StudioElementRect | null,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  segmentIndex: number
+): void => {
+  if (!sourceRect || width <= 0 || height <= 0) return;
+  segments.push({
+    key: `${segmentIndex}_${Math.round(x)}_${Math.round(y)}`,
+    x,
+    y,
+    width,
+    height,
+    sourceRect: {
+      x: sourceRect.x,
+      y: sourceRect.y,
+      width: sourceRect.width,
+      height: sourceRect.height,
+    },
+  });
+};
+
+const drawRepeatedHorizontally = (
+  segments: StudioElementSegment[],
+  sourceRect: StudioElementRect,
+  destX: number,
+  destY: number,
+  targetWidth: number,
+  targetHeight: number,
+  unitWidth: number,
+  segmentIndexRef: { value: number }
+): void => {
+  let offsetX = 0;
+  while (offsetX < targetWidth - 0.001) {
+    const drawSegmentWidth = Math.min(unitWidth, targetWidth - offsetX);
+    const srcWidth = Math.max(1, sourceRect.width * (drawSegmentWidth / unitWidth));
+    pushSegment(
+      segments,
+      { x: sourceRect.x, y: sourceRect.y, width: srcWidth, height: sourceRect.height },
+      destX + offsetX,
+      destY,
+      drawSegmentWidth,
+      targetHeight,
+      segmentIndexRef.value++
+    );
+    offsetX += drawSegmentWidth;
+  }
+};
+
+const drawRepeatedVertically = (
+  segments: StudioElementSegment[],
+  sourceRect: StudioElementRect,
+  destX: number,
+  destY: number,
+  targetWidth: number,
+  targetHeight: number,
+  unitHeight: number,
+  segmentIndexRef: { value: number }
+): void => {
+  let offsetY = 0;
+  while (offsetY < targetHeight - 0.001) {
+    const drawSegmentHeight = Math.min(unitHeight, targetHeight - offsetY);
+    const srcHeight = Math.max(1, sourceRect.height * (drawSegmentHeight / unitHeight));
+    pushSegment(
+      segments,
+      { x: sourceRect.x, y: sourceRect.y, width: sourceRect.width, height: srcHeight },
+      destX,
+      destY + offsetY,
+      targetWidth,
+      drawSegmentHeight,
+      segmentIndexRef.value++
+    );
+    offsetY += drawSegmentHeight;
+  }
+};
+
+const drawHorizontalSegment = (
+  segments: StudioElementSegment[],
+  sourceRect: StudioElementRect,
+  destX: number,
+  destY: number,
+  segmentWidth: number,
+  segmentHeight: number,
+  fullWidth: number,
+  fromEnd: boolean,
+  segmentIndexRef: { value: number }
+): void => {
+  if (segmentWidth <= 0 || fullWidth <= 0) return;
+  const ratio = segmentWidth / fullWidth;
+  const srcWidth = Math.max(1, sourceRect.width * ratio);
+  const srcX = fromEnd ? sourceRect.x + sourceRect.width - srcWidth : sourceRect.x;
+  pushSegment(
+    segments,
+    { x: srcX, y: sourceRect.y, width: srcWidth, height: sourceRect.height },
+    destX,
+    destY,
+    segmentWidth,
+    segmentHeight,
+    segmentIndexRef.value++
+  );
+};
+
+const drawVerticalSegment = (
+  segments: StudioElementSegment[],
+  sourceRect: StudioElementRect,
+  destX: number,
+  destY: number,
+  segmentWidth: number,
+  segmentHeight: number,
+  fullHeight: number,
+  fromEnd: boolean,
+  segmentIndexRef: { value: number }
+): void => {
+  if (segmentHeight <= 0 || fullHeight <= 0) return;
+  const ratio = segmentHeight / fullHeight;
+  const srcHeight = Math.max(1, sourceRect.height * ratio);
+  const srcY = fromEnd ? sourceRect.y + sourceRect.height - srcHeight : sourceRect.y;
+  pushSegment(
+    segments,
+    { x: sourceRect.x, y: srcY, width: sourceRect.width, height: srcHeight },
+    destX,
+    destY,
+    segmentWidth,
+    segmentHeight,
+    segmentIndexRef.value++
+  );
+};
+
+const drawBoxSegment = (
+  segments: StudioElementSegment[],
+  sourceRect: StudioElementRect,
+  destX: number,
+  destY: number,
+  destWidth: number,
+  destHeight: number,
+  fullWidth: number,
+  fullHeight: number,
+  fromEndX: boolean,
+  fromEndY: boolean,
+  segmentIndexRef: { value: number }
+): void => {
+  if (destWidth <= 0 || destHeight <= 0 || fullWidth <= 0 || fullHeight <= 0) return;
+  const widthRatio = destWidth / fullWidth;
+  const heightRatio = destHeight / fullHeight;
+  const srcWidth = Math.max(1, sourceRect.width * widthRatio);
+  const srcHeight = Math.max(1, sourceRect.height * heightRatio);
+  const srcX = fromEndX ? sourceRect.x + sourceRect.width - srcWidth : sourceRect.x;
+  const srcY = fromEndY ? sourceRect.y + sourceRect.height - srcHeight : sourceRect.y;
+  pushSegment(
+    segments,
+    { x: srcX, y: srcY, width: srcWidth, height: srcHeight },
+    destX,
+    destY,
+    destWidth,
+    destHeight,
+    segmentIndexRef.value++
+  );
+};
+
+const drawRepeatedGrid = (
+  segments: StudioElementSegment[],
+  sourceRect: StudioElementRect,
+  destX: number,
+  destY: number,
+  targetWidth: number,
+  targetHeight: number,
+  unitWidth: number,
+  unitHeight: number,
+  segmentIndexRef: { value: number }
+): void => {
+  let offsetY = 0;
+  while (offsetY < targetHeight - 0.001) {
+    const drawSegmentHeight = Math.min(unitHeight, targetHeight - offsetY);
+    const srcHeight = Math.max(1, sourceRect.height * (drawSegmentHeight / unitHeight));
+    let offsetX = 0;
+    while (offsetX < targetWidth - 0.001) {
+      const drawSegmentWidth = Math.min(unitWidth, targetWidth - offsetX);
+      const srcWidth = Math.max(1, sourceRect.width * (drawSegmentWidth / unitWidth));
+      pushSegment(
+        segments,
+        { x: sourceRect.x, y: sourceRect.y, width: srcWidth, height: srcHeight },
+        destX + offsetX,
+        destY + offsetY,
+        drawSegmentWidth,
+        drawSegmentHeight,
+        segmentIndexRef.value++
+      );
+      offsetX += drawSegmentWidth;
+    }
+    offsetY += drawSegmentHeight;
+  }
+};
+
+export function buildStudioElementSpriteParts(element: any): StudioElementSegment[] {
+  const rectValue = readValue(element?.rect) || [0, 0, 0, 0];
+  const metrics = resolveStudioElementMetrics(element);
+  const normalizedScale = normalizeScale(readValue(element?.scale));
+  const scaleX = normalizedScale.x;
+  const scaleY = normalizedScale.y;
+  const rectangle = {
+    x: toFiniteNumber(rectValue[0], 0) ?? 0,
+    y: toFiniteNumber(rectValue[1], 0) ?? 0,
+    width: toFiniteNumber(rectValue[2], 0) ?? 0,
+    height: toFiniteNumber(rectValue[3], 0) ?? 0,
+  };
+  const normalizedRule = normalizeStudioElementDrawRule(readValue(element?.drawRule));
+
+  if (!normalizedRule) {
+    return [
+      {
+        key: "default",
+        x: metrics.drawX,
+        y: metrics.drawY,
+        width: metrics.drawWidth,
+        height: metrics.drawHeight,
+        sourceRect: rectangle,
+      },
+    ];
+  }
+
+  const segments: StudioElementSegment[] = [];
+  const segmentIndexRef = { value: 0 };
+
+  if (normalizedRule.type === "repeat-axis") {
+    const bodyRect = getSourceRect(rectangle, normalizedRule.rects.body);
+    if (!bodyRect) return buildStudioElementSpriteParts({ ...element, drawRule: null });
+    if (normalizedRule.axis === "x") {
+      drawRepeatedHorizontally(
+        segments,
+        bodyRect,
+        metrics.drawX,
+        metrics.drawY,
+        metrics.drawWidth,
+        metrics.drawHeight,
+        Math.max(1, bodyRect.width * scaleX),
+        segmentIndexRef
+      );
+    } else {
+      drawRepeatedVertically(
+        segments,
+        bodyRect,
+        metrics.drawX,
+        metrics.drawY,
+        metrics.drawWidth,
+        metrics.drawHeight,
+        Math.max(1, bodyRect.height * scaleY),
+        segmentIndexRef
+      );
+    }
+    return segments.length > 0 ? segments : buildStudioElementSpriteParts({ ...element, drawRule: null });
+  }
+
+  if (normalizedRule.type === "edge-repeat") {
+    const startRect = getSourceRect(rectangle, normalizedRule.rects.start);
+    const middleRect = getSourceRect(rectangle, normalizedRule.rects.middle);
+    const endRect = getSourceRect(rectangle, normalizedRule.rects.end);
+    if (!startRect || !middleRect || !endRect) return buildStudioElementSpriteParts({ ...element, drawRule: null });
+
+    if (normalizedRule.axis === "x") {
+      const startWidth = Math.max(1, startRect.width * scaleX);
+      const endWidth = Math.max(1, endRect.width * scaleX);
+      const fixedWidth = startWidth + endWidth;
+      if (fixedWidth <= metrics.drawWidth) {
+        pushSegment(segments, startRect, metrics.drawX, metrics.drawY, startWidth, metrics.drawHeight, segmentIndexRef.value++);
+        pushSegment(
+          segments,
+          endRect,
+          metrics.drawX + metrics.drawWidth - endWidth,
+          metrics.drawY,
+          endWidth,
+          metrics.drawHeight,
+          segmentIndexRef.value++
+        );
+        const middleTargetWidth = metrics.drawWidth - fixedWidth;
+        if (middleTargetWidth > 0) {
+          drawRepeatedHorizontally(
+            segments,
+            middleRect,
+            metrics.drawX + startWidth,
+            metrics.drawY,
+            middleTargetWidth,
+            metrics.drawHeight,
+            Math.max(1, middleRect.width * scaleX),
+            segmentIndexRef
+          );
+        }
+        return segments;
+      }
+      const ratio = metrics.drawWidth / fixedWidth;
+      const startDrawWidth = Math.max(0, startWidth * ratio);
+      const endDrawWidth = Math.max(0, metrics.drawWidth - startDrawWidth);
+      drawHorizontalSegment(
+        segments,
+        startRect,
+        metrics.drawX,
+        metrics.drawY,
+        startDrawWidth,
+        metrics.drawHeight,
+        startWidth,
+        false,
+        segmentIndexRef
+      );
+      drawHorizontalSegment(
+        segments,
+        endRect,
+        metrics.drawX + startDrawWidth,
+        metrics.drawY,
+        endDrawWidth,
+        metrics.drawHeight,
+        endWidth,
+        true,
+        segmentIndexRef
+      );
+      return segments;
+    }
+
+    const startHeight = Math.max(1, startRect.height * scaleY);
+    const endHeight = Math.max(1, endRect.height * scaleY);
+    const fixedHeight = startHeight + endHeight;
+    if (fixedHeight <= metrics.drawHeight) {
+      pushSegment(segments, startRect, metrics.drawX, metrics.drawY, metrics.drawWidth, startHeight, segmentIndexRef.value++);
+      pushSegment(
+        segments,
+        endRect,
+        metrics.drawX,
+        metrics.drawY + metrics.drawHeight - endHeight,
+        metrics.drawWidth,
+        endHeight,
+        segmentIndexRef.value++
+      );
+      const middleTargetHeight = metrics.drawHeight - fixedHeight;
+      if (middleTargetHeight > 0) {
+        drawRepeatedVertically(
+          segments,
+          middleRect,
+          metrics.drawX,
+          metrics.drawY + startHeight,
+          metrics.drawWidth,
+          middleTargetHeight,
+          Math.max(1, middleRect.height * scaleY),
+          segmentIndexRef
+        );
+      }
+      return segments;
+    }
+
+    const ratio = metrics.drawHeight / fixedHeight;
+    const startDrawHeight = Math.max(0, startHeight * ratio);
+    const endDrawHeight = Math.max(0, metrics.drawHeight - startDrawHeight);
+    drawVerticalSegment(
+      segments,
+      startRect,
+      metrics.drawX,
+      metrics.drawY,
+      metrics.drawWidth,
+      startDrawHeight,
+      startHeight,
+      false,
+      segmentIndexRef
+    );
+    drawVerticalSegment(
+      segments,
+      endRect,
+      metrics.drawX,
+      metrics.drawY + startDrawHeight,
+      metrics.drawWidth,
+      endDrawHeight,
+      endHeight,
+      true,
+      segmentIndexRef
+    );
+    return segments;
+  }
+
+  const cornerTL = getSourceRect(rectangle, normalizedRule.rects.cornerTL);
+  const cornerTR = getSourceRect(rectangle, normalizedRule.rects.cornerTR);
+  const cornerBL = getSourceRect(rectangle, normalizedRule.rects.cornerBL);
+  const cornerBR = getSourceRect(rectangle, normalizedRule.rects.cornerBR);
+  const edgeT = getSourceRect(rectangle, normalizedRule.rects.edgeT);
+  const edgeB = getSourceRect(rectangle, normalizedRule.rects.edgeB);
+  const edgeL = getSourceRect(rectangle, normalizedRule.rects.edgeL);
+  const edgeR = getSourceRect(rectangle, normalizedRule.rects.edgeR);
+  const center = getSourceRect(rectangle, normalizedRule.rects.center);
+  if (!cornerTL || !cornerTR || !cornerBL || !cornerBR || !edgeT || !edgeB || !edgeL || !edgeR || !center) {
+    return buildStudioElementSpriteParts({ ...element, drawRule: null });
+  }
+
+  const leftFixed = Math.max(1, Math.max(cornerTL.width, cornerBL.width, edgeL.width) * scaleX);
+  const rightFixed = Math.max(1, Math.max(cornerTR.width, cornerBR.width, edgeR.width) * scaleX);
+  const topFixed = Math.max(1, Math.max(cornerTL.height, cornerTR.height, edgeT.height) * scaleY);
+  const bottomFixed = Math.max(1, Math.max(cornerBL.height, cornerBR.height, edgeB.height) * scaleY);
+  const fixedWidth = leftFixed + rightFixed;
+  const fixedHeight = topFixed + bottomFixed;
+  const ratioX = fixedWidth > metrics.drawWidth ? metrics.drawWidth / fixedWidth : 1;
+  const ratioY = fixedHeight > metrics.drawHeight ? metrics.drawHeight / fixedHeight : 1;
+  const leftDraw = Math.max(0, leftFixed * ratioX);
+  const rightDraw = ratioX < 1 ? Math.max(0, metrics.drawWidth - leftDraw) : rightFixed;
+  const topDraw = Math.max(0, topFixed * ratioY);
+  const bottomDraw = ratioY < 1 ? Math.max(0, metrics.drawHeight - topDraw) : bottomFixed;
+  const middleWidth = Math.max(0, metrics.drawWidth - leftDraw - rightDraw);
+  const middleHeight = Math.max(0, metrics.drawHeight - topDraw - bottomDraw);
+  const leftX = metrics.drawX;
+  const middleX = metrics.drawX + leftDraw;
+  const rightX = metrics.drawX + metrics.drawWidth - rightDraw;
+  const topY = metrics.drawY;
+  const middleY = metrics.drawY + topDraw;
+  const bottomY = metrics.drawY + metrics.drawHeight - bottomDraw;
+
+  drawBoxSegment(segments, cornerTL, leftX, topY, leftDraw, topDraw, leftFixed, topFixed, false, false, segmentIndexRef);
+  drawBoxSegment(segments, cornerTR, rightX, topY, rightDraw, topDraw, rightFixed, topFixed, true, false, segmentIndexRef);
+  drawBoxSegment(segments, cornerBL, leftX, bottomY, leftDraw, bottomDraw, leftFixed, bottomFixed, false, true, segmentIndexRef);
+  drawBoxSegment(segments, cornerBR, rightX, bottomY, rightDraw, bottomDraw, rightFixed, bottomFixed, true, true, segmentIndexRef);
+
+  if (middleWidth > 0 && topDraw > 0) {
+    drawRepeatedHorizontally(segments, edgeT, middleX, topY, middleWidth, topDraw, Math.max(1, edgeT.width * scaleX), segmentIndexRef);
+  }
+  if (middleWidth > 0 && bottomDraw > 0) {
+    drawRepeatedHorizontally(
+      segments,
+      edgeB,
+      middleX,
+      bottomY,
+      middleWidth,
+      bottomDraw,
+      Math.max(1, edgeB.width * scaleX),
+      segmentIndexRef
+    );
+  }
+  if (middleHeight > 0 && leftDraw > 0) {
+    drawRepeatedVertically(segments, edgeL, leftX, middleY, leftDraw, middleHeight, Math.max(1, edgeL.height * scaleY), segmentIndexRef);
+  }
+  if (middleHeight > 0 && rightDraw > 0) {
+    drawRepeatedVertically(
+      segments,
+      edgeR,
+      rightX,
+      middleY,
+      rightDraw,
+      middleHeight,
+      Math.max(1, edgeR.height * scaleY),
+      segmentIndexRef
+    );
+  }
+  if (middleWidth > 0 && middleHeight > 0) {
+    drawRepeatedGrid(
+      segments,
+      center,
+      middleX,
+      middleY,
+      middleWidth,
+      middleHeight,
+      Math.max(1, center.width * scaleX),
+      Math.max(1, center.height * scaleY),
+      segmentIndexRef
+    );
+  }
+
+  return segments.length > 0 ? segments : buildStudioElementSpriteParts({ ...element, drawRule: null });
+}
+
+export function resolveStudioElementShadowCaster(
+  element: any,
+  metrics = resolveStudioElementMetrics(element),
+  options: StudioElementRenderOptions = {}
+): StudioElementShapeShadowStyle | null {
+  const lighting = resolveLighting(options);
+  if (!readValue(element?.hasShadow) && !hasAutoLightingSunShadows(lighting)) return null;
+  if (!shouldRenderLightingShadows(lighting)) return null;
+
+  const contact = resolveStudioElementShadowContact(metrics);
+  const light = resolveStudioElementShadowLight(lighting, metrics, contact);
+  if (!light) return null;
+
+  const budget = options.shadowBudget;
+  if (budget) {
+    if (budget.remaining <= 0) return null;
+    budget.remaining -= 1;
+  }
+
+  const height = Math.max(metrics.drawHeight * 1.18, metrics.hitboxHeight * metrics.hitboxScaleY * 2.2, 44);
+  const intensity = clamp(light.influence, 0, 1);
+
+  return {
+    enabled: true,
+    contactX: contact.x,
+    contactY: contact.y,
+    contactWidth: contact.width,
+    direction: light.direction,
+    height,
+    length: clamp(light.length, Math.max(22, height * 0.32), Math.max(115, height * 1.45)),
+    alpha: clamp(0.18 + intensity * 0.29, 0.18, 0.5),
+    blur: clamp(1.1 + height * 0.005, 1.2, 2.5),
+    widthScale: clamp(0.48 + intensity * 0.1, 0.46, 0.6),
+    contactAlpha: clamp(0.72 + intensity * 0.2, 0.72, 0.92),
+    contactBlur: clamp(0.7 + height * 0.002, 0.8, 1.35),
+    contactWidthScale: clamp(0.62 + intensity * 0.22, 0.62, 0.88),
+    shadowColor: resolveLightingShadowColor(lighting),
+  };
+}
+
+const resolveStudioElementShadowContact = (
+  metrics: StudioElementMetrics
+): { x: number; y: number; width: number } => {
+  const hitboxWidth = metrics.hitboxWidth * metrics.hitboxScaleX;
+  const hitboxHeight = metrics.hitboxHeight * metrics.hitboxScaleY;
+  const hitboxX = metrics.hitboxX * metrics.hitboxScaleX;
+  const hitboxY = metrics.hitboxY * metrics.hitboxScaleY;
+  return {
+    x: hitboxX + hitboxWidth / 2,
+    y: clamp(hitboxY + hitboxHeight, 1, metrics.drawHeight),
+    width: Math.max(4, hitboxWidth),
+  };
+};
+
+const normalizeDirection = (x: number, y: number): { x: number; y: number } | null => {
+  const length = Math.hypot(x, y);
+  if (!Number.isFinite(length) || length <= 0.001) return null;
+  return { x: x / length, y: y / length };
+};
+
+const resolveSunVector = (lighting: LightingState | null | undefined): { x: number; y: number } | null => {
+  const ambientLight = lighting?.shadows?.ambientLight;
+  if (ambientLight && ambientLight.enabled !== false) {
+    const ambientX = toFiniteNumber(ambientLight.x, null);
+    const ambientY = toFiniteNumber(ambientLight.y, null);
+    if (ambientX !== null && ambientY !== null) {
+      return { x: ambientX, y: ambientY };
+    }
+  }
+
+  const sun = lighting?.sun;
+  if (!sun || sun.enabled === false || (sun.intensity ?? 1) <= 0) return null;
+  return {
+    x: toFiniteNumber(sun.x, -0.45) ?? -0.45,
+    y: toFiniteNumber(sun.y, -1) ?? -1,
+  };
+};
+
+const resolveStudioElementShadowLight = (
+  lighting: LightingState | null | undefined,
+  metrics: StudioElementMetrics,
+  contact: { x: number; y: number; width: number }
+): { direction: { x: number; y: number }; influence: number; length: number } | null => {
+  const shadowWeight = clamp(toFiniteNumber(lighting?.sun?.shadowWeight, 1) ?? 1, 0, 4);
+  const sunVector = resolveSunVector(lighting);
+  if (sunVector) {
+    const direction = normalizeDirection(-sunVector.x, -sunVector.y);
+    if (direction) {
+      const sun = lighting?.sun;
+      const ambientLight = lighting?.shadows?.ambientLight;
+      const sunIntensity = clamp(toFiniteNumber(sun?.intensity, ambientLight?.intensity ?? 1) ?? 1, 0, 2);
+      const ambientLength = toFiniteNumber(ambientLight?.length, null);
+      const baseLength = ambientLength ?? 22 + sunIntensity * 25 * Math.max(0.7, shadowWeight);
+      return {
+        direction,
+        influence: clamp(0.44 + sunIntensity * 0.32 * Math.max(0.7, shadowWeight), 0.42, 0.86),
+        length: Math.max(baseLength, metrics.drawHeight * 0.56),
+      };
+    }
+  }
+
+  const influences: Array<{ direction: { x: number; y: number }; influence: number; length: number }> = [];
+  const contactWorldX = metrics.drawX + contact.x;
+  const contactWorldY = metrics.drawY + contact.y;
+  const falloffPower = clamp(toFiniteNumber(lighting?.shadows?.falloffPower, 0.85) ?? 0.85, 0.25, 6);
+  for (const spot of lighting?.spots ?? []) {
+    const spotX = toFiniteNumber(spot?.x, null);
+    const spotY = toFiniteNumber(spot?.y, null);
+    if (spotX === null || spotY === null) continue;
+    const radius = Math.max((toFiniteNumber(spot.radius, 180) ?? 180) * 12, 480);
+    const distanceX = contactWorldX - spotX;
+    const distanceY = contactWorldY - spotY;
+    const distance = Math.hypot(distanceX, distanceY);
+    const direction = normalizeDirection(distanceX, distanceY);
+    if (!direction || distance > radius) continue;
+    const falloff = Math.pow(clamp(1 - distance / radius, 0, 1), falloffPower);
+    const intensity = clamp(toFiniteNumber(spot.intensity, 1) ?? 1, 0, 2);
+    const influence = clamp(falloff * intensity, 0, 1.2);
+    if (influence <= 0.001) continue;
+    influences.push({
+      direction,
+      influence,
+      length: clamp(distance * metrics.drawHeight / 170, Math.max(24, metrics.drawHeight * 0.42), Math.max(120, metrics.drawHeight * 2.1)),
+    });
+  }
+
+  if (influences.length === 0) return null;
+  influences.sort((a, b) => b.influence - a.influence);
+  if (lighting?.shadows?.mode !== "blend2" || influences.length === 1) {
+    return influences[0];
+  }
+
+  const top = influences.slice(0, 2);
+  const total = top.reduce((sum, item) => sum + Math.max(0.001, item.influence), 0);
+  const blendedX = top.reduce((sum, item) => sum + item.direction.x * Math.max(0.001, item.influence), 0) / total;
+  const blendedY = top.reduce((sum, item) => sum + item.direction.y * Math.max(0.001, item.influence), 0) / total;
+  const direction = normalizeDirection(blendedX, blendedY);
+  if (!direction) return influences[0];
+  return {
+    direction,
+    influence: clamp(total / top.length, 0, 1.2),
+    length: top.reduce((sum, item) => sum + item.length * Math.max(0.001, item.influence), 0) / total,
+  };
+};
+
+const resolveLightingShadowColor = (lighting: LightingState | null | undefined): string => {
+  const value = lighting?.shadows?.shadowColor;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return `#${(value & 0xffffff).toString(16).padStart(6, "0")}`;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value;
+  }
+  return "#05070d";
+};
+
+const mapRange = (value: number, srcStart: number, srcSize: number, destStart: number, destSize: number): number => {
+  if (srcSize <= 0 || destSize <= 0) return destStart;
+  const ratio = clamp((value - srcStart) / srcSize, 0, 1);
+  return destStart + ratio * destSize;
+};
+
+const mapLocalPointToWorld = (
+  rectangle: StudioElementRect,
+  metrics: StudioElementMetrics,
+  rule: NormalizedDrawRule | null,
+  localX: number,
+  localY: number,
+  scaleX: number,
+  scaleY: number
+): { x: number; y: number } => {
+  const sourceWidth = Math.max(1, rectangle.width);
+  const sourceHeight = Math.max(1, rectangle.height);
+  const fallback = {
+    x: metrics.drawX + (clamp(localX, 0, sourceWidth) / sourceWidth) * metrics.drawWidth,
+    y: metrics.drawY + (clamp(localY, 0, sourceHeight) / sourceHeight) * metrics.drawHeight,
+  };
+
+  if (!rule) return fallback;
+
+  if (rule.type === "edge-repeat") {
+    const start = rule.rects.start;
+    const middle = rule.rects.middle;
+    const end = rule.rects.end;
+    if (!start || !middle || !end) return fallback;
+
+    if (rule.axis === "x") {
+      const startSrc = Math.max(1, start[2]);
+      const endSrc = Math.max(1, end[2]);
+      const fixedWidth = startSrc * scaleX + endSrc * scaleX;
+      const compressRatio = fixedWidth > metrics.drawWidth ? metrics.drawWidth / fixedWidth : 1;
+      const startDraw = startSrc * scaleX * compressRatio;
+      const endDraw = endSrc * scaleX * compressRatio;
+      const middleDraw = Math.max(0, metrics.drawWidth - startDraw - endDraw);
+      const middleSrc = Math.max(1, sourceWidth - startSrc - endSrc);
+
+      if (localX <= startSrc) {
+        return { x: mapRange(localX, 0, startSrc, metrics.drawX, Math.max(1, startDraw)), y: fallback.y };
+      }
+      if (localX >= sourceWidth - endSrc) {
+        return {
+          x: mapRange(localX, sourceWidth - endSrc, endSrc, metrics.drawX + metrics.drawWidth - endDraw, Math.max(1, endDraw)),
+          y: fallback.y,
+        };
+      }
+      return {
+        x: mapRange(localX, startSrc, middleSrc, metrics.drawX + startDraw, Math.max(1, middleDraw)),
+        y: fallback.y,
+      };
+    }
+
+    const startSrc = Math.max(1, start[3]);
+    const endSrc = Math.max(1, end[3]);
+    const fixedHeight = startSrc * scaleY + endSrc * scaleY;
+    const compressRatio = fixedHeight > metrics.drawHeight ? metrics.drawHeight / fixedHeight : 1;
+    const startDraw = startSrc * scaleY * compressRatio;
+    const endDraw = endSrc * scaleY * compressRatio;
+    const middleDraw = Math.max(0, metrics.drawHeight - startDraw - endDraw);
+    const middleSrc = Math.max(1, sourceHeight - startSrc - endSrc);
+
+    if (localY <= startSrc) {
+      return { x: fallback.x, y: mapRange(localY, 0, startSrc, metrics.drawY, Math.max(1, startDraw)) };
+    }
+    if (localY >= sourceHeight - endSrc) {
+      return {
+        x: fallback.x,
+        y: mapRange(localY, sourceHeight - endSrc, endSrc, metrics.drawY + metrics.drawHeight - endDraw, Math.max(1, endDraw)),
+      };
+    }
+    return {
+      x: fallback.x,
+      y: mapRange(localY, startSrc, middleSrc, metrics.drawY + startDraw, Math.max(1, middleDraw)),
+    };
+  }
+
+  if (rule.type !== "frame-9slice") return fallback;
+
+  const cornerTL = rule.rects.cornerTL;
+  const cornerTR = rule.rects.cornerTR;
+  const cornerBL = rule.rects.cornerBL;
+  const cornerBR = rule.rects.cornerBR;
+  const edgeT = rule.rects.edgeT;
+  const edgeB = rule.rects.edgeB;
+  const edgeL = rule.rects.edgeL;
+  const edgeR = rule.rects.edgeR;
+  if (!cornerTL || !cornerTR || !cornerBL || !cornerBR || !edgeT || !edgeB || !edgeL || !edgeR) return fallback;
+
+  const leftSrc = Math.max(1, Math.max(cornerTL[2], cornerBL[2], edgeL[2]));
+  const rightSrc = Math.max(1, Math.max(cornerTR[2], cornerBR[2], edgeR[2]));
+  const topSrc = Math.max(1, Math.max(cornerTL[3], cornerTR[3], edgeT[3]));
+  const bottomSrc = Math.max(1, Math.max(cornerBL[3], cornerBR[3], edgeB[3]));
+  const leftFixed = leftSrc * scaleX;
+  const rightFixed = rightSrc * scaleX;
+  const topFixed = topSrc * scaleY;
+  const bottomFixed = bottomSrc * scaleY;
+  const fixedWidth = leftFixed + rightFixed;
+  const fixedHeight = topFixed + bottomFixed;
+  const ratioX = fixedWidth > metrics.drawWidth ? metrics.drawWidth / fixedWidth : 1;
+  const ratioY = fixedHeight > metrics.drawHeight ? metrics.drawHeight / fixedHeight : 1;
+  const leftDraw = leftFixed * ratioX;
+  const rightDraw = ratioX < 1 ? Math.max(0, metrics.drawWidth - leftDraw) : rightFixed;
+  const topDraw = topFixed * ratioY;
+  const bottomDraw = ratioY < 1 ? Math.max(0, metrics.drawHeight - topDraw) : bottomFixed;
+  const middleSrcWidth = Math.max(1, sourceWidth - leftSrc - rightSrc);
+  const middleSrcHeight = Math.max(1, sourceHeight - topSrc - bottomSrc);
+  const middleDrawWidth = Math.max(0, metrics.drawWidth - leftDraw - rightDraw);
+  const middleDrawHeight = Math.max(0, metrics.drawHeight - topDraw - bottomDraw);
+
+  let mappedX = fallback.x;
+  if (localX <= leftSrc) {
+    mappedX = mapRange(localX, 0, leftSrc, metrics.drawX, Math.max(1, leftDraw));
+  } else if (localX >= sourceWidth - rightSrc) {
+    mappedX = mapRange(localX, sourceWidth - rightSrc, rightSrc, metrics.drawX + metrics.drawWidth - rightDraw, Math.max(1, rightDraw));
+  } else {
+    mappedX = mapRange(localX, leftSrc, middleSrcWidth, metrics.drawX + leftDraw, Math.max(1, middleDrawWidth));
+  }
+
+  let mappedY = fallback.y;
+  if (localY <= topSrc) {
+    mappedY = mapRange(localY, 0, topSrc, metrics.drawY, Math.max(1, topDraw));
+  } else if (localY >= sourceHeight - bottomSrc) {
+    mappedY = mapRange(localY, sourceHeight - bottomSrc, bottomSrc, metrics.drawY + metrics.drawHeight - bottomDraw, Math.max(1, bottomDraw));
+  } else {
+    mappedY = mapRange(localY, topSrc, middleSrcHeight, metrics.drawY + topDraw, Math.max(1, middleDrawHeight));
+  }
+
+  return { x: mappedX, y: mappedY };
+};
+
+const normalizeLightSpot = (value: any, rectangle: StudioElementRect): any => {
+  const defaults = {
+    enabled: false,
+    x: Math.round(rectangle.width / 2),
+    y: Math.round(rectangle.height / 2),
+    radius: 50,
+    intensity: 95,
+    flicker: true,
+    flickerSpeed: 13,
+    style: "normal",
+  };
+
+  if (!value || typeof value !== "object") return defaults;
+
+  const maxX = Math.max(0, rectangle.width - 1);
+  const maxY = Math.max(0, rectangle.height - 1);
+  const maxRadius = Math.max(8, Math.max(rectangle.width, rectangle.height) * 2);
+  const rawIntensity = toFiniteNumber(value.intensity, defaults.intensity) ?? defaults.intensity;
+
+  return {
+    enabled: typeof value.enabled === "boolean" ? value.enabled : true,
+    x: Math.round(clamp(toFiniteNumber(value.x, defaults.x) ?? defaults.x, 0, maxX)),
+    y: Math.round(clamp(toFiniteNumber(value.y, defaults.y) ?? defaults.y, 0, maxY)),
+    radius: Math.round(clamp(toFiniteNumber(value.radius, defaults.radius) ?? defaults.radius, 4, maxRadius)),
+    intensity: Number(clamp(rawIntensity <= 1 ? rawIntensity * 100 : rawIntensity, 0, 100).toFixed(2)),
+    flicker: typeof value.flicker === "boolean" ? value.flicker : defaults.flicker,
+    flickerSpeed: Math.round(clamp(toFiniteNumber(value.flickerSpeed, defaults.flickerSpeed) ?? defaults.flickerSpeed, 1, 60)),
+    style: normalizeLightStyle(typeof value.style === "string" ? value.style : typeof value.preset === "string" ? value.preset : defaults.style),
+  };
+};
+
+export function resolveStudioElementLightSpotOverlay(
+  element: any,
+  metrics = resolveStudioElementMetrics(element)
+): StudioElementLightSpotOverlay {
+  const rectValue = readValue(element?.rect) || [0, 0, 0, 0];
+  const rectangle = {
+    x: toFiniteNumber(rectValue[0], 0) ?? 0,
+    y: toFiniteNumber(rectValue[1], 0) ?? 0,
+    width: toFiniteNumber(rectValue[2], 0) ?? 0,
+    height: toFiniteNumber(rectValue[3], 0) ?? 0,
+  };
+  const normalizedScale = normalizeScale(readValue(element?.scale));
+  const normalizedRule = normalizeStudioElementDrawRule(readValue(element?.drawRule));
+  const lightSpot = normalizeLightSpot(readValue(element?.lightSpot), rectangle);
+  const mapped = mapLocalPointToWorld(rectangle, metrics, normalizedRule, lightSpot.x, lightSpot.y, normalizedScale.x, normalizedScale.y);
+  const lightScaleX = metrics.drawWidth / Math.max(1, rectangle.width);
+  const lightScaleY = metrics.drawHeight / Math.max(1, rectangle.height);
+  const lightRadius = Math.max(4, lightSpot.radius * ((lightScaleX + lightScaleY) / 2));
+  const style = normalizeLightStyle(lightSpot.style);
+
+  return {
+    id: [
+      "studio-element",
+      readValue(element?.id) ?? "unknown",
+      Math.round(metrics.drawX),
+      Math.round(metrics.drawY),
+      Math.round(lightSpot.x),
+      Math.round(lightSpot.y),
+    ].join(":"),
+    enabled: lightSpot.enabled,
+    x: mapped.x,
+    y: mapped.y,
+    radius: lightRadius,
+    renderRadius: lightRadius * lightStyleRadiusScale(style),
+    intensity: lightSpot.intensity / 100,
+    flicker: lightSpot.flicker,
+    flickerSpeed: lightSpot.flickerSpeed,
+    style,
+  };
+}
+
+const createLightingShadowRenderVersion = (lighting: LightingState | null | undefined): Record<string, unknown> => {
+  return {
+    autoSunShadows: hasAutoLightingSunShadows(lighting),
+    renderShadows: shouldRenderLightingShadows(lighting),
+    sun: lighting?.sun ?? null,
+    shadows: lighting?.shadows ?? null,
+    spots: lighting?.spots ?? null,
+  };
+};
+
+const createRenderVersion = (elements: any[], shadowLimit: number, lighting: LightingState | null | undefined): string => {
+  return JSON.stringify({
+    shadowLimit,
+    lighting: createLightingShadowRenderVersion(lighting),
+    elements: elements.map((element) => ({
+      id: readValue(element?.id),
+      image: readValue(element?.image),
+      rect: readValue(element?.rect),
+      drawIn: readValue(element?.drawIn),
+      hitbox: readValue(element?.hitbox),
+      zIndexOffset: readValue(element?.zIndexOffset),
+      hasShadow: readValue(element?.hasShadow),
+      scale: readValue(element?.scale),
+      drawRule: readValue(element?.drawRule),
+      lightSpot: readValue(element?.lightSpot),
+    })),
+  });
+};
+
+const isCanvasSource = (value: unknown): value is CanvasImageSource => {
+  if (!value || typeof value !== "object") return false;
+  return Boolean(
+    (typeof HTMLImageElement !== "undefined" && value instanceof HTMLImageElement) ||
+      (typeof HTMLCanvasElement !== "undefined" && value instanceof HTMLCanvasElement) ||
+      (typeof ImageBitmap !== "undefined" && value instanceof ImageBitmap) ||
+      (typeof OffscreenCanvas !== "undefined" && value instanceof OffscreenCanvas) ||
+      (typeof SVGImageElement !== "undefined" && value instanceof SVGImageElement) ||
+      (typeof HTMLVideoElement !== "undefined" && value instanceof HTMLVideoElement)
+  );
+};
+
+const getTextureCanvasSource = (texture: Texture): CanvasImageSource | null => {
+  const source = (texture as any)?.source;
+  const resource = source?.resource ?? source?._resource ?? source?.image ?? source?.canvas ?? source;
+  return isCanvasSource(resource) ? resource : null;
+};
+
+const drawFallbackShadowSilhouette = (ctx: CanvasRenderingContext2D, metrics: StudioElementMetrics): void => {
+  const contact = resolveStudioElementShadowContact(metrics);
+  const crownHeight = Math.max(8, contact.y * 0.72);
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.ellipse(metrics.drawWidth / 2, crownHeight * 0.48, metrics.drawWidth * 0.36, crownHeight * 0.46, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(contact.x - contact.width * 0.18, crownHeight * 0.55, Math.max(2, contact.width * 0.36), Math.max(2, contact.y - crownHeight * 0.55));
+};
+
+const measureStudioElementSilhouetteContact = (
+  sourceCanvas: HTMLCanvasElement,
+  style: StudioElementShapeShadowStyle,
+  sourceHeight: number
+): StudioElementShadowContactMetrics => {
+  const fallback: StudioElementShadowContactMetrics = {
+    x: style.contactX,
+    width: style.contactWidth,
+    minX: Math.max(0, style.contactX - style.contactWidth / 2),
+    maxX: Math.min(sourceCanvas.width, style.contactX + style.contactWidth / 2),
+    bandHeight: Math.round(clamp(sourceHeight * 0.14, 8, 30)),
+    measured: false,
+  };
+  const ctx = sourceCanvas.getContext("2d");
+  if (!ctx) return fallback;
+
+  const width = Math.max(1, Math.floor(sourceCanvas.width));
+  const height = Math.max(1, Math.min(Math.floor(sourceHeight), Math.floor(sourceCanvas.height)));
+  const bandHeight = Math.round(clamp(height * 0.14, 8, 30));
+  const startY = Math.max(0, height - bandHeight);
+
+  let data: ImageData;
+  try {
+    data = ctx.getImageData(0, startY, width, height - startY);
+  } catch (_error) {
+    return fallback;
+  }
+
+  let alphaTotal = 0;
+  let weightedX = 0;
+  let minX = width;
+  let maxX = -1;
+  const pixels = data.data;
+  for (let y = 0; y < data.height; y += 1) {
+    for (let x = 0; x < data.width; x += 1) {
+      const alpha = pixels[(y * data.width + x) * 4 + 3];
+      if (alpha <= 12) continue;
+      alphaTotal += alpha;
+      weightedX += (x + 0.5) * alpha;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+    }
+  }
+
+  if (alphaTotal <= 0 || maxX < minX) return fallback;
+
+  const measuredX = weightedX / alphaTotal;
+  const measuredWidth = maxX - minX + 1;
+  const maxOffset = Math.max(8, style.contactWidth * 0.55);
+
+  return {
+    x: clamp(measuredX, style.contactX - maxOffset, style.contactX + maxOffset),
+    width: clamp(
+      measuredWidth * 1.15,
+      Math.max(5, style.contactWidth * 0.38),
+      Math.max(8, style.contactWidth * 0.92)
+    ),
+    minX,
+    maxX,
+    bandHeight,
+    measured: true,
+  };
+};
+
+const createStudioElementSilhouetteCanvas = (
+  baseTexture: Texture,
+  parts: StudioElementSegment[],
+  metrics: StudioElementMetrics
+): HTMLCanvasElement | null => {
+  if (typeof document === "undefined") return null;
+
+  const width = Math.max(1, Math.ceil(metrics.drawWidth));
+  const height = Math.max(1, Math.ceil(metrics.drawHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.imageSmoothingEnabled = false;
+  const imageSource = getTextureCanvasSource(baseTexture);
+  let drewImage = false;
+  if (imageSource) {
+    for (const part of parts) {
+      try {
+        ctx.drawImage(
+          imageSource,
+          part.sourceRect.x,
+          part.sourceRect.y,
+          part.sourceRect.width,
+          part.sourceRect.height,
+          part.x - metrics.drawX,
+          part.y - metrics.drawY,
+          part.width,
+          part.height
+        );
+        drewImage = true;
+      } catch (_error) {
+        drewImage = false;
+        ctx.clearRect(0, 0, width, height);
+        break;
+      }
+    }
+  }
+
+  if (!drewImage) {
+    drawFallbackShadowSilhouette(ctx, metrics);
+  }
+
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalCompositeOperation = "source-over";
+  return canvas;
+};
+
+const createStudioElementShapeShadowSprite = (
+  baseTexture: Texture,
+  parts: StudioElementSegment[],
+  metrics: StudioElementMetrics,
+  style: StudioElementShapeShadowStyle,
+  label: string
+): Sprite | null => {
+  if (!style.enabled || typeof document === "undefined") return null;
+
+  const sourceCanvas = createStudioElementSilhouetteCanvas(baseTexture, parts, metrics);
+  if (!sourceCanvas) return null;
+
+  const sourceWidth = Math.max(1, Math.ceil(metrics.drawWidth));
+  const sourceHeight = Math.max(1, Math.floor(clamp(style.contactY, 1, metrics.drawHeight)));
+  const visualContact = measureStudioElementSilhouetteContact(sourceCanvas, style, sourceHeight);
+  const contactAnchorX = visualContact.x;
+  const projectionWidth = sourceWidth * style.widthScale;
+  const projectionScaleX = projectionWidth / sourceWidth;
+  const bottomLeft = {
+    x: contactAnchorX - contactAnchorX * projectionScaleX,
+    y: style.contactY,
+  };
+  const topLeft = {
+    x: bottomLeft.x + style.direction.x * style.length,
+    y: bottomLeft.y + style.direction.y * style.length,
+  };
+  const bottomRight = {
+    x: bottomLeft.x + projectionWidth,
+    y: bottomLeft.y,
+  };
+  const topRight = {
+    x: topLeft.x + projectionWidth,
+    y: topLeft.y,
+  };
+  const padding = Math.ceil(style.blur * 3 + 3);
+  const minX = Math.floor(Math.min(bottomLeft.x, topLeft.x, bottomRight.x, topRight.x));
+  const minY = Math.floor(Math.min(bottomLeft.y, topLeft.y, bottomRight.y, topRight.y));
+  const maxX = Math.ceil(Math.max(bottomLeft.x, topLeft.x, bottomRight.x, topRight.x));
+  const maxY = Math.ceil(Math.max(bottomLeft.y, topLeft.y, bottomRight.y, topRight.y));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, maxX - minX + padding * 2);
+  canvas.height = Math.max(1, maxY - minY + padding * 2);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  const localOffsetX = -minX + padding;
+  const localOffsetY = -minY + padding;
+  ctx.imageSmoothingEnabled = false;
+  ctx.filter = style.blur > 0 ? `blur(${style.blur}px)` : "none";
+  ctx.setTransform(
+    projectionWidth / sourceWidth,
+    0,
+    (bottomLeft.x - topLeft.x) / sourceHeight,
+    (bottomLeft.y - topLeft.y) / sourceHeight,
+    topLeft.x + localOffsetX,
+    topLeft.y + localOffsetY
+  );
+  ctx.drawImage(sourceCanvas, 0, 0, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.filter = "none";
+
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = style.shadowColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const contactCanvasX = contactAnchorX + localOffsetX;
+  const contactCanvasY = style.contactY + localOffsetY;
+  const contactWidth = Math.max(
+    4,
+    Math.min(
+      visualContact.width * style.contactWidthScale,
+      projectionWidth * 0.58,
+      style.contactWidth * 0.9
+    )
+  );
+  const contactHeight = Math.max(2, contactWidth * 0.14);
+  const contactOverlap = Math.max(2, contactHeight * 1.15);
+  const contactOriginY = contactCanvasY - contactOverlap * 0.72;
+  const farCanvasX = contactCanvasX + style.direction.x * style.length;
+  const farCanvasY = contactOriginY + style.direction.y * style.length;
+  const fade = ctx.createLinearGradient(contactCanvasX, contactOriginY, farCanvasX, farCanvasY);
+  fade.addColorStop(0, "rgba(0, 0, 0, 0.86)");
+  fade.addColorStop(0.16, "rgba(0, 0, 0, 0.58)");
+  fade.addColorStop(0.58, "rgba(0, 0, 0, 0.22)");
+  fade.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.globalCompositeOperation = "destination-in";
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.globalCompositeOperation = "destination-in";
+  ctx.fillStyle = "#000000";
+  const clipY = Math.max(0, Math.round(contactCanvasY - contactOverlap));
+  ctx.fillRect(0, clipY, canvas.width, canvas.height - clipY);
+  ctx.globalCompositeOperation = "source-over";
+
+  const footprintSourceX = Math.max(0, Math.floor(visualContact.minX));
+  const footprintSourceWidth = Math.max(1, Math.ceil(visualContact.maxX) - footprintSourceX);
+  const footprintSourceHeight = Math.max(1, Math.min(sourceHeight, visualContact.bandHeight));
+  const footprintHeight = Math.max(3, Math.min(12, footprintSourceHeight * 0.34));
+  const footprintWidth = Math.max(
+    contactWidth * 0.7,
+    Math.min(footprintSourceWidth * 1.08, style.contactWidth * 0.98)
+  );
+  const footprintX = contactCanvasX - footprintWidth / 2;
+  const footprintY = contactCanvasY - footprintHeight * 0.82;
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.filter = "blur(0.35px)";
+  ctx.globalAlpha = clamp(style.contactAlpha * 1.05, 0, 0.88);
+  ctx.drawImage(
+    sourceCanvas,
+    footprintSourceX,
+    sourceHeight - footprintSourceHeight,
+    footprintSourceWidth,
+    footprintSourceHeight,
+    footprintX,
+    footprintY,
+    footprintWidth,
+    footprintHeight
+  );
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = style.shadowColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.filter = style.contactBlur > 0 ? `blur(${style.contactBlur}px)` : "none";
+  ctx.globalAlpha = style.contactAlpha;
+  ctx.fillStyle = style.shadowColor;
+  ctx.beginPath();
+  ctx.ellipse(
+    contactCanvasX,
+    contactCanvasY - contactHeight * 0.16,
+    contactWidth * 0.54,
+    contactHeight,
+    0,
+    0,
+    Math.PI * 2
+  );
+  ctx.fill();
+  ctx.restore();
+
+  const coreWidth = Math.max(3, contactWidth * 0.24);
+  const coreHeight = Math.max(2, contactHeight * 0.48);
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.filter = "blur(0.8px)";
+  ctx.globalAlpha = clamp(style.contactAlpha * 0.92, 0, 0.72);
+  ctx.fillStyle = style.shadowColor;
+  ctx.beginPath();
+  ctx.ellipse(
+    contactCanvasX,
+    contactCanvasY - Math.max(0.5, coreHeight * 0.2),
+    coreWidth,
+    coreHeight,
+    0,
+    0,
+    Math.PI * 2
+  );
+  ctx.fill();
+  ctx.restore();
+
+  const footWidth = Math.max(2, contactWidth * 0.18);
+  const footHeight = Math.max(2, contactHeight * 0.62);
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.filter = "blur(0.45px)";
+  ctx.globalAlpha = clamp(style.contactAlpha * 1.1, 0, 0.84);
+  ctx.fillStyle = style.shadowColor;
+  ctx.beginPath();
+  ctx.ellipse(
+    contactCanvasX,
+    contactCanvasY - Math.max(0.75, footHeight * 0.48),
+    footWidth,
+    footHeight,
+    0,
+    0,
+    Math.PI * 2
+  );
+  ctx.fill();
+  ctx.restore();
+
+  const texture = Texture.from(canvas);
+  const sprite = new Sprite(texture);
+  sprite.label = `${label}:shape-shadow`;
+  sprite.x = minX - padding;
+  sprite.y = minY - padding;
+  sprite.alpha = style.alpha;
+  sprite.zIndex = -3;
+  sprite.eventMode = "none";
+  sprite.blendMode = "multiply";
+  (sprite as any).__studioShapeShadow = {
+    contactY: style.contactY,
+    contactX: style.contactX,
+    contactAlpha: style.contactAlpha,
+    visualContactX: contactAnchorX,
+    visualContactWidth: contactWidth,
+    visualContactMeasured: visualContact.measured,
+    contactOverlap,
+    footprintWidth,
+    footprintHeight,
+    direction: style.direction,
+    length: style.length,
+    projectionScaleX,
+    projectedContactX: bottomLeft.x + contactAnchorX * projectionScaleX,
+    sourceHeight,
+  };
+  return sprite;
+};
+
+export class StudioElementRenderer {
+  private textureCache = new Map<string, Promise<Texture>>();
+  private containers: PixiContainer[] = [];
+  private lightSpotIds = new Set<string>();
+  private lightSpotSprites: StudioElementLightSpotSprite[] = [];
+  private renderSerial = 0;
+  private renderVersion = "";
+  private shadowCasterCount = 0;
+
+  async renderElements(elements: any[], options: StudioElementRenderOptions = {}): Promise<PixiContainer[]> {
+    const shadowLimit = options.shadowCasterLimit ?? DEFAULT_SHADOW_CASTER_LIMIT;
+    const renderVersion = createRenderVersion(elements, shadowLimit, resolveLighting(options));
+    if (this.renderVersion === renderVersion) {
+      if (options.shadowBudget) {
+        options.shadowBudget.remaining = Math.max(0, options.shadowBudget.remaining - this.shadowCasterCount);
+      }
+      return this.containers;
+    }
+
+    const currentSerial = ++this.renderSerial;
+    const nextLightSpotIds = new Set<string>();
+    const nextContainers: PixiContainer[] = [];
+    let nextShadowCasterCount = 0;
+
+    for (const element of elements) {
+      const container = await this.createElementContainer(element, options, nextLightSpotIds);
+      if (currentSerial !== this.renderSerial) {
+        destroyContainers([container]);
+        return this.containers;
+      }
+      if ((container as any).__studioElementShadowCaster) {
+        nextShadowCasterCount += 1;
+      }
+      nextContainers.push(container);
+    }
+
+    if (currentSerial !== this.renderSerial) {
+      destroyContainers(nextContainers);
+      return this.containers;
+    }
+
+    this.replaceLightSpots(options.sceneMap, nextLightSpotIds);
+    destroyContainers(this.containers);
+    this.containers = nextContainers;
+    this.rebuildLightSpotSpriteIndex();
+    this.lightSpotIds = nextLightSpotIds;
+    this.renderVersion = renderVersion;
+    this.shadowCasterCount = nextShadowCasterCount;
+    return this.containers;
+  }
+
+  destroy(sceneMap?: any): void {
+    this.renderSerial += 1;
+    destroyContainers(this.containers);
+    this.containers = [];
+    this.lightSpotSprites = [];
+    this.renderVersion = "";
+    this.shadowCasterCount = 0;
+    this.lightSpotIds.forEach((id) => sceneMap?.removeLightSpot?.(id));
+    this.lightSpotIds.clear();
+  }
+
+  update(deltaTime: number): void {
+    if (this.lightSpotSprites.length === 0) return;
+    const safeDelta = clamp(toFiniteNumber(deltaTime, 16.67) ?? 16.67, 0, 120);
+
+    for (const light of this.lightSpotSprites) {
+      if (!light.sprite || light.sprite.destroyed) continue;
+
+      const flickerRatio = light.flicker ? clamp(light.flickerSpeed / 12, 0.5, 5) : 0.65;
+      light.phase += (safeDelta / 1000) * flickerRatio * light.waveSpeed;
+
+      if (light.flicker) {
+        const targetNoise = 0.84 + Math.random() * 0.24;
+        light.noise += (targetNoise - light.noise) * 0.22;
+      } else {
+        light.noise += (1 - light.noise) * 0.08;
+      }
+
+      const pulseWave = 1 + Math.sin(light.phase * Math.PI * 2) * light.pulseAmplitude;
+      const pulse = clamp(pulseWave * light.noise, 0.72, 1.32);
+      light.sprite.alpha = clamp(light.baseAlpha * pulse, 0, 1);
+    }
+  }
+
+  private async loadTexture(source: string): Promise<Texture> {
+    if (!source) return Texture.EMPTY;
+    const cached = this.textureCache.get(source);
+    if (cached) return cached;
+    const promise = Assets.load(source)
+      .then((texture) => (texture && texture.source ? texture : Texture.from(source)))
+      .catch(() => Texture.EMPTY);
+    this.textureCache.set(source, promise);
+    return promise;
+  }
+
+  private async createElementContainer(
+    element: any,
+    options: StudioElementRenderOptions,
+    lightSpotIds: Set<string>
+  ): Promise<PixiContainer> {
+    const image = readValue(element?.image) || "";
+    const baseTexture = await this.loadTexture(image);
+    const metrics = resolveStudioElementMetrics(element);
+    const container = new PixiContainer();
+    const createdTextures: Texture[] = [];
+    (container as any).__studioElementTextures = createdTextures;
+    container.x = Math.round(metrics.drawX);
+    container.y = Math.round(metrics.drawY);
+    container.zIndex = metrics.resolvedZIndex;
+    container.sortableChildren = true;
+    container.label = `StudioElement:${readValue(element?.id) ?? "element"}`;
+
+    const parts = buildStudioElementSpriteParts(element);
+    for (const part of parts) {
+      const texture = this.createSegmentTexture(baseTexture, part.sourceRect, `${container.label}:${part.key}`);
+      if (texture !== Texture.EMPTY) {
+        createdTextures.push(texture);
+      }
+      const sprite = new Sprite(texture);
+      sprite.x = part.x - metrics.drawX;
+      sprite.y = part.y - metrics.drawY;
+      sprite.width = part.width;
+      sprite.height = part.height;
+      sprite.roundPixels = true;
+      container.addChild(sprite);
+    }
+
+    const shadowCaster = resolveStudioElementShadowCaster(element, metrics, options);
+    if (shadowCaster) {
+      const shadowSprite = createStudioElementShapeShadowSprite(baseTexture, parts, metrics, shadowCaster, container.label ?? "StudioElement");
+      if (shadowSprite) {
+        if (shadowSprite.texture && shadowSprite.texture !== Texture.EMPTY) {
+          createdTextures.push(shadowSprite.texture);
+        }
+        container.addChild(shadowSprite);
+        (container as any).__studioElementShadowCaster = true;
+      }
+    }
+
+    this.addLightSpotSprite(container, element, metrics);
+    this.syncLightSpot(element, metrics, options.sceneMap, lightSpotIds);
+    return container;
+  }
+
+  private createSegmentTexture(baseTexture: Texture, sourceRect: StudioElementRect, label: string): Texture {
+    if (baseTexture === Texture.EMPTY || !baseTexture.source) return Texture.EMPTY;
+
+    const sourceWidth = Math.max(1, Math.floor(baseTexture.width || sourceRect.x + sourceRect.width));
+    const sourceHeight = Math.max(1, Math.floor(baseTexture.height || sourceRect.y + sourceRect.height));
+    const frameX = clamp(Math.round(sourceRect.x), 0, Math.max(0, sourceWidth - 1));
+    const frameY = clamp(Math.round(sourceRect.y), 0, Math.max(0, sourceHeight - 1));
+    const frameWidth = Math.max(1, Math.min(Math.round(sourceRect.width), sourceWidth - frameX));
+    const frameHeight = Math.max(1, Math.min(Math.round(sourceRect.height), sourceHeight - frameY));
+
+    return new Texture({
+      source: baseTexture.source,
+      frame: new Rectangle(frameX, frameY, frameWidth, frameHeight),
+      label,
+    });
+  }
+
+  private addLightSpotSprite(container: PixiContainer, element: any, metrics: StudioElementMetrics): void {
+    const overlay = resolveStudioElementLightSpotOverlay(element, metrics);
+    if (!overlay.enabled || overlay.intensity <= 0) return;
+
+    const texture = getLightSpotTexture(overlay.style);
+    const sprite = new Sprite(texture);
+    sprite.anchor.set(0.5);
+    sprite.x = overlay.x - metrics.drawX;
+    sprite.y = overlay.y - metrics.drawY;
+    sprite.width = overlay.renderRadius * 2;
+    sprite.height = overlay.renderRadius * 2;
+    sprite.alpha = clamp(overlay.intensity * 1.18, 0, 1);
+    sprite.zIndex = -2;
+    sprite.eventMode = "none";
+    sprite.blendMode = "add";
+    const pulse = lightStylePulse(overlay.style);
+    (sprite as any).__studioLightSpot = {
+      sprite,
+      baseAlpha: sprite.alpha,
+      flicker: overlay.flicker,
+      flickerSpeed: overlay.flickerSpeed,
+      pulseAmplitude: pulse.pulseAmplitude,
+      waveSpeed: pulse.waveSpeed,
+      phase: Math.random(),
+      noise: 1,
+    };
+    container.addChild(sprite);
+  }
+
+  private syncLightSpot(element: any, metrics: StudioElementMetrics, sceneMap: any, lightSpotIds: Set<string>): void {
+    if (!sceneMap) return;
+
+    const overlay = resolveStudioElementLightSpotOverlay(element, metrics);
+    if (!overlay.enabled) {
+      sceneMap.removeLightSpot?.(overlay.id);
+      return;
+    }
+
+    lightSpotIds.add(overlay.id);
+    sceneMap.addLightSpot?.(overlay.id, {
+      id: overlay.id,
+      x: overlay.x,
+      y: overlay.y,
+      radius: overlay.renderRadius,
+      intensity: overlay.intensity,
+      flicker: overlay.flicker,
+      flickerSpeed: overlay.flickerSpeed,
+    });
+  }
+
+  private replaceLightSpots(sceneMap: any, nextIds: Set<string>): void {
+    if (!sceneMap) return;
+    this.lightSpotIds.forEach((id) => {
+      if (!nextIds.has(id)) {
+        sceneMap.removeLightSpot?.(id);
+      }
+    });
+  }
+
+  private rebuildLightSpotSpriteIndex(): void {
+    const next: StudioElementLightSpotSprite[] = [];
+    const stack: any[] = [...this.containers];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (!current || current.destroyed) continue;
+      if (current.__studioLightSpot) {
+        next.push(current.__studioLightSpot);
+      }
+      if (Array.isArray(current.children)) {
+        stack.push(...current.children);
+      }
+    }
+    this.lightSpotSprites = next;
+  }
+}
+
+function destroyContainers(containers: PixiContainer[]): void {
+  for (const container of containers) {
+    if (!container || container.destroyed) continue;
+    const createdTextures = ((container as any).__studioElementTextures ?? []) as Texture[];
+    if (container.parent) {
+      container.parent.removeChild(container);
+    }
+    container.destroy({
+      children: true,
+      texture: false,
+      textureSource: false,
+      context: true,
+    });
+    for (const texture of createdTextures) {
+      if (texture && texture !== Texture.EMPTY && !texture.destroyed) {
+        texture.destroy(false);
+      }
+    }
+  }
+}

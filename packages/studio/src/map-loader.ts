@@ -1,10 +1,13 @@
 "use client";
 
-import MapComponent from "./components/draw-map.ce";
 import MapComponentV2 from "./components/draw-map-v2.ce";
 import { inject, RpgClientEngine } from "@rpgjs/client";
 import { createSpriteSheetObject, resolveAssetSource } from "./spritesheet-utils";
 import { getGameDataProvider, getStudioGameRuntimeConfig } from "./data-provider";
+import {
+  buildStudioTerrainCollisionPolygons,
+  createStudioTerrainRenderData,
+} from "./map-renderer";
 
 // Type definitions for better type safety
 interface GlobalConfig {
@@ -941,123 +944,21 @@ export const loadMap = async (mapId: string) => {
     finalHitboxes = mergeElementTilesetHitboxes(tilesetsById, elementsLow, finalHitboxes, fallbackElementTilesetId)
   }
 
-  /**
-   * Generates collision hitboxes from Wang tiles terrain data
-   * 
-   * @param terrain - 2D array containing tile IDs for each position
-   * @param wangsets - Parsed Wang sets configuration containing collision information
-   * @param mapWidth - Width of the map in tiles
-   * @param mapHeight - Height of the map in tiles
-   * @param tileWidth - Width of each tile in pixels (default: 48)
-   * @param tileHeight - Height of each tile in pixels (default: 48)
-   * @returns Array of collision hitboxes
-   * 
-   * @example
-   * ```ts
-   * const collisionHitboxes = generateCollisionHitboxes(terrain, wangsets, 20, 15, 48, 48);
-   * ```
-   */
-  const generateCollisionHitboxes = (
-    terrain: number[][],
-    wangsets: any[],
-    mapWidth: number,
-    mapHeight: number,
-    tileWidth: number = 48,
-    tileHeight: number = 48
-  ): any[] => {
-    if (!terrain || !wangsets || wangsets.length === 0) {
-      return [];
-    }
-
-    // Create a map of tile ID to collision information from wangsets
-    const collisionMap = new Map<number, boolean>();
-    
-    wangsets.forEach(wangset => {
-      if (wangset.wangcolors && Array.isArray(wangset.wangcolors)) {
-        wangset.wangcolors.forEach((wangcolor: any) => {
-          if (wangcolor.tile !== undefined && wangcolor.tile !== -1) {
-            collisionMap.set(wangcolor.tile, wangcolor.collision === true);
-          }
-        });
-      }
-    });
-
-    const collisionHitboxes: any[] = [];
-
-    for (let y = 0; y < mapHeight; y++) {
-      for (let x = 0; x < mapWidth; x++) {
-        // Get tile ID from terrain array
-        const tileId = terrain[y]?.[x];
-        
-        if (tileId !== undefined && tileId !== -1 && collisionMap.has(tileId)) {
-          const hasCollision = collisionMap.get(tileId);
-          
-          if (hasCollision) {
-            const pixelX = x * tileWidth;
-            const pixelY = y * tileHeight;
-            
-            const hitbox = {
-              id: `terrain_collision_${x}_${y}`,
-              x: pixelX,
-              y: pixelY,
-              width: tileWidth,
-              height: tileHeight,
-              properties: {
-                type: "terrain_collision",
-                tileX: x,
-                tileY: y,
-                tileId: tileId,
-                source: "wang_terrain"
-              },
-            };
-
-            collisionHitboxes.push(hitbox);
-          }
-        }
-      }
-    }
-
-    return collisionHitboxes;
-  };
-
-  // Parse wangsets and generate collision hitboxes if baseTerrain exists
-  let wangsetsCollisionHitboxes: any[] = [];
   const terrainByTileset = isV2
     ? (typeof map.terrainByTileset === 'string' ? JSON.parse(map.terrainByTileset ?? '[]') : (map.terrainByTileset || []))
     : []
-  const resolveTilesetId = (value: any): string => {
-    return toIdentifierString(value)
-  }
-
-  if (map.params.baseTerrain && map.params.baseTerrain.metadata && map.params.baseTerrain.metadata.wangsets) {
-    try {
-      const wangsets = JSON.parse(map.params.baseTerrain.metadata.wangsets);
-      
-      if (isV2 && map.terrain) {
-        let terrain = JSON.parse(map.terrain ?? '[]');
-        const primaryTerrainId = resolveTilesetId(map.params.primaryTerrainTileset) || resolveTilesetId(map.params.baseTerrain);
-        if (primaryTerrainId && Array.isArray(terrainByTileset) && terrainByTileset.length > 0) {
-          const primaryLayer = terrainByTileset.find((layer: any) => resolveTilesetId(layer.tilesetId || layer.id) === primaryTerrainId);
-          if (primaryLayer?.tiles) {
-            terrain = primaryLayer.tiles;
-          }
-        }
-        wangsetsCollisionHitboxes = generateCollisionHitboxes(
-          terrain,
-          wangsets,
-          map.params.width,
-          map.params.height,
-          48,
-          48
-        );
-      }
-    } catch (error) {
-      console.warn('Failed to parse wangsets for collision detection:', error);
-    }
-  }
-  
-  // Merge Wang tiles collision hitboxes with existing hitboxes
-  const allHitboxes = [...finalHitboxes, ...wangsetsCollisionHitboxes];
+  const terrainCollisionPolygons = isV2 ? buildStudioTerrainCollisionPolygons({
+    ...map,
+    terrainByTileset,
+  }) : [];
+  const terrainRenderData = isV2 ? createStudioTerrainRenderData({
+    ...map,
+    terrainByTileset,
+  }) : null;
+  const allHitboxes = [
+    ...(Array.isArray(finalHitboxes) ? finalHitboxes : []),
+    ...terrainCollisionPolygons,
+  ];
 
   firstMapLoaded = true;
 
@@ -1072,6 +973,7 @@ export const loadMap = async (mapId: string) => {
       elementsHigh: isV2 ? mergedElementsHigh : [],
       terrain: isV2 ? JSON.parse(map.terrain ?? '[]') : [],
       terrainByTileset: isV2 ? terrainByTileset : [],
+      terrainRenderData,
     },
     hitboxes: allHitboxes,
     component: MapComponentV2,

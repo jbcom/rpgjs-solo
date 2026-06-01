@@ -2,8 +2,7 @@
     <Container>
         @for (spritePart of spriteParts) {
             <Sprite
-                image={image}
-                rectangle={spritePart.rectangle}
+                sheet={spritePart.sheet}
                 x={spritePart.x}
                 y={spritePart.y}
                 width={spritePart.width}
@@ -119,6 +118,8 @@ const scaleValue = readValue(scale)
 const drawRuleValue = readValue(drawRule)
 const lightSpotValue = readValue(lightSpot)
 const resolvedHasShadow = Boolean(readValue(hasShadow))
+const imageValue = readValue(image)
+const elementIdValue = readValue(id) ?? "element"
 
 const rectangle = {
     x: rectValue[0],
@@ -261,20 +262,56 @@ const getRuleSourceRect = (localRect) => {
     }
 }
 
+const staticFrameAnimations = () => [[{ time: 0, frameX: 0, frameY: 0 }]]
+
+const createStaticFrameSheet = (key, sourceRect) => ({
+    definition: {
+        id: [
+            "studio-element",
+            elementIdValue,
+            key,
+            sourceRect.x,
+            sourceRect.y,
+            sourceRect.width,
+            sourceRect.height
+        ].join("-"),
+        image: imageValue,
+        width: sourceRect.x + sourceRect.width,
+        height: sourceRect.y + sourceRect.height,
+        framesWidth: 1,
+        framesHeight: 1,
+        rectWidth: sourceRect.width,
+        rectHeight: sourceRect.height,
+        offset: {
+            x: sourceRect.x,
+            y: sourceRect.y
+        },
+        textures: {
+            default: {
+                animations: staticFrameAnimations
+            }
+        }
+    },
+    playing: "default"
+})
+
 const pushSegment = (segments, sourceRect, x, y, width, height, segmentIndex) => {
     if (!sourceRect || width <= 0 || height <= 0) return
+    const key = `${segmentIndex}_${Math.round(x)}_${Math.round(y)}`
+    const segmentRectangle = {
+        x: sourceRect.x,
+        y: sourceRect.y,
+        width: sourceRect.width,
+        height: sourceRect.height
+    }
     segments.push({
-        key: `${segmentIndex}_${Math.round(x)}_${Math.round(y)}`,
+        key,
         x,
         y,
         width,
         height,
-        rectangle: {
-            x: sourceRect.x,
-            y: sourceRect.y,
-            width: sourceRect.width,
-            height: sourceRect.height
-        }
+        rectangle: segmentRectangle,
+        sheet: createStaticFrameSheet(key, segmentRectangle)
     })
 }
 
@@ -841,7 +878,8 @@ const fallbackSpriteParts = [
         y: drawY,
         width: drawWidth,
         height: drawHeight,
-        rectangle
+        rectangle,
+        sheet: createStaticFrameSheet("default", rectangle)
     }
 ]
 

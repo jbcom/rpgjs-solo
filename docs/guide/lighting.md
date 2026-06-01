@@ -124,15 +124,15 @@ Ambient lighting fields map to CanvasEngine `NightAmbient` props: `darkness` and
 
 ## Shadows
 
-Set `lighting.shadows.enabled` to `true` to enable character shadows. The engine automatically marks character sprites as shadow casters and derives default shadow sizing from the sprite bounds and hitbox.
+Set `lighting.sun` to enable sun-driven shadows automatically. The engine automatically marks character sprites as shadow casters and derives default shadow sizing from the sprite bounds and hitbox. Use `lighting.shadows.enabled: false` to explicitly disable shadows from the sun.
 
 ```ts
 map.patchLighting({
   sun: {
-    x: -500,
-    y: -700,
+    x: -0.45,
+    y: -1,
     z: 520,
-    intensity: 0.8
+    intensity: 0.95
   },
   shadows: {
     enabled: true,
@@ -141,10 +141,11 @@ map.patchLighting({
     scanHz: 8,
     cullToViewport: true,
     minInfluence: 0.16,
-    falloffPower: 1.2,
-    ambientLight: { x: -0.18, y: -1, z: 420, intensity: 0.18, shadowWeight: 0.75 }
+    falloffPower: 1.2
   }
 })
 ```
 
-Map light spots affect shadows even when the map is not in night mode. Local spots, including Studio element `lightSpot` entries, enable `SpriteShadows` with default shadow options so torch-lit Studio maps do not need a separate `lighting.shadows` block. `ambientLight` provides a directional baseline shadow for sprites outside point light radius; set it to `null` or `{ enabled: false }` to disable it. In Studio maps, an element with a `lightSpot` is automatically registered as a local light spot, then used by `NightAmbient` when night is active and by `SpriteShadows` whenever the spot exists.
+Map light spots affect shadows even when the map is not in night mode. Sun shadows are rendered as a directional ambient source, so sprite, character, and Studio element shadows keep the same projection across the map instead of changing with distance. Spot lights are still passed as point lights to `SpriteShadows` for character shadows, so nearby torches or element `lightSpot` entries can pull character shadows opposite to the local source according to intensity, radius, and `shadowWeight`. Studio element shadows keep the sun angle whenever an active sun exists, which keeps trees and props visually aligned across the map. `ambientLight` overrides the derived sun direction; set it to `null` or `{ enabled: false }` to disable that directional baseline. In Studio maps, an element with a `lightSpot` is automatically registered as a local light spot, then used by `NightAmbient` when night is active and by shadows whenever the spot exists.
+
+For sun-driven shadows, the default sun behaves like a directional top-left light so sprite shadows project toward the bottom-right with minimal distance variation. Studio v2 rerenders element shadows when map lighting changes. Studio elements use cached Pixi shadow textures projected from the element sprite silhouette and clipped around the bottom of the hitbox, so the cast shadow follows the object shape instead of a generic blurred circle. The projected tail is tuned shorter than a low-sun cast shadow and the contact occlusion is anchored from the opaque pixels at the base of the sprite, including a compressed footprint from the sprite base with a small overlap behind the sprite so trunks and props stay visually attached to the ground without a large circular blob. Studio v2 renders terrain wall shadows as cached Pixi sprites generated from the bottom of each wall face, with a solid contact base and a softer projected tail. These wall shadows do not use `SpriteShadows`, so large wall shapes do not become dynamic shadow casters. Studio elements receive automatic sun shadows even when generated map data has `hasShadow: false`.
