@@ -31,7 +31,7 @@
     import { computed, effect, mount, signal, tick } from 'canvasengine'
     import { Weather } from "@canvasengine/presets";
     import { EventLayerComponent, RpgClientEngine, inject } from "@rpgjs/client";
-    import { Container as PixiContainer } from "pixi.js";
+    import { Container as PixiContainer, Graphics } from "pixi.js";
     import StudioTerrainMap from '../map-renderer/components/studio-terrain-map.ce'
     import { StudioTerrainWallOcclusionRenderer, StudioTerrainWallShadowRenderer } from '../map-renderer/terrain-renderer/terrain-chunk-renderer'
     import { StudioElementRenderer } from '../map-renderer/studio-element-renderer'
@@ -44,21 +44,41 @@
     const terrainWallShadowWorld = new PixiContainer()
     const elementsAlwaysLowWorld = new PixiContainer()
     const elementsHighWorld = new PixiContainer()
+    const terrainWallShadowMask = new Graphics()
+    const elementsAlwaysLowMask = new Graphics()
+    const eventLayerMask = new Graphics()
+    const elementsHighMask = new Graphics()
     terrainWallShadowWorld.sortableChildren = true
     elementsAlwaysLowWorld.sortableChildren = true
     elementsHighWorld.sortableChildren = true
-    const terrainWallShadowPixiChildren = [terrainWallShadowWorld]
-    const elementsAlwaysLowPixiChildren = [elementsAlwaysLowWorld]
-    const elementsHighPixiChildren = [elementsHighWorld]
+    terrainWallShadowWorld.mask = terrainWallShadowMask
+    elementsAlwaysLowWorld.mask = elementsAlwaysLowMask
+    elementsHighWorld.mask = elementsHighMask
+    const terrainWallShadowPixiChildren = [terrainWallShadowWorld, terrainWallShadowMask]
+    const elementsAlwaysLowPixiChildren = [elementsAlwaysLowWorld, elementsAlwaysLowMask]
+    const elementsHighPixiChildren = [elementsHighWorld, elementsHighMask]
     let terrainWallShadowChildren = []
     let elementsAlwaysLowChildren = []
     const terrainWallOcclusionChildren = signal([])
     const elementsLowPixiChildren = signal([])
+    let eventLayerMaskedChildren = []
     let elementsHighChildren = []
-    const eventLayerPixiChildren = computed(() => [
-      ...elementsLowPixiChildren(),
-      ...terrainWallOcclusionChildren()
-    ])
+    const eventLayerPixiChildren = computed(() => {
+      const children = [
+        ...elementsLowPixiChildren(),
+        ...terrainWallOcclusionChildren()
+      ]
+      eventLayerMaskedChildren.forEach((child) => {
+        if (!children.includes(child) && child.mask === eventLayerMask) {
+          child.mask = null
+        }
+      })
+      children.forEach((child) => {
+        child.mask = eventLayerMask
+      })
+      eventLayerMaskedChildren = children
+      return [eventLayerMask, ...children]
+    })
     const terrainWallOcclusionRenderer = new StudioTerrainWallOcclusionRenderer()
     const terrainWallShadowRenderer = new StudioTerrainWallShadowRenderer()
     const elementsAlwaysLowRenderer = new StudioElementRenderer()
@@ -90,6 +110,21 @@
         }
         world.addChild(child)
       })
+    }
+
+    const updateMapMask = (mask, bounds) => {
+      mask.clear()
+      mask.rect(0, 0, bounds.width, bounds.height)
+      mask.fill(0xffffff)
+    }
+
+    const clearEventLayerMasks = () => {
+      eventLayerMaskedChildren.forEach((child) => {
+        if (child.mask === eventLayerMask) {
+          child.mask = null
+        }
+      })
+      eventLayerMaskedChildren = []
     }
 
     const tilesetImage = computed(() => {
@@ -142,6 +177,7 @@
         terrainWallOcclusionChildren.set([])
         elementsAlwaysLowChildren = []
         elementsLowPixiChildren.set([])
+        clearEventLayerMasks()
         elementsHighChildren = []
         syncPixiWorldChildren(terrainWallShadowWorld, terrainWallShadowChildren)
         syncPixiWorldChildren(elementsAlwaysLowWorld, elementsAlwaysLowChildren)
@@ -422,6 +458,27 @@
     const scale = computed(() => {
       const params = data().params
       return params?.scale || 1
+    })
+
+    const mapBounds = computed(() => {
+      const mapData = map()
+      const renderData = data()?.terrainRenderData
+      const width =
+        Number(renderData?.width) ||
+        Math.max(1, Math.floor(Number(mapData?.width) || 50)) * (Number(mapData?.tilewidth) || 48)
+      const height =
+        Number(renderData?.height) ||
+        Math.max(1, Math.floor(Number(mapData?.height) || 50)) * (Number(mapData?.tileheight) || 48)
+
+      return { width, height }
+    })
+
+    effect(() => {
+      const bounds = mapBounds()
+      updateMapMask(terrainWallShadowMask, bounds)
+      updateMapMask(elementsAlwaysLowMask, bounds)
+      updateMapMask(eventLayerMask, bounds)
+      updateMapMask(elementsHighMask, bounds)
     })
 
     const elementsAlwaysLow = computed(() => data().elementsAlwaysLow || [])
