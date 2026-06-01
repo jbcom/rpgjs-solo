@@ -1,5 +1,12 @@
 # @rpgjs/client
 
+## 5.0.0-beta.15
+
+### Patch Changes
+
+- dba133e: Queue early changeMap packets until the client has finished loading modules and GUI definitions.
+  - @rpgjs/server@5.0.0-beta.15
+
 ## 5.0.0-beta.14
 
 ### Patch Changes

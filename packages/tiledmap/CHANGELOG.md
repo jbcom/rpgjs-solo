@@ -1,5 +1,14 @@
 # @rpgjs/tiledmap
 
+## 5.0.0-beta.15
+
+### Patch Changes
+
+- Updated dependencies [dba133e]
+  - @rpgjs/client@5.0.0-beta.15
+  - @rpgjs/server@5.0.0-beta.15
+  - @rpgjs/vite@5.0.0-beta.15
+
 ## 5.0.0-beta.14
 
 ### Patch Changes

@@ -32,6 +32,7 @@
   },
   "changesets": [
     "bright-battles-move",
+    "fuzzy-maps-wait",
     "next-beta-latest",
     "sharp-plates-push"
   ]
