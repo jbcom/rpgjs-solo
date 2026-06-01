@@ -213,6 +213,8 @@ export class RpgClientEngine<T = any> {
   private mapTransitionInProgress = false;
   private currentMapRoomId?: string;
   private socketListenersInitialized = false;
+  private clientReadyForMapChanges = false;
+  private pendingMapChanges: any[] = [];
   
   // Store subscriptions and event listeners for cleanup
   private tickSubscriptions: any[] = [];
@@ -390,6 +392,8 @@ export class RpgClientEngine<T = any> {
     this.hooks.callHooks("client-sprite-load", this).subscribe();
 
     await lastValueFrom(this.hooks.callHooks("client-engine-onStart", this));
+    this.clientReadyForMapChanges = true;
+    this.flushPendingMapChanges();
 
     // wondow is resize
     this.resizeHandler = () => {
@@ -594,10 +598,11 @@ export class RpgClientEngine<T = any> {
     });
 
     this.webSocket.on("changeMap", (data) => {
-      const nextMapId = typeof data?.mapId === "string" ? data.mapId : undefined;
-      this.beginMapTransfer(nextMapId);
-      const transferToken = typeof data?.transferToken === "string" ? data.transferToken : undefined;
-      this.loadScene(data.mapId, transferToken);
+      if (!this.clientReadyForMapChanges) {
+        this.pendingMapChanges.push(data);
+        return;
+      }
+      this.handleChangeMap(data);
     });
 
     this.webSocket.on("showComponentAnimation", (data) => {
@@ -793,6 +798,19 @@ export class RpgClientEngine<T = any> {
     const packets = this.pendingSyncPackets;
     this.pendingSyncPackets = [];
     packets.forEach((packet) => this.applySyncPacket(packet));
+  }
+
+  private flushPendingMapChanges() {
+    const packets = this.pendingMapChanges;
+    this.pendingMapChanges = [];
+    packets.forEach((packet) => this.handleChangeMap(packet));
+  }
+
+  private handleChangeMap(data: any) {
+    const nextMapId = typeof data?.mapId === "string" ? data.mapId : undefined;
+    this.beginMapTransfer(nextMapId);
+    const transferToken = typeof data?.transferToken === "string" ? data.transferToken : undefined;
+    this.loadScene(data.mapId, transferToken);
   }
 
   private applySyncPacket(data: any) {
