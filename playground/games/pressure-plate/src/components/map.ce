@@ -1,0 +1,32 @@
+<Container>
+  <Rect width={720} height={480} color="#f6f7f2" />
+  <Rect x={32} y={32} width={656} height={416} color="#ffffff" />
+  <Rect x={32} y={32} width={656} height={2} color="#9aa7a0" />
+  <Rect x={32} y={446} width={656} height={2} color="#9aa7a0" />
+  <Rect x={32} y={32} width={2} height={416} color="#9aa7a0" />
+  <Rect x={686} y={32} width={2} height={416} color="#9aa7a0" />
+
+  @for (line of gridLines) {
+    <Rect x={line.x} y={32} width={1} height={416} color="#e1e7e2" alpha={0.7} />
+    <Rect x={32} y={line.y} width={656} height={1} color="#e1e7e2" alpha={0.7} />
+  }
+
+  <Text x={44} y={44} text="Pressure Plate" color="#17201b" size={18} fontFamily="Arial" />
+  <Text x={44} y={72} text="Push the stone onto the plate to open the door." color="#405047" size={13} fontFamily="Arial" />
+  <Text x={44} y={94} text="The plate writes a shared map variable; the door reacts in onChanges." color="#59675f" size={12} fontFamily="Arial" />
+
+  <Rect x={496} y={128} width={118} height={56} color="#f1f5f9" />
+  <Text x={510} y={146} text="Door state" color="#29332e" size={13} fontFamily="Arial" />
+  <Text x={510} y={166} text="from map variable" color="#58645e" size={11} fontFamily="Arial" />
+
+  <EventLayerComponent />
+</Container>
+
+<script>
+  import { EventLayerComponent } from "@rpgjs/client";
+
+  const gridLines = Array.from({ length: 19 }, (_, index) => ({
+    x: 64 + index * 32,
+    y: 64 + index * 32,
+  }));
+</script>

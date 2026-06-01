@@ -199,6 +199,10 @@ export interface EventHooks {
   onAction?: (this: RpgEvent, player: RpgPlayer) => void;
   /** Called when a player touches this event */
   onPlayerTouch?: (this: RpgEvent, player: RpgPlayer) => void;
+  /** Called when this event starts touching a player or another event */
+  onTouch?: (this: RpgEvent, other: RpgPlayer | RpgEvent, context: RpgTouchContext) => void | Promise<void>;
+  /** Called when this event stops touching a player or another event */
+  onTouchEnd?: (this: RpgEvent, other: RpgPlayer | RpgEvent, context: RpgTouchContext) => void | Promise<void>;
   /** Called when a player enters a shape attached to the event */
   onInShape?: (this: RpgEvent, zone: RpgShape, player: RpgPlayer) => void;
   /** Called when a player exits a shape attached to the event */
@@ -207,6 +211,16 @@ export interface EventHooks {
   onDetectInShape?: (this: RpgEvent, player: RpgPlayer, shape: RpgShape) => void;
   /** Called when a player is detected exiting a detection shape attached to the event */
   onDetectOutShape?: (this: RpgEvent, player: RpgPlayer, shape: RpgShape) => void;
+}
+
+export interface RpgTouchContext {
+  self: RpgEvent;
+  other: RpgPlayer | RpgEvent;
+  otherType: "player" | "event";
+  player?: RpgPlayer;
+  phase: "start" | "end";
+  pairId: string;
+  map: RpgMap;
 }
 
 /** Type for event class constructor */
@@ -335,6 +349,13 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   database = signal({});
 
+  variables = type(
+    signal<Record<string, any>>({}) as never,
+    "variables",
+    { persist: true },
+    this as never
+  ) as unknown as ReturnType<typeof signal<Record<string, any>>>;
+
   /** 
    * Array of map configurations - can contain MapOptions objects or instances of map classes
    * 
@@ -408,6 +429,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   private _eventOwnerById: Map<string, string> = new Map();
   /** Runtime registry of spawned scenario event ids by player id */
   private _scenarioEventIdsByPlayer: Map<string, Set<string>> = new Map();
+  private _syncChangesDepth = 0;
   projectiles = new RpgMapProjectiles(this);
 
   autoSync: boolean = true;
@@ -761,6 +783,33 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       return zA !== zB;
     };
 
+    const buildPairId = (entityA: any, entityB: any): string => {
+      return entityA.uuid < entityB.uuid
+        ? `${entityA.uuid}-${entityB.uuid}`
+        : `${entityB.uuid}-${entityA.uuid}`;
+    };
+
+    const dispatchTouch = (
+      self: RpgEvent,
+      other: RpgPlayer | RpgEvent,
+      otherType: "player" | "event",
+      phase: "start" | "end",
+      pairId: string,
+      player?: RpgPlayer,
+    ) => {
+      const context: RpgTouchContext = {
+        self,
+        other,
+        otherType,
+        player,
+        phase,
+        pairId,
+        map: this,
+      };
+      const method = phase === "start" ? "onTouch" : "onTouchEnd";
+      void self.execMethod(method, [other, context]);
+    };
+
     // Listen to collision enter events
     this.physic.getEvents().onCollisionEnter((collision) => {
       const entityA = collision.entityA;
@@ -773,9 +822,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       }
 
       // Create a unique key for this collision pair
-      const collisionKey = entityA.uuid < entityB.uuid
-        ? `${entityA.uuid}-${entityB.uuid}`
-        : `${entityB.uuid}-${entityA.uuid}`;
+      const collisionKey = buildPairId(entityA, entityB);
 
       // Skip if we've already processed this collision
       if (activeCollisions.has(collisionKey)) {
@@ -813,22 +860,29 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         return;
       }
 
-      // Check if one entity is a player and the other is an event
-      const player = this.getPlayer(entityA.uuid) || this.getPlayer(entityB.uuid);
-      if (!player) {
+      const playerA = this.getPlayer(entityA.uuid);
+      const playerB = this.getPlayer(entityB.uuid);
+      const eventA = this.getEvent(entityA.uuid);
+      const eventB = this.getEvent(entityB.uuid);
+
+      if (playerA && eventB && this.isEventVisibleForPlayer(eventB, playerA)) {
+        activeCollisions.add(collisionKey);
+        dispatchTouch(eventB, playerA, "player", "start", collisionKey, playerA);
+        void eventB.execMethod('onPlayerTouch', [playerA]);
         return;
       }
 
-      // Determine which entity is the event
-      const eventId = player.id === entityA.uuid ? entityB.uuid : entityA.uuid;
-      const event = this.getEvent(eventId);
-
-      if (event && this.isEventVisibleForPlayer(eventId, player)) {
-        // Mark this collision as processed
+      if (playerB && eventA && this.isEventVisibleForPlayer(eventA, playerB)) {
         activeCollisions.add(collisionKey);
+        dispatchTouch(eventA, playerB, "player", "start", collisionKey, playerB);
+        void eventA.execMethod('onPlayerTouch', [playerB]);
+        return;
+      }
 
-        // Trigger the onPlayerTouch hook on the event
-        event.execMethod('onPlayerTouch', [player]);
+      if (eventA && eventB) {
+        activeCollisions.add(collisionKey);
+        dispatchTouch(eventA, eventB, "event", "start", collisionKey);
+        dispatchTouch(eventB, eventA, "event", "start", collisionKey);
       }
     });
 
@@ -842,9 +896,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         return;
       }
 
-      const collisionKey = entityA.uuid < entityB.uuid
-        ? `${entityA.uuid}-${entityB.uuid}`
-        : `${entityB.uuid}-${entityA.uuid}`;
+      const collisionKey = buildPairId(entityA, entityB);
 
       // Check for shape collisions
       const shapeA = this._shapeEntities.get(entityA.uuid);
@@ -877,9 +929,82 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         return;
       }
 
-      // Remove from active collisions so onPlayerTouch can be called again if they collide again
+      if (!activeCollisions.has(collisionKey)) {
+        return;
+      }
       activeCollisions.delete(collisionKey);
+
+      const playerA = this.getPlayer(entityA.uuid);
+      const playerB = this.getPlayer(entityB.uuid);
+      const eventA = this.getEvent(entityA.uuid);
+      const eventB = this.getEvent(entityB.uuid);
+
+      if (playerA && eventB && this.isEventVisibleForPlayer(eventB, playerA)) {
+        dispatchTouch(eventB, playerA, "player", "end", collisionKey, playerA);
+        return;
+      }
+
+      if (playerB && eventA && this.isEventVisibleForPlayer(eventA, playerB)) {
+        dispatchTouch(eventA, playerB, "player", "end", collisionKey, playerB);
+        return;
+      }
+
+      if (eventA && eventB) {
+        dispatchTouch(eventA, eventB, "event", "end", collisionKey);
+        dispatchTouch(eventB, eventA, "event", "end", collisionKey);
+      }
     });
+  }
+
+  setVariable(key: string, val: any): void {
+    this.variables.mutate((variables) => {
+      variables[key] = val;
+    });
+    this.syncChanges();
+  }
+
+  getVariable<U = any>(key: string): U | undefined {
+    return this.variables()[key];
+  }
+
+  removeVariable(key: string): boolean {
+    const variables = this.variables();
+    if (!(key in variables)) {
+      return false;
+    }
+    this.variables.mutate((draft) => {
+      delete draft[key];
+    });
+    this.syncChanges();
+    return true;
+  }
+
+  hasVariable(key: string): boolean {
+    return key in this.variables();
+  }
+
+  getVariableKeys(): string[] {
+    return Object.keys(this.variables());
+  }
+
+  clearVariables(): void {
+    this.variables.set({});
+    this.syncChanges();
+  }
+
+  syncChanges(): void {
+    if (this._syncChangesDepth > 0) {
+      return;
+    }
+    this._syncChangesDepth += 1;
+    try {
+      for (const player of Object.values(this.players()) as RpgPlayer[]) {
+        player.syncChanges();
+      }
+    }
+    finally {
+      this._syncChangesDepth -= 1;
+    }
   }
 
   /**
@@ -2184,6 +2309,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         onChanges?: (this: RpgEvent, player: RpgPlayer) => void;
         onAction?: (this: RpgEvent, player: RpgPlayer) => void;
         onPlayerTouch?: (this: RpgEvent, player: RpgPlayer) => void;
+        onTouch?: (this: RpgEvent, other: RpgPlayer | RpgEvent, context: RpgTouchContext) => void | Promise<void>;
+        onTouchEnd?: (this: RpgEvent, other: RpgPlayer | RpgEvent, context: RpgTouchContext) => void | Promise<void>;
         onInShape?: (this: RpgEvent, zone: RpgShape, player: RpgPlayer) => void;
         onOutShape?: (this: RpgEvent, zone: RpgShape, player: RpgPlayer) => void;
         onDetectInShape?: (this: RpgEvent, player: RpgPlayer, shape: RpgShape) => void;
@@ -2198,6 +2325,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
           if (hookObj.onChanges) this.onChanges = hookObj.onChanges.bind(this);
           if (hookObj.onAction) this.onAction = hookObj.onAction.bind(this);
           if (hookObj.onPlayerTouch) this.onPlayerTouch = hookObj.onPlayerTouch.bind(this);
+          if (hookObj.onTouch) this.onTouch = hookObj.onTouch.bind(this);
+          if (hookObj.onTouchEnd) this.onTouchEnd = hookObj.onTouchEnd.bind(this);
           if (hookObj.onInShape) this.onInShape = hookObj.onInShape.bind(this);
           if (hookObj.onOutShape) this.onOutShape = hookObj.onOutShape.bind(this);
           if (hookObj.onDetectInShape) this.onDetectInShape = hookObj.onDetectInShape.bind(this);

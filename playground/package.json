@@ -16,6 +16,8 @@
     "build:dash": "pnpm --dir games/dash build",
     "dev:mouse-interactions": "pnpm --dir games/mouse-interactions dev",
     "build:mouse-interactions": "pnpm --dir games/mouse-interactions build",
+    "dev:pressure-plate": "pnpm --dir games/pressure-plate dev",
+    "build:pressure-plate": "pnpm --dir games/pressure-plate build",
     "dev:studio": "pnpm --dir games/studio dev",
     "build:studio": "pnpm --dir games/studio build",
     "dev:tiled": "pnpm --dir games/tiled dev",

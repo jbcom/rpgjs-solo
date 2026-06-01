@@ -565,6 +565,43 @@ importers:
         specifier: ^8.0.13
         version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
 
+  playground/games/pressure-plate:
+    dependencies:
+      '@canvasengine/presets':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(canvasengine@2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6))(pixi.js@8.18.1)
+      '@rpgjs/client':
+        specifier: workspace:*
+        version: link:../../../packages/client
+      '@rpgjs/common':
+        specifier: workspace:*
+        version: link:../../../packages/common
+      '@rpgjs/server':
+        specifier: workspace:*
+        version: link:../../../packages/server
+      '@rpgjs/ui-css':
+        specifier: workspace:*
+        version: link:../../../packages/ui-css
+      '@rpgjs/vite':
+        specifier: workspace:*
+        version: link:../../../packages/vite
+      '@signe/di':
+        specifier: 3.0.1
+        version: 3.0.1
+      canvasengine:
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/react@19.2.14)(pixi.js@8.18.1)(react@19.2.6)
+      pixi.js:
+        specifier: ^8.18.1
+        version: 8.18.1
+    devDependencies:
+      '@canvasengine/compiler':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+      vite:
+        specifier: ^8.0.13
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(tsx@4.22.0)(yaml@2.8.3)
+
   playground/games/projectiles:
     dependencies:
       '@canvasengine/presets':

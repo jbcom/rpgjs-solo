@@ -3,6 +3,7 @@ import { testing, TestingFixture } from '@rpgjs/testing'
 import { defineModule, createModule } from '@rpgjs/common'
 import { EventData, RpgEvent, RpgPlayer, RpgServer, Move } from '../src'
 import { RpgClient } from '../../client/src'
+import { createStatesSnapshotDeep } from '@signe/sync'
 
 const Event = () => {
   return {
@@ -282,4 +283,362 @@ test('changing pushable at runtime updates the event physics body', async () => 
     expect(body.mass).toBe(12)
     expect(body.invMass).toBe(1 / 12)
     expect(body.canBePushedBy(map.getBody(player.id))).toBe(true)
+})
+
+test('event touch hooks run once on event/event enter and on exit for both events', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+    const calls: string[] = []
+
+    await map.createDynamicEvent({
+      id: "plate",
+      x: 300,
+      y: 300,
+      event: {
+        name: "plate",
+        onTouch(other, context) {
+          calls.push(`plate:${other.name}:${context.phase}:${context.otherType}:${context.player ? "player" : "none"}`)
+        },
+        onTouchEnd(other, context) {
+          calls.push(`plate:${other.name}:${context.phase}:${context.otherType}:${context.player ? "player" : "none"}`)
+        },
+      }
+    })
+    await map.createDynamicEvent({
+      id: "stone",
+      x: 300,
+      y: 300,
+      event: {
+        name: "stone",
+        pushable: true,
+        onTouch(other, context) {
+          calls.push(`stone:${other.name}:${context.phase}:${context.otherType}:${context.player ? "player" : "none"}`)
+        },
+        onTouchEnd(other, context) {
+          calls.push(`stone:${other.name}:${context.phase}:${context.otherType}:${context.player ? "player" : "none"}`)
+        },
+      }
+    })
+
+    const plateBody = map.getBody("plate")
+    const stoneBody = map.getBody("stone")
+    const collision = { entityA: plateBody, entityB: stoneBody }
+
+    map.physic.getEvents().emitCollisionEnter(collision)
+    map.physic.getEvents().emitCollisionEnter(collision)
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      "plate:stone:start:event:none",
+      "stone:plate:start:event:none",
+    ])
+
+    map.physic.getEvents().emitCollisionExit(collision)
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      "plate:stone:start:event:none",
+      "stone:plate:start:event:none",
+      "plate:stone:end:event:none",
+      "stone:plate:end:event:none",
+    ])
+})
+
+test('event touch hooks ignore collisions across different z levels', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+    const calls: string[] = []
+
+    await map.createDynamicEvent({
+      id: "low-plate",
+      x: 310,
+      y: 310,
+      event: {
+        name: "low-plate",
+        onTouch(other, context) {
+          calls.push(`low:${other.name}:${context.phase}`)
+        },
+        onTouchEnd(other, context) {
+          calls.push(`low:${other.name}:${context.phase}`)
+        },
+      }
+    })
+    await map.createDynamicEvent({
+      id: "high-stone",
+      x: 310,
+      y: 310,
+      event: {
+        name: "high-stone",
+        onInit() {
+          this.z.set(1)
+        },
+        onTouch(other, context) {
+          calls.push(`high:${other.name}:${context.phase}`)
+        },
+        onTouchEnd(other, context) {
+          calls.push(`high:${other.name}:${context.phase}`)
+        },
+      }
+    })
+
+    const lowBody = map.getBody("low-plate")
+    const highBody = map.getBody("high-stone")
+    const collision = { entityA: lowBody, entityB: highBody }
+
+    map.physic.getEvents().emitCollisionEnter(collision)
+    map.physic.getEvents().emitCollisionExit(collision)
+    await fixture.wait(0)
+
+    expect(calls).toEqual([])
+})
+
+test('class-based events receive touch hooks', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+    const calls: string[] = []
+
+    class TouchClassEvent extends RpgEvent {
+      onTouch(other: RpgPlayer | RpgEvent, context: any) {
+        calls.push(`${this.id}:${other.name}:${context.phase}:${context.otherType}`)
+      }
+    }
+
+    await map.createDynamicEvent({
+      id: "class-touch",
+      x: 320,
+      y: 320,
+      event: TouchClassEvent,
+    })
+    await map.createDynamicEvent({
+      id: "class-other",
+      x: 320,
+      y: 320,
+      event: {
+        name: "class-other",
+      }
+    })
+
+    map.physic.getEvents().emitCollisionEnter({
+      entityA: map.getBody("class-touch"),
+      entityB: map.getBody("class-other"),
+    })
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      "class-touch:class-other:start:event",
+    ])
+})
+
+test('player/event touch keeps onPlayerTouch compatibility and exposes context.player', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+    const calls: string[] = []
+
+    await map.createDynamicEvent({
+      id: "touch-npc",
+      x: player.x(),
+      y: player.y(),
+      event: {
+        name: "TouchNpc",
+        onTouch(other, context) {
+          calls.push(`onTouch:${other.id}:${context.player?.id}:${context.otherType}:${context.phase}`)
+        },
+        onTouchEnd(other, context) {
+          calls.push(`onTouchEnd:${other.id}:${context.player?.id}:${context.otherType}:${context.phase}`)
+        },
+        onPlayerTouch(otherPlayer) {
+          calls.push(`onPlayerTouch:${otherPlayer.id}`)
+        },
+      }
+    })
+
+    const playerBody = map.getBody(player.id)
+    const eventBody = map.getBody("touch-npc")
+    const collision = { entityA: playerBody, entityB: eventBody }
+
+    map.physic.getEvents().emitCollisionEnter(collision)
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      `onTouch:${player.id}:${player.id}:player:start`,
+      `onPlayerTouch:${player.id}`,
+    ])
+
+    map.physic.getEvents().emitCollisionExit(collision)
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      `onTouch:${player.id}:${player.id}:player:start`,
+      `onPlayerTouch:${player.id}`,
+      `onTouchEnd:${player.id}:${player.id}:player:end`,
+    ])
+})
+
+test('scenario event touch hooks only run for the owner player', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+    const calls: string[] = []
+
+    const otherOwnedEventId = await map.createDynamicEvent({
+      id: "private-touch-other",
+      x: player.x(),
+      y: player.y(),
+      event: {
+        name: "PrivateTouch",
+        onTouch(other, context) {
+          calls.push(`other:start:${other.id}:${context.player?.id}`)
+        },
+        onTouchEnd(other, context) {
+          calls.push(`other:end:${other.id}:${context.player?.id}`)
+        },
+      }
+    }, { mode: "scenario", scenarioOwnerId: "another-player" })
+
+    map.physic.getEvents().emitCollisionEnter({
+      entityA: map.getBody(player.id),
+      entityB: map.getBody(otherOwnedEventId),
+    })
+    map.physic.getEvents().emitCollisionExit({
+      entityA: map.getBody(player.id),
+      entityB: map.getBody(otherOwnedEventId),
+    })
+    await fixture.wait(0)
+
+    expect(calls).toEqual([])
+
+    const ownedEventId = await map.createDynamicEvent({
+      id: "private-touch-owner",
+      x: player.x(),
+      y: player.y(),
+      event: {
+        name: "PrivateTouchOwner",
+        onTouch(other, context) {
+          calls.push(`owner:start:${other.id}:${context.player?.id}`)
+        },
+        onTouchEnd(other, context) {
+          calls.push(`owner:end:${other.id}:${context.player?.id}`)
+        },
+      }
+    }, { mode: "scenario", scenarioOwnerId: player.id })
+
+    const ownerCollision = {
+      entityA: map.getBody(player.id),
+      entityB: map.getBody(ownedEventId),
+    }
+
+    map.physic.getEvents().emitCollisionEnter(ownerCollision)
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      `owner:start:${player.id}:${player.id}`,
+    ])
+
+    map.physic.getEvents().emitCollisionExit(ownerCollision)
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      `owner:start:${player.id}:${player.id}`,
+      `owner:end:${player.id}:${player.id}`,
+    ])
+})
+
+test('map variables expose persistent shared state helpers', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+
+    map.setVariable("temple.door.open", true)
+    map.setVariable("counter", 2)
+
+    expect(map.getVariable<boolean>("temple.door.open")).toBe(true)
+    expect(map.hasVariable("counter")).toBe(true)
+    expect(map.getVariableKeys().sort()).toEqual(["counter", "temple.door.open"])
+
+    const snapshot = createStatesSnapshotDeep(map)
+    expect(snapshot.variables).toEqual({
+      "temple.door.open": true,
+      counter: 2,
+    })
+
+    expect(map.removeVariable("counter")).toBe(true)
+    expect(map.removeVariable("missing")).toBe(false)
+    expect(map.hasVariable("counter")).toBe(false)
+
+    map.clearVariables()
+    expect(map.getVariableKeys()).toEqual([])
+})
+
+test('map variable writes trigger visible event onChanges with recursion guard', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+    let changes = 0
+
+    await map.createDynamicEvent({
+      id: "door",
+      x: 360,
+      y: 300,
+      event: {
+        name: "door",
+        onChanges() {
+          changes += 1
+          map.setVariable("door.lastChange", changes)
+        }
+      }
+    })
+
+    map.setVariable("temple.door.open", true)
+    await fixture.wait(0)
+
+    expect(changes).toBe(1)
+    expect(map.getVariable("door.lastChange")).toBe(1)
+})
+
+test('map variable writes trigger onChanges for every player on the map', async () => {
+    player = await client.waitForMapChange('map1')
+    const otherClient = await fixture.createClient()
+    const otherPlayer = await otherClient.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+    const changesByPlayer = new Map<string, number>()
+
+    await map.createDynamicEvent({
+      id: "shared-door",
+      x: 420,
+      y: 300,
+      event: {
+        name: "shared-door",
+        onChanges(changedPlayer) {
+          changesByPlayer.set(changedPlayer.id, (changesByPlayer.get(changedPlayer.id) ?? 0) + 1)
+        }
+      }
+    })
+
+    map.setVariable("shared.door.open", true)
+    await fixture.wait(0)
+
+    expect(changesByPlayer.get(player.id)).toBe(1)
+    expect(changesByPlayer.get(otherPlayer.id)).toBe(1)
+})
+
+test('player variable writes trigger onChanges with recursion guard', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+    let changes = 0
+
+    await map.createDynamicEvent({
+      id: "player-state-door",
+      x: 390,
+      y: 300,
+      event: {
+        name: "player-state-door",
+        onChanges(changedPlayer) {
+          changes += 1
+          changedPlayer.setVariable("door.checked", changes)
+        }
+      }
+    })
+
+    player.setVariable("quest.started", true)
+    await fixture.wait(0)
+
+    expect(changes).toBe(1)
+    expect(player.getVariable("door.checked")).toBe(1)
 })

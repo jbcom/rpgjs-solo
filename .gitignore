@@ -23,5 +23,7 @@ vitest.config.ts.timestamp*
 docs/.vitepress/cache
 .cursor/debug.log
 public
+!playground/games/pressure-plate/public/
+!playground/games/pressure-plate/public/hero.png
 .partykit
 .vite

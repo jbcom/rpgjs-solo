@@ -107,6 +107,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   private _clientListeners = new Map<string, Set<(data: any) => void | Promise<void>>>();
   private _projectiles?: RpgPlayerProjectiles;
   private locale?: string;
+  private _syncChangesDepth = 0;
 
   /**
    * Computed signal for world X position
@@ -1116,9 +1117,18 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   * @memberof Player
   */
   syncChanges() {
-    this._eventChanges();
-    if (shouldAutoSave(this, { reason: "auto", source: "syncChanges" })) {
-      void this.save("auto", {}, { reason: "auto", source: "syncChanges" });
+    if (this._syncChangesDepth > 0) {
+      return;
+    }
+    this._syncChangesDepth += 1;
+    try {
+      this._eventChanges();
+      if (shouldAutoSave(this, { reason: "auto", source: "syncChanges" })) {
+        void this.save("auto", {}, { reason: "auto", source: "syncChanges" });
+      }
+    }
+    finally {
+      this._syncChangesDepth -= 1;
     }
   }
 

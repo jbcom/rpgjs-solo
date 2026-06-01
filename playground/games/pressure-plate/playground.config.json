@@ -1,0 +1,8 @@
+{
+  "id": "pressure-plate",
+  "title": "Pressure Plate",
+  "description": "Push a stone onto a plate. Event touch hooks update a shared map variable that opens the door.",
+  "tags": ["events", "physics", "variables"],
+  "modes": ["standalone", "mmorpg"],
+  "port": 5188
+}

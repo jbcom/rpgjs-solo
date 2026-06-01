@@ -73,6 +73,7 @@
             "pages": [
               "guide/create-event",
               "guide/event-modes",
+              "guide/event-touch-map-variables",
               "guide/create-movement",
               "guide/projectiles",
               "guide/move-routes",

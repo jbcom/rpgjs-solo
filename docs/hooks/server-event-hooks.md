@@ -126,6 +126,36 @@ const event: RpgEventHooks = {
 }
 ```
 
+### onTouch / onTouchEnd
+
+**Description:** Called when an event starts or stops touching a player or another event.
+
+`onTouch` is called once when a collision pair begins. `onTouchEnd` is called once when that pair separates. For player/event collisions, `onTouch` runs before `onPlayerTouch` so existing `onPlayerTouch` code keeps working. For event/event collisions, both events receive the hook.
+
+**Parameters:**
+- `other: RpgPlayer | RpgEvent` - The player or event touching this event
+- `context: RpgTouchContext` - Collision context with `self`, `other`, `otherType`, `player`, `phase`, `pairId`, and `map`
+
+**Example:**
+```ts
+import type { EventDefinition, RpgTouchContext } from '@rpgjs/server'
+import type { RpgEvent, RpgPlayer } from '@rpgjs/server'
+
+export const PressurePlate: EventDefinition = {
+    name: 'PressurePlate',
+    onTouch(other: RpgPlayer | RpgEvent, context: RpgTouchContext) {
+        if (other.name === 'Stone') {
+            context.map.setVariable('temple.door.open', true)
+        }
+    },
+    onTouchEnd(other: RpgPlayer | RpgEvent, context: RpgTouchContext) {
+        if (other.name === 'Stone') {
+            context.map.setVariable('temple.door.open', false)
+        }
+    }
+}
+```
+
 ### onDetectInShape / onDetectOutShape
 
 **Description:** Called when a player enters or leaves an event's detection shape
@@ -211,3 +241,22 @@ const event: RpgEventHooks = {
 ```
 
 Use player variables for this kind of state, because they persist with the player and travel with the player snapshot across saves and map transfers.
+
+Use map variables instead when the state belongs to the shared map room:
+
+```ts
+import type { EventDefinition } from '@rpgjs/server'
+
+const Door: EventDefinition = {
+    name: 'Door',
+    onChanges() {
+        const map = this.getCurrentMap()
+        const open = map?.getVariable<boolean>('temple.door.open') === true
+
+        this.through = open
+        this.setGraphic(open ? 'door-open' : 'door-closed')
+    }
+}
+```
+
+`map.setVariable()`, `map.removeVariable()`, and `map.clearVariables()` automatically re-run `onChanges` for visible players and events on the map. Player variable writes automatically re-run the same cycle for that player.

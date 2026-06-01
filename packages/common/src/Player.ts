@@ -186,6 +186,30 @@ export class RpgCommonPlayer {
     this._pushable.set(!!value);
   }
 
+  get through(): boolean {
+    return this._through();
+  }
+
+  set through(value: boolean) {
+    this._through.set(!!value);
+  }
+
+  get throughOtherPlayer(): boolean {
+    return this._throughOtherPlayer();
+  }
+
+  set throughOtherPlayer(value: boolean) {
+    this._throughOtherPlayer.set(!!value);
+  }
+
+  get throughEvent(): boolean {
+    return this._throughEvent();
+  }
+
+  set throughEvent(value: boolean) {
+    this._throughEvent.set(!!value);
+  }
+
   /**
    * Get whether direction changes are locked
    * 

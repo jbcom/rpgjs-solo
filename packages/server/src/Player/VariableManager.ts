@@ -43,6 +43,7 @@ export function WithVariableManager<TBase extends PlayerCtor>(Base: TBase) {
       this.variables.mutate((variables) => {
         variables[key] = val;
       });
+      (this as any).syncChanges?.();
     }
 
     getVariable<U = any>(key: string): U | undefined {
@@ -57,6 +58,7 @@ export function WithVariableManager<TBase extends PlayerCtor>(Base: TBase) {
       this.variables.mutate((draft) => {
         delete draft[key];
       });
+      (this as any).syncChanges?.();
       return true;
     }
 
@@ -70,6 +72,7 @@ export function WithVariableManager<TBase extends PlayerCtor>(Base: TBase) {
 
     clearVariables(): void {
       this.variables.set({});
+      (this as any).syncChanges?.();
     }
   } as unknown as TBase;
 }
