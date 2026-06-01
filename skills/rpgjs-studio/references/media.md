@@ -29,9 +29,12 @@ Workflow:
 
 ## Write and generation endpoints
 
-- Update media metadata: `PUT /api/media/:id`
+- Update media metadata only: `PUT /api/media/:id`
+- Update media metadata and synchronize the root media type: `PUT /api/media/update/:id`
 - Replace media file: `POST /api/media/replace/:id`
 - Estimate or execute generation: `POST /api/media/generate`
+
+Use `PUT /api/media/update/:id` when the payload can change the media category/type. The request body is `{ "metadata": { ... }, "type"?: string }`; when `metadata.type` or `type` is a non-empty string, the endpoint writes both `metadata.type` and the root `type` field so media filters and type-specific tools stay consistent.
 
 ## Generation inputs
 
@@ -109,5 +112,5 @@ curl -sS -X POST "$BASE_URL/api/media/replace/$MEDIA_ID" \
 - Use `GET /api/media/all` or `GET /api/media/all/:type` first when the user knows a file by name but not by ID.
 - Prefer `GET /api/media?query=<search>` for name-based lookup when a task needs a specific referenced asset.
 - Use `GET /api/game/media/:mediaId` when the caller is game/runtime code and needs the media fields usable in the game.
-- For metadata-only updates, use `PUT /api/media/:id` with JSON.
+- For metadata-only updates, use `PUT /api/media/:id` with JSON. If the update includes a media type change, use `PUT /api/media/update/:id` so the root `type` field is synchronized with metadata.
 - Media generation is now unified and workflow-based. Always estimate first, ask for confirmation, then execute.

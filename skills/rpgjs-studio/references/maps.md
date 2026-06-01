@@ -7,6 +7,7 @@ Use this reference for map CRUD and map-specific secondary operations.
 - List maps: `GET /api/maps`
 - Create map: `POST /api/maps/v2`
 - Read one map: `GET /api/maps/:mapId`
+- Read one game/runtime map: `GET /api/game/maps/:mapId`
 - Update map: `PUT /api/maps/:mapId`
 - Delete map: `DELETE /api/maps/:mapId`
 
@@ -44,6 +45,15 @@ Media fields must use media `_id` values resolved through `/api/media?query=<sea
 
 ### `PUT /api/maps/:mapId`
 
+This endpoint accepts partial section updates. Omitted fields are preserved. Send only the section that changed when possible:
+
+- Start position only: `{ "startX": 0, "startY": 0 }`
+- Events only: `{ "events": [{ "eventId": "...", "x": 10, "y": 20 }] }` or `{ "events": [] }`
+- Terrain morphology only: `{ "terrainMorphologyLayer": { ... } }` or `{ "terrainMorphologyLayer": null }`
+- Terrain only: send `terrain`, and optionally `terrainLayer` plus `terrainControlTexture`
+- Elements only: send `elementsAlwaysLow`, `elementsLow`, and `elementsHigh`
+- Tileset params only: send `baseTerrainId`, `tilesetId`, `terrainTilesetIds`, `elementTilesetIds`, `primaryTerrainTilesetId`, or `primaryElementTilesetId`
+
 Useful fields from `mapSchema` when a full map update is needed:
 
 - `name?: string`
@@ -67,6 +77,8 @@ Useful fields from `mapSchema` when a full map update is needed:
 `terrainMorphologyLayer` stores hole and wall strokes in world pixels. Hole params support `depth`, `roundness`, `roughness`, optional facade `textureId`, optional bottom-fill `fillTextureId`, and `fillHeight` clamped to `0..100`; `textureId` is not used as the bottom-fill fallback. Wall params support `height`, `roundness`, `roughness`, and optional facade `textureId`. The editor wall smoothness control maps to `roughness = 1 - smoothness`. The brush tool modifies the terrain surface; hole/wall tools use the selected terrain texture as the vertical facade while the top surface remains the already-painted base terrain. The renderer merges hole/wall masks as signed terrain levels before drawing, so overlapping strokes are clipped or neutralized instead of being rendered as independent overlays. The editor renders this layer after `terrainLayer` and treats intersecting hole/wall cells as blocking collision.
 
 `lighting.sun` controls the map-level sun option. `enabled` toggles automatic sunlight shadows for walls, characters, and elements. `intensity` is clamped to `0..1`.
+
+`GET /api/game/maps/:mapId` returns event placement data for runtime use. Event media references under `event.params.graphic`, `event.params.faceset`, `event.triggers[].graphic`, and `event.triggers[].faceset` are returned as hydrated media objects when the media exists, including `_id`, `id`, `type`, `fileName`, `metadata`, `width`, and `height`. Runtime code should use the media object metadata directly instead of treating these fields as storage filenames.
 
 ## Example: read all maps
 
