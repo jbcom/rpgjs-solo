@@ -266,6 +266,12 @@ export async function testing(
   );
   const websocket = inject<AbstractWebsocket>(WebSocketToken) as any;
   const clientEngine = inject<RpgClientEngine>(RpgClientEngine);
+  globalFixtures.push({
+    context: undefined,
+    clientEngine,
+    websocket,
+    server: websocket.getServer(),
+  });
 
   return {
     async createClient() {
@@ -456,10 +462,6 @@ export async function testing(
  * ```
  */
 export async function clear(): Promise<void> {
-
-  // Wait for the next tick to ensure all promises are resolved
-  await new Promise((resolve) => setTimeout(resolve, 0));
-
   // Clean up all created client and server instances from all fixtures
   for (const client of globalFixtures) {
     try {
@@ -484,6 +486,10 @@ export async function clear(): Promise<void> {
 
   // Clear the global fixtures array
   globalFixtures.length = 0;
+
+  // Let CanvasEngine callbacks scheduled during teardown flush before removing
+  // the DI context they may still read.
+  await new Promise((resolve) => setTimeout(resolve, 0));
 
   // Clear client context injection
   try {
