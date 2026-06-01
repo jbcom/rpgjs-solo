@@ -4,6 +4,7 @@ import type {
   TerrainSourceRect,
   TerrainTextureGridMetadata,
   TerrainTextureMetadata,
+  TerrainTileAtlasMetadata,
   TerrainTransitionRule,
 } from "../types";
 
@@ -17,9 +18,13 @@ export function normalizeTerrainAssetMetadata(
 ): TerrainAssetMetadata | null {
   if (!terrain) return null;
   const metadata = ((terrain as TerrainMediaLike).metadata ?? terrain ?? {}) as Record<string, unknown>;
+  const atlasSource =
+    stringValue((terrain as TerrainMediaLike).fileName) ??
+    stringValue(metadata.fileName) ??
+    "";
   const sourceTexture =
     stringValue(metadata.sourceTexture) ??
-    stringValue((terrain as TerrainMediaLike).fileName) ??
+    atlasSource ??
     stringValue(metadata.fileName) ??
     "";
   const textureGrid = normalizeTextureGridMetadata(metadata);
@@ -28,6 +33,7 @@ export function normalizeTerrainAssetMetadata(
 
   return {
     sourceTexture,
+    tileAtlas: normalizeTileAtlasMetadata(metadata, atlasSource, textureGrid),
     textureGrid,
     terrainTextures,
     transitions,
@@ -55,6 +61,40 @@ export function resolveTerrainTextureSourceRect(
     y: Math.max(0, Math.min(y, imageHeight - 1)),
     width: Math.max(1, Math.min(grid.tileSize, imageWidth - x)),
     height: Math.max(1, Math.min(grid.tileSize, imageHeight - y)),
+  };
+}
+
+export function resolveTerrainTileAtlasSourceRect(
+  asset: TerrainAssetMetadata,
+  tileId: number,
+  imageWidth?: number,
+  imageHeight?: number
+): TerrainSourceRect | null {
+  const atlas = asset.tileAtlas;
+  if (!atlas) return null;
+
+  const tileWidth = Math.max(1, Math.floor(atlas.tileWidth));
+  const tileHeight = Math.max(1, Math.floor(atlas.tileHeight));
+  const columns = resolveTileAtlasColumns(atlas, tileWidth, imageWidth);
+  if (columns <= 0) return null;
+
+  const rows = imageHeight
+    ? Math.max(1, Math.floor(imageHeight / tileHeight))
+    : Math.max(1, Math.ceil(Math.max(atlas.tileCount ?? tileId + 1, tileId + 1) / columns));
+  const availableTiles = Math.max(1, columns * rows);
+  const sourceIndex = positiveModulo(nonNegativeInteger(tileId) ?? 0, availableTiles);
+  const x = (sourceIndex % columns) * tileWidth;
+  const y = Math.floor(sourceIndex / columns) * tileHeight;
+
+  if (imageWidth && imageHeight && (x >= imageWidth || y >= imageHeight)) {
+    return null;
+  }
+
+  return {
+    x: imageWidth ? Math.max(0, Math.min(x, imageWidth - 1)) : x,
+    y: imageHeight ? Math.max(0, Math.min(y, imageHeight - 1)) : y,
+    width: imageWidth ? Math.max(1, Math.min(tileWidth, imageWidth - x)) : tileWidth,
+    height: imageHeight ? Math.max(1, Math.min(tileHeight, imageHeight - y)) : tileHeight,
   };
 }
 
@@ -186,6 +226,37 @@ function normalizeTextureGridMetadata(metadata: Record<string, unknown>): Terrai
   return { columns, rows, tileSize };
 }
 
+function normalizeTileAtlasMetadata(
+  metadata: Record<string, unknown>,
+  source: string,
+  textureGrid: TerrainTextureGridMetadata
+): TerrainTileAtlasMetadata | null {
+  if (!source) return null;
+
+  const tileWidth =
+    positiveInteger(metadata.tilewidth) ??
+    positiveInteger(metadata.tileWidth) ??
+    textureGrid.tileSize;
+  const tileHeight =
+    positiveInteger(metadata.tileheight) ??
+    positiveInteger(metadata.tileHeight) ??
+    textureGrid.tileSize;
+  const columns =
+    positiveInteger(metadata.imageColumns) ??
+    positiveInteger(metadata.atlasColumns);
+  const tileCount =
+    positiveInteger(metadata.tilecount) ??
+    positiveInteger(metadata.tileCount);
+
+  return {
+    source,
+    tileWidth,
+    tileHeight,
+    ...(columns ? { columns } : {}),
+    ...(tileCount ? { tileCount } : {}),
+  };
+}
+
 function normalizeTerrainTextures(
   value: unknown,
   grid: TerrainTextureGridMetadata
@@ -271,6 +342,17 @@ function nonNegativeInteger(value: unknown): number | undefined {
 
 function objectValue(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
+}
+
+function resolveTileAtlasColumns(
+  atlas: TerrainTileAtlasMetadata,
+  tileWidth: number,
+  imageWidth?: number
+): number {
+  if (imageWidth && imageWidth > 0) {
+    return Math.max(1, Math.floor(imageWidth / tileWidth));
+  }
+  return Math.max(1, Math.floor(atlas.columns ?? 1));
 }
 
 function positiveModulo(value: number, modulo: number): number {

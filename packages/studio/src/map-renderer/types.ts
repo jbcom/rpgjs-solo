@@ -31,15 +31,26 @@ export interface TerrainTransitionRule {
 
 export interface TerrainAssetMetadata {
   sourceTexture: string;
+  tileAtlas: TerrainTileAtlasMetadata | null;
   textureGrid: TerrainTextureGridMetadata;
   terrainTextures: TerrainTextureMetadata[];
   transitions: TerrainTransitionRule[];
 }
 
+export interface TerrainTileAtlasMetadata {
+  source: string;
+  tileWidth: number;
+  tileHeight: number;
+  columns?: number;
+  tileCount?: number;
+}
+
 export interface StudioTerrainCell {
+  source: "terrain-texture" | "tile-atlas";
   terrainTextureId: string;
   textureIndex: number;
   collision: boolean;
+  tileId?: number;
 }
 
 export interface StudioTerrainStroke {

@@ -16,6 +16,7 @@ import {
   findTerrainTexture,
   getTerrainRenderMode,
   resolveEffectiveTerrainTextureGrid,
+  resolveTerrainTileAtlasSourceRect,
   resolveTerrainTextureSourceRect,
 } from "./terrain-texture";
 
@@ -324,6 +325,22 @@ export class StudioTerrainChunkRenderer {
     for (let tileY = minTileY; tileY <= maxTileY; tileY += 1) {
       for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
         const cell = data.terrainGrid[tileY]?.[tileX];
+        if (cell?.source === "tile-atlas" && image) {
+          if (
+            this.drawTerrainAtlasTile(
+              ctx,
+              data,
+              image,
+              cell.tileId ?? cell.textureIndex,
+              tileX * tileSize,
+              tileY * tileSize,
+              tileSize,
+              tileSize
+            )
+          ) {
+            continue;
+          }
+        }
         const texture = findTerrainTexture(data.asset, cell?.terrainTextureId ?? cell?.textureIndex);
         if (!texture && !image) {
           this.fillTerrainRect(
@@ -367,6 +384,7 @@ export class StudioTerrainChunkRenderer {
       for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
         const cell = data.terrainGrid[tileY]?.[tileX];
         if (!cell) continue;
+        if (cell.source === "tile-atlas") continue;
         const texture = findTerrainTexture(data.asset, cell.terrainTextureId);
         const mode = getTerrainRenderMode(texture);
         const fadeWidth = mode.type === "fade" ? Math.max(1, Number(mode.width ?? 18)) : 0;
@@ -1320,6 +1338,43 @@ export class StudioTerrainChunkRenderer {
     }
     ctx.fillStyle = fallbackTerrainColor(textureId);
     ctx.fillRect(x, y, width, height);
+  }
+
+  private drawTerrainAtlasTile(
+    ctx: CanvasRenderingContext2D,
+    data: StudioTerrainRenderData,
+    image: HTMLImageElement,
+    tileId: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): boolean {
+    if (!data.asset) return false;
+    const source = resolveTerrainTileAtlasSourceRect(
+      data.asset,
+      tileId,
+      image.naturalWidth || image.width,
+      image.naturalHeight || image.height
+    );
+    if (!source) return false;
+
+    try {
+      ctx.drawImage(
+        image,
+        source.x,
+        source.y,
+        source.width,
+        source.height,
+        x,
+        y,
+        width,
+        height
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private strokeWithTerrainTexture(

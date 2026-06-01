@@ -24,6 +24,34 @@ type TestGlobalScope = typeof globalThis & {
   __RPGJS_TEST__?: boolean;
 };
 
+const lightingColorsEqual = (
+  left: LightSpot["color"],
+  right: LightSpot["color"],
+): boolean => {
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => value === right[index]);
+  }
+  return left === right;
+};
+
+const lightSpotsEqual = (left: LightSpot | undefined, right: LightSpot): boolean => {
+  if (!left) return false;
+  return left.id === right.id
+    && left.x === right.x
+    && left.y === right.y
+    && left.radius === right.radius
+    && left.intensity === right.intensity
+    && lightingColorsEqual(left.color, right.color)
+    && left.flicker === right.flicker
+    && left.flickerSpeed === right.flickerSpeed
+    && left.pulse === right.pulse
+    && left.pulseSpeed === right.pulseSpeed
+    && left.phase === right.phase;
+};
+
 export class RpgClientMap extends RpgCommonMap<any> {
   engine: RpgClientEngine = inject(RpgClientEngine)
   @users(RpgClientPlayer) players = signal<Record<string, RpgClientPlayer>>({});
@@ -132,10 +160,15 @@ export class RpgClientMap extends RpgCommonMap<any> {
     if (!nextSpot) {
       return;
     }
-    this.localLightSpots.update((spots) => ({
-      ...spots,
-      [id]: nextSpot,
-    }));
+    this.localLightSpots.update((spots) => {
+      if (lightSpotsEqual(spots[id], nextSpot)) {
+        return spots;
+      }
+      return {
+        ...spots,
+        [id]: nextSpot,
+      };
+    });
   }
 
   patchLightSpot(id: string, patch: Partial<LightSpot>): void {

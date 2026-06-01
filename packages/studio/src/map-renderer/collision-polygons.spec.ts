@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { buildStudioTerrainCollisionPolygons } from "./collision-polygons";
 import { createStudioTerrainRenderData } from "./map-normalizer";
-import { resolveTerrainTextureSourceRect } from "./terrain-renderer/terrain-texture";
+import {
+  resolveTerrainTextureSourceRect,
+  resolveTerrainTileAtlasSourceRect,
+} from "./terrain-renderer/terrain-texture";
 
 const terrainMedia = {
   id: "terrain",
@@ -11,6 +14,24 @@ const terrainMedia = {
     terrainTextures: [
       { id: "grass", index: 0, label: "Grass", collision: false },
       { id: "water", index: 1, label: "Water", collision: true },
+    ],
+  },
+};
+
+const tileAtlasTerrainMedia = {
+  id: "terrain-atlas",
+  fileName: "terrain-atlas.png",
+  metadata: {
+    sourceTexture: "source-texture.png",
+    textureGrid: { columns: 2, rows: 2, tileSize: 48 },
+    tilewidth: 48,
+    tileheight: 48,
+    tilecount: 256,
+    terrainTextures: [
+      { id: "terrain-0", index: 0, label: "Terrain 1", collision: false },
+      { id: "terrain-1", index: 1, label: "Terrain 2", collision: false },
+      { id: "terrain-2", index: 2, label: "Terrain 3", collision: false },
+      { id: "terrain-3", index: 3, label: "Terrain 4", collision: false },
     ],
   },
 };
@@ -85,6 +106,58 @@ describe("studio terrain map renderer data", () => {
       y: 0,
       width: 627,
       height: 627,
+    });
+  });
+
+  it("keeps numeric tile grids as tile-atlas cells when the terrain media is an atlas", () => {
+    const data = createStudioTerrainRenderData(
+      createMap({
+        params: {
+          width: 2,
+          height: 1,
+          baseTerrain: tileAtlasTerrainMedia,
+          primaryTerrainTileset: tileAtlasTerrainMedia,
+          terrainTilesets: [tileAtlasTerrainMedia],
+        },
+        terrain: JSON.stringify([[8, 0]]),
+      })
+    );
+
+    expect(data.sourceTexture).toContain("terrain-atlas.png");
+    expect(data.sourceTexture).not.toContain("source-texture.png");
+    expect(data.terrainGrid[0][0]).toMatchObject({
+      source: "tile-atlas",
+      tileId: 8,
+    });
+    expect(data.terrainGrid[0][1]).toMatchObject({
+      source: "tile-atlas",
+      tileId: 0,
+    });
+  });
+
+  it("resolves tile atlas source rectangles from the loaded image dimensions", () => {
+    const asset = createStudioTerrainRenderData(
+      createMap({
+        params: {
+          baseTerrain: tileAtlasTerrainMedia,
+          primaryTerrainTileset: tileAtlasTerrainMedia,
+          terrainTilesets: [tileAtlasTerrainMedia],
+        },
+        terrain: JSON.stringify([[255]]),
+      })
+    ).asset!;
+
+    expect(resolveTerrainTileAtlasSourceRect(asset, 8, 2400, 288)).toMatchObject({
+      x: 384,
+      y: 0,
+      width: 48,
+      height: 48,
+    });
+    expect(resolveTerrainTileAtlasSourceRect(asset, 255, 2400, 288)).toMatchObject({
+      x: 240,
+      y: 240,
+      width: 48,
+      height: 48,
     });
   });
 });

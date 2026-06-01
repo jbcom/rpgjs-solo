@@ -27,7 +27,11 @@ export function createStudioTerrainRenderData(map: any): StudioTerrainRenderData
   const heightTiles = Math.max(1, Math.ceil(height / tileSize));
   const terrainAssetSource = resolvePrimaryTerrainAsset(params);
   const asset = normalizeTerrainAssetMetadata(terrainAssetSource);
-  const sourceTexture = asset?.sourceTexture ? resolveAssetSource(asset.sourceTexture) : "";
+  const useTileAtlas = shouldRenderTerrainAsTileAtlas(map, asset);
+  const terrainSource = useTileAtlas
+    ? asset?.tileAtlas?.source ?? asset?.sourceTexture
+    : asset?.sourceTexture;
+  const sourceTexture = terrainSource ? resolveAssetSource(terrainSource) : "";
   const terrainControl = normalizeTerrainControlTexture(
     terrainLayer,
     asset,
@@ -35,7 +39,7 @@ export function createStudioTerrainRenderData(map: any): StudioTerrainRenderData
     height,
     tileSize
   );
-  const terrainGrid = resolveTerrainGrid(map, asset, widthTiles, heightTiles);
+  const terrainGrid = resolveTerrainGrid(map, asset, widthTiles, heightTiles, useTileAtlas);
   const morphologyFeatures = normalizeMorphologyFeatures(map?.terrainMorphologyLayer);
 
   return {
@@ -80,7 +84,8 @@ function resolveTerrainGrid(
   map: any,
   asset: ReturnType<typeof normalizeTerrainAssetMetadata>,
   width: number,
-  height: number
+  height: number,
+  useTileAtlas: boolean
 ): StudioTerrainCell[][] {
   const fallbackTexture = asset?.terrainTextures[0] ?? null;
   const terrain = resolvePrimaryTerrainArray(map, width, height);
@@ -89,12 +94,43 @@ function resolveTerrainGrid(
     Array.from({ length: width }, (_, x) => {
       const rawTile = terrain[y]?.[x];
       const texture = findTerrainTexture(asset, rawTile ?? fallbackTexture?.index ?? 0) ?? fallbackTexture;
+      const tileId = normalizeTile(rawTile);
+      if (useTileAtlas) {
+        return {
+          source: "tile-atlas",
+          terrainTextureId: texture?.id ?? `tile-${tileId}`,
+          textureIndex: texture?.index ?? tileId,
+          collision: texture?.collision === true,
+          tileId,
+        };
+      }
       return {
+        source: "terrain-texture",
         terrainTextureId: texture?.id ?? "terrain-0",
         textureIndex: texture?.index ?? 0,
         collision: texture?.collision === true,
       };
     })
+  );
+}
+
+function shouldRenderTerrainAsTileAtlas(
+  map: any,
+  asset: ReturnType<typeof normalizeTerrainAssetMetadata>
+): boolean {
+  if (!asset?.tileAtlas?.source) return false;
+  if (parseObject(map?.terrainLayer)?.mode === "control-texture") return false;
+
+  const rawTerrain = parseArray(map?.terrain);
+  if (rawTerrain.length === 0) return false;
+
+  const maxTileId = getMaxTileId(rawTerrain);
+  const declaredTileCount = asset.tileAtlas.tileCount ?? 0;
+  const logicalTextureCount = asset.terrainTextures.length;
+
+  return (
+    maxTileId >= logicalTextureCount ||
+    declaredTileCount > Math.max(logicalTextureCount, asset.textureGrid.columns * asset.textureGrid.rows)
   );
 }
 
@@ -129,6 +165,22 @@ function normalizeTerrainRows(value: any[], width: number, height: number): numb
   return Array.from({ length: height }, (_, y) =>
     Array.from({ length: width }, (_, x) => normalizeTile(value[y]?.[x]))
   );
+}
+
+function getMaxTileId(value: unknown): number {
+  let max = -1;
+  const visit = (entry: unknown): void => {
+    if (Array.isArray(entry)) {
+      entry.forEach(visit);
+      return;
+    }
+    const numberValue = Number(entry);
+    if (Number.isFinite(numberValue) && numberValue >= 0) {
+      max = Math.max(max, Math.floor(numberValue));
+    }
+  };
+  visit(value);
+  return max;
 }
 
 function normalizeMorphologyFeatures(value: unknown): StudioTerrainMorphologyFeature[] {
