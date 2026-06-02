@@ -564,14 +564,18 @@ export async function nextTick(
     return;
   }
 
-  // 1. On server: Process inputs for all players
-  for (const player of serverMap.getPlayers()) {
-    if (player.pendingInputs && player.pendingInputs.length > 0) {
-      await serverMap.processInput(player.id);
+  if (typeof serverMap.nextTickAsync === "function") {
+    await serverMap.nextTickAsync(delta);
+  } else {
+    // 1. On server: Process inputs for all players
+    for (const player of serverMap.getPlayers()) {
+      if (player.pendingInputs && player.pendingInputs.length > 0) {
+        await serverMap.processInput(player.id);
+      }
     }
-  }
 
-  serverMap.nextTick(delta);
+    serverMap.nextTick(delta);
+  }
 
   // 3. Server sends data to client - trigger sync for all players
   // The sync is triggered by calling syncChanges() on each player

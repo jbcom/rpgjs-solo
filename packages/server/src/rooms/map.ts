@@ -417,8 +417,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   private _shapes: Map<string, RpgShape> = new Map();
   /** Internal: Map of shape entity UUIDs to RpgShape instances */
   private _shapeEntities: Map<string, RpgShape> = new Map();
-  /** Internal: Subscription for the input processing loop */
-  private _inputLoopSubscription?: any;
+  private _serverTickInProgress = false;
+  private _queuedServerTickDelta = 0;
+  private _serverTickLoopVersion = 0;
   /** Enable/disable automatic tick processing (useful for unit tests) */
   private _autoTickEnabled: boolean = true;
   /** Runtime templates for scenario events to instantiate per player */
@@ -451,9 +452,6 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     };
     this.sessionExpiryTime = 1000 * 60 * 5;
     this.setupCollisionDetection();
-    if (this._autoTickEnabled) {
-      this.loop();
-    }
   }
 
   onStart() {
@@ -491,6 +489,35 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         this.projectiles.step(fixedStep);
       },
     });
+  }
+
+  protected async runFixedTicksAsync(
+    deltaMs: number,
+    hooks?: {
+      beforeStep?: () => void | Promise<void>;
+      afterStep?: (tick: number) => void | Promise<void>;
+    },
+  ): Promise<number> {
+    const fixedStep = this.physic.getWorld().getTimeStep();
+    return super.runFixedTicksAsync(deltaMs, {
+      beforeStep: hooks?.beforeStep,
+      afterStep: async (tick) => {
+        await hooks?.afterStep?.(tick);
+        this.projectiles.step(fixedStep);
+      },
+    });
+  }
+
+  loadPhysic(): void {
+    const shouldAutoTick = this._autoTickEnabled;
+    const previousAutoTickEnabled = this.autoTickEnabled;
+    this.autoTickEnabled = false;
+    super.loadPhysic();
+    this.autoTickEnabled = previousAutoTickEnabled;
+
+    if (shouldAutoTick) {
+      this.startServerTickLoop();
+    }
   }
 
   clearPhysic(): void {
@@ -1996,51 +2023,83 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 
   /**
-   * Main game loop that processes player inputs
-   * 
-   * This private method subscribes to tick$ and processes pending inputs
-   * for all players on the map with a throttle of 50ms. It ensures inputs are
-   * processed in order and prevents concurrent processing for the same player.
-   * 
-   * ## Architecture
-   * 
-   * - Subscribes to tick$ with throttleTime(50ms) for responsive input processing
-   * - Processes inputs for each player with pending inputs
-   * - Uses a flag to prevent concurrent processing for the same player
-   * - Calls `processInput()` to handle anti-cheat validation and movement
-   * 
-   * @example
-   * ```ts
-   * // This method is called automatically in the constructor if autoTick is enabled
-   * // You typically don't call it directly
-   * ```
+   * Main server game loop.
+   *
+   * A single tick subscription drives input processing, fixed physics steps,
+   * projectiles, and sync side effects in a deterministic order.
    */
-  private loop() {
-    if (this._inputLoopSubscription) {
-      this._inputLoopSubscription.unsubscribe();
-    }
-
-    this._inputLoopSubscription = this.tick$.subscribe(() => {
-      for (const player of this.getPlayers()) {
-        const anyPlayer = player as any;
-        const shouldProcess = player.pendingInputs.length > 0 || (player.lastProcessedInputTs || 0) > 0;
-        if (!shouldProcess || anyPlayer._isProcessingInputs) {
-          continue;
-        }
-        anyPlayer._isProcessingInputs = true;
-        void this.processInput(player.id).finally(() => {
-          anyPlayer._isProcessingInputs = false;
-        });
-      }
+  private startServerTickLoop() {
+    this.stopServerTickLoop();
+    const loopVersion = ++this._serverTickLoopVersion;
+    this.tickSubscription = this.tick$.subscribe(({ delta }) => {
+      void this.runQueuedServerTick(delta, loopVersion);
     });
   }
 
+  private stopServerTickLoop() {
+    this._serverTickLoopVersion += 1;
+    if (this.tickSubscription) {
+      this.tickSubscription.unsubscribe();
+      this.tickSubscription = null;
+    }
+    this._queuedServerTickDelta = 0;
+  }
+
+  private async runQueuedServerTick(deltaMs: number, loopVersion = this._serverTickLoopVersion): Promise<void> {
+    if (loopVersion !== this._serverTickLoopVersion) {
+      return;
+    }
+    this._queuedServerTickDelta += deltaMs;
+    if (this._serverTickInProgress) {
+      return;
+    }
+
+    this._serverTickInProgress = true;
+    try {
+      while (this._queuedServerTickDelta > 0 && loopVersion === this._serverTickLoopVersion) {
+        const nextDelta = this._queuedServerTickDelta;
+        this._queuedServerTickDelta = 0;
+        await this.runServerTick(nextDelta);
+      }
+    }
+    finally {
+      this._serverTickInProgress = false;
+    }
+  }
+
+  private async runServerTick(deltaMs: number): Promise<number> {
+    return this.runFixedTicksAsync(deltaMs, {
+      beforeStep: () => this.processPendingInputsForTick(),
+    });
+  }
+
+  private async processPendingInputsForTick(): Promise<void> {
+    for (const player of this.getPlayers()) {
+      const anyPlayer = player as any;
+      const shouldProcess = player.pendingInputs.length > 0 || (player.lastProcessedInputTs || 0) > 0;
+      if (!shouldProcess || anyPlayer._isProcessingInputs) {
+        continue;
+      }
+      anyPlayer._isProcessingInputs = true;
+      try {
+        await this.processInput(player.id);
+      }
+      finally {
+        anyPlayer._isProcessingInputs = false;
+      }
+    }
+  }
+
+  async nextTickAsync(deltaMs: number = 16): Promise<number> {
+    return this.runServerTick(deltaMs);
+  }
+
   /**
-   * Enable or disable automatic tick processing
+   * Enable or disable automatic server tick processing
    * 
-   * When disabled, the input processing loop will not run automatically.
-   * This is useful for unit tests where you want manual control over when
-   * inputs are processed.
+   * When disabled, the unified input/physics/projectile loop will not run
+   * automatically. This is useful for unit tests where you want manual control
+   * over server ticks.
    * 
    * @param enabled - Whether to enable automatic tick processing (default: true)
    * 
@@ -2050,16 +2109,16 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * map.setAutoTick(false);
    * 
    * // Manually trigger tick processing
-   * await map.processInput('player1');
+   * await map.nextTickAsync();
    * ```
    */
   setAutoTick(enabled: boolean): void {
     this._autoTickEnabled = enabled;
-    if (enabled && !this._inputLoopSubscription) {
-      this.loop();
-    } else if (!enabled && this._inputLoopSubscription) {
-      this._inputLoopSubscription.unsubscribe();
-      this._inputLoopSubscription = undefined;
+    this.autoTickEnabled = enabled;
+    if (enabled && !this.tickSubscription && this.data()) {
+      this.startServerTickLoop();
+    } else if (!enabled) {
+      this.stopServerTickLoop();
     }
   }
 
@@ -3316,11 +3375,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   clear(): void {
     try {
       this.clearLightingTransition();
-      // Stop input processing loop
-      if (this._inputLoopSubscription) {
-        this._inputLoopSubscription.unsubscribe();
-        this._inputLoopSubscription = undefined;
-      }
+      this.stopServerTickLoop();
     } catch (error) {
       console.warn('Error during map cleanup:', error);
     }

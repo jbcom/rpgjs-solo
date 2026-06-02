@@ -214,4 +214,43 @@ describe("Prediction + Reconciliation Server Protocol", () => {
     expect(player._lastFramePositions?.position?.direction).toBe(Direction.Right);
     expect(player.lastProcessedInputTs).toBeGreaterThanOrEqual(timestamp + 180);
   });
+
+  test("should process pending input before the physics step in server nextTickAsync", async () => {
+    const initialX = player.x();
+    const frame = 31;
+
+    await serverMap.onInput(player, {
+      input: Direction.Right,
+      frame,
+      tick: 0,
+      timestamp: Date.now(),
+    });
+
+    const executed = await serverMap.nextTickAsync(20);
+
+    expect(executed).toBe(1);
+    expect(player.pendingInputs).toHaveLength(0);
+    expect(player._lastFramePositions?.frame).toBe(frame);
+    expect(player.x()).toBeGreaterThan(initialX);
+    expect(serverMap.getTick()).toBeGreaterThan(0);
+  });
+
+  test("should run projectiles once for each fixed server step", async () => {
+    const stepSpy = vi.spyOn(serverMap.projectiles, "step");
+
+    const executed = await serverMap.nextTickAsync(80);
+
+    expect(executed).toBe(4);
+    expect(stepSpy).toHaveBeenCalledTimes(4);
+  });
+
+  test("should start and stop the unified auto tick subscription with setAutoTick", () => {
+    expect(serverMap.tickSubscription).toBeFalsy();
+
+    serverMap.setAutoTick(true);
+    expect(serverMap.tickSubscription).toBeTruthy();
+
+    serverMap.setAutoTick(false);
+    expect(serverMap.tickSubscription).toBeFalsy();
+  });
 });

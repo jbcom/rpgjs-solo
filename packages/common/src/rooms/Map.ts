@@ -53,9 +53,21 @@ export interface MapHitboxQueryOptions {
   kinds?: MapHitboxQueryKind[];
 }
 
+type FixedTickHooks = {
+  beforeStep?: () => void;
+  afterStep?: (tick: number) => void;
+};
+
+type AsyncFixedTickHooks = {
+  beforeStep?: () => void | Promise<void>;
+  afterStep?: (tick: number) => void | Promise<void>;
+};
+
 const COLLISION_PROXIMITY_MARGIN = 1;
 const DEFAULT_INTERACTION_RANGE = 16;
 const INTERACTION_SIDE_PADDING = 4;
+const DEFAULT_MAX_FIXED_STEPS_PER_TICK = 5;
+const DEFAULT_MAX_TICK_DELTA_MS = 250;
 
 export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   abstract players: Signal<Record<string, T>>;
@@ -86,6 +98,8 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   eventsSubscription?: Subscription | null;
   private physicsAccumulatorMs = 0;
   private physicsSyncDepth = 0;
+  protected maxFixedStepsPerTick = DEFAULT_MAX_FIXED_STEPS_PER_TICK;
+  protected maxTickDeltaMs = DEFAULT_MAX_TICK_DELTA_MS;
 
   /**
    * Whether to automatically subscribe to tick$ for physics updates
@@ -190,9 +204,9 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   /**
    * Observable representing the game loop tick
    * 
-   * This observable emits the current timestamp every 16ms (approximately 60fps).
-   * It's shared using the share() operator, meaning that all subscribers will receive
-   * events from a single interval rather than creating multiple intervals.
+   * This observable emits elapsed time and the current epoch timestamp at roughly
+   * 60fps. It is shared using the share() operator, meaning that all subscribers
+   * receive events from a single timer rather than creating multiple timers.
    * 
    * ## Physics Loop Architecture
    * 
@@ -226,11 +240,14 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    */
   tick$ = new Observable<{ delta: number, timestamp: number }>(observer => {
     if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+      let lastTimestamp = this.getTickTime();
       const interval = setInterval(() => {
+        const now = this.getTickTime();
         observer.next({
-          delta: 16,
+          delta: this.normalizeTickDelta(now - lastTimestamp),
           timestamp: Date.now()
         });
+        lastTimestamp = now;
       }, 16);
       return () => clearInterval(interval);
     }
@@ -244,7 +261,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       lastTimestamp = timestamp;
       observer.next({
         delta,
-        timestamp
+        timestamp: Date.now()
       });
       frameId = window.requestAnimationFrame(frame);
     };
@@ -254,6 +271,27 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   }).pipe(
     share()
   );
+
+  private getTickTime(): number {
+    const performanceNow = globalThis.performance?.now?.();
+    return typeof performanceNow === "number" && Number.isFinite(performanceNow)
+      ? performanceNow
+      : Date.now();
+  }
+
+  private normalizeTickDelta(deltaMs: number): number {
+    if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
+      return 16;
+    }
+    return Math.max(1, Math.min(this.maxTickDeltaMs, deltaMs));
+  }
+
+  private getMaxFixedStepsPerTick(): number {
+    const configured = Math.floor(Number(this.maxFixedStepsPerTick));
+    return Number.isFinite(configured) && configured > 0
+      ? configured
+      : DEFAULT_MAX_FIXED_STEPS_PER_TICK;
+  }
 
   /**
    * Clear all physics content and reset to initial state
@@ -558,22 +596,17 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    * });
    * ```
    */
-  protected runFixedTicks(
-    deltaMs: number,
-    hooks?: {
-      beforeStep?: () => void;
-      afterStep?: (tick: number) => void;
-    },
-  ): number {
+  protected runFixedTicks(deltaMs: number, hooks?: FixedTickHooks): number {
     if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
       return 0;
     }
 
     const fixedStepMs = this.physic.getWorld().getTimeStep() * 1000;
-    this.physicsAccumulatorMs += deltaMs;
+    this.physicsAccumulatorMs += this.normalizeTickDelta(deltaMs);
     let executed = 0;
+    const maxSteps = this.getMaxFixedStepsPerTick();
 
-    while (this.physicsAccumulatorMs >= fixedStepMs) {
+    while (this.physicsAccumulatorMs >= fixedStepMs && executed < maxSteps) {
       this.physicsAccumulatorMs -= fixedStepMs;
       hooks?.beforeStep?.();
       
@@ -584,6 +617,31 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       executed += 1;
 
       hooks?.afterStep?.(tick);
+    }
+
+    return executed;
+  }
+
+  protected async runFixedTicksAsync(deltaMs: number, hooks?: AsyncFixedTickHooks): Promise<number> {
+    if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
+      return 0;
+    }
+
+    const fixedStepMs = this.physic.getWorld().getTimeStep() * 1000;
+    this.physicsAccumulatorMs += this.normalizeTickDelta(deltaMs);
+    let executed = 0;
+    const maxSteps = this.getMaxFixedStepsPerTick();
+
+    while (this.physicsAccumulatorMs >= fixedStepMs && executed < maxSteps) {
+      this.physicsAccumulatorMs -= fixedStepMs;
+      await hooks?.beforeStep?.();
+
+      this.physic.updateMovements();
+
+      const tick = this.physic.stepFrame();
+      executed += 1;
+
+      await hooks?.afterStep?.(tick);
     }
 
     return executed;
@@ -628,6 +686,10 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    */
   nextTick(deltaMs: number = 16): number {
     return this.runFixedTicks(deltaMs);
+  }
+
+  nextTickAsync(deltaMs: number = 16): Promise<number> {
+    return this.runFixedTicksAsync(deltaMs);
   }
 
   /**
