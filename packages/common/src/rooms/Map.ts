@@ -225,13 +225,32 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
    * ```
    */
   tick$ = new Observable<{ delta: number, timestamp: number }>(observer => {
-    const interval = setInterval(() => {
+    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+      const interval = setInterval(() => {
+        observer.next({
+          delta: 16,
+          timestamp: Date.now()
+        });
+      }, 16);
+      return () => clearInterval(interval);
+    }
+
+    let frameId = 0;
+    let lastTimestamp = 0;
+    const frame = (timestamp: number) => {
+      const delta = lastTimestamp === 0
+        ? 16
+        : Math.max(1, Math.min(100, timestamp - lastTimestamp));
+      lastTimestamp = timestamp;
       observer.next({
-        delta: 16,
-        timestamp: Date.now()
+        delta,
+        timestamp
       });
-    }, 16);
-    return () => clearInterval(interval);
+      frameId = window.requestAnimationFrame(frame);
+    };
+
+    frameId = window.requestAnimationFrame(frame);
+    return () => window.cancelAnimationFrame(frameId);
   }).pipe(
     share()
   );

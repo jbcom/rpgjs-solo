@@ -1,4 +1,10 @@
+// @vitest-environment jsdom
+
 import { describe, expect, test, vi } from "vitest";
+import { Context } from "@signe/di";
+import { WebSocketToken } from "./AbstractSocket";
+import { provideMmorpg } from "./mmorpg";
+import { provideRpg } from "./standalone";
 import { normalizeStandaloneMessage } from "./standalone-message";
 
 describe("standalone websocket bridge", () => {
@@ -30,5 +36,19 @@ describe("standalone websocket bridge", () => {
       type: "projectile:spawnBatch",
       value: { projectiles: [] },
     });
+  });
+
+  test("marks standalone and MMORPG websocket providers with their runtime mode", () => {
+    class Server {}
+    const context = new Context();
+    const standaloneProvider = provideRpg(Server).find(
+      (provider: any) => provider.provide === WebSocketToken,
+    ) as any;
+    const mmorpgProvider = provideMmorpg({ connectionId: "test-client" }).find(
+      (provider: any) => provider.provide === WebSocketToken,
+    ) as any;
+
+    expect(standaloneProvider.useFactory(context).mode).toBe("standalone");
+    expect(mmorpgProvider.useFactory(context).mode).toBe("mmorpg");
   });
 });
