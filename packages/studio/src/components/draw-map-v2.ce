@@ -1,9 +1,8 @@
 <Container scale>
-    <StudioTerrainMap data splitWallForeground={true} />
+    <StudioTerrainMap data splitWallForeground={true} /> 
     <Container sortableChildren={true} pixiChildren={terrainWallShadowPixiChildren} />
     <Container sortableChildren={true} pixiChildren={elementsAlwaysLowPixiChildren} />
-    <EventLayerComponent pixiChildren={eventLayerPixiChildren} />
-    
+    <EventLayerComponent pixiChildren={eventLayerPixiChildren} /> 
     <Container sortableChildren={true} pixiChildren={elementsHighPixiChildren} />
 </Container>
 
@@ -37,6 +36,7 @@
     import { StudioElementRenderer } from '../map-renderer/studio-element-renderer'
     import { toCanvasWeatherOptions } from '@common/weather';
     import { assetsUrl } from "../constants";
+    import { createViewportCullKey, getPixiLocalViewportBounds } from '../map-renderer/viewport-culling'
 
     const { data } = defineProps()
 
@@ -46,7 +46,6 @@
     const elementsHighWorld = new PixiContainer()
     const terrainWallShadowMask = new Graphics()
     const elementsAlwaysLowMask = new Graphics()
-    const eventLayerMask = new Graphics()
     const elementsHighMask = new Graphics()
     terrainWallShadowWorld.sortableChildren = true
     elementsAlwaysLowWorld.sortableChildren = true
@@ -61,23 +60,12 @@
     let elementsAlwaysLowChildren = []
     const terrainWallOcclusionChildren = signal([])
     const elementsLowPixiChildren = signal([])
-    let eventLayerMaskedChildren = []
     let elementsHighChildren = []
     const eventLayerPixiChildren = computed(() => {
-      const children = [
+      return [
         ...elementsLowPixiChildren(),
         ...terrainWallOcclusionChildren()
       ]
-      eventLayerMaskedChildren.forEach((child) => {
-        if (!children.includes(child) && child.mask === eventLayerMask) {
-          child.mask = null
-        }
-      })
-      children.forEach((child) => {
-        child.mask = eventLayerMask
-      })
-      eventLayerMaskedChildren = children
-      return [eventLayerMask, ...children]
     })
     const terrainWallOcclusionRenderer = new StudioTerrainWallOcclusionRenderer()
     const terrainWallShadowRenderer = new StudioTerrainWallShadowRenderer()
@@ -88,11 +76,15 @@
     let terrainWallShadowSerial = 0
     let studioElementRenderSerial = 0
     const STUDIO_ELEMENT_SHADOW_CASTER_LIMIT = 1000
+    const TERRAIN_MORPHOLOGY_CULL_MARGIN = 1024
+    const TERRAIN_MORPHOLOGY_CULL_GRID_SIZE = 128
+    let lastTerrainMorphologyCullKey = ""
 
     tick(({ deltaTime }) => {
       elementsAlwaysLowRenderer.update(deltaTime)
       elementsLowRenderer.update(deltaTime)
       elementsHighRenderer.update(deltaTime)
+      updateTerrainMorphologyCulling()
     })
 
     const syncPixiWorldChildren = (world, children) => {
@@ -118,15 +110,6 @@
       mask.fill(0xffffff)
     }
 
-    const clearEventLayerMasks = () => {
-      eventLayerMaskedChildren.forEach((child) => {
-        if (child.mask === eventLayerMask) {
-          child.mask = null
-        }
-      })
-      eventLayerMaskedChildren = []
-    }
-
     const tilesetImage = computed(() => {
       const params = data().params
       if (!params?.tileset?.fileName) return ''
@@ -140,6 +123,8 @@
       const children = await terrainWallOcclusionRenderer.renderMap(mapData)
       if (currentSerial !== terrainWallOcclusionSerial) return
       terrainWallOcclusionChildren.set(children)
+      lastTerrainMorphologyCullKey = ""
+      updateTerrainMorphologyCulling()
     }
 
     const mapLighting = computed(() => {
@@ -155,6 +140,8 @@
       if (currentSerial !== terrainWallShadowSerial) return
       terrainWallShadowChildren = children
       syncPixiWorldChildren(terrainWallShadowWorld, terrainWallShadowChildren)
+      lastTerrainMorphologyCullKey = ""
+      updateTerrainMorphologyCulling()
     }
 
     effect(() => {
@@ -173,11 +160,11 @@
         terrainWallOcclusionSerial += 1
         terrainWallShadowSerial += 1
         studioElementRenderSerial += 1
+        lastTerrainMorphologyCullKey = ""
         terrainWallShadowChildren = []
         terrainWallOcclusionChildren.set([])
         elementsAlwaysLowChildren = []
         elementsLowPixiChildren.set([])
-        clearEventLayerMasks()
         elementsHighChildren = []
         syncPixiWorldChildren(terrainWallShadowWorld, terrainWallShadowChildren)
         syncPixiWorldChildren(elementsAlwaysLowWorld, elementsAlwaysLowChildren)
@@ -189,6 +176,27 @@
         elementsHighRenderer.destroy(engine.sceneMap)
       }
     })
+
+    function updateTerrainMorphologyCulling() {
+      const bounds = getPixiLocalViewportBounds(engine, terrainWallShadowWorld)
+      if (!bounds) {
+        if (lastTerrainMorphologyCullKey) {
+          lastTerrainMorphologyCullKey = ""
+          terrainWallOcclusionRenderer.updateSpriteVisibility(null)
+          terrainWallShadowRenderer.updateSpriteVisibility(null)
+        }
+        return
+      }
+
+      const cullKey = createViewportCullKey(bounds, TERRAIN_MORPHOLOGY_CULL_GRID_SIZE)
+      if (cullKey === lastTerrainMorphologyCullKey) {
+        return
+      }
+
+      lastTerrainMorphologyCullKey = cullKey
+      terrainWallOcclusionRenderer.updateSpriteVisibility(bounds, TERRAIN_MORPHOLOGY_CULL_MARGIN)
+      terrainWallShadowRenderer.updateSpriteVisibility(bounds, TERRAIN_MORPHOLOGY_CULL_MARGIN)
+    }
 
     const terrainImage = computed(() => {
       const params = data().params
@@ -477,7 +485,6 @@
       const bounds = mapBounds()
       updateMapMask(terrainWallShadowMask, bounds)
       updateMapMask(elementsAlwaysLowMask, bounds)
-      updateMapMask(eventLayerMask, bounds)
       updateMapMask(elementsHighMask, bounds)
     })
 

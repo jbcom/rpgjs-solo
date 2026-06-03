@@ -545,7 +545,7 @@ export async function nextTick(
   }
 
   const tickTimestamp = timestamp ?? Date.now();
-  const delta = 16; // 16ms for 60fps
+  const delta = 16; // Legacy fallback delta for maps without nextTickAsync()
 
   // Get server instance from client context
   const websocket = (client as any).webSocket;
@@ -564,14 +564,18 @@ export async function nextTick(
     return;
   }
 
-  // 1. On server: Process inputs for all players
-  for (const player of serverMap.getPlayers()) {
-    if (player.pendingInputs && player.pendingInputs.length > 0) {
-      await serverMap.processInput(player.id);
+  if (typeof serverMap.nextTickAsync === "function") {
+    await serverMap.nextTickAsync();
+  } else {
+    // 1. On server: Process inputs for all players
+    for (const player of serverMap.getPlayers()) {
+      if (player.pendingInputs && player.pendingInputs.length > 0) {
+        await serverMap.processInput(player.id);
+      }
     }
-  }
 
-  serverMap.nextTick(delta);
+    serverMap.nextTick(delta);
+  }
 
   // 3. Server sends data to client - trigger sync for all players
   // The sync is triggered by calling syncChanges() on each player

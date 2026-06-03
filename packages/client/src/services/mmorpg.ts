@@ -17,6 +17,8 @@ export interface MmorpgOptions {
 }
 
 export class BridgeWebsocket extends AbstractWebsocket {
+  readonly mode = "mmorpg" as const;
+
   private socket: any;
   private privateId: string;
   private pendingOn: Array<{ event: string; callback: (data: any) => void }> = [];

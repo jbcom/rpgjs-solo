@@ -214,4 +214,99 @@ describe("Prediction + Reconciliation Server Protocol", () => {
     expect(player._lastFramePositions?.position?.direction).toBe(Direction.Right);
     expect(player.lastProcessedInputTs).toBeGreaterThanOrEqual(timestamp + 180);
   });
+
+  test("should process pending input before the physics step in server nextTickAsync", async () => {
+    const initialX = player.x();
+    const frame = 31;
+
+    await serverMap.onInput(player, {
+      input: Direction.Right,
+      frame,
+      tick: 0,
+      timestamp: Date.now(),
+    });
+
+    const executed = await serverMap.nextTickAsync(20);
+
+    expect(executed).toBe(1);
+    expect(player.pendingInputs).toHaveLength(0);
+    expect(player._lastFramePositions?.frame).toBe(frame);
+    expect(player.x()).toBeGreaterThan(initialX);
+    expect(serverMap.getTick()).toBeGreaterThan(0);
+  });
+
+  test("should run one fixed step on default nextTickAsync", async () => {
+    const initialTick = serverMap.getTick();
+    const initialX = player.x();
+    const frame = 32;
+
+    await serverMap.onInput(player, {
+      input: Direction.Right,
+      frame,
+      tick: 0,
+      timestamp: Date.now(),
+    });
+
+    const executed = await serverMap.nextTickAsync();
+
+    expect(executed).toBe(1);
+    expect(serverMap.getTick()).toBe(initialTick + 1);
+    expect(player.pendingInputs).toHaveLength(0);
+    expect(player._lastFramePositions?.frame).toBe(frame);
+    expect(player.x()).toBeGreaterThan(initialX);
+  });
+
+  test("should not consume queued trajectory inputs on partial accumulator ticks", async () => {
+    const baseTs = Date.now();
+    await serverMap.onInput(player, {
+      input: Direction.Down,
+      frame: 34,
+      tick: 34,
+      timestamp: baseTs + 16,
+      trajectory: [
+        {
+          input: Direction.Right,
+          frame: 33,
+          tick: 33,
+          timestamp: baseTs,
+        },
+        {
+          input: Direction.Down,
+          frame: 34,
+          tick: 34,
+          timestamp: baseTs + 16,
+        },
+      ],
+    });
+
+    expect(player.pendingInputs.map((entry: any) => entry.frame)).toEqual([33, 34]);
+
+    const firstExecuted = await serverMap.nextTickAsync(8);
+    expect(firstExecuted).toBe(0);
+    expect(player.pendingInputs.map((entry: any) => entry.frame)).toEqual([33, 34]);
+
+    const secondExecuted = await serverMap.nextTickAsync(9);
+    expect(secondExecuted).toBe(1);
+    expect(player._lastFramePositions?.frame).toBe(33);
+    expect(player.pendingInputs.map((entry: any) => entry.frame)).toEqual([34]);
+  });
+
+  test("should run projectiles once for each fixed server step", async () => {
+    const stepSpy = vi.spyOn(serverMap.projectiles, "step");
+
+    const executed = await serverMap.nextTickAsync(80);
+
+    expect(executed).toBe(4);
+    expect(stepSpy).toHaveBeenCalledTimes(4);
+  });
+
+  test("should start and stop the unified auto tick subscription with setAutoTick", () => {
+    expect(serverMap.tickSubscription).toBeFalsy();
+
+    serverMap.setAutoTick(true);
+    expect(serverMap.tickSubscription).toBeTruthy();
+
+    serverMap.setAutoTick(false);
+    expect(serverMap.tickSubscription).toBeFalsy();
+  });
 });

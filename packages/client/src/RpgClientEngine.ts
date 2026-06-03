@@ -52,6 +52,11 @@ interface MovementTrajectoryPoint {
   direction?: Direction;
 }
 
+interface CanvasResizeSize {
+  width: number;
+  height: number;
+}
+
 const DEFAULT_DASH_ADDITIONAL_SPEED = 8;
 const DEFAULT_DASH_DURATION_MS = 180;
 const DEFAULT_DASH_COOLDOWN_MS = 450;
@@ -187,6 +192,9 @@ export class RpgClientEngine<T = any> {
   private predictionEnabled = false;
   private prediction?: PredictionController<RpgMovementInput, Direction>;
   private readonly SERVER_CORRECTION_THRESHOLD = 30;
+  private localMovementAuthority = false;
+  private lastLocalMovementInputAt = 0;
+  private readonly LOCAL_MOVEMENT_AUTHORITY_ACK_GRACE_MS = 250;
   private inputFrameCounter = 0;
   private pendingPredictionFrames: number[] = [];
   private lastClientPhysicsStepAt = 0;
@@ -267,7 +275,34 @@ export class RpgClientEngine<T = any> {
     this.registerSpriteComponent("rpg:image", ImageComponent);
 
     this.predictionEnabled = (this.globalConfig as any)?.prediction?.enabled !== false;
+    this.localMovementAuthority = this.resolveLocalMovementAuthority();
     this.initializePredictionController();
+  }
+
+  private resolveLocalMovementAuthority(): boolean {
+    const predictionConfig = (this.globalConfig as any)?.prediction;
+    const configured =
+      (this.globalConfig as any)?.movementAuthority ??
+      predictionConfig?.movementAuthority ??
+      predictionConfig?.authority ??
+      predictionConfig?.mode;
+
+    if (
+      configured === "server" ||
+      configured === "network" ||
+      configured === false
+    ) {
+      return false;
+    }
+    if (
+      configured === "client" ||
+      configured === "local" ||
+      configured === true
+    ) {
+      return true;
+    }
+
+    return this.webSocket.mode === "standalone";
   }
 
   setLocale(locale: string) {
@@ -359,6 +394,7 @@ export class RpgClientEngine<T = any> {
       Canvas,
       bootstrapOptions
     );
+    this.installCanvasResizeGuard(app);
     this.canvasApp = app;
     this.canvasElement = canvasElement;
     this.renderer = app.renderer as unknown as PIXI.Renderer;
@@ -418,6 +454,56 @@ export class RpgClientEngine<T = any> {
     this.tickSubscriptions.push(tickSubscription);
 
     this.startPingPong();
+  }
+
+  private installCanvasResizeGuard(app: any) {
+    if (!app || typeof app.resize !== "function") return;
+
+    const originalResize = app.resize.bind(app);
+    app.resize = () => {
+      const targetSize = this.readCanvasResizeTargetSize(app);
+      const rendererSize = this.readCanvasRendererSize(app);
+
+      if (
+        targetSize &&
+        rendererSize &&
+        targetSize.width === rendererSize.width &&
+        targetSize.height === rendererSize.height
+      ) {
+        this.cancelCanvasResizeFrame(app);
+        return;
+      }
+
+      originalResize();
+    };
+  }
+
+  private readCanvasResizeTargetSize(app: any): CanvasResizeSize | null {
+    const resizeTarget = app?.resizeTo;
+    if (!resizeTarget || typeof window === "undefined") return null;
+
+    const rawWidth = resizeTarget === window ? window.innerWidth : resizeTarget.clientWidth;
+    const rawHeight = resizeTarget === window ? window.innerHeight : resizeTarget.clientHeight;
+    const width = Math.round(Number(rawWidth));
+    const height = Math.round(Number(rawHeight));
+
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 0 || height < 0) return null;
+    return { width, height };
+  }
+
+  private readCanvasRendererSize(app: any): CanvasResizeSize | null {
+    const screen = app?.renderer?.screen;
+    const width = Math.round(Number(screen?.width));
+    const height = Math.round(Number(screen?.height));
+
+    if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
+    return { width, height };
+  }
+
+  private cancelCanvasResizeFrame(app: any) {
+    if (typeof app?._cancelResize === "function") {
+      app._cancelResize();
+    }
   }
 
   private resolveSceneMapComponent() {
@@ -527,8 +613,8 @@ export class RpgClientEngine<T = any> {
 
     const myId = this.playerIdSignal();
     const players = payload.players;
-    const shouldMaskLocalPosition =
-      this.predictionEnabled && !!this.prediction?.hasPendingInputs();
+    const localPatch = myId && players ? players[myId] : undefined;
+    const shouldMaskLocalPosition = this.shouldPreserveLocalPlayerPosition(localPatch);
     if (shouldMaskLocalPosition && myId && players && players[myId]) {
       const localPatch = { ...players[myId] };
       delete localPatch.x;
@@ -542,6 +628,31 @@ export class RpgClientEngine<T = any> {
     }
 
     return payload;
+  }
+
+  private shouldPreserveLocalPlayerPosition(localPatch?: any): boolean {
+    if (!localPatch) {
+      return false;
+    }
+    if (this.predictionEnabled && !!this.prediction?.hasPendingInputs()) {
+      return true;
+    }
+    return this.shouldKeepLocalPlayerMovement();
+  }
+
+  private shouldKeepLocalPlayerMovement(): boolean {
+    if (!this.localMovementAuthority || this.mapTransitionInProgress) {
+      return false;
+    }
+    const myId = this.playerIdSignal();
+    const player = myId ? this.sceneMap?.players?.()?.[myId] : undefined;
+    if (!player) {
+      return false;
+    }
+    if (this.prediction?.hasPendingInputs()) {
+      return true;
+    }
+    return Date.now() - this.lastLocalMovementInputAt <= this.LOCAL_MOVEMENT_AUTHORITY_ACK_GRACE_MS;
   }
 
   private normalizeAckWithSyncState(
@@ -1733,6 +1844,7 @@ export class RpgClientEngine<T = any> {
       if (timestamp < this.dashLockedUntil) return;
       this.dashLockedUntil = timestamp + cooldown;
     }
+    this.lastLocalMovementInputAt = timestamp;
 
     let frame: number;
     let tick: number;
@@ -2248,12 +2360,13 @@ export class RpgClientEngine<T = any> {
 
   private applyServerAck(ack: { frame: number; serverTick?: number; x?: number; y?: number; direction?: Direction }) {
     this.updateServerTickEstimate(ack.serverTick);
+    const keepLocalMovement = this.shouldKeepLocalPlayerMovement();
     if (this.predictionEnabled && this.prediction) {
       const result = this.prediction.applyServerAck({
         frame: ack.frame,
         serverTick: ack.serverTick,
         state:
-          typeof ack.x === "number" && typeof ack.y === "number"
+          !keepLocalMovement && typeof ack.x === "number" && typeof ack.y === "number"
             ? { x: ack.x, y: ack.y, direction: ack.direction }
             : undefined,
       });
@@ -2264,6 +2377,9 @@ export class RpgClientEngine<T = any> {
     }
 
     if (typeof ack.x !== "number" || typeof ack.y !== "number") {
+      return;
+    }
+    if (keepLocalMovement) {
       return;
     }
     const player = this.getCurrentPlayer() as any;
