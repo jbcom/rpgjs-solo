@@ -1,5 +1,11 @@
 # @rpgjs/ui-css
 
+## 5.0.0-beta.13
+
+### Patch Changes
+
+- Release the next RPGJS beta with terrain rendering performance improvements and a unified server tick loop.
+
 ## 5.0.0-beta.12
 
 ### Patch Changes

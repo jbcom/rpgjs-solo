@@ -1,5 +1,16 @@
 # @rpgjs/tiledmap
 
+## 5.0.0-beta.16
+
+### Patch Changes
+
+- Release the next RPGJS beta with terrain rendering performance improvements and a unified server tick loop.
+- Updated dependencies
+  - @rpgjs/client@5.0.0-beta.16
+  - @rpgjs/common@5.0.0-beta.15
+  - @rpgjs/server@5.0.0-beta.16
+  - @rpgjs/vite@5.0.0-beta.16
+
 ## 5.0.0-beta.15
 
 ### Patch Changes

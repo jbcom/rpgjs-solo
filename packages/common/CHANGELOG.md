@@ -1,5 +1,11 @@
 # @rpgjs/common
 
+## 5.0.0-beta.15
+
+### Patch Changes
+
+- Release the next RPGJS beta with terrain rendering performance improvements and a unified server tick loop.
+
 ## 5.0.0-beta.14
 
 ### Patch Changes
