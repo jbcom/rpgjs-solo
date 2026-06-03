@@ -235,8 +235,9 @@ describe("Prediction + Reconciliation Server Protocol", () => {
     expect(serverMap.getTick()).toBeGreaterThan(0);
   });
 
-  test("should flush pending input on default nextTickAsync even without a fixed physics step", async () => {
+  test("should run one fixed step on default nextTickAsync", async () => {
     const initialTick = serverMap.getTick();
+    const initialX = player.x();
     const frame = 32;
 
     await serverMap.onInput(player, {
@@ -248,10 +249,46 @@ describe("Prediction + Reconciliation Server Protocol", () => {
 
     const executed = await serverMap.nextTickAsync();
 
-    expect(executed).toBe(0);
-    expect(serverMap.getTick()).toBe(initialTick);
+    expect(executed).toBe(1);
+    expect(serverMap.getTick()).toBe(initialTick + 1);
     expect(player.pendingInputs).toHaveLength(0);
     expect(player._lastFramePositions?.frame).toBe(frame);
+    expect(player.x()).toBeGreaterThan(initialX);
+  });
+
+  test("should not consume queued trajectory inputs on partial accumulator ticks", async () => {
+    const baseTs = Date.now();
+    await serverMap.onInput(player, {
+      input: Direction.Down,
+      frame: 34,
+      tick: 34,
+      timestamp: baseTs + 16,
+      trajectory: [
+        {
+          input: Direction.Right,
+          frame: 33,
+          tick: 33,
+          timestamp: baseTs,
+        },
+        {
+          input: Direction.Down,
+          frame: 34,
+          tick: 34,
+          timestamp: baseTs + 16,
+        },
+      ],
+    });
+
+    expect(player.pendingInputs.map((entry: any) => entry.frame)).toEqual([33, 34]);
+
+    const firstExecuted = await serverMap.nextTickAsync(8);
+    expect(firstExecuted).toBe(0);
+    expect(player.pendingInputs.map((entry: any) => entry.frame)).toEqual([33, 34]);
+
+    const secondExecuted = await serverMap.nextTickAsync(9);
+    expect(secondExecuted).toBe(1);
+    expect(player._lastFramePositions?.frame).toBe(33);
+    expect(player.pendingInputs.map((entry: any) => entry.frame)).toEqual([34]);
   });
 
   test("should run projectiles once for each fixed server step", async () => {

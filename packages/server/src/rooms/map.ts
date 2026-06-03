@@ -2068,13 +2068,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 
   private async runServerTick(deltaMs: number): Promise<number> {
-    const executed = await this.runFixedTicksAsync(deltaMs, {
+    return this.runFixedTicksAsync(deltaMs, {
       beforeStep: () => this.processPendingInputsForTick(),
     });
-    if (executed === 0) {
-      await this.processPendingInputsForTick();
-    }
-    return executed;
   }
 
   private async processPendingInputsForTick(): Promise<void> {
@@ -2094,8 +2090,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
   }
 
-  async nextTickAsync(deltaMs: number = 16): Promise<number> {
-    return this.runServerTick(deltaMs);
+  async nextTickAsync(deltaMs?: number): Promise<number> {
+    const fixedStepMs = this.physic.getWorld().getTimeStep() * 1000;
+    return this.runServerTick(deltaMs ?? fixedStepMs);
   }
 
   /**

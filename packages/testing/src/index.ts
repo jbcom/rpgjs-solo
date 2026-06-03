@@ -545,7 +545,7 @@ export async function nextTick(
   }
 
   const tickTimestamp = timestamp ?? Date.now();
-  const delta = 16; // 16ms for 60fps
+  const delta = 16; // Legacy fallback delta for maps without nextTickAsync()
 
   // Get server instance from client context
   const websocket = (client as any).webSocket;
@@ -565,7 +565,7 @@ export async function nextTick(
   }
 
   if (typeof serverMap.nextTickAsync === "function") {
-    await serverMap.nextTickAsync(delta);
+    await serverMap.nextTickAsync();
   } else {
     // 1. On server: Process inputs for all players
     for (const player of serverMap.getPlayers()) {
