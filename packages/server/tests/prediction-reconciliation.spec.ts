@@ -235,6 +235,25 @@ describe("Prediction + Reconciliation Server Protocol", () => {
     expect(serverMap.getTick()).toBeGreaterThan(0);
   });
 
+  test("should flush pending input on default nextTickAsync even without a fixed physics step", async () => {
+    const initialTick = serverMap.getTick();
+    const frame = 32;
+
+    await serverMap.onInput(player, {
+      input: Direction.Right,
+      frame,
+      tick: 0,
+      timestamp: Date.now(),
+    });
+
+    const executed = await serverMap.nextTickAsync();
+
+    expect(executed).toBe(0);
+    expect(serverMap.getTick()).toBe(initialTick);
+    expect(player.pendingInputs).toHaveLength(0);
+    expect(player._lastFramePositions?.frame).toBe(frame);
+  });
+
   test("should run projectiles once for each fixed server step", async () => {
     const stepSpy = vi.spyOn(serverMap.projectiles, "step");
 
