@@ -97,7 +97,6 @@ test("map lighting syncs to clients and merges local light spots", async () => {
     { id: "torch", x: 300, y: 320, radius: 180, intensity: 1, flicker: true },
   ]);
 
-  const localLightSpots = client.client.sceneMap.localLightSpots();
   client.client.sceneMap.addLightSpot("torch", {
     x: 300,
     y: 320,
@@ -105,7 +104,14 @@ test("map lighting syncs to clients and merges local light spots", async () => {
     intensity: 1,
     flicker: true,
   });
-  expect(client.client.sceneMap.localLightSpots()).toBe(localLightSpots);
+  expect(Object.keys(client.client.sceneMap.localLightSpots())).toEqual(["torch"]);
+  expect(client.client.sceneMap.localLightSpots().torch).toMatchObject({
+    x: 300,
+    y: 320,
+    radius: 180,
+    intensity: 1,
+    flicker: true,
+  });
 
   client.client.sceneMap.patchLightSpot("torch", { x: 340 });
   expect(client.client.sceneMap.getLighting()?.spots?.[1]).toMatchObject({

@@ -32,7 +32,9 @@
   },
   "changesets": [
     "bright-battles-move",
+    "fuzzy-maps-wait",
     "next-beta-latest",
-    "sharp-plates-push"
+    "sharp-plates-push",
+    "terrain-server-tick-beta"
   ]
 }

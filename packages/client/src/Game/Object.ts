@@ -64,6 +64,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
 
   constructor() {
     super();
+    const engine = this.engine;
     this.hooks.callHooks("client-sprite-onInit", this).subscribe();
 
     this._frames.observable.subscribe(({ items }) => {
@@ -84,7 +85,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
         const graphicRefs = Array.isArray(graphics) ? graphics : [];
         if (graphicRefs.length === 0) return of([]);
         return from(Promise.all(graphicRefs.map(async (graphic) => {
-          const spritesheet = await this.engine.getSpriteSheet(graphic);
+          const spritesheet = await engine.getSpriteSheet(graphic);
           return withGraphicDisplayScale(spritesheet, scale);
         })));
       })
@@ -93,7 +94,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
       this.graphicsSignals.set(sheets);
     });
 
-    this.engine.tick
+    engine.tick
       .pipe
       //throttleTime(10)
       ()
@@ -101,7 +102,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
         const frame = this.frames.shift();
         if (frame) {
           if (typeof frame.x !== "number" || typeof frame.y !== "number") return;
-          this.engine.scene.setBodyPosition(
+          engine.scene.setBodyPosition(
             this.id,
             frame.x,
             frame.y,

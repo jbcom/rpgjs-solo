@@ -17,6 +17,8 @@ interface StandaloneOptions {
 }
 
 class BridgeWebsocket extends AbstractWebsocket {
+  readonly mode = "standalone" as const;
+
   private room: ServerIo;
   private socket: ClientIo;
   private socketRoom?: ServerIo;

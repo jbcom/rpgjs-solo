@@ -9,8 +9,11 @@ export type SocketUpdateProperties = {
   host?: string;
   query?: SocketQuery;
 };
+export type WebSocketMode = "standalone" | "mmorpg";
 
 export abstract class AbstractWebsocket {
+  readonly mode?: WebSocketMode;
+
   constructor(protected context: Context) {}
 
   abstract connection(listeners?: (data: any) => void): Promise<void>;

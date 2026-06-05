@@ -1,5 +1,22 @@
 # @rpgjs/client
 
+## 5.0.0-beta.16
+
+### Patch Changes
+
+- Release the next RPGJS beta with terrain rendering performance improvements and a unified server tick loop.
+- Updated dependencies
+  - @rpgjs/common@5.0.0-beta.15
+  - @rpgjs/server@5.0.0-beta.16
+  - @rpgjs/ui-css@5.0.0-beta.13
+
+## 5.0.0-beta.15
+
+### Patch Changes
+
+- dba133e: Queue early changeMap packets until the client has finished loading modules and GUI definitions.
+  - @rpgjs/server@5.0.0-beta.15
+
 ## 5.0.0-beta.14
 
 ### Patch Changes

@@ -6,9 +6,11 @@
 />
 
 <script>
-import { computed, effect } from "canvasengine"
+import { computed, effect, tick } from "canvasengine"
+import { RpgClientEngine, inject } from "@rpgjs/client"
 import { Container as PixiContainer } from "pixi.js"
 import { StudioTerrainChunkRenderer } from "../terrain-renderer/terrain-chunk-renderer"
+import { createViewportCullKey, getPixiLocalViewportBounds } from "../viewport-culling"
 
 const { data, debugCollisions, splitWallForeground } = defineProps({
   debugCollisions: {
@@ -21,13 +23,17 @@ const { data, debugCollisions, splitWallForeground } = defineProps({
   }
 })
 
+const TERRAIN_CULL_MARGIN = 1024
+const TERRAIN_CULL_GRID_SIZE = 128
 const readValue = (value) => typeof value === "function" ? value() : value
+const engine = inject(RpgClientEngine)
 const terrainWorld = new PixiContainer()
 terrainWorld.sortableChildren = true
 terrainWorld.roundPixels = true
 const terrainPixiChildren = [terrainWorld]
 let terrainRenderer = new StudioTerrainChunkRenderer(terrainWorld)
 let renderSerial = 0
+let lastCullKey = ""
 
 const terrainSize = computed(() => {
   const mapData = readValue(data)
@@ -51,7 +57,11 @@ const renderTerrain = async () => {
   })
   if (currentSerial !== renderSerial) {
     terrainRenderer.invalidateTerrain()
+    lastCullKey = ""
+    return
   }
+  lastCullKey = ""
+  updateTerrainCulling()
 }
 
 effect(() => {
@@ -61,8 +71,33 @@ effect(() => {
   void renderTerrain()
 })
 
+tick(() => {
+  updateTerrainCulling()
+})
+
+function updateTerrainCulling() {
+  const bounds = getPixiLocalViewportBounds(engine, terrainWorld)
+  if (!bounds) {
+    if (lastCullKey) {
+      lastCullKey = ""
+      terrainRenderer.updateChunkVisibility(null)
+    }
+    return
+  }
+
+  const cullKey = createViewportCullKey(bounds, TERRAIN_CULL_GRID_SIZE)
+
+  if (cullKey === lastCullKey) {
+    return
+  }
+
+  lastCullKey = cullKey
+  terrainRenderer.updateChunkVisibility(bounds, TERRAIN_CULL_MARGIN)
+}
+
 function destroyTerrainRenderer() {
   renderSerial += 1
+  lastCullKey = ""
   terrainRenderer.destroy()
 }
 </script>

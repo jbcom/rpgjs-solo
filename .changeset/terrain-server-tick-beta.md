@@ -11,4 +11,4 @@
 "@rpgjs/vue": patch
 ---
 
-Release the next RPGJS beta with client interactions, i18n support, movement and physics improvements, Studio fixes, action battle updates, playground migration, and related runtime documentation.
+Release the next RPGJS beta with terrain rendering performance improvements and a unified server tick loop.
