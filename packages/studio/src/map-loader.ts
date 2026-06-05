@@ -892,14 +892,30 @@ export const loadMap = async (mapId: string) => {
       const heightRatio = instanceHeight / effectiveSourceHeight
       const finalScaleX = scaleX * widthRatio
       const finalScaleY = scaleY * heightRatio
+      const visualWidth = instanceWidth * scaleX
+      const visualHeight = instanceHeight * scaleY
+      const rawHitboxX = elementX + (hitboxX * finalScaleX)
+      const rawHitboxY = elementY + (hitboxY * finalScaleY)
+      const rawHitboxWidth = hitboxWidth * finalScaleX
+      const rawHitboxHeight = hitboxHeight * finalScaleY
+      const clampedHitboxX = Math.max(elementX, Math.min(elementX + Math.max(0, visualWidth - 1), rawHitboxX))
+      const clampedHitboxY = Math.max(elementY, Math.min(elementY + Math.max(0, visualHeight - 1), rawHitboxY))
+      const clampedHitboxRight = Math.max(
+        clampedHitboxX + 1,
+        Math.min(elementX + visualWidth, rawHitboxX + rawHitboxWidth)
+      )
+      const clampedHitboxBottom = Math.max(
+        clampedHitboxY + 1,
+        Math.min(elementY + visualHeight, rawHitboxY + rawHitboxHeight)
+      )
 
       // Create the absolute hitbox with scale applied
       const absoluteHitbox = {
         id: `element_${index}_${tilesetElement.id}`,
-        x: elementX + (hitboxX * finalScaleX),
-        y: elementY + (hitboxY * finalScaleY),
-        width: hitboxWidth * finalScaleX,
-        height: hitboxHeight * finalScaleY,
+        x: clampedHitboxX,
+        y: clampedHitboxY,
+        width: clampedHitboxRight - clampedHitboxX,
+        height: clampedHitboxBottom - clampedHitboxY,
         type: hitbox.type || 'rectangle'
       }
 

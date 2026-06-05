@@ -908,47 +908,54 @@ export class StudioTerrainChunkRenderer {
     sliceWidth: number
   ): Sprite[] {
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    const maskCtx = mask.canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx || !maskCtx) return [];
+    if (!ctx) return [];
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-    const maskData = maskCtx.getImageData(0, 0, mask.canvas.width, mask.canvas.height).data;
     const sprites: Sprite[] = [];
 
     for (let sliceX = 0; sliceX < canvas.width; sliceX += sliceWidth) {
       const width = Math.min(sliceWidth, canvas.width - sliceX);
-      const alphaBounds = findAlphaBounds(imageData, canvas.width, canvas.height, {
+      const bands = findAlphaBands(imageData, canvas.width, canvas.height, {
         x: sliceX,
         y: 0,
         width,
         height: canvas.height,
       });
-      if (!alphaBounds) continue;
 
-      const slice = this.createCanvasBuffer(alphaBounds.width, alphaBounds.height, true);
-      slice.ctx.drawImage(
-        canvas,
-        alphaBounds.x,
-        alphaBounds.y,
-        alphaBounds.width,
-        alphaBounds.height,
-        0,
-        0,
-        alphaBounds.width,
-        alphaBounds.height
-      );
+      bands.forEach((band, bandIndex) => {
+        const alphaBounds = findAlphaBounds(imageData, canvas.width, canvas.height, {
+          x: sliceX,
+          y: band.y,
+          width,
+          height: band.height,
+        });
+        if (!alphaBounds) return;
 
-      const texture = Texture.from(slice.canvas);
-      setNearestTextureScale(texture);
-      const sprite = new Sprite(texture);
-      sprite.x = Math.round(mask.bounds.x + alphaBounds.x);
-      sprite.y = Math.round(mask.bounds.y + alphaBounds.y);
-      sprite.zIndex = Math.round(mask.bounds.y + findSurfaceBottomY(maskData, mask.canvas.width, mask.canvas.height, sliceX, width) + 1);
-      sprite.roundPixels = true;
-      sprite.cullable = true;
-      sprite.cullArea = new Rectangle(0, 0, alphaBounds.width, alphaBounds.height);
-      sprite.label = `StudioWallOcclusion:${feature.id}:${sliceX}`;
-      sprites.push(sprite);
+        const slice = this.createCanvasBuffer(alphaBounds.width, alphaBounds.height, true);
+        slice.ctx.drawImage(
+          canvas,
+          alphaBounds.x,
+          alphaBounds.y,
+          alphaBounds.width,
+          alphaBounds.height,
+          0,
+          0,
+          alphaBounds.width,
+          alphaBounds.height
+        );
+
+        const texture = Texture.from(slice.canvas);
+        setNearestTextureScale(texture);
+        const sprite = new Sprite(texture);
+        sprite.x = Math.round(mask.bounds.x + alphaBounds.x);
+        sprite.y = Math.round(mask.bounds.y + alphaBounds.y);
+        sprite.zIndex = Math.round(mask.bounds.y + alphaBounds.y + alphaBounds.height);
+        sprite.roundPixels = true;
+        sprite.cullable = true;
+        sprite.cullArea = new Rectangle(0, 0, alphaBounds.width, alphaBounds.height);
+        sprite.label = `StudioWallOcclusion:${feature.id}:${sliceX}:${bandIndex}`;
+        sprites.push(sprite);
+      });
     }
 
     return sprites;
@@ -2438,27 +2445,49 @@ function findAlphaBounds(
   };
 }
 
-function findSurfaceBottomY(
-  maskData: Uint8ClampedArray,
+function findAlphaBands(
+  data: Uint8ClampedArray,
   canvasWidth: number,
   canvasHeight: number,
-  sliceX: number,
-  sliceWidth: number
-): number {
-  const startX = clampInteger(sliceX, 0, canvasWidth - 1);
-  const endX = clampInteger(sliceX + sliceWidth, startX + 1, canvasWidth);
-  let bottomY = 0;
+  bounds: { x: number; y: number; width: number; height: number },
+  threshold = 4
+): Array<{ y: number; height: number }> {
+  const startX = clampInteger(Math.floor(bounds.x), 0, canvasWidth - 1);
+  const startY = clampInteger(Math.floor(bounds.y), 0, canvasHeight - 1);
+  const endX = clampInteger(Math.ceil(bounds.x + bounds.width), startX + 1, canvasWidth);
+  const endY = clampInteger(Math.ceil(bounds.y + bounds.height), startY + 1, canvasHeight);
+  const bands: Array<{ y: number; height: number }> = [];
+  const maxGap = 2;
+  let bandStart = -1;
+  let lastAlphaY = -1;
 
-  for (let x = startX; x < endX; x += 1) {
-    for (let y = canvasHeight - 1; y >= 0; y -= 1) {
-      if (maskData[(y * canvasWidth + x) * 4 + 3] > 8) {
-        bottomY = Math.max(bottomY, y);
+  for (let y = startY; y < endY; y += 1) {
+    let hasAlpha = false;
+    for (let x = startX; x < endX; x += 1) {
+      if (data[(y * canvasWidth + x) * 4 + 3] > threshold) {
+        hasAlpha = true;
         break;
       }
     }
+
+    if (hasAlpha) {
+      if (bandStart < 0) bandStart = y;
+      lastAlphaY = y;
+      continue;
+    }
+
+    if (bandStart >= 0 && y - lastAlphaY > maxGap) {
+      bands.push({ y: bandStart, height: lastAlphaY - bandStart + 1 });
+      bandStart = -1;
+      lastAlphaY = -1;
+    }
   }
 
-  return bottomY;
+  if (bandStart >= 0) {
+    bands.push({ y: bandStart, height: lastAlphaY - bandStart + 1 });
+  }
+
+  return bands;
 }
 
 const TRANSPARENT: RgbaColor = { r: 0, g: 0, b: 0, a: 0 };

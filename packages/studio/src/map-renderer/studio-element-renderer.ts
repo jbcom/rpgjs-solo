@@ -265,15 +265,25 @@ export function resolveStudioElementMetrics(element: any): StudioElementMetrics 
   const drawHeightBase = clampMin(toFiniteNumber(drawInValue?.[3], rectangle.height) ?? rectangle.height);
   const drawWidth = clampMin(drawWidthBase * scaleX);
   const drawHeight = clampMin(drawHeightBase * scaleY);
-  const hitboxX = toFiniteNumber(hitboxValue.x, 0) ?? 0;
-  const hitboxY = toFiniteNumber(hitboxValue.y, 0) ?? 0;
-  const hitboxWidth = clampMin(toFiniteNumber(hitboxValue.width, 1) ?? 1);
-  const hitboxHeight = clampMin(toFiniteNumber(hitboxValue.height, 1) ?? 1);
+  const rawHitboxX = toFiniteNumber(hitboxValue.x, 0) ?? 0;
+  const rawHitboxY = toFiniteNumber(hitboxValue.y, 0) ?? 0;
+  const rawHitboxWidth = clampMin(toFiniteNumber(hitboxValue.width, 1) ?? 1);
+  const rawHitboxHeight = clampMin(toFiniteNumber(hitboxValue.height, 1) ?? 1);
+  const hitboxBoundsWidth = Math.max(1, rectangle.width);
+  const hitboxBoundsHeight = Math.max(1, rectangle.height);
+  const hitboxX = clamp(rawHitboxX, 0, Math.max(0, hitboxBoundsWidth - 1));
+  const hitboxY = clamp(rawHitboxY, 0, Math.max(0, hitboxBoundsHeight - 1));
+  const hitboxRight = clamp(rawHitboxX + rawHitboxWidth, hitboxX + 1, hitboxBoundsWidth);
+  const hitboxBottom = clamp(rawHitboxY + rawHitboxHeight, hitboxY + 1, hitboxBoundsHeight);
+  const hitboxWidth = hitboxRight - hitboxX;
+  const hitboxHeight = hitboxBottom - hitboxY;
   const hitboxScaleX = drawWidth / Math.max(1, rectangle.width);
   const hitboxScaleY = drawHeight / Math.max(1, rectangle.height);
   const resolvedZIndexOffset = toFiniteNumber(readValue(element?.zIndexOffset), 0) ?? 0;
   const hasSortableHitbox = hitboxValue && hitboxValue.type !== "none";
-  const elementSortY = hasSortableHitbox ? drawY + hitboxY * hitboxScaleY : drawY + drawHeight;
+  const elementSortY = hasSortableHitbox
+    ? drawY + (hitboxY + hitboxHeight) * hitboxScaleY
+    : drawY + drawHeight;
 
   return {
     drawX,

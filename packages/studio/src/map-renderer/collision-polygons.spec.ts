@@ -304,4 +304,290 @@ describe("buildStudioTerrainCollisionPolygons", () => {
     expect(wallPolygons.some((polygon) => polygon.y === 0)).toBe(false);
     expect(wallPolygons.some((polygon) => polygon.y >= 48)).toBe(true);
   });
+
+  it("adds lower body collisions for large smart wall blocks while leaving the upper layer passable", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        params: {
+          ...createMap().params,
+          width: 5,
+          height: 4,
+        },
+        terrain: JSON.stringify([
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+        ]),
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 240,
+          height: 192,
+          tileSize: 48,
+          features: [
+            {
+              id: "smart-block-wall",
+              kind: "wall",
+              params: { height: 96, smartBrushMode: "cave" },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [
+                    { x: 48, y: 72 },
+                    { x: 192, y: 72 },
+                  ],
+                  radius: 72,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    const wallPolygons = polygons.filter((polygon) => polygon.type === "morphology_wall_edge_collision");
+    const bodyPolygons = wallPolygons.filter((polygon) => polygon.properties?.role === "body");
+
+    expect(bodyPolygons.length).toBeGreaterThan(0);
+    expect(bodyPolygons.some((polygon) => polygon.y > 96 && polygon.y < 128)).toBe(true);
+    expect(bodyPolygons.some((polygon) => polygon.y + polygon.height >= 160)).toBe(true);
+    expect(wallPolygons.every((polygon) => polygon.y + polygon.height <= 192)).toBe(true);
+  });
+
+  it("does not add body collisions to small cave wall strokes so the upper wall layer stays passable", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        params: {
+          ...createMap().params,
+          width: 5,
+          height: 4,
+        },
+        terrain: JSON.stringify([
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+        ]),
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 240,
+          height: 192,
+          tileSize: 48,
+          features: [
+            {
+              id: "small-cave-wall",
+              kind: "wall",
+              params: { height: 96, smartBrushMode: "cave" },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [
+                    { x: 48, y: 72 },
+                    { x: 192, y: 72 },
+                  ],
+                  radius: 22,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    const wallPolygons = polygons.filter((polygon) => polygon.type === "morphology_wall_edge_collision");
+
+    expect(wallPolygons.length).toBeGreaterThan(0);
+    expect(wallPolygons.some((polygon) => polygon.properties?.role === "body")).toBe(false);
+  });
+
+  it("keeps body collisions low on large diagonal wall strokes so the upper layer remains passable", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        params: {
+          ...createMap().params,
+          width: 10,
+          height: 8,
+        },
+        terrain: JSON.stringify([
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ]),
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 480,
+          height: 384,
+          tileSize: 48,
+          features: [
+            {
+              id: "large-diagonal-wall",
+              kind: "wall",
+              params: { height: 56, roundness: 0.35, roughness: 0.45 },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [
+                    { x: 288, y: 144 },
+                    { x: 240, y: 240 },
+                  ],
+                  radius: 96,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    const bodyPolygons = polygons.filter(
+      (polygon) =>
+        polygon.type === "morphology_wall_edge_collision" &&
+        polygon.properties?.role === "body"
+    );
+
+    expect(bodyPolygons.length).toBeGreaterThan(0);
+    expect(bodyPolygons.every((polygon) => polygon.y >= 320)).toBe(true);
+    expect(bodyPolygons.some((polygon) => polygon.y + polygon.height >= 380)).toBe(true);
+  });
+
+  it("keeps bottom map wall collisions inside the map bounds", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        params: {
+          ...createMap().params,
+          width: 5,
+          height: 4,
+        },
+        terrain: JSON.stringify([
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+        ]),
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 240,
+          height: 192,
+          tileSize: 48,
+          features: [
+            {
+              id: "bottom-wall",
+              kind: "wall",
+              params: { height: 96 },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [
+                    { x: 0, y: 192 },
+                    { x: 240, y: 192 },
+                  ],
+                  radius: 22,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    const wallPolygons = polygons.filter((polygon) => polygon.type === "morphology_wall_edge_collision");
+
+    expect(wallPolygons.length).toBeGreaterThan(0);
+    expect(wallPolygons.some((polygon) => polygon.y >= 160)).toBe(true);
+    expect(wallPolygons.every((polygon) => polygon.y + polygon.height <= 192)).toBe(true);
+  });
+
+  it("keeps vertical wall side collisions aligned with the side instead of the wall base", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        terrain: JSON.stringify([
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+        ]),
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 192,
+          height: 144,
+          tileSize: 48,
+          features: [
+            {
+              id: "side-wall",
+              kind: "wall",
+              params: { height: 96 },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [
+                    { x: 96, y: 24 },
+                    { x: 96, y: 120 },
+                  ],
+                  radius: 22,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    const wallPolygons = polygons.filter((polygon) => polygon.type === "morphology_wall_edge_collision");
+
+    expect(wallPolygons.length).toBeGreaterThan(0);
+    expect(wallPolygons.some((polygon) => polygon.x > 80 && polygon.x < 100)).toBe(true);
+    expect(wallPolygons.every((polygon) => polygon.y < 48)).toBe(true);
+    expect(wallPolygons.every((polygon) => polygon.y + polygon.height <= 144)).toBe(true);
+  });
+
+  it("keeps diagonal wall side collisions near the segment instead of pushing them to the base", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        terrain: JSON.stringify([
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+        ]),
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 192,
+          height: 144,
+          tileSize: 48,
+          features: [
+            {
+              id: "diagonal-side-wall",
+              kind: "wall",
+              params: { height: 96 },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [
+                    { x: 48, y: 96 },
+                    { x: 96, y: 48 },
+                  ],
+                  radius: 22,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    const wallPolygons = polygons.filter((polygon) => polygon.type === "morphology_wall_edge_collision");
+
+    expect(wallPolygons.length).toBeGreaterThan(0);
+    expect(wallPolygons.every((polygon) => polygon.y < 96)).toBe(true);
+    expect(wallPolygons.every((polygon) => polygon.y + polygon.height <= 120)).toBe(true);
+  });
 });

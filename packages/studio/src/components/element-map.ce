@@ -1090,7 +1090,7 @@ const hitboxScaleY = drawHeight / Math.max(1, rectangle.height)
 const resolvedZIndexOffset = toFiniteNumber(zIndexOffset(), 0) ?? 0
 const hasSortableHitbox = hitboxValue && hitboxValue.type !== "none"
 const elementSortY = hasSortableHitbox
-    ? drawY + (hitboxY * hitboxScaleY)
+    ? drawY + ((hitboxY + hitboxHeight) * hitboxScaleY)
     : drawY + drawHeight
 const resolvedElementZIndex = Math.round(elementSortY + resolvedZIndexOffset)
 const resolvedLightSpotZIndex = resolvedElementZIndex - 2

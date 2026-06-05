@@ -534,7 +534,8 @@
   });
 
   const z = computed(() => {
-    return sprite.y() + sprite.z()
+    const box = hitbox?.()
+    return sprite.y() + (box?.h ?? 0) + sprite.z()
   });
 
   const realAnimationName = signal(animationName());

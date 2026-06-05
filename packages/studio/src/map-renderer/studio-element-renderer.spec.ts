@@ -118,7 +118,7 @@ describe("studio element renderer helpers", () => {
     expect(parts.some((part) => part.x === 10 && part.y === 10)).toBe(true);
   });
 
-  it("uses the hitbox top as the sortable z index when a hitbox exists", () => {
+  it("uses the hitbox bottom as the sortable z index when a hitbox exists", () => {
     const metrics = resolveStudioElementMetrics(
       createElement({
         drawIn: [10, 20, 96, 96],
@@ -128,7 +128,20 @@ describe("studio element renderer helpers", () => {
       })
     );
 
-    expect(metrics.resolvedZIndex).toBe(63);
+    expect(metrics.resolvedZIndex).toBe(87);
+  });
+
+  it("clamps oversized hitboxes to the rendered element bounds", () => {
+    const metrics = resolveStudioElementMetrics(
+      createElement({
+        drawIn: [10, 20, 96, 96],
+        rect: [0, 0, 48, 48],
+        hitbox: { x: 0, y: 0, width: 48, height: 80 },
+      })
+    );
+
+    expect(metrics.hitboxHeight).toBe(48);
+    expect(metrics.resolvedZIndex).toBe(116);
   });
 
   it("respects the shared shadow budget", () => {
