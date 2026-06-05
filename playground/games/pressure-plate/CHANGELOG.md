@@ -1,5 +1,16 @@
 # @rpgjs/playground-pressure-plate
 
+## 1.0.0-beta.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @rpgjs/client@5.0.0-beta.17
+  - @rpgjs/common@5.0.0-beta.16
+  - @rpgjs/server@5.0.0-beta.17
+  - @rpgjs/ui-css@5.0.0-beta.14
+  - @rpgjs/vite@5.0.0-beta.17
+
 ## 1.0.0-beta.3
 
 ### Patch Changes

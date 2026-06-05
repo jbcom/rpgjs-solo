@@ -1,5 +1,14 @@
 # @rpgjs/vue
 
+## 5.0.0-beta.17
+
+### Patch Changes
+
+- Release the next RPGJS beta while keeping the physics package on its stable release line.
+- Updated dependencies
+  - @rpgjs/client@5.0.0-beta.17
+  - @rpgjs/common@5.0.0-beta.16
+
 ## 5.0.0-beta.16
 
 ### Patch Changes

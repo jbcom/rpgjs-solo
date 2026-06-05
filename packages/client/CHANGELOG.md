@@ -1,5 +1,15 @@
 # @rpgjs/client
 
+## 5.0.0-beta.17
+
+### Patch Changes
+
+- Release the next RPGJS beta while keeping the physics package on its stable release line.
+- Updated dependencies
+  - @rpgjs/common@5.0.0-beta.16
+  - @rpgjs/server@5.0.0-beta.17
+  - @rpgjs/ui-css@5.0.0-beta.14
+
 ## 5.0.0-beta.16
 
 ### Patch Changes
