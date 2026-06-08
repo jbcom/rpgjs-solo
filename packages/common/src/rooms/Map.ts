@@ -388,11 +388,11 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     }
 
     for (let staticHitbox of hitboxes) {
-      if ('x' in staticHitbox) {
-        this.addStaticHitbox(staticHitbox.id ?? generateShortUUID(), staticHitbox.x, staticHitbox.y, staticHitbox.width, staticHitbox.height);
-      }
-      else if ('points' in staticHitbox) {
+      if ('points' in staticHitbox) {
         this.addStaticHitbox(staticHitbox.id ?? generateShortUUID(), staticHitbox.points);
+      }
+      else if ('x' in staticHitbox) {
+        this.addStaticHitbox(staticHitbox.id ?? generateShortUUID(), staticHitbox.x, staticHitbox.y, staticHitbox.width, staticHitbox.height);
       }
     }
 

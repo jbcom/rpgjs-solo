@@ -36,6 +36,18 @@ const tileAtlasTerrainMedia = {
   },
 };
 
+const elementTilesetMedia = {
+  _id: "element-tileset",
+  id: "element-tileset",
+  fileName: "elements.png",
+  metadata: {
+    elements: JSON.stringify([
+      { id: "floor", rect: [0, 0, 48, 48], hitbox: { type: "none", x: 0, y: 0, width: 48, height: 48 } },
+      { id: "wide-floor", rect: [0, 0, 144, 96], hitbox: { type: "none", x: 0, y: 0, width: 144, height: 96 } },
+    ]),
+  },
+};
+
 function createMap(overrides: Record<string, unknown> = {}) {
   return {
     _id: "map",
@@ -54,6 +66,43 @@ function createMap(overrides: Record<string, unknown> = {}) {
     ]),
     ...overrides,
   };
+}
+
+function hasCollisionAt(polygons: ReturnType<typeof buildStudioTerrainCollisionPolygons>, x: number, y: number) {
+  return polygons.some((polygon) => (
+    x >= polygon.x &&
+    x < polygon.x + polygon.width &&
+    y >= polygon.y &&
+    y < polygon.y + polygon.height
+  ));
+}
+
+function hasPolygonCollisionAt(polygons: ReturnType<typeof buildStudioTerrainCollisionPolygons>, x: number, y: number) {
+  return polygons.some((polygon) => {
+    if (
+      x < polygon.x ||
+      x > polygon.x + polygon.width ||
+      y < polygon.y ||
+      y > polygon.y + polygon.height
+    ) {
+      return false;
+    }
+    return pointInPolygon(x, y, polygon.points);
+  });
+}
+
+function pointInPolygon(x: number, y: number, points: Array<[number, number]>) {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+    const xi = points[i][0];
+    const yi = points[i][1];
+    const xj = points[j][0];
+    const yj = points[j][1];
+    const intersects = ((yi > y) !== (yj > y)) &&
+      x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
 }
 
 describe("studio terrain map renderer data", () => {
@@ -182,6 +231,27 @@ describe("buildStudioTerrainCollisionPolygons", () => {
     ]);
   });
 
+  it("lets low elements clear non-walkable terrain below them", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        params: {
+          ...createMap().params,
+          tileset: elementTilesetMedia,
+        },
+        terrain: JSON.stringify([[1, 1, 1]]),
+        elementsLow: JSON.stringify([
+          { x: 48, y: 0, id: "floor", tilesetId: "element-tileset", width: 48, height: 48 },
+        ]),
+      })
+    );
+
+    const terrainPolygons = polygons.filter((polygon) => polygon.type === "terrain_collision");
+
+    expect(hasCollisionAt(terrainPolygons, 24, 24)).toBe(true);
+    expect(hasCollisionAt(terrainPolygons, 72, 24)).toBe(false);
+    expect(hasCollisionAt(terrainPolygons, 120, 24)).toBe(true);
+  });
+
   it("creates edge collisions for hole borders while leaving the interior rule separate", () => {
     const polygons = buildStudioTerrainCollisionPolygons(
       createMap({
@@ -216,6 +286,84 @@ describe("buildStudioTerrainCollisionPolygons", () => {
 
     expect(polygons.some((polygon) => polygon.type === "morphology_hole_edge_collision")).toBe(true);
     expect(polygons.every((polygon) => polygon.width > 0 && polygon.height > 0)).toBe(true);
+  });
+
+  it("follows the hole contour instead of blocking whole terrain tiles around it", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        terrain: JSON.stringify([
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+        ]),
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 192,
+          height: 144,
+          tileSize: 48,
+          features: [
+            {
+              id: "hole-1",
+              kind: "hole",
+              params: { depth: 64, fillHeight: 50 },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [{ x: 96, y: 72 }],
+                  radius: 54,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    ).filter((polygon) => polygon.type === "morphology_hole_edge_collision");
+
+    expect(hasPolygonCollisionAt(polygons, 96, 18)).toBe(true);
+    expect(hasPolygonCollisionAt(polygons, 60, 10)).toBe(false);
+  });
+
+  it("lets low elements clear hole edge collisions below them", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        params: {
+          ...createMap().params,
+          tileset: elementTilesetMedia,
+        },
+        terrain: JSON.stringify([
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+        ]),
+        elementsLow: JSON.stringify([
+          { x: 0, y: 0, id: "wide-floor", tilesetId: "element-tileset", width: 192, height: 144 },
+        ]),
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 192,
+          height: 144,
+          tileSize: 48,
+          features: [
+            {
+              id: "hole-1",
+              kind: "hole",
+              params: { depth: 64, fillHeight: 50 },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [{ x: 96, y: 72 }],
+                  radius: 54,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    expect(polygons.some((polygon) => polygon.type === "morphology_hole_edge_collision")).toBe(false);
   });
 
   it("creates edge collisions for wall borders instead of blocking the whole top surface", () => {
@@ -255,6 +403,51 @@ describe("buildStudioTerrainCollisionPolygons", () => {
 
     expect(polygons.some((polygon) => polygon.type === "morphology_wall_edge_collision")).toBe(true);
     expect(polygons.every((polygon) => polygon.points.length >= 4)).toBe(true);
+  });
+
+  it("lets low elements clear wall collisions below them", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        params: {
+          ...createMap().params,
+          tileset: elementTilesetMedia,
+        },
+        terrain: JSON.stringify([
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+        ]),
+        elementsLow: JSON.stringify([
+          { x: 0, y: 0, id: "wide-floor", tilesetId: "element-tileset", width: 192, height: 144 },
+        ]),
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 192,
+          height: 144,
+          tileSize: 48,
+          features: [
+            {
+              id: "wall-1",
+              kind: "wall",
+              params: { height: 48 },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [
+                    { x: 48, y: 72 },
+                    { x: 144, y: 72 },
+                  ],
+                  radius: 42,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    expect(polygons.some((polygon) => polygon.type === "morphology_wall_edge_collision")).toBe(false);
   });
 
   it("pushes the far wall border collision down to allow visual overlap with the top surface", () => {

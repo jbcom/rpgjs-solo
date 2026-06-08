@@ -826,7 +826,8 @@ export const loadMap = async (mapId: string) => {
     tilesetsById: Map<string, TilesetElementsIndex>,
     elementsData: any[],
     existingHitboxes: any[],
-    fallbackTilesetId?: string
+    fallbackTilesetId?: string,
+    coveredTerrainHitboxes: any[] = []
   ): any[] => {
     if (!elementsData || elementsData.length === 0) {
       return existingHitboxes
@@ -894,6 +895,9 @@ export const loadMap = async (mapId: string) => {
       const finalScaleY = scaleY * heightRatio
       const visualWidth = instanceWidth * scaleX
       const visualHeight = instanceHeight * scaleY
+      if (rectIntersectsAnyHitbox({ x: elementX, y: elementY, width: visualWidth, height: visualHeight }, coveredTerrainHitboxes)) {
+        return
+      }
       const rawHitboxX = elementX + (hitboxX * finalScaleX)
       const rawHitboxY = elementY + (hitboxY * finalScaleY)
       const rawHitboxWidth = hitboxWidth * finalScaleX
@@ -926,6 +930,48 @@ export const loadMap = async (mapId: string) => {
     return mergedHitboxes
   }
 
+  const rectIntersectsAnyHitbox = (
+    rect: { x: number; y: number; width: number; height: number },
+    hitboxes: any[]
+  ): boolean => {
+    return hitboxes.some((hitbox) => {
+      const bounds = getHitboxBounds(hitbox)
+      if (!bounds) return false
+      return rect.x < bounds.x + bounds.width &&
+        rect.x + rect.width > bounds.x &&
+        rect.y < bounds.y + bounds.height &&
+        rect.y + rect.height > bounds.y
+    })
+  }
+
+  const getHitboxBounds = (hitbox: any): { x: number; y: number; width: number; height: number } | null => {
+    if (!hitbox || typeof hitbox !== 'object') return null
+    if (Array.isArray(hitbox.points) && hitbox.points.length > 0) {
+      const xs = hitbox.points
+        .map((point: unknown) => Array.isArray(point) ? toFiniteNumber(point[0]) : null)
+        .filter((value: number | null): value is number => value !== null)
+      const ys = hitbox.points
+        .map((point: unknown) => Array.isArray(point) ? toFiniteNumber(point[1]) : null)
+        .filter((value: number | null): value is number => value !== null)
+      if (xs.length === 0 || ys.length === 0) return null
+      const minX = Math.min(...xs)
+      const minY = Math.min(...ys)
+      return {
+        x: minX,
+        y: minY,
+        width: Math.max(...xs) - minX,
+        height: Math.max(...ys) - minY,
+      }
+    }
+
+    const x = toFiniteNumber(hitbox.x)
+    const y = toFiniteNumber(hitbox.y)
+    const width = toFiniteNumber(hitbox.width)
+    const height = toFiniteNumber(hitbox.height)
+    if (x === null || y === null || width === null || height === null) return null
+    return { x, y, width, height }
+  }
+
   const primaryElementTileset = map.params.tileset
   const elementTilesets = normalizeTilesets(map.params.elementTilesets)
   const resolvedElementTilesets = elementTilesets.length > 0 ? elementTilesets : (primaryElementTileset ? [primaryElementTileset] : [])
@@ -952,17 +998,28 @@ export const loadMap = async (mapId: string) => {
   const mergedElementsLow = mergeElementsWithTilesets(tilesetsById, elementsLow, 1, fallbackElementTilesetId)
   const mergedElementsHigh = mergeElementsWithTilesets(tilesetsById, elementsHigh, 2, fallbackElementTilesetId)
   
+  const terrainByTileset = isV2
+    ? (typeof map.terrainByTileset === 'string' ? JSON.parse(map.terrainByTileset ?? '[]') : (map.terrainByTileset || []))
+    : []
+  const terrainCollisionPolygonsBeforeLowClear = isV2 ? buildStudioTerrainCollisionPolygons({
+    ...map,
+    terrainByTileset,
+  }, { clearLowElements: false }) : [];
+
   // Merge hitboxes from elementTileset with existing map hitboxes
   // Note: Only elementsLow generate hitboxes (elementsAlwaysLow and elementsHigh don't)
   let finalHitboxes = map.hitboxes
   if (isV2 && tilesetsById.size > 0) {
     // Merge hitboxes only from elementsLow (always-low and high don't have hitboxes)
-    finalHitboxes = mergeElementTilesetHitboxes(tilesetsById, elementsLow, finalHitboxes, fallbackElementTilesetId)
+    finalHitboxes = mergeElementTilesetHitboxes(
+      tilesetsById,
+      elementsLow,
+      finalHitboxes,
+      fallbackElementTilesetId,
+      terrainCollisionPolygonsBeforeLowClear
+    )
   }
 
-  const terrainByTileset = isV2
-    ? (typeof map.terrainByTileset === 'string' ? JSON.parse(map.terrainByTileset ?? '[]') : (map.terrainByTileset || []))
-    : []
   const terrainCollisionPolygons = isV2 ? buildStudioTerrainCollisionPolygons({
     ...map,
     terrainByTileset,
