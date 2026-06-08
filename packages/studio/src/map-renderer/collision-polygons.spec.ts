@@ -231,7 +231,28 @@ describe("buildStudioTerrainCollisionPolygons", () => {
     ]);
   });
 
-  it("lets low elements clear non-walkable terrain below them", () => {
+  it("lets always-low elements clear non-walkable terrain below them", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        params: {
+          ...createMap().params,
+          tileset: elementTilesetMedia,
+        },
+        terrain: JSON.stringify([[1, 1, 1]]),
+        elementsAlwaysLow: JSON.stringify([
+          { x: 48, y: 0, id: "floor", tilesetId: "element-tileset", width: 48, height: 48 },
+        ]),
+      })
+    );
+
+    const terrainPolygons = polygons.filter((polygon) => polygon.type === "terrain_collision");
+
+    expect(hasCollisionAt(terrainPolygons, 24, 24)).toBe(true);
+    expect(hasCollisionAt(terrainPolygons, 72, 24)).toBe(false);
+    expect(hasCollisionAt(terrainPolygons, 120, 24)).toBe(true);
+  });
+
+  it("keeps regular low elements from clearing terrain collisions", () => {
     const polygons = buildStudioTerrainCollisionPolygons(
       createMap({
         params: {
@@ -247,9 +268,7 @@ describe("buildStudioTerrainCollisionPolygons", () => {
 
     const terrainPolygons = polygons.filter((polygon) => polygon.type === "terrain_collision");
 
-    expect(hasCollisionAt(terrainPolygons, 24, 24)).toBe(true);
-    expect(hasCollisionAt(terrainPolygons, 72, 24)).toBe(false);
-    expect(hasCollisionAt(terrainPolygons, 120, 24)).toBe(true);
+    expect(hasCollisionAt(terrainPolygons, 72, 24)).toBe(true);
   });
 
   it("creates edge collisions for hole borders while leaving the interior rule separate", () => {
@@ -324,7 +343,7 @@ describe("buildStudioTerrainCollisionPolygons", () => {
     expect(hasPolygonCollisionAt(polygons, 60, 10)).toBe(false);
   });
 
-  it("lets low elements clear hole edge collisions below them", () => {
+  it("lets always-low elements clear hole edge collisions below them", () => {
     const polygons = buildStudioTerrainCollisionPolygons(
       createMap({
         params: {
@@ -336,7 +355,7 @@ describe("buildStudioTerrainCollisionPolygons", () => {
           [0, 0, 0, 0],
           [0, 0, 0, 0],
         ]),
-        elementsLow: JSON.stringify([
+        elementsAlwaysLow: JSON.stringify([
           { x: 0, y: 0, id: "wide-floor", tilesetId: "element-tileset", width: 192, height: 144 },
         ]),
         terrainMorphologyLayer: {
@@ -405,7 +424,7 @@ describe("buildStudioTerrainCollisionPolygons", () => {
     expect(polygons.every((polygon) => polygon.points.length >= 4)).toBe(true);
   });
 
-  it("lets low elements clear wall collisions below them", () => {
+  it("lets always-low elements clear wall collisions below them", () => {
     const polygons = buildStudioTerrainCollisionPolygons(
       createMap({
         params: {
@@ -417,7 +436,7 @@ describe("buildStudioTerrainCollisionPolygons", () => {
           [0, 0, 0, 0],
           [0, 0, 0, 0],
         ]),
-        elementsLow: JSON.stringify([
+        elementsAlwaysLow: JSON.stringify([
           { x: 0, y: 0, id: "wide-floor", tilesetId: "element-tileset", width: 192, height: 144 },
         ]),
         terrainMorphologyLayer: {

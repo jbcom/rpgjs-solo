@@ -22,15 +22,9 @@ interface Point {
   y: number;
 }
 
-export function buildStudioTerrainCollisionPolygons(
-  map: any,
-  options: { clearLowElements?: boolean } = {}
-): StudioCollisionPolygon[] {
+export function buildStudioTerrainCollisionPolygons(map: any): StudioCollisionPolygon[] {
   const data = createStudioTerrainRenderData(map);
-  const shouldClearLowElements = options.clearLowElements !== false;
-  const lowElementRects = shouldClearLowElements
-    ? resolveLowElementWalkableRects(map, data.width, data.height)
-    : [];
+  const alwaysLowElementRects = resolveAlwaysLowElementWalkableRects(map, data.width, data.height);
   const terrainMask = createEmptyMask(data.widthTiles, data.heightTiles);
 
   for (let y = 0; y < data.heightTiles; y += 1) {
@@ -40,7 +34,7 @@ export function buildStudioTerrainCollisionPolygons(
   }
 
   const polygons = pixelRectanglesToPolygons(
-    subtractRects(maskRectanglesToPixelRects(maskToRectangles(terrainMask), data.tileSize), lowElementRects),
+    subtractRects(maskRectanglesToPixelRects(maskToRectangles(terrainMask), data.tileSize), alwaysLowElementRects),
     "terrain_collision",
     "terrain",
     data.tileSize
@@ -53,7 +47,7 @@ export function buildStudioTerrainCollisionPolygons(
         data.width,
         data.height,
         data.tileSize,
-        lowElementRects
+        alwaysLowElementRects
       ));
       return;
     }
@@ -63,7 +57,7 @@ export function buildStudioTerrainCollisionPolygons(
       data.width,
       data.height,
       data.tileSize,
-      lowElementRects
+      alwaysLowElementRects
     ));
   });
 
@@ -1023,9 +1017,9 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function resolveLowElementWalkableRects(map: any, mapWidth: number, mapHeight: number): PixelRect[] {
-  const elementsLow = parseArray(map?.elementsLow);
-  if (elementsLow.length === 0) return [];
+function resolveAlwaysLowElementWalkableRects(map: any, mapWidth: number, mapHeight: number): PixelRect[] {
+  const elementsAlwaysLow = parseArray(map?.elementsAlwaysLow);
+  if (elementsAlwaysLow.length === 0) return [];
 
   const tilesets = normalizeTilesets([
     map?.params?.tileset,
@@ -1040,14 +1034,14 @@ function resolveLowElementWalkableRects(map: any, mapWidth: number, mapHeight: n
 
   const fallbackTileset = tilesets[0];
 
-  return elementsLow
-    .map((element) => resolveLowElementRect(element, tilesetsById, fallbackTileset))
+  return elementsAlwaysLow
+    .map((element) => resolveElementRect(element, tilesetsById, fallbackTileset))
     .filter((rect): rect is PixelRect => rect !== null)
     .map((rect) => clampPixelRect(rect, mapWidth, mapHeight))
     .filter((rect): rect is PixelRect => rect !== null);
 }
 
-function resolveLowElementRect(
+function resolveElementRect(
   element: any,
   tilesetsById: Map<string, any>,
   fallbackTileset: any
