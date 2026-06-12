@@ -155,6 +155,18 @@ export function getTerrainRenderMode(texture: TerrainTextureMetadata | null): Te
   return { type: "fade", width: 18, curve: "smooth" };
 }
 
+export function isWaterTerrainTexture(
+  asset: TerrainAssetMetadata | null,
+  textureIdOrIndex: unknown
+): boolean {
+  const texture = findTerrainTexture(asset, textureIdOrIndex);
+  if (getTerrainRenderMode(texture).type === "water") return true;
+  const value = String(textureIdOrIndex ?? "");
+  const label = texture?.label ?? "";
+  const specialType = texture?.specialType ?? "";
+  return /water|eau|liquid|river|lake|sea|ocean|swamp|marais|lava/i.test(`${value} ${label} ${specialType}`);
+}
+
 export function drawTerrainTexture(
   ctx: CanvasRenderingContext2D,
   image: CanvasImageSource,

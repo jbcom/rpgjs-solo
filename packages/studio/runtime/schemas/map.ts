@@ -65,6 +65,33 @@ export const mapParamsSchema = {
   },
 };
 
+export const waterAnimationSchema = {
+  type: "object",
+  title: "Water Animation",
+  description: "Optional animated water overlay for Studio terrain rendering.",
+  properties: {
+    enabled: {
+      type: "boolean",
+      title: "Enabled",
+      description: "Enable animated water on this map.",
+      default: false,
+    },
+    speed: {
+      type: "number",
+      title: "Speed",
+      description: "How fast the water movement animates.",
+      default: 1,
+    },
+    intensity: {
+      type: "number",
+      title: "Intensity",
+      description: "How visible the animated water overlay is.",
+      default: 0.45,
+    },
+  },
+  required: ["enabled"],
+} as const;
+
 export const mapSchema = {
   type: "object",
   properties: {
@@ -149,6 +176,7 @@ export const mapSchema = {
     },
     weather: weatherStateNullableSchema as any,
     lighting: lightingStateNullableSchema as any,
+    waterAnimation: waterAnimationSchema as any,
     elementsAlwaysLow: {
       type: "string",
       title: "Elements Always Low",

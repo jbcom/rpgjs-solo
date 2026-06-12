@@ -7,7 +7,7 @@
 
 export const studio = {
   projectId: 'd8d6c955-3d7f-421d-9ffc-edf99a940fbc',
-   startMapId: '3c965c08-76a0-4dcd-929e-b65fe60698a1',
+   startMapId: 'bfa29cae-b7e5-4433-b840-6495547e4563',
    apiUrl: 'https://rpgjs.studio/api',
    assetsUrl: 'https://assets.rpgjs.studio',
 }

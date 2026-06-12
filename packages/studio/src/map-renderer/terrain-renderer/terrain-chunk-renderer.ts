@@ -15,6 +15,7 @@ import {
   createTerrainPatternCanvas,
   findTerrainTexture,
   getTerrainRenderMode,
+  isWaterTerrainTexture,
   resolveEffectiveTerrainTextureGrid,
   resolveTerrainTileAtlasSourceRect,
   resolveTerrainTextureSourceRect,
@@ -33,6 +34,19 @@ interface TerrainChunk {
   canvas: HTMLCanvasElement;
   texture: Texture;
   sprite: Sprite;
+  waterOverlay?: TerrainWaterOverlay;
+}
+
+interface TerrainWaterOverlay {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  mask: HTMLCanvasElement;
+  texture: Texture;
+  sprite: Sprite;
+  phase: number;
+  speed: number;
+  intensity: number;
+  seed: number;
 }
 
 interface TerrainViewportBounds {
@@ -199,7 +213,7 @@ export class StudioTerrainChunkRenderer {
 
     for (const [key, chunk] of this.chunks) {
       if (!nextKeys.has(key)) {
-        chunk.sprite.destroy({ texture: true });
+        this.destroyChunk(chunk);
         this.chunks.delete(key);
       }
     }
@@ -214,6 +228,9 @@ export class StudioTerrainChunkRenderer {
     if (!bounds || !isFiniteBounds(bounds)) {
       for (const chunk of this.chunks.values()) {
         chunk.sprite.visible = true;
+        if (chunk.waterOverlay) {
+          chunk.waterOverlay.sprite.visible = true;
+        }
       }
       return;
     }
@@ -226,7 +243,24 @@ export class StudioTerrainChunkRenderer {
     };
 
     for (const chunk of this.chunks.values()) {
-      chunk.sprite.visible = rectsIntersect(chunk, visibleBounds);
+      const visible = rectsIntersect(chunk, visibleBounds);
+      chunk.sprite.visible = visible;
+      if (chunk.waterOverlay) {
+        chunk.waterOverlay.sprite.visible = visible;
+      }
+    }
+  }
+
+  update(deltaTime: number): void {
+    if (this.destroyed) return;
+    const safeDelta = clampNumber(Number(deltaTime) || 16.67, 0, 120) / 1000;
+
+    for (const chunk of this.chunks.values()) {
+      const overlay = chunk.waterOverlay;
+      if (!overlay || overlay.sprite.destroyed || !overlay.sprite.visible) continue;
+      overlay.phase += safeDelta * overlay.speed;
+      drawWaterAnimationFrame(overlay);
+      updateCanvasTexture(overlay.texture);
     }
   }
 
@@ -243,7 +277,7 @@ export class StudioTerrainChunkRenderer {
       for (let x = minX; x <= maxX; x += 1) {
         const chunk = this.chunks.get(`${x}:${y}`);
         if (chunk) {
-          chunk.sprite.destroy({ texture: true });
+          this.destroyChunk(chunk);
           this.chunks.delete(chunk.key);
         }
       }
@@ -254,7 +288,7 @@ export class StudioTerrainChunkRenderer {
   destroy(): void {
     this.destroyed = true;
     for (const chunk of this.chunks.values()) {
-      chunk.sprite.destroy({ texture: true });
+      this.destroyChunk(chunk);
     }
     this.chunks.clear();
     this.patternCache.clear();
@@ -364,14 +398,17 @@ export class StudioTerrainChunkRenderer {
     sprite.roundPixels = true;
     sprite.cullable = true;
     sprite.cullArea = new Rectangle(0, 0, bounds.width, bounds.height);
+    const waterOverlay = this.createWaterOverlay(data, controlImage, bounds);
 
     const previous = this.chunks.get(key);
     if (previous) {
-      const index = this.world.getChildIndex(previous.sprite);
-      previous.sprite.destroy({ texture: true });
-      this.world.addChildAt(sprite, Math.max(0, index));
+      this.destroyChunk(previous);
+      this.world.addChild(sprite);
     } else {
       this.world.addChild(sprite);
+    }
+    if (waterOverlay) {
+      this.world.addChild(waterOverlay.sprite);
     }
 
     this.chunks.set(key, {
@@ -383,7 +420,17 @@ export class StudioTerrainChunkRenderer {
       canvas,
       texture,
       sprite,
+      ...(waterOverlay ? { waterOverlay } : {}),
     });
+  }
+
+  private destroyChunk(chunk: TerrainChunk): void {
+    if (!chunk.sprite.destroyed) {
+      chunk.sprite.destroy({ texture: true });
+    }
+    if (chunk.waterOverlay && !chunk.waterOverlay.sprite.destroyed) {
+      chunk.waterOverlay.sprite.destroy({ texture: true });
+    }
   }
 
   private drawBaseTerrain(
@@ -677,7 +724,7 @@ export class StudioTerrainChunkRenderer {
     bounds: { x: number; y: number; width: number; height: number }
   ): void {
     for (const layer of layers) {
-      if (layer.mode.type !== "water" && !/water|eau|liquid|river|lake|sea|ocean|swamp|marais|lava/i.test(layer.terrainTextureId)) {
+      if (layer.mode.type !== "water" && !isWaterTerrainTexture(null, layer.terrainTextureId)) {
         continue;
       }
 
@@ -700,6 +747,109 @@ export class StudioTerrainChunkRenderer {
       output.ctx.drawImage(overlay.canvas, 0, 0);
       output.ctx.restore();
     }
+  }
+
+  private createWaterOverlay(
+    data: StudioTerrainRenderData,
+    controlImage: HTMLImageElement | null,
+    bounds: { x: number; y: number; width: number; height: number }
+  ): TerrainWaterOverlay | null {
+    if (!data.waterAnimation.enabled || !data.asset) return null;
+    const mask = data.terrainControl
+      ? this.createTerrainControlWaterMask(data, controlImage, bounds)
+      : this.createTerrainGridWaterMask(data, bounds);
+    if (!mask) return null;
+
+    const maskCtx = mask.getContext("2d", { willReadFrequently: true });
+    if (!maskCtx) return null;
+    const alphaBounds = findAlphaBounds(
+      maskCtx.getImageData(0, 0, mask.width, mask.height).data,
+      mask.width,
+      mask.height,
+      { x: 0, y: 0, width: mask.width, height: mask.height }
+    );
+    if (!alphaBounds) return null;
+
+    const canvas = this.createCanvasBuffer(bounds.width, bounds.height, true);
+    const texture = Texture.from(canvas.canvas);
+    setNearestTextureScale(texture);
+    const sprite = new Sprite(texture);
+    sprite.x = Math.round(bounds.x);
+    sprite.y = Math.round(bounds.y);
+    sprite.zIndex = 0.15;
+    sprite.roundPixels = true;
+    sprite.cullable = true;
+    sprite.cullArea = new Rectangle(0, 0, bounds.width, bounds.height);
+    sprite.label = "StudioTerrain:water-animation";
+
+    const overlay: TerrainWaterOverlay = {
+      canvas: canvas.canvas,
+      ctx: canvas.ctx,
+      mask,
+      texture,
+      sprite,
+      phase: 0,
+      speed: data.waterAnimation.speed,
+      intensity: data.waterAnimation.intensity,
+      seed: terrainMorphologyNoise(bounds.x * 0.013, bounds.y * 0.013, 19),
+    };
+    drawWaterAnimationFrame(overlay);
+    updateCanvasTexture(texture);
+    return overlay;
+  }
+
+  private createTerrainGridWaterMask(
+    data: StudioTerrainRenderData,
+    bounds: { x: number; y: number; width: number; height: number }
+  ): HTMLCanvasElement | null {
+    const tileSize = data.tileSize;
+    const minTileX = Math.max(0, Math.floor(bounds.x / tileSize));
+    const minTileY = Math.max(0, Math.floor(bounds.y / tileSize));
+    const maxTileX = Math.min(data.widthTiles - 1, Math.floor((bounds.x + bounds.width) / tileSize));
+    const maxTileY = Math.min(data.heightTiles - 1, Math.floor((bounds.y + bounds.height) / tileSize));
+    const mask = this.createCanvasBuffer(bounds.width, bounds.height, true);
+    let hasWater = false;
+
+    mask.ctx.fillStyle = "#ffffff";
+    for (let tileY = minTileY; tileY <= maxTileY; tileY += 1) {
+      for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
+        const cell = data.terrainGrid[tileY]?.[tileX];
+        if (!cell || !isWaterTerrainTexture(data.asset, cell.terrainTextureId ?? cell.textureIndex)) continue;
+        hasWater = true;
+        mask.ctx.fillRect(
+          tileX * tileSize - bounds.x,
+          tileY * tileSize - bounds.y,
+          tileSize,
+          tileSize
+        );
+      }
+    }
+
+    return hasWater ? mask.canvas : null;
+  }
+
+  private createTerrainControlWaterMask(
+    data: StudioTerrainRenderData,
+    controlImage: HTMLImageElement | null,
+    bounds: { x: number; y: number; width: number; height: number }
+  ): HTMLCanvasElement | null {
+    const control = data.terrainControl;
+    if (!control || !data.asset || !controlImage) return null;
+    const controlBuffer = this.getImageBuffer(control.source, controlImage);
+    if (!controlBuffer) return null;
+    const layers = createTerrainControlRenderLayers(data.asset, control.palette)
+      .filter((layer) => layer.mode.type === "water" || isWaterTerrainTexture(data.asset, layer.terrainTextureId));
+    if (layers.length === 0) return null;
+
+    const mask = this.createCanvasBuffer(bounds.width, bounds.height, true);
+    for (const layer of layers) {
+      mask.ctx.drawImage(
+        this.buildTerrainControlRawMask(controlBuffer, control, layer.paletteIndex, bounds),
+        0,
+        0
+      );
+    }
+    return mask.canvas;
   }
 
   private createTerrainControlLayerEdgeMask(
@@ -2381,6 +2531,52 @@ function terrainRenderModeWidth(mode: TerrainRenderMode | undefined): number {
 
 export function resolveTerrainTextureRepeatLocal(world: number, period: number): number {
   return positiveModulo(world / Math.max(period, 1), 1);
+}
+
+function drawWaterAnimationFrame(overlay: TerrainWaterOverlay): void {
+  const { canvas, ctx, mask, intensity } = overlay;
+  const width = canvas.width;
+  const height = canvas.height;
+  const phase = overlay.phase + overlay.seed * 4;
+  ctx.clearRect(0, 0, width, height);
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const bandSpacing = 22;
+  const drift = positiveModulo(phase * 28, bandSpacing);
+  for (let y = -bandSpacing; y < height + bandSpacing; y += bandSpacing) {
+    ctx.beginPath();
+    for (let x = -18; x <= width + 18; x += 12) {
+      const waveY = y + drift + Math.sin(x * 0.055 + phase * 3 + y * 0.07) * (2 + intensity * 4);
+      if (x <= -18) ctx.moveTo(x, waveY);
+      else ctx.lineTo(x, waveY);
+    }
+    ctx.strokeStyle = `rgba(190, 238, 255, ${0.06 + intensity * 0.18})`;
+    ctx.lineWidth = 1 + intensity * 2;
+    ctx.stroke();
+  }
+
+  const glow = ctx.createLinearGradient(0, 0, width, height);
+  glow.addColorStop(0, `rgba(255, 255, 255, ${0.02 + intensity * 0.08})`);
+  glow.addColorStop(0.5, "rgba(130, 210, 245, 0)");
+  glow.addColorStop(1, `rgba(82, 168, 214, ${0.02 + intensity * 0.06})`);
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.globalCompositeOperation = "destination-in";
+  ctx.drawImage(mask, 0, 0);
+  ctx.restore();
+}
+
+function updateCanvasTexture(texture: Texture): void {
+  const textureLike = texture as unknown as {
+    update?: () => void;
+    source?: { update?: () => void };
+  };
+  textureLike.source?.update?.();
+  textureLike.update?.();
 }
 
 function positiveModulo(value: number, modulo: number): number {

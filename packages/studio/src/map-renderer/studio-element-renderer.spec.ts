@@ -32,6 +32,7 @@ const createTerrainData = (overrides: Record<string, any> = {}) => ({
   terrainControl: null,
   terrainGrid: [],
   morphologyFeatures: [],
+  waterAnimation: { enabled: false, speed: 1, intensity: 0.45 },
   version: "terrain-v1",
   ...overrides,
 });

@@ -77,7 +77,14 @@ export interface StudioTerrainRenderData {
   terrainControl: StudioTerrainControlTexture | null;
   terrainGrid: StudioTerrainCell[][];
   morphologyFeatures: StudioTerrainMorphologyFeature[];
+  waterAnimation: StudioWaterAnimationOptions;
   version: string;
+}
+
+export interface StudioWaterAnimationOptions {
+  enabled: boolean;
+  speed: number;
+  intensity: number;
 }
 
 export interface StudioTerrainControlTexture {

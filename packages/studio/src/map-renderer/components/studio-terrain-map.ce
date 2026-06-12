@@ -71,7 +71,8 @@ effect(() => {
   void renderTerrain()
 })
 
-tick(() => {
+tick(({ deltaTime }) => {
+  terrainRenderer.update(deltaTime)
   updateTerrainCulling()
 })
 

@@ -5,6 +5,7 @@ import {
   type StudioTerrainControlTexture,
   type StudioTerrainMorphologyFeature,
   type StudioTerrainRenderData,
+  type StudioWaterAnimationOptions,
 } from "./types";
 import {
   findTerrainTexture,
@@ -41,6 +42,7 @@ export function createStudioTerrainRenderData(map: any): StudioTerrainRenderData
   );
   const terrainGrid = resolveTerrainGrid(map, asset, widthTiles, heightTiles, useTileAtlas);
   const morphologyFeatures = normalizeMorphologyFeatures(map?.terrainMorphologyLayer);
+  const waterAnimation = normalizeWaterAnimationOptions(map?.waterAnimation);
 
   return {
     widthTiles,
@@ -53,12 +55,14 @@ export function createStudioTerrainRenderData(map: any): StudioTerrainRenderData
     terrainControl,
     terrainGrid,
     morphologyFeatures,
+    waterAnimation,
     version: [
       map?._id ?? map?.id ?? "",
       JSON.stringify(map?.terrain ?? ""),
       JSON.stringify(map?.terrainByTileset ?? ""),
       JSON.stringify(map?.terrainLayer ?? ""),
       JSON.stringify(map?.terrainMorphologyLayer ?? ""),
+      JSON.stringify(waterAnimation),
       JSON.stringify(params?.baseTerrain?.updatedAt ?? ""),
       JSON.stringify(params?.primaryTerrainTileset?.updatedAt ?? ""),
       terrainControl?.source ?? "",
@@ -256,6 +260,23 @@ function normalizeTerrainControlTexture(
   };
 }
 
+function normalizeWaterAnimationOptions(value: unknown): StudioWaterAnimationOptions {
+  const options = parseObject(value);
+  if (!options || options.enabled !== true) {
+    return {
+      enabled: false,
+      speed: 1,
+      intensity: 0.45,
+    };
+  }
+
+  return {
+    enabled: true,
+    speed: clampNumber(positiveNumber(options.speed) ?? 1, 0.1, 4),
+    intensity: clampNumber(positiveNumber(options.intensity) ?? 0.45, 0.05, 1),
+  };
+}
+
 function parseArray(value: unknown): any[] {
   if (Array.isArray(value)) return value;
   const parsed = typeof value === "string" ? parseJson(value) : value;
@@ -307,6 +328,10 @@ function normalizeTile(value: unknown): number {
 function positiveNumber(value: unknown): number | undefined {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
 }
 
 function stringValue(value: unknown): string | undefined {

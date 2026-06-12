@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildStudioTerrainCollisionPolygons } from "./collision-polygons";
 import { createStudioTerrainRenderData } from "./map-normalizer";
 import {
+  isWaterTerrainTexture,
   resolveTerrainTextureSourceRect,
   resolveTerrainTileAtlasSourceRect,
 } from "./terrain-renderer/terrain-texture";
@@ -144,6 +145,41 @@ describe("studio terrain map renderer data", () => {
       tileSize: 48,
       palette: ["water", "grass"],
     });
+  });
+
+  it("normalizes disabled water animation by default", () => {
+    const data = createStudioTerrainRenderData(createMap());
+
+    expect(data.waterAnimation).toEqual({
+      enabled: false,
+      speed: 1,
+      intensity: 0.45,
+    });
+  });
+
+  it("normalizes enabled water animation options", () => {
+    const data = createStudioTerrainRenderData(
+      createMap({
+        waterAnimation: {
+          enabled: true,
+          speed: 20,
+          intensity: 5,
+        },
+      })
+    );
+
+    expect(data.waterAnimation).toEqual({
+      enabled: true,
+      speed: 4,
+      intensity: 1,
+    });
+  });
+
+  it("detects water terrain textures from render metadata", () => {
+    const asset = createStudioTerrainRenderData(createMap()).asset!;
+
+    expect(isWaterTerrainTexture(asset, "water")).toBe(true);
+    expect(isWaterTerrainTexture(asset, "grass")).toBe(false);
   });
 
   it("uses the source image dimensions when terrain atlas metadata is compact", () => {
