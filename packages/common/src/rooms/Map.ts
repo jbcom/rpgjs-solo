@@ -884,6 +884,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     subscribeSignal(owner.x);
     subscribeSignal(owner.y);
+    subscribeSignal(owner.z);
     subscribeSignal(owner.hitbox);
     subscribeSignal(owner._through);
     subscribeSignal(owner._pushable);
@@ -901,6 +902,9 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   }
 
   private shouldDisableCharacterCollisions(owner: any): boolean {
+    if (this.isAlwaysOnTopEvent(owner)) {
+      return true;
+    }
     if (typeof owner._through === "function") {
       try {
         return !!owner._through();
@@ -912,6 +916,36 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       return owner.through;
     }
     return false;
+  }
+
+  private isAlwaysOnTopEvent(owner: any): boolean {
+    if (!owner) {
+      return false;
+    }
+    if (typeof owner.isEvent !== "function") {
+      return false;
+    }
+
+    try {
+      if (!owner.isEvent()) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+
+    if (typeof owner._alwaysOnTop === "function") {
+      try {
+        return !!owner._alwaysOnTop();
+      } catch {
+        return false;
+      }
+    }
+    if (owner.alwaysOnTop === true) {
+      return true;
+    }
+
+    return this.resolveNumeric(owner.z) >= 1000;
   }
 
   private resolvePhysicsEntityKind(owner: any, id?: string): PhysicsEntityKind {
@@ -1580,9 +1614,17 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       const selfOwner = (self as any).owner;
       const otherOwner = (other as any).owner;
 
+      if (this.isAlwaysOnTopEvent(selfOwner)) {
+        return false;
+      }
+
       // If either entity has no owner, resolve collision (e.g., walls, obstacles must block)
       if (!selfOwner || !otherOwner) {
         return true;
+      }
+
+      if (this.isAlwaysOnTopEvent(otherOwner)) {
+        return false;
       }
 
     

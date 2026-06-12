@@ -392,6 +392,66 @@ test('event touch hooks ignore collisions across different z levels', async () =
     expect(calls).toEqual([])
 })
 
+test('always-on-top events do not resolve physical collisions', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+
+    player.z.set(1000)
+
+    await map.createDynamicEvent({
+      id: "top-overlay",
+      x: player.x(),
+      y: player.y(),
+      event: {
+        name: "top-overlay",
+        onInit() {
+          this.z.set(1000)
+        },
+      }
+    })
+    await fixture.nextTick()
+
+    map.createShape({
+      name: "solid-wall",
+      x: player.x(),
+      y: player.y(),
+      width: 32,
+      height: 32,
+    })
+
+    const playerBody = map.getBody(player.id)
+    const eventBody = map.getBody("top-overlay")
+    const wallBody = map.physic.getEntityByUUID("shape-solid-wall")
+
+    expect(playerBody.shouldResolveCollisionWith(eventBody)).toBe(false)
+    expect(eventBody.shouldResolveCollisionWith(wallBody)).toBe(false)
+})
+
+test('events on a regular z level still resolve collisions on the same level', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+
+    player.z.set(1)
+
+    await map.createDynamicEvent({
+      id: "regular-z-event",
+      x: player.x(),
+      y: player.y(),
+      event: {
+        name: "regular-z-event",
+        onInit() {
+          this.z.set(1)
+        },
+      }
+    })
+    await fixture.nextTick()
+
+    const playerBody = map.getBody(player.id)
+    const eventBody = map.getBody("regular-z-event")
+
+    expect(playerBody.shouldResolveCollisionWith(eventBody)).toBe(true)
+})
+
 test('class-based events receive touch hooks', async () => {
     player = await client.waitForMapChange('map1')
     const map = player.getCurrentMap() as any
