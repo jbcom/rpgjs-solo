@@ -155,7 +155,7 @@ export function getTerrainRenderMode(texture: TerrainTextureMetadata | null): Te
   return { type: "fade", width: 18, curve: "smooth" };
 }
 
-export function drawMirroredTerrainTexture(
+export function drawTerrainTexture(
   ctx: CanvasRenderingContext2D,
   image: CanvasImageSource,
   source: TerrainSourceRect,
@@ -164,42 +164,22 @@ export function drawMirroredTerrainTexture(
   width: number,
   height = width
 ): void {
-  const cellWidth = Math.max(1, Math.floor(width / 2));
-  const cellHeight = Math.max(1, Math.floor(height / 2));
-  const inset = source.width > 12 && source.height > 12 ? 3 : 0;
-  const sourceX = source.x + inset;
-  const sourceY = source.y + inset;
-  const sourceWidth = Math.max(1, source.width - inset * 2);
-  const sourceHeight = Math.max(1, source.height - inset * 2);
-
   ctx.imageSmoothingEnabled = false;
-
-  const drawCell = (offsetX: number, offsetY: number, flipX: boolean, flipY: boolean) => {
-    ctx.save();
-    ctx.translate(x + offsetX + (flipX ? cellWidth : 0), y + offsetY + (flipY ? cellHeight : 0));
-    ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
-    ctx.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, cellWidth, cellHeight);
-    ctx.restore();
-  };
-
-  drawCell(0, 0, false, false);
-  drawCell(cellWidth, 0, true, false);
-  drawCell(0, cellHeight, false, true);
-  drawCell(cellWidth, cellHeight, true, true);
+  ctx.drawImage(image, source.x, source.y, source.width, source.height, x, y, width, height);
 }
 
-export function createMirroredTerrainPatternCanvas(
+export function createTerrainPatternCanvas(
   image: CanvasImageSource,
   source: TerrainSourceRect,
   destinationCellSize: number
 ): HTMLCanvasElement {
   const cellSize = Math.max(1, Math.floor(destinationCellSize));
   const canvas = document.createElement("canvas");
-  canvas.width = cellSize * 2;
-  canvas.height = cellSize * 2;
+  canvas.width = cellSize;
+  canvas.height = cellSize;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context unavailable");
-  drawMirroredTerrainTexture(ctx, image, source, 0, 0, canvas.width, canvas.height);
+  drawTerrainTexture(ctx, image, source, 0, 0, canvas.width, canvas.height);
   return canvas;
 }
 

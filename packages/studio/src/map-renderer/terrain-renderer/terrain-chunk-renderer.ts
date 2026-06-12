@@ -12,7 +12,7 @@ import {
   type StudioTerrainRenderData,
 } from "../types";
 import {
-  createMirroredTerrainPatternCanvas,
+  createTerrainPatternCanvas,
   findTerrainTexture,
   getTerrainRenderMode,
   resolveEffectiveTerrainTextureGrid,
@@ -1541,7 +1541,7 @@ export class StudioTerrainChunkRenderer {
     let patternCanvas = this.patternCache.get(cacheKey);
     if (!patternCanvas) {
       const source = resolveTerrainTextureSourceRect(data.asset, texture, image.naturalWidth, image.naturalHeight);
-      patternCanvas = createMirroredTerrainPatternCanvas(image, source, renderSize);
+      patternCanvas = createTerrainPatternCanvas(image, source, renderSize);
       this.patternCache.set(cacheKey, patternCanvas);
     }
     return ctx.createPattern(patternCanvas, "repeat");
@@ -2332,8 +2332,8 @@ function sampleTerrainLayerColor(
   worldY: number,
   light: number
 ): RgbaColor {
-  const localX = mirroredLocal(worldX, Math.max(sourceTileSize * 2, 1));
-  const localY = mirroredLocal(worldY, Math.max(sourceTileSize * 2, 1));
+  const localX = resolveTerrainTextureRepeatLocal(worldX, sourceTileSize);
+  const localY = resolveTerrainTextureRepeatLocal(worldY, sourceTileSize);
   const x = clampInteger(
     Math.floor(layer.source.x + localX * Math.max(1, layer.source.width - 1)),
     0,
@@ -2379,9 +2379,8 @@ function terrainRenderModeWidth(mode: TerrainRenderMode | undefined): number {
   return 0;
 }
 
-function mirroredLocal(world: number, period: number): number {
-  const local = positiveModulo(world / period, 1);
-  return 1 - Math.abs(local * 2 - 1);
+export function resolveTerrainTextureRepeatLocal(world: number, period: number): number {
+  return positiveModulo(world / Math.max(period, 1), 1);
 }
 
 function positiveModulo(value: number, modulo: number): number {

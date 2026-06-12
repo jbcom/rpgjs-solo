@@ -6,7 +6,10 @@ import {
   resolveStudioElementShadowCaster,
   StudioElementRenderer,
 } from "./studio-element-renderer";
-import { resolveStudioTerrainWallShadowStyle } from "./terrain-renderer/terrain-chunk-renderer";
+import {
+  resolveStudioTerrainWallShadowStyle,
+  resolveTerrainTextureRepeatLocal,
+} from "./terrain-renderer/terrain-chunk-renderer";
 
 const createElement = (overrides: Record<string, any> = {}) => ({
   id: "tree",
@@ -34,6 +37,13 @@ const createTerrainData = (overrides: Record<string, any> = {}) => ({
 });
 
 describe("studio element renderer helpers", () => {
+  it("repeats terrain texture coordinates without mirroring adjacent tiles", () => {
+    expect(resolveTerrainTextureRepeatLocal(0, 48)).toBe(0);
+    expect(resolveTerrainTextureRepeatLocal(24, 48)).toBe(0.5);
+    expect(resolveTerrainTextureRepeatLocal(48, 48)).toBe(0);
+    expect(resolveTerrainTextureRepeatLocal(72, 48)).toBe(0.5);
+  });
+
   it("creates one fallback sprite part when no draw rule is configured", () => {
     const parts = buildStudioElementSpriteParts(createElement());
 
