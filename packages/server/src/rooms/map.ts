@@ -292,7 +292,8 @@ interface LightingSetOptions {
 }
 
 @Room({
-  path: "map-{id}"
+  path: "map-{id}",
+  persistState: false
 })
 export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   private _clientListeners = new Map<string, Set<(player: RpgPlayer, data: any) => void | Promise<void>>>();

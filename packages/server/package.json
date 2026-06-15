@@ -26,21 +26,21 @@
   "license": "MIT",
   "description": "",
   "dependencies": {
-    "@canvasengine/tiled": "2.0.0-rc.4",
+    "@canvasengine/tiled": "2.0.0",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/database": "^4.3.0",
     "@rpgjs/physic": "workspace:*",
     "@rpgjs/testing": "workspace:*",
-    "@signe/di": "3.0.1",
-    "@signe/reactive": "3.0.1",
-    "@signe/room": "3.0.1",
-    "@signe/sync": "3.0.1",
+    "@signe/di": "3.1.0",
+    "@signe/reactive": "3.1.0",
+    "@signe/room": "3.1.0",
+    "@signe/sync": "3.1.0",
     "rxjs": "^7.8.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "vite": "^8.0.13",
-    "vite-plugin-dts": "^5.0.0"
+    "vite": "^8.0.16",
+    "vite-plugin-dts": "^5.0.2"
   },
   "type": "module"
 }

@@ -13,15 +13,15 @@
   "license": "MIT",
   "description": "",
   "devDependencies": {
-    "vite": "^8.0.13",
-    "vite-plugin-dts": "^5.0.0"
+    "vite": "^8.0.16",
+    "vite-plugin-dts": "^5.0.2"
   },
   "dependencies": {
-    "@canvasengine/testing": "2.0.0-rc.4",
+    "@canvasengine/testing": "2.0.0",
     "@rpgjs/client": "workspace:*",
     "@rpgjs/server": "workspace:*",
-    "@signe/di": "3.0.1",
-    "canvasengine": "2.0.0-rc.4",
+    "@signe/di": "3.1.0",
+    "canvasengine": "2.0.0",
     "rxjs": "^7.8.2",
     "vitest-webgl-canvas-mock": "^1.1.0"
   },

@@ -23,8 +23,8 @@
   "description": "RPGJS is a framework for creating RPG/MMORPG games",
   "dependencies": {
     "execa": "^9.6.1",
-    "pnpm": "^10.25.0",
-    "tsx": "^4.22.0",
+    "pnpm": "^11.6.0",
+    "tsx": "^4.22.4",
     "wait-on": "^9.0.10"
   },
   "keywords": [
@@ -34,17 +34,20 @@
     "javascript",
     "typescript"
   ],
-  "packageManager": "pnpm@11.1.2",
+  "packageManager": "pnpm@11.6.0",
   "private": true,
   "type": "module",
   "devDependencies": {
+    "@canvasengine/compiler": "2.0.0",
+    "@canvasengine/presets": "2.0.0",
     "@changesets/cli": "^2.31.0",
-    "@canvasengine/compiler": "2.0.0-rc.4",
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.3",
+    "canvasengine": "2.0.0",
     "jsdom": "^29.1.1",
+    "pixi.js": "^8.19.0",
     "ts-morph": "^28.0.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.13",
-    "vitest": "^4.1.6"
+    "vite": "^8.0.16",
+    "vitest": "^4.1.9"
   }
 }

@@ -21,25 +21,25 @@
   "author": "Samuel Ronce",
   "license": "MIT",
   "peerDependencies": {
-    "@canvasengine/presets": "^2.0.0-rc.4",
-    "canvasengine": "^2.0.0-rc.4",
+    "@canvasengine/presets": "^2.0.0",
+    "canvasengine": "^2.0.0",
     "pixi.js": "^8.9.2"
   },
   "dependencies": {
     "@rpgjs/common": "workspace:*",
     "@rpgjs/server": "workspace:*",
     "@rpgjs/ui-css": "workspace:*",
-    "@signe/di": "3.0.1",
-    "@signe/room": "3.0.1",
-    "@signe/sync": "3.0.1",
+    "@signe/di": "3.1.0",
+    "@signe/room": "3.1.0",
+    "@signe/sync": "3.1.0",
     "pixi-filters": "^6.1.5",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@canvasengine/compiler": "2.0.0-rc.4",
-    "vite": "^8.0.13",
-    "vite-plugin-dts": "^5.0.0",
-    "vitest": "^4.1.6"
+    "@canvasengine/compiler": "2.0.0",
+    "vite": "^8.0.16",
+    "vite-plugin-dts": "^5.0.2",
+    "vitest": "^4.1.9"
   },
   "type": "module"
 }
