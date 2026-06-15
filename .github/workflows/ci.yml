@@ -87,6 +87,11 @@ jobs:
           run: |
             pnpm build
 
+        - name: Configure npm auth for pnpm
+          run: pnpm config set "//registry.npmjs.org/:_authToken" "$NPM_AUTH_TOKEN"
+          env:
+            NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
         - name: 📣 Version packages or publish to npm
           id: changesets
           uses: changesets/action@v1
