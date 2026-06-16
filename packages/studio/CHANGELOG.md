@@ -1,5 +1,17 @@
 # @rpgjs/studio
 
+## 5.0.0-beta.19
+
+### Patch Changes
+
+- Release the next RPGJS beta while keeping the physics package unchanged.
+- Updated dependencies
+  - @rpgjs/action-battle@5.0.0-beta.19
+  - @rpgjs/client@5.0.0-beta.19
+  - @rpgjs/common@5.0.0-beta.19
+  - @rpgjs/server@5.0.0-beta.19
+  - @rpgjs/vite@5.0.0-beta.19
+
 ## 5.0.0-beta.17
 
 ### Patch Changes

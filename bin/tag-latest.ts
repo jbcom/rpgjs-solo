@@ -24,6 +24,7 @@ async function main(): Promise<void> {
     const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8')) as PackageJson;
 
     if (!packageJson.name || !packageJson.version || packageJson.private) continue;
+    if (packageJson.name === '@rpgjs/physic') continue;
 
     const spec = `${packageJson.name}@${packageJson.version}`;
     console.log(`Tagging ${spec} as latest`);

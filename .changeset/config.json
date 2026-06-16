@@ -13,6 +13,7 @@
     "@rpgjs/playground-action-battle",
     "@rpgjs/playground-dash",
     "@rpgjs/playground-mouse-interactions",
+    "@rpgjs/playground-pressure-plate",
     "@rpgjs/playground-projectiles",
     "@rpgjs/playground-studio",
     "@rpgjs/playground-tiled",

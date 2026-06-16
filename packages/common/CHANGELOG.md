@@ -1,5 +1,11 @@
 # @rpgjs/common
 
+## 5.0.0-beta.19
+
+### Patch Changes
+
+- Release the next RPGJS beta while keeping the physics package unchanged.
+
 ## 5.0.0-beta.16
 
 ### Patch Changes
