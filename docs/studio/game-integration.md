@@ -224,3 +224,5 @@ provideStudioGame({
 - `bundleBasePath`: public path for exported Studio data. Defaults to `/game-data`.
 - `displayTitleScreen`: display the Studio title screen when supported by the project.
 - `startMapId`: force the map used to start the player.
+- `debugCollisions`: display Studio collision debug overlays. This is a shortcut for the built-in Studio debug plugin.
+- `studioPlugins`: attach Studio client-side map renderer plugins. See [Create a Studio plugin](/studio/plugins).

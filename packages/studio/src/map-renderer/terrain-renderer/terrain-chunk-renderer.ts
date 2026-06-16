@@ -1181,8 +1181,30 @@ export class StudioTerrainChunkRenderer {
     }
 
     const mask = this.createCanvasBuffer(Math.max(1, Math.ceil(bounds.width)), Math.max(1, Math.ceil(bounds.height)), true);
-    for (const stroke of feature.strokes) {
-      this.drawStructuredTerrainMorphologyStrokeMask(mask.ctx, stroke, feature.params, bounds.x, bounds.y);
+    if (feature.operations?.length) {
+      for (const operation of feature.operations) {
+        if (operation.mode === "erase") {
+          mask.ctx.save();
+          mask.ctx.globalCompositeOperation = "destination-out";
+          this.drawTerrainMorphologyEraserStrokeMask(mask.ctx, operation.stroke, feature.params, bounds.x, bounds.y);
+          mask.ctx.restore();
+        } else {
+          this.drawStructuredTerrainMorphologyStrokeMask(mask.ctx, operation.stroke, feature.params, bounds.x, bounds.y);
+        }
+      }
+    } else {
+      for (const stroke of feature.strokes) {
+        this.drawStructuredTerrainMorphologyStrokeMask(mask.ctx, stroke, feature.params, bounds.x, bounds.y);
+      }
+
+      if (feature.eraserStrokes?.length) {
+        mask.ctx.save();
+        mask.ctx.globalCompositeOperation = "destination-out";
+        for (const stroke of feature.eraserStrokes) {
+          this.drawTerrainMorphologyEraserStrokeMask(mask.ctx, stroke, feature.params, bounds.x, bounds.y);
+        }
+        mask.ctx.restore();
+      }
     }
 
     const result = { canvas: mask.canvas, bounds };
@@ -1236,6 +1258,70 @@ export class StudioTerrainChunkRenderer {
       }
     }
 
+    ctx.restore();
+  }
+
+  private drawTerrainMorphologyEraserStrokeMask(
+    ctx: CanvasRenderingContext2D,
+    stroke: StudioTerrainMorphologyFeature["strokes"][number],
+    params: StudioTerrainMorphologyFeature["params"],
+    offsetX: number,
+    offsetY: number
+  ): void {
+    if (stroke.points.length === 0) return;
+
+    const smoothness = getTerrainMorphologySmoothnessFromParams(params);
+    const radius = Math.max(1, Number(stroke.radius) || 1);
+    const roughness = "height" in params
+      ? Math.pow(1 - smoothness, 1.04) * 0.34
+      : (1 - smoothness) * 0.3;
+    const points = Math.round(38 + smoothness * 34);
+    const spacing = Math.max(12, radius * (0.32 + smoothness * 0.14));
+
+    ctx.save();
+    ctx.fillStyle = "#fff";
+
+    const stamp = (x: number, y: number): void => {
+      drawTerrainMorphologyOrganicBlob(
+        ctx,
+        x - offsetX,
+        y - offsetY,
+        radius * (1 + roughness * 0.2),
+        roughness,
+        points
+      );
+      ctx.fill();
+    };
+
+    const hasSegment = stroke.points.some((point, index) => {
+      const previous = stroke.points[index - 1];
+      return !!previous && Math.hypot(point.x - previous.x, point.y - previous.y) > 0.001;
+    });
+
+    if (stroke.points.length === 1 || !hasSegment) {
+      const point = stroke.points[0];
+      stamp(point.x, point.y);
+      ctx.restore();
+      return;
+    }
+
+    stroke.points.forEach((point, index) => {
+      if (index === 0) {
+        stamp(point.x, point.y);
+        return;
+      }
+
+      const previous = stroke.points[index - 1];
+      if (!previous) return;
+
+      const dx = point.x - previous.x;
+      const dy = point.y - previous.y;
+      const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / spacing));
+      for (let step = 1; step <= steps; step += 1) {
+        const t = step / steps;
+        stamp(previous.x + dx * t, previous.y + dy * t);
+      }
+    });
     ctx.restore();
   }
 

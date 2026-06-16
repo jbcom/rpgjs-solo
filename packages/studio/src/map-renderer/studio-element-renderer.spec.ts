@@ -261,6 +261,45 @@ describe("studio element renderer helpers", () => {
     renderer.destroy();
   });
 
+  it("does not attach Studio element collision debug graphics by default", async () => {
+    const renderer = new StudioElementRenderer();
+    const [container] = await renderer.renderElements([createElement({ image: "" })]);
+
+    const debug = container.children.find((child: any) => String(child.label ?? "").includes("CollisionDebug"));
+
+    expect(debug).toBeUndefined();
+
+    renderer.destroy();
+  });
+
+  it("attaches Studio element collision debug graphics when enabled", async () => {
+    const renderer = new StudioElementRenderer();
+    const [container] = await renderer.renderElements([createElement({ image: "" })], {
+      debugCollisions: true,
+    });
+
+    const debug = container.children.find((child: any) => child.label === "StudioElement:tree:CollisionDebug") as any;
+
+    expect(debug).toBeTruthy();
+    expect(debug.zIndex).toBeGreaterThan(1000000);
+
+    renderer.destroy();
+  });
+
+  it("does not attach Studio element collision debug graphics for disabled hitboxes", async () => {
+    const renderer = new StudioElementRenderer();
+    const [container] = await renderer.renderElements(
+      [createElement({ image: "", hitbox: { type: "none", x: 12, y: 30, width: 24, height: 14 } })],
+      { debugCollisions: true }
+    );
+
+    const debug = container.children.find((child: any) => String(child.label ?? "").includes("CollisionDebug"));
+
+    expect(debug).toBeUndefined();
+
+    renderer.destroy();
+  });
+
   it("anchors the projected silhouette on the hitbox contact center", async () => {
     const renderer = new StudioElementRenderer();
     const [container] = await renderer.renderElements(

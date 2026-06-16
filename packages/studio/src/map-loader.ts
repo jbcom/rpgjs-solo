@@ -13,6 +13,7 @@ import {
 interface GlobalConfig {
   projectId?: string;
   startMapId?: string;
+  debugCollisions?: boolean;
   hero?: {
     graphic?: any;
     faceset?: any;
@@ -996,6 +997,7 @@ export const loadMap = async (mapId: string) => {
       terrain: isV2 ? JSON.parse(map.terrain ?? '[]') : [],
       terrainByTileset: isV2 ? terrainByTileset : [],
       terrainRenderData,
+      debugCollisions: client.globalConfig.debugCollisions === true,
     },
     hitboxes: allHitboxes,
     component: MapComponentV2,

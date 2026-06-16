@@ -1,8 +1,8 @@
 <Container scale>
-    <StudioTerrainMap data splitWallForeground={true} /> 
+    <StudioTerrainMap data debugCollisions={terrainPluginOptions().debugCollisions === true} splitWallForeground={true} /> 
     <Container sortableChildren={true} pixiChildren={terrainWallShadowPixiChildren} />
     <Container sortableChildren={true} pixiChildren={elementsAlwaysLowPixiChildren} />
-    <EventLayerComponent pixiChildren={eventLayerPixiChildren} /> 
+    <StudioEventLayer pixiChildren={eventLayerPixiChildren} /> 
     <Container sortableChildren={true} pixiChildren={elementsHighPixiChildren} />
 </Container>
 
@@ -29,14 +29,19 @@
   <script>
     import { computed, effect, mount, signal, tick } from 'canvasengine'
     import { Weather } from "@canvasengine/presets";
-    import { EventLayerComponent, RpgClientEngine, inject } from "@rpgjs/client";
+    import { RpgClientEngine, inject } from "@rpgjs/client";
     import { Container as PixiContainer, Graphics } from "pixi.js";
     import StudioTerrainMap from '../map-renderer/components/studio-terrain-map.ce'
+    import StudioEventLayer from './studio-event-layer.ce'
     import { StudioTerrainWallOcclusionRenderer, StudioTerrainWallShadowRenderer } from '../map-renderer/terrain-renderer/terrain-chunk-renderer'
     import { StudioElementRenderer } from '../map-renderer/studio-element-renderer'
     import { toCanvasWeatherOptions } from '@common/weather';
     import { assetsUrl } from "../constants";
     import { createViewportCullKey, getPixiLocalViewportBounds } from '../map-renderer/viewport-culling'
+    import {
+      collectStudioMapPluginPixiChildren,
+      composeStudioMapPluginOptions
+    } from '../studio-map-plugins'
 
     const { data } = defineProps()
 
@@ -61,10 +66,26 @@
     const terrainWallOcclusionChildren = signal([])
     const elementsLowPixiChildren = signal([])
     let elementsHighChildren = []
+    const studioMapPluginContext = computed(() => ({
+      engine,
+      map: data(),
+      data: data()
+    }))
+    const studioMapPlugins = computed(() => engine.globalConfig?.studioPlugins || [])
+    const terrainPluginOptions = computed(() => {
+      return composeStudioMapPluginOptions(studioMapPlugins(), 'terrainOptions', studioMapPluginContext())
+    })
+    const elementPluginOptions = computed(() => {
+      return composeStudioMapPluginOptions(studioMapPlugins(), 'elementRenderOptions', studioMapPluginContext())
+    })
+    const eventLayerPluginPixiChildren = computed(() => {
+      return collectStudioMapPluginPixiChildren(studioMapPlugins(), studioMapPluginContext())
+    })
     const eventLayerPixiChildren = computed(() => {
       return [
         ...elementsLowPixiChildren(),
-        ...terrainWallOcclusionChildren()
+        ...terrainWallOcclusionChildren(),
+        ...eventLayerPluginPixiChildren()
       ]
     })
     const terrainWallOcclusionRenderer = new StudioTerrainWallOcclusionRenderer()
@@ -501,7 +522,8 @@
         sceneMap: engine.sceneMap,
         lighting: mapLighting(),
         shadowBudget,
-        shadowCasterLimit: STUDIO_ELEMENT_SHADOW_CASTER_LIMIT
+        shadowCasterLimit: STUDIO_ELEMENT_SHADOW_CASTER_LIMIT,
+        ...elementPluginOptions()
       }
 
       const alwaysLowChildren = await elementsAlwaysLowRenderer.renderElements(
@@ -533,6 +555,7 @@
       data()
       tilesetImageById()
       tilesetImage()
+      elementPluginOptions()
       mapLighting()
       void renderStudioElements()
     })

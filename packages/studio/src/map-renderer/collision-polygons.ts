@@ -1,6 +1,7 @@
 import {
   type StudioCollisionPolygon,
   type StudioTerrainMorphologyFeature,
+  type StudioTerrainStroke,
 } from "./types";
 import { createStudioTerrainRenderData } from "./map-normalizer";
 
@@ -72,6 +73,110 @@ function createEmptyMask(width: number, height: number): BooleanMask {
   };
 }
 
+function getEffectiveMorphologyStrokes(feature: StudioTerrainMorphologyFeature): StudioTerrainStroke[] {
+  if (feature.operations?.length) {
+    return feature.operations.reduce<StudioTerrainStroke[]>((strokes, operation) => {
+      if (operation.mode === "paint") {
+        return [...strokes, operation.stroke];
+      }
+      return strokes.flatMap((stroke) => subtractMorphologyStroke(stroke, operation.stroke));
+    }, []);
+  }
+
+  return (feature.eraserStrokes ?? []).reduce<StudioTerrainStroke[]>(
+    (strokes, eraserStroke) => strokes.flatMap((stroke) => subtractMorphologyStroke(stroke, eraserStroke)),
+    feature.strokes
+  );
+}
+
+function subtractMorphologyStroke(stroke: StudioTerrainStroke, eraserStroke: StudioTerrainStroke): StudioTerrainStroke[] {
+  const sampledPoints = sampleMorphologyStrokePoints(stroke, Math.max(4, Math.min(12, stroke.radius * 0.35, eraserStroke.radius * 0.35)));
+  const visibleSegments: StudioTerrainStroke[] = [];
+  let currentPoints: StudioTerrainStroke["points"] = [];
+
+  sampledPoints.forEach((point) => {
+    if (isPointInsideMorphologyStroke(point, eraserStroke)) {
+      if (currentPoints.length > 0) {
+        visibleSegments.push(createDerivedMorphologyStroke(stroke, visibleSegments.length, currentPoints));
+        currentPoints = [];
+      }
+      return;
+    }
+
+    currentPoints.push(point);
+  });
+
+  if (currentPoints.length > 0) {
+    visibleSegments.push(createDerivedMorphologyStroke(stroke, visibleSegments.length, currentPoints));
+  }
+
+  return visibleSegments;
+}
+
+function sampleMorphologyStrokePoints(stroke: StudioTerrainStroke, spacing: number): StudioTerrainStroke["points"] {
+  if (stroke.points.length <= 1) return stroke.points;
+  const points: StudioTerrainStroke["points"] = [];
+
+  stroke.points.forEach((point, index) => {
+    const previous = stroke.points[index - 1];
+    if (!previous) {
+      points.push(point);
+      return;
+    }
+
+    const distance = Math.hypot(point.x - previous.x, point.y - previous.y);
+    const steps = Math.max(1, Math.ceil(distance / spacing));
+    for (let step = 1; step <= steps; step += 1) {
+      const ratio = step / steps;
+      points.push({
+        x: previous.x + (point.x - previous.x) * ratio,
+        y: previous.y + (point.y - previous.y) * ratio,
+      });
+    }
+  });
+
+  return points;
+}
+
+function createDerivedMorphologyStroke(
+  source: StudioTerrainStroke,
+  index: number,
+  points: StudioTerrainStroke["points"]
+): StudioTerrainStroke {
+  return {
+    ...source,
+    id: `${source.id}_visible_${index}`,
+    points,
+  };
+}
+
+function isPointInsideMorphologyStroke(point: Point, stroke: StudioTerrainStroke): boolean {
+  if (stroke.points.length === 0) return false;
+  if (stroke.points.length === 1) {
+    return Math.hypot(point.x - stroke.points[0].x, point.y - stroke.points[0].y) <= stroke.radius;
+  }
+
+  for (let index = 1; index < stroke.points.length; index += 1) {
+    if (distanceToSegment(point, stroke.points[index - 1], stroke.points[index]) <= stroke.radius) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function distanceToSegment(point: Point, from: Point, to: Point): number {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared <= 0.000001) {
+    return Math.hypot(point.x - from.x, point.y - from.y);
+  }
+
+  const ratio = Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared));
+  return Math.hypot(point.x - (from.x + dx * ratio), point.y - (from.y + dy * ratio));
+}
+
 function resolveWallBackCollisionOffset(feature: StudioTerrainMorphologyFeature, tileSize: number): number {
   const explicitOffset = Number(feature.params.backCollisionOffset ?? feature.params.collisionOffsetY);
   if (Number.isFinite(explicitOffset) && explicitOffset >= 0) {
@@ -93,7 +198,7 @@ function createHoleMorphologyCollisionPolygons(
   const thickness = resolveHoleCollisionThickness(feature, tileSize);
   const polygons: StudioCollisionPolygon[] = [];
 
-  feature.strokes.forEach((stroke) => {
+  getEffectiveMorphologyStrokes(feature).forEach((stroke) => {
     const points = normalizeStrokePoints(stroke.points);
     const radius = resolveHoleCollisionRadius(stroke.radius, feature.params);
     if (points.length === 0) return;
@@ -424,7 +529,7 @@ function createWallMorphologyCollisionPolygons(
   const backCollisionOffset = resolveWallBackCollisionOffset(feature, tileSize);
   const polygons: StudioCollisionPolygon[] = [];
 
-  feature.strokes.forEach((stroke) => {
+  getEffectiveMorphologyStrokes(feature).forEach((stroke) => {
     if (stroke.points.length === 1) {
       pushWallCollisionRect(
         polygons,

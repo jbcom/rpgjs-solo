@@ -13,6 +13,7 @@ RPGJS Studio can be used directly from an AI coding assistant such as Claude Cod
 - How to install the RPGJS Studio skill
 - How to create and configure the Studio API key
 - How to connect an RPGJS game to Studio data
+- How to extend the Studio map renderer with plugins
 
 ## Recommended workflow
 
@@ -41,3 +42,4 @@ RPGSTUDIO_API_KEY=your-api-key
 ## Next step
 
 - [Use a game with Studio](/studio/game-integration)
+- [Create a Studio plugin](/studio/plugins)

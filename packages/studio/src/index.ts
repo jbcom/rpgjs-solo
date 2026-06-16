@@ -6,6 +6,22 @@ import loadMap from "./map-loader";
 import { configureStudioGameRuntime } from "./data-provider";
 import { configureStudioConstants } from "./constants";
 import type { GameRuntimeMode } from "./data-provider/types";
+import type { StudioMapPlugin } from "./studio-map-plugins";
+export {
+  collectStudioMapPluginPixiChildren,
+  composeStudioMapPluginOptions,
+  createStudioEventCollisionDebugOverlay,
+  createStudioMapPlugins,
+  studioDebugCollisionsPlugin,
+} from "./studio-map-plugins";
+export type {
+  CreateStudioMapPluginsOptions,
+  StudioDebugCollisionsOptions,
+  StudioMapPlugin,
+  StudioMapPluginContext,
+  StudioMapPluginPixiChild,
+  StudioTerrainRenderOptions,
+} from "./studio-map-plugins";
 export { createStudioActionBattleAnimations } from "./action-battle-animations";
 export type {
   StudioCombatAnimationIds,
@@ -24,6 +40,8 @@ export interface StudioGameModuleConfig {
   apiUrl?: string;
   displayTitleScreen?: boolean;
   startMapId?: string;
+  debugCollisions?: boolean;
+  studioPlugins?: StudioMapPlugin[];
 }
 
 export function provideStudioGame(config: StudioGameModuleConfig = {}) {

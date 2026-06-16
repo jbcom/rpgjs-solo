@@ -147,6 +147,68 @@ describe("studio terrain map renderer data", () => {
     });
   });
 
+  it("preserves morphology erase operations during render data normalization", () => {
+    const data = createStudioTerrainRenderData(
+      createMap({
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 192,
+          height: 144,
+          tileSize: 48,
+          features: [
+            {
+              id: "wall-1",
+              kind: "wall",
+              params: { height: 48 },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [
+                    { x: 48, y: 72 },
+                    { x: 144, y: 72 },
+                  ],
+                  radius: 42,
+                },
+              ],
+              eraserStrokes: [
+                {
+                  id: "erase-1",
+                  points: [{ x: 96, y: 72 }],
+                  radius: 24,
+                },
+              ],
+              operations: [
+                {
+                  mode: "paint",
+                  stroke: {
+                    id: "stroke-1",
+                    points: [
+                      { x: 48, y: 72 },
+                      { x: 144, y: 72 },
+                    ],
+                    radius: 42,
+                  },
+                },
+                {
+                  mode: "erase",
+                  stroke: {
+                    id: "erase-1",
+                    points: [{ x: 96, y: 72 }],
+                    radius: 24,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    expect(data.morphologyFeatures[0].eraserStrokes).toHaveLength(1);
+    expect(data.morphologyFeatures[0].operations?.map((operation) => operation.mode)).toEqual(["paint", "erase"]);
+  });
+
   it("normalizes disabled water animation by default", () => {
     const data = createStudioTerrainRenderData(createMap());
 
@@ -503,6 +565,75 @@ describe("buildStudioTerrainCollisionPolygons", () => {
     );
 
     expect(polygons.some((polygon) => polygon.type === "morphology_wall_edge_collision")).toBe(false);
+  });
+
+  it("keeps a wall collision gap where a morphology erase operation cuts the middle", () => {
+    const polygons = buildStudioTerrainCollisionPolygons(
+      createMap({
+        params: {
+          ...createMap().params,
+          width: 5,
+          height: 4,
+        },
+        terrain: JSON.stringify([
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+        ]),
+        terrainMorphologyLayer: {
+          version: 1,
+          mode: "terrain-morphology",
+          width: 240,
+          height: 192,
+          tileSize: 48,
+          features: [
+            {
+              id: "wall-erased",
+              kind: "wall",
+              params: { height: 48 },
+              strokes: [
+                {
+                  id: "stroke-1",
+                  points: [
+                    { x: 48, y: 72 },
+                    { x: 192, y: 72 },
+                  ],
+                  radius: 42,
+                },
+              ],
+              operations: [
+                {
+                  mode: "paint",
+                  stroke: {
+                    id: "stroke-1",
+                    points: [
+                      { x: 48, y: 72 },
+                      { x: 192, y: 72 },
+                    ],
+                    radius: 42,
+                  },
+                },
+                {
+                  mode: "erase",
+                  stroke: {
+                    id: "erase-1",
+                    points: [{ x: 120, y: 72 }],
+                    radius: 52,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    const wallPolygons = polygons.filter((polygon) => polygon.type === "morphology_wall_edge_collision");
+
+    expect(hasCollisionAt(wallPolygons, 48, 120)).toBe(true);
+    expect(hasCollisionAt(wallPolygons, 120, 120)).toBe(false);
+    expect(hasCollisionAt(wallPolygons, 192, 120)).toBe(true);
   });
 
   it("pushes the far wall border collision down to allow visual overlap with the top surface", () => {

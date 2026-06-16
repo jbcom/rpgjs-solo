@@ -1,0 +1,190 @@
+import type { RpgClientEngine } from "@rpgjs/client";
+import { Graphics } from "pixi.js";
+import type { StudioElementRenderOptions } from "./map-renderer/studio-element-renderer";
+
+export interface StudioMapPluginContext {
+  engine: RpgClientEngine<any>;
+  map: any;
+  data: any;
+}
+
+export type StudioTerrainRenderOptions = {
+  debugCollisions?: boolean;
+};
+
+export type StudioMapPluginPixiChild = any & {
+  __studioMapPluginUpdate?: () => void;
+};
+
+export interface StudioMapPlugin {
+  id: string;
+  terrainOptions?: (ctx: StudioMapPluginContext) => StudioTerrainRenderOptions;
+  elementRenderOptions?: (ctx: StudioMapPluginContext) => Partial<StudioElementRenderOptions>;
+  eventLayerPixiChildren?: (ctx: StudioMapPluginContext) => StudioMapPluginPixiChild[];
+}
+
+export interface StudioDebugCollisionsOptions {
+  terrain?: boolean;
+  elements?: boolean;
+  events?: boolean;
+  players?: boolean;
+  color?: number;
+  fillAlpha?: number;
+  strokeAlpha?: number;
+}
+
+export interface CreateStudioMapPluginsOptions {
+  plugins?: StudioMapPlugin[];
+  debugCollisions?: boolean;
+}
+
+export interface StudioEventCollisionDebugRect {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const DEBUG_COLLISIONS_PLUGIN_ID = "studio.debug-collisions";
+
+const readValue = (value: any) => typeof value === "function" ? value() : value;
+
+const toFiniteNumber = (value: unknown, fallback = 0): number => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+};
+
+const readSignalNumber = (value: any, fallback = 0): number => {
+  return toFiniteNumber(readValue(value), fallback);
+};
+
+function getEventBodyPosition(engine: RpgClientEngine<any>, id: string, event: any): { x: number; y: number } {
+  const sceneMap = (engine as any).sceneMap;
+  const topLeft = sceneMap?.getBodyPosition?.(id, "top-left");
+  if (topLeft && Number.isFinite(Number(topLeft.x)) && Number.isFinite(Number(topLeft.y))) {
+    return {
+      x: Number(topLeft.x),
+      y: Number(topLeft.y),
+    };
+  }
+  return {
+    x: readSignalNumber(event?.x),
+    y: readSignalNumber(event?.y),
+  };
+}
+
+function resolveStudioEventCollisionDebugRect(
+  engine: RpgClientEngine<any>,
+  id: string,
+  event: any,
+): StudioEventCollisionDebugRect | null {
+  const hitbox = readValue(event?.hitbox);
+  const width = toFiniteNumber(hitbox?.w, 0);
+  const height = toFiniteNumber(hitbox?.h, 0);
+  if (width <= 0 || height <= 0) return null;
+
+  const position = getEventBodyPosition(engine, id, event);
+  return {
+    id,
+    x: Math.round(position.x),
+    y: Math.round(position.y),
+    width: Math.round(width),
+    height: Math.round(height),
+  };
+}
+
+export function resolveStudioEventCollisionDebugRects(
+  engine: RpgClientEngine<any>,
+  options: StudioDebugCollisionsOptions = {},
+): StudioEventCollisionDebugRect[] {
+  const sceneMap = (engine as any).sceneMap;
+  const includePlayers = options.players !== false;
+  const entries = Object.entries(readValue(sceneMap?.events) || {});
+  const playerEntries = includePlayers ? Object.entries(readValue(sceneMap?.players) || {}) : [];
+
+  return [...entries, ...playerEntries]
+    .map(([id, event]) => resolveStudioEventCollisionDebugRect(engine, id, event))
+    .filter((rect): rect is StudioEventCollisionDebugRect => rect !== null);
+}
+
+export function createStudioEventCollisionDebugOverlay(
+  engine: RpgClientEngine<any>,
+  options: StudioDebugCollisionsOptions = {},
+): StudioMapPluginPixiChild {
+  const graphics = new Graphics() as StudioMapPluginPixiChild;
+  const color = options.color ?? 0xef4444;
+  const fillAlpha = options.fillAlpha ?? 0.18;
+  const strokeAlpha = options.strokeAlpha ?? 0.72;
+
+  graphics.zIndex = 2147483647;
+  graphics.label = "StudioEventCollisionDebug";
+  graphics.__studioMapPluginUpdate = () => {
+    if (graphics.destroyed) return;
+    graphics.clear();
+    resolveStudioEventCollisionDebugRects(engine, options).forEach((rect) => {
+      graphics
+        .rect(rect.x, rect.y, rect.width, rect.height)
+        .fill({ color, alpha: fillAlpha })
+        .stroke({ width: 1, color, alpha: strokeAlpha });
+    });
+  };
+
+  graphics.__studioMapPluginUpdate();
+  return graphics;
+}
+
+export function studioDebugCollisionsPlugin(options: StudioDebugCollisionsOptions = {}): StudioMapPlugin {
+  let eventOverlay: StudioMapPluginPixiChild | null = null;
+
+  return {
+    id: DEBUG_COLLISIONS_PLUGIN_ID,
+    terrainOptions() {
+      return {
+        debugCollisions: options.terrain !== false,
+      };
+    },
+    elementRenderOptions() {
+      return {
+        debugCollisions: options.elements !== false,
+      };
+    },
+    eventLayerPixiChildren(ctx) {
+      if (options.events === false) return [];
+      if (!eventOverlay || eventOverlay.destroyed) {
+        eventOverlay = createStudioEventCollisionDebugOverlay(ctx.engine, options);
+      }
+      return [eventOverlay];
+    },
+  };
+}
+
+export function createStudioMapPlugins(options: CreateStudioMapPluginsOptions = {}): StudioMapPlugin[] {
+  const plugins = [...(options.plugins ?? [])];
+  if (options.debugCollisions === true && !plugins.some((plugin) => plugin.id === DEBUG_COLLISIONS_PLUGIN_ID)) {
+    plugins.unshift(studioDebugCollisionsPlugin());
+  }
+  return plugins;
+}
+
+export function composeStudioMapPluginOptions<T extends Record<string, any>>(
+  plugins: StudioMapPlugin[],
+  hookName: "terrainOptions" | "elementRenderOptions",
+  ctx: StudioMapPluginContext,
+): T {
+  return plugins.reduce((options, plugin) => {
+    const hook = plugin[hookName];
+    if (!hook) return options;
+    return {
+      ...options,
+      ...hook(ctx),
+    };
+  }, {} as T);
+}
+
+export function collectStudioMapPluginPixiChildren(
+  plugins: StudioMapPlugin[],
+  ctx: StudioMapPluginContext,
+): StudioMapPluginPixiChild[] {
+  return plugins.flatMap((plugin) => plugin.eventLayerPixiChildren?.(ctx) ?? []).filter(Boolean);
+}

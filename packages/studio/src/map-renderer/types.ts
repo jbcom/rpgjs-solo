@@ -59,11 +59,18 @@ export interface StudioTerrainStroke {
   radius: number;
 }
 
+export interface StudioTerrainMorphologyOperation {
+  mode: "paint" | "erase";
+  stroke: StudioTerrainStroke;
+}
+
 export interface StudioTerrainMorphologyFeature {
   id: string;
   kind: "hole" | "wall";
   params: Record<string, unknown>;
   strokes: StudioTerrainStroke[];
+  eraserStrokes?: StudioTerrainStroke[];
+  operations?: StudioTerrainMorphologyOperation[];
 }
 
 export interface StudioTerrainRenderData {

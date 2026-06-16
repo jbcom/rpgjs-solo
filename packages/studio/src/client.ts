@@ -20,11 +20,14 @@ import {
   getGameDataProvider,
   getStudioGameRuntimeConfig,
 } from "./data-provider";
-import { StudioGameModuleConfig } from ".";
+import type { StudioGameModuleConfig } from ".";
+import { createStudioMapPlugins, type StudioMapPlugin } from "./studio-map-plugins";
 
 interface GlobalConfig {
   projectId?: string;
   startMapId?: string;
+  debugCollisions?: boolean;
+  studioPlugins?: StudioMapPlugin[];
   keyboardControls?: Record<string, any>;
   hero?: {
     graphic?: any;
@@ -172,6 +175,8 @@ export default (config: StudioGameModuleConfig) => {
 
         window.gameConfig = response;
 
+        const debugCollisions = config.debugCollisions === true || response.debugCollisions === true || engine.globalConfig?.debugCollisions === true;
+
         engine.globalConfig = {
           ...engine.globalConfig,
           ...response,
@@ -181,6 +186,14 @@ export default (config: StudioGameModuleConfig) => {
           ),
           projectId: response._id || engine.globalConfig?.projectId,
           startMapId: config.startMapId !== undefined ? config.startMapId : (response.startMapId || engine.globalConfig?.startMapId),
+          debugCollisions,
+          studioPlugins: createStudioMapPlugins({
+            plugins: [
+              ...(engine.globalConfig?.studioPlugins ?? []),
+              ...(config.studioPlugins ?? []),
+            ],
+            debugCollisions,
+          }),
         };
 
         const animationMediaRefs = Object.values(

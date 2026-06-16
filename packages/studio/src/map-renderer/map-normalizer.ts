@@ -4,6 +4,7 @@ import {
   type StudioTerrainCell,
   type StudioTerrainControlTexture,
   type StudioTerrainMorphologyFeature,
+  type StudioTerrainMorphologyOperation,
   type StudioTerrainRenderData,
   type StudioWaterAnimationOptions,
 } from "./types";
@@ -199,30 +200,27 @@ function normalizeMorphologyFeatures(value: unknown): StudioTerrainMorphologyFea
       const kind = candidate.kind === "wall" ? "wall" : candidate.kind === "hole" ? "hole" : null;
       if (!kind || !Array.isArray(candidate.strokes)) return null;
       const strokes = candidate.strokes
-        .map((stroke): StudioTerrainMorphologyFeature["strokes"][number] | null => {
-          if (!stroke || typeof stroke !== "object") return null;
-          const source = stroke as Record<string, unknown>;
-          const points = Array.isArray(source.points)
-            ? source.points
-                .map((point): { x: number; y: number } | null => {
-                  if (!point || typeof point !== "object") return null;
-                  const record = point as Record<string, unknown>;
-                  const x = Number(record.x);
-                  const y = Number(record.y);
-                  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
-                })
-                .filter((point): point is { x: number; y: number } => point !== null)
-            : [];
-          if (points.length === 0) return null;
-          return {
-            id: String(source.id ?? `stroke-${points.length}`),
-            points,
-            radius: Math.max(1, Number(source.radius) || STUDIO_TERRAIN_TILE_SIZE),
-          };
-        })
+        .map(normalizeMorphologyStroke)
         .filter((stroke): stroke is StudioTerrainMorphologyFeature["strokes"][number] => stroke !== null);
 
       if (strokes.length === 0) return null;
+      const eraserStrokes = Array.isArray(candidate.eraserStrokes)
+        ? candidate.eraserStrokes
+            .map(normalizeMorphologyStroke)
+            .filter((stroke): stroke is StudioTerrainMorphologyFeature["strokes"][number] => stroke !== null)
+        : [];
+      const operations = Array.isArray(candidate.operations)
+        ? candidate.operations
+            .map((operation): StudioTerrainMorphologyOperation | null => {
+              if (!operation || typeof operation !== "object") return null;
+              const source = operation as Record<string, unknown>;
+              const mode = source.mode === "paint" ? "paint" : source.mode === "erase" ? "erase" : null;
+              const stroke = normalizeMorphologyStroke(source.stroke);
+              return mode && stroke ? { mode, stroke } : null;
+            })
+            .filter((operation): operation is NonNullable<StudioTerrainMorphologyFeature["operations"]>[number] => operation !== null)
+        : [];
+
       return {
         id: String(candidate.id ?? `${kind}-${strokes.length}`),
         kind,
@@ -230,9 +228,33 @@ function normalizeMorphologyFeatures(value: unknown): StudioTerrainMorphologyFea
           ? candidate.params
           : {}) as Record<string, unknown>,
         strokes,
+        ...(eraserStrokes.length > 0 ? { eraserStrokes } : {}),
+        ...(operations.length > 0 ? { operations } : {}),
       };
     })
     .filter((feature): feature is StudioTerrainMorphologyFeature => feature !== null);
+}
+
+function normalizeMorphologyStroke(value: unknown): StudioTerrainMorphologyFeature["strokes"][number] | null {
+  if (!value || typeof value !== "object") return null;
+  const source = value as Record<string, unknown>;
+  const points = Array.isArray(source.points)
+    ? source.points
+        .map((point): { x: number; y: number } | null => {
+          if (!point || typeof point !== "object") return null;
+          const record = point as Record<string, unknown>;
+          const x = Number(record.x);
+          const y = Number(record.y);
+          return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+        })
+        .filter((point): point is { x: number; y: number } => point !== null)
+    : [];
+  if (points.length === 0) return null;
+  return {
+    id: String(source.id ?? `stroke-${points.length}`),
+    points,
+    radius: Math.max(1, Number(source.radius) || STUDIO_TERRAIN_TILE_SIZE),
+  };
 }
 
 function normalizeTerrainControlTexture(

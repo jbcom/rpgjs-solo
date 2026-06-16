@@ -1,4 +1,4 @@
-import { Assets, Container as PixiContainer, Rectangle, Sprite, Texture } from "pixi.js";
+import { Assets, Container as PixiContainer, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import { hasAutoLightingSunShadows, shouldRenderLightingShadows, type LightingState } from "@rpgjs/common";
 
 const DEFAULT_SHADOW_CASTER_LIMIT = 1000;
@@ -11,6 +11,7 @@ export interface StudioElementRenderOptions {
   lighting?: LightingState | null;
   shadowBudget?: { remaining: number };
   shadowCasterLimit?: number;
+  debugCollisions?: boolean;
 }
 
 export interface StudioElementSegment {
@@ -1154,9 +1155,15 @@ const createLightingShadowRenderVersion = (lighting: LightingState | null | unde
   };
 };
 
-const createRenderVersion = (elements: any[], shadowLimit: number, lighting: LightingState | null | undefined): string => {
+const createRenderVersion = (
+  elements: any[],
+  shadowLimit: number,
+  lighting: LightingState | null | undefined,
+  debugCollisions: boolean
+): string => {
   return JSON.stringify({
     shadowLimit,
+    debugCollisions,
     lighting: createLightingShadowRenderVersion(lighting),
     elements: elements.map((element) => ({
       id: readValue(element?.id),
@@ -1539,7 +1546,8 @@ export class StudioElementRenderer {
 
   async renderElements(elements: any[], options: StudioElementRenderOptions = {}): Promise<PixiContainer[]> {
     const shadowLimit = options.shadowCasterLimit ?? DEFAULT_SHADOW_CASTER_LIMIT;
-    const renderVersion = createRenderVersion(elements, shadowLimit, resolveLighting(options));
+    const debugCollisions = options.debugCollisions === true;
+    const renderVersion = createRenderVersion(elements, shadowLimit, resolveLighting(options), debugCollisions);
     if (this.renderVersion === renderVersion) {
       if (options.shadowBudget) {
         options.shadowBudget.remaining = Math.max(0, options.shadowBudget.remaining - this.shadowCasterCount);
@@ -1669,8 +1677,30 @@ export class StudioElementRenderer {
     }
 
     this.addLightSpotSprite(container, element, metrics);
+    this.addDebugCollisionGraphics(container, metrics, options);
     this.syncLightSpot(element, metrics, options.sceneMap, lightSpotIds);
     return container;
+  }
+
+  private addDebugCollisionGraphics(
+    container: PixiContainer,
+    metrics: StudioElementMetrics,
+    options: StudioElementRenderOptions
+  ): void {
+    if (options.debugCollisions !== true || !metrics.hasSortableHitbox) return;
+
+    const width = Math.max(1, Math.round(metrics.hitboxWidth * metrics.hitboxScaleX));
+    const height = Math.max(1, Math.round(metrics.hitboxHeight * metrics.hitboxScaleY));
+    const x = Math.round(metrics.hitboxX * metrics.hitboxScaleX);
+    const y = Math.round(metrics.hitboxY * metrics.hitboxScaleY);
+    const graphics = new Graphics();
+    graphics.label = `${container.label ?? "StudioElement"}:CollisionDebug`;
+    graphics.zIndex = 2147483647;
+    graphics
+      .rect(x, y, width, height)
+      .fill({ color: 0xef4444, alpha: 0.18 })
+      .stroke({ width: 1, color: 0xef4444, alpha: 0.72 });
+    container.addChild(graphics);
   }
 
   private createSegmentTexture(baseTexture: Texture, sourceRect: StudioElementRect, label: string): Texture {
