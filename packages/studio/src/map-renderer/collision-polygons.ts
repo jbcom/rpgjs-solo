@@ -4,6 +4,7 @@ import {
   type StudioTerrainStroke,
 } from "./types";
 import { createStudioTerrainRenderData } from "./map-normalizer";
+import { resolveStudioElementSize } from "../studio-element-size";
 
 interface BooleanMask {
   width: number;
@@ -1161,16 +1162,14 @@ function resolveElementRect(
   const sourceRect = Array.isArray(tilesetElement?.rect) ? tilesetElement.rect : null;
   const sourceWidth = sourceRect ? toFiniteNumber(sourceRect[2]) : null;
   const sourceHeight = sourceRect ? toFiniteNumber(sourceRect[3]) : null;
-  const width = normalizeDimension(element?.width, sourceWidth);
-  const height = normalizeDimension(element?.height, sourceHeight);
-  if (width === null || height === null || width <= 0 || height <= 0) return null;
+  if (sourceWidth === null || sourceHeight === null || sourceWidth <= 0 || sourceHeight <= 0) return null;
 
-  const scale = resolveScale(element?.scale ?? tilesetElement?.scale);
+  const size = resolveStudioElementSize(element, tilesetElement, tileset?.metadata, sourceWidth, sourceHeight);
   return {
     x,
     y,
-    width: width * scale.x,
-    height: height * scale.y,
+    width: size.targetWidth,
+    height: size.targetHeight,
   };
 }
 
@@ -1179,33 +1178,6 @@ function resolveTilesetElement(tileset: any, elementId: unknown): any | null {
   const elements = parseArray(tileset?.metadata?.elements);
   const key = String(elementId);
   return elements.find((element, index) => String(element?.id ?? index) === key || String(index) === key) ?? null;
-}
-
-function normalizeDimension(value: unknown, fallback: number | null): number | null {
-  const resolved = toFiniteNumber(value);
-  if (resolved !== null && resolved > 0) return resolved;
-  return fallback !== null && fallback > 0 ? fallback : null;
-}
-
-function resolveScale(value: unknown): { x: number; y: number } {
-  if (Array.isArray(value)) {
-    const x = toFiniteNumber(value[0]) ?? 1;
-    const y = toFiniteNumber(value[1]) ?? x;
-    return { x: x > 0 ? x : 1, y: y > 0 ? y : 1 };
-  }
-
-  if (typeof value === "number") {
-    return { x: value > 0 ? value : 1, y: value > 0 ? value : 1 };
-  }
-
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    const x = toFiniteNumber(record.x) ?? 1;
-    const y = toFiniteNumber(record.y) ?? x;
-    return { x: x > 0 ? x : 1, y: y > 0 ? y : 1 };
-  }
-
-  return { x: 1, y: 1 };
 }
 
 function normalizeTilesets(value: unknown): any[] {

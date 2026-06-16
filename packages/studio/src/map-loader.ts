@@ -8,6 +8,7 @@ import {
   buildStudioTerrainCollisionPolygons,
   createStudioTerrainRenderData,
 } from "./map-renderer";
+import { resolveStudioElementSize } from "./studio-element-size";
 
 // Type definitions for better type safety
 interface GlobalConfig {
@@ -41,6 +42,7 @@ interface TilesetElementEntry {
 
 interface TilesetElementsIndex {
   elements: any[];
+  metadata: any;
   mapById: Map<string, TilesetElementEntry>;
   mapByIndex: Map<string, TilesetElementEntry>;
   drawRuleByElementId: Map<string, RuntimeDrawRule>;
@@ -550,12 +552,6 @@ export const loadMap = async (mapId: string) => {
     return value;
   };
 
-  const normalizeDimension = (value: unknown, fallback: number): number => {
-    const parsed = toFiniteNumber(value);
-    if (parsed === null) return Math.max(1, Math.round(fallback));
-    return Math.max(1, Math.round(parsed));
-  };
-
   const normalizeDrawRuleRect = (value: unknown): DrawRuleRect | null => {
     if (!Array.isArray(value) || value.length < 4) return null;
     const x = toFiniteNumber(value[0]);
@@ -679,7 +675,7 @@ export const loadMap = async (mapId: string) => {
       }
     });
 
-    return { elements, mapById, mapByIndex, drawRuleByElementId, drawRuleById };
+    return { elements, metadata: tileset?.metadata, mapById, mapByIndex, drawRuleByElementId, drawRuleById };
   };
 
   const resolveTilesetElement = (
@@ -771,18 +767,22 @@ export const loadMap = async (mapId: string) => {
       const y = toFiniteNumber(element.y)
       if (x === null || y === null) return
 
-      const drawWidth = normalizeDimension(element.width, sourceWidth)
-      const drawHeight = normalizeDimension(element.height, sourceHeight)
+      const size = resolveStudioElementSize(
+        element,
+        tilesetElement,
+        tileset.metadata,
+        sourceWidth,
+        sourceHeight
+      )
       const zIndexOffset = toFiniteNumber(element.zIndexOffset) ?? 0
       const drawRule = resolveDrawRuleForElement(element, tileset, entry)
 
       const mergedElement: Record<string, unknown> = {
         ...tilesetElement,
         tilesetId,
-        drawIn: [Math.round(x), Math.round(y), drawWidth, drawHeight],
+        drawIn: [Math.round(x), Math.round(y), size.baseWidth, size.baseHeight],
         layer: () => layerNumber,
-        // Instance overrides take priority over tileset defaults
-        scale: element.scale !== undefined ? element.scale : tilesetElement.scale,
+        scale: size.scale,
         hasShadow:
           typeof element.hasShadow === 'boolean'
             ? element.hasShadow
@@ -855,28 +855,6 @@ export const loadMap = async (mapId: string) => {
       const sourceRectWidth = sourceRect ? toFiniteNumber(sourceRect[2]) : null
       const sourceRectHeight = sourceRect ? toFiniteNumber(sourceRect[3]) : null
       
-      // Apply scale if present
-      let scaleX = 1
-      let scaleY = 1
-      const scaleSource = element.scale !== undefined ? element.scale : tilesetElement.scale
-      if (scaleSource) {
-        if (Array.isArray(scaleSource)) {
-          scaleX = scaleSource[0] || 1
-          scaleY = scaleSource[1] || 1
-        } else if (typeof scaleSource === 'number') {
-          scaleX = scaleSource
-          scaleY = scaleSource
-        } else if (typeof scaleSource === 'object') {
-          scaleX = (scaleSource as { x?: number }).x || 1
-          scaleY = (scaleSource as { y?: number }).y || scaleX
-        } else {
-          scaleX = 1
-          scaleY = 1
-        }
-      }
-      scaleX = scaleX > 0 ? scaleX : 1
-      scaleY = scaleY > 0 ? scaleY : 1
-
       const hitboxX = toFiniteNumber(hitbox.x) ?? 0
       const hitboxY = toFiniteNumber(hitbox.y) ?? 0
       const hitboxWidth = toFiniteNumber(hitbox.width) ?? 0
@@ -887,14 +865,17 @@ export const loadMap = async (mapId: string) => {
         sourceRectWidth && sourceRectWidth > 0 ? sourceRectWidth : Math.max(1, hitboxWidth)
       const effectiveSourceHeight =
         sourceRectHeight && sourceRectHeight > 0 ? sourceRectHeight : Math.max(1, hitboxHeight)
-      const instanceWidth = normalizeDimension(element.width, effectiveSourceWidth)
-      const instanceHeight = normalizeDimension(element.height, effectiveSourceHeight)
-      const widthRatio = instanceWidth / effectiveSourceWidth
-      const heightRatio = instanceHeight / effectiveSourceHeight
-      const finalScaleX = scaleX * widthRatio
-      const finalScaleY = scaleY * heightRatio
-      const visualWidth = instanceWidth * scaleX
-      const visualHeight = instanceHeight * scaleY
+      const size = resolveStudioElementSize(
+        element,
+        tilesetElement,
+        tileset.metadata,
+        effectiveSourceWidth,
+        effectiveSourceHeight
+      )
+      const finalScaleX = size.scale.x
+      const finalScaleY = size.scale.y
+      const visualWidth = size.targetWidth
+      const visualHeight = size.targetHeight
       const rawHitboxX = elementX + (hitboxX * finalScaleX)
       const rawHitboxY = elementY + (hitboxY * finalScaleY)
       const rawHitboxWidth = hitboxWidth * finalScaleX
