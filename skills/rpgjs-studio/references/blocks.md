@@ -951,6 +951,54 @@ Use to remove an event from the current map.
 }
 ```
 
+### `spawn_common_event`
+
+Use to create a visible reusable event object on the current map. The event ID must be a common event ID from the game response or event database.
+
+```json
+{
+  "type": "spawn_common_event",
+  "data": {
+    "commonEventId": "COMMON_EVENT_ID",
+    "positionMode": "player"
+  }
+}
+```
+
+Fixed position:
+
+```json
+{
+  "type": "spawn_common_event",
+  "data": {
+    "commonEventId": "COMMON_EVENT_ID",
+    "positionMode": "fixed",
+    "position": { "x": 10, "y": 5 }
+  }
+}
+```
+
+Variable position:
+
+```json
+{
+  "type": "spawn_common_event",
+  "data": {
+    "commonEventId": "COMMON_EVENT_ID",
+    "positionMode": "variable",
+    "positionVariableXId": "VARIABLE_X_ID",
+    "positionVariableYId": "VARIABLE_Y_ID"
+  }
+}
+```
+
+Allowed `positionMode`:
+
+- `player`
+- `current_event`
+- `variable`
+- `fixed`
+
 ### `play_bgm`
 
 ```json
@@ -969,6 +1017,21 @@ Use to remove an event from the current map.
   "type": "play_se",
   "data": {
     "sound": "SOUND_MEDIA_ID"
+  }
+}
+```
+
+### `call_common_event`
+
+Use to execute another reusable event workflow in the current context.
+
+```json
+{
+  "type": "call_common_event",
+  "data": {
+    "commonEventId": "COMMON_EVENT_ID",
+    "parameters": {},
+    "maxDepth": 10
   }
 }
 ```

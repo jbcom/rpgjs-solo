@@ -10,7 +10,7 @@ import {
   BlockType,
   BlockParamsMap
 } from '@common/blocks';
-import { Move, RpgEvent, RpgPlayer } from '@rpgjs/server';
+import { EventMode, Move, RpgEvent, RpgPlayer } from '@rpgjs/server';
 
 // ============================================================================
 // Block Execution Service
@@ -46,6 +46,7 @@ export class BlockExecutionService {
   // Internal state for control flow
   private variables = new Map<string, unknown>();
   private switches = new Map<string, boolean>();
+  private spawnCounter = 0;
 
   /**
    * Creates a new BlockExecutionService
@@ -219,6 +220,43 @@ export class BlockExecutionService {
         if (targetEvent && typeof targetEvent.callEvent === 'function') {
           await targetEvent.callEvent(eventId, parameters);
         }
+      },
+
+      getCommonEvent: (commonEventId: string): unknown => {
+        const map = event.getCurrentMap?.() ?? player.getCurrentMap?.();
+        return (map as any)?.__studioCommonEventsById?.get?.(commonEventId);
+      },
+
+      spawnCommonEvent: async (
+        commonEventId: string,
+        position: { x: number; y: number },
+        options?: { mode?: 'shared' | 'scenario' },
+      ): Promise<void> => {
+        const map = event.getCurrentMap?.() ?? player.getCurrentMap?.();
+        const commonEvent = (map as any)?.__studioCommonEventsById?.get?.(commonEventId);
+        if (!map?.createDynamicEvent || !commonEvent) return;
+
+        const scale = Number((map as any).scale || 1);
+        const normalizedScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+        const runtimeId = `${commonEventId}_spawn_${Date.now()}_${this.spawnCounter++}`;
+
+        await map.createDynamicEvent({
+          ...commonEvent,
+          id: runtimeId,
+          _id: commonEvent._id ?? commonEvent.id ?? commonEventId,
+          eventId: runtimeId,
+          sourceEventId: commonEventId,
+          x: position.x / normalizedScale,
+          y: position.y / normalizedScale,
+          position: {
+            ...(commonEvent.position || {}),
+            x: position.x / normalizedScale,
+            y: position.y / normalizedScale,
+          },
+        }, {
+          mode: options?.mode === 'scenario' ? EventMode.Scenario : EventMode.Shared,
+          scenarioOwnerId: options?.mode === 'scenario' ? player.id : undefined,
+        });
       },
       
       executeScript: async (code: string): Promise<void> => {

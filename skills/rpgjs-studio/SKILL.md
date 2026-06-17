@@ -131,3 +131,4 @@ curl -sS -X POST "$BASE_URL/..." \
 - Game/runtime code can read media data usable in the game with `GET /api/game/media/:mediaId`; use `references/media.md` for details.
 - Media type changes should use `PUT /api/media/update/:mediaId` instead of the metadata-only admin endpoint; this synchronizes `metadata.type` with the root `type` field.
 - Game map responses from `GET /api/game/maps/:mapId` hydrate event `params.graphic`, `params.faceset`, `triggers[].graphic`, and `triggers[].faceset` as media objects when possible; use `references/maps.md` for the runtime response shape.
+- Event workflow blocks can call or spawn reusable game events with `call_common_event` and `spawn_common_event`. Both use `commonEventId`; `spawn_common_event` can resolve its position from `player`, `current_event`, `variable`, or `fixed`.

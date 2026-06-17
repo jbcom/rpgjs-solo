@@ -171,6 +171,13 @@ When working on gameplay or engine integration:
 - keep server/client responsibilities aligned with the current codebase
 - check whether maps are loaded through `provideTiledMap` or a custom `provideLoadMap`
 
+When working on the RPGJS Studio runtime inside `packages/studio`:
+
+- update the matching runtime block schema, types, executor, registry exports, and `skills/rpgjs-studio` references together
+- if a block executes inside the game engine, add or update Vitest coverage under `packages/studio/tests`
+- for reusable Studio events, use `commonEventId`; `call_common_event` executes the selected event workflow, and `spawn_common_event` delegates visible runtime objects to `map.createDynamicEvent(...)`
+- keep common event data on the RPGJS map runtime context so block executors can resolve it without extra Studio API calls during gameplay
+
 When working on `.ce` components:
 
 - verify CanvasEngine syntax against fetched docs

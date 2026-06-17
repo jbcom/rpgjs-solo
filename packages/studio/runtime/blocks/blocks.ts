@@ -33,7 +33,9 @@ import {
   schemaCallShop,
   schemaEraseEvent,
   schemaPlayBgm,
-  schemaPlaySe
+  schemaPlaySe,
+  schemaCallCommonEvent,
+  schemaSpawnCommonEvent
 } from './executors/index';
 
 
@@ -177,6 +179,8 @@ export const defaultBlocks = [
     schemaCallShop,
 
     schemaEraseEvent,
+
+    schemaSpawnCommonEvent,
   
     // {
     //   type: 'change_screen_tone',
@@ -230,6 +234,8 @@ export const defaultBlocks = [
     schemaPlayBgm,
   
     schemaPlaySe,
+
+    schemaCallCommonEvent,
   ] as const;
 
   /**

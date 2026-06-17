@@ -825,9 +825,42 @@ export interface PlaySeParams {
  */
 export interface CallCommonEventParams {
   /** ID of the event to call */
-  eventId: string;
+  commonEventId: string;
+  /** Legacy ID of the event to call */
+  eventId?: string;
   /** Parameters to pass to the event */
   parameters?: Record<string, unknown>;
+  /** Recursion guard for nested event calls */
+  maxDepth?: number;
+}
+
+export interface CommonEventPositionParams {
+  /** Position selected on the current map */
+  position?: { x: number; y: number };
+  /** How to resolve the spawn position */
+  positionMode?: 'current_event' | 'player' | 'variable' | 'fixed' | 'explicit';
+  /** Variable containing the X position */
+  positionVariableXId?: string;
+  /** Variable containing the Y position */
+  positionVariableYId?: string;
+  /** Explicit X position */
+  x?: number;
+  /** Explicit Y position */
+  y?: number;
+}
+
+/**
+ * Parameters for the spawn_common_event block
+ *
+ * Spawns a visible event on the current map.
+ */
+export interface SpawnCommonEventParams extends CommonEventPositionParams {
+  /** ID of the event to spawn */
+  commonEventId: string;
+  /** Legacy ID of the event to spawn */
+  eventId?: string;
+  /** Runtime event mode */
+  mode?: 'shared' | 'scenario';
 }
 
 /**
@@ -926,6 +959,7 @@ export interface BlockParamsMap {
   
   // System
   call_common_event: CallCommonEventParams;
+  spawn_common_event: SpawnCommonEventParams;
   script: ScriptParams;
   comment: CommentParams;
 }
@@ -1291,6 +1325,19 @@ export interface GameExecutionContext {
   evaluateCondition(condition: string): boolean;
   /** Call another event */
   callEvent(eventId: string, parameters: Record<string, unknown>): Promise<void>;
+  /** Load a common event definition */
+  getCommonEvent?(commonEventId: string): Promise<unknown> | unknown;
+  /** Spawn a common event on the current map */
+  spawnCommonEvent?(
+    commonEventId: string,
+    position: { x: number; y: number },
+    options?: { mode?: 'shared' | 'scenario' }
+  ): Promise<void> | void;
+  /** Common event recursive execution state */
+  commonEventExecutionState?: {
+    depth: number;
+    parameters: Record<string, unknown>;
+  };
   /** Execute custom script */
   executeScript(code: string): Promise<void>;
 

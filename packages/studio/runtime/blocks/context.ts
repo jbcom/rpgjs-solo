@@ -45,6 +45,22 @@ export const functionSchemas = {
       displayField: 'name',
       valueField: '_id'
     }
+  },
+
+  /**
+   * Event selection schema for callable/spawnable game events.
+   */
+  commonEvent: {
+    type: 'string',
+    title: 'Event',
+    description: 'Select an event from the game',
+    format: 'select',
+    options: {
+      source: 'database',
+      type: 'commonEvent',
+      displayField: 'name',
+      valueField: '_id'
+    }
   }
 };
 

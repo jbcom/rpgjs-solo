@@ -511,6 +511,9 @@ const normalizeStudioMapPayload = async (
     { useLocalBundleEvents },
   );
   const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents);
+  const hydratedCommonEvents = await hydrateEventMediaReferences(
+    parseArrayValue(mapResponse.commonEvents ?? mapResponse.data?.commonEvents),
+  );
   const mapDataValue = Array.isArray(mapResponse.data)
     ? mapResponse.data
     : parseJsonValue(mapResponse.data, []);
@@ -538,6 +541,7 @@ const normalizeStudioMapPayload = async (
     data: mapDataValue,
     hitboxes: mergedHitboxes,
     events: hydratedEvents,
+    commonEvents: hydratedCommonEvents,
     params,
   };
 
@@ -546,6 +550,7 @@ const normalizeStudioMapPayload = async (
     id: normalizedMap.id,
     data: normalizedMap,
     events: hydratedEvents,
+    commonEvents: hydratedCommonEvents,
     hitboxes: mergedHitboxes,
     width:
       initialMapData?.width ||
@@ -663,9 +668,25 @@ export default (_config?: unknown) => {
         });
         (mapExtended as any).__resolvedEventsById = resolvedEventsById;
 
+        const hydratedCommonEvents = await hydrateEventMediaReferences(
+          parseArrayValue(mapData?.commonEvents ?? mapData?.data?.commonEvents),
+        );
+        const commonEventsById = new Map<string, any>();
+        hydratedCommonEvents.forEach((entry) => {
+          const ids = [
+            entry?.eventId,
+            entry?.id,
+            entry?._id,
+          ].filter((value): value is string => typeof value === "string" && value.length > 0);
+          ids.forEach((id) => commonEventsById.set(id, entry));
+        });
+        (mapExtended as any).__studioCommonEventsById = commonEventsById;
+
         mapData.events = hydratedEvents;
+        mapData.commonEvents = hydratedCommonEvents;
         if (mapData?.data) {
           mapData.data.events = hydratedEvents;
+          mapData.data.commonEvents = hydratedCommonEvents;
         }
         mapExtended.startPosition = mapData.data?.start;
         mapExtended.scale = mapData.data?.params?.scale || 1;
