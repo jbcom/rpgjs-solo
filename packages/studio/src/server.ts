@@ -681,6 +681,9 @@ export default (_config?: unknown) => {
           ids.forEach((id) => commonEventsById.set(id, entry));
         });
         (mapExtended as any).__studioCommonEventsById = commonEventsById;
+        (mapExtended as any).__studioMapLoadBlocks = parseArrayValue(
+          mapData?.mapLoadBlocks ?? mapData?.data?.mapLoadBlocks,
+        );
 
         mapData.events = hydratedEvents;
         mapData.commonEvents = hydratedCommonEvents;
@@ -712,6 +715,15 @@ export default (_config?: unknown) => {
         }
 
         return map as any;
+      },
+      async onLoad(map: RpgMap) {
+        const blocks = (map as any).__studioMapLoadBlocks;
+        if (!Array.isArray(blocks) || blocks.length === 0) {
+          return;
+        }
+
+        const blockExecutor = new BlockExecutionService(null, null, map);
+        await blockExecutor.executeBlockSequence(blocks);
       },
     },
     event: {

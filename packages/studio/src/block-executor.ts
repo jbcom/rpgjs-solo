@@ -10,7 +10,7 @@ import {
   BlockType,
   BlockParamsMap
 } from '@common/blocks';
-import { EventMode, Move, RpgEvent, RpgPlayer } from '@rpgjs/server';
+import { EventMode, Move, RpgEvent, RpgMap, RpgPlayer } from '@rpgjs/server';
 
 // ============================================================================
 // Block Execution Service
@@ -54,9 +54,9 @@ export class BlockExecutionService {
    * @param player - The RpgPlayer instance for this execution context
    * @param event - The RpgEvent instance (the current event being executed)
    */
-  constructor(player: RpgPlayer, event: RpgEvent) {
+  constructor(player: RpgPlayer | null, event: RpgEvent | null, map: RpgMap | null = null) {
     this.executors = createExecutorRegistry();
-    this.context = this.createGameContext(player, event);
+    this.context = this.createGameContext(player, event, map);
   }
 
   /**
@@ -145,23 +145,24 @@ export class BlockExecutionService {
    * @param event - Current event instance
    * @returns Game execution context with player and event
    */
-  private createGameContext(player: RpgPlayer, event: RpgEvent): GameExecutionContext {
+  private createGameContext(player: RpgPlayer | null, event: RpgEvent | null, map: RpgMap | null): GameExecutionContext {
     return {
       player: player,
       event: event,
+      map,
       executors: this.executors,
       moveApi: Move,
      
       // Switch operations
       getVariable: (variableId: string): unknown => {
-        if (typeof player.getVariable === 'function') {
+        if (typeof player?.getVariable === 'function') {
           return player.getVariable(variableId);
         }
         return this.variables.get(variableId);
       },
 
       setVariable: (variableId: string, value: unknown): void => {
-        if (typeof player.setVariable === 'function') {
+        if (typeof player?.setVariable === 'function') {
           player.setVariable(variableId, value);
         } else {
           this.variables.set(variableId, value);
@@ -216,15 +217,15 @@ export class BlockExecutionService {
       
       callEvent: async (eventId: string, parameters: Record<string, unknown>): Promise<void> => {
         // Call another event - implement based on your event system
-        const targetEvent = event.getCurrentMap?.()?.getEvent?.(eventId);
+        const targetEvent = event?.getCurrentMap?.()?.getEvent?.(eventId) ?? map?.getEvent?.(eventId);
         if (targetEvent && typeof targetEvent.callEvent === 'function') {
           await targetEvent.callEvent(eventId, parameters);
         }
       },
 
       getCommonEvent: (commonEventId: string): unknown => {
-        const map = event.getCurrentMap?.() ?? player.getCurrentMap?.();
-        return (map as any)?.__studioCommonEventsById?.get?.(commonEventId);
+        const currentMap = event?.getCurrentMap?.() ?? player?.getCurrentMap?.() ?? map;
+        return (currentMap as any)?.__studioCommonEventsById?.get?.(commonEventId);
       },
 
       spawnCommonEvent: async (
@@ -232,15 +233,15 @@ export class BlockExecutionService {
         position: { x: number; y: number },
         options?: { mode?: 'shared' | 'scenario' },
       ): Promise<void> => {
-        const map = event.getCurrentMap?.() ?? player.getCurrentMap?.();
-        const commonEvent = (map as any)?.__studioCommonEventsById?.get?.(commonEventId);
-        if (!map?.createDynamicEvent || !commonEvent) return;
+        const currentMap = event?.getCurrentMap?.() ?? player?.getCurrentMap?.() ?? map;
+        const commonEvent = (currentMap as any)?.__studioCommonEventsById?.get?.(commonEventId);
+        if (!currentMap?.createDynamicEvent || !commonEvent) return;
 
-        const scale = Number((map as any).scale || 1);
+        const scale = Number((currentMap as any).scale || 1);
         const normalizedScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
         const runtimeId = `${commonEventId}_spawn_${Date.now()}_${this.spawnCounter++}`;
 
-        await map.createDynamicEvent({
+        await currentMap.createDynamicEvent({
           ...commonEvent,
           id: runtimeId,
           _id: commonEvent._id ?? commonEvent.id ?? commonEventId,
@@ -255,7 +256,7 @@ export class BlockExecutionService {
           },
         }, {
           mode: options?.mode === 'scenario' ? EventMode.Scenario : EventMode.Shared,
-          scenarioOwnerId: options?.mode === 'scenario' ? player.id : undefined,
+          scenarioOwnerId: options?.mode === 'scenario' ? player?.id : undefined,
         });
       },
       

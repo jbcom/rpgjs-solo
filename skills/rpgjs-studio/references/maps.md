@@ -53,6 +53,7 @@ This endpoint accepts partial section updates. Omitted fields are preserved. Sen
 - Terrain only: send `terrain`, and optionally `terrainLayer` plus `terrainControlTexture`
 - Elements only: send `elementsAlwaysLow`, `elementsLow`, and `elementsHigh`
 - Tileset params only: send `baseTerrainId`, `tilesetId`, `terrainTilesetIds`, `elementTilesetIds`, `primaryTerrainTilesetId`, or `primaryElementTilesetId`
+- Map load workflow only: `{ "mapLoadBlockCollectionId": "..." }` or `{ "mapLoadBlockCollectionId": null }`
 
 Useful fields from `mapSchema` when a full map update is needed:
 
@@ -61,6 +62,7 @@ Useful fields from `mapSchema` when a full map update is needed:
 - `params?: object`
 - `weather?: object | null`
 - `lighting?: { sun: { enabled: boolean, intensity: number } } | null`
+- `mapLoadBlockCollectionId?: string | null`
 - `events?: Array<{ eventId: string, x: number, y: number }>`
 - `elementsAlwaysLow?: string`
 - `elementsLow?: string`
@@ -78,7 +80,9 @@ Useful fields from `mapSchema` when a full map update is needed:
 
 `lighting.sun` controls the map-level sun option. `enabled` toggles automatic sunlight shadows for walls, characters, and elements. `intensity` is clamped to `0..1`.
 
-`GET /api/game/maps/:mapId` returns event placement data for runtime use. Event media references under `event.params.graphic`, `event.params.faceset`, `event.triggers[].graphic`, and `event.triggers[].faceset` are returned as hydrated media objects when the media exists, including `_id`, `id`, `type`, `fileName`, `metadata`, `width`, and `height`. Runtime code should use the media object metadata directly instead of treating these fields as storage filenames.
+`mapLoadBlockCollectionId` points to a block collection executed once by the RPGJS server `map.onLoad(map)` hook when the map is loaded. Use `null` to disable it. This is a map-level workflow, so no player or event is guaranteed; prefer map-level blocks such as scene setup or weather.
+
+`GET /api/game/maps/:mapId` returns event placement data for runtime use. Event media references under `event.params.graphic`, `event.params.faceset`, `event.triggers[].graphic`, and `event.triggers[].faceset` are returned as hydrated media objects when the media exists, including `_id`, `id`, `type`, `fileName`, `metadata`, `width`, and `height`. If `mapLoadBlockCollectionId` is configured, the runtime response also includes `mapLoadBlocks`, the hydrated block array executed by `map.onLoad(map)`. Runtime code should use the media object metadata directly instead of treating these fields as storage filenames.
 
 ## Example: read all maps
 

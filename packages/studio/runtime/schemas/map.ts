@@ -176,6 +176,11 @@ export const mapSchema = {
     },
     weather: weatherStateNullableSchema as any,
     lighting: lightingStateNullableSchema as any,
+    mapLoadBlockCollectionId: {
+      type: ["string", "null"],
+      title: "Map Load Workflow",
+      description: "Optional block collection executed when the map is loaded",
+    },
     waterAnimation: waterAnimationSchema as any,
     elementsAlwaysLow: {
       type: "string",

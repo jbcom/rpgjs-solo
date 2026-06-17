@@ -1297,6 +1297,8 @@ export interface GameExecutionContext {
   player: ExecutionPlayer | any;
   /** Current event instance (RpgEvent or compatible) */
   event: ExecutionEvent | any;
+  /** Current map instance for map-level workflows */
+  map?: any;
   /** Reference to executors for recursive execution */
   executors?: RuntimeBlockExecutorRegistry;
   

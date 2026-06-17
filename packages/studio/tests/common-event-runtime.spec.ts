@@ -152,4 +152,32 @@ describe("Studio common event runtime blocks", () => {
       },
     );
   });
+
+  test("BlockExecutionService executes map load blocks with a map-only context", async () => {
+    const setWeather = vi.fn();
+    const map = {
+      getWeather: () => null,
+      setWeather,
+    };
+    const service = new BlockExecutionService(null, null, map as any);
+
+    await service.executeBlockSequence([
+      {
+        id: "weather",
+        type: "set_weather",
+        data: {
+          effect: "rain",
+          preset: "lightRain",
+        },
+      } as any,
+    ]);
+
+    expect(setWeather).toHaveBeenCalledWith(
+      expect.objectContaining({
+        effect: "rain",
+        preset: "lightRain",
+      }),
+      { sync: undefined },
+    );
+  });
 });

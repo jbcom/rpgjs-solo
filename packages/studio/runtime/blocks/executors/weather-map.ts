@@ -14,6 +14,9 @@ type RuntimeMapWeatherApi = {
 };
 
 const resolveCurrentMap = (context: GameExecutionContext): RuntimeMapWeatherApi | null => {
+  if ((context as any).map) {
+    return (context as any).map as RuntimeMapWeatherApi;
+  }
   if (typeof (context.event as any)?.getCurrentMap === 'function') {
     return (context.event as any).getCurrentMap() as RuntimeMapWeatherApi;
   }
