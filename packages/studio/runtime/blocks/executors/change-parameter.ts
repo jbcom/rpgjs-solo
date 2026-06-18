@@ -17,6 +17,7 @@ export const schemaChangeParameter = {
   description: 'Modify a player parameter value',
   category: 'character',
   icon: '🧩',
+  requiredCapabilities: ['player'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

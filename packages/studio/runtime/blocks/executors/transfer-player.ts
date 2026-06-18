@@ -11,6 +11,7 @@ export const schemaTransferPlayer = {
   description: 'Move the player to a different map or location',
   category: 'scene',
   icon: '🗺️',
+  requiredCapabilities: ['player', 'map'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

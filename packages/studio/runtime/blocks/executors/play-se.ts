@@ -10,6 +10,7 @@ export const schemaPlaySe = {
   description: 'Play a sound effect',
   category: 'audio',
   icon: '🔊',
+  requiredCapabilities: ['player', 'audio'],
   schema: {
     type: 'object',
     properties: {
@@ -60,4 +61,3 @@ export const schemaPlaySe = {
 export const play_se: BlockExecutor<'play_se'> = async (context, params) => {
   await context.player.playSound(params.sound ?? params.filename);
 };
-

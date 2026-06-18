@@ -10,6 +10,7 @@ export const schemaPlayBgm = {
   description: 'Play or change the background music',
   category: 'audio',
   icon: '🎵',
+  requiredCapabilities: ['player', 'audio'],
   schema: {
     type: 'object',
     properties: {
@@ -60,4 +61,3 @@ export const schemaPlayBgm = {
 export const play_bgm: BlockExecutor<'play_bgm'> = async (context, params) => {
   await context.player.playSound(params.music ?? params.filename);
 };
-

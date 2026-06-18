@@ -11,6 +11,7 @@ export const schemaApplyGraphicAnimation: BlockDefinition<'apply_graphic_animati
   description: 'Change the animation state of a character or event',
   category: 'character',
   icon: '🎞️',
+  requiredCapabilities: ['map'],
   schema: {
     type: 'object',
     properties: {

@@ -14,6 +14,7 @@ export const schemaCallCommonEvent = {
   description: 'Execute the selected event workflow in the current context',
   category: 'system',
   icon: '🔁',
+  requiredCapabilities: ['player'],
   schema: {
     type: 'object',
     properties: {
@@ -48,6 +49,7 @@ export const schemaSpawnCommonEvent = {
   description: 'Create a visible event object on the current map',
   category: 'scene',
   icon: '➕',
+  requiredCapabilities: ['map'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

@@ -11,6 +11,7 @@ export const schemaChangeVariable = {
   description: 'Modify a variable value',
   category: 'variable',
   icon: '📊',
+  requiredCapabilities: ['variables'],
   schema: createVariableModificationSchema(
     OPERATION_SETS.ALL,
     'Value',
@@ -82,4 +83,3 @@ export const change_variable: BlockExecutor<'change_variable'> = async (context,
       break;
   }
 };
-

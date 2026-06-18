@@ -8,6 +8,7 @@ export const schemaCallShop = {
   description: 'Open the shop interface',
   category: 'scene',
   icon: '🛒',
+  requiredCapabilities: ['player', 'ui'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

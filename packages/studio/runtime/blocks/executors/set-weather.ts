@@ -8,6 +8,7 @@ export const schemaSetWeather = {
   description: 'Replace current map weather state and sync to players by default',
   category: 'scene',
   icon: '🌦️',
+  requiredCapabilities: ['map'],
   schema: {
     ...weatherSetBlockSchema,
     properties: {

@@ -13,6 +13,7 @@ export const schemaConditionalBranch = {
   description: 'Execute different actions based on a condition',
   category: 'control',
   icon: '🔀',
+  requiredCapabilities: ['player'],
   outputs: ['true', 'false'],
   canHaveChildren: true,
   schema: createConditionSchema(

@@ -7,6 +7,7 @@ export const schemaShowSave = {
   description: 'Open the save menu with optional slots',
   category: 'scene',
   icon: '💾',
+  requiredCapabilities: ['player', 'ui'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

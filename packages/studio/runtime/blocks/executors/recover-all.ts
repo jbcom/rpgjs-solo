@@ -7,6 +7,7 @@ export const schemaRecoverAll = {
   description: 'Restore HP and SP to full',
   category: 'character',
   icon: '💊',
+  requiredCapabilities: ['player'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

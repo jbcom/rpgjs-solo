@@ -10,6 +10,7 @@ export const schemaSetSwitch = {
   description: 'Turn a game switch ON or OFF',
   category: 'variable',
   icon: '🔘',
+  requiredCapabilities: ['player', 'variables'],
   schema: {
     type: 'object',
     properties: {
@@ -58,4 +59,3 @@ export const schemaSetSwitch = {
 export const set_switch: BlockExecutor<'set_switch'> = async (context, params) => {
   context.player.setVariable(params.switchName, params.value);
 };
-

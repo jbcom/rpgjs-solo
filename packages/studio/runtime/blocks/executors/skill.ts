@@ -20,6 +20,7 @@ export const schemaChangeSkill = {
   description: 'Teach or remove a skill from the player',
   category: 'character',
   icon: '📘',
+  requiredCapabilities: ['player', 'skills'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',
@@ -46,6 +47,7 @@ export const schemaUseSkill = {
   description: 'Use one of the player skills',
   category: 'character',
   icon: '✨',
+  requiredCapabilities: ['player', 'skills'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

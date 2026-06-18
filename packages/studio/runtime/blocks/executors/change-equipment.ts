@@ -8,6 +8,7 @@ export const schemaChangeEquipment = {
   description: 'Equip or unequip equipment on the player',
   category: 'character',
   icon: '🛡️',
+  requiredCapabilities: ['player', 'equipment'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

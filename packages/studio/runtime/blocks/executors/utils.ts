@@ -310,7 +310,10 @@ export function getEvent(
     return context.event;
   }
   // Get event from the current map
-  const map = (context.event as any).getCurrentMap?.();
+  const map =
+    (context.event as any)?.getCurrentMap?.() ??
+    (context.player as any)?.getCurrentMap?.() ??
+    (context as any).map;
   if (map) {
     const event = map.getEvent?.(params.eventId);
     if (event) {

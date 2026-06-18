@@ -1,5 +1,5 @@
-import { BlockContextCondition, BlockContextInfo } from './types';
-import { EventType } from '../event-types';
+import type { BlockContextCondition, BlockContextInfo, ExecutionCapability } from './types';
+import type { EventType } from '../event-types';
 
 /**
  * Helper functions for creating common context conditions
@@ -190,5 +190,37 @@ export function hasTrigger(): BlockContextCondition {
 export function hasCollectionId(): BlockContextCondition {
   return (context: BlockContextInfo) => {
     return context.collectionId !== null && context.collectionId !== undefined;
+  };
+}
+
+export function requiresCapabilities(...capabilities: ExecutionCapability[]): BlockContextCondition {
+  return (context: BlockContextInfo) => {
+    const available = new Set(context.executionProfile.capabilities);
+    return capabilities.every(capability => available.has(capability));
+  };
+}
+
+export function withoutCapabilities(...capabilities: ExecutionCapability[]): BlockContextCondition {
+  return (context: BlockContextInfo) => {
+    const available = new Set(context.executionProfile.capabilities);
+    return capabilities.every(capability => !available.has(capability));
+  };
+}
+
+export function requiresPlayer(): BlockContextCondition {
+  return requiresCapabilities('player');
+}
+
+export function requiresEvent(): BlockContextCondition {
+  return requiresCapabilities('event');
+}
+
+export function requiresMap(): BlockContextCondition {
+  return requiresCapabilities('map');
+}
+
+export function forSources(...sources: string[]): BlockContextCondition {
+  return (context: BlockContextInfo) => {
+    return sources.includes(context.executionProfile.source);
   };
 }

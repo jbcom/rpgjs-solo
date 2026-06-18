@@ -11,6 +11,7 @@ export const schemaShowUpAnimation: BlockDefinition<'show_up_animation'> = {
   description: 'Display an up animation above the player',
   category: 'character',
   icon: '⬆️',
+  requiredCapabilities: ['player', 'ui'],
   schema: {
     type: 'object',
     properties: {

@@ -11,6 +11,7 @@ export const schemaSetVariable = {
   description: 'Set the value of a game variable',
   category: 'variable',
   icon: '📝',
+  requiredCapabilities: ['player', 'variables'],
   schema: {
     type: 'object',
     properties: {
@@ -101,4 +102,3 @@ export const set_variable: BlockExecutor<'set_variable'> = async (context, param
       break;
   }
 };
-

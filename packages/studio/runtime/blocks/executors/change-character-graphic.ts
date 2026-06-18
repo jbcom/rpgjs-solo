@@ -13,6 +13,7 @@ export const schemaChangeCharacterGraphic: BlockDefinition<'change_character_gra
   description: 'Change the appearance of a character',
   category: 'character',
   icon: '🎭',
+  requiredCapabilities: ['map'],
   schema: {
     type: 'object',
     properties: {
@@ -100,4 +101,3 @@ export const change_character_graphic: BlockExecutor<'change_character_graphic'>
   }
   await character.setGraphic(params.spritesheet);
 };
-

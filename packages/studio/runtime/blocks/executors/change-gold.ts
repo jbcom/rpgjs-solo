@@ -11,6 +11,7 @@ export const schemaGold = {
   description: 'Modify the player\'s gold amount',
   category: 'variable',
   icon: '💰',
+  requiredCapabilities: ['player'],
   contextCondition: excludeTriggers('onInit'),
   schema: createVariableModificationSchema(
     OPERATION_SETS.CURRENCY,
@@ -72,4 +73,3 @@ export const change_gold: BlockExecutor<'change_gold'> = async (context, params)
       break;
   }
 };
-

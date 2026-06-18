@@ -8,6 +8,7 @@ export const schemaEraseEvent = {
   description: 'Remove an event from the map',
   category: 'scene',
   icon: '🧹',
+  requiredCapabilities: ['player', 'map'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

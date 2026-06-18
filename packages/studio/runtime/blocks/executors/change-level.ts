@@ -9,6 +9,7 @@ export const schemaChangeLevel = {
   description: 'Modify the player\'s level',
   category: 'character',
   icon: '⭐',
+  requiredCapabilities: ['player'],
   contextCondition: excludeTriggers('onInit'),
   schema: createVariableModificationSchema(
     OPERATION_SETS.ADDITIVE,

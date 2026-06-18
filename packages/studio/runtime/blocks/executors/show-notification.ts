@@ -7,6 +7,7 @@ export const schemaShowNotification = {
   description: 'Display a notification message to the player',
   category: 'message',
   icon: '🔔',
+  requiredCapabilities: ['player', 'ui'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

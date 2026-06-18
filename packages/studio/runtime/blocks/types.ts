@@ -1032,11 +1032,35 @@ export type BlockCategory =
 // Block Definition
 // ============================================================================
 
+export type ExecutionCapability =
+  | 'map'
+  | 'player'
+  | 'event'
+  | 'variables'
+  | 'inventory'
+  | 'equipment'
+  | 'skills'
+  | 'ui'
+  | 'audio';
+
+export interface EventBuilderExecutionProfile {
+  source: 'event_page' | 'common_event' | 'map_load' | string;
+  capabilities: readonly ExecutionCapability[];
+  blocks?: {
+    include?: readonly string[];
+    exclude?: readonly string[];
+    includeCategories?: readonly string[];
+    excludeCategories?: readonly string[];
+  };
+  fields?: {
+    excludeTargets?: readonly ('player' | 'this_event')[];
+    excludeConditionTypes?: readonly string[];
+    excludeMoveRouteActions?: readonly string[];
+  };
+}
+
 /**
- * Context information available to block conditions and schema adaptations
- * 
- * This interface provides the complete context information that can be used
- * to determine block availability and adapt block schemas.
+ * Context information available to block conditions and schema adaptations.
  */
 export interface BlockContextInfo {
   /** Event type (character, enemy, free) */
@@ -1045,6 +1069,8 @@ export interface BlockContextInfo {
   trigger: string | null;
   /** Collection ID being edited (optional) */
   collectionId?: string | null;
+  /** Execution profile for the current builder usage */
+  executionProfile: EventBuilderExecutionProfile;
 }
 
 /**
@@ -1135,6 +1161,8 @@ export interface BlockDefinition<T extends string = string> {
   outputs?: readonly string[] | string[];
   /** Whether this block can contain child blocks */
   canHaveChildren?: boolean;
+  /** Runtime capabilities required to use this block */
+  requiredCapabilities?: readonly ExecutionCapability[];
   /** Optional condition callback to determine if the block should be available in a given context */
   contextCondition?: BlockContextCondition;
   /** Optional callback to adapt the block's schema based on the current context */

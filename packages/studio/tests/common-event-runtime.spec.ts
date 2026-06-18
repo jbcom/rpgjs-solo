@@ -153,15 +153,27 @@ describe("Studio common event runtime blocks", () => {
     );
   });
 
-  test("BlockExecutionService executes map load blocks with a map-only context", async () => {
+  test("BlockExecutionService executes map entry blocks with player and map context", async () => {
     const setWeather = vi.fn();
+    const showText = vi.fn(async () => undefined);
     const map = {
       getWeather: () => null,
       setWeather,
     };
-    const service = new BlockExecutionService(null, null, map as any);
+    const player = {
+      showText,
+      getCurrentMap: () => map,
+    };
+    const service = new BlockExecutionService(player as any, null, map as any);
 
     await service.executeBlockSequence([
+      {
+        id: "text",
+        type: "show_text",
+        data: {
+          text: "Welcome",
+        },
+      } as any,
       {
         id: "weather",
         type: "set_weather",
@@ -172,6 +184,11 @@ describe("Studio common event runtime blocks", () => {
       } as any,
     ]);
 
+    expect(showText).toHaveBeenCalledWith("Welcome", {
+      talkWith: undefined,
+      position: undefined,
+      face: undefined,
+    });
     expect(setWeather).toHaveBeenCalledWith(
       expect.objectContaining({
         effect: "rain",

@@ -12,6 +12,7 @@ export const schemaShowChoices = {
   description: 'Present multiple choice options to the player',
   category: 'message',
   icon: '🔀',
+  requiredCapabilities: ['player', 'ui'],
   outputs: ['choice1', 'choice2', 'choice3', 'choice4'],
   canHaveChildren: true,
   contextCondition: excludeTriggers('onInit'),
@@ -92,4 +93,3 @@ export const show_choices: BlockExecutor<'show_choices'> = async (context, param
     }
   }
 };
-

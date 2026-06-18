@@ -12,6 +12,7 @@ export const schemaChangeItem = {
   description: 'Add or remove items from the player\'s inventory',
   category: 'variable',
   icon: '📦',
+  requiredCapabilities: ['player', 'inventory'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',
@@ -173,4 +174,3 @@ export const change_item: BlockExecutor<'change_item'> = async (context, params)
       break;
   }
 };
-

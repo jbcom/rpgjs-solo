@@ -7,6 +7,7 @@ export const schemaCallMainMenu = {
   description: 'Open the main menu interface',
   category: 'scene',
   icon: '📋',
+  requiredCapabilities: ['player', 'ui'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

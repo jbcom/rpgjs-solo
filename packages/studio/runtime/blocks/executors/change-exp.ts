@@ -9,6 +9,7 @@ export const schemaChangeExp = {
   description: 'Modify the player\'s experience points',
   category: 'character',
   icon: '📈',
+  requiredCapabilities: ['player'],
   contextCondition: excludeTriggers('onInit'),
   schema: createVariableModificationSchema(
     OPERATION_SETS.ADDITIVE,

@@ -9,6 +9,7 @@ export const schemaChangeSp = {
   description: 'Modify the player\'s SP',
   category: 'character',
   icon: '💠',
+  requiredCapabilities: ['player'],
   contextCondition: excludeTriggers('onInit'),
   schema: createVariableModificationSchema(
     OPERATION_SETS.HEALTH,

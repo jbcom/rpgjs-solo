@@ -178,8 +178,8 @@ export const mapSchema = {
     lighting: lightingStateNullableSchema as any,
     mapLoadBlockCollectionId: {
       type: ["string", "null"],
-      title: "Map Load Workflow",
-      description: "Optional block collection executed when the map is loaded",
+      title: "Map Entry Workflow",
+      description: "Optional block collection executed when a player enters the map",
     },
     waterAnimation: waterAnimationSchema as any,
     elementsAlwaysLow: {

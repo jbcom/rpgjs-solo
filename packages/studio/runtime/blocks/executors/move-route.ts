@@ -223,6 +223,7 @@ export const schemaMoveRoute = {
   description: 'Define a custom movement route for an event or player',
   category: 'character',
   icon: '🧭',
+  requiredCapabilities: ['map'],
   schema: {
     type: 'object',
     properties: {

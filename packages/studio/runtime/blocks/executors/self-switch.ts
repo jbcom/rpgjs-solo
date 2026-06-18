@@ -10,6 +10,7 @@ export const schemaSelfSwitch = {
   description: 'Turn a self switch ON or OFF',
   category: 'variable',
   icon: '🔘',
+  requiredCapabilities: ['player', 'event', 'variables'],
   schema: {
     type: 'object',
     properties: {
@@ -58,4 +59,3 @@ export const schemaSelfSwitch = {
 export const self_switch: BlockExecutor<'self_switch'> = async (context, params) => {
   context.player.setVariable(context.event.id + '_' + params.switchName, params.value);
 };
-

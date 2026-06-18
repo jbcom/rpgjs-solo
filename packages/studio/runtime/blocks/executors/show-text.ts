@@ -12,6 +12,7 @@ export const schemaShowText = {
   description: 'Display a message dialog to the player',
   category: 'message',
   icon: '💬',
+  requiredCapabilities: ['player', 'ui'],
   contextCondition: excludeTriggers('onInit'),
   schema: {
     type: 'object',

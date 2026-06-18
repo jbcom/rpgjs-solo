@@ -716,13 +716,13 @@ export default (_config?: unknown) => {
 
         return map as any;
       },
-      async onLoad(map: RpgMap) {
+      async onJoin(player: RpgPlayer, map: RpgMap) {
         const blocks = (map as any).__studioMapLoadBlocks;
         if (!Array.isArray(blocks) || blocks.length === 0) {
           return;
         }
 
-        const blockExecutor = new BlockExecutionService(null, null, map);
+        const blockExecutor = new BlockExecutionService(player, null, map);
         await blockExecutor.executeBlockSequence(blocks);
       },
     },

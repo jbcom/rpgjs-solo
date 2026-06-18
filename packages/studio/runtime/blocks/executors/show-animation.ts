@@ -11,6 +11,7 @@ export const schemaShowAnimation: BlockDefinition<'show_animation'> = {
   description: 'Display a visual animation on the map or an event',
   category: 'scene',
   icon: '✨',
+  requiredCapabilities: ['player', 'map'],
   schema: {
     type: 'object',
     properties: {

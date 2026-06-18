@@ -31,6 +31,21 @@ For every created block, generate an `id` with this pattern:
 
 Also set a `level` property on each block.
 
+## Execution contexts
+
+Blocks can declare `requiredCapabilities`.
+
+- `player`: needs a current RPGJS player.
+- `event`: needs a current RPGJS event.
+- `map`: needs a current map.
+- `variables`, `inventory`, `equipment`, `skills`, `ui`, `audio`: domain-specific capabilities.
+
+When building a map entry workflow (`mapLoadBlockCollectionId` / `mapLoadBlocks`), use
+blocks that can run with a current player and map, but without a current event. The
+Studio UI uses `eventBuilderProfiles.mapLoad` for this context; it hides blocks that
+require `event`, and removes field options such as `current_event` from compatible
+schemas.
+
 ## Core endpoints
 
 - List all block collections: `GET /api/blocks`
