@@ -1,9 +1,11 @@
 import type {
-  GameExecutionContext,
   BlockExecutor,
-  ChangeVariableParams
+  ChangeVariableParams,
+  SetVariableParams,
+  VariableOperation
 } from '../types';
 import { createVariableModificationSchema, OPERATION_SETS } from '../definitions';
+import { set_variable } from './set-variable';
 
 export const schemaChangeVariable = {
   type: 'change_variable',
@@ -21,65 +23,26 @@ export const schemaChangeVariable = {
   )
 } as const;
 
+const legacyOperationMap: Record<ChangeVariableParams['operation'], VariableOperation> = {
+  set: 'set',
+  add: 'add',
+  sub: 'subtract',
+  mul: 'multiply',
+  div: 'divide',
+  mod: 'modulo'
+};
+
 /**
- * Modifies a variable value
- * 
- * This executor handles changing variable values with various operations.
- * It supports both constant amounts and variable-based amounts, allowing
- * for flexible variable manipulation in the game.
- * 
- * @param context - The execution context
- * @param params - Parameters containing variable ID, operation, and value source
- * 
- * @example
- * ```typescript
- * // Add 10 to a variable
- * await changeVariableExecutor(context, {
- *   variableId: 'player_score',
- *   type: 'constant',
- *   operation: 'add',
- *   amount: 10
- * });
- * 
- * // Multiply variable by another variable
- * await changeVariableExecutor(context, {
- *   variableId: 'player_score',
- *   type: 'variable',
- *   operation: 'mul',
- *   amountVariableId: 'multiplier'
- * });
- * ```
+ * Legacy alias kept for old projects. New block payloads should use set_variable.
  */
 export const change_variable: BlockExecutor<'change_variable'> = async (context, params) => {
-  const value = params.type === 'constant'
-    ? (params.amount ?? 0)
-    : (() => {
-        const v = context.getVariable(params.amountVariableId ?? '');
-        return typeof v === 'number' ? v : 0;
-      })();
-  
-  const variableId = params.variableId;
-  const currentValue = context.getVariable(variableId);
-  const numericCurrentValue = typeof currentValue === 'number' ? currentValue : 0;
-  
-  switch (params.operation) {
-    case 'set':
-      context.setVariable(variableId, value);
-      break;
-    case 'add':
-      context.setVariable(variableId, numericCurrentValue + value);
-      break;
-    case 'sub':
-      context.setVariable(variableId, numericCurrentValue - value);
-      break;
-    case 'mul':
-      context.setVariable(variableId, numericCurrentValue * value);
-      break;
-    case 'div':
-      context.setVariable(variableId, Math.floor(numericCurrentValue / value));
-      break;
-    case 'mod':
-      context.setVariable(variableId, numericCurrentValue % value);
-      break;
-  }
+  const nextParams: SetVariableParams = {
+    variableId: params.variableId,
+    operation: legacyOperationMap[params.operation],
+    valueSource: params.type === 'variable' ? 'variable' : 'constant',
+    value: params.amount ?? 0,
+    sourceVariableId: params.amountVariableId
+  };
+
+  await set_variable(context, nextParams);
 };

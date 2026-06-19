@@ -233,7 +233,6 @@ Used by:
 - `change_exp`
 - `change_level`
 - `change_parameter`
-- `change_variable`
 
 Pattern:
 
@@ -279,7 +278,6 @@ Not all blocks support all operations:
 
 - `change_hp`, `change_sp`, `change_exp`, `change_level`, `change_parameter`: `set`, `add`, `sub`
 - `change_gold`: `set`, `add`, `sub`, `mul`
-- `change_variable`: `set`, `add`, `sub`, `mul`, `div`, `mod`
 
 ### Conditional branch
 
@@ -443,7 +441,8 @@ Use to pause execution.
 
 ### `set_variable`
 
-Use to set or modify a game variable directly.
+Use to set or modify a game variable. This is the only public variable-value
+block; do not create `change_variable` in new payloads.
 
 ```json
 {
@@ -451,6 +450,7 @@ Use to set or modify a game variable directly.
   "data": {
     "variableId": "VARIABLE_ID",
     "operation": "set",
+    "valueSource": "constant",
     "value": "1"
   }
 }
@@ -464,6 +464,82 @@ Allowed `operation`:
 - `multiply`
 - `divide`
 - `modulo`
+
+Allowed `valueSource`:
+
+- `constant`: use `value` as a free text field
+- `variable`: use `sourceVariableId`
+- `random`: use `randomMin` and `randomMax`
+- `player_x`
+- `player_y`
+- `player_direction`
+- `map_id`
+- `gold`
+- `player_id`
+- `player_name`
+- `level`
+- `hp`
+- `sp`
+
+Examples:
+
+```json
+{
+  "type": "set_variable",
+  "data": {
+    "variableId": "VARIABLE_ID",
+    "operation": "add",
+    "valueSource": "variable",
+    "sourceVariableId": "OTHER_VARIABLE_ID"
+  }
+}
+```
+
+```json
+{
+  "type": "set_variable",
+  "data": {
+    "variableId": "VARIABLE_ID",
+    "operation": "set",
+    "valueSource": "random",
+    "randomMin": 1,
+    "randomMax": 10
+  }
+}
+```
+
+```json
+{
+  "type": "set_variable",
+  "data": {
+    "variableId": "VARIABLE_ID",
+    "operation": "set",
+    "valueSource": "player_x"
+  }
+}
+```
+
+```json
+{
+  "type": "set_variable",
+  "data": {
+    "variableId": "VARIABLE_ID",
+    "operation": "set",
+    "valueSource": "map_id"
+  }
+}
+```
+
+```json
+{
+  "type": "set_variable",
+  "data": {
+    "variableId": "VARIABLE_ID",
+    "operation": "set",
+    "valueSource": "gold"
+  }
+}
+```
 
 ### `set_switch`
 
@@ -600,22 +676,6 @@ Use to fully recover the player.
 {
   "type": "recover_all",
   "data": {}
-}
-```
-
-### `change_variable`
-
-Use to modify an existing variable numerically.
-
-```json
-{
-  "type": "change_variable",
-  "data": {
-    "variableId": "VARIABLE_ID",
-    "type": "constant",
-    "operation": "add",
-    "amount": 1
-  }
 }
 ```
 

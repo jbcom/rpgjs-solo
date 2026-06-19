@@ -19,7 +19,6 @@ import {
   schemaChangeEquipment,
   schemaChangeSkill,
   schemaUseSkill,
-  schemaChangeVariable,
   schemaMoveRoute,
   schemaChangeCharacterGraphic,
   schemaApplyGraphicAnimation,
@@ -99,8 +98,6 @@ export const defaultBlocks = [
 
     schemaUseSkill,
   
-    schemaChangeVariable,
-  
    
   
     // Character & Movement Blocks
@@ -179,8 +176,6 @@ export const defaultBlocks = [
     schemaCallShop,
 
     schemaEraseEvent,
-
-    schemaSpawnCommonEvent,
   
     // {
     //   type: 'change_screen_tone',
@@ -235,7 +230,10 @@ export const defaultBlocks = [
   
     schemaPlaySe,
 
+    // System Blocks
     schemaCallCommonEvent,
+
+    schemaSpawnCommonEvent,
   ] as const;
 
   /**

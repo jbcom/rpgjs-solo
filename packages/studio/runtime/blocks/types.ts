@@ -29,7 +29,9 @@ import type {
   WeatherState,
 } from '../weather';
 
-export type BlockType = typeof defaultBlocks[number]['type'];
+export type PublicBlockType = typeof defaultBlocks[number]['type'];
+export type LegacyBlockType = 'change_variable';
+export type BlockType = PublicBlockType | LegacyBlockType;
 
 // ============================================================================
 // Block Parameter Interfaces
@@ -326,6 +328,24 @@ export interface WaitParams {
 export type VariableOperation = 'set' | 'add' | 'subtract' | 'multiply' | 'divide' | 'modulo';
 
 /**
+ * Value sources supported by the set_variable block.
+ */
+export type SetVariableValueSource =
+  | 'constant'
+  | 'variable'
+  | 'random'
+  | 'player_x'
+  | 'player_y'
+  | 'player_direction'
+  | 'map_id'
+  | 'gold'
+  | 'player_id'
+  | 'player_name'
+  | 'level'
+  | 'hp'
+  | 'sp';
+
+/**
  * Parameters for the set_variable block
  * 
  * Sets or modifies a game variable's value.
@@ -335,8 +355,16 @@ export interface SetVariableParams {
   variableId: string;
   /** Operation to perform */
   operation: VariableOperation;
-  /** Value to use (can be number, string, or expression) */
-  value: string | number;
+  /** Source of the value to assign or use in the operation */
+  valueSource?: SetVariableValueSource;
+  /** Constant value to use */
+  value?: string | number;
+  /** Variable ID to read when valueSource is variable */
+  sourceVariableId?: string;
+  /** Minimum random value when valueSource is random */
+  randomMin?: number;
+  /** Maximum random value when valueSource is random */
+  randomMax?: number;
 }
 
 /**
@@ -532,7 +560,7 @@ export interface ChangeEquipmentParams {
  * Parameters for changing player skills.
  */
 export interface ChangeSkillParams {
-  /** Skill to learn or forget */
+  /** Skill to learn, forget, or use */
   skillId: string;
   /** Whether to learn or forget the skill */
   state: 'learn' | 'forget';
@@ -826,8 +854,6 @@ export interface PlaySeParams {
 export interface CallCommonEventParams {
   /** ID of the event to call */
   commonEventId: string;
-  /** Legacy ID of the event to call */
-  eventId?: string;
   /** Parameters to pass to the event */
   parameters?: Record<string, unknown>;
   /** Recursion guard for nested event calls */
@@ -857,8 +883,6 @@ export interface CommonEventPositionParams {
 export interface SpawnCommonEventParams extends CommonEventPositionParams {
   /** ID of the event to spawn */
   commonEventId: string;
-  /** Legacy ID of the event to spawn */
-  eventId?: string;
   /** Runtime event mode */
   mode?: 'shared' | 'scenario';
 }
@@ -1069,6 +1093,8 @@ export interface BlockContextInfo {
   trigger: string | null;
   /** Collection ID being edited (optional) */
   collectionId?: string | null;
+  /** Map ID for map-scoped builders (optional) */
+  mapId?: string | null;
   /** Execution profile for the current builder usage */
   executionProfile: EventBuilderExecutionProfile;
 }
@@ -1198,6 +1224,8 @@ export interface ExecutionPlayer {
   setVariable(variableId: string, value: unknown): void;
   /** Player name */
   name?: string;
+  /** Player ID */
+  id?: string;
   /** Player direction */
   direction?: string;
   /** Player X position */
@@ -1224,6 +1252,10 @@ export interface ExecutionPlayer {
   clearEquipment?(slot: EquipmentSlot | string): void;
   /** Player's gold amount */
   gold: number;
+  /** Player HP */
+  hp?: number;
+  /** Player SP */
+  sp?: number;
   /** Player level */
   level?: number;
   /** Get player level */
@@ -1329,6 +1361,19 @@ export interface GameExecutionContext {
   map?: any;
   /** Reference to executors for recursive execution */
   executors?: RuntimeBlockExecutorRegistry;
+  /** Resolve an event record by id */
+  getCommonEvent?(commonEventId: string): Promise<unknown> | unknown;
+  /** Spawn an event on the current map */
+  spawnCommonEvent?(
+    commonEventId: string,
+    position: { x: number; y: number },
+    options?: { mode?: 'shared' | 'scenario' }
+  ): Promise<void> | void;
+  /** Current event recursion state */
+  commonEventExecutionState?: {
+    depth: number;
+    parameters: Record<string, unknown>;
+  };
   
   // Variable/Switch operations
   /** Get a game variable value */
@@ -1355,19 +1400,6 @@ export interface GameExecutionContext {
   evaluateCondition(condition: string): boolean;
   /** Call another event */
   callEvent(eventId: string, parameters: Record<string, unknown>): Promise<void>;
-  /** Load a common event definition */
-  getCommonEvent?(commonEventId: string): Promise<unknown> | unknown;
-  /** Spawn a common event on the current map */
-  spawnCommonEvent?(
-    commonEventId: string,
-    position: { x: number; y: number },
-    options?: { mode?: 'shared' | 'scenario' }
-  ): Promise<void> | void;
-  /** Common event recursive execution state */
-  commonEventExecutionState?: {
-    depth: number;
-    parameters: Record<string, unknown>;
-  };
   /** Execute custom script */
   executeScript(code: string): Promise<void>;
 
