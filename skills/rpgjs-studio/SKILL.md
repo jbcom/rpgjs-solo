@@ -128,6 +128,8 @@ curl -sS -X POST "$BASE_URL/..." \
 - Project settings and database enemies both support combat animation spritesheet media IDs under `animations`: `attack`, `hurt`, `die`, and `castSpell`.
 - The RPGJS starter runtime uses these spritesheets in action battle: attack actions, damage/hurt feedback, delayed death removal, and skill/cast usage can temporarily switch to the configured spritesheet.
 - Database enemies support action battle AI options under `behavior`: `enemyType`, `attackCooldown`, `visionRange`, `attackRange`, `dodgeChance`, `dodgeCooldown`, `fleeThreshold`, `attackPatterns`, `patrolWaypoints`, and `groupBehavior`.
+- Database enemies expose a lightweight preview endpoint: `GET /api/database/enemies/preview?ids=<id1,id2>`. Use it when only `_id`, `name`, and `graphic` are needed for known enemy ids instead of listing or reading full enemy records. Send at most 100 distinct ids per request.
+- `GET /api/events` returns the legacy event array by default. Add `page` or `limit` to opt into paginated responses: `GET /api/events?page=1&limit=24` returns `{ data, meta }`.
 - Project settings and database enemies both support level-gated skill acquisition under `skills`: `{ skillId, level }`.
 - Database skills support media IDs under `icon`, `animation`, and `sound`.
 - Game/runtime code can read media data usable in the game with `GET /api/game/media/:mediaId`; use `references/media.md` for details.

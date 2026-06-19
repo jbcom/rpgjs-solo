@@ -20,6 +20,34 @@ Use this reference for creating, editing, attaching, and staging map events.
 - Replace triggers: `PUT /api/events/:eventId/triggers`
 - List events on a map: `GET /api/maps/:mapId/events`
 
+## Listing and pagination
+
+`GET /api/events` keeps the legacy response shape and returns a raw event array.
+
+To opt into pagination, pass `page` or `limit`:
+
+```bash
+curl -sS "$BASE_URL/api/events?page=1&limit=24" \
+  -H "x-api-key:$RPGSTUDIO_API_KEY" \
+  -H "Content-Type: application/json"
+```
+
+The paginated response shape is:
+
+```json
+{
+  "data": [],
+  "meta": {
+    "page": 1,
+    "limit": 24,
+    "total": 0,
+    "pageCount": 0
+  }
+}
+```
+
+Use this mode for UI lists or agents that only need one page of events. The maximum `limit` is `100`.
+
 ## Recommended workflow
 
 1. Resolve the map first.

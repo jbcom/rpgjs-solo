@@ -16,6 +16,7 @@ Current active types in this repo:
 - Read one: `GET /api/database/:type/:id`
 - Update: `PUT /api/database/:type/:id`
 - Delete: `DELETE /api/database/:type/:id`
+- Enemy previews: `GET /api/database/enemies/preview?ids=<id1,id2>`
 
 `:type` is the database resource path, for example `items`, `enemies`, or `variables`.
 
@@ -178,6 +179,24 @@ Notes:
 - `skills[].skillId` is a skill `_id`. Search `/api/database/skills?query=<search>` first.
 - `skills[].level` is the minimum enemy level required to acquire the skill.
 - `behavior.dodgeChance` and `behavior.fleeThreshold` use ratios between `0` and `1`.
+
+### `GET /api/database/enemies/preview?ids=<id1,id2>`
+
+Use this endpoint when a UI or agent only needs lightweight enemy display data for known enemy `_id`s.
+
+Response items contain only:
+
+- `_id: string`
+- `name?: string`
+- `graphic?: string`
+
+Notes:
+
+- `ids` is a comma-separated list of enemy `_id`s.
+- Send at most 100 distinct ids per request. Larger requests return `400`.
+- The endpoint is scoped to the API key project and ignores ids outside the project.
+- It only returns records with `type: "enemy"`.
+- It avoids loading full enemy payloads such as behavior, rewards, inventory, and skills.
 
 ### `POST /api/database/variables`
 
