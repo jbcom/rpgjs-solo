@@ -49,8 +49,8 @@ export default {
        return {
           id,
           component: Map,
-          width: 500,
-          height: 500,
+          width: 5000,
+          height: 5000,
           data: {
             color: colorMap[id]
           },

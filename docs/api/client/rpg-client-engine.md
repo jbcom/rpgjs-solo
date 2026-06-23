@@ -1116,14 +1116,16 @@ object directly to `engine.interactions.use(...)`.
 Set the camera to follow a specific sprite
 
 This method changes which sprite the camera viewport should follow.
-The camera will smoothly animate to the target sprite if smoothMove options are provided.
+The camera can smoothly animate to the target sprite before continuous follow starts.
 
 ## Design
 
 The camera follow target is stored in a signal that is read by sprite components.
 Each sprite checks if it should be followed by comparing its ID with the target ID.
 When smoothMove options are provided, the viewport animation is handled by CanvasEngine's
-viewport system.
+viewport system. `time` and `ease` configure the transition to the target, while
+`speed`, `acceleration`, and `radius` configure the continuous follow behavior after
+the transition.
 
 - Source: `packages/client/src/RpgClientEngine.ts`
 - Kind: `method`
@@ -1132,13 +1134,20 @@ viewport system.
 ### Signature
 
 ```ts
-setCameraFollow(targetId: string | null, smoothMove?: boolean | { time?: number; ease?: string }): void
+setCameraFollow(targetId: string | null, smoothMove?: boolean | {
+  enabled?: boolean;
+  time?: number;
+  ease?: CameraFollowEase;
+  speed?: number;
+  acceleration?: number | null;
+  radius?: number | null;
+}): void
 ```
 
 ### Parameters
 
 - `targetId`: `string | null`
-- `smoothMove?`: `boolean | { time?: number; ease?: string }`
+- `smoothMove?`: `boolean | { enabled?: boolean; time?: number; ease?: CameraFollowEase; speed?: number; acceleration?: number | null; radius?: number | null }`
 
 ### Examples
 
@@ -1150,6 +1159,15 @@ engine.setCameraFollow(otherPlayerId, true);
 engine.setCameraFollow(eventId, {
   time: 1000,
   ease: "easeInOutQuad"
+});
+
+// Follow with a smooth transition and softer continuous follow
+engine.setCameraFollow(eventId, {
+  time: 1000,
+  ease: "easeInOutQuad",
+  speed: 12,
+  acceleration: 0.2,
+  radius: 80
 });
 
 // Follow without animation (instant)
