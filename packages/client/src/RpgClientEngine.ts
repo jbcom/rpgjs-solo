@@ -196,7 +196,7 @@ export class RpgClientEngine<T = any> {
   /** Trigger for map shake animation */
   mapShakeTrigger: ConfigurableTrigger<MapShakeOptions> = trigger<MapShakeOptions>();
 
-  controlsReady = signal(undefined); 
+  controlsReady = signal<boolean | undefined>(undefined); 
   gamePause = signal(false);
 
   private predictionEnabled = false;
@@ -373,7 +373,7 @@ export class RpgClientEngine<T = any> {
       ...currentValues,
       values: new Map([['__default__', controlInstance]])
     }
-    this.controlsReady.set(undefined);
+    this.controlsReady.set(true);
   }
 
   async start() {

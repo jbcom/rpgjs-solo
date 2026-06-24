@@ -449,18 +449,48 @@ export class RpgGui {
     }
 
     const guiInstance = this.get(id)!;
-    
-    // Check if it's a Vue component (in extraGuis)
     const isVueComponent = this.extraGuis.some(gui => gui.name === id);
-    
-    if (isVueComponent) {
-      // Handle Vue component display
-      this._handleVueComponentDisplay(id, data, dependencies, guiInstance, openId);
-    } else {
+
+    if (guiInstance.subscription) {
+      guiInstance.subscription.unsubscribe();
+      guiInstance.subscription = undefined;
+    }
+
+    const show = () => {
       guiInstance.openId = openId;
       guiInstance.data.set(data);
       guiInstance.display.set(true);
+      if (isVueComponent) {
+        this._notifyVueGui(id, true, data);
+      }
+    };
+
+    const deps = dependencies.length > 0
+      ? dependencies
+      : (guiInstance.dependencies ?? []);
+
+    if (deps.length > 0) {
+      const values = deps.map(dependency => dependency());
+      const subscription = new Subscription();
+      const showIfReady = () => {
+        if (values.every(value => value !== undefined)) {
+          show();
+        }
+      };
+
+      deps.forEach((dependency, index) => {
+        subscription.add(dependency.observable.subscribe((value) => {
+          values[index] = value;
+          showIfReady();
+        }));
+      });
+
+      guiInstance.subscription = subscription;
+      showIfReady();
+      return;
     }
+
+    show();
   }
 
   isDisplaying(id: string): boolean {
@@ -490,17 +520,26 @@ export class RpgGui {
       : (guiInstance.dependencies ?? []);
 
     if (deps.length > 0) {
-      // Subscribe to dependencies
-      guiInstance.subscription = combineLatest(
-        deps.map(dependency => dependency.observable)
-      ).subscribe((values) => {
+      const values = deps.map(dependency => dependency());
+      const subscription = new Subscription();
+      const showIfReady = () => {
         if (values.every(value => value !== undefined)) {
           guiInstance.openId = openId;
           guiInstance.data.set(data);
           guiInstance.display.set(true);
           this._notifyVueGui(id, true, data);
         }
+      };
+
+      deps.forEach((dependency, index) => {
+        subscription.add(dependency.observable.subscribe((value) => {
+          values[index] = value;
+          showIfReady();
+        }));
       });
+
+      guiInstance.subscription = subscription;
+      showIfReady();
       return;
     }
 

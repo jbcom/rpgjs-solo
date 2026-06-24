@@ -72,7 +72,21 @@ export default {
       }),
     }),
     provideClientModules([
-      withMobile(),
+      withMobile({
+        enabled: "always",
+        joystick: {
+          outerColor: "#d7e7ff",
+          innerColor: "#ffffff",
+          scale: 0.82,
+          moveInterval: 40,
+          threshold: 0.05,
+        },
+        buttons: {
+          action: true,
+          back: false,
+          dash: true,
+        },
+      }),
       {
         spritesheetResolver: async (id: string) => {
           if (id === "potion" || id == 'wood') {

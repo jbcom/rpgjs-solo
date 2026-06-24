@@ -360,9 +360,43 @@
   const canControls = () => isMe() && getCanMoveValue(sprite)
   const keyboardControls = client.globalConfig.keyboardControls;
   const activeDirectionKeys = new Map();
+  const activeControlDirections = new Map();
+  const activeControlDirectionReleaseTimers = new Map();
+  const CONTROL_DIRECTION_RELEASE_GRACE_MS = 160;
+
+  const hasHeldDirection = () =>
+    activeDirectionKeys.size > 0 || activeControlDirections.size > 0;
+
+  const publishMobileDebug = (type, payload = {}) => {
+    const target = typeof window !== "undefined" ? window : globalThis;
+    if (!target.__RPGJS_MOBILE_DEBUG__) return;
+    const event = {
+      source: "character",
+      type,
+      time: Date.now(),
+      isCurrentPlayer: isCurrentPlayer(),
+      animationName: animationName(),
+      realAnimationName: realAnimationName?.(),
+      activeKeyboardDirections: Array.from(activeDirectionKeys.values()),
+      activeControlDirections: Array.from(activeControlDirections.values()),
+      heldDirection: resolveHeldDirection(),
+      canControls: canControls(),
+      x: x(),
+      y: y(),
+      ...payload
+    };
+    target.__RPGJS_MOBILE_DEBUG_EVENTS__ = [
+      ...(target.__RPGJS_MOBILE_DEBUG_EVENTS__ || []).slice(-199),
+      event
+    ];
+    target.__RPGJS_MOBILE_DEBUG_LAST__ = event;
+  };
 
   const resolveHeldDirection = () => {
-    const directions = Array.from(activeDirectionKeys.values());
+    const directions = [
+      ...Array.from(activeDirectionKeys.values()),
+      ...Array.from(activeControlDirections.values()),
+    ];
     return directions[directions.length - 1];
   };
 
@@ -408,25 +442,75 @@
     );
 
   const playPredictedWalkAnimation = () => {
-    if (sprite.animationFixed) return;
-    if (sprite.animationIsPlaying && sprite.animationIsPlaying()) return;
+    if (sprite.animationFixed) {
+      publishMobileDebug("walk:skip", { reason: "animationFixed" });
+      return;
+    }
+    if (sprite.animationIsPlaying && sprite.animationIsPlaying()) {
+      publishMobileDebug("walk:skip", { reason: "animationIsPlaying" });
+      return;
+    }
     realAnimationName.set('walk');
+    publishMobileDebug("walk:set", { reason: "predicted" });
   };
 
   const resumeHeldDirectionWalkAnimation = () => {
-    if (!isCurrentPlayer()) return false;
-    if (activeDirectionKeys.size === 0) return false;
-    if (!canControls()) return false;
-    if (sprite.animationFixed) return false;
-    if (sprite.animationIsPlaying && sprite.animationIsPlaying()) return false;
+    if (!isCurrentPlayer()) {
+      publishMobileDebug("walk:resume-fail", { reason: "notCurrentPlayer" });
+      return false;
+    }
+    if (!hasHeldDirection()) {
+      publishMobileDebug("walk:resume-fail", { reason: "noHeldDirection" });
+      return false;
+    }
+    if (!canControls()) {
+      publishMobileDebug("walk:resume-fail", { reason: "cannotControl" });
+      return false;
+    }
+    if (sprite.animationFixed) {
+      publishMobileDebug("walk:resume-fail", { reason: "animationFixed" });
+      return false;
+    }
+    if (sprite.animationIsPlaying && sprite.animationIsPlaying()) {
+      publishMobileDebug("walk:resume-fail", { reason: "animationIsPlaying" });
+      return false;
+    }
     realAnimationName.set('walk');
+    publishMobileDebug("walk:set", { reason: "resumeHeldDirection" });
     return true;
   };
 
   const processMovementInput = (input) => {
     if (!canControls()) return;
+    publishMobileDebug("movement:input", { input });
     client.processInput({ input });
     playPredictedWalkAnimation();
+  };
+
+  const activateControlDirection = (name, directionInput) => {
+    const releaseTimer = activeControlDirectionReleaseTimers.get(name);
+    if (releaseTimer) {
+      clearTimeout(releaseTimer);
+      activeControlDirectionReleaseTimers.delete(name);
+    }
+    activeControlDirections.delete(name);
+    activeControlDirections.set(name, directionInput);
+    publishMobileDebug("control:activate", { name, directionInput });
+    resumeHeldDirectionWalkAnimation();
+  };
+
+  const releaseControlDirection = (name) => {
+    const previousTimer = activeControlDirectionReleaseTimers.get(name);
+    if (previousTimer) clearTimeout(previousTimer);
+    activeControlDirectionReleaseTimers.set(name, setTimeout(() => {
+      activeControlDirectionReleaseTimers.delete(name);
+      activeControlDirections.delete(name);
+      publishMobileDebug("control:release", { name });
+      if (!hasHeldDirection() && animationName() === 'stand') {
+        realAnimationName.set('stand');
+        publishMobileDebug("stand:set", { reason: "controlRelease" });
+      }
+    }, CONTROL_DIRECTION_RELEASE_GRACE_MS));
   };
 
   const processDashInput = () => {
@@ -474,28 +558,44 @@
       repeat: true,
       bind: keyboardControls.down,
       keyDown() {
+        activateControlDirection('down', Direction.Down)
         processMovementInput(Direction.Down)
+      },
+      keyUp() {
+        releaseControlDirection('down')
       },
     },
     up: {
       repeat: true,
       bind: keyboardControls.up,
       keyDown() {
+        activateControlDirection('up', Direction.Up)
         processMovementInput(Direction.Up)
+      },
+      keyUp() {
+        releaseControlDirection('up')
       },
     },
     left: {
       repeat: true,
       bind: keyboardControls.left,
       keyDown() {
+        activateControlDirection('left', Direction.Left)
         processMovementInput(Direction.Left)
+      },
+      keyUp() {
+        releaseControlDirection('left')
       },
     },
     right: {
       repeat: true,
       bind: keyboardControls.right,
       keyDown() {
+        activateControlDirection('right', Direction.Right)
         processMovementInput(Direction.Right)
+      },
+      keyUp() {
+        releaseControlDirection('right')
       },
     },
     action: {
@@ -512,6 +612,14 @@
         processDashInput()
       },
     },
+    back: {
+      bind: keyboardControls.escape,
+      keyDown() {
+        if (canControls()) {
+          client.processAction({ action: 'escape' })
+        }
+      },
+    },
     escape: {
       bind: keyboardControls.escape,
       keyDown() {
@@ -519,6 +627,21 @@
           client.processAction({ action: 'escape' })
         }
       },
+    },
+    joystick: {
+      enabled: true,
+      directionMapping: {
+        top: 'up',
+        bottom: 'down',
+        left: 'left',
+        right: 'right',
+        top_left: ['up', 'left'],
+        top_right: ['up', 'right'],
+        bottom_left: ['down', 'left'],
+        bottom_right: ['down', 'right']
+      },
+      moveInterval: 50,
+      threshold: 0.1
     },
     gamepad: {
       enabled: true
@@ -1051,6 +1174,8 @@
     removeTransitionSubscription?.unsubscribe();
     animationMovementSubscription.unsubscribe();
     resumeWalkSubscriptions.forEach(subscription => subscription.unsubscribe());
+    activeControlDirectionReleaseTimers.forEach(timer => clearTimeout(timer));
+    activeControlDirectionReleaseTimers.clear();
     xSubscription.unsubscribe();
     ySubscription.unsubscribe();
     await lastValueFrom(hooks.callHooks("client-sprite-onDestroy", sprite)) 

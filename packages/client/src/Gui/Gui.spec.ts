@@ -98,6 +98,25 @@ describe("RpgGui Vue integration", () => {
     });
   });
 
+  test("waits for CanvasEngine GUI dependencies before displaying", async () => {
+    const { gui } = await createGui();
+    const enabled = signal(true);
+    const ready = signal<boolean | undefined>(undefined);
+
+    gui.add({
+      id: "canvas-dependency",
+      component: CanvasGui,
+      autoDisplay: true,
+      dependencies: () => [enabled, ready],
+    });
+
+    expect(gui.isDisplaying("canvas-dependency")).toBe(false);
+
+    ready.set(true);
+
+    expect(gui.isDisplaying("canvas-dependency")).toBe(true);
+  });
+
   test("ignores stale server close events for previous GUI opens", async () => {
     const { gui, socket } = await createGui();
     await gui._initialize();

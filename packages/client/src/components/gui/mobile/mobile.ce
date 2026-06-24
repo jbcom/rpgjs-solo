@@ -1,80 +1,293 @@
-<Container justifyContent="space-between" alignItems="flex-end" width="100%" height="100%">
-    <!-- Gamepad buttons A and B (left side) -->
-    <Container justifyContent="flex-start" alignItems="flex-end"  gap={20}>
-        <Container display="flex" direction="column" gap={20} margin={50}>
-            <!-- Button B (top) -->
-  
-            <!-- Button A (bottom) -->
-            <Button 
-                text="A"
-                shape="circle"
-                width={70}
-                height={70}
-                controls={controlsInstance}
-                controlName="action"
-                style={{
-                    backgroundColor: {
-                        normal: "#2ecc71",
-                        hover: "#27ae60",
-                        pressed: "#229954",
-                        disabled: "#7f8c8d"
-                    },
-                    text: {
-                        fontSize: 24,
-                        fontFamily: "Arial Bold",
-                        color: "#ffffff"
-                    }
-                }}
-            />
-
-            <Button 
-                text="B"
-                shape="circle"
-                width={70}
-                height={70}
-                controls={controlsInstance}
-                controlName="back"
-                style={{
-                    backgroundColor: {
-                        normal: "#e74c3c",
-                        hover: "#c0392b",
-                        pressed: "#a93226",
-                        disabled: "#7f8c8d"
-                    },
-                    text: {
-                        fontSize: 24,
-                        fontFamily: "Arial Bold",
-                        color: "#ffffff"
-                    }
-                }}
-            />
-
+<Container justifyContent="space-between" alignItems="flex-end" width="100%" height="100%" onBeforeDestroy={releaseJoystickControl}>
+    <Container margin={94} alignItems="flex-end">
+        <Container>
+            @if (showJoystick()) {
+                <Joystick 
+                    x={70}
+                    y={-70}
+                    outerColor={joystickOuterColor()}
+                    innerColor={joystickInnerColor()}
+                    scale={joystickScale()}
+                    outerScale={joystickOuterScale()}
+                    innerScale={joystickInnerScale()}
+                    onStart={onJoystickStart}
+                    onChange={onJoystickChange}
+                    onEnd={onJoystickEnd}
+                />
+            }
         </Container>
     </Container>
-    
-    <Container margin={100} alignItems="flex-end">
-        <Container>
-            <Joystick 
-                controls={controlsInstance}
-                outerColor="#34495e"
-                innerColor="#3498db"
-            />
+
+    <Container justifyContent="flex-end" alignItems="flex-end" gap={14} margin={30}>
+        <Container display="flex" direction="row" alignItems="flex-end" gap={14}>
+            @if (showDashButton()) {
+                <Container width={56} height={56}>
+                    <Button 
+                        shape="circle"
+                        width={56}
+                        height={56}
+                        y={-56}
+                        controls={controlsInstance}
+                        controlName="dash"
+                        style={dashButtonStyle}
+                        alpha={0.72}
+                    />
+                    <Text text="R" x={52} y={0} anchor={{ x: 0.5, y: 0.5 }} size={20} color="#ffffff" />
+                </Container>
+            }
+
+            @if (showActionButton()) {
+                <Container width={68} height={68}>
+                    <Button 
+                        shape="circle"
+                        width={68}
+                        height={68}
+                        y={-68}
+                        controls={controlsInstance}
+                        controlName="action"
+                        style={actionButtonStyle}
+                        alpha={0.78}
+                    />
+                    <Text text="A" x={62} y={0} anchor={{ x: 0.5, y: 0.5 }} size={24} color="#14253a" />
+                </Container>
+            }
+
+            @if (showBackButton()) {
+                <Container width={56} height={56}>
+                    <Button 
+                        shape="circle"
+                        width={56}
+                        height={56}
+                        y={-56}
+                        controls={controlsInstance}
+                        controlName="back"
+                        style={backButtonStyle}
+                        alpha={0.72}
+                    />
+                    <Text text="B" x={52} y={0} anchor={{ x: 0.5, y: 0.5 }} size={20} color="#ffffff" />
+                </Container>
+            }
+
         </Container>
     </Container>
 </Container>
 
 <script>
-    import { signal, mount } from 'canvasengine'
-    import { Button } from 'canvasengine'
+    import { signal, mount, computed } from 'canvasengine'
     import { inject } from '../../../core/inject'
-    import { RpgClientEngine } from '../../../RpgClientEngine'
-    import { Direction } from '@rpgjs/common'
 
-
+    const { data } = defineProps()
     const controlsInstance = signal(null)
+    const options = computed(() => data?.() || {})
+    const buttons = computed(() => options().buttons || {})
+    const joystick = computed(() => options().joystick)
+
+    const showActionButton = computed(() => buttons().action !== false)
+    const showBackButton = computed(() => buttons().back !== false)
+    const showDashButton = computed(() => buttons().dash === true)
+    const showJoystick = computed(() => joystick() !== false)
+    const joystickOuterColor = computed(() => joystick()?.outerColor || "#d7e7ff")
+    const joystickInnerColor = computed(() => joystick()?.innerColor || "#ffffff")
+    const joystickScale = computed(() => joystick()?.scale ?? 0.82)
+    const joystickOuterScale = computed(() => joystick()?.outerScale || { x: 0.86, y: 0.86 })
+    const joystickInnerScale = computed(() => joystick()?.innerScale || { x: 0.88, y: 0.88 })
+    let activeJoystickControl = null
+    let activeJoystickPower = 0
+    let joystickRepeatTimer = null
+
+    const baseButtonTextStyle = {
+        fontSize: 24,
+        fontFamily: "Arial Bold",
+        color: "#ffffff"
+    }
+
+    const actionButtonStyle = {
+        backgroundColor: {
+            normal: "#f7fbff",
+            hover: "#ffffff",
+            pressed: "#8fd4ff",
+            disabled: "#7f8c8d"
+        },
+        text: {
+            ...baseButtonTextStyle,
+            color: "#14253a"
+        }
+    }
+
+    const backButtonStyle = {
+        backgroundColor: {
+            normal: "#243041",
+            hover: "#2f4059",
+            pressed: "#152132",
+            disabled: "#7f8c8d"
+        },
+        text: baseButtonTextStyle
+    }
+
+    const dashButtonStyle = {
+        backgroundColor: {
+            normal: "#243041",
+            hover: "#2f4059",
+            pressed: "#152132",
+            disabled: "#7f8c8d"
+        },
+        text: {
+            ...baseButtonTextStyle,
+            fontSize: 20
+        }
+    }
+
+    const applyJoystickOptions = (control) => {
+        const joystickOptions = joystick()
+        if (!control || !joystickOptions || joystickOptions === false) return
+        control.joystick?.updateJoystickConfig?.({
+            ...control.joystick?.getJoystickConfig?.(),
+            ...(typeof joystickOptions.moveInterval === "number" ? { moveInterval: joystickOptions.moveInterval } : {}),
+            ...(typeof joystickOptions.threshold === "number" ? { threshold: joystickOptions.threshold } : {})
+        })
+    }
+
+    const getJoystickThreshold = () => {
+        const joystickOptions = joystick()
+        if (joystickOptions && joystickOptions !== false && typeof joystickOptions.threshold === "number") {
+            return joystickOptions.threshold
+        }
+        return controlsInstance()?.joystick?.getJoystickConfig?.()?.threshold ?? 0.1
+    }
+
+    const getJoystickMoveInterval = () => {
+        const joystickOptions = joystick()
+        if (joystickOptions && joystickOptions !== false && typeof joystickOptions.moveInterval === "number") {
+            return joystickOptions.moveInterval
+        }
+        return controlsInstance()?.joystick?.getJoystickConfig?.()?.moveInterval ?? 50
+    }
+
+    const controlForAxis = (negativeControl, positiveControl, negativeAngle, positiveAngle, angle) => {
+        const distanceToNegative = Math.abs(angle - negativeAngle)
+        const distanceToPositive = Math.abs(angle - positiveAngle)
+        return distanceToNegative <= distanceToPositive ? negativeControl : positiveControl
+    }
+
+    const resolveJoystickControl = (event) => {
+        const direction = event?.direction
+        if (direction === "top") return "up"
+        if (direction === "bottom") return "down"
+        if (direction === "left") return "left"
+        if (direction === "right") return "right"
+
+        const angle = Number(event?.angle)
+        if (!Number.isFinite(angle)) {
+            if (direction === "top_left") return "left"
+            if (direction === "top_right") return "right"
+            if (direction === "bottom_left") return "left"
+            if (direction === "bottom_right") return "right"
+            return null
+        }
+
+        if (direction === "top_left") return controlForAxis("up", "left", 90, 180, angle)
+        if (direction === "top_right") return controlForAxis("right", "up", 0, 90, angle)
+        if (direction === "bottom_left") return controlForAxis("left", "down", 180, 270, angle)
+        if (direction === "bottom_right") return controlForAxis("right", "down", 360, 270, angle)
+        return null
+    }
+
+    const applyJoystickControl = (name, isDown, power = activeJoystickPower) => {
+        const control = controlsInstance()
+        const joystickControls = control?.joystick
+        if (joystickControls?.applyControl) {
+            return joystickControls.applyControl(name, isDown, { power })
+        }
+        const keyboard = control?.keyboard
+        if (keyboard?.applyControl) return keyboard.applyControl(name, isDown)
+        return control?.applyControl?.(name, isDown, { power })
+    }
+
+    const stopJoystickRepeat = () => {
+        if (!joystickRepeatTimer) return
+        clearInterval(joystickRepeatTimer)
+        joystickRepeatTimer = null
+    }
+
+    const startJoystickRepeat = () => {
+        if (!activeJoystickControl || joystickRepeatTimer) return
+        joystickRepeatTimer = setInterval(() => {
+            if (!activeJoystickControl) return
+            applyJoystickControl(activeJoystickControl, true)
+        }, getJoystickMoveInterval())
+    }
+
+    const releaseJoystickControl = () => {
+        stopJoystickRepeat()
+        if (!activeJoystickControl) return
+        const previous = activeJoystickControl
+        activeJoystickControl = null
+        activeJoystickPower = 0
+        applyJoystickControl(previous, false, 0)
+    }
+
+    const activateJoystickControl = (controlName, power = 0) => {
+        if (!controlName) {
+            releaseJoystickControl()
+            return
+        }
+        activeJoystickPower = power
+        if (activeJoystickControl === controlName) {
+            startJoystickRepeat()
+            return
+        }
+        releaseJoystickControl()
+        activeJoystickControl = controlName
+        applyJoystickControl(controlName, true, power)
+        startJoystickRepeat()
+    }
+
+    const publishMobileDebug = (type, payload = {}) => {
+        const target = typeof window !== "undefined" ? window : globalThis
+        if (!target.__RPGJS_MOBILE_DEBUG__) return
+        const event = {
+            source: "mobile-gui",
+            type,
+            time: Date.now(),
+            ...payload
+        }
+        target.__RPGJS_MOBILE_DEBUG_EVENTS__ = [
+            ...(target.__RPGJS_MOBILE_DEBUG_EVENTS__ || []).slice(-199),
+            event
+        ]
+        target.__RPGJS_MOBILE_DEBUG_LAST__ = event
+    }
+
+    const onJoystickStart = () => {
+        publishMobileDebug("joystick:start", {
+            config: controlsInstance()?.joystick?.getJoystickConfig?.()
+        })
+    }
+
+    const onJoystickChange = (event) => {
+        const threshold = getJoystickThreshold()
+        const controlName = event?.power >= threshold ? resolveJoystickControl(event) : null
+        publishMobileDebug("joystick:change", {
+            direction: event?.direction,
+            power: event?.power,
+            angle: event?.angle,
+            threshold,
+            controlName,
+            config: controlsInstance()?.joystick?.getJoystickConfig?.()
+        })
+        activateJoystickControl(controlName, event?.power ?? 0)
+    }
+
+    const onJoystickEnd = () => {
+        publishMobileDebug("joystick:end", {
+            controlName: activeJoystickControl
+        })
+        releaseJoystickControl()
+    }
 
     mount((element) => {
         const control = inject('KeyboardControls')
         controlsInstance.set(control)
+        applyJoystickOptions(control)
     })
 </script>

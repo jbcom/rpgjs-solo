@@ -71,7 +71,10 @@ graphic = 'hero'
 hitbox = [16, 16]
 ```
 
-The legacy starter modules are mapped automatically: `@rpgjs/mobile-gui` uses the v5 mobile GUI helper, while `@rpgjs/default-gui` and `@rpgjs/gamepad` are treated as compatibility no-ops because their behavior is built into v5.
+The legacy starter modules are mapped automatically: `@rpgjs/mobile-gui` uses
+the v5 `withMobile()` CanvasEngine mobile GUI helper, while
+`@rpgjs/default-gui` and `@rpgjs/gamepad` are treated as compatibility no-ops
+because their behavior is built into v5.
 
 ## Spritesheets
 
