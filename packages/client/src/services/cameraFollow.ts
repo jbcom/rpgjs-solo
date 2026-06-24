@@ -54,9 +54,20 @@ export type CameraFollowSmoothMoveOptions = {
 
 export type CameraFollowSmoothMove = boolean | CameraFollowSmoothMoveOptions;
 
+export type CameraFollowTarget = {
+  x: number;
+  y: number;
+  destroyed?: boolean;
+} | null | undefined;
+
+export type CameraFollowPosition = {
+  x: number;
+  y: number;
+};
+
 export interface CameraFollowApplyContext {
   viewport: any;
-  target: { x: number; y: number };
+  target: CameraFollowTarget;
   smoothMove: CameraFollowSmoothMove;
   followRevision: number;
   isCurrentRevision: (revision: number) => boolean;
@@ -114,17 +125,69 @@ export const clearCameraFollowPlugins = (viewport: any) => {
   viewport?.plugins?.remove?.("follow");
 };
 
+export const ownsCameraFollowRevision = (
+  appliedRevision: number | null,
+  currentRevision: number
+) => {
+  return appliedRevision !== null && appliedRevision === currentRevision;
+};
+
+export const readCameraFollowPosition = (
+  target: CameraFollowTarget
+): CameraFollowPosition | null => {
+  if (!target) return null;
+
+  try {
+    if (target.destroyed) return null;
+    const x = target.x;
+    const y = target.y;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x, y };
+  } catch {
+    return null;
+  }
+};
+
+const createCameraFollowTarget = (
+  target: CameraFollowTarget,
+  initialPosition: CameraFollowPosition
+) => {
+  let lastPosition = initialPosition;
+
+  const readPosition = () => {
+    const nextPosition = readCameraFollowPosition(target);
+    if (nextPosition) {
+      lastPosition = nextPosition;
+    }
+    return lastPosition;
+  };
+
+  return {
+    get x() {
+      return readPosition().x;
+    },
+    get y() {
+      return readPosition().y;
+    },
+  };
+};
+
 export const followCameraInstantly = (
   viewport: any,
-  target: { x: number; y: number },
+  target: CameraFollowTarget,
   smoothMove: CameraFollowSmoothMove
 ) => {
+  const position = readCameraFollowPosition(target);
+  if (!position) return false;
+
+  const followTarget = createCameraFollowTarget(target, position);
   const followOptions = cameraFollowOptions(smoothMove);
   if (followOptions) {
-    viewport.follow(target, followOptions);
+    viewport.follow(followTarget, followOptions);
   } else {
-    viewport.follow(target);
+    viewport.follow(followTarget);
   }
+  return true;
 };
 
 export const applyCameraFollow = ({
@@ -137,19 +200,23 @@ export const applyCameraFollow = ({
 }: CameraFollowApplyContext) => {
   clearCameraFollowPlugins(viewport);
 
+  const position = readCameraFollowPosition(target);
+  if (!position) return false;
+
   const animationOptions = cameraFollowAnimationOptions(smoothMove);
   if (!animationOptions || animationOptions.time <= 0) {
-    followCameraInstantly(viewport, target, smoothMove);
-    return;
+    return followCameraInstantly(viewport, target, smoothMove);
   }
 
   viewport.animate({
-    position: { x: target.x, y: target.y },
+    position,
     time: animationOptions.time,
     ease: animationOptions.ease,
     callbackOnComplete: () => {
       if (!isCurrentRevision(followRevision) || !shouldFollowCamera()) return;
+      if (!readCameraFollowPosition(target)) return;
       followCameraInstantly(viewport, target, smoothMove);
     },
   });
+  return true;
 };

@@ -3,6 +3,7 @@ import {
   applyCameraFollow,
   cameraFollowAnimationOptions,
   cameraFollowOptions,
+  ownsCameraFollowRevision,
 } from "./cameraFollow";
 
 const createViewport = () => ({
@@ -71,7 +72,11 @@ describe("camera follow", () => {
     const animateOptions = viewport.animate.mock.calls[0][0];
     animateOptions.callbackOnComplete();
 
-    expect(viewport.follow).toHaveBeenCalledWith(target, {
+    const [followTarget, followOptions] = viewport.follow.mock.calls[0];
+    expect(followTarget).not.toBe(target);
+    expect(followTarget.x).toBe(120);
+    expect(followTarget.y).toBe(240);
+    expect(followOptions).toEqual({
       speed: 10,
       radius: 32,
     });
@@ -91,7 +96,10 @@ describe("camera follow", () => {
     });
 
     expect(viewport.animate).not.toHaveBeenCalled();
-    expect(viewport.follow).toHaveBeenCalledWith(target);
+    const [followTarget] = viewport.follow.mock.calls[0];
+    expect(followTarget).not.toBe(target);
+    expect(followTarget.x).toBe(120);
+    expect(followTarget.y).toBe(240);
   });
 
   it("does not follow after animation if another camera command superseded it", () => {
@@ -110,5 +118,103 @@ describe("camera follow", () => {
     animateOptions.callbackOnComplete();
 
     expect(viewport.follow).not.toHaveBeenCalled();
+  });
+
+  it("does not follow a target whose position cannot be read", () => {
+    const viewport = createViewport();
+    const target = {
+      get x(): number {
+        throw new Error("target destroyed");
+      },
+      get y() {
+        return 240;
+      },
+    };
+
+    applyCameraFollow({
+      viewport,
+      target,
+      smoothMove: false,
+      followRevision: 1,
+      isCurrentRevision: () => true,
+      shouldFollowCamera: () => true,
+    });
+
+    expect(viewport.plugins.remove).toHaveBeenCalledWith("animate");
+    expect(viewport.plugins.remove).toHaveBeenCalledWith("follow");
+    expect(viewport.animate).not.toHaveBeenCalled();
+    expect(viewport.follow).not.toHaveBeenCalled();
+  });
+
+  it("keeps the follow target readable when the source target is destroyed", () => {
+    const viewport = createViewport();
+    let position: { x: number; y: number } | null = { x: 120, y: 240 };
+    const target = {
+      get destroyed() {
+        return position === null;
+      },
+      get x() {
+        if (!position) throw new Error("target destroyed");
+        return position.x;
+      },
+      get y() {
+        if (!position) throw new Error("target destroyed");
+        return position.y;
+      },
+    };
+
+    applyCameraFollow({
+      viewport,
+      target,
+      smoothMove: false,
+      followRevision: 1,
+      isCurrentRevision: () => true,
+      shouldFollowCamera: () => true,
+    });
+
+    const [followTarget] = viewport.follow.mock.calls[0];
+    expect(followTarget.x).toBe(120);
+    expect(followTarget.y).toBe(240);
+
+    position = { x: 160, y: 280 };
+    expect(followTarget.x).toBe(160);
+    expect(followTarget.y).toBe(280);
+
+    position = null;
+    expect(followTarget.x).toBe(160);
+    expect(followTarget.y).toBe(280);
+  });
+
+  it("does not follow after animation if the target was destroyed", () => {
+    const viewport = createViewport();
+    let destroyed = false;
+    const target = {
+      get destroyed() {
+        return destroyed;
+      },
+      x: 120,
+      y: 240,
+    };
+
+    applyCameraFollow({
+      viewport,
+      target,
+      smoothMove: { time: 800, ease: "easeInOutQuad" },
+      followRevision: 2,
+      isCurrentRevision: (revision) => revision === 2,
+      shouldFollowCamera: () => true,
+    });
+
+    destroyed = true;
+    const animateOptions = viewport.animate.mock.calls[0][0];
+    animateOptions.callbackOnComplete();
+
+    expect(viewport.follow).not.toHaveBeenCalled();
+  });
+
+  it("only lets the sprite that owns the active follow revision clear plugins", () => {
+    expect(ownsCameraFollowRevision(2, 2)).toBe(true);
+    expect(ownsCameraFollowRevision(2, 3)).toBe(false);
+    expect(ownsCameraFollowRevision(null, 2)).toBe(false);
   });
 });
