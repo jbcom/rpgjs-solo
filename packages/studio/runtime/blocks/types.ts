@@ -742,6 +742,32 @@ export interface ShowAnimationParams {
 }
 
 /**
+ * Smooth camera transition options supported by RPGJS.
+ */
+export type CameraFollowSmoothMove = boolean | {
+  /** Transition duration in milliseconds */
+  time?: number;
+  /** Easing name */
+  ease?: string;
+};
+
+/**
+ * Parameters for the camera_follow block
+ *
+ * Makes the current player's camera follow the player, current event, or another event.
+ */
+export interface CameraFollowParams {
+  /** Target event ID, "$player", or "$this" */
+  eventId: string;
+  /** Enable a smooth transition; defaults to true */
+  smoothMove?: boolean;
+  /** Optional advanced transition duration in milliseconds */
+  time?: number;
+  /** Optional advanced transition easing name */
+  ease?: string;
+}
+
+/**
  * Parameters for the show_up_animation block
  * 
  * Displays a component animation above the player with optional icon and sound.
@@ -971,6 +997,7 @@ export interface BlockParamsMap {
   set_weather: SetWeatherParams;
   change_screen_tone: ChangeScreenToneParams;
   show_animation: ShowAnimationParams;
+  camera_follow: CameraFollowParams;
   call_main_menu: CallMainMenuParams;
   call_gameover: CallGameoverParams;
   show_save: ShowSaveParams;
@@ -1268,6 +1295,8 @@ export interface ExecutionPlayer {
   animationFixed?: boolean;
   /** Display a component animation on the player */
   showComponentAnimation?(id: string, params: unknown): Promise<void> | void;
+  /** Make this player's camera follow another player or event */
+  cameraFollow?(target: ExecutionPlayer | ExecutionEvent | any, options?: { smoothMove?: CameraFollowSmoothMove }): void;
 }
 
 /**

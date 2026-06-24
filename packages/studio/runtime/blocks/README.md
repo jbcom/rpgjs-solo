@@ -511,7 +511,7 @@ my_new_block: async (context, params) => {
 | `control` | Flux de contrôle | conditional_branch, loop, wait |
 | `variable` | Gestion des variables | set_variable, change_gold, change_item |
 | `character` | Actions sur personnages | move_character, change_graphic |
-| `scene` | Gestion de scène | transfer_player, change_screen_tone |
+| `scene` | Gestion de scène | transfer_player, camera_follow, change_screen_tone |
 | `audio` | Sons et musiques | play_bgm, play_se |
 | `system` | Actions système | call_common_event, script |
 

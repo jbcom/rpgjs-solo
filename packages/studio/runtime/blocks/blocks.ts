@@ -25,6 +25,7 @@ import {
   schemaShowUpAnimation,
   schemaTransferPlayer,
   schemaShowAnimation,
+  schemaCameraFollow,
   schemaSetWeather,
   schemaCallMainMenu,
   schemaCallGameover,
@@ -164,6 +165,8 @@ export const defaultBlocks = [
     schemaTransferPlayer,
   
     schemaShowAnimation,
+
+    schemaCameraFollow,
 
     schemaSetWeather,
 

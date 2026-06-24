@@ -925,6 +925,52 @@ Or on map position:
 }
 ```
 
+### `camera_follow`
+
+Use to make the current player's camera follow a player or event target.
+
+```json
+{
+  "type": "camera_follow",
+  "data": {
+    "eventId": "$player"
+  }
+}
+```
+
+Allowed `eventId` values:
+
+- `$player`: return the camera to the current player
+- `$this`: follow the current event
+- any map event id: follow that event
+
+By default, `smoothMove` is `true`. Use `false` for an instant camera change:
+
+```json
+{
+  "type": "camera_follow",
+  "data": {
+    "eventId": "EVENT_ID",
+    "smoothMove": false
+  }
+}
+```
+
+Advanced smooth transition options are passed to RPGJS `player.cameraFollow()`:
+
+```json
+{
+  "type": "camera_follow",
+  "data": {
+    "eventId": "EVENT_ID",
+    "time": 1000,
+    "ease": "easeInOutQuad"
+  }
+}
+```
+
+Allowed `ease` values are the easing names exposed by the Studio dropdown, including `linear`, `easeInQuad`, `easeOutQuad`, `easeInOutQuad`, `easeInCubic`, `easeOutCubic`, `easeInOutCubic`, `easeInSine`, `easeOutSine`, `easeInOutSine`, `easeInBack`, `easeOutBack`, and related `Quart`, `Quint`, `Expo`, and `Circ` variants.
+
 ### `set_weather`
 
 Use to replace map weather.
