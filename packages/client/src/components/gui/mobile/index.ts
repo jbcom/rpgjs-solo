@@ -2,25 +2,60 @@ import { inject } from "../../../core/inject";
 import { RpgClientEngine } from "../../../RpgClientEngine";
 import MobileGui from "./mobile.ce";
 import { computed } from "canvasengine";
+import type { ButtonProps, ComponentFunction, JoystickSettings } from "canvasengine";
 
 export type MobileGuiEnabled = "auto" | "always" | "never" | (() => boolean);
+export type MobileGuiJoystickSide = "left" | "right";
+export type MobileGuiMargin = number | [number, number, number, number];
+
+export interface MobileGuiLayoutOptions {
+    joystickSide?: MobileGuiJoystickSide;
+    margin?: MobileGuiMargin;
+    buttonsMargin?: MobileGuiMargin;
+    joystickMargin?: MobileGuiMargin;
+    gap?: number;
+}
+
+export interface MobileJoystickComponentProps extends JoystickSettings {
+    defaultProps: JoystickSettings;
+}
+
+export interface MobileButtonComponentProps extends ButtonProps {
+    controlName: "action" | "back" | "dash";
+    defaultProps: ButtonProps;
+}
+
+export interface MobileGuiComponentsOptions {
+    joystick?: ComponentFunction<MobileJoystickComponentProps>;
+    buttons?: {
+        action?: ComponentFunction<MobileButtonComponentProps>;
+        back?: ComponentFunction<MobileButtonComponentProps>;
+        dash?: ComponentFunction<MobileButtonComponentProps>;
+    };
+}
+
+export interface MobileGuiButtonOptions extends Partial<ButtonProps> {
+    enabled?: boolean;
+    component?: ComponentFunction<MobileButtonComponentProps>;
+    container?: Record<string, unknown>;
+}
+
+export interface MobileGuiJoystickOptions extends Partial<JoystickSettings> {
+    component?: ComponentFunction<MobileJoystickComponentProps>;
+    moveInterval?: number;
+    threshold?: number;
+}
 
 export interface MobileGuiOptions {
     id?: string;
     enabled?: MobileGuiEnabled;
-    joystick?: false | {
-        outerColor?: string;
-        innerColor?: string;
-        scale?: number | { x: number; y: number };
-        outerScale?: { x: number; y: number };
-        innerScale?: { x: number; y: number };
-        moveInterval?: number;
-        threshold?: number;
-    };
+    layout?: MobileGuiLayoutOptions;
+    components?: MobileGuiComponentsOptions;
+    joystick?: false | MobileGuiJoystickOptions;
     buttons?: {
-        action?: boolean;
-        back?: boolean;
-        dash?: boolean;
+        action?: boolean | MobileGuiButtonOptions;
+        back?: boolean | MobileGuiButtonOptions;
+        dash?: boolean | MobileGuiButtonOptions;
     };
 }
 

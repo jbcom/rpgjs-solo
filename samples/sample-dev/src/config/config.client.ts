@@ -28,6 +28,8 @@ import { provideTiledMap } from "@rpgjs/tiledmap/client";
 import { provideMain } from "../modules/main";
 import TooltipComponent from "../components/tooltip.ce";
 import { withMobile } from "@rpgjs/client";
+import MobileButton from "../components/mobile-button.ce";
+import MobileJoystick from "../components/mobile-joystick.ce";
 import {
   createActionBattleUi,
   createActionBattleVisual,
@@ -73,7 +75,20 @@ export default {
     }),
     provideClientModules([
       withMobile({
-        enabled: "always",
+        enabled: "auto",
+        layout: {
+          joystickSide: "right",
+          joystickMargin: [30, 68, 30, 30],
+          buttonsMargin: 50,
+          gap: 16,
+        },
+        components: {
+          joystick: MobileJoystick,
+          buttons: {
+            action: MobileButton,
+            dash: MobileButton,
+          },
+        },
         joystick: {
           outerColor: "#d7e7ff",
           innerColor: "#ffffff",
@@ -82,9 +97,17 @@ export default {
           threshold: 0.05,
         },
         buttons: {
-          action: true,
+          action: {
+            enabled: true,
+            width: 70,
+            height: 70,
+          },
           back: false,
-          dash: true,
+          dash: {
+            enabled: true,
+            width: 58,
+            height: 58,
+          },
         },
       }),
       {

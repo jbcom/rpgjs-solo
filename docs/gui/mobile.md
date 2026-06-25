@@ -51,10 +51,55 @@ Available options:
 | --- | --- |
 | `id` | GUI id. Defaults to `mobile-gui`. |
 | `enabled` | `"auto"`, `"always"`, `"never"`, or a predicate. Defaults to `"auto"`. |
+| `layout` | Positions the overlay. Use `joystickSide`, `margin`, `buttonsMargin`, `joystickMargin`, and `gap` to tune placement. |
+| `components` | Replaces the default CanvasEngine joystick or button components. |
 | `joystick` | Set to `false` to hide it, or pass colors, scale, and movement settings. `outerScale` and `innerScale` are available when using custom joystick sprites. |
 | `buttons.action` | Shows the A button and triggers the `action` control. |
 | `buttons.back` | Shows the B button and triggers the `back` control. |
 | `buttons.dash` | Shows the D button and triggers the `dash` control. |
+
+## Customize Components
+
+The default overlay is built with CanvasEngine components. You can replace the
+joystick, individual buttons, or both. Custom components receive the same control
+props as the default component plus `defaultProps`, so they can wrap CanvasEngine
+`Joystick` and `Button` without reimplementing RPGJS input behavior.
+
+```ts
+import { provideClientModules, withMobile } from '@rpgjs/client'
+import MobileButton from './components/mobile-button.ce'
+import MobileJoystick from './components/mobile-joystick.ce'
+
+export default {
+  providers: [
+    provideClientModules([
+      withMobile({
+        layout: {
+          joystickSide: 'right',
+          joystickMargin: [30, 68, 30, 30],
+          gap: 16
+        },
+        components: {
+          joystick: MobileJoystick,
+          buttons: {
+            action: MobileButton,
+            dash: MobileButton
+          }
+        },
+        buttons: {
+          action: { enabled: true, width: 70, height: 70 },
+          back: false,
+          dash: { enabled: true, width: 58, height: 58 }
+        }
+      })
+    ])
+  ]
+}
+```
+
+For one-off tweaks, pass CanvasEngine props directly on `joystick` or a button
+option. For larger visual changes, prefer `components` and wrap the default
+props inside your `.ce` component.
 
 ## Runtime Behavior
 

@@ -23,10 +23,24 @@ describe("withMobile", () => {
 
   test("passes options to the GUI and resolves enabled dependencies", async () => {
     const { withMobile } = await import("./index");
+    const CustomJoystick = vi.fn();
+    const CustomActionButton = vi.fn();
 
     const module = withMobile({
       id: "touch-controls",
       enabled: "always",
+      layout: {
+        joystickSide: "right",
+        gap: 18,
+        buttonsMargin: 44,
+        joystickMargin: [24, 60, 24, 24],
+      },
+      components: {
+        joystick: CustomJoystick,
+        buttons: {
+          action: CustomActionButton,
+        },
+      },
       joystick: {
         outerColor: "#111111",
         innerColor: "#eeeeee",
@@ -37,7 +51,10 @@ describe("withMobile", () => {
         threshold: 0.2,
       },
       buttons: {
-        action: true,
+        action: {
+          enabled: true,
+          width: 72,
+        },
         back: false,
         dash: true,
       },
@@ -46,6 +63,13 @@ describe("withMobile", () => {
     const dependencies = gui.dependencies();
 
     expect(gui.id).toBe("touch-controls");
+    expect(gui.data.layout?.joystickSide).toBe("right");
+    expect(gui.data.components?.joystick).toBe(CustomJoystick);
+    expect(gui.data.components?.buttons?.action).toBe(CustomActionButton);
+    expect(gui.data.buttons?.action).toMatchObject({
+      enabled: true,
+      width: 72,
+    });
     expect(gui.data.buttons?.dash).toBe(true);
     expect(gui.data.joystick).toMatchObject({
       outerColor: "#111111",

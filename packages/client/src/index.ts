@@ -30,5 +30,17 @@ export { RpgClientEvent } from "./Game/Event";
 export * from "./Game/ProjectileManager";
 export * from "./Game/ClientVisuals";
 export { withMobile } from "./components/gui/mobile";
+export type {
+    MobileButtonComponentProps,
+    MobileGuiButtonOptions,
+    MobileGuiComponentsOptions,
+    MobileGuiEnabled,
+    MobileGuiJoystickOptions,
+    MobileGuiJoystickSide,
+    MobileGuiLayoutOptions,
+    MobileGuiMargin,
+    MobileGuiOptions,
+    MobileJoystickComponentProps,
+} from "./components/gui/mobile";
 export * from "./services/AbstractSocket";
 export * from "./i18n";

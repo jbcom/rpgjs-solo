@@ -1,89 +1,80 @@
-<Container justifyContent="space-between" alignItems="flex-end" width="100%" height="100%" onBeforeDestroy={releaseJoystickControl}>
-    <Container justifyContent="flex-end" alignItems="flex-end" gap={14} margin={50}>
-        <Container display="flex" direction="row" alignItems="flex-end" gap={14}>
+<Container flexDirection={rootDirection()} justifyContent="space-between" alignItems="flex-end" width="100%" height="100%" onBeforeDestroy={releaseJoystickControl}>
+    <Container justifyContent="flex-end" alignItems="flex-end" gap={layoutGap()} margin={buttonsMargin()}>
+        <Container display="flex" flexDirection="row" alignItems="flex-end" gap={layoutGap()}>
             @if (showDashButton()) {
-                <Container width={56} height={56}>
-                    <Button 
-                        shape="circle"
-                        text="R"
-                        width={56}
-                        height={56}
-                        controls={controlsInstance}
-                        controlName="dash"
-                        style={dashButtonStyle}
-                        alpha={0.78}
-                    />
+                <Container ...buttonContainerProps("dash")>
+                    <dashButtonComponent() ...buttonProps("dash") />
                 </Container>
             }
 
             @if (showActionButton()) {
-                <Container width={68} height={68}>
-                    <Button 
-                        shape="circle"
-                        text="A"
-                        width={68}
-                        height={68}
-                        controls={controlsInstance}
-                        controlName="action"
-                        style={actionButtonStyle}
-                        alpha={0.84}
-                    />
+                <Container ...buttonContainerProps("action")>
+                    <actionButtonComponent() ...buttonProps("action") />
                 </Container>
             }
 
             @if (showBackButton()) {
-                <Container width={56} height={56}>
-                    <Button 
-                        shape="circle"
-                        text="B"
-                        width={56}
-                        height={56}
-                        controls={controlsInstance}
-                        controlName="back"
-                        style={backButtonStyle}
-                        alpha={0.78}
-                    />
+                <Container ...buttonContainerProps("back")>
+                    <backButtonComponent() ...buttonProps("back") />
                 </Container>
             }
 
         </Container>
     </Container>
 
-    <Container margin={[30, 54, 30, 30]} alignItems="flex-end">
+    <Container margin={joystickMargin()} alignItems="flex-end">
         @if (showJoystick()) {
-            <Joystick
-                outerColor={joystickOuterColor()}
-                innerColor={joystickInnerColor()}
-                scale={joystickScale()}
-                outerScale={joystickOuterScale()}
-                innerScale={joystickInnerScale()}
-                onStart={onJoystickStart}
-                onChange={onJoystickChange}
-                onEnd={onJoystickEnd}
-            />
+            <joystickComponent() ...joystickProps() />
         }
     </Container>
 </Container>
 
 <script>
-    import { signal, mount, computed } from 'canvasengine'
+    import { Button, Joystick, signal, mount, computed } from 'canvasengine'
     import { inject } from '../../../core/inject'
 
     const { data } = defineProps()
     const controlsInstance = signal(null)
     const options = computed(() => data?.() || {})
+    const layout = computed(() => options().layout || {})
+    const components = computed(() => options().components || {})
     const buttons = computed(() => options().buttons || {})
     const joystick = computed(() => options().joystick)
 
-    const showActionButton = computed(() => buttons().action !== false)
-    const showBackButton = computed(() => buttons().back !== false)
-    const showDashButton = computed(() => buttons().dash === true)
+    const readButtonOption = (name) => buttons()[name]
+    const buttonEnabled = (name, defaultValue) => {
+        const option = readButtonOption(name)
+        if (typeof option === "boolean") return option
+        return option?.enabled ?? defaultValue
+    }
+
+    const showActionButton = computed(() => buttonEnabled("action", true))
+    const showBackButton = computed(() => buttonEnabled("back", true))
+    const showDashButton = computed(() => buttonEnabled("dash", false))
     const showJoystick = computed(() => joystick() !== false)
-    const joystickOuterColor = computed(() => joystick()?.outerColor || "#d7e7ff")
-    const joystickInnerColor = computed(() => joystick()?.innerColor || "#ffffff")
-    const joystickScale = computed(() => joystick()?.scale ?? 0.82)
-    const joystickOuterScale = computed(() => joystick()?.outerScale || { x: 0.86, y: 0.86 })
-    const joystickInnerScale = computed(() => joystick()?.innerScale || { x: 0.88, y: 0.88 })
+    const joystickSide = computed(() => layout().joystickSide || "right")
+    const rootDirection = computed(() => joystickSide() === "left" ? "row-reverse" : "row")
+    const layoutGap = computed(() => layout().gap ?? 14)
+    const buttonsMargin = computed(() => layout().buttonsMargin ?? layout().margin ?? 50)
+    const joystickMargin = computed(() => (
+        layout().joystickMargin
+        ?? layout().margin
+        ?? (joystickSide() === "right" ? [30, 54, 30, 30] : [30, 30, 30, 54])
+    ))
+
+    function readObjectOption(option) {
+        return typeof option === "object" && option ? option : {}
+    }
+
+    function resolveButtonComponent(name) {
+        const option = readObjectOption(readButtonOption(name))
+        return option.component || components().buttons?.[name] || Button
+    }
+
+    const joystickComponent = computed(() => joystick()?.component || components().joystick || Joystick)
+    const actionButtonComponent = computed(() => resolveButtonComponent("action"))
+    const backButtonComponent = computed(() => resolveButtonComponent("back"))
+    const dashButtonComponent = computed(() => resolveButtonComponent("dash"))
     let activeJoystickControl = null
     let activeJoystickPower = 0
     let joystickRepeatTimer = null
@@ -139,6 +130,79 @@
         border: {
             color: "#ffffff",
             width: 1
+        }
+    }
+
+    const defaultButtonProps = {
+        action: {
+            shape: "circle",
+            text: "A",
+            width: 68,
+            height: 68,
+            controls: controlsInstance,
+            controlName: "action",
+            style: actionButtonStyle,
+            alpha: 0.84
+        },
+        back: {
+            shape: "circle",
+            text: "B",
+            width: 56,
+            height: 56,
+            controls: controlsInstance,
+            controlName: "back",
+            style: backButtonStyle,
+            alpha: 0.78
+        },
+        dash: {
+            shape: "circle",
+            text: "R",
+            width: 56,
+            height: 56,
+            controls: controlsInstance,
+            controlName: "dash",
+            style: dashButtonStyle,
+            alpha: 0.78
+        }
+    }
+
+    const buttonProps = (name) => {
+        const option = readObjectOption(readButtonOption(name))
+        const { enabled, component, container, ...props } = option
+        const defaultProps = defaultButtonProps[name]
+        return {
+            ...defaultProps,
+            ...props,
+            defaultProps
+        }
+    }
+
+    const buttonContainerProps = (name) => {
+        const props = buttonProps(name)
+        return {
+            width: props.width,
+            height: props.height,
+            ...readObjectOption(readButtonOption(name)).container
+        }
+    }
+
+    const joystickProps = () => {
+        const joystickOptions = readObjectOption(joystick())
+        const { component, moveInterval, threshold, ...props } = joystickOptions
+        const defaultProps = {
+            outerColor: "#d7e7ff",
+            innerColor: "#ffffff",
+            scale: 0.82,
+            outerScale: { x: 0.86, y: 0.86 },
+            innerScale: { x: 0.88, y: 0.88 },
+            onStart: onJoystickStart,
+            onChange: onJoystickChange,
+            onEnd: onJoystickEnd
+        }
+        return {
+            ...defaultProps,
+            ...props,
+            defaultProps
         }
     }
 
