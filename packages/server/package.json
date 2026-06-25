@@ -1,6 +1,6 @@
 {
   "name": "@rpgjs/server",
-  "version": "5.0.0-beta.20",
+  "version": "5.0.0-beta.21",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -27,10 +27,10 @@
   "description": "",
   "dependencies": {
     "@canvasengine/tiled": "2.0.0",
-    "@rpgjs/common": "workspace:*",
+    "@rpgjs/common": "5.0.0-beta.21",
     "@rpgjs/database": "^4.3.0",
-    "@rpgjs/physic": "workspace:*",
-    "@rpgjs/testing": "workspace:*",
+    "@rpgjs/physic": "5.0.1",
+    "@rpgjs/testing": "5.0.0-beta.21",
     "@signe/di": "3.1.0",
     "@signe/reactive": "3.1.0",
     "@signe/room": "3.1.0",

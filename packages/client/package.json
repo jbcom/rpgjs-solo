@@ -1,6 +1,6 @@
 {
   "name": "@rpgjs/client",
-  "version": "5.0.0-beta.20",
+  "version": "5.0.0-beta.21",
   "description": "RPGJS is a framework for creating RPG/MMORPG games",
   "main": "dist/index.js",
   "types": "./dist/index.d.ts",
@@ -26,9 +26,9 @@
     "pixi.js": "^8.9.2"
   },
   "dependencies": {
-    "@rpgjs/common": "workspace:*",
-    "@rpgjs/server": "workspace:*",
-    "@rpgjs/ui-css": "workspace:*",
+    "@rpgjs/common": "5.0.0-beta.21",
+    "@rpgjs/server": "5.0.0-beta.21",
+    "@rpgjs/ui-css": "5.0.0-beta.21",
     "@signe/di": "3.1.0",
     "@signe/room": "3.1.0",
     "@signe/sync": "3.1.0",
