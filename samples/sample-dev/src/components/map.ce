@@ -1,5 +1,5 @@
 <Container>
-    <Rect width={500} height={500} color={color} />
+    <Rect width={5000} height={5000} color={color} />
     <EventLayerComponent></EventLayerComponent>
 </Container>
 

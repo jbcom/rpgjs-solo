@@ -28,6 +28,8 @@ import { provideTiledMap } from "@rpgjs/tiledmap/client";
 import { provideMain } from "../modules/main";
 import TooltipComponent from "../components/tooltip.ce";
 import { withMobile } from "@rpgjs/client";
+import MobileButton from "../components/mobile-button.ce";
+import MobileJoystick from "../components/mobile-joystick.ce";
 import {
   createActionBattleUi,
   createActionBattleVisual,
@@ -49,8 +51,8 @@ export default {
        return {
           id,
           component: Map,
-          width: 500,
-          height: 500,
+          width: 5000,
+          height: 5000,
           data: {
             color: colorMap[id]
           },
@@ -72,7 +74,42 @@ export default {
       }),
     }),
     provideClientModules([
-      withMobile(),
+      withMobile({
+        enabled: "auto",
+        layout: {
+          joystickSide: "right",
+          joystickMargin: [30, 68, 30, 30],
+          buttonsMargin: 50,
+          gap: 16,
+        },
+        components: {
+          joystick: MobileJoystick,
+          buttons: {
+            action: MobileButton,
+            dash: MobileButton,
+          },
+        },
+        joystick: {
+          outerColor: "#d7e7ff",
+          innerColor: "#ffffff",
+          scale: 0.82,
+          moveInterval: 40,
+          threshold: 0.05,
+        },
+        buttons: {
+          action: {
+            enabled: true,
+            width: 70,
+            height: 70,
+          },
+          back: false,
+          dash: {
+            enabled: true,
+            width: 58,
+            height: 58,
+          },
+        },
+      }),
       {
         spritesheetResolver: async (id: string) => {
           if (id === "potion" || id == 'wood') {

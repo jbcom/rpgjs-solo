@@ -41,6 +41,12 @@ import { RpgClientInteractions } from "./services/interactions";
 import { normalizeRoomMapId } from "./utils/mapId";
 import { EventComponentResolverRegistry, type EventComponentResolver } from "./Game/EventComponentResolver";
 import { RpgClientBuiltinI18n } from "./i18n";
+import type { CameraFollowSmoothMove } from "./services/cameraFollow";
+export type {
+  CameraFollowEase,
+  CameraFollowSmoothMove,
+  CameraFollowSmoothMoveOptions,
+} from "./services/cameraFollow";
 
 interface MovementTrajectoryPoint {
   frame: number;
@@ -183,10 +189,14 @@ export class RpgClientEngine<T = any> {
   private eventComponentResolvers = new EventComponentResolverRegistry();
   /** ID of the sprite that the camera should follow. null means follow the current player */
   cameraFollowTargetId = signal<string | null>(null);
+  /** Camera follow transition options used by character components when the target changes */
+  cameraFollowSmoothMove: CameraFollowSmoothMove = false;
+  /** Incremented for each camera follow command so repeated commands on the same target are applied */
+  cameraFollowRevision = signal(0);
   /** Trigger for map shake animation */
   mapShakeTrigger: ConfigurableTrigger<MapShakeOptions> = trigger<MapShakeOptions>();
 
-  controlsReady = signal(undefined); 
+  controlsReady = signal<boolean | undefined>(undefined); 
   gamePause = signal(false);
 
   private predictionEnabled = false;
@@ -363,7 +373,7 @@ export class RpgClientEngine<T = any> {
       ...currentValues,
       values: new Map([['__default__', controlInstance]])
     }
-    this.controlsReady.set(undefined);
+    this.controlsReady.set(true);
   }
 
   async start() {
@@ -604,6 +614,12 @@ export class RpgClientEngine<T = any> {
     };
 
     return find((this.canvasApp as any)?.stage);
+  }
+
+  private clearCameraFollowViewportPlugins(): void {
+    const viewport = this.findViewportInstance();
+    viewport?.plugins?.remove?.("animate");
+    viewport?.plugins?.remove?.("follow");
   }
 
   private prepareSyncPayload(data: any): any {
@@ -881,7 +897,7 @@ export class RpgClientEngine<T = any> {
     this.sceneMap.clearLightSpots();
     this.clearComponentAnimations();
     this.projectiles.setMapId(nextMapId);
-    this.cameraFollowTargetId.set(null);
+    this.resetCameraFollow(false);
     this.sceneMap.reset();
     this.sceneMap.loadPhysic();
   }
@@ -1476,19 +1492,22 @@ export class RpgClientEngine<T = any> {
    * Set the camera to follow a specific sprite
    * 
    * This method changes which sprite the camera viewport should follow.
-   * The camera will smoothly animate to the target sprite if smoothMove options are provided.
+   * The camera can smoothly animate to the target sprite before continuous follow starts.
    * 
    * ## Design
    * 
    * The camera follow target is stored in a signal that is read by sprite components.
    * Each sprite checks if it should be followed by comparing its ID with the target ID.
-   * When smoothMove options are provided, the viewport animation is handled by CanvasEngine's
-   * viewport system.
+   * When smoothMove options are provided, the transition is handled by pixi-viewport's
+   * animation plugin, then continuous follow is handled by CanvasEngine's viewport system.
    * 
    * @param targetId - The ID of the sprite to follow. Set to null to follow the current player
    * @param smoothMove - Animation options. Can be a boolean (default: true) or an object with time and ease
    * @param smoothMove.time - Duration of the animation in milliseconds (optional)
    * @param smoothMove.ease - Easing function name from https://easings.net (optional)
+   * @param smoothMove.speed - Continuous follow speed after the transition (optional)
+   * @param smoothMove.acceleration - Continuous follow acceleration after the transition (optional)
+   * @param smoothMove.radius - Center radius where the target can move without moving the viewport (optional)
    * 
    * @example
    * ```ts
@@ -1510,19 +1529,19 @@ export class RpgClientEngine<T = any> {
    */
   setCameraFollow(
     targetId: string | null,
-    smoothMove?: boolean | { time?: number; ease?: string }
+    smoothMove?: CameraFollowSmoothMove
   ): void {
-    // Store smoothMove options for potential future use with viewport animation
-    // For now, we just set the target ID and let CanvasEngine handle the viewport follow
-    // The smoothMove options could be used to configure viewport animation if CanvasEngine supports it
+    this.clearCameraFollowViewportPlugins();
+    this.cameraFollowSmoothMove = smoothMove ?? true;
     this.cameraFollowTargetId.set(targetId);
-    
-    // If smoothMove is an object, we could store it for viewport configuration
-    // This would require integration with CanvasEngine's viewport animation system
-    if (typeof smoothMove === "object" && smoothMove !== null) {
-      // Future: Apply smoothMove.time and smoothMove.ease to viewport animation
-      // For now, CanvasEngine handles viewport following automatically
-    }
+    this.cameraFollowRevision.set(this.cameraFollowRevision() + 1);
+  }
+
+  private resetCameraFollow(smoothMove: CameraFollowSmoothMove = false): void {
+    this.clearCameraFollowViewportPlugins();
+    this.cameraFollowSmoothMove = smoothMove;
+    this.cameraFollowTargetId.set(null);
+    this.cameraFollowRevision.set(this.cameraFollowRevision() + 1);
   }
 
   addParticle(particle: any) {
@@ -2611,7 +2630,7 @@ export class RpgClientEngine<T = any> {
 
       // Reset signals
       this.playerIdSignal.set(null);
-      this.cameraFollowTargetId.set(null);
+      this.resetCameraFollow(false);
       this.spriteComponentsBehind.set([]);
       this.spriteComponentsInFront.set([]);
       this.eventComponentResolvers.clear();

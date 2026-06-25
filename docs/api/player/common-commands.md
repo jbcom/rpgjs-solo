@@ -136,7 +136,14 @@ following NPCs, or focusing on specific events.
 
 ```ts
 cameraFollow(otherPlayer: RpgPlayer | RpgEvent, options?: {
-      smoothMove?: boolean | { time?: number; ease?: string };
+      smoothMove?: boolean | {
+        enabled?: boolean;
+        time?: number;
+        ease?: CameraFollowEase;
+        speed?: number;
+        acceleration?: number | null;
+        radius?: number | null;
+      };
     }): void
 ```
 
@@ -144,7 +151,7 @@ cameraFollow(otherPlayer: RpgPlayer | RpgEvent, options?: {
 
 - `otherPlayer`: `RpgPlayer | RpgEvent`
 - `options?`: `{
-      smoothMove?: boolean | { time?: number; ease?: string };
+      smoothMove?: boolean | { enabled?: boolean; time?: number; ease?: CameraFollowEase; speed?: number; acceleration?: number | null; radius?: number | null };
     }`
 
 ### Examples
@@ -158,6 +165,17 @@ player.cameraFollow(npcEvent, {
   smoothMove: {
     time: 1000,
     ease: "easeInOutQuad"
+  }
+});
+
+// Follow with a smooth transition and softer continuous follow
+player.cameraFollow(npcEvent, {
+  smoothMove: {
+    time: 1000,
+    ease: "easeInOutQuad",
+    speed: 12,
+    acceleration: 0.2,
+    radius: 80
   }
 });
 

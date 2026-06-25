@@ -80,6 +80,39 @@ const BasicPlayerMixins = combinePlayerMixins([
   WithBattleManager,
 ]);
 
+type CameraFollowEase =
+  | "linear"
+  | "easeInQuad"
+  | "easeOutQuad"
+  | "easeInOutQuad"
+  | "easeInCubic"
+  | "easeOutCubic"
+  | "easeInOutCubic"
+  | "easeInQuart"
+  | "easeOutQuart"
+  | "easeInOutQuart"
+  | "easeInQuint"
+  | "easeOutQuint"
+  | "easeInOutQuint"
+  | "easeInSine"
+  | "easeOutSine"
+  | "easeInOutSine"
+  | "easeInExpo"
+  | "easeOutExpo"
+  | "easeInOutExpo"
+  | "easeInCirc"
+  | "easeOutCirc"
+  | "easeInOutCirc"
+  | "easeInElastic"
+  | "easeOutElastic"
+  | "easeInOutElastic"
+  | "easeInBack"
+  | "easeOutBack"
+  | "easeInOutBack"
+  | "easeInBounce"
+  | "easeOutBounce"
+  | "easeInOutBounce";
+
 /**
  * RPG Player class with component management capabilities
  * 
@@ -1597,6 +1630,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * @param options.smoothMove - Enable smooth animation. Can be a boolean (default: true) or an object with animation parameters
    * @param options.smoothMove.time - Time duration for the animation in milliseconds (optional)
    * @param options.smoothMove.ease - Easing function name. Visit https://easings.net for available functions (optional)
+   * @param options.smoothMove.speed - Continuous follow speed after the transition (optional)
+   * @param options.smoothMove.acceleration - Continuous follow acceleration after the transition (optional)
+   * @param options.smoothMove.radius - Center radius where the target can move without moving the viewport (optional)
    * 
    * @example
    * ```ts
@@ -1618,7 +1654,14 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   cameraFollow(
     otherPlayer: RpgPlayer | RpgEvent,
     options?: {
-      smoothMove?: boolean | { time?: number; ease?: string };
+      smoothMove?: boolean | {
+        enabled?: boolean;
+        time?: number;
+        ease?: CameraFollowEase;
+        speed?: number;
+        acceleration?: number | null;
+        radius?: number | null;
+      };
     }
   ): void {
     const map = this.getCurrentMap();

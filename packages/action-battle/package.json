@@ -1,6 +1,6 @@
 {
   "name": "@rpgjs/action-battle",
-  "version": "5.0.0-beta.20",
+  "version": "5.0.0-beta.21",
   "main": "dist/client/index.js",
   "types": "dist/client/index.d.ts",
   "scripts": {
@@ -27,11 +27,11 @@
   "description": "RPGJS is a framework for creating RPG/MMORPG games",
   "peerDependencies": {
     "@canvasengine/presets": "^2.0.0",
-    "@rpgjs/client": "workspace:*",
-    "@rpgjs/common": "workspace:*",
-    "@rpgjs/server": "workspace:*",
-    "@rpgjs/vite": "workspace:*",
-    "canvasengine": "^2.0.0"
+    "@rpgjs/client": "5.0.0-beta.21",
+    "@rpgjs/common": "5.0.0-beta.21",
+    "@rpgjs/server": "5.0.0-beta.21",
+    "@rpgjs/vite": "5.0.0-beta.21",
+    "canvasengine": "^2.0.1"
   },
   "publishConfig": {
     "access": "public"

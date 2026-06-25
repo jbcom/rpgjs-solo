@@ -1,0 +1,72 @@
+<Button ...buttonProps() style={buttonStyle()} />
+
+<script>
+    import { Button } from 'canvasengine'
+
+    const { controlName, defaultProps } = defineProps()
+
+    const readValue = (value) => typeof value === "function" ? value() : value
+    const control = () => readValue(controlName)
+    const defaultButtonProps = () => readValue(defaultProps) || {}
+
+    const styles = {
+        action: {
+            backgroundColor: {
+                normal: "#f8fbff",
+                hover: "#ffffff",
+                pressed: "#7dd3fc",
+                disabled: "#728094"
+            },
+            text: {
+                color: "#102033",
+                fontSize: 26,
+                fontFamily: "Arial Bold"
+            },
+            border: {
+                color: "#223044",
+                width: 3
+            }
+        },
+        dash: {
+            backgroundColor: {
+                normal: "#223044",
+                hover: "#2c3d55",
+                pressed: "#111827",
+                disabled: "#728094"
+            },
+            text: {
+                color: "#ffffff",
+                fontSize: 20,
+                fontFamily: "Arial Bold"
+            },
+            border: {
+                color: "#f8fbff",
+                width: 2
+            }
+        },
+        back: {
+            backgroundColor: {
+                normal: "#334155",
+                hover: "#475569",
+                pressed: "#1e293b",
+                disabled: "#728094"
+            },
+            text: {
+                color: "#ffffff",
+                fontSize: 22,
+                fontFamily: "Arial Bold"
+            },
+            border: {
+                color: "#f8fbff",
+                width: 2
+            }
+        }
+    }
+
+    const buttonStyle = () => styles[control()] || styles.action
+    const buttonProps = () => ({
+        ...defaultButtonProps(),
+        style: buttonStyle(),
+        alpha: control() === "action" ? 0.92 : 0.86
+    })
+</script>

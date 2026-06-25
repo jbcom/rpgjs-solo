@@ -542,8 +542,8 @@ export default createServer({
             }
             
             player.changeMap("center-map", {
-              x: 100,
-              y: 100,
+              x: 500,
+              y: 500,
             });
 
             player.allRecovery()
@@ -609,6 +609,13 @@ export default createServer({
           async onInput(player: RpgPlayer, input: any) {
             // console.log("call shop")
 
+            if (input.action == 'action') {
+              const map = player.getCurrentMap()
+              const event = map?.getEvents()[0]
+              player?.cameraFollow(event, {
+                smoothMove: true
+              })
+            }
 
             // const choice = await player.showChoices('Hello', [
             //   { text: 'Fight', value: 'fight' },

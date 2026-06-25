@@ -1,0 +1,20 @@
+<Container width={160} height={160} alpha={0.92}>
+    <Joystick
+        ...joystickProps()
+        outerColor="#1d2633"
+        innerColor="#f8fbff"
+        outerScale={outerScale}
+        innerScale={innerScale}
+    />
+</Container>
+
+<script>
+    import { Joystick } from 'canvasengine'
+
+    const { defaultProps } = defineProps()
+    const outerScale = { x: 0.94, y: 0.94 }
+    const innerScale = { x: 0.92, y: 0.92 }
+
+    const readValue = (value) => typeof value === "function" ? value() : value
+    const joystickProps = () => readValue(defaultProps) || {}
+</script>
