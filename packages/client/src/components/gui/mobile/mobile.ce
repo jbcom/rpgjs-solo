@@ -1,19 +1,4 @@
 <Container justifyContent="space-between" alignItems="flex-end" width="100%" height="100%" onBeforeDestroy={releaseJoystickControl}>
-    <Container margin={[30, 30, 30, 54]} alignItems="flex-end">
-        @if (showJoystick()) {
-            <Joystick
-                outerColor={joystickOuterColor()}
-                innerColor={joystickInnerColor()}
-                scale={joystickScale()}
-                outerScale={joystickOuterScale()}
-                innerScale={joystickInnerScale()}
-                onStart={onJoystickStart}
-                onChange={onJoystickChange}
-                onEnd={onJoystickEnd}
-            />
-        }
-    </Container>
-
     <Container justifyContent="flex-end" alignItems="flex-end" gap={14} margin={50}>
         <Container display="flex" direction="row" alignItems="flex-end" gap={14}>
             @if (showDashButton()) {
@@ -62,6 +47,21 @@
             }
 
         </Container>
+    </Container>
+
+    <Container margin={[30, 54, 30, 30]} alignItems="flex-end">
+        @if (showJoystick()) {
+            <Joystick
+                outerColor={joystickOuterColor()}
+                innerColor={joystickInnerColor()}
+                scale={joystickScale()}
+                outerScale={joystickOuterScale()}
+                innerScale={joystickInnerScale()}
+                onStart={onJoystickStart}
+                onChange={onJoystickChange}
+                onEnd={onJoystickEnd}
+            />
+        }
     </Container>
 </Container>
 
