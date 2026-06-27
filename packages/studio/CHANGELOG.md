@@ -1,5 +1,17 @@
 # @rpgjs/studio
 
+## 5.0.0-beta.22
+
+### Patch Changes
+
+- 016aa37: Fix Studio animation blocks to keep event erase animations attached to the sprite being removed.
+- Updated dependencies [1028c17]
+- Updated dependencies [06afecc]
+  - @rpgjs/client@5.0.0-beta.22
+  - @rpgjs/vite@5.0.0-beta.22
+  - @rpgjs/action-battle@5.0.0-beta.22
+  - @rpgjs/server@5.0.0-beta.22
+
 ## 5.0.0-beta.20
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @rpgjs/vite
 
+## 5.0.0-beta.22
+
+### Patch Changes
+
+- 06afecc: Prevent Vite dev dependency optimization from prebundling RPGJS and CanvasEngine runtime packages that share PixiJS state, fixing missing TileMap render pipe registration in the starter.
+  - @rpgjs/server@5.0.0-beta.22
+
 ## 5.0.0-beta.20
 
 ### Patch Changes
