@@ -5,6 +5,14 @@ import { entryPointPlugin } from "./entry-point-plugin";
 import { mmorpgBuildPlugin } from "./mmorpg-build-plugin";
 
 const runtimeDedupe = ["@canvasengine/presets", "canvasengine", "pixi.js"];
+const runtimeOptimizeDepsExclude = [
+  ...runtimeDedupe,
+  "@rpgjs/client",
+  "@rpgjs/common",
+  "@rpgjs/server",
+  "@rpgjs/tiledmap/client",
+  "@rpgjs/tiledmap/server",
+];
 
 type MmorpgEntryPoints =
   | string
@@ -53,7 +61,7 @@ export function rpgjs({
             dedupe: runtimeDedupe,
           },
           optimizeDeps: {
-            exclude: ["canvasengine"],
+            exclude: runtimeOptimizeDepsExclude,
             include: ["pixi.js > eventemitter3"],
           },
         };
