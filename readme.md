@@ -7,13 +7,15 @@
   <img src="https://img.shields.io/github/commit-activity/m/RSamaium/RPG-JS" alt="Activity">
 </p>
 
-# RPG JS v5 Beta: Create RPGs and MMORPGs in the browser
+# RPG JS v5 Beta: Build 2D RPGs and MMORPGs in TypeScript
 
-RPGJS is a TypeScript framework for building 2D browser RPGs and MMORPGs.
+RPGJS is a TypeScript framework for building 2D browser RPGs and MMORPGs without rebuilding the same engine layers for every project.
 
-You write gameplay once, then run it either as a standalone RPG or as a networked MMORPG. RPGJS gives you the RPG-specific pieces that a generic web stack does not provide out of the box: maps, players, events, server/client synchronization, GUI, save/load, i18n, movement, collision, and multiplayer room flow.
+You write RPG gameplay once, then run it either as a standalone RPG or as a networked MMORPG. RPGJS gives you the game-specific pieces that a generic web stack does not provide out of the box: maps, players, events, server-owned state, client prediction, synchronized rooms, GUI, save/load, i18n, movement, collision, and multiplayer flow.
 
-The goal is not to be a generic 3D game engine. RPGJS focuses on the architecture and runtime needed to build RPG-style games on the web, while keeping the project extensible through TypeScript, Vite, dependency injection, and modular packages.
+The goal is not to be a generic 3D game engine. RPGJS focuses on the architecture and runtime needed to build RPG-style games on the web, especially MMORPGs where gameplay state, map rooms, and player synchronization need a clear client/server model.
+
+![RPGJS framework infographic](./docs/assets/rpgjs-framework-infographic.png)
 
 ## Website and Documentation
 
@@ -22,12 +24,12 @@ The goal is not to be a generic 3D game engine. RPGJS focuses on the architectur
 
 ## Why RPGJS?
 
-RPGJS is useful when you want to build a game with RPG mechanics without assembling every engine layer yourself.
+RPGJS is useful when you want to build a game with RPG mechanics and a production-ready path from a local RPG to a synchronized MMORPG.
 
 - One gameplay architecture for standalone RPG and MMORPG modes
-- Authoritative server state for multiplayer projects
+- Authoritative server state for multiplayer and MMORPG projects
 - Client-side prediction and reconciliation for responsive MMORPG movement
-- Map-based world structure where each map can act as a room
+- Map-based world structure where each map can act as a multiplayer room
 - Built-in player, event, GUI, inventory, skill, save/load, and movement concepts
 - Shared i18n for gameplay text, client menus, and reusable modules with game-level overrides
 - Rendering with CanvasEngine, plus Vue overlays when DOM UI is a better fit
@@ -56,6 +58,10 @@ Core ideas:
 - **Translations follow the runtime**: server gameplay text and client UI labels can share the same i18n catalog, while modules can ship defaults that each game overrides.
 - **Services are replaceable**: storage, map loading, networking, GUI, and other behaviors can be overridden.
 
+### What is CanvasEngine?
+
+CanvasEngine is the canvas rendering and component system used by RPGJS. It renders the game world and canvas-native GUI components inside the same runtime, which keeps RPG interfaces close to maps, sprites, effects, and gameplay state. Vue remains available for DOM overlays when a screen is better handled outside the canvas.
+
 ## Getting Started
 
 ```bash
@@ -67,17 +73,17 @@ npm run dev
 
 Open `http://localhost:5173`.
 
-By default, the starter runs in MMORPG mode. To run the same project as a standalone RPG:
+By default, the starter runs in RPG mode. To run the same project as an MMORPG:
 
 ```bash
-RPG_TYPE=rpg npm run dev
+RPG_TYPE=mmorpg npm run dev
 ```
 
 On Windows:
 
 ```bash
 npm install --save-dev cross-env
-npx cross-env RPG_TYPE=rpg npm run dev
+npx cross-env RPG_TYPE=mmorpg npm run dev
 ```
 
 If you use an AI coding assistant and want it to understand RPGJS v5 better, you can also install the RPGJS skill:
