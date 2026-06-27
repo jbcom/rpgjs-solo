@@ -3,7 +3,7 @@ import type {
   ShowAnimationParams,
   BlockDefinition
 } from '../types';
-import { getEvent } from './utils';
+import { getEvent, getSerializablePosition } from './utils';
 
 export const schemaShowAnimation: BlockDefinition<'show_animation'> = {
   type: 'show_animation',
@@ -78,7 +78,7 @@ export const schemaShowAnimation: BlockDefinition<'show_animation'> = {
         }
       }
     ],
-    required: ['targetType', 'graphic']
+    required: ['targetType', 'spritesheet']
   }
 };
 
@@ -98,7 +98,11 @@ export const show_animation: BlockExecutor<'show_animation'> = async (context, p
   const graphic = params.spritesheet;
   const animationName = 'default';
 
-  let target = params.targetType === 'event' ? getEvent(context, { eventId: params.eventId }) : params.position;
+  const target = params.targetType === 'event' ? getEvent(context, { eventId: params.eventId }) : params.position;
+  const position = getSerializablePosition(target);
+  if (!position) {
+    return;
+  }
 
-  await map.showAnimation?.(target, graphic, animationName);
+  await map.showAnimation?.(position, graphic, animationName);
 };

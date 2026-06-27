@@ -2,6 +2,8 @@ import { excludeTriggers } from '../context-helpers';
 import type { BlockExecutor, EraseEventParams } from '../types';
 import { getEvent } from './utils';
 
+const DEFAULT_ERASE_ANIMATION_DURATION = 1200;
+
 export const schemaEraseEvent = {
   type: 'erase_event',
   label: 'Erase Event',
@@ -45,8 +47,16 @@ export const erase_event: BlockExecutor<'erase_event'> = async (context, params)
   }
 
   if (params.animation) {
-    const map = context.player.getCurrentMap?.();
-    await map?.showAnimation?.(character, params.animation, 'default');
+    (character as any).remove?.({
+      reason: 'erase_event',
+      transition: {
+        animation: 'default',
+        graphic: params.animation,
+        duration: DEFAULT_ERASE_ANIMATION_DURATION,
+      },
+      timeoutMs: DEFAULT_ERASE_ANIMATION_DURATION,
+    });
+    return;
   }
 
   (character as any).remove?.();

@@ -248,7 +248,6 @@ export default (config: StudioGameModuleConfig) => {
     },
     sprite: {
       async onBeforeRemove(sprite, context) {
-        if (context.reason !== "defeated") return;
         const transition = context.transition;
         if (!transition?.animation) return;
         const timeoutMs = context.timeoutMs ?? transition.duration ?? 700;

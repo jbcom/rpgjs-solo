@@ -322,3 +322,35 @@ export function getEvent(
   }
   throw new Error(`Event not found: ${params.eventId}`);
 }
+
+function readCoordinate(source: unknown, key: 'x' | 'y'): number | undefined {
+  const value = (source as any)?.[key];
+  const raw = typeof value === 'function' ? value.call(source) : value;
+  const coordinate = Number(raw);
+  return Number.isFinite(coordinate) ? coordinate : undefined;
+}
+
+/**
+ * Converts a Studio target or RPGJS character into a plain map position.
+ *
+ * Server map animations are broadcast to clients, so their target must stay
+ * serializable. RPGJS characters expose reactive x/y signals; forwarding the
+ * character object itself would leak functions into the socket payload.
+ */
+export function getSerializablePosition(target: unknown): { x: number; y: number } | undefined {
+  const x = readCoordinate(target, 'x');
+  const y = readCoordinate(target, 'y');
+  if (x !== undefined && y !== undefined) {
+    return { x, y };
+  }
+
+  const positionValue = (target as any)?.position;
+  const position = typeof positionValue === 'function' ? positionValue.call(target) : positionValue;
+  const positionX = readCoordinate(position, 'x');
+  const positionY = readCoordinate(position, 'y');
+  if (positionX !== undefined && positionY !== undefined) {
+    return { x: positionX, y: positionY };
+  }
+
+  return undefined;
+}
