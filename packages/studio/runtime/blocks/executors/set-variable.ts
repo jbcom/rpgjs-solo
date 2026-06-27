@@ -65,7 +65,12 @@ export const resolveSetVariableValue = (
     case 'constant':
       return normalizeConstant(params.value);
     case 'variable':
-      return context.getVariable?.(params.sourceVariableId ?? '') ?? context.player.getVariable(params.sourceVariableId ?? '') ?? 0;
+      if (typeof context.getVariable === 'function') {
+        const value = context.getVariable(params.sourceVariableId ?? '');
+        return typeof value === 'string' || typeof value === 'number' ? value : 0;
+      }
+      const value = context.player?.getVariable?.(params.sourceVariableId ?? '');
+      return typeof value === 'string' || typeof value === 'number' ? value : 0;
     case 'random': {
       const min = normalizeNumber(params.randomMin);
       const max = normalizeNumber(params.randomMax);
@@ -102,14 +107,16 @@ export const applySetVariableOperation = (
   newValue: string | number
 ) => {
   const variableId = params.variableId;
-  const currentValue = context.getVariable?.(variableId) ?? context.player.getVariable(variableId);
+  const currentValue = typeof context.getVariable === 'function'
+    ? context.getVariable(variableId)
+    : context.player?.getVariable?.(variableId);
   const operation = params.operation ?? 'set';
   const setVariable = (value: unknown) => {
     if (typeof context.setVariable === 'function') {
       context.setVariable(variableId, value);
       return;
     }
-    context.player.setVariable(variableId, value);
+    context.player?.setVariable?.(variableId, value);
   };
 
   if (operation === 'set') {
@@ -145,7 +152,7 @@ export const schemaSetVariable = {
   description: 'Set the value of a game variable',
   category: 'variable',
   icon: '📝',
-  requiredCapabilities: ['player', 'variables'],
+  requiredCapabilities: ['variables'],
   schema: {
     type: 'object',
     properties: {

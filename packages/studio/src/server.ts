@@ -25,6 +25,7 @@ import {
 } from "./database-normalizer";
 import { createStudioDefaultClass } from "./skills-to-learn";
 import { getStudioSkillChangeNotification } from "./skill-notification";
+import { triggerMatchesExecution, type StudioTouchTarget } from "./touch-runtime";
 export { createStudioActionBattleAnimations } from "./action-battle-animations";
 export type {
   StudioCombatAnimationIds,
@@ -63,6 +64,20 @@ const mergePlayerConfig = (
       ...(baseConfig.animations ?? {}),
       ...(overrideConfig.animations ?? {}),
     },
+  };
+};
+
+const createMapVariableConditionSubject = (map: RpgMap | null) => {
+  if (!map || typeof (map as any).getVariable !== "function") {
+    return null;
+  }
+  return {
+    getVariable: (variableId: string) => (map as any).getVariable(variableId),
+    setVariable: (variableId: string, value: unknown) =>
+      (map as any).setVariable?.(variableId, value),
+    hasItem: () => false,
+    getItemCount: () => 0,
+    gold: 0,
   };
 };
 
@@ -779,11 +794,16 @@ export default (_config?: unknown) => {
             player: RpgPlayer | null,
             event: RpgEvent,
           ) {
+            const conditionPlayer =
+              player ?? createMapVariableConditionSubject(event.getCurrentMap?.() ?? map);
             for (let i = object.triggers.length - 1; i >= 0; i--) {
               const trigger = object.triggers[i];
               const isEnabled = trigger?.enabled !== false;
               if (
-                matchesPageConditions(trigger.conditions, { player, event }) &&
+                matchesPageConditions(trigger.conditions, {
+                  player: conditionPlayer as any,
+                  event,
+                }) &&
                 isEnabled
               ) {
                 return { trigger, index: i };
@@ -826,10 +846,20 @@ export default (_config?: unknown) => {
             player: RpgPlayer | null,
             triggerType: string,
             event: RpgEvent,
+            options?: {
+              touchTarget?: StudioTouchTarget;
+              variableScope?: "player" | "map";
+            },
           ) {
-            const blockExecutor = new BlockExecutionService(player, event);
-            const trigger = eventObj.applyActiveTrigger(player, event);
-            if (!trigger || trigger.type !== triggerType) {
+            const blockExecutor = new BlockExecutionService(
+              player,
+              event,
+              event.getCurrentMap?.() ?? map,
+              { variableScope: options?.variableScope },
+            );
+            const conditionPlayer = options?.variableScope === "map" ? null : player;
+            const trigger = eventObj.applyActiveTrigger(conditionPlayer, event);
+            if (!triggerMatchesExecution(trigger, triggerType, options?.touchTarget)) {
               return;
             }
             if (trigger && trigger.blocks) {
@@ -892,9 +922,10 @@ export default (_config?: unknown) => {
           };
 
           const createContext = (
-            player: RpgPlayer,
+            player: RpgPlayer | null,
             event: RpgEvent,
             triggerType: string,
+            touchContext?: any,
           ) => {
             return {
               event,
@@ -907,6 +938,7 @@ export default (_config?: unknown) => {
               executeBlocks: eventObj.executeBlocks,
               eventType,
               triggerType,
+              touchContext,
               moveApi: Move,
             };
           };
@@ -927,8 +959,35 @@ export default (_config?: unknown) => {
           eventObj.onPlayerTouch = async function (player: RpgPlayer) {
             const context = createContext(player, this, "onTouch");
             const defaultHandler = async () => {
-              await eventObj.executeBlocks(player, "onTouch", this);
+              await eventObj.executeBlocks(player, "onTouch", this, {
+                touchTarget: "player",
+              });
               player.syncChanges();
+            };
+            if (runtime.hooks?.onTouch) {
+              await runtime.hooks.onTouch(context, defaultHandler);
+            } else {
+              await defaultHandler();
+            }
+          };
+
+          eventObj.onTouch = async function (
+            _other: RpgPlayer | RpgEvent,
+            touchContext: any,
+          ) {
+            if (touchContext?.otherType !== "event") {
+              return;
+            }
+            const currentMap = this.getCurrentMap?.() ?? map;
+            const [fallbackPlayer] = currentMap?.getPlayers?.() ?? [];
+            const player = fallbackPlayer ?? null;
+            const context = createContext(player, this, "onTouch", touchContext);
+            const defaultHandler = async () => {
+              await eventObj.executeBlocks(player, "onTouch", this, {
+                touchTarget: "event",
+                variableScope: "map",
+              });
+              player?.syncChanges?.();
             };
             if (runtime.hooks?.onTouch) {
               await runtime.hooks.onTouch(context, defaultHandler);

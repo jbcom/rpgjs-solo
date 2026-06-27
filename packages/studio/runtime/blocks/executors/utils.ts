@@ -242,7 +242,7 @@ export function getValue(
   if (params.type === 'constant') {
     return params.amount ?? 0;
   }
-  const value = context.player.getVariable(params.amountVariableId ?? '');
+  const value = context.getVariable(params.amountVariableId ?? '');
   return typeof value === 'number' ? value : 0;
 }
 

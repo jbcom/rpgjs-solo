@@ -31,8 +31,8 @@ export const baseTriggers = [
   },
   {
     type: 'onTouch',
-    name: 'If Touched by Player',
-    description: 'Blocks that execute when the player touches or collides with this event',
+    name: 'If Touched',
+    description: 'Blocks that execute when the player or another event touches this event',
     icon: 'pi pi-hand-pointer',
     category: 'interaction'
   }

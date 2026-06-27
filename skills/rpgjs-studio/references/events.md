@@ -46,7 +46,12 @@ The paginated response shape is:
 }
 ```
 
-Use this mode for UI lists or agents that only need one page of events. The maximum `limit` is `100`.
+Use this mode for UI lists or agents that only need one page of events. The maximum `limit` is `100`. Paginated lists are sorted by newest creation date by default. Optional query params:
+
+- `sortBy=createdAt|updatedAt|name`
+- `sortDirection=asc|desc`
+- `eventType=all|character|enemy|free`
+- `assignment=all|assigned|unassigned`
 
 ## Recommended workflow
 
@@ -127,6 +132,14 @@ Common `Page` fields from `pageSchema`:
 - `trigger?: "action_button" | "player_touch" | "event_touch" | "autorun" | "parallel"`
 - `options?: { directionFix?: boolean, through?: boolean, alwaysOnTop?: boolean }`
 - `blockCollectionId?: string`
+
+Touch trigger mapping:
+
+- `trigger: "player_touch"` maps to runtime `type: "onTouch"` with `typeData.touchTarget: "player"`.
+- `trigger: "event_touch"` maps to runtime `type: "onTouch"` with `typeData.touchTarget: "event"`.
+- Existing runtime `onTouch` triggers without `typeData.touchTarget` behave as player touch.
+- Older records that used `type: "onChange"` for event touch should be migrated to `type: "onTouch"` with `typeData.touchTarget: "event"` when updated.
+- Event/event touch workflows use map variables for variable and switch blocks. Player-only blocks receive the first player currently on the map as a temporary fallback until explicit affected-player targeting exists.
 
 ## Conditions and variable IDs
 
@@ -224,6 +237,8 @@ Accepted trigger types in the current server code:
 - `onChange`
 - `onTouch`
 - `onParallel`
+
+For direct trigger updates, set `typeData.touchTarget` on `onTouch` triggers when the workflow should distinguish player contact from event/event contact.
 
 ## Blocks workflow
 

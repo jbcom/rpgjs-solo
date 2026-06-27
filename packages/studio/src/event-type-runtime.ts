@@ -37,6 +37,7 @@ export type EventHookContext = {
   params: any;
   eventType: string;
   triggerType: string;
+  touchContext?: any;
   resolveActiveTrigger: (
     player: RpgPlayer | null,
     event: RpgEvent
@@ -45,7 +46,8 @@ export type EventHookContext = {
   executeBlocks: (
     player: RpgPlayer | null,
     triggerType: string,
-    event: RpgEvent
+    event: RpgEvent,
+    options?: { touchTarget?: "player" | "event"; variableScope?: "player" | "map" }
   ) => Promise<void>;
   runInitLifecycle?: (options?: InitLifecycleOptions) => Promise<void>;
 };

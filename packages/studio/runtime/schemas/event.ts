@@ -60,6 +60,20 @@ export const triggerSchema = {
       title: "Enabled",
       description: "Whether this trigger is enabled",
       default: true
+    },
+    typeData: {
+      type: "object",
+      title: "Type Data",
+      description: "Trigger-specific data",
+      properties: {
+        touchTarget: {
+          type: "string",
+          title: "Touch Target",
+          description: "For onTouch triggers, selects whether the workflow runs on player touch or event touch",
+          enum: ["player", "event"]
+        }
+      },
+      additionalProperties: true
     }
   },
   required: ["type"]
@@ -97,6 +111,14 @@ export const pageSchema = {
       type: "object",
       title: "Type Data",
       description: "Event-type-specific data for this page",
+      properties: {
+        touchTarget: {
+          type: "string",
+          title: "Touch Target",
+          description: "For onTouch triggers, selects whether the workflow runs on player touch or event touch",
+          enum: ["player", "event"]
+        }
+      },
       additionalProperties: true
     },
     graphic: {
@@ -120,7 +142,7 @@ export const pageSchema = {
     pattern: {
       type: "string",
       title: "Pattern",
-      enum: ["initial", "animate", "loop", "stop"],
+      enum: ["initial", "loop", "stop"],
       default: "initial"
     },
     movement: {
@@ -200,6 +222,12 @@ export const eventSchema = {
       description: "Event pages with their configuration and commands",
       items: pageSchema,
       maxItems: MAP_EDITOR_CONSTANTS.MAX_EVENT_PAGES
+    },
+    "@mapIds": {
+      type: "array",
+      title: "Map IDs",
+      description: "Computed list of maps that place this event",
+      items: { type: "string" }
     }
   },
 } as const;

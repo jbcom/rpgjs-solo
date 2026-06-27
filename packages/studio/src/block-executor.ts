@@ -54,9 +54,14 @@ export class BlockExecutionService {
    * @param player - The RpgPlayer instance for this execution context
    * @param event - The RpgEvent instance (the current event being executed)
    */
-  constructor(player: RpgPlayer | null, event: RpgEvent | null, map: RpgMap | null = null) {
+  constructor(
+    player: RpgPlayer | null,
+    event: RpgEvent | null,
+    map: RpgMap | null = null,
+    options?: { variableScope?: 'player' | 'map' },
+  ) {
     this.executors = createExecutorRegistry();
-    this.context = this.createGameContext(player, event, map);
+    this.context = this.createGameContext(player, event, map, options);
   }
 
   /**
@@ -145,25 +150,44 @@ export class BlockExecutionService {
    * @param event - Current event instance
    * @returns Game execution context with player and event
    */
-  private createGameContext(player: RpgPlayer | null, event: RpgEvent | null, map: RpgMap | null): GameExecutionContext {
+  private createGameContext(
+    player: RpgPlayer | null,
+    event: RpgEvent | null,
+    map: RpgMap | null,
+    options?: { variableScope?: 'player' | 'map' },
+  ): GameExecutionContext {
+    const resolveCurrentMap = () => {
+      return map ?? event?.getCurrentMap?.() ?? player?.getCurrentMap?.() ?? (player as any)?.map ?? null;
+    };
+    const currentMap = resolveCurrentMap();
+
     return {
       player: player,
       event: event,
-      map,
+      map: currentMap,
       executors: this.executors,
       moveApi: Move,
      
       // Switch operations
       getVariable: (variableId: string): unknown => {
-        if (typeof player?.getVariable === 'function') {
+        if (options?.variableScope !== 'map' && typeof player?.getVariable === 'function') {
           return player.getVariable(variableId);
+        }
+        const resolvedMap = resolveCurrentMap();
+        if (typeof resolvedMap?.getVariable === 'function') {
+          return resolvedMap.getVariable(variableId);
         }
         return this.variables.get(variableId);
       },
 
       setVariable: (variableId: string, value: unknown): void => {
-        if (typeof player?.setVariable === 'function') {
+        if (options?.variableScope !== 'map' && typeof player?.setVariable === 'function') {
           player.setVariable(variableId, value);
+          return;
+        }
+        const resolvedMap = resolveCurrentMap();
+        if (typeof resolvedMap?.setVariable === 'function') {
+          resolvedMap.setVariable(variableId, value);
         } else {
           this.variables.set(variableId, value);
         }
@@ -217,14 +241,14 @@ export class BlockExecutionService {
       
       callEvent: async (eventId: string, parameters: Record<string, unknown>): Promise<void> => {
         // Call another event - implement based on your event system
-        const targetEvent = event?.getCurrentMap?.()?.getEvent?.(eventId) ?? map?.getEvent?.(eventId);
+        const targetEvent = resolveCurrentMap()?.getEvent?.(eventId);
         if (targetEvent && typeof targetEvent.callEvent === 'function') {
           await targetEvent.callEvent(eventId, parameters);
         }
       },
 
       getCommonEvent: (commonEventId: string): unknown => {
-        const currentMap = event?.getCurrentMap?.() ?? player?.getCurrentMap?.() ?? map;
+        const currentMap = resolveCurrentMap();
         return (currentMap as any)?.__studioCommonEventsById?.get?.(commonEventId);
       },
 
@@ -233,7 +257,7 @@ export class BlockExecutionService {
         position: { x: number; y: number },
         options?: { mode?: 'shared' | 'scenario' },
       ): Promise<void> => {
-        const currentMap = event?.getCurrentMap?.() ?? player?.getCurrentMap?.() ?? map;
+        const currentMap = resolveCurrentMap();
         const commonEvent = (currentMap as any)?.__studioCommonEventsById?.get?.(commonEventId);
         if (!currentMap?.createDynamicEvent || !commonEvent) return;
 

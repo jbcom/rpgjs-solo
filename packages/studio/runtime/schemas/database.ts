@@ -90,7 +90,7 @@ export const itemSchema = {
                         format: { layout: "specific" },
                     },
                 },
-                required: ["attack"],
+                required: ["atk"],
             },
             else: {
                 if: {
@@ -115,7 +115,7 @@ export const itemSchema = {
                         },
                         
                     },
-                    required: ["defense"],
+                    required: ["pdef"],
                 }
             },
         },
@@ -201,13 +201,49 @@ export const skillSchema = {
         icon: {
             type: "string",
             title: "Icon",
-            description: "The icon identifier for the skill",
-            format: { layout: "basic" },
+            description: "Media icon associated with this skill",
+            format: {
+                name: "media",
+                type: "icon",
+                buttonLabel: "Select Icon",
+                useUpload: {
+                    accept: "image/*",
+                },
+                layout: "basic",
+            } as any,
         },
-        mpCost: {
+        animation: {
+            type: "string",
+            title: "Animation",
+            description: "Media animation played by this skill",
+            format: {
+                name: "media",
+                type: "animation",
+                buttonLabel: "Select Animation",
+                useUpload: {
+                    accept: "image/*",
+                },
+                layout: "basic",
+            } as any,
+        },
+        sound: {
+            type: "string",
+            title: "Sound",
+            description: "Sound effect played by this skill",
+            format: {
+                name: "media",
+                type: "sound",
+                buttonLabel: "Select Sound Effect",
+                useUpload: {
+                    accept: "audio/*",
+                },
+                layout: "basic",
+            } as any,
+        },
+        spCost: {
             type: "number",
-            title: "MP Cost",
-            description: "The MP cost to use this skill",
+            title: "SP Cost",
+            description: "The SP cost to use this skill",
             default: 0,
             format: { layout: "combat" },
         },
@@ -259,7 +295,7 @@ export const skillSchema = {
             format: { layout: "target" },
         },
     },
-    required: ["name", "mpCost", "power"],
+    required: ["name", "spCost", "power"],
 } as any;
 
 export const variableSchema = {
@@ -273,9 +309,10 @@ export const variableSchema = {
         description: {
             type: "string",
             title: "Description",
-            format: {  type: "textarea" },
-        }
+            format: {  name: "textarea" },
+        },
     },
+    required: ["name"]
 } as any;
 
 export type Database = FromSchema<typeof databaseSchema>;
