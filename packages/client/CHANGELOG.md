@@ -1,5 +1,12 @@
 # @rpgjs/client
 
+## 5.0.0-beta.22
+
+### Patch Changes
+
+- 1028c17: Use workspace protocol for internal RPGJS package dependencies during prerelease development so CI installs do not fetch unpublished beta packages from npm.
+  - @rpgjs/server@5.0.0-beta.22
+
 ## 5.0.0-beta.20
 
 ### Patch Changes

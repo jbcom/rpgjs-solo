@@ -1,5 +1,11 @@
 # @rpgjs/server
 
+## 5.0.0-beta.22
+
+### Patch Changes
+
+- @rpgjs/testing@5.0.0-beta.22
+
 ## 5.0.0-beta.20
 
 ### Patch Changes

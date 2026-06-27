@@ -31,13 +31,9 @@
     "@rpgjs/playground-pressure-plate": "1.0.0-beta.0"
   },
   "changesets": [
-    "bright-battles-move",
-    "fuzzy-maps-wait",
-    "next-beta-latest",
-    "next-beta-without-physic",
-    "next-rpgjs-beta",
-    "release-beta-20",
-    "sharp-plates-push",
-    "terrain-server-tick-beta"
+    "bright-readme-map",
+    "clean-workspace-internal-deps",
+    "plain-studio-animations",
+    "tidy-tiled-vite-runtime"
   ]
 }
