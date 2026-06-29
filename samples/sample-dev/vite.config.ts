@@ -4,6 +4,9 @@ import startServer from './src/server';
 import vue from '@vitejs/plugin-vue';
 
 export default defineConfig({
+   optimizeDeps: {
+    include: ['pixi.js > @xmldom/xmldom']
+  },
   plugins: [
     vue(),
     tiledMapFolderPlugin({

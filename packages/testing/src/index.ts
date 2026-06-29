@@ -275,14 +275,22 @@ export async function testing(
 
   return {
     async createClient() {
+      const getCurrentPlayers = () => {
+        const server = websocket.getServer();
+        const room = server?.getCurrentRoom?.() ?? server?.subRoom;
+        return typeof room?.players === "function" ? room.players() : {};
+      };
+
       const clientObj = {
-        socket: websocket.getSocket(),
+        get socket() {
+          return websocket.getSocket();
+        },
         client: clientEngine,
         get playerId() {
-          return Object.keys(websocket.getServer().subRoom.players())[0];
+          return Object.keys(getCurrentPlayers())[0];
         },
         get player(): RpgPlayer {
-          return websocket.getServer().subRoom.players()[clientObj.playerId] as RpgPlayer;
+          return getCurrentPlayers()[clientObj.playerId] as RpgPlayer;
         },
         /**
          * Wait for player to be on a specific map
@@ -314,7 +322,7 @@ export async function testing(
           timeout = 5000
         ): Promise<RpgPlayer> {
           // Check if already on the expected map
-          const currentMap = clientObj.player.getCurrentMap();
+          const currentMap = clientObj.player?.getCurrentMap();
           if (currentMap?.id === expectedMapId) {
             return clientObj.player;
           }
@@ -330,7 +338,7 @@ export async function testing(
           const timeout$ = timer(timeout).pipe(
             take(1),
             switchMap(() => {
-              const currentMap = clientObj.player.getCurrentMap();
+              const currentMap = clientObj.player?.getCurrentMap();
               return throwError(() => new Error(
                 `Timeout: Player did not reach map ${expectedMapId} within ${timeout}ms. ` +
                   `Current map: ${currentMap?.id || "null"}`
@@ -346,7 +354,7 @@ export async function testing(
             if (error instanceof Error) {
               throw error;
             }
-            const currentMap = clientObj.player.getCurrentMap();
+            const currentMap = clientObj.player?.getCurrentMap();
             throw new Error(
               `Timeout: Player did not reach map ${expectedMapId} within ${timeout}ms. ` +
                 `Current map: ${currentMap?.id || "null"}`

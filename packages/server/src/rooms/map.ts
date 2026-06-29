@@ -1185,9 +1185,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   onJoin(player: RpgPlayer, conn: Parameters<RoomMethods["$send"]>[0]) {
     const alignPlayerBodyWithSignals = () => {
-      const hitbox = typeof player.hitbox === 'function' ? player.hitbox() : player.hitbox;
-      const width = hitbox?.w ?? 32;
-      const height = hitbox?.h ?? 32;
+      const hitbox = (typeof player.hitbox === 'function' ? player.hitbox() : player.hitbox) as any;
+      const width = hitbox?.w ?? hitbox?.width ?? 32;
+      const height = hitbox?.h ?? hitbox?.height ?? 32;
       const body = this.getBody(player.id) as any;
       if (body) {
         // Ensure physics callbacks target the current player instance

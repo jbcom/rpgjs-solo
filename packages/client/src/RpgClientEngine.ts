@@ -39,6 +39,7 @@ import { normalizeActionInput } from "./services/actionInput";
 import { createClientPointerContext, type ClientPointerContext } from "./services/pointerContext";
 import { RpgClientInteractions } from "./services/interactions";
 import { normalizeRoomMapId } from "./utils/mapId";
+import { applySyncedHitboxPayload } from "./utils/syncHitbox";
 import { EventComponentResolverRegistry, type EventComponentResolver } from "./Game/EventComponentResolver";
 import { RpgClientBuiltinI18n } from "./i18n";
 import type { CameraFollowSmoothMove } from "./services/cameraFollow";
@@ -799,14 +800,6 @@ export class RpgClientEngine<T = any> {
       }
     })
 
-    this.webSocket.on("setHitbox", (data) => {
-      const { object, width, height } = data || {};
-      const player = object ? this.sceneMap.getObjectById(object) : undefined;
-      if (!player || typeof (player as any).setHitbox !== "function") return;
-      (player as any).setHitbox(width, height);
-      (this.sceneMap as any).refreshCharacterHitboxes?.();
-    })
-
     this.webSocket.on("playSound", (data) => {
       const { soundId, volume, loop } = data;
       this.playSound(soundId, { volume, loop });
@@ -975,7 +968,7 @@ export class RpgClientEngine<T = any> {
         : undefined;
     const payload = this.prepareSyncPayload(data);
     load(this.sceneMap, payload, true);
-    (this.sceneMap as any).refreshCharacterHitboxes?.();
+    applySyncedHitboxPayload(this.sceneMap, payload);
 
     if (normalizedAck) {
       this.applyServerAck(normalizedAck);
@@ -2181,12 +2174,25 @@ export class RpgClientEngine<T = any> {
     return { x, y, direction };
   }
 
+  private resolveHitboxDimension(source: unknown, fallback: number): number {
+    const value = typeof source === "string" ? Number(source) : source;
+    return typeof value === "number" && Number.isFinite(value) && value > 0
+      ? value
+      : fallback;
+  }
+
+  private resolveObjectHitboxSize(object: any): { width: number; height: number } {
+    const hitbox = typeof object?.hitbox === "function" ? object.hitbox() : object?.hitbox;
+    return {
+      width: this.resolveHitboxDimension(hitbox?.w ?? hitbox?.width, 0),
+      height: this.resolveHitboxDimension(hitbox?.h ?? hitbox?.height, 0),
+    };
+  }
+
   private applyAuthoritativeState(state: PredictionState<Direction>): void {
     const player = this.sceneMap?.getCurrentPlayer();
     if (!player) return;
-    const hitbox = typeof player.hitbox === "function" ? player.hitbox() : player.hitbox;
-    const width = hitbox?.w ?? 0;
-    const height = hitbox?.h ?? 0;
+    const { width, height } = this.resolveObjectHitboxSize(player);
     const updated = this.sceneMap.updateHitbox(player.id, state.x, state.y, width, height);
     if (!updated) {
       this.sceneMap.setBodyPosition(player.id, state.x, state.y, "top-left");
@@ -2415,9 +2421,7 @@ export class RpgClientEngine<T = any> {
     if (!player || !myId) {
       return;
     }
-    const hitbox = typeof player.hitbox === "function" ? player.hitbox() : player.hitbox;
-    const width = hitbox?.w ?? 0;
-    const height = hitbox?.h ?? 0;
+    const { width, height } = this.resolveObjectHitboxSize(player);
     const updated = this.sceneMap.updateHitbox(myId, ack.x, ack.y, width, height);
     if (!updated) {
       this.sceneMap.setBodyPosition(myId, ack.x, ack.y, "top-left");

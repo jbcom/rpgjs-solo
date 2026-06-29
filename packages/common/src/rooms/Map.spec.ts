@@ -46,7 +46,7 @@ describe("RpgCommonMap static hitboxes", () => {
     expect(testCollision(triangle!, probe)).toBeNull();
   });
 
-  test("refreshes existing event physics bodies from synced hitbox signals", () => {
+  test("updates existing event physics bodies from synced hitbox signals", () => {
     const map = new TestMap();
     const event = {
       id: "wide-event",
@@ -71,9 +71,33 @@ describe("RpgCommonMap static hitboxes", () => {
     expect(map.getBody("wide-event")?.height).toBe(32);
 
     event.hitbox.set({ w: 56, h: 50 });
-    map.refreshCharacterHitboxes();
 
     expect(map.getBody("wide-event")?.width).toBe(56);
     expect(map.getBody("wide-event")?.height).toBe(50);
+  });
+
+  test("loads event physics bodies from Studio width and height hitbox data", () => {
+    const map = new TestMap();
+    const event = {
+      id: "studio-event",
+      x: signal(100),
+      y: signal(120),
+      z: signal(0),
+      hitbox: signal({ width: 56, height: 50 }),
+      _removeTransition: signal(false),
+    };
+
+    map.data.set({
+      width: 200,
+      height: 200,
+      hitboxes: [],
+    });
+    map.events.set({
+      "studio-event": event,
+    });
+    map.loadPhysic();
+
+    expect(map.getBody("studio-event")?.width).toBe(56);
+    expect(map.getBody("studio-event")?.height).toBe(50);
   });
 });

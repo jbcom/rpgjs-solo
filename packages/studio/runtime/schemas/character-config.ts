@@ -5,10 +5,33 @@ export const characterHitboxSchema = {
   ...eventHitboxSchema,
   title: "Hero Hitbox",
   description: "Custom collision hitbox size for the hero",
+  properties: {
+    width: {
+      type: "number",
+      title: "Width",
+      minimum: 1
+    },
+    height: {
+      type: "number",
+      title: "Height",
+      minimum: 1
+    }
+  },
   format: {
-    name: "character-hitbox",
+    hidden: true,
     layout: "appearance",
-    graphicControlName: "graphic",
+  } as any,
+} as const;
+
+export const characterGraphicSchema = {
+  ...characterSchema.graphic,
+  title: "hero appearance.title",
+  description: "hero appearance.description",
+  format: {
+    ...characterSchema.graphic.format,
+    name: "character-graphic-hitbox",
+    layout: "appearance",
+    hitboxControlName: "hitbox",
     direction: "down",
     pattern: "loop",
     titleKey: "hero hitbox.title",
@@ -20,6 +43,7 @@ export const characterHitboxSchema = {
 const appearanceProperties = {
   //name: { type: "string", title: "Name" },
   ...characterSchema,
+  graphic: characterGraphicSchema,
   hitbox: characterHitboxSchema,
 } as const;
 

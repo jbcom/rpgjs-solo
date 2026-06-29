@@ -807,6 +807,39 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     });
   }
 
+  prepareSnapshotForObjectLoad(snapshot: any) {
+    if (!snapshot || typeof snapshot !== "object") {
+      return snapshot;
+    }
+
+    const hitbox = this.normalizeSnapshotHitbox(snapshot.hitbox);
+    if (!hitbox) {
+      return snapshot;
+    }
+
+    this.hitbox.set(hitbox);
+    const rest = { ...snapshot };
+    delete rest.hitbox;
+    return rest;
+  }
+
+  private normalizeSnapshotHitbox(hitbox: any): { w: number; h: number } | null {
+    if (!hitbox || typeof hitbox !== "object") {
+      return null;
+    }
+
+    const width = this.normalizeSnapshotHitboxDimension(hitbox.w ?? hitbox.width);
+    const height = this.normalizeSnapshotHitboxDimension(hitbox.h ?? hitbox.height);
+    return width && height ? { w: width, h: height } : null;
+  }
+
+  private normalizeSnapshotHitboxDimension(value: unknown): number | null {
+    const numberValue = typeof value === "string" ? Number(value) : value;
+    return typeof numberValue === "number" && Number.isFinite(numberValue) && numberValue > 0
+      ? numberValue
+      : null;
+  }
+
   snapshot() {
     const snapshot = createStatesSnapshotDeep(this);
     delete (snapshot as any).pendingMapPosition;

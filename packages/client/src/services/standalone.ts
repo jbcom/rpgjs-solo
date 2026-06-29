@@ -8,6 +8,7 @@ import { RpgGui } from "../Gui/Gui";
 import { provideKeyboardControls } from "./keyboardControls";
 import { provideSaveClient } from "./save";
 import { normalizeStandaloneMessage } from "./standalone-message";
+import type { SocketQuery } from "./AbstractSocket";
 
 type ServerIo = any;
 type ClientIo = any;
@@ -22,6 +23,9 @@ class BridgeWebsocket extends AbstractWebsocket {
   private room: ServerIo;
   private socket: ClientIo;
   private socketRoom?: ServerIo;
+  private roomId = "lobby-1";
+  private query?: SocketQuery;
+  private readonly privateId = "player-client-id";
   private listeners: Array<{
     event: string;
     callback: (data: any) => void;
@@ -29,11 +33,10 @@ class BridgeWebsocket extends AbstractWebsocket {
   }> = [];
   private rooms = {
     partyFn: async (roomId: string) => {
-      this.room = new ServerIo(roomId, this.rooms);
-      const server = new this.server(this.room)
+      const room = new ServerIo(roomId, this.rooms);
+      const server = new this.server(room)
       await server.onStart();
       await server.subRoom.onStart()
-      this.context.set('server', server)
       return server
     },
     env: {}
@@ -57,22 +60,8 @@ class BridgeWebsocket extends AbstractWebsocket {
 
   private async _connection(listeners?: (data: any) => void) {
     this.detachCurrentSocket();
-    this.serverInstance = this.context.get('server')
-    this.socket = new ClientIo(this.serverInstance, 'player-client-id');
-    const url = new URL('http://localhost')
-    const request = new Request(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
+    await this.connectToRoom();
     listeners?.(this.socket)
-    this.room.clients.set(this.socket.id, this.socket);
-    this.socketRoom = this.room;
-    this.listeners.forEach(({ handler }) => {
-      this.socket.addEventListener("message", handler);
-    });
-    await this.serverInstance.onConnect(this.socket.conn as any, { request } as any);
     return this.socket
   }
 
@@ -129,8 +118,9 @@ class BridgeWebsocket extends AbstractWebsocket {
    * await websocket.reconnect()
    * ```
    */
-  updateProperties(_params: SocketUpdateProperties) {
-    // empty
+  updateProperties({ room, query }: SocketUpdateProperties) {
+    this.roomId = room;
+    this.query = query;
   }
 
   /**
@@ -154,6 +144,49 @@ class BridgeWebsocket extends AbstractWebsocket {
     await this._connection((socket) => {
       listeners?.(socket)
     })
+  }
+
+  private async connectToRoom() {
+    if (this.serverInstance?.room?.id !== this.roomId) {
+      const party = await this.room.context.parties.main.get(this.roomId);
+      this.serverInstance = party.server;
+      this.context.set('server', this.serverInstance);
+      this.room = this.serverInstance.room;
+    }
+    else {
+      this.serverInstance = this.context.get('server');
+    }
+
+    this.socket = new ClientIo(this.serverInstance, this.privateId);
+    const url = new URL('http://localhost');
+    const query = this.normalizeQuery(this.query);
+    if (query) {
+      for (const [key, value] of Object.entries(query)) {
+        url.searchParams.set(key, value);
+      }
+    }
+    const request = new Request(url.toString(), {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    this.room.clients.set(this.socket.id, this.socket);
+    this.socketRoom = this.room;
+    this.listeners.forEach(({ handler }) => {
+      this.socket.addEventListener("message", handler);
+    });
+    await this.serverInstance.onConnect(this.socket.conn as any, { request } as any);
+  }
+
+  private normalizeQuery(query?: SocketQuery): Record<string, string> | undefined {
+    if (!query) {
+      return undefined;
+    }
+    return Object.fromEntries(
+      Object.entries(query)
+        .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+    );
   }
 
   private detachCurrentSocket() {

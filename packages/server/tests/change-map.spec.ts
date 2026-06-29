@@ -81,8 +81,15 @@ test('Player can change map', async () => {
     expect(player.x()).toBe(200)
     expect(player.y()).toBe(200)
 
-    await player.changeMap('map1', { x: 100, y: 100 })
+    player.setHitbox(64, 48)
+    await player.changeMap('map1', { x: 120, y: 140 })
     player = await client.waitForMapChange('map1')
+
+    expect(player.x()).toBe(120)
+    expect(player.y()).toBe(140)
+    expect(player.hitbox()).toEqual({ w: 64, h: 48 })
+    expect(player.getCurrentMap()?.getBody(player.id)?.width).toBe(64)
+    expect(player.getCurrentMap()?.getBody(player.id)?.height).toBe(48)
 
     const implicitResult = await player.changeMap('map2')
     expect(implicitResult).toBe(true)
@@ -104,4 +111,45 @@ test('Player can change map', async () => {
 
     expect(player.x()).toBe(400)
     expect(player.y()).toBe(410)
+})
+
+test('Player start hook can change map with a custom hitbox in standalone mode', async () => {
+    const serverModule = defineModule<RpgServer>({
+        maps: [
+            {
+                id: 'center-map',
+                file: '',
+            }
+        ],
+        player: {
+            onStart(player) {
+                player.setHitbox(96, 80)
+                player.changeMap('center-map', { x: 500, y: 500 })
+            }
+        }
+    })
+    const myModule = createModule('StartModule', [{
+        server: serverModule,
+        client: clientModule
+    }])
+    const startFixture = await testing(myModule)
+    const startClient = await startFixture.createClient()
+
+    await startClient.socket.send({
+        action: 'gui.interaction',
+        value: {
+            guiId: 'title-screen',
+            name: 'select',
+            data: { id: 'start' },
+        },
+    })
+
+    const startedPlayer = await startClient.waitForMapChange('center-map')
+    expect(startedPlayer.x()).toBe(500)
+    expect(startedPlayer.y()).toBe(500)
+    expect(startedPlayer.hitbox()).toEqual({ w: 96, h: 80 })
+    expect(startedPlayer.getCurrentMap()?.getBody(startedPlayer.id)?.width).toBe(96)
+    expect(startedPlayer.getCurrentMap()?.getBody(startedPlayer.id)?.height).toBe(80)
+
+    await startFixture.clear()
 })

@@ -51,4 +51,51 @@ describe("standalone websocket bridge", () => {
     expect(standaloneProvider.useFactory(context).mode).toBe("standalone");
     expect(mmorpgProvider.useFactory(context).mode).toBe("mmorpg");
   });
+
+  test("reconnects standalone rooms with updated room and query", async () => {
+    const connects: Array<{ roomId: string; url: string; sessionId: string }> = [];
+    class Server {
+      subRoom = {
+        onStart: vi.fn(),
+      };
+
+      constructor(public room: any) {}
+
+      async onStart() {}
+
+      async onConnect(conn: any, ctx: any) {
+        connects.push({
+          roomId: this.room.id,
+          url: ctx.request.url,
+          sessionId: conn.sessionId,
+        });
+      }
+    }
+
+    const context = new Context();
+    const standaloneProvider = provideRpg(Server).find(
+      (provider: any) => provider.provide === WebSocketToken,
+    ) as any;
+    const socket = standaloneProvider.useFactory(context);
+
+    await socket.connection();
+    socket.updateProperties({
+      room: "map-center-map",
+      query: { transferToken: "token-1" },
+    });
+    await socket.reconnect();
+
+    expect(connects).toEqual([
+      expect.objectContaining({
+        roomId: "lobby-1",
+        sessionId: "player-client-id",
+      }),
+      expect.objectContaining({
+        roomId: "map-center-map",
+        sessionId: "player-client-id",
+      }),
+    ]);
+    expect(connects[1].url).toContain("transferToken=token-1");
+    expect(socket.getServer().room.id).toBe("map-center-map");
+  });
 });

@@ -178,6 +178,10 @@ export abstract class BaseRoom {
         resolvedSnapshot = (user as any).resolveEquipmentsSnapshot(resolvedSnapshot, this);
       }
 
+      if (user && typeof (user as any).prepareSnapshotForObjectLoad === 'function') {
+        resolvedSnapshot = (user as any).prepareSnapshotForObjectLoad(resolvedSnapshot);
+      }
+
       return resolvedSnapshot;
     }
 

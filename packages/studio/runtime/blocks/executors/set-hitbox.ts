@@ -95,14 +95,61 @@ const applyRuntimeHitbox = (
     map.updateHitbox?.(id, x, y, width, height);
   }
 
-  const payload = { object: id, width, height };
-  if (typeof map.broadcast === 'function') {
-    map.broadcast('setHitbox', payload);
-  } else if (typeof map.$broadcast === 'function') {
-    map.$broadcast({ type: 'setHitbox', value: payload });
+  markEventHitboxForSync(map, id, target);
+  syncRuntimeHitboxChange(context, map);
+};
+
+const markEventHitboxForSync = (
+  map: any,
+  id: string,
+  target: ReturnType<typeof getEvent>,
+): void => {
+  const eventsSignal = map?.events;
+  if (typeof eventsSignal !== 'function') {
+    return;
   }
 
-  map.refreshCharacterHitboxes?.();
+  const events = eventsSignal();
+  if (!events || events[id] !== target) {
+    return;
+  }
+
+  if (typeof eventsSignal.mutate === 'function') {
+    eventsSignal.mutate((draft: Record<string, unknown>) => {
+      draft[id] = target;
+    });
+    return;
+  }
+
+  if (typeof eventsSignal.update === 'function') {
+    eventsSignal.update((current: Record<string, unknown>) => ({
+      ...current,
+      [id]: target,
+    }));
+    return;
+  }
+
+  if (typeof eventsSignal.set === 'function') {
+    eventsSignal.set({
+      ...events,
+      [id]: target,
+    });
+  }
+};
+
+const syncRuntimeHitboxChange = (
+  context: Parameters<BlockExecutor<'set_hitbox'>>[0],
+  map: any,
+): void => {
+  if (typeof map?.syncChanges === 'function') {
+    map.syncChanges();
+    return;
+  }
+
+  const player = (context as any).player;
+  if (typeof player?.syncChanges === 'function') {
+    player.syncChanges();
+  }
 };
 
 const resolveExecutionMap = (

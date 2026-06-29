@@ -752,9 +752,6 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       return;
     }
 
-    const hitbox = typeof owner.hitbox === "function" ? owner.hitbox() : owner.hitbox;
-    const width = hitbox?.w ?? 32;
-    const height = hitbox?.h ?? 32;
     this.addCharacter({
       owner,
       kind,
@@ -783,9 +780,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     (entity as any).owner = owner;
     this.bindCharacterSignalSync(entity, owner);
 
-    const hitbox = typeof owner.hitbox === "function" ? owner.hitbox() : owner.hitbox;
-    const width = hitbox?.w ?? 32;
-    const height = hitbox?.h ?? 32;
+    const { width, height } = this.resolveCharacterHitboxSize(owner);
     const topLeftX = this.resolveNumeric(owner.x);
     const topLeftY = this.resolveNumeric(owner.y);
     const kind = this.resolvePhysicsEntityKind(owner, owner.id);
@@ -807,6 +802,21 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       return source;
     }
     return fallback;
+  }
+
+  private resolveHitboxDimension(source: unknown, fallback: number): number {
+    const value = typeof source === "string" ? Number(source) : source;
+    return typeof value === "number" && Number.isFinite(value) && value > 0
+      ? value
+      : fallback;
+  }
+
+  private resolveCharacterHitboxSize(owner: any): { width: number; height: number } {
+    const hitbox = typeof owner?.hitbox === "function" ? owner.hitbox() : owner?.hitbox;
+    return {
+      width: this.resolveHitboxDimension(hitbox?.w ?? hitbox?.width, 32),
+      height: this.resolveHitboxDimension(hitbox?.h ?? hitbox?.height, 32),
+    };
   }
 
   private resolveCharacterMass(owner: any, fallback = 1): number {
@@ -1486,10 +1496,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     const owner = options.owner;
     const id = owner.id;
 
-    // Get hitbox dimensions - hitbox.w/h are the FULL dimensions, not radius
-    const hitbox = typeof owner.hitbox === "function" ? owner.hitbox() : owner.hitbox;
-    const width = hitbox?.w ?? 32;
-    const height = hitbox?.h ?? 32;
+    const { width, height } = this.resolveCharacterHitboxSize(owner);
 
     // owner.x() and owner.y() are TOP-LEFT positions
     const topLeftX = owner.x();

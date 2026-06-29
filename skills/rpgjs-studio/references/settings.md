@@ -19,7 +19,7 @@ Useful fields from `projectSchema`:
 - `name?: string`
 - `subtitle?: string`
 - `keyboardControls?: { down?, up?, left?, right?, action?, back? }`
-- `hero?: { graphic?: string, faceset?: string }`
+- `hero?: { graphic?: string, faceset?: string, hitbox?: { width: number, height: number } }`
 - `startingEquipment?: { weaponId?: string, armorId?: string }`
 - `startingInventory?: Array<{ itemId: string, amount: number }>`
 - `initialLevel?: number`
@@ -37,6 +37,9 @@ Useful fields from `projectSchema`:
 - `hero.graphic` and `hero.faceset` are media `_id`s.
 - Search `/api/media?query=<search>` first.
 - If missing and generation is required, ask user permission before spending credits.
+- `hero.hitbox` is optional. Use positive RPGJS-pixel dimensions `{ width, height }`; omit it to keep the default `32 x 32` player hitbox. Do not send graphic-scaled dimensions or `dx`/`dy` offsets.
+- In Studio UI, `hero.graphic` and `hero.hitbox` are edited together by the reusable `character-graphic-hitbox` form-schema format. It should reuse Signestack Admin's built-in `media` form-schema format for graphic selection behind one visible "Change graphic" button; avoid adding a second visible media card, second hitbox field, or custom media dialog next to it.
+- Project update payloads must keep hero appearance fields under `hero`. If UI code receives root-level `graphic`, `faceset`, or `hitbox` from a form renderer, normalize them to `hero.graphic`, `hero.faceset`, or `hero.hitbox` before calling the API.
 
 ### Hero animations
 

@@ -537,6 +537,8 @@ export default createServer({
             //   [MAXHP]: { value: 100 }
             // };
 
+            player.setHitbox(100, 100)
+
             if (!player.getSkill(fireSkill)) {
               player.learnSkill(fireSkill);
             }
@@ -550,6 +552,7 @@ export default createServer({
           },
           onConnected: (player: RpgPlayer) => {
             player.addItem(BasicPotion);
+            
           },
           onLoad: (player: RpgPlayer, data: any) => {
             console.log("load", player.items());
@@ -561,6 +564,7 @@ export default createServer({
           onJoinMap: (player: RpgPlayer, map: RpgMap) => {
             player.setGraphic("hero");
             console.log("join map", player.expCurve, player.param);
+            console.log('---', player.hitbox().w, player.hitbox().h)
 
             // Configure player stats
             //player.hp = 200;
