@@ -162,6 +162,7 @@ const startGame = async (player: RpgPlayer, map?: RpgMap) => {
   (player as any).combatAnimations = heroConfig.animations ?? {};
   const startingItems = await ensureStartingItemsInDatabase(player, heroConfig, map);
   assignPlayerStartParams(player, heroConfig, startingItems);
+  applyPlayerHitbox(player, heroConfig);
 };
 
 const applyStartGameOnce = async (player: RpgPlayer, map?: RpgMap) => {
@@ -183,6 +184,12 @@ const collectStartingItemIds = (config: ProjectBasic): string[] => {
   }
 
   return [...ids];
+};
+
+const applyPlayerHitbox = (player: RpgPlayer, config: ProjectBasic): void => {
+  const hitbox = normalizeRuntimeHitbox((config as any).hitbox);
+  if (!hitbox || typeof (player as any).setHitbox !== "function") return;
+  (player as any).setHitbox(hitbox.width, hitbox.height);
 };
 
 const assignPlayerStartParams = (

@@ -150,30 +150,6 @@ type MapShakeOptions = {
   direction?: string;
 };
 
-const markRuntimeHitboxOverride = (
-  object: any,
-  width: number,
-  height: number,
-  sceneMap?: any,
-): void => {
-  const hitbox = { width, height };
-  Object.defineProperty(object, "__rpgjsRuntimeHitbox", {
-    value: hitbox,
-    configurable: true,
-    writable: true,
-  });
-
-  if (!sceneMap || typeof object?.id !== "string") return;
-  if (!(sceneMap.__rpgjsRuntimeHitboxes instanceof Map)) {
-    Object.defineProperty(sceneMap, "__rpgjsRuntimeHitboxes", {
-      value: new Map(),
-      configurable: true,
-      writable: true,
-    });
-  }
-  sceneMap.__rpgjsRuntimeHitboxes.set(object.id, hitbox);
-};
-
 export class RpgClientEngine<T = any> {
   private guiService: RpgGui;
   private webSocket: AbstractWebsocket;
@@ -828,7 +804,6 @@ export class RpgClientEngine<T = any> {
       const player = object ? this.sceneMap.getObjectById(object) : undefined;
       if (!player || typeof (player as any).setHitbox !== "function") return;
       (player as any).setHitbox(width, height);
-      markRuntimeHitboxOverride(player, width, height, this.sceneMap);
       (this.sceneMap as any).refreshCharacterHitboxes?.();
     })
 

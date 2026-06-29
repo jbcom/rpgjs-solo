@@ -8,6 +8,10 @@ type ParamValue = ParamCurve | number;
 export type ProjectBasic = {
   initialLevel?: number;
   finalLevel?: number;
+  hitbox?: {
+    width: number;
+    height: number;
+  };
   expCurve?: {
     basis: number;
     extra: number;

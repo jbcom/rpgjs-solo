@@ -3,8 +3,11 @@ export type StudioEventHitboxSize = {
   height: number;
 };
 
-const CONFIGURED_HITBOX_KEY = "__rpgjsStudioConfiguredHitbox";
-const RUNTIME_HITBOX_KEY = "__rpgjsRuntimeHitbox";
+const DEFAULT_EVENT_HITBOX: StudioEventHitboxSize = {
+  width: 32,
+  height: 32,
+};
+const lastStudioConfiguredHitboxes = new WeakMap<object, StudioEventHitboxSize>();
 
 const sameHitbox = (
   first?: StudioEventHitboxSize,
@@ -27,40 +30,49 @@ const normalizeHitbox = (value: unknown): StudioEventHitboxSize | undefined => {
   };
 };
 
-const setHiddenHitbox = (
+const canStoreEventState = (event: any): event is object => {
+  return (typeof event === "object" && event !== null) || typeof event === "function";
+};
+
+const getLastConfiguredHitbox = (event: any): StudioEventHitboxSize | undefined => {
+  return canStoreEventState(event)
+    ? lastStudioConfiguredHitboxes.get(event)
+    : undefined;
+};
+
+const rememberConfiguredHitbox = (
   event: any,
-  key: string,
   hitbox: StudioEventHitboxSize,
 ): void => {
-  Object.defineProperty(event, key, {
-    value: hitbox,
-    configurable: true,
-    writable: true,
-  });
+  if (canStoreEventState(event)) {
+    lastStudioConfiguredHitboxes.set(event, hitbox);
+  }
 };
 
 export const resolveStudioEventHitboxForSync = (
   event: any,
   configuredHitbox: StudioEventHitboxSize,
-  runtimeOverride?: StudioEventHitboxSize,
 ): StudioEventHitboxSize => {
-  const previousConfigured = normalizeHitbox(event?.[CONFIGURED_HITBOX_KEY]);
-  const runtimeHitbox = normalizeHitbox(runtimeOverride) ?? normalizeHitbox(event?.[RUNTIME_HITBOX_KEY]);
-  const configuredChanged =
-    previousConfigured !== undefined && !sameHitbox(previousConfigured, configuredHitbox);
+  const previousConfigured = getLastConfiguredHitbox(event);
+  const currentHitbox = normalizeHitbox(
+    typeof event?.hitbox === "function" ? event.hitbox() : event?.hitbox,
+  );
 
-  setHiddenHitbox(event, CONFIGURED_HITBOX_KEY, configuredHitbox);
+  rememberConfiguredHitbox(event, configuredHitbox);
 
-  if (configuredChanged) {
-    delete event[RUNTIME_HITBOX_KEY];
+  if (!currentHitbox) {
     return configuredHitbox;
   }
 
-  if (runtimeHitbox) {
-    setHiddenHitbox(event, RUNTIME_HITBOX_KEY, runtimeHitbox);
+  if (!previousConfigured) {
+    return sameHitbox(currentHitbox, DEFAULT_EVENT_HITBOX)
+      ? configuredHitbox
+      : currentHitbox;
   }
 
-  return runtimeHitbox ?? configuredHitbox;
+  return sameHitbox(currentHitbox, previousConfigured)
+    ? configuredHitbox
+    : currentHitbox;
 };
 
 export const applyStudioEventHitbox = (

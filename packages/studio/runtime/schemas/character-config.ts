@@ -1,9 +1,26 @@
-import { characterSchema } from "./event";
+import { characterSchema, eventHitboxSchema } from "./event";
 import { itemSchema } from "./database";
+
+export const characterHitboxSchema = {
+  ...eventHitboxSchema,
+  title: "Hero Hitbox",
+  description: "Custom collision hitbox size for the hero",
+  format: {
+    name: "character-hitbox",
+    layout: "appearance",
+    graphicControlName: "graphic",
+    direction: "down",
+    pattern: "loop",
+    titleKey: "hero hitbox.title",
+    descriptionKey: "hero hitbox.description",
+    defaultHintKey: "hero hitbox.default hint",
+  } as any,
+} as const;
 
 const appearanceProperties = {
   //name: { type: "string", title: "Name" },
   ...characterSchema,
+  hitbox: characterHitboxSchema,
 } as const;
 
 export const createAppearanceSchema = (title: string) => ({

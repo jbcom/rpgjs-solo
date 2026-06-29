@@ -43,9 +43,20 @@ describe("Studio client event hitbox sync", () => {
     expect(event.hitbox()).toEqual({ w: 56, h: 50 });
   });
 
-  test("keeps a runtime hitbox override across client Studio hitbox syncs", () => {
+  test("applies the configured hitbox over the default client hitbox", () => {
     const event = {
-      __rpgjsRuntimeHitbox: { width: 60, height: 60 },
+      hitbox: () => ({ w: 32, h: 32 }),
+    };
+
+    expect(resolveStudioEventHitboxForSync(event, { width: 109, height: 108 })).toEqual({
+      width: 109,
+      height: 108,
+    });
+  });
+
+  test("keeps the synchronized hitbox when it differs from the Studio config", () => {
+    const event = {
+      hitbox: () => ({ w: 60, h: 60 }),
     };
 
     expect(resolveStudioEventHitboxForSync(event, { width: 109, height: 108 })).toEqual({
@@ -58,35 +69,39 @@ describe("Studio client event hitbox sync", () => {
     });
   });
 
-  test("uses an explicit runtime hitbox override when the event object was replaced", () => {
-    const event = {};
-
-    expect(
-      resolveStudioEventHitboxForSync(
-        event,
-        { width: 109, height: 108 },
-        { width: 60, height: 60 },
-      ),
-    ).toEqual({
-      width: 60,
-      height: 60,
-    });
-    expect((event as any).__rpgjsRuntimeHitbox).toEqual({ width: 60, height: 60 });
-  });
-
-  test("drops a runtime hitbox override when the configured hitbox changes", () => {
+  test("keeps a synchronized page hitbox after a configured hitbox was applied", () => {
+    let value = { w: 109, h: 108 };
     const event = {
-      __rpgjsRuntimeHitbox: { width: 60, height: 60 },
+      hitbox: () => value,
     };
 
     expect(resolveStudioEventHitboxForSync(event, { width: 109, height: 108 })).toEqual({
-      width: 60,
-      height: 60,
+      width: 109,
+      height: 108,
     });
+
+    value = { w: 32, h: 32 };
+
+    expect(resolveStudioEventHitboxForSync(event, { width: 109, height: 108 })).toEqual({
+      width: 32,
+      height: 32,
+    });
+  });
+
+  test("updates a previously applied configured hitbox when the Studio config changes", () => {
+    let value = { w: 109, h: 108 };
+    const event = {
+      hitbox: () => value,
+    };
+
+    expect(resolveStudioEventHitboxForSync(event, { width: 109, height: 108 })).toEqual({
+      width: 109,
+      height: 108,
+    });
+
     expect(resolveStudioEventHitboxForSync(event, { width: 32, height: 48 })).toEqual({
       width: 32,
       height: 48,
     });
-    expect((event as any).__rpgjsRuntimeHitbox).toBeUndefined();
   });
 });

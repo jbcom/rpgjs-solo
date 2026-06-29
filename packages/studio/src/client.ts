@@ -195,9 +195,6 @@ const syncStudioEventHitboxes = (scene: any): void => {
   }
 
   const events = typeof scene?.events === "function" ? scene.events() : {};
-  const runtimeHitboxes = scene?.__rpgjsRuntimeHitboxes instanceof Map
-    ? scene.__rpgjsRuntimeHitboxes
-    : undefined;
   for (const [id, event] of Object.entries(events ?? {})) {
     const configuredHitbox = resolveStudioEventHitbox(configuredEvents.get(id));
     if (!configuredHitbox) continue;
@@ -205,15 +202,7 @@ const syncStudioEventHitboxes = (scene: any): void => {
     const hitbox = resolveStudioEventHitboxForSync(
       event,
       configuredHitbox,
-      normalizeStudioHitbox(runtimeHitboxes?.get(id)),
     );
-    if (
-      runtimeHitboxes?.has(id) &&
-      hitbox.width === configuredHitbox.width &&
-      hitbox.height === configuredHitbox.height
-    ) {
-      runtimeHitboxes.delete(id);
-    }
     applyStudioEventHitbox(event, hitbox);
 
     const body = scene.getBody?.(id);
