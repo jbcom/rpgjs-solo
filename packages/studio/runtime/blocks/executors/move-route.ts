@@ -212,6 +212,18 @@ const applyRouteCommand = (
         }
         player.z = isOnTop ? 1000 : 0;
       };
+    case 'set_always_on_bottom':
+      return (player: any) => {
+        if (!player) {
+          return;
+        }
+        const isOnBottom = Boolean(command.value);
+        if (player.z?.set) {
+          player.z.set(isOnBottom ? -1000 : 0);
+          return;
+        }
+        player.z = isOnBottom ? -1000 : 0;
+      };
     default:
       return undefined;
   }
@@ -288,6 +300,7 @@ export const schemaMoveRoute = {
                 'set_direction_fix',
                 'set_through',
                 'set_always_on_top',
+                'set_always_on_bottom',
                 'set_can_move',
                 'set_through_other_player'
               ],
@@ -318,6 +331,7 @@ export const schemaMoveRoute = {
                   'Fix Direction',
                   'Through',
                   'Always On Top',
+                  'Always On Bottom',
                   'Block Movement',
                   'Through Other Player'
                 ]
@@ -382,6 +396,7 @@ export const schemaMoveRoute = {
                       'set_direction_fix',
                       'set_through',
                       'set_always_on_top',
+                      'set_always_on_bottom',
                       'set_can_move',
                       'set_through_other_player'
                     ]

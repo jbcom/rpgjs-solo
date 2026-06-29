@@ -658,6 +658,7 @@ export type MoveRouteCommandType =
   | 'set_direction_fix'
   | 'set_through'
   | 'set_always_on_top'
+  | 'set_always_on_bottom'
   | 'set_can_move'
   | 'set_through_other_player';
 
@@ -697,6 +698,20 @@ export interface ChangeCharacterGraphicParams {
   eventId: string;
   /** Path to the new spritesheet */
   spritesheet: string;
+}
+
+/**
+ * Parameters for the set_hitbox block
+ *
+ * Changes the collision hitbox size of a player or event.
+ */
+export interface SetHitboxParams {
+  /** ID of the event/character to modify */
+  eventId: string;
+  /** Hitbox width in pixels */
+  width: number;
+  /** Hitbox height in pixels */
+  height: number;
 }
 
 /**
@@ -989,6 +1004,7 @@ export interface BlockParamsMap {
   move_character: MoveCharacterParams;
   move_route: MoveRouteParams;
   change_character_graphic: ChangeCharacterGraphicParams;
+  set_hitbox: SetHitboxParams;
   apply_graphic_animation: ApplyGraphicAnimationParams;
   show_up_animation: ShowUpAnimationParams;
   
@@ -1293,6 +1309,8 @@ export interface ExecutionPlayer {
   setAnimation?(animationName: string, repeatCount?: number): Promise<void> | void;
   /** Lock automatic animation changes */
   animationFixed?: boolean;
+  /** Set collision hitbox size */
+  setHitbox?(width: number, height: number): void;
   /** Display a component animation on the player */
   showComponentAnimation?(id: string, params: unknown): Promise<void> | void;
   /** Make this player's camera follow another player or event */
@@ -1316,6 +1334,8 @@ export interface ExecutionEvent {
   followRoute?(route: unknown, speed: number): Promise<void>;
   /** Set the graphic/spritesheet */
   setGraphic(spritesheet: string): Promise<void>;
+  /** Set collision hitbox size */
+  setHitbox?(width: number, height: number): void;
   /** Set the current animation */
   setAnimation?(animationName: string, repeatCount?: number): Promise<void> | void;
   /** Show a spritesheet animation attached to the event */

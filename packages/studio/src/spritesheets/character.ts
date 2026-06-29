@@ -6,7 +6,7 @@ export const CharacterSpritesheet = (options: {
   framesWidth: number;
   framesHeight: number;
   scale?: [number, number];
-  anchor: [number, number];
+  anchor?: [number, number];
 }) => {
   const frameY = (direction: Direction) => {
     return {
@@ -44,7 +44,7 @@ export const CharacterSpritesheet = (options: {
     image: options.imageSource,
     opacity: 1,
     scale: scale,
-    anchor: options.anchor,
+    ...(options.anchor ? { anchor: options.anchor } : {}),
     framesWidth: options.framesWidth,
     framesHeight: options.framesHeight,
     textures: {

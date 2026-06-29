@@ -118,6 +118,27 @@ const toBoolean = (value: unknown): boolean | undefined => {
   return typeof value === "boolean" ? value : undefined;
 };
 
+const DEFAULT_EVENT_HITBOX = {
+  width: 32,
+  height: 32,
+};
+
+const normalizeHitboxDimension = (value: unknown): number | undefined => {
+  const numberValue = typeof value === "string" ? Number(value) : value;
+  if (typeof numberValue !== "number" || !Number.isFinite(numberValue) || numberValue <= 0) {
+    return undefined;
+  }
+  return Math.round(numberValue);
+};
+
+const normalizeEventHitbox = (value: unknown): { width: number; height: number } | undefined => {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const width = normalizeHitboxDimension(record.width ?? record.w);
+  const height = normalizeHitboxDimension(record.height ?? record.h);
+  return width && height ? { width, height } : undefined;
+};
+
 const normalizeEnemyType = (value: unknown): EnemyType | undefined => {
   if (typeof value !== "string") return undefined;
   return enemyTypes.has(value) ? (value as EnemyType) : undefined;
@@ -497,6 +518,21 @@ const applyPatternSetting: TriggerSettingsApplier = ({ event, trigger }) => {
   }
 };
 
+const applyHitboxSetting: TriggerSettingsApplier = ({
+  event,
+  trigger,
+  fallbackParams,
+  object,
+}) => {
+  if (typeof event.setHitbox !== "function") return;
+  const hitbox =
+    normalizeEventHitbox(trigger?.hitbox) ??
+    normalizeEventHitbox(fallbackParams?.hitbox) ??
+    normalizeEventHitbox(object?.hitbox) ??
+    DEFAULT_EVENT_HITBOX;
+  event.setHitbox(hitbox.width, hitbox.height);
+};
+
 const applyOptionsSetting: TriggerSettingsApplier = ({ event, trigger }) => {
   const options = trigger?.options || {};
   if (options.directionFix) {
@@ -507,6 +543,10 @@ const applyOptionsSetting: TriggerSettingsApplier = ({ event, trigger }) => {
   }
   if (options.alwaysOnTop) {
     event.z.set(1000);
+  } else if (options.alwaysOnBottom) {
+    event.z.set(-1000);
+  } else if (typeof event.z?.set === "function") {
+    event.z.set(0);
   }
 };
 
@@ -515,6 +555,7 @@ const baseTriggerSettingsAppliers: TriggerSettingsApplier[] = [
   applyDirectionSetting,
   applyMovementSetting,
   applyPatternSetting,
+  applyHitboxSetting,
   applyOptionsSetting,
 ];
 
@@ -603,7 +644,7 @@ const characterRuntime: EventTypeRuntime = {
 };
 
 const enemyRuntime: EventTypeRuntime = {
-  triggerSettings: [applyEnemyGraphicSetting],
+  triggerSettings: [applyEnemyGraphicSetting, applyHitboxSetting],
   hooks: {
     onInit: async (context, next) => {
       const trigger = context.resolveActiveTrigger?.(context.player, context.event)?.trigger;

@@ -23,12 +23,12 @@
   <Particle emit={emitParticleTrigger} settings={particleSettings} zIndex={1000} name={particleName} />
   <Container>
     @for (graphicObj of renderedGraphics) {
-      <Container scale={graphicScale(graphicObj)}>
+      <Container scale={graphicContainerScale(graphicObj)}>
         <Sprite 
           sheet={sheet(graphicObj)} 
           direction 
           tint 
-          hitbox
+          hitbox={graphicHitbox(graphicObj)}
           shadowCaster={shadowCaster(graphicObj)}
           flash={flashConfig}
         />
@@ -76,6 +76,7 @@
   import { GameEngineToken, ModulesToken, shouldRenderLightingShadows } from "@rpgjs/common";
   import { RpgClientEngine } from "../RpgClientEngine";
   import { applyCameraFollow, clearCameraFollowPlugins, ownsCameraFollowRevision } from "../services/cameraFollow";
+  import { resolveScaledHitboxAnchor, scaleHitboxForGraphicDisplay, toPositiveNumber } from "./character-hitbox";
   import { inject } from "../core/inject";  
   import { Direction, Animation } from "@rpgjs/common";
   import { normalizeEventComponent } from "../Game/EventComponentResolver";
@@ -685,7 +686,7 @@
   }
 
   const graphicScale = (graphicObject) => {
-    const scale = graphicObject?.displayScale ?? graphicObject?.scale;
+    const scale = graphicObject?.scale;
     if (Array.isArray(scale)) return scale;
     if (typeof scale === 'number') return [scale, scale];
     if (scale && typeof scale === 'object') {
@@ -696,12 +697,34 @@
     return undefined;
   }
 
+  const graphicContainerScale = (graphicObject) => {
+    const scale = graphicObject?.displayScale;
+    if (Array.isArray(scale)) return scale;
+    if (typeof scale === 'number') return [scale, scale];
+    if (scale && typeof scale === 'object') {
+      const x = typeof scale.x === 'number' ? scale.x : 1;
+      const y = typeof scale.y === 'number' ? scale.y : x;
+      return [x, y];
+    }
+    return [1, 1];
+  }
+
+  const multiplyScale = (left, right) => {
+    const a = normalizePair(left);
+    const b = normalizePair(right);
+    return [a[0] * b[0], a[1] * b[1]];
+  }
+
+  const graphicHitbox = (graphicObject) => {
+    const box = hitbox();
+    const scale = graphicEffectiveScale(graphicObject);
+    return scaleHitboxForGraphicDisplay(box, scale);
+  }
+
   const shadowCaster = (graphicObject) => {
     const box = hitbox();
     const bounds = graphicBounds();
-    const scale = graphicScale(graphicObject);
-    const scaleY = Array.isArray(scale) && typeof scale[1] === 'number' ? Math.abs(scale[1]) : 1;
-    const height = Math.max(bounds?.height ?? box?.h ?? 32, box?.h ?? 32) * scaleY;
+    const height = Math.max(bounds?.height ?? box?.h ?? 32, box?.h ?? 32);
 
     return {
       enabled: shadowsEnabled,
@@ -721,11 +744,6 @@
 
   const imageDimensions = signal({});
   const loadingImageDimensions = new Set();
-
-  const toPositiveNumber = (value) => {
-    const number = typeof value === 'number' ? value : parseFloat(value);
-    return Number.isFinite(number) && number > 0 ? number : undefined;
-  };
 
   const toFiniteNumber = (value, fallback = 0) => {
     const number = typeof value === 'number' ? value : parseFloat(value);
@@ -826,6 +844,13 @@
     return frame?.[prop] ?? textureOptions?.[prop] ?? graphicObject?.[prop];
   };
 
+  const graphicEffectiveScale = (graphicObject) => {
+    const textureOptions = resolveTextureOptions(graphicObject);
+    const frame = resolveFirstAnimationFrame(textureOptions);
+    const spriteScale = normalizePair(optionValue('scale', frame, textureOptions, graphicObject) ?? graphicScale(graphicObject));
+    return multiplyScale(spriteScale, graphicContainerScale(graphicObject));
+  };
+
   const resolveFrameSize = (textureOptions, dimensions) => {
     const framesWidth = toPositiveNumber(textureOptions?.framesWidth) ?? 1;
     const framesHeight = toPositiveNumber(textureOptions?.framesHeight) ?? 1;
@@ -844,31 +869,6 @@
       width,
       height
     };
-  };
-
-  const resolveHitboxAnchor = (spriteWidth, spriteHeight, realSize, box) => {
-    if (!spriteWidth || !spriteHeight || !box) {
-      return [0, 0];
-    }
-
-    const heightOfSprite = typeof realSize === 'number' ? realSize : realSize?.height;
-    const resolvedHeight = toPositiveNumber(heightOfSprite) ?? spriteHeight;
-    const gap = Math.max(0, (spriteHeight - resolvedHeight) / 2);
-    const hitboxTopLeftX = clampRatio((spriteWidth - box.w) / 2 / spriteWidth);
-    const hitboxTopLeftY = clampRatio((spriteHeight - box.h - gap) / spriteHeight);
-    const hitboxCenterX = clampRatio(hitboxTopLeftX + box.w / 2 / spriteWidth);
-    const hitboxCenterY = clampRatio(hitboxTopLeftY + box.h / 2 / spriteHeight);
-    const footY = clampRatio((spriteHeight - gap) / spriteHeight);
-
-    switch (box.anchorMode ?? 'top-left') {
-      case 'center':
-        return [hitboxCenterX, hitboxCenterY];
-      case 'foot':
-        return [hitboxCenterX, footY];
-      case 'top-left':
-      default:
-        return [hitboxTopLeftX, hitboxTopLeftY];
-    }
   };
 
   const loadImageDimensions = (image) => {
@@ -950,14 +950,15 @@
         return;
       }
 
+      const scale = graphicEffectiveScale(graphicObject);
       const explicitAnchor = normalizeAnchor(optionValue('anchor', frame, textureOptions, graphicObject));
-      const anchor = explicitAnchor ?? resolveHitboxAnchor(
+      const anchor = explicitAnchor ?? resolveScaledHitboxAnchor(
         spriteWidth,
         spriteHeight,
         optionValue('spriteRealSize', frame, textureOptions, graphicObject),
-        box
+        box,
+        scale
       );
-      const scale = normalizePair(optionValue('scale', frame, textureOptions, graphicObject) ?? graphicScale(graphicObject));
       const x = toFiniteNumber(optionValue('x', frame, textureOptions, graphicObject), 0);
       const y = toFiniteNumber(optionValue('y', frame, textureOptions, graphicObject), 0);
       const leftEdge = -anchor[0] * spriteWidth * scale[0];

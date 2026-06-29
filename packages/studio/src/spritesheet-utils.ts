@@ -115,7 +115,6 @@ export const createSpriteSheetObject = async (
           framesWidth: media.metadata?.frameWidth ?? 4,
           framesHeight: media.metadata?.frameHeight ?? 4,
           scale: scale !== undefined ? [scale, scale] : undefined,
-          anchor: [0.35, 0.65],
         });
         return scale === undefined
           ? {

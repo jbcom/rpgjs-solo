@@ -32,6 +32,7 @@ describe("Studio spritesheet utils", () => {
     });
 
     expect(spritesheet.scale).toEqual([1, 1]);
+    expect(spritesheet.anchor).toBeUndefined();
     expect(spritesheet.displayScale).toBe(STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE);
   });
 
@@ -48,7 +49,23 @@ describe("Studio spritesheet utils", () => {
     });
 
     expect(spritesheet.scale).toEqual([0.75, 0.75]);
+    expect(spritesheet.anchor).toBeUndefined();
     expect(spritesheet.displayScale).toBeUndefined();
+  });
+
+  test("keeps LPC sprite real size in source pixels when media is scaled", async () => {
+    const spritesheet = await createSpriteSheetObject({
+      type: "character",
+      id: "hero",
+      fileName: "hero.png",
+      metadata: {
+        lpc: true,
+        scale: 0.65,
+      },
+    });
+
+    expect(spritesheet.scale).toEqual([0.65, 0.65]);
+    expect(spritesheet.spriteRealSize).toEqual({ width: 48, height: 52 });
   });
 
   test("tries Studio media lookup for file-name graphics before direct asset fallback", async () => {

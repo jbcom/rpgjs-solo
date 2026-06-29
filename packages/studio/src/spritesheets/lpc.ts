@@ -43,8 +43,8 @@ export const LPCSpritesheetPreset = (options: {
     framesHeight: 4,
     scale: scale,
     spriteRealSize: {
-      width: 48 * scale[0],
-      height: 52 * scale[1],
+      width: 48,
+      height: 52,
     },
     textures: {
       [Animation.Stand]: {

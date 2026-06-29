@@ -90,6 +90,37 @@ const readGameConfig = (): any => {
   return globalScope.window?.gameConfig ?? globalScope.gameConfig ?? {};
 };
 
+const normalizeRuntimeHitbox = (value: unknown): { width: number; height: number } | undefined => {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const rawWidth = record.width ?? record.w;
+  const rawHeight = record.height ?? record.h;
+  const width = typeof rawWidth === "number" ? rawWidth : Number(rawWidth);
+  const height = typeof rawHeight === "number" ? rawHeight : Number(rawHeight);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return undefined;
+  }
+  return {
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
+  };
+};
+
+export const resolveRuntimeEventHitbox = (object: any, params: any): { width: number; height: number } | undefined => {
+  const triggerHitbox = Array.isArray(object?.triggers)
+    ? [...object.triggers]
+      .reverse()
+      .find((trigger: any) => trigger?.enabled !== false && normalizeRuntimeHitbox(trigger?.hitbox))
+      ?.hitbox
+    : undefined;
+
+  return (
+    normalizeRuntimeHitbox(object?.hitbox) ??
+    normalizeRuntimeHitbox(triggerHitbox) ??
+    normalizeRuntimeHitbox(params?.hitbox)
+  );
+};
+
 const resolvePlayerConfig = async (player: RpgPlayer): Promise<ProjectBasic> => {
   const gameConfig = readGameConfig();
   const baseHeroConfig = {
@@ -779,6 +810,7 @@ export default (_config?: unknown) => {
         }
 
         const params = object.params;
+        const hitbox = resolveRuntimeEventHitbox(object, params);
         const scale = mapExtended.scale;
         const eventType =
           normalizeEventType(object.eventType || object.type || "character") ||
@@ -1014,6 +1046,7 @@ export default (_config?: unknown) => {
           event: eventObj,
           x: object.x * mapExtended.scale,
           y: object.y * mapExtended.scale,
+          ...(hitbox ? { hitbox } : {}),
           id: object.eventId || object.id || object._id,
         };
       },

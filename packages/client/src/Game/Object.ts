@@ -130,6 +130,25 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     return inject(RpgClientEngine);
   }
 
+  setHitbox(width: number, height: number): void {
+    if (typeof width !== "number" || width <= 0) {
+      throw new Error("setHitbox: width must be a positive number");
+    }
+    if (typeof height !== "number" || height <= 0) {
+      throw new Error("setHitbox: height must be a positive number");
+    }
+
+    this.hitbox.set({
+      w: width,
+      h: height,
+    });
+
+    const sceneMap = (this.engine as any)?.sceneMap;
+    if (sceneMap && this.id) {
+      sceneMap.updateHitbox?.(this.id, this.x(), this.y(), width, height);
+    }
+  }
+
   private animationSubscription?: Subscription;
   private animationResetTimeout?: ReturnType<typeof setTimeout>;
   private animationWaitResolve?: () => void;

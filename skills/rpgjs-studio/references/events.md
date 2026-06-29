@@ -128,10 +128,25 @@ Common `Page` fields from `pageSchema`:
 - `graphic?: string`
 - `direction?: "down" | "left" | "right" | "up"`
 - `pattern?: "initial" | "loop" | "stop"`
+- `hitbox?: { width: number, height: number }`
 - `movement?: { type, speed, frequency, route }`
 - `trigger?: "action_button" | "player_touch" | "event_touch" | "autorun" | "parallel"`
-- `options?: { directionFix?: boolean, through?: boolean, alwaysOnTop?: boolean }`
+- `options?: { directionFix?: boolean, through?: boolean, alwaysOnTop?: boolean, alwaysOnBottom?: boolean }`
 - `blockCollectionId?: string`
+
+Event page hitbox:
+
+- `width` and `height` are RPGJS-pixel dimensions and must be positive numbers.
+- Missing `hitbox` keeps the runtime default `32 x 32`.
+- Graphic/media scale affects only the displayed sprite size; it does not scale `hitbox.width` or `hitbox.height`.
+- Studio previews the hitbox at the foot of the sprite.
+- Runtime game map responses expose the selected page hitbox as `event.hitbox: { width, height }`; `event.triggers[].hitbox` keeps the page-level value.
+
+Rendering layer options:
+
+- Use either `alwaysOnTop` or `alwaysOnBottom`, not both.
+- `alwaysOnTop` draws the event above nearby characters.
+- `alwaysOnBottom` draws the event below nearby characters.
 
 Touch trigger mapping:
 

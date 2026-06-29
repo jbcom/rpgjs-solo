@@ -813,6 +813,7 @@ Actions include:
 - `set_direction_fix`
 - `set_through`
 - `set_always_on_top`
+- `set_always_on_bottom`
 - `set_can_move`
 - `set_through_other_player`
 
@@ -821,6 +822,8 @@ Actions that require `value`:
 - `change_speed`: `0.2 | 0.5 | 1 | 3 | 5 | 7 | 10`
 - `change_frequency`: `600 | 400 | 200 | 100 | 50 | 25 | 0`
 - boolean toggles: `true | false`
+
+Use either `set_always_on_top` or `set_always_on_bottom` for a route step, not both at the same time for the same target.
 
 ### `change_character_graphic`
 
@@ -970,6 +973,29 @@ Advanced smooth transition options are passed to RPGJS `player.cameraFollow()`:
 ```
 
 Allowed `ease` values are the easing names exposed by the Studio dropdown, including `linear`, `easeInQuad`, `easeOutQuad`, `easeInOutQuad`, `easeInCubic`, `easeOutCubic`, `easeInOutCubic`, `easeInSine`, `easeOutSine`, `easeInOutSine`, `easeInBack`, `easeOutBack`, and related `Quart`, `Quint`, `Expo`, and `Circ` variants.
+
+### `set_hitbox`
+
+Use to change the hitbox size of the current player or a map event.
+
+```json
+{
+  "type": "set_hitbox",
+  "data": {
+    "eventId": "$this",
+    "width": 48,
+    "height": 32
+  }
+}
+```
+
+Allowed `eventId` values:
+
+- `$player`: current player
+- `$this`: current event
+- any map event id: target that event
+
+`width` and `height` are positive RPGJS-pixel dimensions. They are not scaled by the target graphic/media scale.
 
 ### `set_weather`
 

@@ -266,6 +266,8 @@ export type EventPosOption = {
   mode?: EventMode | "shared" | "scenario",
   /** Owner player id when mode is scenario */
   scenarioOwnerId?: string,
+  /** Initial event hitbox in RPGJS pixels */
+  hitbox?: { width?: number; height?: number; w?: number; h?: number },
   /** 
    * Event definition - can be either:
    * - A class that extends RpgEvent
@@ -633,6 +635,38 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
 
     return false;
+  }
+
+  private resolveEventHitbox(eventObj: any): { width: number; height: number } | undefined {
+    const readHitbox = (value: unknown): { width: number; height: number } | undefined => {
+      if (!value || typeof value !== "object") return undefined;
+      const record = value as Record<string, unknown>;
+      const widthValue = record.width ?? record.w;
+      const heightValue = record.height ?? record.h;
+      const width = typeof widthValue === "number" ? widthValue : Number(widthValue);
+      const height = typeof heightValue === "number" ? heightValue : Number(heightValue);
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+        return undefined;
+      }
+      return {
+        width: Math.max(1, Math.round(width)),
+        height: Math.max(1, Math.round(height)),
+      };
+    };
+
+    const eventDef = eventObj?.event ?? eventObj;
+    const directHitbox = readHitbox(eventObj?.hitbox);
+    if (directHitbox) return directHitbox;
+
+    const objectHitbox = readHitbox(eventDef?.hitbox);
+    if (objectHitbox) return objectHitbox;
+
+    if (typeof eventDef === "function") {
+      return readHitbox((eventDef as any).hitbox)
+        ?? readHitbox((eventDef as any).prototype?.hitbox);
+    }
+
+    return undefined;
   }
 
   private normalizeEventObject(eventObj: EventPosOption | any): EventPosOption {
@@ -2333,6 +2367,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     const y = typeof eventObj.y === "number" ? eventObj.y : 0;
     const mass = this.resolveEventMass(eventObj);
     const pushable = this.resolveEventPushable(eventObj);
+    const hitbox = this.resolveEventHitbox(eventObj);
 
     const requestedMode = options.mode ?? this.resolveEventMode(eventObj);
     const mode = this.normalizeEventMode(requestedMode);
@@ -2414,11 +2449,18 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     eventInstance.map = this;
     eventInstance.context = context;
+    if (hitbox) {
+      eventInstance.setHitbox(hitbox.width, hitbox.height);
+    }
 
     await eventInstance.teleport({ x, y });
     await eventInstance.execMethod('onInit');
 
     this.events()[id] = eventInstance;
+    if (hitbox) {
+      eventInstance.setHitbox(hitbox.width, hitbox.height);
+    }
+
     this.setEventRuntimeMetadata(id, effectiveMode, scenarioOwnerId);
     return id;
   }

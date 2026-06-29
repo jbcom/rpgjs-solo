@@ -149,6 +149,35 @@ test('object-based EventDefinition mass does not make an event pushable by itsel
     expect(body.canBePushedBy(playerBody)).toBe(false)
 })
 
+test('createDynamicEvent applies width and height hitbox data to the event body', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+
+    await map.createDynamicEvent({
+      id: "wide-hitbox-object",
+      x: 180,
+      y: 160,
+      hitbox: {
+        width: 56,
+        height: 261,
+      },
+      event: {
+        name: "WideHitbox",
+      }
+    })
+    await fixture.nextTick()
+
+    const event = map.getEvent("wide-hitbox-object")
+    const body = map.getBody("wide-hitbox-object")
+
+    expect(event.hitbox()).toEqual({ w: 56, h: 261 })
+    expect(body.width).toBe(56)
+    expect(body.height).toBe(261)
+
+    const snapshot = createStatesSnapshotDeep(map)
+    expect(snapshot.events["wide-hitbox-object"].hitbox).toEqual({ w: 56, h: 261 })
+})
+
 test('non-pushable events can still move through scripted routes', async () => {
     player = await client.waitForMapChange('map1')
     const map = player.getCurrentMap() as any

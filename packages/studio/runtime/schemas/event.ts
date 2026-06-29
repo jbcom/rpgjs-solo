@@ -41,6 +41,27 @@ export const characterSchema = {
   },
 } as const;
 
+export const eventHitboxSchema = {
+  type: "object",
+  title: "Hitbox",
+  description: "Custom collision hitbox size for this event page",
+  properties: {
+    width: {
+      type: "number",
+      title: "Width",
+      minimum: 1,
+      default: 32
+    },
+    height: {
+      type: "number",
+      title: "Height",
+      minimum: 1,
+      default: 32
+    }
+  },
+  required: ["width", "height"]
+} as const;
+
 export const triggerSchema = {
   type: "object",
   properties: {
@@ -61,6 +82,7 @@ export const triggerSchema = {
       description: "Whether this trigger is enabled",
       default: true
     },
+    hitbox: eventHitboxSchema,
     typeData: {
       type: "object",
       title: "Type Data",
@@ -145,6 +167,7 @@ export const pageSchema = {
       enum: ["initial", "loop", "stop"],
       default: "initial"
     },
+    hitbox: eventHitboxSchema,
     movement: {
       type: "object",
       title: "Movement",
@@ -182,7 +205,8 @@ export const pageSchema = {
       properties: {
         directionFix: { type: "boolean", title: "Direction Fix" },
         through: { type: "boolean", title: "Through" },
-        alwaysOnTop: { type: "boolean", title: "Always on Top" }
+        alwaysOnTop: { type: "boolean", title: "Always on Top" },
+        alwaysOnBottom: { type: "boolean", title: "Always on Bottom" }
       }
     },
     blockCollectionId: {

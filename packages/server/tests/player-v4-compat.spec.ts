@@ -57,6 +57,24 @@ describe("RpgPlayer v4 compatibility helpers", () => {
     expect(player.hitbox()).toEqual({ w: 12, h: 14 });
   });
 
+  test("setHitbox refreshes map physics without forcing a sync cycle", () => {
+    const player = new RpgPlayer();
+    player.id = "event-1";
+    player.position = { x: 10, y: 20 };
+    const map = {
+      physic: {},
+      updateHitbox: vi.fn(),
+      syncChanges: vi.fn(),
+    };
+    player.map = map as any;
+
+    player.setHitbox(60, 50);
+
+    expect(player.hitbox()).toEqual({ w: 60, h: 50 });
+    expect(map.updateHitbox).toHaveBeenCalledWith("event-1", 10, 20, 60, 50);
+    expect(map.syncChanges).not.toHaveBeenCalled();
+  });
+
   test("getTile and tiles use Tiled data when available", () => {
     const player = new RpgPlayer();
     const getTileByPosition = vi.fn((x: number, y: number) => ({ x, y, hasCollision: true }));

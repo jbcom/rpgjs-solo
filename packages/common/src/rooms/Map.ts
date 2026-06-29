@@ -1719,6 +1719,31 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     return id;
   }
 
+  /** @internal Reconciles physics bodies with synchronized character signals. */
+  refreshCharacterHitboxes(): void {
+    const players = this.players?.() ?? {};
+    for (const id in players) {
+      const player = players[id];
+      if (!player) continue;
+      player.id = player.id ?? id;
+      this.createCharacterHitbox(player, "hero");
+    }
+
+    const events = this.events?.() ?? {};
+    for (const id in events) {
+      const event = events[id];
+      if (!event) continue;
+      event.id = event.id ?? id;
+      if (event._removeTransition?.()) {
+        this.removeHitbox(id, event, "npc");
+        continue;
+      }
+      this.createCharacterHitbox(event, "npc", {
+        mass: this.resolveCharacterMass(event, 100),
+      });
+    }
+  }
+
   /**
    * Update hitbox position and size
    * 

@@ -94,6 +94,37 @@ describe("studio map plugins", () => {
         y: 65,
         width: 18,
         height: 26,
+        label: "18 x 26",
+      },
+    ]);
+  });
+
+  it("prefers the physics body dimensions for event debug rectangles", () => {
+    const engine = {
+      sceneMap: {
+        events: {
+          npc: {
+            hitbox: () => ({ w: 32, h: 32 }),
+            x: () => 10,
+            y: () => 20,
+          },
+        },
+        getBody: (id: string) => {
+          expect(id).toBe("npc");
+          return { width: 56, height: 261 };
+        },
+        getBodyPosition: () => ({ x: 42, y: 64 }),
+      },
+    } as any;
+
+    expect(resolveStudioEventCollisionDebugRects(engine)).toEqual([
+      {
+        id: "npc",
+        x: 42,
+        y: 64,
+        width: 56,
+        height: 261,
+        label: "56 x 261",
       },
     ]);
   });
@@ -102,10 +133,15 @@ describe("studio map plugins", () => {
     const engine = {
       sceneMap: {
         events: {
-          npc: {
+          npcW: {
             hitbox: { w: 16, h: 24 },
             x: () => 32,
             y: () => 48,
+          },
+          npcWidth: {
+            hitbox: { width: 56, height: 261 },
+            x: () => 64,
+            y: () => 96,
           },
         },
         getBodyPosition: () => undefined,
@@ -114,11 +150,20 @@ describe("studio map plugins", () => {
 
     expect(resolveStudioEventCollisionDebugRects(engine)).toEqual([
       {
-        id: "npc",
+        id: "npcW",
         x: 32,
         y: 48,
         width: 16,
         height: 24,
+        label: "16 x 24",
+      },
+      {
+        id: "npcWidth",
+        x: 64,
+        y: 96,
+        width: 56,
+        height: 261,
+        label: "56 x 261",
       },
     ]);
   });

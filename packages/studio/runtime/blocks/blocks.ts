@@ -21,6 +21,7 @@ import {
   schemaUseSkill,
   schemaMoveRoute,
   schemaChangeCharacterGraphic,
+  schemaSetHitbox,
   schemaApplyGraphicAnimation,
   schemaShowUpAnimation,
   schemaTransferPlayer,
@@ -156,6 +157,8 @@ export const defaultBlocks = [
     schemaMoveRoute,
 
     schemaChangeCharacterGraphic,
+
+    schemaSetHitbox,
   
     schemaApplyGraphicAnimation,
 

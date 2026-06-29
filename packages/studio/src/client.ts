@@ -22,6 +22,7 @@ import {
 } from "./data-provider";
 import type { StudioGameModuleConfig } from ".";
 import { createStudioMapPlugins, type StudioMapPlugin } from "./studio-map-plugins";
+import { applyStudioEventHitbox, resolveStudioEventHitboxForSync } from "./event-hitbox-client";
 
 interface GlobalConfig {
   projectId?: string;
@@ -143,6 +144,84 @@ const resolveStudioDatabaseForPreload = async (
   } catch (error) {
     console.warn("[StudioGame] combat animation preload database fetch failed", error);
     return [];
+  }
+};
+
+const normalizeStudioHitboxDimension = (value: unknown): number | undefined => {
+  const number = typeof value === "string" ? Number(value) : value;
+  if (typeof number !== "number" || !Number.isFinite(number) || number <= 0) {
+    return undefined;
+  }
+  return Math.round(number);
+};
+
+const normalizeStudioHitbox = (value: unknown): { width: number; height: number } | undefined => {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const width = normalizeStudioHitboxDimension(record.width ?? record.w);
+  const height = normalizeStudioHitboxDimension(record.height ?? record.h);
+  return width && height ? { width, height } : undefined;
+};
+
+const resolveStudioEventHitbox = (event: any): { width: number; height: number } | undefined => {
+  const triggerHitbox = Array.isArray(event?.triggers)
+    ? [...event.triggers]
+      .reverse()
+      .find((trigger: any) => trigger?.enabled !== false && normalizeStudioHitbox(trigger?.hitbox))
+      ?.hitbox
+    : undefined;
+
+  return (
+    normalizeStudioHitbox(event?.hitbox) ??
+    normalizeStudioHitbox(triggerHitbox) ??
+    normalizeStudioHitbox(event?.params?.hitbox)
+  );
+};
+
+const collectStudioMapEvents = (scene: any): any[] => {
+  const data = typeof scene?.data === "function" ? scene.data() : scene?.data;
+  return [
+    ...(Array.isArray(data?.events) ? data.events : []),
+    ...(Array.isArray(data?.data?.events) ? data.data.events : []),
+  ];
+};
+
+const syncStudioEventHitboxes = (scene: any): void => {
+  const configuredEvents = new Map<string, any>();
+  for (const event of collectStudioMapEvents(scene)) {
+    const ids = [event?.eventId, event?.id, event?._id]
+      .filter((value): value is string => typeof value === "string" && value.length > 0);
+    ids.forEach((id) => configuredEvents.set(id, event));
+  }
+
+  const events = typeof scene?.events === "function" ? scene.events() : {};
+  const runtimeHitboxes = scene?.__rpgjsRuntimeHitboxes instanceof Map
+    ? scene.__rpgjsRuntimeHitboxes
+    : undefined;
+  for (const [id, event] of Object.entries(events ?? {})) {
+    const configuredHitbox = resolveStudioEventHitbox(configuredEvents.get(id));
+    if (!configuredHitbox) continue;
+
+    const hitbox = resolveStudioEventHitboxForSync(
+      event,
+      configuredHitbox,
+      normalizeStudioHitbox(runtimeHitboxes?.get(id)),
+    );
+    if (
+      runtimeHitboxes?.has(id) &&
+      hitbox.width === configuredHitbox.width &&
+      hitbox.height === configuredHitbox.height
+    ) {
+      runtimeHitboxes.delete(id);
+    }
+    applyStudioEventHitbox(event, hitbox);
+
+    const body = scene.getBody?.(id);
+    if (body?.width === hitbox.width && body?.height === hitbox.height) continue;
+
+    const x = typeof (event as any).x === "function" ? (event as any).x() : (event as any).x;
+    const y = typeof (event as any).y === "function" ? (event as any).y() : (event as any).y;
+    scene.updateHitbox?.(id, Number(x) || 0, Number(y) || 0, hitbox.width, hitbox.height);
   }
 };
 
@@ -270,10 +349,14 @@ export default (config: StudioGameModuleConfig) => {
           fadeTrigger,
         });
       },
+      onChanges: (scene) => {
+        setTimeout(() => syncStudioEventHitboxes(scene), 0);
+      },
       onAfterLoading: async (scene) => {
         const gui = inject(RpgGui);
         const engine = inject(RpgClientEngine);
         engine.scene.clearLocalWeather?.();
+        syncStudioEventHitboxes(scene);
         fadeTrigger.start();
         gui.display("hud", {
           faceset: {

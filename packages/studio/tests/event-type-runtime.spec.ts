@@ -304,4 +304,113 @@ describe("Studio event runtime", () => {
     expect(calls).toContainEqual(["walk", Infinity]);
     expect(event.animationFixed).toBe(true);
   });
+
+  test("applies mutually exclusive Studio rendering layer options", () => {
+    const zValues: number[] = [];
+    const event: any = {
+      z: {
+        set: (value: number) => zValues.push(value),
+      },
+      changeDirection: () => {},
+      stopMoveTo: () => {},
+      setGraphicAnimation: () => {},
+    };
+
+    applyTriggerSettings({
+      event,
+      trigger: {
+        options: {
+          alwaysOnBottom: true,
+        },
+      },
+      fallbackParams: {},
+      eventType: "character",
+      object: {},
+    });
+
+    applyTriggerSettings({
+      event,
+      trigger: {
+        options: {
+          alwaysOnTop: true,
+          alwaysOnBottom: true,
+        },
+      },
+      fallbackParams: {},
+      eventType: "character",
+      object: {},
+    });
+
+    expect(zValues).toEqual([-1000, 1000]);
+  });
+
+  test("applies Studio event page hitbox settings", () => {
+    const hitboxCalls: Array<[number, number]> = [];
+    const event: any = {
+      setHitbox: (width: number, height: number) => hitboxCalls.push([width, height]),
+      changeDirection: () => {},
+      stopMoveTo: () => {},
+      setGraphicAnimation: () => {},
+    };
+
+    applyTriggerSettings({
+      event,
+      trigger: {
+        hitbox: {
+          width: 18,
+          height: 26,
+        },
+      },
+      fallbackParams: {},
+      eventType: "character",
+      object: {},
+    });
+
+    expect(hitboxCalls).toEqual([[18, 26]]);
+  });
+
+  test("applies physics-style Studio event hitbox settings", () => {
+    const hitboxCalls: Array<[number, number]> = [];
+    const event: any = {
+      setHitbox: (width: number, height: number) => hitboxCalls.push([width, height]),
+      changeDirection: () => {},
+      stopMoveTo: () => {},
+      setGraphicAnimation: () => {},
+    };
+
+    applyTriggerSettings({
+      event,
+      trigger: {},
+      fallbackParams: {},
+      eventType: "character",
+      object: {
+        hitbox: {
+          w: 56,
+          h: 50,
+        },
+      },
+    });
+
+    expect(hitboxCalls).toEqual([[56, 50]]);
+  });
+
+  test("resets Studio event hitbox to the default when no page hitbox is configured", () => {
+    const hitboxCalls: Array<[number, number]> = [];
+    const event: any = {
+      setHitbox: (width: number, height: number) => hitboxCalls.push([width, height]),
+      changeDirection: () => {},
+      stopMoveTo: () => {},
+      setGraphicAnimation: () => {},
+    };
+
+    applyTriggerSettings({
+      event,
+      trigger: {},
+      fallbackParams: {},
+      eventType: "character",
+      object: {},
+    });
+
+    expect(hitboxCalls).toEqual([[32, 32]]);
+  });
 });

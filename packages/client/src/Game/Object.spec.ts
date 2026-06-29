@@ -1,25 +1,39 @@
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { signal } from "canvasengine";
 import { appendFramePayload, RpgClientObject, withGraphicDisplayScale } from "./Object";
+import { RpgClientEvent } from "./Event";
+import { RpgClientPlayer } from "./Player";
+
+const injected = vi.hoisted(() => ({
+  engine: {} as any,
+}));
 
 vi.mock("../RpgClientEngine", () => ({
   RpgClientEngine: class RpgClientEngine {},
 }));
 
 vi.mock("../core/inject", () => ({
-  inject: () => ({}),
+  inject: () => injected.engine,
 }));
 
-function createObject() {
-  const object = Object.create(RpgClientObject.prototype) as RpgClientObject;
+function createObject(prototype: object = RpgClientObject.prototype) {
+  const object = Object.create(prototype) as RpgClientObject;
+  object.id = "object-1";
+  object.x = signal(10) as any;
+  object.y = signal(20) as any;
   object.animationName = signal("stand");
   object.graphics = signal(["hero"]) as any;
   object.animationCurrentIndex = signal(0);
   object.animationIsPlaying = signal(false);
+  object.hitbox = signal({ w: 32, h: 32 }) as any;
   return object;
 }
 
 describe("RpgClientObject animations", () => {
+  beforeEach(() => {
+    injected.engine = {};
+  });
+
   test("accepts a single frame payload without requiring iterable spread", () => {
     expect(
       appendFramePayload({ stale: true }, { x: 10, y: 20, ts: 1 }),
@@ -31,6 +45,32 @@ describe("RpgClientObject animations", () => {
       id: "hero",
       displayScale: 0.5,
     });
+  });
+
+  test("updates the client-side hitbox signal", () => {
+    const object = createObject();
+
+    object.setHitbox(56, 50);
+
+    expect(object.hitbox()).toEqual({ w: 56, h: 50 });
+  });
+
+  test.each([
+    ["player", RpgClientPlayer.prototype],
+    ["event", RpgClientEvent.prototype],
+  ])("updates the client-side %s physics body", (_kind, prototype) => {
+    const updateHitbox = vi.fn();
+    injected.engine = {
+      sceneMap: {
+        updateHitbox,
+      },
+    };
+    const object = createObject(prototype);
+
+    object.setHitbox(56, 50);
+
+    expect(object.hitbox()).toEqual({ w: 56, h: 50 });
+    expect(updateHitbox).toHaveBeenCalledWith("object-1", 10, 20, 56, 50);
   });
 
   test("marks temporary animation as finished before restoring locomotion animation", async () => {
