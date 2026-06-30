@@ -7,6 +7,12 @@ import { getGameDataProvider } from "./data-provider";
 
 export const STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE = 0.7;
 
+const resolveCharacterDisplayScale = (scale: unknown): number => {
+  return typeof scale === "number"
+    ? STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE * scale
+    : STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE;
+};
+
 const isAbsolutePath = (value: string): boolean => {
   return (
     value.startsWith("http://") ||
@@ -95,14 +101,11 @@ export const createSpriteSheetObject = async (
         const spritesheet = LPCSpritesheetPreset({
           id,
           imageSource: url,
-          scale: scale !== undefined ? [scale, scale] : undefined,
         });
-        return scale === undefined
-          ? {
-              ...spritesheet,
-              displayScale: STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE,
-            }
-          : spritesheet;
+        return {
+          ...spritesheet,
+          displayScale: resolveCharacterDisplayScale(scale),
+        };
       } else {
         const scale =
           typeof media.metadata?.scale === "number"
@@ -114,14 +117,11 @@ export const createSpriteSheetObject = async (
           imageSource: url,
           framesWidth: media.metadata?.frameWidth ?? 4,
           framesHeight: media.metadata?.frameHeight ?? 4,
-          scale: scale !== undefined ? [scale, scale] : undefined,
         });
-        return scale === undefined
-          ? {
-              ...spritesheet,
-              displayScale: STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE,
-            }
-          : spritesheet;
+        return {
+          ...spritesheet,
+          displayScale: resolveCharacterDisplayScale(scale),
+        };
 
       }
     case "faceset":

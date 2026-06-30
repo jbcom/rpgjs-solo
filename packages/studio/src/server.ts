@@ -641,7 +641,6 @@ export default (_config?: unknown) => {
             getGraphicScale(
               (mapExtended.globalConfig.hero as any)?.params,
               mapExtended.globalConfig.hero,
-              heroGraphic,
             ) ?? null,
           );
           player.setGraphic(heroGraphicKey);

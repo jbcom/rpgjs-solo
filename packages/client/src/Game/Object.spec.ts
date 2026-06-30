@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { signal } from "canvasengine";
-import { appendFramePayload, RpgClientObject, withGraphicDisplayScale } from "./Object";
+import { appendFramePayload, multiplyGraphicDisplayScale, RpgClientObject, withGraphicDisplayScale } from "./Object";
 import { RpgClientEvent } from "./Event";
 import { RpgClientPlayer } from "./Player";
 
@@ -43,7 +43,15 @@ describe("RpgClientObject animations", () => {
   test("keeps instance scale outside the spritesheet transform scale", () => {
     expect(withGraphicDisplayScale({ id: "hero" }, 0.5)).toEqual({
       id: "hero",
-      displayScale: 0.5,
+      displayScale: [0.5, 0.5],
+    });
+  });
+
+  test("combines media and instance display scales", () => {
+    expect(multiplyGraphicDisplayScale(0.5, 2)).toEqual([1, 1]);
+    expect(withGraphicDisplayScale({ id: "hero", displayScale: 0.5 }, { x: 2, y: 3 })).toEqual({
+      id: "hero",
+      displayScale: [1, 1.5],
     });
   });
 

@@ -29,12 +29,49 @@ type ConfigurableTrigger<T> = Omit<Trigger<T>, "start"> & {
   start(config?: T): Promise<void>;
 };
 
+const toFiniteScale = (value: unknown, fallback: number): number => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+};
+
+const normalizeGraphicScale = (value: unknown, fallback: [number, number] = [1, 1]): [number, number] => {
+  if (typeof value === "number" || typeof value === "string") {
+    const scale = toFiniteScale(value, fallback[0]);
+    return [scale, scale];
+  }
+  if (Array.isArray(value)) {
+    const x = toFiniteScale(value[0], fallback[0]);
+    const y = toFiniteScale(value[1] ?? value[0], x);
+    return [x, y];
+  }
+  if (value && typeof value === "object") {
+    const scale = value as { x?: unknown; y?: unknown };
+    const x = toFiniteScale(scale.x, fallback[0]);
+    const y = toFiniteScale(scale.y ?? scale.x, x);
+    return [x, y];
+  }
+  return fallback;
+};
+
+export const multiplyGraphicDisplayScale = (
+  baseScale: unknown,
+  instanceScale: unknown,
+): [number, number] => {
+  const base = normalizeGraphicScale(baseScale);
+  const instance = normalizeGraphicScale(instanceScale);
+  return [base[0] * instance[0], base[1] * instance[1]];
+};
+
 export const withGraphicDisplayScale = (spritesheet: any, scale: unknown): any => {
   if (!spritesheet || typeof spritesheet !== "object") return spritesheet;
   if (scale === undefined || scale === null) return spritesheet;
   return {
     ...spritesheet,
-    displayScale: scale,
+    displayScale: multiplyGraphicDisplayScale(spritesheet.displayScale, scale),
   };
 };
 

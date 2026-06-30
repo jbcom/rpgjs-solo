@@ -87,7 +87,7 @@ const applyGraphicSetting: TriggerSettingsApplier = ({
   const graphicKey = getGraphicKey(graphic);
   if (graphicKey) {
     (event as any)._graphicScale?.set(
-      getGraphicScale(trigger, fallbackParams, object, graphic) ?? null,
+      getGraphicScale(trigger, fallbackParams, object) ?? null,
     );
     event.setGraphic(graphicKey);
   }
@@ -424,7 +424,7 @@ const applyEnemyGraphicSetting: TriggerSettingsApplier = ({
   const graphicKey = getGraphicKey(enemy.graphic ?? enemy.params?.graphic);
   if (graphicKey) {
     (event as any)._graphicScale?.set(
-      getGraphicScale(trigger, fallbackParams, object, enemy.params, enemy) ??
+      getGraphicScale(trigger, fallbackParams, object, enemy.params) ??
         null,
     );
     event.setGraphic(graphicKey);

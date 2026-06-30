@@ -279,6 +279,39 @@ describe("Studio event runtime", () => {
     expect(calls).toContain("characters/hero.png");
   });
 
+  test("keeps Studio media metadata scale on the resolved spritesheet", () => {
+    const calls: any[] = [];
+    const scaleCalls: any[] = [];
+    const event: any = {
+      setGraphic: (graphic: any) => calls.push(graphic),
+      _graphicScale: {
+        set: (scale: any) => scaleCalls.push(scale),
+      },
+      changeDirection: () => {},
+      stopMoveTo: () => {},
+      setGraphicAnimation: () => {},
+    };
+
+    applyTriggerSettings({
+      event,
+      trigger: {
+        graphic: {
+          _id: "d823702e-3dc8-4f6e-8fc1-abea9ed8959c",
+          fileName: "1782630508484-vv5ok8zi.png",
+          metadata: {
+            scale: 0.5,
+          },
+        },
+      },
+      fallbackParams: {},
+      eventType: "free",
+      object: {},
+    });
+
+    expect(scaleCalls).toContain(null);
+    expect(calls).toContain("d823702e-3dc8-4f6e-8fc1-abea9ed8959c");
+  });
+
   test("locks animated Studio event patterns as continuous walk animations", () => {
     const calls: any[] = [];
     const event: any = {

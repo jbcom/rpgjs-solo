@@ -48,9 +48,9 @@ describe("Studio spritesheet utils", () => {
       },
     });
 
-    expect(spritesheet.scale).toEqual([0.75, 0.75]);
+    expect(spritesheet.scale).toEqual([1, 1]);
     expect(spritesheet.anchor).toBeUndefined();
-    expect(spritesheet.displayScale).toBeUndefined();
+    expect(spritesheet.displayScale).toBe(STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE * 0.75);
   });
 
   test("keeps LPC sprite real size in source pixels when media is scaled", async () => {
@@ -64,7 +64,8 @@ describe("Studio spritesheet utils", () => {
       },
     });
 
-    expect(spritesheet.scale).toEqual([0.65, 0.65]);
+    expect(spritesheet.scale).toEqual([1, 1]);
+    expect(spritesheet.displayScale).toBe(STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE * 0.65);
     expect(spritesheet.spriteRealSize).toEqual({ width: 48, height: 52 });
   });
 
@@ -84,7 +85,8 @@ describe("Studio spritesheet utils", () => {
 
     expect(getMedia).toHaveBeenCalledWith("hero.png");
     expect(spritesheet.framesWidth).toBe(3);
-    expect(spritesheet.scale).toEqual([0.5, 0.5]);
+    expect(spritesheet.scale).toEqual([1, 1]);
+    expect(spritesheet.displayScale).toBe(STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE * 0.5);
   });
 
   test("keeps direct file-name fallback when Studio media lookup fails", async () => {
