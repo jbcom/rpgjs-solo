@@ -84,6 +84,24 @@ export const appendFramePayload = (current: unknown, items: unknown): Frame[] =>
   return currentFrames.concat(nextFrames);
 };
 
+export const getFrameTimestamp = (frame: Frame): number => {
+  const timestamp = Number(frame.ts);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+export const mergeFreshFramePayload = (
+  current: unknown,
+  items: unknown,
+  lastAppliedFrameTs = 0,
+): Frame[] => {
+  return appendFramePayload(current, items)
+    .filter((frame) => {
+      const timestamp = getFrameTimestamp(frame);
+      return timestamp === 0 || timestamp > lastAppliedFrameTs;
+    })
+    .sort((a, b) => getFrameTimestamp(a) - getFrameTimestamp(b));
+};
+
 export abstract class RpgClientObject extends RpgCommonPlayer {
   abstract _type: string;
   emitParticleTrigger = trigger();
@@ -94,6 +112,7 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
   frames: Frame[] = [];
   graphicsSignals = signal<any[]>([]);
   flashTrigger: ConfigurableTrigger<FlashTriggerOptions> = trigger<FlashTriggerOptions>();
+  private lastAppliedFrameTs = 0;
   private animationRestoreState?: {
     animationName: string;
     graphics: any[];
@@ -107,7 +126,11 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
     this._frames.observable.subscribe(({ items }) => {
       if (!this.id) return;
       //if (this.id == this.engine.playerIdSignal()!) return;
-      this.frames = appendFramePayload(this.frames, items);
+      this.frames = mergeFreshFramePayload(
+        this.frames,
+        items,
+        this.lastAppliedFrameTs,
+      );
     });
 
     const graphics$ = this.graphics.observable.pipe(map(({ items }) => items));
@@ -139,14 +162,23 @@ export abstract class RpgClientObject extends RpgCommonPlayer {
         const frame = this.frames.shift();
         if (frame) {
           if (typeof frame.x !== "number" || typeof frame.y !== "number") return;
+          const frameTs = this.getFrameTimestamp(frame);
+          if (frameTs > 0 && frameTs <= this.lastAppliedFrameTs) return;
           engine.scene.setBodyPosition(
             this.id,
             frame.x,
             frame.y,
             "top-left"
           );
+          if (frameTs > this.lastAppliedFrameTs) {
+            this.lastAppliedFrameTs = frameTs;
+          }
         }
       });
+  }
+
+  private getFrameTimestamp(frame: Frame): number {
+    return getFrameTimestamp(frame);
   }
 
   /**

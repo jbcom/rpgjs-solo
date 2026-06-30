@@ -373,6 +373,82 @@ test('event touch hooks run once on event/event enter and on exit for both event
     ])
 })
 
+test('ground event touch sensors wait until the plate is covered enough', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+    const calls: string[] = []
+
+    await map.createDynamicEvent({
+      id: "floor-switch",
+      x: 500,
+      y: 500,
+      hitbox: {
+        width: 32,
+        height: 32,
+      },
+      event: {
+        name: "floor-switch",
+        onInit() {
+          this.through = true
+          this.throughEvent = true
+          this.z.set(-1000)
+        },
+        onTouch(other, context) {
+          calls.push(`switch:${other.name}:${context.phase}`)
+        },
+        onTouchEnd(other, context) {
+          calls.push(`switch:${other.name}:${context.phase}`)
+        },
+      }
+    })
+    await map.createDynamicEvent({
+      id: "stone-cover",
+      x: 518,
+      y: 500,
+      hitbox: {
+        width: 98,
+        height: 105,
+      },
+      event: {
+        name: "stone-cover",
+      }
+    })
+
+    const switchBody = map.getBody("floor-switch")
+    const stoneBody = map.getBody("stone-cover")
+    const collision = { entityA: switchBody, entityB: stoneBody }
+
+    map.physic.getEvents().emitCollisionEnter(collision)
+    await fixture.wait(0)
+
+    expect(calls).toEqual([])
+
+    map.setBodyPosition("stone-cover", 492, 500, "top-left")
+    await map.nextTickAsync()
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      "switch:stone-cover:start",
+    ])
+
+    map.setBodyPosition("stone-cover", 518, 500, "top-left")
+    await map.nextTickAsync()
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      "switch:stone-cover:start",
+      "switch:stone-cover:end",
+    ])
+
+    map.physic.getEvents().emitCollisionExit(collision)
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      "switch:stone-cover:start",
+      "switch:stone-cover:end",
+    ])
+})
+
 test('event touch hooks ignore collisions across different z levels', async () => {
     player = await client.waitForMapChange('map1')
     const map = player.getCurrentMap() as any
@@ -419,6 +495,81 @@ test('event touch hooks ignore collisions across different z levels', async () =
     await fixture.wait(0)
 
     expect(calls).toEqual([])
+})
+
+test('event touch tracking is removed when collision exits after z changes', async () => {
+    player = await client.waitForMapChange('map1')
+    const map = player.getCurrentMap() as any
+    const calls: string[] = []
+
+    await map.createDynamicEvent({
+      id: "z-changing-plate",
+      x: 320,
+      y: 320,
+      event: {
+        name: "z-changing-plate",
+        onTouch(other, context) {
+          calls.push(`plate:${other.name}:${context.phase}`)
+        },
+        onTouchEnd(other, context) {
+          calls.push(`plate:${other.name}:${context.phase}`)
+        },
+      }
+    })
+    await map.createDynamicEvent({
+      id: "z-changing-stone",
+      x: 320,
+      y: 320,
+      event: {
+        name: "z-changing-stone",
+        onTouch(other, context) {
+          calls.push(`stone:${other.name}:${context.phase}`)
+        },
+        onTouchEnd(other, context) {
+          calls.push(`stone:${other.name}:${context.phase}`)
+        },
+      }
+    })
+
+    const plate = map.getEvent("z-changing-plate")
+    const stone = map.getEvent("z-changing-stone")
+    const collision = {
+      entityA: map.getBody("z-changing-plate"),
+      entityB: map.getBody("z-changing-stone"),
+    }
+
+    map.physic.getEvents().emitCollisionEnter(collision)
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      "plate:z-changing-stone:start",
+      "stone:z-changing-plate:start",
+    ])
+
+    stone.z.set(1)
+    await map.nextTickAsync()
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      "plate:z-changing-stone:start",
+      "stone:z-changing-plate:start",
+      "plate:z-changing-stone:end",
+      "stone:z-changing-plate:end",
+    ])
+
+    map.physic.getEvents().emitCollisionExit(collision)
+    await fixture.wait(0)
+
+    stone.z.set(plate.z())
+    await map.nextTickAsync()
+    await fixture.wait(0)
+
+    expect(calls).toEqual([
+      "plate:z-changing-stone:start",
+      "stone:z-changing-plate:start",
+      "plate:z-changing-stone:end",
+      "stone:z-changing-plate:end",
+    ])
 })
 
 test('always-on-top events do not resolve physical collisions', async () => {

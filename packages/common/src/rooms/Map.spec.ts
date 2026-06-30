@@ -100,4 +100,77 @@ describe("RpgCommonMap static hitboxes", () => {
     expect(map.getBody("studio-event")?.width).toBe(56);
     expect(map.getBody("studio-event")?.height).toBe(50);
   });
+
+  test("lets event touch sensors overlap other events without physical separation", () => {
+    const map = new TestMap();
+    const plate = {
+      id: "plate",
+      x: signal(100),
+      y: signal(120),
+      z: signal(0),
+      hitbox: signal({ w: 32, h: 32 }),
+      _throughEvent: signal(true),
+      _removeTransition: signal(false),
+    };
+    const rock = {
+      id: "rock",
+      x: signal(100),
+      y: signal(120),
+      z: signal(0),
+      hitbox: signal({ w: 32, h: 32 }),
+      _removeTransition: signal(false),
+    };
+
+    map.data.set({
+      width: 200,
+      height: 200,
+      hitboxes: [],
+    });
+    map.events.set({ plate, rock });
+    map.loadPhysic();
+
+    expect(testCollision(map.getBody("plate")!, map.getBody("rock")!)).not.toBeNull();
+
+    map.physic.stepFrame();
+
+    expect(plate.x()).toBe(100);
+    expect(plate.y()).toBe(120);
+    expect(rock.x()).toBe(100);
+    expect(rock.y()).toBe(120);
+  });
+
+  test("clamps route movement position frames at the current route target", () => {
+    const map = new TestMap();
+    const event: any = {
+      id: "route-event",
+      x: signal(100),
+      y: signal(100),
+      z: signal(0),
+      hitbox: signal({ w: 32, h: 32 }),
+      _removeTransition: signal(false),
+      __routeMovementClamp: {
+        targetTopLeft: { x: 70, y: 100 },
+        direction: { x: -1, y: 0 },
+      },
+    };
+
+    map.data.set({
+      width: 200,
+      height: 200,
+      hitboxes: [],
+    });
+    map.events.set({ "route-event": event });
+    map.loadPhysic();
+
+    map.setBodyPosition("route-event", 68, 100, "top-left");
+
+    expect(event.x()).toBe(70);
+    expect(event.y()).toBe(100);
+
+    delete event.__routeMovementClamp;
+    map.setBodyPosition("route-event", 68, 100, "top-left");
+
+    expect(event.x()).toBe(68);
+    expect(event.y()).toBe(100);
+  });
 });

@@ -766,6 +766,11 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
     clearMovements(): void {
       const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
+      delete (this as any).__routeMovementClamp;
+      const body = map?.getBody?.((this as unknown as PlayerWithMixins).id) as any;
+      if (body) {
+        delete body.__routeMovementClamp;
+      }
       if (!map) return;
 
       const playerId = (this as unknown as PlayerWithMixins).id;
@@ -1319,7 +1324,31 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             // Debug logging disabled - enable if needed for troubleshooting
           }
 
+          private setRouteClamp(entity?: any): void {
+            if (!this.currentTargetTopLeft) {
+              this.clearRouteClamp(entity);
+              return;
+            }
+
+            const clamp = {
+              targetTopLeft: this.currentTargetTopLeft,
+              direction: this.currentDirection,
+            };
+            (this.player as any).__routeMovementClamp = clamp;
+            if (entity) {
+              entity.__routeMovementClamp = clamp;
+            }
+          }
+
+          private clearRouteClamp(entity?: any): void {
+            delete (this.player as any).__routeMovementClamp;
+            if (entity) {
+              delete entity.__routeMovementClamp;
+            }
+          }
+
           private processNextRoute(): void {
+            this.clearRouteClamp();
             // Reset frequency wait state when processing a new route
             this.waitingForFrequency = false;
             this.frequencyWaitStartTime = 0;
@@ -1331,6 +1360,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             if (this.routeIndex >= this.routes.length) {
               this.debugLog('COMPLETE all routes finished');
               this.finished = true;
+              this.clearRouteClamp();
               this.onComplete(true);
               return;
             }
@@ -1402,6 +1432,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 const map = this.player.getCurrentMap() as any;
                 if (!map) {
                   this.finished = true;
+                  this.clearRouteClamp();
                   this.onComplete(false);
                   return;
                 }
@@ -1509,6 +1540,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 this.lastDistanceToTarget = null;
                 this.stuckCheckInitialized = false;
                 this.currentTargetTopLeft = null;
+                this.clearRouteClamp();
                 return;
               }
             }
@@ -1516,6 +1548,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             const entity = body.getEntity?.();
             if (!entity) {
               this.finished = true;
+              this.clearRouteClamp(entity);
               this.onComplete(false);
               return;
             }
@@ -1535,7 +1568,10 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               dx = this.currentTargetTopLeft.x - currentTopLeftX;
               dy = this.currentTargetTopLeft.y - currentTopLeftY;
               distance = Math.hypot(dx, dy);
-              const arrivalThreshold = Math.max(this.tolerance, (this.player as any).speed);
+              const arrivalThreshold = this.getArrivalThreshold(
+                currentMap,
+                (this.player as any).speed
+              );
 
               // Snap to the target when the physics step overshoots the discrete route distance.
               if (distance <= arrivalThreshold) {
@@ -1546,6 +1582,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 this.currentTarget = null;
                 this.currentTargetTopLeft = null;
                 this.currentDirection = { x: 0, y: 0 };
+                this.clearRouteClamp(entity);
                 body.setVelocity({ x: 0, y: 0 });
                 // Reset stuck detection
                 this.lastPosition = null;
@@ -1575,7 +1612,10 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               dx = this.currentTarget.x - currentPosition.x;
               dy = this.currentTarget.y - currentPosition.y;
               distance = Math.hypot(dx, dy);
-              const arrivalThreshold = Math.max(this.tolerance, (this.player as any).speed);
+              const arrivalThreshold = this.getArrivalThreshold(
+                currentMap,
+                (this.player as any).speed
+              );
 
               // Check if we've reached the target (using center position as fallback)
               if (distance <= arrivalThreshold) {
@@ -1586,6 +1626,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 this.currentTarget = null;
                 this.currentTargetTopLeft = null;
                 this.currentDirection = { x: 0, y: 0 };
+                this.clearRouteClamp(entity);
                 body.setVelocity({ x: 0, y: 0 });
                 // Reset stuck detection
                 this.lastPosition = null;
@@ -1653,6 +1694,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                         // Cancel the route
                         this.debugLog('STUCK cancelled route');
                         this.finished = true;
+                        this.clearRouteClamp(entity);
                         this.onComplete(false);
                         body.setVelocity({ x: 0, y: 0 });
                         return;
@@ -1669,6 +1711,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                       this.currentTarget = null;
                       this.currentTargetTopLeft = null;
                       this.currentDirection = { x: 0, y: 0 };
+                      this.clearRouteClamp(entity);
                       body.setVelocity({ x: 0, y: 0 });
 
                       // Reset stuck detection to start fresh on the next target
@@ -1709,6 +1752,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               this.currentTarget = null;
               this.currentTargetTopLeft = null;
               this.currentDirection = { x: 0, y: 0 };
+              this.clearRouteClamp(entity);
               body.setVelocity({ x: 0, y: 0 });
               if (!this.finished) {
                 const playerFrequency = this.player.frequency;
@@ -1738,6 +1782,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
               cardinalDirection = this.currentDirection.y >= 0 ? Direction.Down : Direction.Up;
             }
 
+            this.setRouteClamp(entity);
             map.movePlayer(this.player as any, cardinalDirection)
           }
 
@@ -1746,6 +1791,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
           }
 
           onFinished(): void {
+            this.clearRouteClamp();
             this.onComplete(true);
           }
 
@@ -1757,6 +1803,21 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             return stepsPerTile * playerSpeed;
           }
 
+          private getArrivalThreshold(map: any, playerSpeed: number): number {
+            const speed = Number(playerSpeed);
+            if (!Number.isFinite(speed) || speed <= 0) {
+              return this.tolerance;
+            }
+            const speedScalar = Number(map?.speedScalar ?? 50);
+            const timeStep = Number(map?.physic?.getWorld?.().getTimeStep?.() ?? 1 / 60);
+            const physicsStepDistance =
+              Number.isFinite(speedScalar) && speedScalar > 0 &&
+              Number.isFinite(timeStep) && timeStep > 0
+                ? speed * speedScalar * timeStep
+                : speed;
+            return Math.max(this.tolerance, speed, physicsStepDistance + 2);
+          }
+
           private setNextSegmentTarget(currentTopLeftX: number, currentTopLeftY: number): void {
             if (!this.segmentDirection || this.remainingDistance <= 0) {
               return;
@@ -1765,6 +1826,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             const map = this.player.getCurrentMap() as any;
             if (!map) {
               this.finished = true;
+              this.clearRouteClamp();
               this.onComplete(false);
               return;
             }
@@ -1772,6 +1834,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
             const entity = map.physic.getEntityByUUID(this.player.id);
             if (!entity) {
               this.finished = true;
+              this.clearRouteClamp();
               this.onComplete(false);
               return;
             }
@@ -1863,6 +1926,12 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
     breakRoutes(force: boolean = false): void {
       this._isInfiniteRouteActive = false;
+      delete (this as any).__routeMovementClamp;
+      const map = (this as unknown as PlayerWithMixins).getCurrentMap() as any;
+      const body = map?.getBody?.((this as unknown as PlayerWithMixins).id) as any;
+      if (body) {
+        delete body.__routeMovementClamp;
+      }
 
       if (force) {
         // Force stop by clearing all movements immediately

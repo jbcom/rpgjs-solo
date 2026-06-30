@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { signal } from "canvasengine";
-import { appendFramePayload, multiplyGraphicDisplayScale, RpgClientObject, withGraphicDisplayScale } from "./Object";
+import {
+  appendFramePayload,
+  mergeFreshFramePayload,
+  multiplyGraphicDisplayScale,
+  RpgClientObject,
+  withGraphicDisplayScale,
+} from "./Object";
 import { RpgClientEvent } from "./Event";
 import { RpgClientPlayer } from "./Player";
 
@@ -38,6 +44,16 @@ describe("RpgClientObject animations", () => {
     expect(
       appendFramePayload({ stale: true }, { x: 10, y: 20, ts: 1 }),
     ).toEqual([{ x: 10, y: 20, ts: 1 }]);
+  });
+
+  test("drops stale movement frames that arrive after a newer frame was applied", () => {
+    expect(
+      mergeFreshFramePayload(
+        [],
+        [{ x: 733, y: 551, ts: 200 }],
+        300,
+      ),
+    ).toEqual([]);
   });
 
   test("keeps instance scale outside the spritesheet transform scale", () => {

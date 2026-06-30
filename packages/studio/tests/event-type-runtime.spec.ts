@@ -377,6 +377,32 @@ describe("Studio event runtime", () => {
     expect(zValues).toEqual([-1000, 1000]);
   });
 
+  test("makes Studio event-touch triggers pass-through for other events", () => {
+    const event: any = {
+      z: {
+        set: () => {},
+      },
+      changeDirection: () => {},
+      stopMoveTo: () => {},
+      setGraphicAnimation: () => {},
+    };
+
+    applyTriggerSettings({
+      event,
+      trigger: {
+        type: "onTouch",
+        typeData: {
+          touchTarget: "event",
+        },
+      },
+      fallbackParams: {},
+      eventType: "free",
+      object: {},
+    });
+
+    expect(event.throughEvent).toBe(true);
+  });
+
   test("applies Studio event page hitbox settings", () => {
     const hitboxCalls: Array<[number, number]> = [];
     const event: any = {

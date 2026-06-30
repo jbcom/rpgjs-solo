@@ -282,6 +282,36 @@ describe("Move Routes - Tile Movements", () => {
     expect(player.y()).toBe(initialY);
   });
 
+  test("should not emit a tile movement frame past the route target", async () => {
+    const map = player.getCurrentMap() as any;
+    const originalSpeedScalar = map.speedScalar;
+    const originalApplyFrames = player.applyFrames.bind(player);
+    const emittedX: number[] = [];
+
+    player.speed = 3;
+    map.speedScalar = 250;
+    player.frames = [];
+    player.applyFrames = function () {
+      emittedX.push(...this.frames.map((frame) => frame.x));
+      return originalApplyFrames();
+    };
+
+    try {
+      const initialX = player.x();
+      const expectedX = initialX - Math.floor(map.tileWidth / player.speed) * player.speed;
+
+      await fixture.waitUntil(
+        player.moveRoutes([Move.tileLeft()])
+      );
+
+      expect(player.x()).toBe(expectedX);
+      expect(Math.min(...emittedX)).toBeGreaterThanOrEqual(expectedX);
+    } finally {
+      player.applyFrames = originalApplyFrames;
+      map.speedScalar = originalSpeedScalar;
+    }
+  });
+
   test("should move up by tiles using Move.tileUp()", async () => {
     const initialX = player.x();
     const initialY = player.y();

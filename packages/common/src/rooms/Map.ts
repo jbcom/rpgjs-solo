@@ -897,6 +897,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     subscribeSignal(owner.z);
     subscribeSignal(owner.hitbox);
     subscribeSignal(owner._through);
+    subscribeSignal(owner._throughEvent);
     subscribeSignal(owner._pushable);
     subscribeSignal(owner._mass);
   }
@@ -1595,8 +1596,29 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
       // Calculate top-left from center using the original hitbox dimensions
       // This ensures consistency: center = topLeft + (size / 2)
       // Therefore: topLeft = center - (size / 2)
-      const topLeftX = x - entityWidth / 2;
-      const topLeftY = y - entityHeight / 2;
+      let topLeftX = x - entityWidth / 2;
+      let topLeftY = y - entityHeight / 2;
+      const routeClamp =
+        (currentOwner as any).__routeMovementClamp ??
+        (entity as any).__routeMovementClamp;
+      const targetTopLeft = routeClamp?.targetTopLeft;
+      const direction = routeClamp?.direction;
+      if (targetTopLeft && direction) {
+        const targetX = Number(targetTopLeft.x);
+        const targetY = Number(targetTopLeft.y);
+        const directionX = Number(direction.x);
+        const directionY = Number(direction.y);
+        if (Number.isFinite(targetX) && Number.isFinite(directionX)) {
+          if ((directionX > 0 && topLeftX > targetX) || (directionX < 0 && topLeftX < targetX)) {
+            topLeftX = targetX;
+          }
+        }
+        if (Number.isFinite(targetY) && Number.isFinite(directionY)) {
+          if ((directionY > 0 && topLeftY > targetY) || (directionY < 0 && topLeftY < targetY)) {
+            topLeftY = targetY;
+          }
+        }
+      }
       let changed = false;
 
       this.withPhysicsSync(() => {
@@ -1610,7 +1632,10 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         }
       });
       if (changed) {
-        currentOwner.applyFrames?.();
+        const applyFrames = currentOwner.applyFrames;
+        if (typeof applyFrames === "function") {
+          queueMicrotask(() => applyFrames.call(currentOwner));
+        }
       }
     });
 
@@ -1704,13 +1729,13 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
         }
       }
 
-      // throughEvent only applies when SELF is a player and OTHER is an event
-      // (players passing through events)
-      if (isSelfPlayer && isOtherEvent) {
+      // throughEvent applies when SELF is a player or event and OTHER is an event.
+      // Collisions are still detected, but not physically resolved.
+      if ((isSelfPlayer || isSelfEvent) && isOtherEvent) {
         if (typeof selfOwner._throughEvent === "function") {
           try {
             if (selfOwner._throughEvent() === true) {
-              return false; // Pass through events but events still fire
+              return false; // Pass through events but touch events still fire
             }
           } catch {
             // Ignore errors

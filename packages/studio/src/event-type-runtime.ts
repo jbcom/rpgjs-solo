@@ -541,6 +541,17 @@ const applyOptionsSetting: TriggerSettingsApplier = ({ event, trigger }) => {
   if (options.through) {
     event.through = options.through;
   }
+  const isEventTouchTrigger =
+    trigger?.type === "onTouch" && trigger?.typeData?.touchTarget === "event";
+  const throughEvent =
+    typeof options.throughEvent === "boolean"
+      ? options.throughEvent
+      : isEventTouchTrigger
+        ? true
+        : undefined;
+  if (throughEvent !== undefined) {
+    event.throughEvent = throughEvent;
+  }
   if (options.alwaysOnTop) {
     event.z.set(1000);
   } else if (options.alwaysOnBottom) {
