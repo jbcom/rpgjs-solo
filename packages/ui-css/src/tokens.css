@@ -82,12 +82,12 @@
   --rpg-ui-hud-padding: 16px;
   --rpg-ui-hud-background: rgba(2, 6, 23, 0.48);
   --rpg-ui-hud-border: rgba(255, 255, 255, 0.12);
-  --rpg-ui-avatar-size: 64px;
+  --rpg-ui-avatar-size: 72px;
   --rpg-ui-avatar-background: rgba(15, 23, 42, 0.92);
   --rpg-ui-avatar-border: rgba(255, 255, 255, 0.88);
   --rpg-ui-avatar-border-width: 3px;
   --rpg-ui-avatar-shadow: 0 0 10px rgba(2, 6, 23, 0.5);
-  --rpg-ui-avatar-content-transform: translate(-42%, -45%) scale(0.35);
+  --rpg-ui-avatar-content-transform: translate(-50%, -48%) scale(0.2);
   --rpg-ui-avatar-level-bg: rgba(2, 6, 23, 0.9);
   --rpg-ui-avatar-level-color: #facc15;
   --rpg-ui-avatar-level-border: rgba(250, 204, 21, 0.8);

@@ -1,6 +1,8 @@
 <DOMContainer width="100%" height="100%" controls={menuControls}>
-    <div class="rpg-ui-main-menu rpg-anim-fade-in">
-        <div class="rpg-ui-main-menu-layout">
+    <div class="rpg-ui-main-menu rpg-anim-fade-in" click={closeMenuFromPointer}>
+        <div class="rpg-ui-main-menu-backdrop"></div>
+        <button class="rpg-ui-close-button" type="button" title="Close" aria-label="Close menu" click={closeMenuFromPointer}>x</button>
+        <div class="rpg-ui-main-menu-layout" click={stopEvent}>
             <div class="rpg-ui-main-menu-left rpg-ui-menu rpg-ui-panel">
                 <div class="rpg-ui-menu-header">{t("rpg.menu.title")}</div>
                 <div class="rpg-ui-main-menu-list">
@@ -77,8 +79,8 @@
         </div>
         @if (saveOverlay) {
             <div class="rpg-ui-main-menu-overlay">
-                <div class="rpg-ui-main-menu-overlay-backdrop"></div>
-                <div class="rpg-ui-main-menu-overlay-content">
+                <div class="rpg-ui-main-menu-overlay-backdrop" click={closeSaveOverlayFromPointer}></div>
+                <div class="rpg-ui-main-menu-overlay-content" click={stopEvent}>
                     <SaveLoadComponent
                         data={saveLoadData}
                         onFinish={closeSaveOverlay}
@@ -202,6 +204,28 @@
         });
     };
 
+    const stopEvent = (event) => {
+        event?.stopPropagation?.();
+    };
+
+    const closeSaveOverlayFromPointer = (event) => {
+        stopEvent(event);
+        closeSaveOverlay();
+    };
+
+    const closeMenu = () => {
+        if (saveOverlay()) {
+            closeSaveOverlay();
+            return;
+        }
+        onFinish();
+    };
+
+    const closeMenuFromPointer = (event) => {
+        stopEvent(event);
+        closeMenu();
+    };
+
     const confirmExit = () => {
         if (onInteraction) onInteraction("exit");
     };
@@ -285,11 +309,18 @@
     });
 
     mount((element) => {
+        const inputLockToken = {};
+        const previousStopProcessingInput = engine.stopProcessingInput;
+        const previousGamePause = engine.gamePause();
+        engine.__rpgMainMenuInputLock = inputLockToken;
+        engine.stopProcessingInput = true;
         engine.gamePause.set(true);
         return () => {
             delay(() => {
-                engine.stopProcessingInput = false;
-                engine.gamePause.set(false);
+                if (engine.__rpgMainMenuInputLock !== inputLockToken) return;
+                engine.__rpgMainMenuInputLock = undefined;
+                engine.stopProcessingInput = previousStopProcessingInput;
+                engine.gamePause.set(previousGamePause);
             });
         }
     });

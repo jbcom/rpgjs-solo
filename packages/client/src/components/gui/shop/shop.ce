@@ -1,5 +1,7 @@
     <DOMContainer width="100%" height="100%">
-        <div class="rpg-shop-container rpg-anim-fade-in">
+        <div class="rpg-shop-layer" click={closeShopFromPointer}>
+        <button class="rpg-ui-close-button" type="button" title="Close" aria-label="Close shop" click={closeShopFromPointer}>x</button>
+        <div class="rpg-shop-container rpg-anim-fade-in" click={stopEvent}>
             <div class="rpg-shop-header">
                 <div class="rpg-shop-merchant">
                     <div>
@@ -143,8 +145,8 @@
                     </div>
                 }
                 @if (quantityDialogOpen) {
-                    <div class="rpg-shop-modal">
-                        <div class="rpg-shop-modal-card">
+                    <div class="rpg-shop-modal" click={closeQuantityDialogFromPointer}>
+                        <div class="rpg-shop-modal-card" click={stopEvent}>
                             <div class="rpg-shop-modal-title">{{ actionLabel }}</div>
                             <div class="rpg-shop-modal-item">{{ currentItem()?.name || "" }}</div>
                             @if (currentItem()?.quantity !== undefined) {
@@ -173,6 +175,7 @@
                 }
                 </div>
             </div>
+        </div>
         </div>
     </DOMContainer>
 
@@ -349,6 +352,28 @@
         return function() {
             quantityDialogOpen.set(false)
         }
+    }
+
+    const stopEvent = (event) => {
+        event?.stopPropagation?.()
+    }
+
+    const closeQuantityDialogFromPointer = (event) => {
+        stopEvent(event)
+        quantityDialogOpen.set(false)
+    }
+
+    const closeShop = () => {
+        if (quantityDialogOpen()) {
+            quantityDialogOpen.set(false)
+            return
+        }
+        onFinish()
+    }
+
+    const closeShopFromPointer = (event) => {
+        stopEvent(event)
+        closeShop()
     }
 
     function confirmTrade() {

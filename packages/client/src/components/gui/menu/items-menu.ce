@@ -63,8 +63,9 @@
             </div>
         </div>
         @if (confirmOpen) {
-            <div class="rpg-ui-menu-confirm">
-                <div class="rpg-ui-menu-confirm-card">
+            <div class="rpg-ui-menu-confirm" click={cancelConfirmFromPointer}>
+                <button class="rpg-ui-close-button" type="button" title="Close" aria-label="Close confirmation" click={cancelConfirmFromPointer}>x</button>
+                <div class="rpg-ui-menu-confirm-card" click={stopEvent}>
                     <div class="rpg-ui-menu-confirm-title">{t("rpg.menu.use")} {confirmItem()?.name}?</div>
                     <Navigation tabindex={selectedConfirm} controls={confirmControls}>
                         <div class="rpg-ui-menu-confirm-actions">
@@ -195,6 +196,15 @@
             confirmOpen.set(false);
             confirmItem.set(null);
         });
+    };
+
+    const stopEvent = (event) => {
+        event?.stopPropagation?.();
+    };
+
+    const cancelConfirmFromPointer = (event) => {
+        stopEvent(event);
+        cancelConfirm();
     };
 
     function confirmSelect(index) {

@@ -1,11 +1,23 @@
-.rpg-shop-container {
+.rpg-shop-layer {
   position: absolute;
-  inset: 20px;
+  inset: 0;
+  z-index: 1000;
   display: flex;
-  width: auto;
+  align-items: stretch;
+  justify-content: center;
+  padding: clamp(10px, 3vw, 20px);
+  box-sizing: border-box;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.rpg-shop-container {
+  position: relative;
+  display: flex;
+  width: min(var(--rpg-ui-shop-max-width), 100%);
   max-width: var(--rpg-ui-shop-max-width);
-  height: auto;
-  min-height: calc(100% - 40px);
+  height: 100%;
+  min-height: 0;
   margin: 0 auto;
   flex-direction: column;
   border: 1px solid var(--rpg-ui-shop-muted-border);
@@ -44,6 +56,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  min-width: 0;
 }
 
 .rpg-shop-merchant-avatar {
@@ -71,7 +84,9 @@
 }
 
 .rpg-shop-merchant-info p {
+  max-width: 64ch;
   color: var(--rpg-ui-text-muted);
+  overflow-wrap: anywhere;
 }
 
 .rpg-shop-gold {
@@ -92,10 +107,13 @@
   gap: 24px;
   padding: 0 30px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .rpg-shop-tab {
   position: relative;
+  flex: 0 0 auto;
   padding: 16px 0;
   color: var(--rpg-ui-text-muted);
   cursor: pointer;
@@ -130,15 +148,34 @@
   flex: 1;
   display: flex;
   min-height: 0;
+  overflow: hidden;
 }
 
 .rpg-shop-grid {
   flex: 1;
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
   padding: 30px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--rpg-ui-accent), transparent 30%) transparent;
+}
+
+.rpg-shop-grid::-webkit-scrollbar,
+.rpg-shop-details::-webkit-scrollbar,
+.rpg-shop-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.rpg-shop-grid::-webkit-scrollbar-thumb,
+.rpg-shop-details::-webkit-scrollbar-thumb,
+.rpg-shop-container::-webkit-scrollbar-thumb {
+  border-radius: var(--rpg-ui-radius-full);
+  background: color-mix(in srgb, var(--rpg-ui-accent), transparent 35%);
 }
 
 .rpg-shop-card {
@@ -207,9 +244,13 @@
 
 .rpg-shop-card-name {
   flex: 1;
+  min-width: 0;
   font-size: 16px;
   font-weight: var(--rpg-ui-font-weight-bold);
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rpg-shop-card-price,
@@ -228,11 +269,16 @@
 .rpg-shop-details {
   width: 280px;
   display: flex;
+  min-height: 0;
   flex-direction: column;
   gap: 20px;
   padding: 30px;
   background: rgba(0, 0, 0, 0.2);
   border-left: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--rpg-ui-accent), transparent 30%) transparent;
 }
 
 .rpg-shop-details-header {
@@ -382,6 +428,7 @@
 .rpg-shop-modal-card {
   width: 100%;
   max-width: 360px;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -390,6 +437,7 @@
   border-radius: var(--rpg-ui-radius-lg);
   background: rgba(15, 15, 25, 0.95);
   box-shadow: var(--rpg-ui-shadow-md);
+  overflow: auto;
 }
 
 .rpg-shop-modal-title {
@@ -455,13 +503,75 @@
 }
 
 @media (max-width: 900px) {
+  .rpg-shop-layer {
+    padding:
+      calc(58px + env(safe-area-inset-top, 0px))
+      calc(10px + env(safe-area-inset-right, 0px))
+      calc(10px + env(safe-area-inset-bottom, 0px))
+      calc(10px + env(safe-area-inset-left, 0px));
+  }
+
+  .rpg-shop-container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: var(--rpg-ui-radius-md);
+  }
+
   .rpg-shop-body {
     flex-direction: column;
+    min-height: 0;
+  }
+
+  .rpg-shop-header {
+    align-items: stretch;
+    flex-direction: column;
+    flex: 0 0 auto;
+    padding: 14px;
+  }
+
+  .rpg-shop-tabs {
+    gap: 12px;
+    padding: 0 14px;
+    overflow-x: auto;
+  }
+
+  .rpg-shop-content {
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .rpg-shop-grid {
+    flex: 1 1 auto;
+    min-height: 140px;
+    padding: 14px;
+    overflow: auto;
+  }
+
+  .rpg-shop-card {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .rpg-shop-card-icon {
+    width: 40px;
+    height: 40px;
   }
 
   .rpg-shop-details {
     width: 100%;
+    flex: 0 1 auto;
+    max-height: 42%;
+    box-sizing: border-box;
+    padding: 14px;
     border-left: none;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .rpg-shop-modal {
+    padding: 12px;
   }
 }

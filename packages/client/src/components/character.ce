@@ -521,6 +521,16 @@
     });
   };
 
+  let lastEscapeActionAt = 0;
+  const processEscapeInput = () => {
+    const now = Date.now();
+    if (now - lastEscapeActionAt < 50) return;
+    lastEscapeActionAt = now;
+    if (canControls()) {
+      client.processAction({ action: 'escape' })
+    }
+  };
+
   const actionBind = () => getKeyboardControlBind(keyboardControls.action);
   const keyboardEventId = (event) => `${event.keyCode}:${event.code}:${event.key}`;
 
@@ -616,17 +626,13 @@
     back: {
       bind: keyboardControls.escape,
       keyDown() {
-        if (canControls()) {
-          client.processAction({ action: 'escape' })
-        }
+        processEscapeInput()
       },
     },
     escape: {
       bind: keyboardControls.escape,
       keyDown() {
-        if (canControls()) {
-          client.processAction({ action: 'escape' })
-        }
+        processEscapeInput()
       },
     },
     joystick: {

@@ -1,49 +1,52 @@
 <DOMContainer width="100%" height="100%" controls={dialogControls}>
-    <div
-        class="rpg-ui-dialog-container"
-        data-position={dialogPosition()}
-        data-full-width={isFullWidth() ? "true" : "false"}
-        data-has-face={hasFace() ? "true" : "false"}
-    >
-        <div class="rpg-ui-dialog rpg-anim-fade-in">
-            <div class="rpg-ui-dialog-body">
-               <div>
-                    @if (speakerName()) {
-                        <div class="rpg-ui-dialog-speaker">{speakerName()}</div>
-                    }
-                    <div class="rpg-ui-dialog-content">
-                        {displayMessage()}
+    <div class="rpg-ui-dialog-layer" click={closeDialogFromPointer}>
+        <button class="rpg-ui-close-button" type="button" title="Close" aria-label="Close dialog" click={closeDialogFromPointer}>x</button>
+        <div
+            class="rpg-ui-dialog-container"
+            data-position={dialogPosition()}
+            data-full-width={isFullWidth() ? "true" : "false"}
+            data-has-face={hasFace() ? "true" : "false"}
+        >
+            <div class="rpg-ui-dialog rpg-anim-fade-in" click={stopEvent}>
+                <div class="rpg-ui-dialog-body">
+                   <div>
+                        @if (speakerName()) {
+                            <div class="rpg-ui-dialog-speaker">{speakerName()}</div>
+                        }
+                        <div class="rpg-ui-dialog-content">
+                            {displayMessage()}
+                        </div>
+                        @if (hasChoices()) {
+                            <Navigation tabindex={selectedItem} controls={controls}>
+                                <div class="rpg-ui-dialog-choices">
+                                    @for ((choice,index) of dialogChoices()) {
+                                        <div
+                                            class="rpg-ui-dialog-choice"
+                                            class={{active: selectedItem() === index}}
+                                            tabindex={index}
+                                            data-choice-index={index}
+                                            click={selectChoice(index)}
+                                        >{{ choice.text }}</div>
+                                    }
+                                </div>
+                            </Navigation>
+                        }
                     </div>
-                    @if (hasChoices()) {
-                        <Navigation tabindex={selectedItem} controls={controls}>
-                            <div class="rpg-ui-dialog-choices">
-                                @for ((choice,index) of dialogChoices()) {
-                                    <div
-                                        class="rpg-ui-dialog-choice"
-                                        class={{active: selectedItem() === index}}
-                                        tabindex={index}
-                                        data-choice-index={index}
-                                        click={selectChoice(index)}
-                                    >{{ choice.text }}</div>
-                                }
-                            </div>
-                        </Navigation>
+                    @if (hasFace()) {
+                        <div class="rpg-ui-dialog-face">
+                            <DOMSprite
+                                sheet={faceSheet(dialogFace())}
+                                width="100%"
+                                height="100%"
+                                objectFit="contain"
+                            />
+                        </div>
                     }
                 </div>
-                @if (hasFace()) {
-                    <div class="rpg-ui-dialog-face">
-                        <DOMSprite
-                            sheet={faceSheet(dialogFace())}
-                            width="100%"
-                            height="100%"
-                            objectFit="contain"
-                        />
-                    </div>
+                @if (showIndicator) {
+                    <div class="rpg-ui-dialog-indicator"></div>
                 }
             </div>
-            @if (showIndicator) {
-                <div class="rpg-ui-dialog-indicator"></div>
-            }
         </div>
     </div>
 </DOMContainer>
@@ -159,6 +162,19 @@
     function _onFinish(value) {
         if (onFinish) onFinish(value, normalizeOpenId(guiOpenId));
     }
+
+    const stopEvent = (event) => {
+        event?.stopPropagation?.();
+    };
+
+    const closeDialog = () => {
+        _onFinish();
+    };
+
+    const closeDialogFromPointer = (event) => {
+        stopEvent(event);
+        closeDialog();
+    };
 
     const onSelect = (index) => {
         _onFinish(index);

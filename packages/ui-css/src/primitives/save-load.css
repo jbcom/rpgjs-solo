@@ -1,5 +1,20 @@
+.rpg-ui-save-load-layer {
+  position: relative;
+  z-index: 1000;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(10px, 3vw, 32px);
+  box-sizing: border-box;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.42);
+}
+
 .rpg-ui-save-load {
   width: min(720px, 100%);
+  max-height: min(620px, 100%);
   margin: 0 auto;
   padding: 24px;
   background: var(--rpg-ui-surface);
@@ -9,6 +24,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .rpg-ui-save-load-header {
@@ -30,8 +47,32 @@
 
 .rpg-ui-save-load-list {
   display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--rpg-ui-accent), transparent 30%) transparent;
+}
+
+.rpg-ui-save-load-list > *:not(.rpg-ui-save-load-slot) {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rpg-ui-save-load-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.rpg-ui-save-load-list::-webkit-scrollbar-thumb {
+  border-radius: var(--rpg-ui-radius-full);
+  background: color-mix(in srgb, var(--rpg-ui-accent), transparent 35%);
 }
 
 .rpg-ui-save-load-slot {
@@ -97,4 +138,35 @@
 
 .rpg-ui-save-load-slot.empty {
   opacity: 0.75;
+}
+
+@media (max-width: 640px), (max-height: 560px) {
+  .rpg-ui-save-load-layer {
+    align-items: stretch;
+    padding:
+      calc(58px + env(safe-area-inset-top, 0px))
+      calc(10px + env(safe-area-inset-right, 0px))
+      calc(10px + env(safe-area-inset-bottom, 0px))
+      calc(10px + env(safe-area-inset-left, 0px));
+  }
+
+  .rpg-ui-save-load {
+    width: 100%;
+    max-height: 100%;
+    padding: 14px;
+    gap: 12px;
+    border-radius: var(--rpg-ui-radius-md);
+  }
+
+  .rpg-ui-save-load-title {
+    font-size: var(--rpg-ui-font-size-lg);
+  }
+
+  .rpg-ui-save-load-slot {
+    padding: 12px 14px 12px 30px;
+  }
+
+  .rpg-ui-save-load-slot-meta {
+    grid-template-columns: 1fr;
+  }
 }

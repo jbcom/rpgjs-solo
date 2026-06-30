@@ -78,3 +78,34 @@
   background: var(--rpg-ui-warning);
   color: black;
 }
+
+.rpg-ui-close-button {
+  appearance: none;
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: calc(10px + env(safe-area-inset-left, 0px));
+  z-index: 10000;
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rpg-ui-border-light);
+  border-radius: var(--rpg-ui-radius-full);
+  background: var(--rpg-ui-surface-overlay-strong);
+  color: var(--rpg-ui-text);
+  box-shadow: var(--rpg-ui-shadow-md);
+  font-family: var(--rpg-ui-font);
+  font-size: 24px;
+  font-weight: var(--rpg-ui-font-weight-bold);
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.rpg-ui-close-button:hover,
+.rpg-ui-close-button:focus {
+  border-color: var(--rpg-ui-accent);
+  color: var(--rpg-ui-accent);
+  outline: none;
+}
