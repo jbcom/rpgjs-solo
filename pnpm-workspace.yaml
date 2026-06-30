@@ -8,3 +8,5 @@ allowBuilds:
   sharp: true
   workerd: true
   ws: true
+minimumReleaseAgeExclude:
+  - vite@8.1.1

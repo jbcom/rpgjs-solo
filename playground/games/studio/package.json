@@ -14,7 +14,7 @@
     "@canvasengine/compiler": "2.0.0",
     "@rpgjs/testing": "workspace:*",
     "@rpgjs/vite": "workspace:*",
-    "vite": "^8.0.16",
+    "vite": "^8.1.1",
     "vitest": "^4.1.9"
   },
   "private": true,
@@ -28,9 +28,9 @@
     "@rpgjs/tiledmap": "workspace:*",
     "@rpgjs/ui-css": "workspace:*",
     "@signe/di": "3.1.0",
-    "canvasengine": "2.0.0",
+    "canvasengine": "2.0.1",
     "pixi.js": "8.19.0",
-    "vite-plugin-dts": "^5.0.2"
+    "vite-plugin-dts": "^5.0.3"
   },
   "type": "module"
 }

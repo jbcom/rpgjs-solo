@@ -1,5 +1,5 @@
 import { provideGlobalConfig, Presets } from "@rpgjs/client";
-import { provideClientModules } from "@rpgjs/client";
+import { provideClientModules, withMobile } from "@rpgjs/client";
 import { configCommon, studio } from "./config.common";
 import { provideActionBattle } from "@rpgjs/action-battle/client";
 import { createStudioActionBattleAnimations, provideStudioGame } from "@rpgjs/studio/client";
@@ -27,6 +27,8 @@ export const configClient = {
       }
     }),
     ...configCommon.providers,
-    provideClientModules([]),
+    provideClientModules([
+      withMobile()
+    ]),
   ],
 };
