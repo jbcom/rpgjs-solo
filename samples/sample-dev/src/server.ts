@@ -690,8 +690,8 @@ export default createServer({
                 id: 'center-map',
                 worldX: 500,
                 worldY: 500,
-                width: 500,
-                height: 500,
+                width: 1500,
+                height: 1500,
               },
               {
                 id: 'left-map',

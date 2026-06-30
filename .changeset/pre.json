@@ -32,6 +32,7 @@
   },
   "changesets": [
     "bright-readme-map",
+    "clean-studio-hitbox-sync",
     "clean-workspace-internal-deps",
     "plain-studio-animations",
     "tidy-tiled-vite-runtime"

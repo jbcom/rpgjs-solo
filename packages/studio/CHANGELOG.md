@@ -1,5 +1,17 @@
 # @rpgjs/studio
 
+## 5.0.0-beta.23
+
+### Patch Changes
+
+- e7d8d13: Hydrate Studio event hitboxes from the API initially, apply synchronized hitbox object payloads to client physics bodies, publish runtime Studio hitbox changes through the synced event collection instead of a separate setHitbox websocket path, and keep standalone map transfers on the restored room so transferred player positions and hitboxes are preserved in sample-dev.
+- Updated dependencies [e7d8d13]
+  - @rpgjs/client@5.0.0-beta.23
+  - @rpgjs/common@5.0.0-beta.22
+  - @rpgjs/server@5.0.0-beta.23
+  - @rpgjs/action-battle@5.0.0-beta.23
+  - @rpgjs/vite@5.0.0-beta.23
+
 ## 5.0.0-beta.22
 
 ### Patch Changes
