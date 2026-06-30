@@ -1,5 +1,18 @@
 # @rpgjs/client
 
+## 5.0.0-beta.24
+
+### Patch Changes
+
+- e11f2ed: Fix main menu Escape handling, add outside-click and touch close controls for prebuilt modal GUIs, make menu layouts responsive on small screens, restore a compact desktop menu with an integrated sidebar and column-based item views, use fade-only menu transitions, improve Skills/Equipment and save slot spacing, make active menu rows less visually harsh, and improve HUD and dialog border rendering.
+- 3fb2765: Apply Studio media scale as a multiplier of the default RPGJS display scale, then combine it with event instance scale instead of overwriting it.
+- be412cf: Let Studio event-touch pressure plates overlap pushed events without physical separation, wait until ground sensors are mostly covered before firing, clean up touch tracking when collisions exit after z changes, and clamp route overshoot frames that could make pushed events jitter.
+- Updated dependencies [e11f2ed]
+- Updated dependencies [be412cf]
+  - @rpgjs/ui-css@5.0.0-beta.22
+  - @rpgjs/common@5.0.0-beta.23
+  - @rpgjs/server@5.0.0-beta.24
+
 ## 5.0.0-beta.23
 
 ### Patch Changes

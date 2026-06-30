@@ -1,5 +1,20 @@
 # @rpgjs/studio
 
+## 5.0.0-beta.24
+
+### Patch Changes
+
+- 3fb2765: Apply Studio media scale as a multiplier of the default RPGJS display scale, then combine it with event instance scale instead of overwriting it.
+- be412cf: Let Studio event-touch pressure plates overlap pushed events without physical separation, wait until ground sensors are mostly covered before firing, clean up touch tracking when collisions exit after z changes, and clamp route overshoot frames that could make pushed events jitter.
+- Updated dependencies [e11f2ed]
+- Updated dependencies [3fb2765]
+- Updated dependencies [be412cf]
+  - @rpgjs/client@5.0.0-beta.24
+  - @rpgjs/common@5.0.0-beta.23
+  - @rpgjs/server@5.0.0-beta.24
+  - @rpgjs/action-battle@5.0.0-beta.24
+  - @rpgjs/vite@5.0.0-beta.24
+
 ## 5.0.0-beta.23
 
 ### Patch Changes

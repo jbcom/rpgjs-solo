@@ -1,5 +1,11 @@
 # @rpgjs/common
 
+## 5.0.0-beta.23
+
+### Patch Changes
+
+- be412cf: Let Studio event-touch pressure plates overlap pushed events without physical separation, wait until ground sensors are mostly covered before firing, clean up touch tracking when collisions exit after z changes, and clamp route overshoot frames that could make pushed events jitter.
+
 ## 5.0.0-beta.22
 
 ### Patch Changes

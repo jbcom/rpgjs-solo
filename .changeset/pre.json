@@ -35,6 +35,9 @@
     "clean-studio-hitbox-sync",
     "clean-workspace-internal-deps",
     "plain-studio-animations",
+    "quiet-menu-hud-layout",
+    "soft-studio-media-scale",
+    "tame-event-touch-plates",
     "tidy-tiled-vite-runtime"
   ]
 }
