@@ -80,6 +80,55 @@ describe("studio element renderer helpers", () => {
     expect(parts[2].sourceRect.width).toBe(8);
   });
 
+  it("repeats along the resized axis instead of scaling repeat-axis segments", () => {
+    const parts = buildStudioElementSpriteParts(
+      createElement({
+        rect: [0, 0, 16, 16],
+        drawIn: [0, 0, 16, 16],
+        scale: { x: 40 / 16, y: 1 },
+        drawRule: {
+          type: "repeat-axis",
+          axis: "x",
+          rects: {
+            body: [0, 0, 16, 16],
+          },
+        },
+      })
+    );
+
+    expect(parts).toHaveLength(3);
+    expect(parts.map((part) => part.width)).toEqual([16, 16, 8]);
+    expect(parts[2].sourceRect.width).toBe(8);
+  });
+
+  it("keeps edge-repeat caps unscaled and repeats the middle across the target width", () => {
+    const parts = buildStudioElementSpriteParts(
+      createElement({
+        rect: [201, 693, 92, 101],
+        drawIn: [732, 792, 92, 101],
+        scale: { x: 384 / 92, y: 1 },
+        drawRule: {
+          type: "edge-repeat",
+          axis: "x",
+          rects: {
+            start: [0, 0, 19, 101],
+            middle: [19, 0, 26, 101],
+            end: [45, 0, 47, 101],
+          },
+        },
+      })
+    );
+
+    expect(parts).toHaveLength(15);
+    expect(parts[0]).toMatchObject({ x: 732, y: 792, width: 19, height: 101 });
+    expect(parts[parts.length - 1]).toMatchObject({ x: 1069, y: 792, width: 47, height: 101 });
+    expect(parts.slice(1, -1).map((part) => part.width)).toEqual([
+      26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 6,
+    ]);
+    expect(parts[1].sourceRect).toMatchObject({ x: 220, y: 693, width: 26, height: 101 });
+    expect(parts[13].sourceRect).toMatchObject({ x: 220, y: 693, width: 6, height: 101 });
+  });
+
   it("compresses edge-repeat segments when the target is smaller than fixed edges", () => {
     const parts = buildStudioElementSpriteParts(
       createElement({

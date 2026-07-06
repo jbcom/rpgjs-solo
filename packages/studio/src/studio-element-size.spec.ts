@@ -19,6 +19,38 @@ describe("studio element size resolution", () => {
     expect(resolved.scale.y).toBeCloseTo(125 / 376);
   });
 
+  it("keeps the source height when a horizontal repeat element only overrides width", () => {
+    const resolved = resolveStudioElementSize(
+      { width: 160 },
+      { rect: [0, 0, 48, 32] },
+      {},
+      48,
+      32,
+      { drawRule: { type: "edge-repeat", axis: "x" } }
+    );
+
+    expect(resolved.targetWidth).toBe(160);
+    expect(resolved.targetHeight).toBe(32);
+    expect(resolved.scale.x).toBeCloseTo(160 / 48);
+    expect(resolved.scale.y).toBe(1);
+  });
+
+  it("keeps the source width when a vertical repeat element only overrides height", () => {
+    const resolved = resolveStudioElementSize(
+      { height: 160 },
+      { rect: [0, 0, 32, 48] },
+      {},
+      32,
+      48,
+      { drawRule: { type: "repeat-axis", axis: "y" } }
+    );
+
+    expect(resolved.targetWidth).toBe(32);
+    expect(resolved.targetHeight).toBe(160);
+    expect(resolved.scale.x).toBe(1);
+    expect(resolved.scale.y).toBeCloseTo(160 / 48);
+  });
+
   it("falls back to the tileset element dimensions", () => {
     const resolved = resolveStudioElementSize(
       {},

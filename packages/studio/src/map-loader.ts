@@ -767,15 +767,16 @@ export const loadMap = async (mapId: string) => {
       const y = toFiniteNumber(element.y)
       if (x === null || y === null) return
 
+      const drawRule = resolveDrawRuleForElement(element, tileset, entry)
       const size = resolveStudioElementSize(
         element,
         tilesetElement,
         tileset.metadata,
         sourceWidth,
-        sourceHeight
+        sourceHeight,
+        { drawRule }
       )
       const zIndexOffset = toFiniteNumber(element.zIndexOffset) ?? 0
-      const drawRule = resolveDrawRuleForElement(element, tileset, entry)
 
       const mergedElement: Record<string, unknown> = {
         ...tilesetElement,

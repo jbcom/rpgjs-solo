@@ -558,7 +558,7 @@ export function buildStudioElementSpriteParts(element: any): StudioElementSegmen
         metrics.drawY,
         metrics.drawWidth,
         metrics.drawHeight,
-        Math.max(1, bodyRect.width * scaleX),
+        Math.max(1, bodyRect.width),
         segmentIndexRef
       );
     } else {
@@ -569,7 +569,7 @@ export function buildStudioElementSpriteParts(element: any): StudioElementSegmen
         metrics.drawY,
         metrics.drawWidth,
         metrics.drawHeight,
-        Math.max(1, bodyRect.height * scaleY),
+        Math.max(1, bodyRect.height),
         segmentIndexRef
       );
     }
@@ -583,20 +583,11 @@ export function buildStudioElementSpriteParts(element: any): StudioElementSegmen
     if (!startRect || !middleRect || !endRect) return buildStudioElementSpriteParts({ ...element, drawRule: null });
 
     if (normalizedRule.axis === "x") {
-      const startWidth = Math.max(1, startRect.width * scaleX);
-      const endWidth = Math.max(1, endRect.width * scaleX);
+      const startWidth = Math.max(1, startRect.width);
+      const endWidth = Math.max(1, endRect.width);
       const fixedWidth = startWidth + endWidth;
       if (fixedWidth <= metrics.drawWidth) {
         pushSegment(segments, startRect, metrics.drawX, metrics.drawY, startWidth, metrics.drawHeight, segmentIndexRef.value++);
-        pushSegment(
-          segments,
-          endRect,
-          metrics.drawX + metrics.drawWidth - endWidth,
-          metrics.drawY,
-          endWidth,
-          metrics.drawHeight,
-          segmentIndexRef.value++
-        );
         const middleTargetWidth = metrics.drawWidth - fixedWidth;
         if (middleTargetWidth > 0) {
           drawRepeatedHorizontally(
@@ -606,10 +597,19 @@ export function buildStudioElementSpriteParts(element: any): StudioElementSegmen
             metrics.drawY,
             middleTargetWidth,
             metrics.drawHeight,
-            Math.max(1, middleRect.width * scaleX),
+            Math.max(1, middleRect.width),
             segmentIndexRef
           );
         }
+        pushSegment(
+          segments,
+          endRect,
+          metrics.drawX + metrics.drawWidth - endWidth,
+          metrics.drawY,
+          endWidth,
+          metrics.drawHeight,
+          segmentIndexRef.value++
+        );
         return segments;
       }
       const ratio = metrics.drawWidth / fixedWidth;
@@ -640,20 +640,11 @@ export function buildStudioElementSpriteParts(element: any): StudioElementSegmen
       return segments;
     }
 
-    const startHeight = Math.max(1, startRect.height * scaleY);
-    const endHeight = Math.max(1, endRect.height * scaleY);
+    const startHeight = Math.max(1, startRect.height);
+    const endHeight = Math.max(1, endRect.height);
     const fixedHeight = startHeight + endHeight;
     if (fixedHeight <= metrics.drawHeight) {
       pushSegment(segments, startRect, metrics.drawX, metrics.drawY, metrics.drawWidth, startHeight, segmentIndexRef.value++);
-      pushSegment(
-        segments,
-        endRect,
-        metrics.drawX,
-        metrics.drawY + metrics.drawHeight - endHeight,
-        metrics.drawWidth,
-        endHeight,
-        segmentIndexRef.value++
-      );
       const middleTargetHeight = metrics.drawHeight - fixedHeight;
       if (middleTargetHeight > 0) {
         drawRepeatedVertically(
@@ -663,10 +654,19 @@ export function buildStudioElementSpriteParts(element: any): StudioElementSegmen
           metrics.drawY + startHeight,
           metrics.drawWidth,
           middleTargetHeight,
-          Math.max(1, middleRect.height * scaleY),
+          Math.max(1, middleRect.height),
           segmentIndexRef
         );
       }
+      pushSegment(
+        segments,
+        endRect,
+        metrics.drawX,
+        metrics.drawY + metrics.drawHeight - endHeight,
+        metrics.drawWidth,
+        endHeight,
+        segmentIndexRef.value++
+      );
       return segments;
     }
 
@@ -711,10 +711,10 @@ export function buildStudioElementSpriteParts(element: any): StudioElementSegmen
     return buildStudioElementSpriteParts({ ...element, drawRule: null });
   }
 
-  const leftFixed = Math.max(1, Math.max(cornerTL.width, cornerBL.width, edgeL.width) * scaleX);
-  const rightFixed = Math.max(1, Math.max(cornerTR.width, cornerBR.width, edgeR.width) * scaleX);
-  const topFixed = Math.max(1, Math.max(cornerTL.height, cornerTR.height, edgeT.height) * scaleY);
-  const bottomFixed = Math.max(1, Math.max(cornerBL.height, cornerBR.height, edgeB.height) * scaleY);
+  const leftFixed = Math.max(1, Math.max(cornerTL.width, cornerBL.width, edgeL.width));
+  const rightFixed = Math.max(1, Math.max(cornerTR.width, cornerBR.width, edgeR.width));
+  const topFixed = Math.max(1, Math.max(cornerTL.height, cornerTR.height, edgeT.height));
+  const bottomFixed = Math.max(1, Math.max(cornerBL.height, cornerBR.height, edgeB.height));
   const fixedWidth = leftFixed + rightFixed;
   const fixedHeight = topFixed + bottomFixed;
   const ratioX = fixedWidth > metrics.drawWidth ? metrics.drawWidth / fixedWidth : 1;
@@ -738,7 +738,7 @@ export function buildStudioElementSpriteParts(element: any): StudioElementSegmen
   drawBoxSegment(segments, cornerBR, rightX, bottomY, rightDraw, bottomDraw, rightFixed, bottomFixed, true, true, segmentIndexRef);
 
   if (middleWidth > 0 && topDraw > 0) {
-    drawRepeatedHorizontally(segments, edgeT, middleX, topY, middleWidth, topDraw, Math.max(1, edgeT.width * scaleX), segmentIndexRef);
+    drawRepeatedHorizontally(segments, edgeT, middleX, topY, middleWidth, topDraw, Math.max(1, edgeT.width), segmentIndexRef);
   }
   if (middleWidth > 0 && bottomDraw > 0) {
     drawRepeatedHorizontally(
@@ -748,12 +748,12 @@ export function buildStudioElementSpriteParts(element: any): StudioElementSegmen
       bottomY,
       middleWidth,
       bottomDraw,
-      Math.max(1, edgeB.width * scaleX),
+      Math.max(1, edgeB.width),
       segmentIndexRef
     );
   }
   if (middleHeight > 0 && leftDraw > 0) {
-    drawRepeatedVertically(segments, edgeL, leftX, middleY, leftDraw, middleHeight, Math.max(1, edgeL.height * scaleY), segmentIndexRef);
+    drawRepeatedVertically(segments, edgeL, leftX, middleY, leftDraw, middleHeight, Math.max(1, edgeL.height), segmentIndexRef);
   }
   if (middleHeight > 0 && rightDraw > 0) {
     drawRepeatedVertically(
@@ -763,7 +763,7 @@ export function buildStudioElementSpriteParts(element: any): StudioElementSegmen
       middleY,
       rightDraw,
       middleHeight,
-      Math.max(1, edgeR.height * scaleY),
+      Math.max(1, edgeR.height),
       segmentIndexRef
     );
   }
@@ -775,8 +775,8 @@ export function buildStudioElementSpriteParts(element: any): StudioElementSegmen
       middleY,
       middleWidth,
       middleHeight,
-      Math.max(1, center.width * scaleX),
-      Math.max(1, center.height * scaleY),
+      Math.max(1, center.width),
+      Math.max(1, center.height),
       segmentIndexRef
     );
   }
@@ -973,10 +973,10 @@ const mapLocalPointToWorld = (
     if (rule.axis === "x") {
       const startSrc = Math.max(1, start[2]);
       const endSrc = Math.max(1, end[2]);
-      const fixedWidth = startSrc * scaleX + endSrc * scaleX;
+      const fixedWidth = startSrc + endSrc;
       const compressRatio = fixedWidth > metrics.drawWidth ? metrics.drawWidth / fixedWidth : 1;
-      const startDraw = startSrc * scaleX * compressRatio;
-      const endDraw = endSrc * scaleX * compressRatio;
+      const startDraw = startSrc * compressRatio;
+      const endDraw = endSrc * compressRatio;
       const middleDraw = Math.max(0, metrics.drawWidth - startDraw - endDraw);
       const middleSrc = Math.max(1, sourceWidth - startSrc - endSrc);
 
@@ -997,10 +997,10 @@ const mapLocalPointToWorld = (
 
     const startSrc = Math.max(1, start[3]);
     const endSrc = Math.max(1, end[3]);
-    const fixedHeight = startSrc * scaleY + endSrc * scaleY;
+    const fixedHeight = startSrc + endSrc;
     const compressRatio = fixedHeight > metrics.drawHeight ? metrics.drawHeight / fixedHeight : 1;
-    const startDraw = startSrc * scaleY * compressRatio;
-    const endDraw = endSrc * scaleY * compressRatio;
+    const startDraw = startSrc * compressRatio;
+    const endDraw = endSrc * compressRatio;
     const middleDraw = Math.max(0, metrics.drawHeight - startDraw - endDraw);
     const middleSrc = Math.max(1, sourceHeight - startSrc - endSrc);
 
@@ -1035,10 +1035,10 @@ const mapLocalPointToWorld = (
   const rightSrc = Math.max(1, Math.max(cornerTR[2], cornerBR[2], edgeR[2]));
   const topSrc = Math.max(1, Math.max(cornerTL[3], cornerTR[3], edgeT[3]));
   const bottomSrc = Math.max(1, Math.max(cornerBL[3], cornerBR[3], edgeB[3]));
-  const leftFixed = leftSrc * scaleX;
-  const rightFixed = rightSrc * scaleX;
-  const topFixed = topSrc * scaleY;
-  const bottomFixed = bottomSrc * scaleY;
+  const leftFixed = leftSrc;
+  const rightFixed = rightSrc;
+  const topFixed = topSrc;
+  const bottomFixed = bottomSrc;
   const fixedWidth = leftFixed + rightFixed;
   const fixedHeight = topFixed + bottomFixed;
   const ratioX = fixedWidth > metrics.drawWidth ? metrics.drawWidth / fixedWidth : 1;
