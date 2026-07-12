@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { schemaShowInput, show_input } from '../runtime/blocks/executors/show-input'
+import { buildInputOptions, schemaShowInput, show_input } from '../runtime/blocks/executors/show-input'
 
 describe('Studio show input runtime', () => {
   test('exposes the typed input settings and a required result variable', () => {
@@ -31,6 +31,33 @@ describe('Studio show input runtime', () => {
       max: 120,
     }))
     expect(setVariable).toHaveBeenCalledWith('age', 42)
+  })
+
+  test('builds shared textarea options once and uses the dialog presentation', async () => {
+    const params = {
+      message: 'Biography',
+      variableId: 'biography',
+      presentation: 'dialog' as const,
+      control: 'textarea' as const,
+      rows: 6,
+      speaker: 'Archivist',
+      position: 'bottom' as const,
+    }
+    expect(buildInputOptions(params)).toMatchObject({ control: 'textarea', type: 'text', rows: 6 })
+
+    const showText = vi.fn(async () => 'A long story')
+    const showInput = vi.fn()
+    const setVariable = vi.fn()
+    const context = { player: { showText, showInput }, setVariable } as any
+    await show_input(context, params)
+
+    expect(showText).toHaveBeenCalledWith('Biography', expect.objectContaining({
+      input: expect.objectContaining({ control: 'textarea', rows: 6 }),
+      speaker: 'Archivist',
+      position: 'bottom',
+    }))
+    expect(showInput).not.toHaveBeenCalled()
+    expect(setVariable).toHaveBeenCalledWith('biography', 'A long story')
   })
 
   test('forces textarea values to text and stores null cancellations', async () => {

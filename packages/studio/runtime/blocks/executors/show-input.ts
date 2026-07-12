@@ -1,6 +1,7 @@
+import type { InputOptions } from '@rpgjs/server'
 import { variableSchema } from '../../schemas/database'
 import { excludeTriggers } from '../context-helpers'
-import type { BlockExecutor } from '../types'
+import type { BlockExecutor, ShowInputParams } from '../types'
 
 export const schemaShowInput = {
   type: 'show_input',
@@ -14,13 +15,19 @@ export const schemaShowInput = {
     type: 'object',
     properties: {
       message: { type: 'string', title: 'Message' },
-      title: { type: 'string', title: 'Title' },
       variableId: {
         type: 'string',
         title: 'Result Variable',
         description: 'Variable that receives the string, number, or null result',
         $ref: '#/functions/variable',
         format: { add: { schema: variableSchema } }
+      },
+      presentation: {
+        type: 'string',
+        title: 'Presentation',
+        enum: ['standalone', 'dialog'],
+        default: 'standalone',
+        format: { labels: ['Standalone form', 'Dialog box'] }
       },
       control: {
         type: 'string',
@@ -38,10 +45,25 @@ export const schemaShowInput = {
       },
       placeholder: { type: 'string', title: 'Placeholder' },
       required: { type: 'boolean', title: 'Required', default: false },
-      confirmText: { type: 'string', title: 'Confirm Button' },
-      cancelText: { type: 'string', title: 'Cancel Button' }
+      confirmText: { type: 'string', title: 'Confirm Button Label' },
+      cancelText: { type: 'string', title: 'Cancel Button Label' },
+      cancelButton: { type: 'boolean', title: 'Show Cancel Button', default: true }
     },
     allOf: [
+      {
+        if: { properties: { presentation: { const: 'dialog' } } },
+        then: { properties: {
+          speaker: { type: 'string', title: 'Speaker Name' },
+          position: { type: 'string', title: 'Dialog Position', enum: ['top', 'middle', 'bottom'], default: 'bottom' },
+          faceset: { type: 'string', title: 'Faceset', format: { name: 'faceset-expression' } },
+          expression: { type: 'string', title: 'Expression' },
+          fullWidth: { type: 'boolean', title: 'Full Width', default: false },
+          typewriterEffect: { type: 'boolean', title: 'Typewriter Effect', default: true }
+        } },
+        else: { properties: {
+          title: { type: 'string', title: 'Title' }
+        } }
+      },
       {
         if: { properties: { control: { const: 'textarea' } } },
         then: { properties: {
@@ -51,72 +73,86 @@ export const schemaShowInput = {
           maxLength: { type: 'number', title: 'Maximum Length', minimum: 0 },
           rows: { type: 'number', title: 'Rows', minimum: 1, default: 4 }
         } },
-        else: {
-          allOf: [
-            {
-              if: { properties: { type: { const: 'number' } } },
-              then: { properties: {
-                defaultValue: { type: 'number', title: 'Default Value' },
-                min: { type: 'number', title: 'Minimum Value' },
-                max: { type: 'number', title: 'Maximum Value' },
-                step: { type: 'number', title: 'Step', exclusiveMinimum: 0 }
-              } },
-              else: { properties: {
-                defaultValue: { type: 'string', title: 'Default Value' },
-                minLength: { type: 'number', title: 'Minimum Length', minimum: 0 },
-                maxLength: { type: 'number', title: 'Maximum Length', minimum: 0 }
-              } }
-            }
-          ]
-        }
+        else: { allOf: [{
+          if: { properties: { type: { const: 'number' } } },
+          then: { properties: {
+            defaultValue: { type: 'number', title: 'Default Value' },
+            min: { type: 'number', title: 'Minimum Value' },
+            max: { type: 'number', title: 'Maximum Value' },
+            step: { type: 'number', title: 'Step', exclusiveMinimum: 0 }
+          } },
+          else: { properties: {
+            defaultValue: { type: 'string', title: 'Default Value' },
+            minLength: { type: 'number', title: 'Minimum Length', minimum: 0 },
+            maxLength: { type: 'number', title: 'Maximum Length', minimum: 0 }
+          } }
+        }] }
       }
     ],
     required: ['message', 'variableId']
   }
 } as const
 
-export const show_input: BlockExecutor<'show_input'> = async (context, params) => {
-  const control = params.control === 'textarea' ? 'textarea' : 'input'
-  const type = control === 'textarea' ? 'text' : (params.type ?? 'text')
+export const buildInputOptions = (params: ShowInputParams): InputOptions => {
   const common = {
-    title: params.title,
+    title: params.presentation === 'dialog' ? undefined : params.title,
     placeholder: params.placeholder,
     required: params.required,
     confirmText: params.confirmText,
     cancelText: params.cancelText,
+    cancelButton: params.cancelButton,
   }
-
-  let result: string | number | null
-  if (control === 'textarea') {
-    result = await context.player.showInput(params.message, {
+  if (params.control === 'textarea') {
+    return {
       ...common,
-      control,
+      control: 'textarea',
       type: 'text',
       defaultValue: typeof params.defaultValue === 'string' ? params.defaultValue : undefined,
       minLength: params.minLength,
       maxLength: params.maxLength,
       rows: params.rows,
-    })
-  } else if (type === 'number') {
-    result = await context.player.showInput(params.message, {
+    }
+  }
+  if (params.type === 'number') {
+    return {
       ...common,
-      control,
-      type,
+      control: 'input',
+      type: 'number',
       defaultValue: typeof params.defaultValue === 'number' ? params.defaultValue : undefined,
       min: params.min,
       max: params.max,
       step: params.step,
-    })
-  } else {
-    result = await context.player.showInput(params.message, {
-      ...common,
-      control,
-      type,
-      defaultValue: typeof params.defaultValue === 'string' ? params.defaultValue : undefined,
-      minLength: params.minLength,
-      maxLength: params.maxLength,
-    })
+    }
   }
+  return {
+    ...common,
+    control: 'input',
+    type: params.type === 'password' || params.type === 'email' ? params.type : 'text',
+    defaultValue: typeof params.defaultValue === 'string' ? params.defaultValue : undefined,
+    minLength: params.minLength,
+    maxLength: params.maxLength,
+  }
+}
+
+const resolveFace = (params: ShowInputParams) => {
+  if (!params.faceset) return undefined
+  if (typeof params.faceset === 'string') return { id: params.faceset, expression: params.expression ?? 'default' }
+  const id = params.faceset.id ?? params.faceset.facesetId
+  return id ? { id, expression: params.expression ?? params.faceset.expression ?? 'default' } : undefined
+}
+
+export const show_input: BlockExecutor<'show_input'> = async (context, params) => {
+  const input = buildInputOptions(params)
+  const result = params.presentation === 'dialog'
+    ? await context.player.showText(params.message, {
+        input,
+        speaker: params.speaker,
+        position: params.position,
+        face: resolveFace(params),
+        fullWidth: params.fullWidth,
+        typewriterEffect: params.typewriterEffect,
+      })
+    : await context.player.showInput(params.message, input)
 
   context.setVariable(params.variableId, result)
 }

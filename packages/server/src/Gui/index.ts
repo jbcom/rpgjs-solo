@@ -21,9 +21,10 @@ export {
 }
 
 export { DialogPosition } from './DialogGui'
+export type { DialogBaseOptions, DialogOptions, Choice } from './DialogGui'
 export type { SaveLoadMode, SaveLoadOptions, SaveSlot } from './SaveLoadGui'
 export type { MenuEntryId, MenuEntry, MenuGuiOptions } from './MenuGui'
 export type { ShopGuiOptions, ShopSellList } from './ShopGui'
 export type { TitleEntry, TitleGuiOptions, TitleGuiSelection } from './TitleGui'
 export type { GameoverEntry, GameoverGuiOptions, GameoverGuiSelection } from './GameoverGui'
-export type { BaseInputOptions, TextInputOptions, NumberInputOptions, TextareaInputOptions, InputOptions, InputResult } from './InputGui'
+export type { BaseInputOptions, TextInputOptions, NumberInputOptions, TextareaInputOptions, InputOptions, InputResult } from './InputForm'

@@ -1,88 +1,26 @@
 <DOMContainer width="100%" height="100%">
-  <div class="rpg-ui-input-layer" keydown={handleKeydown}>
-    <form class="rpg-ui-input-dialog rpg-ui-window rpg-anim-fade-in" submit={submit}>
+  <div class="rpg-ui-input-layer">
+    <div class="rpg-ui-input-dialog rpg-ui-window rpg-anim-fade-in">
       @if (title()) {
         <div class="rpg-ui-window-title">{title()}</div>
       }
-      <label class="rpg-ui-input-message" for="rpg-input-value">{data().message}</label>
-      @if (data().control === "textarea") {
-        <textarea
-          id="rpg-input-value"
-          class="rpg-ui-input rpg-ui-input-dialog-field"
-          name="value"
-          value={value}
-          placeholder={data().placeholder || ""}
-          rows={data().rows || 4}
-          minlength={data().minLength}
-          maxlength={data().maxLength}
-          required={data().required}
-        ></textarea>
-      }
-      @else {
-        <input
-          id="rpg-input-value"
-          class="rpg-ui-input rpg-ui-input-dialog-field"
-          name="value"
-          type={data().type || "text"}
-          value={value}
-          placeholder={data().placeholder || ""}
-          min={data().min}
-          max={data().max}
-          step={data().step}
-          minlength={data().minLength}
-          maxlength={data().maxLength}
-          required={data().required}
-        />
-      }
-      @if (errorText()) {
-        <div class="rpg-ui-input-error" role="alert">{errorText()}</div>
-      }
-      <div class="rpg-ui-input-actions">
-        <button class="rpg-ui-btn rpg-ui-input-button rpg-ui-input-button-cancel" type="button" click={cancel}>
-          {data().cancelText || t("rpg.input.cancel")}
-        </button>
-        <button class="rpg-ui-btn rpg-ui-input-button rpg-ui-input-button-confirm" data-variant="primary" type="submit">
-          {data().confirmText || t("rpg.input.confirm")}
-        </button>
-      </div>
-    </form>
+      <InputField data={data} layout="standalone" submit={submit} cancel={cancel} />
+    </div>
   </div>
 </DOMContainer>
 
 <script>
-  import { computed, mount, signal } from "canvasengine";
-  import { inject } from "../../core/inject";
-  import { RpgClientEngine } from "../../RpgClientEngine";
+  import { computed } from "canvasengine";
+  import InputField from "./input-field.ce";
 
-  const engine = inject(RpgClientEngine);
-  const { t } = engine.i18n();
   const { data, onInteraction } = defineProps();
-  const value = signal(String(data().defaultValue ?? ""));
   const title = computed(() => data().title || "");
-  const errorText = computed(() => data().errorKey ? t(data().errorKey, data().errorParams || {}) : "");
 
-  function submit(event, formData) {
-    const submittedValue = formData && Object.prototype.hasOwnProperty.call(formData, "value")
-      ? formData.value
-      : event?.currentTarget?.elements?.value?.value ?? value();
-    value.set(String(submittedValue ?? ""));
-    onInteraction?.("submit", { value: submittedValue ?? "" });
+  function submit(payload) {
+    onInteraction?.("submit", payload);
   }
 
   function cancel() {
     onInteraction?.("cancel");
   }
-
-  function handleKeydown(event) {
-    if (event?.key !== "Escape") return;
-    event.preventDefault?.();
-    event.stopPropagation?.();
-    cancel();
-  }
-
-  mount(() => {
-    setTimeout(() => {
-      document.querySelector(".rpg-ui-input-dialog-field")?.focus?.();
-    });
-  });
 </script>

@@ -127,6 +127,7 @@ Data:
 | `min`, `max`, `step` | `number` | Numeric constraints. |
 | `rows` | `number` | Visible textarea rows. |
 | `confirmText`, `cancelText` | `string` | Button labels. |
+| `cancelButton` | `boolean` | Whether the Cancel button is displayed. Defaults to `true`. |
 | `errorKey`, `errorParams` | `string`, `object` | Latest server validation message, resolved through the project i18n service. |
 
 ```ts
@@ -171,8 +172,13 @@ Data:
 | `typewriterEffect` | `boolean` | Whether the text should reveal progressively. |
 | `speaker` | `string` | Speaker label. |
 | `face` | `{ id: string; expression?: string }` | Faceset spritesheet ID and expression. |
+| `input` | `InputFormData` | Optional typed input displayed after the text. Mutually exclusive with `choices`. |
 
 To return a choice, call `onFinish(index)` where `index` is the selected choice index. For text without choices, call `onFinish()` when the player dismisses the dialog.
+
+For a dialog input, use `onInteraction('submit', { value })` and
+`onInteraction('cancel')`. This keeps parsing and validation on the server and
+allows invalid submissions to update `input.errorKey` without closing the GUI.
 
 CanvasEngine example:
 

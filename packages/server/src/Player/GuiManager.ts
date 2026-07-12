@@ -1,10 +1,10 @@
 import { RpgPlayer } from "./Player";
 import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui, GameoverGui, InputGui } from "../Gui";
-import { DialogOptions, Choice } from "../Gui/DialogGui";
+import { DialogOptions, DialogBaseOptions, Choice } from "../Gui/DialogGui";
 import { SaveLoadOptions, SaveSlot } from "../Gui/SaveLoadGui";
 import { MenuGuiOptions } from "../Gui/MenuGui";
 import { GameoverGuiOptions, GameoverGuiSelection } from "../Gui/GameoverGui";
-import { InputOptions, NumberInputOptions, TextInputOptions, TextareaInputOptions } from "../Gui/InputGui";
+import { InputOptions, NumberInputOptions, TextInputOptions, TextareaInputOptions } from "../Gui/InputForm";
 import { Constructor, PlayerCtor } from "@rpgjs/common";
 
 /**
@@ -38,6 +38,9 @@ export function WithGuiManager<TBase extends PlayerCtor>(
   class GuiManagerMixin extends Base {
     _gui: { [id: string]: Gui } = {};
 
+    showText(msg: string, options: DialogBaseOptions & { input: NumberInputOptions }): Promise<number | null>;
+    showText(msg: string, options: DialogBaseOptions & { input: TextInputOptions | TextareaInputOptions }): Promise<string | null>;
+    showText(msg: string, options?: DialogOptions): Promise<any>;
     showText(msg: string, options: DialogOptions = {}): Promise<any> {
       const gui = new DialogGui(<any>this);
       this._gui[gui.id] = gui;
@@ -47,7 +50,7 @@ export function WithGuiManager<TBase extends PlayerCtor>(
     showChoices(
       msg: string,
       choices: Choice[],
-      options?: DialogOptions
+      options?: DialogBaseOptions
     ): Promise<Choice | null> {
       return this.showText(msg, {
         choices,
@@ -324,6 +327,15 @@ export interface IGuiManager {
    * })
    * ```
    *
+   * Add a typed input directly below the dialog text:
+   *
+   * ```ts
+   * const age = await player.showText('How old are you?', {
+   *   input: { type: 'number', required: true, min: 1 }
+   * })
+   * // age is number | null
+   * ```
+   *
    * **Option: fullWidth**
    *
    * `boolean` (true by default)
@@ -380,6 +392,8 @@ export interface IGuiManager {
    * @returns {Promise}
    * @memberof GuiManager
    */
+  showText(msg: string, options: DialogBaseOptions & { input: NumberInputOptions }): Promise<number | null>;
+  showText(msg: string, options: DialogBaseOptions & { input: TextInputOptions | TextareaInputOptions }): Promise<string | null>;
   showText(msg: string, options?: DialogOptions): Promise<any>;
 
   /**
@@ -407,7 +421,7 @@ export interface IGuiManager {
   showChoices(
     msg: string,
     choices: Choice[],
-    options?: DialogOptions
+    options?: DialogBaseOptions
   ): Promise<Choice | null>;
 
   /**

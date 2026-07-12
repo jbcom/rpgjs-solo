@@ -6,4 +6,4 @@
 "@rpgjs/ui-css": minor
 ---
 
-Add a typed, replaceable player input form with input and textarea controls, server-side validation, and an RPGJS Studio block that stores the submitted value.
+Add reusable typed input and textarea controls for standalone forms and dialog boxes, with shared server-side validation and an RPGJS Studio block that stores the submitted value.

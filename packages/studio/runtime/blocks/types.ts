@@ -61,6 +61,7 @@ export interface ShowInputParams {
   message: string;
   title?: string;
   variableId: string;
+  presentation?: 'standalone' | 'dialog';
   control?: 'input' | 'textarea';
   type?: 'text' | 'number' | 'password' | 'email';
   placeholder?: string;
@@ -68,12 +69,19 @@ export interface ShowInputParams {
   required?: boolean;
   confirmText?: string;
   cancelText?: string;
+  cancelButton?: boolean;
   minLength?: number;
   maxLength?: number;
   min?: number;
   max?: number;
   step?: number;
   rows?: number;
+  speaker?: string;
+  position?: 'top' | 'middle' | 'bottom';
+  faceset?: string | { id?: string; facesetId?: string; expression?: string };
+  expression?: string;
+  fullWidth?: boolean;
+  typewriterEffect?: boolean;
 }
 
 /**
@@ -1279,10 +1287,11 @@ export type AnyBlockDefinition = BlockDefinition<BlockType> | BlockDefinition;
  */
 export interface ExecutionPlayer {
   /** Display a text dialog */
-  showText(text: string, options?: { talkWith?: unknown; position?: string }): Promise<void>;
+  showText(text: string, options?: { talkWith?: unknown; position?: string; input?: Record<string, unknown>; [key: string]: unknown }): Promise<string | number | null | void>;
   /** Ask the player for a typed text or numeric value. */
   showInput(message: string, options: { type: 'number'; control?: 'input'; [key: string]: unknown }): Promise<number | null>;
   showInput(message: string, options?: { type?: 'text' | 'password' | 'email'; control?: 'input' | 'textarea'; [key: string]: unknown }): Promise<string | null>;
+  showInput(message: string, options: { type?: string; control?: string; [key: string]: unknown }): Promise<string | number | null>;
   /** Display choices and get player selection */
   showChoices(question: string, choices: Array<{ text: string; value: number }>): Promise<{ value: number }>;
   /** Get a variable value */

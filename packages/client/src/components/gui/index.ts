@@ -13,6 +13,7 @@ import NotificationComponent from "./notification/notification.ce";
 import TitleScreenComponent from "./title-screen.ce";
 import GameoverComponent from "./gameover.ce";
 import InputComponent from "./input.ce";
+import InputFieldComponent from "./input-field.ce";
 
 export {
     DialogboxComponent,
@@ -29,5 +30,6 @@ export {
     NotificationComponent,
     TitleScreenComponent,
     GameoverComponent,
-    InputComponent
+    InputComponent,
+    InputFieldComponent
 }

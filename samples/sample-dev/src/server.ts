@@ -616,10 +616,14 @@ export default createServer({
             // console.log("call shop")
 
             if (input.action == 'action') {
-              const val = await player.showInput('Enter a value', {
-                placeholder: 'Your value',
-                required: true,
-                control: 'textarea'
+              const val = await player.showText('Comment tu vas ?', {
+                input: {
+                  placeholder: 'Your value',
+                  required: true,
+                  control: 'textarea',
+                  confirmText: 'Validate',
+                  cancelButton: false
+                }
               })
               console.log(val)
             }

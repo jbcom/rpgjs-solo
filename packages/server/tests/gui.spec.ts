@@ -71,6 +71,34 @@ describe("GUI", () => {
     await expect(pending).resolves.toBeNull();
     expect(player.canMove).toBe(true);
   });
+
+  test("dialog gui reuses typed input validation and stays open on errors", async () => {
+    const sent: any[] = [];
+    const player: any = {
+      canMove: true,
+      emit(type: string, value: any) {
+        sent.push({ type, value });
+      },
+    };
+    const gui = new DialogGui(player);
+    const pending = gui.openDialog("How old are you?", {
+      input: { type: "number", required: true, min: 18 },
+    });
+
+    await gui.emit("submit", { value: "17" });
+    expect(player.canMove).toBe(false);
+    expect(sent.at(-1)).toMatchObject({
+      type: "gui.update",
+      value: {
+        guiId: "rpg-dialog",
+        data: { input: { errorKey: "rpg.input.error.min", errorParams: { min: 18 } } },
+      },
+    });
+
+    await gui.emit("submit", { value: "21" });
+    await expect(pending).resolves.toBe(21);
+    expect(player.canMove).toBe(true);
+  });
   test("main menu sends cloneable data when inventory data contains signals", () => {
     const inventoryItem = {
       id: signal("sword"),

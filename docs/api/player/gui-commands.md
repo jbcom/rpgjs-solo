@@ -245,7 +245,7 @@ player.showChoices(text,choices)
 
 - `msg`: `string`
 - `choices`: `Choice[]`
-- `options?`: `DialogOptions`
+- `options?`: `DialogBaseOptions`
 
 ## Show Input
 
@@ -390,6 +390,21 @@ You can define how the dialog box is displayed:
 player.showText('Hello World', {
      position: 'top'
 })
+```
+
+Add a typed input directly below the dialog text:
+
+```ts
+const age = await player.showText('How old are you?', {
+  input: {
+    type: 'number',
+    required: true,
+    min: 1,
+    confirmText: 'Validate',
+    cancelButton: false
+  }
+})
+// age is number | null
 ```
 
 **Option: fullWidth**

@@ -45,6 +45,19 @@
   box-shadow: 0 0 18px color-mix(in srgb, var(--rpg-ui-accent), transparent 25%);
 }
 
+.rpg-ui-input-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rpg-ui-spacing);
+  width: 100%;
+}
+
+.rpg-ui-input-form[data-layout="dialog"] {
+  margin-top: var(--rpg-ui-spacing);
+  padding-top: var(--rpg-ui-spacing);
+  border-top: 1px solid color-mix(in srgb, var(--rpg-ui-accent), transparent 78%);
+}
+
 .rpg-ui-input-message {
   color: var(--rpg-ui-text);
   font-family: var(--rpg-ui-font);
@@ -103,7 +116,7 @@ textarea.rpg-ui-input-dialog-field {
   margin-top: 8px;
 }
 
-.rpg-ui-input-dialog .rpg-ui-input-button {
+.rpg-ui-input-form .rpg-ui-input-button {
   min-width: 128px;
   min-height: 44px;
   margin: 0 0 4px;
@@ -117,30 +130,30 @@ textarea.rpg-ui-input-dialog-field {
     0 8px 18px rgba(0, 0, 0, 0.22);
 }
 
-.rpg-ui-input-dialog .rpg-ui-input-button:hover {
+.rpg-ui-input-form .rpg-ui-input-button:hover {
   transform: translateY(-1px);
 }
 
-.rpg-ui-input-dialog .rpg-ui-input-button:active {
+.rpg-ui-input-form .rpg-ui-input-button:active {
   transform: translateY(3px);
   box-shadow:
     inset 0 2px 4px rgba(0, 0, 0, 0.22),
     0 1px 0 rgba(0, 0, 0, 0.4);
 }
 
-.rpg-ui-input-dialog .rpg-ui-input-button-cancel {
+.rpg-ui-input-form .rpg-ui-input-button-cancel {
   background: rgba(255, 255, 255, 0.06);
   color: var(--rpg-ui-text-muted);
 }
 
-.rpg-ui-input-dialog .rpg-ui-input-button-cancel:hover {
+.rpg-ui-input-form .rpg-ui-input-button-cancel:hover {
   border-color: rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.11);
   color: var(--rpg-ui-text);
 }
 
-.rpg-ui-input-dialog .rpg-ui-input-button-confirm,
-.rpg-ui-input-dialog .rpg-ui-input-button-confirm:hover {
+.rpg-ui-input-form .rpg-ui-input-button-confirm,
+.rpg-ui-input-form .rpg-ui-input-button-confirm:hover {
   border-color: color-mix(in srgb, var(--rpg-ui-accent), white 22%);
   background: var(--rpg-ui-gradient-accent);
   color: var(--rpg-ui-bg);
@@ -156,7 +169,7 @@ textarea.rpg-ui-input-dialog-field {
     flex-direction: column-reverse;
   }
 
-  .rpg-ui-input-dialog .rpg-ui-input-button {
+  .rpg-ui-input-form .rpg-ui-input-button {
     width: 100%;
   }
 }
