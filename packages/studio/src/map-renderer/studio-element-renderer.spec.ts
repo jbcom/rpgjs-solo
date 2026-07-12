@@ -7,6 +7,7 @@ import {
   StudioElementRenderer,
 } from "./studio-element-renderer";
 import {
+  resolveTerrainHoleFillGeometry,
   resolveStudioTerrainWallShadowStyle,
   resolveTerrainTextureRepeatLocal,
 } from "./terrain-renderer/terrain-chunk-renderer";
@@ -38,6 +39,39 @@ const createTerrainData = (overrides: Record<string, any> = {}) => ({
 });
 
 describe("studio element renderer helpers", () => {
+  const createMorphologyMask = (width: number, height: number, filled = true) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const alpha = filled ? 255 : 0;
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let index = 3; index < data.length; index += 4) data[index] = alpha;
+    const context = canvas.getContext("2d")!;
+    context.getImageData = () => ({ data } as ImageData);
+    return { canvas, bounds: { x: 0, y: 0, width, height } };
+  };
+
+  it("resolves the projected water level shared by hole fills and their animation mask", () => {
+    const geometry = resolveTerrainHoleFillGeometry(
+      createMorphologyMask(100, 80),
+      { id: "pond", kind: "hole", params: { fillHeight: 50 }, strokes: [] },
+      60
+    );
+
+    expect(geometry).toEqual({ level: 0.5, dropY: 23, inset: 6 });
+  });
+
+  it("does not create animated water geometry for empty or unfilled holes", () => {
+    const feature = { id: "pond", kind: "hole" as const, params: { fillHeight: 0 }, strokes: [] };
+
+    expect(resolveTerrainHoleFillGeometry(createMorphologyMask(100, 80), feature, 60)).toBeNull();
+    expect(resolveTerrainHoleFillGeometry(
+      createMorphologyMask(100, 80, false),
+      { ...feature, params: { fillHeight: 100 } },
+      60
+    )).toBeNull();
+  });
+
   it("repeats terrain texture coordinates without mirroring adjacent tiles", () => {
     expect(resolveTerrainTextureRepeatLocal(0, 48)).toBe(0);
     expect(resolveTerrainTextureRepeatLocal(24, 48)).toBe(0.5);

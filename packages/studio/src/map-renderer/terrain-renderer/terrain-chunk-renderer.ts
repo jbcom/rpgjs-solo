@@ -41,6 +41,7 @@ interface TerrainWaterOverlay {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   mask: HTMLCanvasElement;
+  surface: HTMLCanvasElement;
   texture: Texture;
   sprite: Sprite;
   phase: number;
@@ -113,6 +114,12 @@ interface TerrainHoleRenderParts {
   rightEdge: TerrainMorphologyMaskBuffer;
   smoothness: number;
   depth: number;
+}
+
+export interface TerrainHoleFillGeometry {
+  dropY: number;
+  inset: number;
+  level: number;
 }
 
 interface RgbaColor {
@@ -398,7 +405,7 @@ export class StudioTerrainChunkRenderer {
     sprite.roundPixels = true;
     sprite.cullable = true;
     sprite.cullArea = new Rectangle(0, 0, bounds.width, bounds.height);
-    const waterOverlay = this.createWaterOverlay(data, controlImage, bounds);
+    const waterOverlay = this.createWaterOverlay(data, controlImage, bounds, canvas);
 
     const previous = this.chunks.get(key);
     if (previous) {
@@ -752,12 +759,19 @@ export class StudioTerrainChunkRenderer {
   private createWaterOverlay(
     data: StudioTerrainRenderData,
     controlImage: HTMLImageElement | null,
-    bounds: { x: number; y: number; width: number; height: number }
+    bounds: { x: number; y: number; width: number; height: number },
+    surface: HTMLCanvasElement
   ): TerrainWaterOverlay | null {
-    if (!data.waterAnimation.enabled || !data.asset) return null;
-    const mask = data.terrainControl
-      ? this.createTerrainControlWaterMask(data, controlImage, bounds)
-      : this.createTerrainGridWaterMask(data, bounds);
+    const hasFilledHole = data.morphologyFeatures.some(
+      (feature) => feature.kind === "hole" && Number(feature.params.fillHeight ?? 0) > 0
+    );
+    if (!data.waterAnimation.enabled && !hasFilledHole) return null;
+    const terrainMask = data.waterAnimation.enabled
+      ? data.terrainControl
+        ? this.createTerrainControlWaterMask(data, controlImage, bounds)
+        : this.createTerrainGridWaterMask(data, bounds)
+      : null;
+    const mask = this.createCombinedWaterMask(data, terrainMask, bounds);
     if (!mask) return null;
 
     const maskCtx = mask.getContext("2d", { willReadFrequently: true });
@@ -786,6 +800,7 @@ export class StudioTerrainChunkRenderer {
       canvas: canvas.canvas,
       ctx: canvas.ctx,
       mask,
+      surface,
       texture,
       sprite,
       phase: 0,
@@ -796,6 +811,34 @@ export class StudioTerrainChunkRenderer {
     drawWaterAnimationFrame(overlay);
     updateCanvasTexture(texture);
     return overlay;
+  }
+
+  private createCombinedWaterMask(
+    data: StudioTerrainRenderData,
+    terrainMask: HTMLCanvasElement | null,
+    bounds: { x: number; y: number; width: number; height: number }
+  ): HTMLCanvasElement | null {
+    const mask = this.createCanvasBuffer(bounds.width, bounds.height, true);
+    let hasWater = false;
+
+    if (terrainMask) {
+      mask.ctx.drawImage(terrainMask, 0, 0);
+      hasWater = true;
+    }
+
+    for (const feature of data.morphologyFeatures) {
+      if (feature.kind !== "hole" || !featureIntersectsBounds(feature, bounds)) continue;
+      const parts = this.createTerrainHoleRenderParts(data, feature);
+      if (!parts) continue;
+      const geometry = resolveTerrainHoleFillGeometry(parts.mask, feature, parts.depth);
+      if (!geometry) continue;
+
+      const fillMask = this.createTerrainMorphologyProjectedLevelMask(parts.mask, geometry.inset, geometry.dropY);
+      mask.ctx.drawImage(fillMask.canvas, fillMask.bounds.x - bounds.x, fillMask.bounds.y - bounds.y);
+      hasWater = true;
+    }
+
+    return hasWater ? mask.canvas : null;
   }
 
   private createTerrainGridWaterMask(
@@ -1529,20 +1572,10 @@ export class StudioTerrainChunkRenderer {
     data: StudioTerrainRenderData,
     image: HTMLImageElement | null
   ): void {
-    const level = clampNumber(Number(feature.params.fillHeight ?? 0) / 100, 0, 1);
-    if (level <= 0) return;
-
-    const bounds = getTerrainMorphologyLocalMaskBounds(mask);
-    if (!bounds) return;
-
-    const width = bounds.maxX - bounds.minX + 1;
-    const height = bounds.maxY - bounds.minY + 1;
-    const minDimension = Math.min(width, height);
     const depth = getTerrainMorphologyHeight(feature);
-    const dropY = Math.round((1 - level) * depth * 0.78);
-    const wallMargin = Math.round(clampNumber(minDimension * 0.035, 4, 10));
-    const inset = Math.round(wallMargin + minDimension * 0.05 * (1 - level));
-    const fillMask = this.createTerrainMorphologyProjectedLevelMask(mask, inset, dropY);
+    const geometry = resolveTerrainHoleFillGeometry(mask, feature, depth);
+    if (!geometry) return;
+    const fillMask = this.createTerrainMorphologyProjectedLevelMask(mask, geometry.inset, geometry.dropY);
     const softFillMask = this.createTerrainMorphologySoftMask(fillMask, 7, mask);
 
     this.drawTerrainMorphologyTextureFill(
@@ -2356,6 +2389,28 @@ function getTerrainMorphologyLocalMaskBounds(
   return maxX < 0 || maxY < 0 ? null : { maxX, maxY, minX, minY };
 }
 
+export function resolveTerrainHoleFillGeometry(
+  mask: TerrainMorphologyMaskBuffer,
+  feature: StudioTerrainMorphologyFeature,
+  depth = getTerrainMorphologyHeight(feature)
+): TerrainHoleFillGeometry | null {
+  const level = clampNumber(Number(feature.params.fillHeight ?? 0) / 100, 0, 1);
+  if (level <= 0) return null;
+
+  const bounds = getTerrainMorphologyLocalMaskBounds(mask);
+  if (!bounds) return null;
+  const width = bounds.maxX - bounds.minX + 1;
+  const height = bounds.maxY - bounds.minY + 1;
+  const minDimension = Math.min(width, height);
+  const wallMargin = Math.round(clampNumber(minDimension * 0.035, 4, 10));
+
+  return {
+    level,
+    dropY: Math.round((1 - level) * depth * 0.78),
+    inset: Math.round(wallMargin + minDimension * 0.05 * (1 - level)),
+  };
+}
+
 function terrainMorphologyNoise(x: number, y: number, seed = 0): number {
   const value = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
   return value - Math.floor(value);
@@ -2620,7 +2675,7 @@ export function resolveTerrainTextureRepeatLocal(world: number, period: number):
 }
 
 function drawWaterAnimationFrame(overlay: TerrainWaterOverlay): void {
-  const { canvas, ctx, mask, intensity } = overlay;
+  const { canvas, ctx, mask, surface, intensity } = overlay;
   const width = canvas.width;
   const height = canvas.height;
   const phase = overlay.phase + overlay.seed * 4;
@@ -2629,6 +2684,19 @@ function drawWaterAnimationFrame(overlay: TerrainWaterOverlay): void {
   ctx.globalCompositeOperation = "source-over";
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+
+  // Repaint the static terrain surface in animated horizontal bands so a
+  // textured liquid visibly refracts instead of looking like a fixed backdrop.
+  ctx.drawImage(surface, 0, 0);
+  const refractionBandHeight = 8;
+  ctx.globalAlpha = 0.42 + intensity * 0.3;
+  for (let y = 0; y < height; y += refractionBandHeight) {
+    const bandHeight = Math.min(refractionBandHeight, height - y);
+    const offsetX = Math.sin(y * 0.075 + phase * 2.4) * (1.2 + intensity * 2.8);
+    const offsetY = Math.sin(y * 0.035 - phase * 1.7) * (0.35 + intensity * 0.65);
+    ctx.drawImage(surface, 0, y, width, bandHeight, offsetX, y + offsetY, width, bandHeight);
+  }
+  ctx.globalAlpha = 1;
 
   const bandSpacing = 22;
   const drift = positiveModulo(phase * 28, bandSpacing);

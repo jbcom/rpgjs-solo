@@ -73,7 +73,7 @@ export const waterAnimationSchema = {
     enabled: {
       type: "boolean",
       title: "Enabled",
-      description: "Enable animated water on this map.",
+      description: "Enable animated painted water on this map. Filled terrain holes animate automatically.",
       default: false,
     },
     speed: {
