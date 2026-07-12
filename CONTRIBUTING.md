@@ -36,6 +36,11 @@ client/server game where the server owns gameplay state.
   option fields, return values, runtime ownership, and at least one usage example,
   using the RPGJS extractor tags (`@title`, `@method` or `@prop`, `@param`,
   `@returns`, and `@memberof`) where the generated API reference requires them.
+- Give every public framework API precise TypeScript types. Avoid `any` in public
+  parameters, options, and return values; use discriminated unions, overloads,
+  or generics when the result depends on the provided options. Verify that the
+  generated `.d.ts` files preserve the intended inference and add type-level
+  tests (for example with `expectTypeOf`) for important public contracts.
 - Regenerate and review the affected committed API pages with `pnpm
   docs:player-api`, `pnpm docs:map-api`, or `pnpm docs:client-api` whenever
   their source JSDoc changes.
