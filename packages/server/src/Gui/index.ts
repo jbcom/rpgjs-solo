@@ -6,6 +6,7 @@ import { NotificationGui } from './NotificationGui'
 import { SaveLoadGui } from './SaveLoadGui'
 import { TitleGui } from './TitleGui'
 import { GameoverGui } from './GameoverGui'
+import { InputGui } from './InputGui'
 
 export { 
     Gui,
@@ -15,7 +16,8 @@ export {
     NotificationGui,
     SaveLoadGui,
     TitleGui,
-    GameoverGui
+    GameoverGui,
+    InputGui
 }
 
 export { DialogPosition } from './DialogGui'
@@ -24,3 +26,4 @@ export type { MenuEntryId, MenuEntry, MenuGuiOptions } from './MenuGui'
 export type { ShopGuiOptions, ShopSellList } from './ShopGui'
 export type { TitleEntry, TitleGuiOptions, TitleGuiSelection } from './TitleGui'
 export type { GameoverEntry, GameoverGuiOptions, GameoverGuiSelection } from './GameoverGui'
+export type { BaseInputOptions, TextInputOptions, NumberInputOptions, TextareaInputOptions, InputOptions, InputResult } from './InputGui'

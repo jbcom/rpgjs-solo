@@ -1,7 +1,7 @@
 import { Context, inject } from "@signe/di";
 import { signal, Signal, WritableSignal } from "canvasengine";
 import { AbstractWebsocket, WebSocketToken } from "../services/AbstractSocket";
-import { DialogboxComponent, ShopComponent, SaveLoadComponent, MainMenuComponent, NotificationComponent, TitleScreenComponent, GameoverComponent } from "../components/gui";
+import { DialogboxComponent, ShopComponent, SaveLoadComponent, MainMenuComponent, NotificationComponent, TitleScreenComponent, GameoverComponent, InputComponent } from "../components/gui";
 import { combineLatest, Subscription } from "rxjs";
 import { PrebuiltGui } from "@rpgjs/common";
 
@@ -175,6 +175,10 @@ export class RpgGui {
     this.add({
       name: PrebuiltGui.Gameover,
       component: GameoverComponent,
+    });
+    this.add({
+      name: PrebuiltGui.Input,
+      component: InputComponent,
     });
 
     this.registerOptimisticReducer(PrebuiltGui.MainMenu, mainMenuOptimisticReducer);

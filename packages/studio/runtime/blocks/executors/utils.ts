@@ -38,6 +38,7 @@ function getBlockEmoji(blockType: string): string {
   const emojiMap: Record<string, string> = {
     // Message blocks
     show_text: '💬',
+    show_input: '⌨️',
     show_choices: '🔀',
     
     // Control blocks

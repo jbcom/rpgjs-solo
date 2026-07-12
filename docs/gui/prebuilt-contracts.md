@@ -98,6 +98,59 @@ For example, this CanvasEngine component can replace the built-in dialog box:
 
 Use `onFinish()` when the server is waiting for a final answer, such as a dialog choice. Use `onInteraction()` for actions that should keep the GUI open, such as buying an item or equipping gear.
 
+## Input
+
+| Contract | Value |
+| --- | --- |
+| ID | `PrebuiltGui.Input` / `rpg-input` |
+| Server API | `player.showInput(message, options)` |
+| Submit with | `onInteraction('submit', { value })` |
+| Cancel with | `onInteraction('cancel')` |
+
+The prebuilt input GUI renders either an HTML input or textarea. Server-owned
+validation keeps the GUI open when a submitted value is invalid. Projects can
+replace the component by registering another GUI with the same ID, but the
+replacement must use the interactions above so validation still runs on the
+authoritative server.
+
+Data:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `message` | `string` | Label or question displayed above the field. |
+| `control` | `'input'` or `'textarea'` | HTML control to render. |
+| `type` | `'text'`, `'number'`, `'password'`, or `'email'` | Input and result type. Textareas always use text. |
+| `defaultValue` | `string` or `number` | Initial field value. |
+| `placeholder` | `string` | Optional placeholder. |
+| `required` | `boolean` | Whether an empty submission is invalid. |
+| `minLength`, `maxLength` | `number` | Text length constraints. |
+| `min`, `max`, `step` | `number` | Numeric constraints. |
+| `rows` | `number` | Visible textarea rows. |
+| `confirmText`, `cancelText` | `string` | Button labels. |
+| `errorKey`, `errorParams` | `string`, `object` | Latest server validation message, resolved through the project i18n service. |
+
+```ts
+const age = await player.showInput('Your age', {
+  type: 'number',
+  required: true,
+  min: 1,
+})
+// number | null
+
+const biography = await player.showInput('Biography', {
+  control: 'textarea',
+  rows: 6,
+  maxLength: 500,
+})
+// string | null
+```
+
+An optional empty number and an explicit cancellation both resolve to `null`.
+Text, password, email, and textarea inputs resolve to strings.
+Default button labels and validation errors use `rpg.input.*` translation keys.
+Game-level i18n messages can override them; explicit `confirmText` and
+`cancelText` options take precedence for one form.
+
 ## Dialog Box
 
 | Contract | Value |

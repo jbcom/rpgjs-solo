@@ -56,6 +56,26 @@ export interface ShowTextParams {
   expression?: string;
 }
 
+/** Parameters for the typed player input block. */
+export interface ShowInputParams {
+  message: string;
+  title?: string;
+  variableId: string;
+  control?: 'input' | 'textarea';
+  type?: 'text' | 'number' | 'password' | 'email';
+  placeholder?: string;
+  defaultValue?: string | number;
+  required?: boolean;
+  confirmText?: string;
+  cancelText?: string;
+  minLength?: number;
+  maxLength?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  rows?: number;
+}
+
 /**
  * Single choice option for show_choices block
  */
@@ -974,6 +994,7 @@ export interface CommentParams {
 export interface BlockParamsMap {
   // Message & Dialog
   show_text: ShowTextParams;
+  show_input: ShowInputParams;
   show_choices: ShowChoicesParams;
   show_notification: ShowNotificationParams;
   
@@ -1259,6 +1280,9 @@ export type AnyBlockDefinition = BlockDefinition<BlockType> | BlockDefinition;
 export interface ExecutionPlayer {
   /** Display a text dialog */
   showText(text: string, options?: { talkWith?: unknown; position?: string }): Promise<void>;
+  /** Ask the player for a typed text or numeric value. */
+  showInput(message: string, options: { type: 'number'; control?: 'input'; [key: string]: unknown }): Promise<number | null>;
+  showInput(message: string, options?: { type?: 'text' | 'password' | 'email'; control?: 'input' | 'textarea'; [key: string]: unknown }): Promise<string | null>;
   /** Display choices and get player selection */
   showChoices(question: string, choices: Array<{ text: string; value: number }>): Promise<{ value: number }>;
   /** Get a variable value */

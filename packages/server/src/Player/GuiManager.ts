@@ -1,9 +1,10 @@
 import { RpgPlayer } from "./Player";
-import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui, GameoverGui } from "../Gui";
+import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui, GameoverGui, InputGui } from "../Gui";
 import { DialogOptions, Choice } from "../Gui/DialogGui";
 import { SaveLoadOptions, SaveSlot } from "../Gui/SaveLoadGui";
 import { MenuGuiOptions } from "../Gui/MenuGui";
 import { GameoverGuiOptions, GameoverGuiSelection } from "../Gui/GameoverGui";
+import { InputOptions, NumberInputOptions, TextInputOptions, TextareaInputOptions } from "../Gui/InputGui";
 import { Constructor, PlayerCtor } from "@rpgjs/common";
 
 /**
@@ -66,6 +67,15 @@ export function WithGuiManager<TBase extends PlayerCtor>(
         ...options,
       });
       return Promise.resolve(true);
+    }
+
+    showInput(message: string, options: NumberInputOptions): Promise<number | null>;
+    showInput(message: string, options?: TextInputOptions | TextareaInputOptions): Promise<string | null>;
+    showInput(message: string, options: InputOptions): Promise<string | number | null>;
+    showInput(message: string, options: InputOptions = {}): Promise<string | number | null> {
+      const gui = new InputGui(<any>this);
+      this._gui[gui.id] = gui;
+      return gui.openInput(message, options);
     }
 
     callMainMenu(options: MenuGuiOptions = {}) {
@@ -252,6 +262,39 @@ export function WithGuiManager<TBase extends PlayerCtor>(
  * Defines the methods that will be available on the player
  */
 export interface IGuiManager {
+  /**
+   * Opens the prebuilt input GUI and waits for the player to submit or cancel it.
+   * The player cannot move while the form is open. Number inputs resolve to a
+   * `number`; text inputs and textareas resolve to a `string`; cancellation and
+   * an empty optional number input resolve to `null`.
+   *
+   * ```ts
+   * const age = await player.showInput('Your age', {
+   *   type: 'number',
+   *   required: true,
+   *   min: 1
+   * })
+   * // age is number | null
+   *
+   * const biography = await player.showInput('Biography', {
+   *   control: 'textarea',
+   *   rows: 6,
+   *   maxLength: 500
+   * })
+   * // biography is string | null
+   * ```
+   *
+   * @title Show Input
+   * @method player.showInput(message,options)
+   * @param {string} message Label or question displayed above the field.
+   * @param {InputOptions} [options] Field type, control, initial value, labels, and validation constraints.
+   * @returns {Promise<string | number | null>} The typed submitted value, or `null` when cancelled or when an optional number is empty.
+   * @memberof GuiManager
+   */
+  showInput(message: string, options: NumberInputOptions): Promise<number | null>;
+  showInput(message: string, options?: TextInputOptions | TextareaInputOptions): Promise<string | null>;
+  showInput(message: string, options: InputOptions): Promise<string | number | null>;
+
   /**
    * Show a text. This is a graphical interface already built. Opens the GUI named `rpg-dialog`
    *
