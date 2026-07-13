@@ -1,5 +1,17 @@
 # @rpgjs/action-battle
 
+## 5.0.0-beta.25
+
+### Patch Changes
+
+- Updated dependencies [ccb9495]
+- Updated dependencies [f6aa046]
+- Updated dependencies [0512640]
+  - @rpgjs/client@5.0.0-beta.25
+  - @rpgjs/common@5.0.0-beta.24
+  - @rpgjs/server@5.0.0-beta.25
+  - @rpgjs/vite@5.0.0-beta.25
+
 ## 5.0.0-beta.24
 
 ### Patch Changes

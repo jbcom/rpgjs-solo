@@ -1,5 +1,17 @@
 # @rpgjs/common
 
+## 5.0.0-beta.24
+
+### Minor Changes
+
+- 0512640: Add reusable typed input and textarea controls for standalone forms and dialog boxes, with shared server-side validation and an RPGJS Studio block that stores the submitted value.
+
+### Patch Changes
+
+- ccb9495: Fix TypeScript declaration errors across the package build, align multi-target declaration exports, complete movement API overloads, and make package and root builds fail when declaration generation reports a type error.
+- Updated dependencies [ccb9495]
+  - @rpgjs/physic@5.0.2-beta.0
+
 ## 5.0.0-beta.23
 
 ### Patch Changes

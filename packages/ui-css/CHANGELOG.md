@@ -1,5 +1,11 @@
 # @rpgjs/ui-css
 
+## 5.0.0-beta.23
+
+### Minor Changes
+
+- 0512640: Add reusable typed input and textarea controls for standalone forms and dialog boxes, with shared server-side validation and an RPGJS Studio block that stores the submitted value.
+
 ## 5.0.0-beta.22
 
 ### Patch Changes
