@@ -7,9 +7,16 @@ import {
   StudioElementRenderer,
 } from "./studio-element-renderer";
 import {
+  isTerrainWaveAnimated,
   resolveTerrainHoleFillGeometry,
+  resolveTerrainHoleWaveDescriptors,
+  resolveTerrainHoleWaveOptions,
   resolveStudioTerrainWallShadowStyle,
   resolveTerrainTextureRepeatLocal,
+  resolveTerrainWaveDirectionVector,
+  resolveTerrainWaveHighlightColor,
+  resolveTerrainWaveRenderStrength,
+  resolveWaterMaskChunkIntersection,
 } from "./terrain-renderer/terrain-chunk-renderer";
 
 const createElement = (overrides: Record<string, any> = {}) => ({
@@ -33,7 +40,7 @@ const createTerrainData = (overrides: Record<string, any> = {}) => ({
   terrainControl: null,
   terrainGrid: [],
   morphologyFeatures: [],
-  waterAnimation: { enabled: false, speed: 1, intensity: 0.45 },
+  waterAnimation: { enabled: false, speed: 1, intensity: 0.45, direction: 90 },
   version: "terrain-v1",
   ...overrides,
 });
@@ -70,6 +77,98 @@ describe("studio element renderer helpers", () => {
       { ...feature, params: { fillHeight: 100 } },
       60
     )).toBeNull();
+  });
+
+  it("inherits wave options per hole and clamps explicit overrides", () => {
+    const fallback = { enabled: false, speed: 1.5, intensity: 0.4, direction: 135 };
+    const inherited = { id: "pond-a", kind: "hole" as const, params: {}, strokes: [] };
+    const overridden = {
+      id: "pond-b",
+      kind: "hole" as const,
+      params: { waveSpeed: 9, waveIntensity: 0, waveDirection: -90 },
+      strokes: [],
+    };
+
+    expect(resolveTerrainHoleWaveOptions(inherited, fallback)).toEqual({
+      speed: 1.5,
+      intensity: 0.4,
+      direction: 135,
+    });
+    expect(resolveTerrainHoleWaveOptions(overridden, fallback)).toEqual({
+      speed: 4,
+      intensity: 0,
+      direction: 270,
+    });
+  });
+
+  it("keeps independent descriptors for animated and static filled holes", () => {
+    const descriptors = resolveTerrainHoleWaveDescriptors(
+      [
+        {
+          id: "east-flow",
+          kind: "hole",
+          params: { fillHeight: 60, waveSpeed: 1, waveIntensity: 0.8, waveDirection: 0 },
+          strokes: [],
+        },
+        {
+          id: "static-west",
+          kind: "hole",
+          params: { fillHeight: 80, waveSpeed: 3, waveIntensity: 0, waveDirection: 180 },
+          strokes: [],
+        },
+        { id: "empty", kind: "hole", params: { fillHeight: 0 }, strokes: [] },
+        { id: "wall", kind: "wall", params: { fillHeight: 100 }, strokes: [] },
+      ],
+      { enabled: false, speed: 1.5, intensity: 0.4, direction: 90 }
+    );
+
+    expect(descriptors.map(({ feature, options }) => ({ id: feature.id, ...options }))).toEqual([
+      { id: "east-flow", speed: 1, intensity: 0.8, direction: 0 },
+      { id: "static-west", speed: 3, intensity: 0, direction: 180 },
+    ]);
+    expect(descriptors.map(({ options }) => isTerrainWaveAnimated(options))).toEqual([true, false]);
+  });
+
+  it("maps cardinal wave directions to screen-space vectors", () => {
+    expect(resolveTerrainWaveDirectionVector(0)).toEqual({ x: 1, y: 0 });
+    expect(resolveTerrainWaveDirectionVector(90)).toEqual({ x: 0, y: 1 });
+    expect(resolveTerrainWaveDirectionVector(180)).toEqual({ x: -1, y: 0 });
+    expect(resolveTerrainWaveDirectionVector(270)).toEqual({ x: 0, y: -1 });
+  });
+
+  it("brightens the local liquid color without imposing a blue tint", () => {
+    const highlight = resolveTerrainWaveHighlightColor({ r: 210, g: 30, b: 20, a: 255 });
+
+    expect(highlight).toEqual({ r: 255, g: 41, b: 27, a: 255 });
+    expect(highlight.r).toBeGreaterThan(highlight.g);
+    expect(highlight.g).toBeGreaterThan(highlight.b);
+  });
+
+  it("scales refraction and highlights continuously from zero intensity", () => {
+    expect(resolveTerrainWaveRenderStrength(0)).toMatchObject({
+      refractionAlpha: 0,
+      refractionAcrossAmplitude: 0,
+      refractionFlowAmplitude: 0,
+      glowAlpha: 0,
+      waveAlpha: 0,
+    });
+
+    const subtle = resolveTerrainWaveRenderStrength(0.001);
+    expect(subtle.refractionAlpha).toBeLessThan(0.01);
+    expect(subtle.refractionAcrossAmplitude).toBeLessThan(0.01);
+    expect(subtle.waveAlpha).toBeLessThan(0.01);
+  });
+
+  it("crops a filled-hole mask to the current chunk without losing alignment", () => {
+    expect(resolveWaterMaskChunkIntersection(
+      { x: 700, y: 40, width: 140, height: 120 },
+      { x: 20, y: 10, width: 100, height: 80 },
+      { x: 768, y: 0, width: 768, height: 768 }
+    )).toEqual({
+      bounds: { x: 0, y: 50, width: 52, height: 80 },
+      sourceX: 68,
+      sourceY: 10,
+    });
   });
 
   it("repeats terrain texture coordinates without mirroring adjacent tiles", () => {

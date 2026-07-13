@@ -62,6 +62,7 @@ Useful fields from `mapSchema` when a full map update is needed:
 - `params?: object`
 - `weather?: object | null`
 - `lighting?: { sun: { enabled: boolean, intensity: number } } | null`
+- `waterAnimation?: { enabled: boolean, speed?: number, intensity?: number, direction?: number }`
 - `mapLoadBlockCollectionId?: string | null`
 - `events?: Array<{ eventId: string, x: number, y: number }>`
 - `elementsAlwaysLow?: string`
@@ -76,7 +77,40 @@ Useful fields from `mapSchema` when a full map update is needed:
 
 `terrainLayer` is the shader terrain V1 contract. The control texture is stored as an RGBA8 media/storage file, with the terrain palette index encoded as `R + G * 256`. `B` is optional light data and treats `128` as neutral when present. `A` is terrain mask coverage for pixel brush strokes, with `255` as fully covered. Soft edges are computed from transition/blend metadata at render time. Legacy tile grids are normalized into `tileSize x tileSize` blocks at load time, but editor brush edits may update the control texture at world-pixel resolution.
 
-`terrainMorphologyLayer` stores hole and wall strokes in world pixels. Hole params support `depth`, `roundness`, `roughness`, optional facade `textureId`, optional bottom-fill `fillTextureId`, and `fillHeight` clamped to `0..100`; `textureId` is not used as the bottom-fill fallback. Wall params support `height`, `roundness`, `roughness`, and optional facade `textureId`. The editor wall smoothness control maps to `roughness = 1 - smoothness`. The brush tool modifies the terrain surface; hole/wall tools use the selected terrain texture as the vertical facade while the top surface remains the already-painted base terrain. The renderer merges hole/wall masks as signed terrain levels before drawing, so overlapping strokes are clipped or neutralized instead of being rendered as independent overlays. The editor renders this layer after `terrainLayer` and treats intersecting hole/wall cells as blocking collision.
+`terrainMorphologyLayer` stores hole and wall strokes in world pixels. Hole params support `depth`, `roundness`, `roughness`, optional facade `textureId`, optional bottom-fill `fillTextureId`, `fillHeight` clamped to `0..100`, and optional per-hole `waveIntensity`, `waveDirection`, and `waveSpeed`; `textureId` is not used as the bottom-fill fallback. Wall params support `height`, `roundness`, `roughness`, and optional facade `textureId`. The editor wall smoothness control maps to `roughness = 1 - smoothness`. The brush tool modifies the terrain surface; hole/wall tools use the selected terrain texture as the vertical facade while the top surface remains the already-painted base terrain. The renderer merges hole/wall masks as signed terrain levels before drawing, so overlapping strokes are clipped or neutralized instead of being rendered as independent overlays. The editor renders this layer after `terrainLayer` and treats intersecting hole/wall cells as blocking collision.
+
+`waterAnimation` defines map-level liquid animation defaults. `speed` defaults to `1`, `intensity` to `0.45`, and `direction` to `90`. Directions use clockwise screen-space degrees: `0` moves right, `90` down, `180` left, and `270` up. Direction values are normalized around the circle.
+
+Filled holes animate independently. Their optional `waveIntensity` (`0..1`), `waveDirection` (degrees), and `waveSpeed` (`0.1..4`) params override the matching map-level `waterAnimation` value; omit a field to inherit the map default. Set `waveIntensity` to `0` to keep the color or texture fill visible without animated waves or refraction. Wave highlights derive their color from the local fill pixels, so colored liquids and textured fills keep their dominant hue instead of receiving a fixed blue tint.
+
+Example map excerpt with a right-moving, stronger wave override for one filled hole:
+
+```json
+{
+  "waterAnimation": {
+    "enabled": false,
+    "speed": 1,
+    "intensity": 0.45,
+    "direction": 90
+  },
+  "terrainMorphologyLayer": {
+    "features": [
+      {
+        "kind": "hole",
+        "params": {
+          "fillHeight": 60,
+          "fillTextureId": "lava-texture-id",
+          "waveIntensity": 0.7,
+          "waveDirection": 0,
+          "waveSpeed": 1.5
+        }
+      }
+    ]
+  }
+}
+```
+
+The excerpt omits the unchanged morphology metadata and strokes. The map-level `enabled` flag controls painted-water animation; filled holes animate automatically unless their effective intensity is `0`.
 
 `lighting.sun` controls the map-level sun option. `enabled` toggles automatic sunlight shadows for walls, characters, and elements. `intensity` is clamped to `0..1`.
 

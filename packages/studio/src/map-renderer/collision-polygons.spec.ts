@@ -216,6 +216,7 @@ describe("studio terrain map renderer data", () => {
       enabled: false,
       speed: 1,
       intensity: 0.45,
+      direction: 90,
     });
   });
 
@@ -226,6 +227,7 @@ describe("studio terrain map renderer data", () => {
           enabled: true,
           speed: 20,
           intensity: 5,
+          direction: -90,
         },
       })
     );
@@ -234,6 +236,27 @@ describe("studio terrain map renderer data", () => {
       enabled: true,
       speed: 4,
       intensity: 1,
+      direction: 270,
+    });
+  });
+
+  it("keeps disabled water values available as filled-hole defaults", () => {
+    const data = createStudioTerrainRenderData(
+      createMap({
+        waterAnimation: {
+          enabled: false,
+          speed: 0,
+          intensity: 0,
+          direction: 450,
+        },
+      })
+    );
+
+    expect(data.waterAnimation).toEqual({
+      enabled: false,
+      speed: 0.1,
+      intensity: 0,
+      direction: 90,
     });
   });
 
