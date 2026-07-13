@@ -1,5 +1,6 @@
 // Export all block executors
 export { show_text } from './show-text';
+export { show_input, schemaShowInput } from './show-input';
 export { show_choices } from './show-choices';
 export { show_notification } from './show-notification';
 export { conditional_branch } from './conditional-branch';

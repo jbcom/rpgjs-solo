@@ -1,9 +1,11 @@
 import { RpgPlayer } from "./Player";
-import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui, GameoverGui } from "../Gui";
-import { DialogOptions, Choice } from "../Gui/DialogGui";
+import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui, GameoverGui, InputGui } from "../Gui";
+import type { ShopGuiOptions, ShopItemInput } from "../Gui/ShopGui";
+import { DialogOptions, DialogBaseOptions, Choice } from "../Gui/DialogGui";
 import { SaveLoadOptions, SaveSlot } from "../Gui/SaveLoadGui";
 import { MenuGuiOptions } from "../Gui/MenuGui";
 import { GameoverGuiOptions, GameoverGuiSelection } from "../Gui/GameoverGui";
+import { InputOptions, NumberInputOptions, TextInputOptions, TextareaInputOptions } from "../Gui/InputForm";
 import { Constructor, PlayerCtor } from "@rpgjs/common";
 
 /**
@@ -37,7 +39,10 @@ export function WithGuiManager<TBase extends PlayerCtor>(
   class GuiManagerMixin extends Base {
     _gui: { [id: string]: Gui } = {};
 
-    showText(msg: string, options: DialogOptions = {}): Promise<any> {
+    showText(msg: string, options: DialogBaseOptions & { input: NumberInputOptions }): Promise<number | null>;
+    showText(msg: string, options: DialogBaseOptions & { input: TextInputOptions | TextareaInputOptions }): Promise<string | null>;
+    showText(msg: string, options?: DialogOptions): Promise<string | number | null>;
+    showText(msg: string, options: DialogOptions = {}): Promise<string | number | null> {
       const gui = new DialogGui(<any>this);
       this._gui[gui.id] = gui;
       return gui.openDialog(msg, options);
@@ -46,12 +51,13 @@ export function WithGuiManager<TBase extends PlayerCtor>(
     showChoices(
       msg: string,
       choices: Choice[],
-      options?: DialogOptions
+      options?: DialogBaseOptions
     ): Promise<Choice | null> {
       return this.showText(msg, {
         choices,
         ...options,
-      }).then((indexSelected: number) => {
+      }).then((indexSelected) => {
+        if (typeof indexSelected !== 'number') return null;
         if (!choices[indexSelected]) return null;
         return choices[indexSelected];
       });
@@ -60,12 +66,21 @@ export function WithGuiManager<TBase extends PlayerCtor>(
     showNotification(
       message: string,
       options: { time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" } = {}
-    ): Promise<any> {
+    ): Promise<boolean> {
       ;(this as unknown as { emit(type: string, value?: unknown): void }).emit('notification', {
         message,
         ...options,
       });
       return Promise.resolve(true);
+    }
+
+    showInput(message: string, options: NumberInputOptions): Promise<number | null>;
+    showInput(message: string, options?: TextInputOptions | TextareaInputOptions): Promise<string | null>;
+    showInput(message: string, options: InputOptions): Promise<string | number | null>;
+    showInput(message: string, options: InputOptions = {}): Promise<string | number | null> {
+      const gui = new InputGui(<any>this);
+      this._gui[gui.id] = gui;
+      return gui.openInput(message, options);
     }
 
     callMainMenu(options: MenuGuiOptions = {}) {
@@ -105,13 +120,7 @@ export function WithGuiManager<TBase extends PlayerCtor>(
      * @returns {void}
      * @memberof GuiManager
      */
-    callShop(items: any[] | {
-      items: any[]
-      sell?: Record<string, number> | Array<{ id: string; multiplier: number }>
-      sellMultiplier?: number
-      message?: string
-      face?: { id: string; expression?: string }
-    }) {
+    callShop(items: ShopItemInput[] | ShopGuiOptions): Promise<unknown | null> {
       const gui = new ShopGui(<any>this);
       this._gui[gui.id] = gui;
       return gui.open(items);
@@ -172,7 +181,7 @@ export function WithGuiManager<TBase extends PlayerCtor>(
      * @returns {Gui}
      * @memberof GuiManager
      */
-    removeGui(guiId: string, data?: any, guiOpenId?: unknown) {
+    removeGui(guiId: string, data?: unknown, guiOpenId?: unknown): void {
       if (this._gui[guiId]) {
         if (!this._gui[guiId].matchesOpenId(guiOpenId)) {
           return;
@@ -253,6 +262,39 @@ export function WithGuiManager<TBase extends PlayerCtor>(
  */
 export interface IGuiManager {
   /**
+   * Opens the prebuilt input GUI and waits for the player to submit or cancel it.
+   * The player cannot move while the form is open. Number inputs resolve to a
+   * `number`; text inputs and textareas resolve to a `string`; cancellation and
+   * an empty optional number input resolve to `null`.
+   *
+   * ```ts
+   * const age = await player.showInput('Your age', {
+   *   type: 'number',
+   *   required: true,
+   *   min: 1
+   * })
+   * // age is number | null
+   *
+   * const biography = await player.showInput('Biography', {
+   *   control: 'textarea',
+   *   rows: 6,
+   *   maxLength: 500
+   * })
+   * // biography is string | null
+   * ```
+   *
+   * @title Show Input
+   * @method player.showInput(message,options)
+   * @param {string} message Label or question displayed above the field.
+   * @param {InputOptions} [options] Field type, control, initial value, labels, and validation constraints.
+   * @returns {Promise<string | number | null>} The typed submitted value, or `null` when cancelled or when an optional number is empty.
+   * @memberof GuiManager
+   */
+  showInput(message: string, options: NumberInputOptions): Promise<number | null>;
+  showInput(message: string, options?: TextInputOptions | TextareaInputOptions): Promise<string | null>;
+  showInput(message: string, options: InputOptions): Promise<string | number | null>;
+
+  /**
    * Show a text. This is a graphical interface already built. Opens the GUI named `rpg-dialog`
    *
    * ```ts
@@ -279,6 +321,15 @@ export interface IGuiManager {
    * player.showText('Hello World', {
    *      position: 'top'
    * })
+   * ```
+   *
+   * Add a typed input directly below the dialog text:
+   *
+   * ```ts
+   * const age = await player.showText('How old are you?', {
+   *   input: { type: 'number', required: true, min: 1 }
+   * })
+   * // age is number | null
    * ```
    *
    * **Option: fullWidth**
@@ -337,7 +388,9 @@ export interface IGuiManager {
    * @returns {Promise}
    * @memberof GuiManager
    */
-  showText(msg: string, options?: DialogOptions): Promise<any>;
+  showText(msg: string, options: DialogBaseOptions & { input: NumberInputOptions }): Promise<number | null>;
+  showText(msg: string, options: DialogBaseOptions & { input: TextInputOptions | TextareaInputOptions }): Promise<string | null>;
+  showText(msg: string, options?: DialogOptions): Promise<string | number | null>;
 
   /**
    * Shows a dialog box with a choice. Opens the GUI named `rpg-dialog`
@@ -364,7 +417,7 @@ export interface IGuiManager {
   showChoices(
     msg: string,
     choices: Choice[],
-    options?: DialogOptions
+    options?: DialogBaseOptions
   ): Promise<Choice | null>;
 
   /**
@@ -383,7 +436,7 @@ export interface IGuiManager {
   showNotification(
     message: string,
     options?: { time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" }
-  ): Promise<any>;
+  ): Promise<boolean>;
 
   /**
    * Display a save/load slots screen. Opens the GUI named `rpg-save`
@@ -463,16 +516,10 @@ export interface IGuiManager {
    * @memberof GuiManager
    */
   callGameover(options?: GameoverGuiOptions): Promise<GameoverGuiSelection | null>;
-  callShop(items: any[] | {
-    items: any[]
-    sell?: Record<string, number> | Array<{ id: string; multiplier: number }>
-    sellMultiplier?: number
-    message?: string
-    face?: { id: string; expression?: string }
-  }): void;
+  callShop(items: ShopItemInput[] | ShopGuiOptions): Promise<unknown | null>;
   gui(guiId: string): Gui;
   getGui(guiId: string): Gui;
-  removeGui(guiId: string, data?: any, guiOpenId?: unknown): void;
+  removeGui(guiId: string, data?: unknown, guiOpenId?: unknown): void;
   showAttachedGui(players?: RpgPlayer[] | RpgPlayer): void;
   hideAttachedGui(players?: RpgPlayer[] | RpgPlayer): void;
 }

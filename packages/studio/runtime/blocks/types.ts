@@ -74,6 +74,34 @@ export interface ShowTextParams {
   inputRows?: number;
 }
 
+/** Parameters for the typed player input block. */
+export interface ShowInputParams {
+  message: string;
+  title?: string;
+  variableId: string;
+  presentation?: 'standalone' | 'dialog';
+  control?: 'input' | 'textarea';
+  type?: 'text' | 'number' | 'password' | 'email';
+  placeholder?: string;
+  defaultValue?: string | number;
+  required?: boolean;
+  confirmText?: string;
+  cancelText?: string;
+  cancelButton?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  rows?: number;
+  speaker?: string;
+  position?: 'top' | 'middle' | 'bottom';
+  faceset?: string | { id?: string; facesetId?: string; expression?: string };
+  expression?: string;
+  fullWidth?: boolean;
+  typewriterEffect?: boolean;
+}
+
 /**
  * Single choice option for show_choices block
  */
@@ -913,6 +941,8 @@ export interface PlaySeParams {
 export interface CallCommonEventParams {
   /** ID of the event to call */
   commonEventId: string;
+  /** @deprecated v4 compatibility alias for `commonEventId`. */
+  eventId?: string;
   /** Parameters to pass to the event */
   parameters?: Record<string, unknown>;
   /** Recursion guard for nested event calls */
@@ -942,6 +972,8 @@ export interface CommonEventPositionParams {
 export interface SpawnCommonEventParams extends CommonEventPositionParams {
   /** ID of the event to spawn */
   commonEventId: string;
+  /** @deprecated v4 compatibility alias for `commonEventId`. */
+  eventId?: string;
   /** Runtime event mode */
   mode?: 'shared' | 'scenario';
 }
@@ -992,6 +1024,7 @@ export interface CommentParams {
 export interface BlockParamsMap {
   // Message & Dialog
   show_text: ShowTextParams;
+  show_input: ShowInputParams;
   show_choices: ShowChoicesParams;
   show_notification: ShowNotificationParams;
   
@@ -1277,6 +1310,10 @@ export type AnyBlockDefinition = BlockDefinition<BlockType> | BlockDefinition;
 export interface ExecutionPlayer {
   /** Display a text dialog */
   showText(text: string, options?: { talkWith?: unknown; position?: string; input?: Record<string, unknown>; [key: string]: unknown }): Promise<string | number | null | void>;
+  /** Ask the player for a typed text or numeric value. */
+  showInput(message: string, options: { type: 'number'; control?: 'input'; [key: string]: unknown }): Promise<number | null>;
+  showInput(message: string, options?: { type?: 'text' | 'password' | 'email'; control?: 'input' | 'textarea'; [key: string]: unknown }): Promise<string | null>;
+  showInput(message: string, options: { type?: string; control?: string; [key: string]: unknown }): Promise<string | number | null>;
   /** Display choices and get player selection */
   showChoices(question: string, choices: Array<{ text: string; value: number }>): Promise<{ value: number }>;
   /** Get a variable value */
@@ -1345,13 +1382,13 @@ export interface ExecutionEvent {
   /** Event ID */
   id?: string;
   /** Move to a position */
-  moveTo(position: { x: number; y: number }): Promise<void>;
+  moveTo(position: { x: number; y: number }): Promise<void> | void;
   /** Move in a direction */
   moveDirection?(direction: string, speed: number): Promise<void>;
   /** Follow a route */
   followRoute?(route: unknown, speed: number): Promise<void>;
   /** Set the graphic/spritesheet */
-  setGraphic(spritesheet: string): Promise<void>;
+  setGraphic(spritesheet: string): Promise<void> | void;
   /** Set collision hitbox size */
   setHitbox?(width: number, height: number): void;
   /** Set the current animation */
@@ -1359,9 +1396,9 @@ export interface ExecutionEvent {
   /** Show a spritesheet animation attached to the event */
   showAnimation?(graphic: string, animationName?: string): Promise<void> | void;
   /** Event world X position */
-  x?: number;
+  x?: number | (() => number);
   /** Event world Y position */
-  y?: number;
+  y?: number | (() => number);
   /** Optional position object */
   position?: { x: number; y: number };
 }

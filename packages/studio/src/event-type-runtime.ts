@@ -22,6 +22,7 @@ export interface RpgMapExtended extends RpgMap {
   };
   scale: number;
   globalConfig: Record<string, unknown>;
+  setInWorldMaps(worldMap: import("@rpgjs/common").WorldMapsManager): void;
 }
 
 export type InitLifecycleOptions = {

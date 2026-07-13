@@ -571,8 +571,10 @@ export default createServer({
             //player.param[MAXHP] = 200;
             player.param[ATK] = 20;
             player.param[PDEF] = 10;
-            
-            
+
+
+
+
             if (!player.getSkill(fireSkill)) {
               player.learnSkill(fireSkill);
             }
@@ -614,11 +616,16 @@ export default createServer({
             // console.log("call shop")
 
             if (input.action == 'action') {
-              const map = player.getCurrentMap()
-              const event = map?.getEvents()[0]
-              player?.cameraFollow(event, {
-                smoothMove: true
+              const val = await player.showText('Comment tu vas ?', {
+                input: {
+                  placeholder: 'Your value',
+                  required: true,
+                  control: 'textarea',
+                  confirmText: 'Validate',
+                  cancelButton: false
+                }
               })
+              console.log(val)
             }
 
             // const choice = await player.showChoices('Hello', [

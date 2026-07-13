@@ -10,6 +10,7 @@ import {
   type StudioTerrainControlTexture,
   type StudioTerrainMorphologyFeature,
   type StudioTerrainRenderData,
+  type StudioWaterAnimationOptions,
 } from "../types";
 import {
   createTerrainPatternCanvas,
@@ -40,13 +41,47 @@ interface TerrainChunk {
 interface TerrainWaterOverlay {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
-  mask: HTMLCanvasElement;
+  frame: CanvasBuffer;
+  waveMask: CanvasBuffer;
+  surface: HTMLCanvasElement;
   texture: Texture;
   sprite: Sprite;
+  regions: TerrainWaterRegion[];
+  originX: number;
+  originY: number;
+}
+
+interface TerrainWaterRegion {
+  mask: HTMLCanvasElement;
+  bounds: { x: number; y: number; width: number; height: number };
   phase: number;
   speed: number;
   intensity: number;
+  direction: number;
   seed: number;
+}
+
+/** @internal */
+export interface TerrainWaterWaveOptions {
+  speed: number;
+  intensity: number;
+  direction: number;
+}
+
+/** @internal */
+export interface TerrainHoleWaveDescriptor {
+  feature: StudioTerrainMorphologyFeature;
+  options: TerrainWaterWaveOptions;
+}
+
+/** @internal */
+export interface TerrainWaveRenderStrength {
+  refractionAlpha: number;
+  refractionAcrossAmplitude: number;
+  refractionFlowAmplitude: number;
+  glowAlpha: number;
+  waveAlpha: number;
+  lineWidth: number;
 }
 
 interface TerrainViewportBounds {
@@ -115,7 +150,14 @@ interface TerrainHoleRenderParts {
   depth: number;
 }
 
-interface RgbaColor {
+export interface TerrainHoleFillGeometry {
+  dropY: number;
+  inset: number;
+  level: number;
+}
+
+/** @internal */
+export interface RgbaColor {
   r: number;
   g: number;
   b: number;
@@ -257,8 +299,11 @@ export class StudioTerrainChunkRenderer {
 
     for (const chunk of this.chunks.values()) {
       const overlay = chunk.waterOverlay;
-      if (!overlay || overlay.sprite.destroyed || !overlay.sprite.visible) continue;
-      overlay.phase += safeDelta * overlay.speed;
+      if (!overlay || overlay.sprite.destroyed) continue;
+      for (const region of overlay.regions) {
+        region.phase += safeDelta * region.speed;
+      }
+      if (!overlay.sprite.visible) continue;
       drawWaterAnimationFrame(overlay);
       updateCanvasTexture(overlay.texture);
     }
@@ -398,7 +443,7 @@ export class StudioTerrainChunkRenderer {
     sprite.roundPixels = true;
     sprite.cullable = true;
     sprite.cullArea = new Rectangle(0, 0, bounds.width, bounds.height);
-    const waterOverlay = this.createWaterOverlay(data, controlImage, bounds);
+    const waterOverlay = this.createWaterOverlay(data, controlImage, bounds, canvas);
 
     const previous = this.chunks.get(key);
     if (previous) {
@@ -752,23 +797,99 @@ export class StudioTerrainChunkRenderer {
   private createWaterOverlay(
     data: StudioTerrainRenderData,
     controlImage: HTMLImageElement | null,
-    bounds: { x: number; y: number; width: number; height: number }
+    bounds: { x: number; y: number; width: number; height: number },
+    surface: HTMLCanvasElement
   ): TerrainWaterOverlay | null {
-    if (!data.waterAnimation.enabled || !data.asset) return null;
-    const mask = data.terrainControl
-      ? this.createTerrainControlWaterMask(data, controlImage, bounds)
-      : this.createTerrainGridWaterMask(data, bounds);
-    if (!mask) return null;
+    const holeRegions: TerrainWaterRegion[] = [];
+    const holeMasks: Array<Pick<TerrainWaterRegion, "mask" | "bounds">> = [];
 
-    const maskCtx = mask.getContext("2d", { willReadFrequently: true });
-    if (!maskCtx) return null;
-    const alphaBounds = findAlphaBounds(
-      maskCtx.getImageData(0, 0, mask.width, mask.height).data,
-      mask.width,
-      mask.height,
-      { x: 0, y: 0, width: mask.width, height: mask.height }
+    const filledHoles = resolveTerrainHoleWaveDescriptors(
+      data.morphologyFeatures,
+      data.waterAnimation
     );
-    if (!alphaBounds) return null;
+    for (const { feature, options } of filledHoles) {
+      if (!featureIntersectsBounds(feature, bounds)) continue;
+      const parts = this.createTerrainHoleRenderParts(data, feature);
+      if (!parts) continue;
+      const geometry = resolveTerrainHoleFillGeometry(parts.mask, feature, parts.depth);
+      if (!geometry) continue;
+
+      const projectedMask = this.createTerrainMorphologyProjectedLevelMask(
+        parts.mask,
+        geometry.inset,
+        geometry.dropY
+      );
+      const projectedAlphaBounds = resolveWaterMaskAlphaBounds(projectedMask.canvas);
+      if (!projectedAlphaBounds) continue;
+      const intersection = resolveWaterMaskChunkIntersection(
+        projectedMask.bounds,
+        projectedAlphaBounds,
+        bounds
+      );
+      if (!intersection) continue;
+
+      const mask = this.createCanvasBuffer(
+        intersection.bounds.width,
+        intersection.bounds.height,
+        true
+      );
+      mask.ctx.drawImage(
+        projectedMask.canvas,
+        intersection.sourceX,
+        intersection.sourceY,
+        intersection.bounds.width,
+        intersection.bounds.height,
+        0,
+        0,
+        intersection.bounds.width,
+        intersection.bounds.height
+      );
+      const regionMask = { mask: mask.canvas, bounds: intersection.bounds };
+      if (data.waterAnimation.enabled) holeMasks.push(regionMask);
+
+      if (!isTerrainWaveAnimated(options)) continue;
+      holeRegions.push({
+        ...regionMask,
+        phase: 0,
+        ...options,
+        seed: terrainMorphologyNoise(stableStringHash(feature.id) * 0.013, 0, 19),
+      });
+    }
+
+    const terrainMask = data.waterAnimation.enabled
+      ? data.terrainControl
+        ? this.createTerrainControlWaterMask(data, controlImage, bounds)
+        : this.createTerrainGridWaterMask(data, bounds)
+      : null;
+    const regions: TerrainWaterRegion[] = [];
+    const mapOptions = resolveTerrainWaveOptions(data.waterAnimation);
+    if (terrainMask) {
+      const terrainMaskCtx = terrainMask.getContext("2d");
+      if (terrainMaskCtx) {
+        terrainMaskCtx.save();
+        terrainMaskCtx.globalCompositeOperation = "destination-out";
+        for (const holeMask of holeMasks) {
+          terrainMaskCtx.drawImage(
+            holeMask.mask,
+            holeMask.bounds.x,
+            holeMask.bounds.y
+          );
+        }
+        terrainMaskCtx.restore();
+      }
+      const alphaBounds = resolveWaterMaskAlphaBounds(terrainMask);
+      if (alphaBounds && isTerrainWaveAnimated(mapOptions)) {
+        regions.push({
+          mask: cropCanvasMask(terrainMask, alphaBounds),
+          bounds: alphaBounds,
+          phase: 0,
+          ...mapOptions,
+          seed: 0,
+        });
+      }
+    }
+    regions.push(...holeRegions);
+    if (regions.length === 0) return null;
 
     const canvas = this.createCanvasBuffer(bounds.width, bounds.height, true);
     const texture = Texture.from(canvas.canvas);
@@ -785,13 +906,14 @@ export class StudioTerrainChunkRenderer {
     const overlay: TerrainWaterOverlay = {
       canvas: canvas.canvas,
       ctx: canvas.ctx,
-      mask,
+      frame: this.createCanvasBuffer(bounds.width, bounds.height, true),
+      waveMask: this.createCanvasBuffer(bounds.width, bounds.height, true),
+      surface,
       texture,
       sprite,
-      phase: 0,
-      speed: data.waterAnimation.speed,
-      intensity: data.waterAnimation.intensity,
-      seed: terrainMorphologyNoise(bounds.x * 0.013, bounds.y * 0.013, 19),
+      regions,
+      originX: bounds.x,
+      originY: bounds.y,
     };
     drawWaterAnimationFrame(overlay);
     updateCanvasTexture(texture);
@@ -1529,20 +1651,10 @@ export class StudioTerrainChunkRenderer {
     data: StudioTerrainRenderData,
     image: HTMLImageElement | null
   ): void {
-    const level = clampNumber(Number(feature.params.fillHeight ?? 0) / 100, 0, 1);
-    if (level <= 0) return;
-
-    const bounds = getTerrainMorphologyLocalMaskBounds(mask);
-    if (!bounds) return;
-
-    const width = bounds.maxX - bounds.minX + 1;
-    const height = bounds.maxY - bounds.minY + 1;
-    const minDimension = Math.min(width, height);
     const depth = getTerrainMorphologyHeight(feature);
-    const dropY = Math.round((1 - level) * depth * 0.78);
-    const wallMargin = Math.round(clampNumber(minDimension * 0.035, 4, 10));
-    const inset = Math.round(wallMargin + minDimension * 0.05 * (1 - level));
-    const fillMask = this.createTerrainMorphologyProjectedLevelMask(mask, inset, dropY);
+    const geometry = resolveTerrainHoleFillGeometry(mask, feature, depth);
+    if (!geometry) return;
+    const fillMask = this.createTerrainMorphologyProjectedLevelMask(mask, geometry.inset, geometry.dropY);
     const softFillMask = this.createTerrainMorphologySoftMask(fillMask, 7, mask);
 
     this.drawTerrainMorphologyTextureFill(
@@ -2356,6 +2468,28 @@ function getTerrainMorphologyLocalMaskBounds(
   return maxX < 0 || maxY < 0 ? null : { maxX, maxY, minX, minY };
 }
 
+export function resolveTerrainHoleFillGeometry(
+  mask: TerrainMorphologyMaskBuffer,
+  feature: StudioTerrainMorphologyFeature,
+  depth = getTerrainMorphologyHeight(feature)
+): TerrainHoleFillGeometry | null {
+  const level = clampNumber(Number(feature.params.fillHeight ?? 0) / 100, 0, 1);
+  if (level <= 0) return null;
+
+  const bounds = getTerrainMorphologyLocalMaskBounds(mask);
+  if (!bounds) return null;
+  const width = bounds.maxX - bounds.minX + 1;
+  const height = bounds.maxY - bounds.minY + 1;
+  const minDimension = Math.min(width, height);
+  const wallMargin = Math.round(clampNumber(minDimension * 0.035, 4, 10));
+
+  return {
+    level,
+    dropY: Math.round((1 - level) * depth * 0.78),
+    inset: Math.round(wallMargin + minDimension * 0.05 * (1 - level)),
+  };
+}
+
 function terrainMorphologyNoise(x: number, y: number, seed = 0): number {
   const value = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
   return value - Math.floor(value);
@@ -2620,40 +2754,421 @@ export function resolveTerrainTextureRepeatLocal(world: number, period: number):
 }
 
 function drawWaterAnimationFrame(overlay: TerrainWaterOverlay): void {
-  const { canvas, ctx, mask, intensity } = overlay;
+  const { canvas, ctx } = overlay;
   const width = canvas.width;
   const height = canvas.height;
-  const phase = overlay.phase + overlay.seed * 4;
+  resetCanvasContext(ctx);
   ctx.clearRect(0, 0, width, height);
-  ctx.save();
-  ctx.globalCompositeOperation = "source-over";
+
+  for (const region of overlay.regions) {
+    drawWaterAnimationRegion(overlay, region);
+  }
+}
+
+function drawWaterAnimationRegion(overlay: TerrainWaterOverlay, region: TerrainWaterRegion): void {
+  const { canvas, ctx, frame, waveMask, surface } = overlay;
+  const width = canvas.width;
+  const height = canvas.height;
+  const phase = region.phase + region.seed * 4;
+  const frameCtx = frame.ctx;
+  const renderBounds = region.bounds;
+  const strength = resolveTerrainWaveRenderStrength(region.intensity);
+
+  resetCanvasContext(frameCtx);
+  frameCtx.clearRect(
+    renderBounds.x,
+    renderBounds.y,
+    renderBounds.width,
+    renderBounds.height
+  );
+  drawCanvasBounds(frameCtx, surface, renderBounds);
+
+  drawDirectionalWaterRefraction(
+    frameCtx,
+    surface,
+    region,
+    phase,
+    width,
+    height,
+    overlay.originX,
+    overlay.originY
+  );
+
+  frameCtx.save();
+  frameCtx.globalCompositeOperation = "screen";
+  frameCtx.globalAlpha = strength.glowAlpha;
+  frameCtx.filter = terrainWaveHighlightFilter();
+  drawCanvasBounds(frameCtx, surface, renderBounds);
+  frameCtx.restore();
+
+  drawDirectionalWaveMask(
+    waveMask,
+    region,
+    phase,
+    width,
+    height,
+    overlay.originX,
+    overlay.originY
+  );
+  waveMask.ctx.globalCompositeOperation = "source-in";
+  waveMask.ctx.filter = terrainWaveHighlightFilter();
+  drawCanvasBounds(waveMask.ctx, surface, renderBounds);
+  resetCanvasContext(waveMask.ctx);
+
+  frameCtx.save();
+  frameCtx.globalAlpha = strength.waveAlpha;
+  drawCanvasBounds(frameCtx, waveMask.canvas, renderBounds);
+  frameCtx.restore();
+
+  frameCtx.globalCompositeOperation = "destination-in";
+  frameCtx.drawImage(region.mask, region.bounds.x, region.bounds.y);
+  frameCtx.globalCompositeOperation = "source-over";
+  drawCanvasBounds(ctx, frame.canvas, renderBounds);
+}
+
+function drawDirectionalWaterRefraction(
+  ctx: CanvasRenderingContext2D,
+  surface: HTMLCanvasElement,
+  region: TerrainWaterRegion,
+  phase: number,
+  width: number,
+  height: number,
+  originX: number,
+  originY: number
+): void {
+  const angle = degreesToRadians(region.direction - 90);
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const centerX = width * 0.5;
+  const centerY = height * 0.5;
+  const projected = projectBoundsIntoRotatedSpace(region.bounds, centerX, centerY, cos, sin);
+  const refractionBandHeight = 8;
+  const drift = positiveModulo(phase * 12, refractionBandHeight);
+  const flow = resolveTerrainWaveDirectionVector(region.direction);
+  const across = { x: flow.y, y: -flow.x };
+  const centerWorld = { x: originX + centerX, y: originY + centerY };
+  const centerFlow = centerWorld.x * flow.x + centerWorld.y * flow.y;
+  const globalMinY = projected.minY + centerFlow;
+  const firstGlobalBand =
+    Math.floor((globalMinY - drift) / refractionBandHeight) * refractionBandHeight + drift;
+  const firstBand = firstGlobalBand - centerFlow;
+  const strength = resolveTerrainWaveRenderStrength(region.intensity);
+
+  ctx.globalAlpha = strength.refractionAlpha;
+  for (let y = firstBand; y <= projected.maxY + refractionBandHeight; y += refractionBandHeight) {
+    const globalY = y + centerFlow;
+    const acrossOffset =
+      Math.sin(globalY * 0.075 + phase * 2.4) * strength.refractionAcrossAmplitude;
+    const flowOffset =
+      Math.sin(globalY * 0.035 - phase * 1.7) * strength.refractionFlowAmplitude;
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.rect(
+      projected.minX - 4,
+      y,
+      projected.maxX - projected.minX + 8,
+      refractionBandHeight + 0.5
+    );
+    ctx.clip();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(
+      surface,
+      across.x * acrossOffset + flow.x * flowOffset,
+      across.y * acrossOffset + flow.y * flowOffset
+    );
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawDirectionalWaveMask(
+  waveMask: CanvasBuffer,
+  region: TerrainWaterRegion,
+  phase: number,
+  width: number,
+  height: number,
+  originX: number,
+  originY: number
+): void {
+  const ctx = waveMask.ctx;
+  resetCanvasContext(ctx);
+  ctx.clearRect(region.bounds.x, region.bounds.y, region.bounds.width, region.bounds.height);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
+  const angle = degreesToRadians(region.direction - 90);
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const centerX = width * 0.5;
+  const centerY = height * 0.5;
+  const projected = projectBoundsIntoRotatedSpace(region.bounds, centerX, centerY, cos, sin);
   const bandSpacing = 22;
   const drift = positiveModulo(phase * 28, bandSpacing);
-  for (let y = -bandSpacing; y < height + bandSpacing; y += bandSpacing) {
+  const flow = resolveTerrainWaveDirectionVector(region.direction);
+  const across = { x: flow.y, y: -flow.x };
+  const centerWorld = { x: originX + centerX, y: originY + centerY };
+  const centerFlow = centerWorld.x * flow.x + centerWorld.y * flow.y;
+  const centerAcross = centerWorld.x * across.x + centerWorld.y * across.y;
+  const globalMinY = projected.minY + centerFlow;
+  const firstGlobalBand = Math.floor((globalMinY - drift) / bandSpacing) * bandSpacing + drift;
+  const firstBand = firstGlobalBand - centerFlow;
+
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.rotate(angle);
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = resolveTerrainWaveRenderStrength(region.intensity).lineWidth;
+  for (let y = firstBand; y <= projected.maxY + bandSpacing; y += bandSpacing) {
     ctx.beginPath();
-    for (let x = -18; x <= width + 18; x += 12) {
-      const waveY = y + drift + Math.sin(x * 0.055 + phase * 3 + y * 0.07) * (2 + intensity * 4);
-      if (x <= -18) ctx.moveTo(x, waveY);
+    for (let x = projected.minX - 18; x <= projected.maxX + 18; x += 12) {
+      const globalX = x + centerAcross;
+      const globalY = y + centerFlow;
+      const waveY =
+        y +
+        Math.sin((globalX + region.seed * 31) * 0.055 + phase * 3 + globalY * 0.07) *
+          (2 + region.intensity * 4);
+      if (x <= projected.minX - 18) ctx.moveTo(x, waveY);
       else ctx.lineTo(x, waveY);
     }
-    ctx.strokeStyle = `rgba(190, 238, 255, ${0.06 + intensity * 0.18})`;
-    ctx.lineWidth = 1 + intensity * 2;
     ctx.stroke();
   }
-
-  const glow = ctx.createLinearGradient(0, 0, width, height);
-  glow.addColorStop(0, `rgba(255, 255, 255, ${0.02 + intensity * 0.08})`);
-  glow.addColorStop(0.5, "rgba(130, 210, 245, 0)");
-  glow.addColorStop(1, `rgba(82, 168, 214, ${0.02 + intensity * 0.06})`);
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.globalCompositeOperation = "destination-in";
-  ctx.drawImage(mask, 0, 0);
   ctx.restore();
+}
+
+function projectBoundsIntoRotatedSpace(
+  bounds: { x: number; y: number; width: number; height: number },
+  centerX: number,
+  centerY: number,
+  cos: number,
+  sin: number
+): { minX: number; minY: number; maxX: number; maxY: number } {
+  const corners = [
+    { x: bounds.x, y: bounds.y },
+    { x: bounds.x + bounds.width, y: bounds.y },
+    { x: bounds.x, y: bounds.y + bounds.height },
+    { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+  ];
+  const projected = corners.map((point) => {
+    const x = point.x - centerX;
+    const y = point.y - centerY;
+    return {
+      x: x * cos + y * sin,
+      y: -x * sin + y * cos,
+    };
+  });
+  return {
+    minX: Math.min(...projected.map((point) => point.x)),
+    minY: Math.min(...projected.map((point) => point.y)),
+    maxX: Math.max(...projected.map((point) => point.x)),
+    maxY: Math.max(...projected.map((point) => point.y)),
+  };
+}
+
+/** @internal */
+export function resolveWaterMaskChunkIntersection(
+  maskBounds: { x: number; y: number; width: number; height: number },
+  alphaBounds: { x: number; y: number; width: number; height: number },
+  chunkBounds: { x: number; y: number; width: number; height: number }
+): {
+  bounds: { x: number; y: number; width: number; height: number };
+  sourceX: number;
+  sourceY: number;
+} | null {
+  const alphaWorldX = maskBounds.x + alphaBounds.x;
+  const alphaWorldY = maskBounds.y + alphaBounds.y;
+  const worldX = Math.max(alphaWorldX, chunkBounds.x);
+  const worldY = Math.max(alphaWorldY, chunkBounds.y);
+  const worldMaxX = Math.min(
+    alphaWorldX + alphaBounds.width,
+    chunkBounds.x + chunkBounds.width
+  );
+  const worldMaxY = Math.min(
+    alphaWorldY + alphaBounds.height,
+    chunkBounds.y + chunkBounds.height
+  );
+  if (worldMaxX <= worldX || worldMaxY <= worldY) return null;
+
+  return {
+    bounds: {
+      x: worldX - chunkBounds.x,
+      y: worldY - chunkBounds.y,
+      width: worldMaxX - worldX,
+      height: worldMaxY - worldY,
+    },
+    sourceX: worldX - maskBounds.x,
+    sourceY: worldY - maskBounds.y,
+  };
+}
+
+function cropCanvasMask(
+  source: HTMLCanvasElement,
+  bounds: { x: number; y: number; width: number; height: number }
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.ceil(bounds.width));
+  canvas.height = Math.max(1, Math.ceil(bounds.height));
+  const ctx = canvas.getContext("2d");
+  ctx?.drawImage(
+    source,
+    bounds.x,
+    bounds.y,
+    bounds.width,
+    bounds.height,
+    0,
+    0,
+    bounds.width,
+    bounds.height
+  );
+  return canvas;
+}
+
+function drawCanvasBounds(
+  ctx: CanvasRenderingContext2D,
+  source: HTMLCanvasElement,
+  bounds: { x: number; y: number; width: number; height: number }
+): void {
+  if (bounds.width <= 0 || bounds.height <= 0) return;
+  ctx.drawImage(
+    source,
+    bounds.x,
+    bounds.y,
+    bounds.width,
+    bounds.height,
+    bounds.x,
+    bounds.y,
+    bounds.width,
+    bounds.height
+  );
+}
+
+function resetCanvasContext(ctx: CanvasRenderingContext2D): void {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.filter = "none";
+}
+
+function terrainWaveHighlightFilter(amount = 0.36): string {
+  return `brightness(${Math.round((1 + clampNumber(amount, 0, 1)) * 100)}%)`;
+}
+
+/** @internal */
+export function resolveTerrainWaveHighlightColor(color: RgbaColor, amount = 0.36): RgbaColor {
+  const multiplier = 1 + clampNumber(amount, 0, 1);
+  return {
+    r: clampByte(color.r * multiplier),
+    g: clampByte(color.g * multiplier),
+    b: clampByte(color.b * multiplier),
+    a: clampByte(color.a),
+  };
+}
+
+/** @internal */
+export function resolveTerrainWaveDirectionVector(direction: number): { x: number; y: number } {
+  const radians = degreesToRadians(normalizeWaveDirection(direction));
+  return {
+    x: snapNearZero(Math.cos(radians)),
+    y: snapNearZero(Math.sin(radians)),
+  };
+}
+
+/** @internal */
+export function resolveTerrainWaveOptions(
+  options?: Partial<StudioWaterAnimationOptions> | null
+): TerrainWaterWaveOptions {
+  return {
+    speed: clampNumber(readFiniteNumber(options?.speed) ?? 1, 0.1, 4),
+    intensity: clampNumber(readFiniteNumber(options?.intensity) ?? 0.45, 0, 1),
+    direction: normalizeWaveDirection(readFiniteNumber(options?.direction) ?? 90),
+  };
+}
+
+/** @internal */
+export function resolveTerrainHoleWaveOptions(
+  feature: StudioTerrainMorphologyFeature,
+  fallback?: Partial<StudioWaterAnimationOptions> | null
+): TerrainWaterWaveOptions {
+  const defaults = resolveTerrainWaveOptions(fallback);
+  return {
+    speed: clampNumber(readFiniteNumber(feature.params.waveSpeed) ?? defaults.speed, 0.1, 4),
+    intensity: clampNumber(readFiniteNumber(feature.params.waveIntensity) ?? defaults.intensity, 0, 1),
+    direction: normalizeWaveDirection(readFiniteNumber(feature.params.waveDirection) ?? defaults.direction),
+  };
+}
+
+/** @internal */
+export function resolveTerrainHoleWaveDescriptors(
+  features: StudioTerrainMorphologyFeature[],
+  fallback?: Partial<StudioWaterAnimationOptions> | null
+): TerrainHoleWaveDescriptor[] {
+  return features
+    .filter(
+      (feature) =>
+        feature.kind === "hole" && (readFiniteNumber(feature.params.fillHeight) ?? 0) > 0
+    )
+    .map((feature) => ({
+      feature,
+      options: resolveTerrainHoleWaveOptions(feature, fallback),
+    }));
+}
+
+/** @internal */
+export function isTerrainWaveAnimated(options: TerrainWaterWaveOptions): boolean {
+  return options.intensity > 0;
+}
+
+/** @internal */
+export function resolveTerrainWaveRenderStrength(intensity: number): TerrainWaveRenderStrength {
+  const value = clampNumber(intensity, 0, 1);
+  return {
+    refractionAlpha: Math.min(1, value * 1.3),
+    refractionAcrossAmplitude: value * (2.5 + value * 2.5),
+    refractionFlowAmplitude: value * (0.8 + value * 0.8),
+    glowAlpha: value * 0.08,
+    waveAlpha: Math.min(1, value * 1.1),
+    lineWidth: 1 + value * 2,
+  };
+}
+
+function resolveWaterMaskAlphaBounds(
+  mask: HTMLCanvasElement
+): { x: number; y: number; width: number; height: number } | null {
+  const ctx = mask.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  return findAlphaBounds(
+    ctx.getImageData(0, 0, mask.width, mask.height).data,
+    mask.width,
+    mask.height,
+    { x: 0, y: 0, width: mask.width, height: mask.height }
+  );
+}
+
+function readFiniteNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+function normalizeWaveDirection(value: number): number {
+  return positiveModulo(Number.isFinite(value) ? value : 90, 360);
+}
+
+function degreesToRadians(value: number): number {
+  return value * Math.PI / 180;
+}
+
+function snapNearZero(value: number): number {
+  return Math.abs(value) < 1e-10 ? 0 : value;
+}
+
+function stableStringHash(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash;
 }
 
 function updateCanvasTexture(texture: Texture): void {

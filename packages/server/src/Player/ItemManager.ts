@@ -3,6 +3,8 @@ import { ATK, PDEF, SDEF } from "@rpgjs/common";
 import { ItemLog } from "../logs";
 import type { ItemClass, ItemInstance } from "@rpgjs/database";
 import { RpgPlayer } from "./Player";
+import type { ElementAffinity } from "./ElementManager";
+import type { StateApplication } from "./StateManager";
 
 // Ajout des enums manquants
 enum Effect {
@@ -118,13 +120,13 @@ export interface ItemData {
   /** Whether the item is consumable */
   consumable?: boolean;
   /** States to add when used */
-  addStates?: any[];
+  addStates?: StateApplication[];
   /** States to remove when used */
-  removeStates?: any[];
+  removeStates?: StateApplication[];
   /** Elemental properties */
-  elements?: any[];
+  elements?: ElementAffinity[];
   /** Parameter modifiers */
-  paramsModifier?: Record<string, any>;
+  paramsModifier?: Record<string, unknown>;
   /** Item type (for equipment validation) */
   _type?: 'item' | 'weapon' | 'armor';
 }

@@ -54,10 +54,9 @@ export interface RpgTiledMap extends RpgMap {
 
 export default defineModule<RpgServer>({
   map: {
-    onBeforeUpdate<T = RpgMap>(mapData: any, map: T): T {
-      prepareTiledPhysicsData(mapData, map as any);
+    onBeforeUpdate(mapData: unknown, map: RpgMap): void {
+      prepareTiledPhysicsData(mapData, map);
       applyTiledPointEvents(mapData);
-      return map;
     },
     onPhysicsInit(map: any, context: { mapData: any }) {
       prepareTiledPhysicsData(context?.mapData, map);

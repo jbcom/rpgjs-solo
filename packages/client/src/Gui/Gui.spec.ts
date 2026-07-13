@@ -14,6 +14,7 @@ vi.mock("../components/gui", () => {
     NotificationComponent: component,
     TitleScreenComponent: component,
     GameoverComponent: component,
+    InputComponent: component,
   };
 });
 
@@ -64,6 +65,10 @@ const VueTooltip = {
 };
 
 describe("RpgGui Vue integration", () => {
+  test("registers the prebuilt input GUI", async () => {
+    const { gui } = await createGui();
+    expect(gui.get(PrebuiltGui.Input)).toBeDefined();
+  });
   test("tracks GUI open ids and sends them back when closing", async () => {
     const { gui, socket } = await createGui();
     await gui._initialize();

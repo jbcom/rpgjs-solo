@@ -32,6 +32,23 @@ client/server game where the server owns gameplay state.
   terminology.
 - Keep backward compatibility where practical. If a legacy path remains, document
   the preferred new path.
+- Add complete JSDoc to every new or modified public API. Document parameters,
+  option fields, return values, runtime ownership, and at least one usage example,
+  using the RPGJS extractor tags (`@title`, `@method` or `@prop`, `@param`,
+  `@returns`, and `@memberof`) where the generated API reference requires them.
+- Give every public framework API precise TypeScript types. Avoid `any` in public
+  parameters, options, and return values; use discriminated unions, overloads,
+  or generics when the result depends on the provided options. Verify that the
+  generated `.d.ts` files preserve the intended inference and add type-level
+  tests (for example with `expectTypeOf`) for important public contracts.
+- Regenerate and review the affected committed API pages with `pnpm
+  docs:player-api`, `pnpm docs:map-api`, or `pnpm docs:client-api` whenever
+  their source JSDoc changes.
+- Route every player-visible label, message, validation error, and notification
+  through the RPGJS i18n service. Do not hard-code user-facing text in
+  components or services. Modules should provide default translation keys and
+  allow game-level messages to override them; explicit per-call labels may be
+  supported when the public API requires them.
 
 ## Plugin-Ready Design
 

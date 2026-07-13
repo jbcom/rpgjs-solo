@@ -1,5 +1,25 @@
 # @rpgjs/studio
 
+## 5.0.0-beta.25
+
+### Minor Changes
+
+- 0512640: Add reusable typed input and textarea controls for standalone forms and dialog boxes, with shared server-side validation and an RPGJS Studio block that stores the submitted value.
+
+### Patch Changes
+
+- fe6c2b9: Animate textured and color-filled terrain holes automatically, including subtle texture refraction driven by the Studio map water speed and intensity.
+- a72a1e8: Support per-hole wave intensity, direction, and speed settings, and tint liquid wave highlights from each fill's local color or texture.
+- ccb9495: Fix TypeScript declaration errors across the package build, align multi-target declaration exports, complete movement API overloads, and make package and root builds fail when declaration generation reports a type error.
+- Updated dependencies [ccb9495]
+- Updated dependencies [f6aa046]
+- Updated dependencies [0512640]
+  - @rpgjs/client@5.0.0-beta.25
+  - @rpgjs/common@5.0.0-beta.24
+  - @rpgjs/server@5.0.0-beta.25
+  - @rpgjs/vite@5.0.0-beta.25
+  - @rpgjs/action-battle@5.0.0-beta.25
+
 ## 5.0.0-beta.24
 
 ### Patch Changes

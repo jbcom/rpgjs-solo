@@ -1,5 +1,21 @@
 # @rpgjs/server
 
+## 5.0.0-beta.25
+
+### Minor Changes
+
+- 0512640: Add reusable typed input and textarea controls for standalone forms and dialog boxes, with shared server-side validation and an RPGJS Studio block that stores the submitted value.
+
+### Patch Changes
+
+- ccb9495: Fix TypeScript declaration errors across the package build, align multi-target declaration exports, complete movement API overloads, and make package and root builds fail when declaration generation reports a type error.
+- f6aa046: Align player, event, and map hooks with their runtime arguments, add the missing player load/save hooks, and expose stricter types for snapshots, save/load results, variables, GUI results, skills, states, classes, combat, and custom server events. Preserve public `@rpgjs/*` imports in generated declarations.
+- Updated dependencies [ccb9495]
+- Updated dependencies [0512640]
+  - @rpgjs/common@5.0.0-beta.24
+  - @rpgjs/physic@5.0.2-beta.0
+  - @rpgjs/testing@5.0.0-beta.25
+
 ## 5.0.0-beta.24
 
 ### Patch Changes

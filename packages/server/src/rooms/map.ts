@@ -13,6 +13,7 @@ import {
   findModules,
   type MapPhysicsInitContext,
   type MapPhysicsEntityContext,
+  type RpgActionInput,
 } from "@rpgjs/common";
 import {
   DEFAULT_DAY_LIGHTING,
@@ -43,6 +44,7 @@ import { buildSaveSlotMeta, resolveSaveStorageStrategy } from "../services/save"
 import { Log } from "../logs/log";
 import { isMapUpdateAuthorized, MAP_UPDATE_TOKEN_ENV, MAP_UPDATE_TOKEN_HEADER } from "../node/map";
 import { RpgMapProjectiles } from "../projectiles";
+import type { DamageFormulas } from "../Player/BattleManager";
 
 const DEFAULT_DASH_COOLDOWN_MS = 450;
 const GROUND_TOUCH_SENSOR_COVERAGE_THRESHOLD = 0.8;
@@ -210,7 +212,7 @@ export interface EventHooks {
    */
   onChanges?: (this: RpgEvent, player: RpgPlayer) => void;
   /** Called when a player performs an action on this event */
-  onAction?: (this: RpgEvent, player: RpgPlayer) => void;
+  onAction?: (this: RpgEvent, player: RpgPlayer, input: RpgActionInput<unknown>) => void | Promise<void>;
   /** Called when a player touches this event */
   onPlayerTouch?: (this: RpgEvent, player: RpgPlayer) => void;
   /** Called when this event starts touching a player or another event */
@@ -312,7 +314,7 @@ interface LightingSetOptions {
   persistState: false
 })
 export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
-  private _clientListeners = new Map<string, Set<(player: RpgPlayer, data: any) => void | Promise<void>>>();
+  private _clientListeners = new Map<string, Set<(player: RpgPlayer, data: unknown) => void | Promise<void>>>();
   private activeTouchCollisions = new Set<string>();
   private trackedTouchCollisions = new Map<string, TrackedTouchCollision>();
 
@@ -368,12 +370,12 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    */
   database = signal({});
 
-  variables: WritableSignal<Record<string, any>> = type(
-    signal<Record<string, any>>({}) as never,
+  variables: WritableSignal<Record<string, unknown>> = type(
+    signal<Record<string, unknown>>({}) as never,
     "variables",
     { persist: true },
     this as never
-  ) as unknown as WritableSignal<Record<string, any>>;
+  ) as unknown as WritableSignal<Record<string, unknown>>;
 
   /** 
    * Array of map configurations - can contain MapOptions objects or instances of map classes
@@ -428,7 +430,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * critical hits, and element coefficients. Default formulas are merged
    * with custom formulas when the map is loaded.
    */
-  damageFormulas: any = {}
+  damageFormulas: DamageFormulas = {}
   private _weatherState: WeatherState | null = null;
   private _lightingState: LightingState | null = null;
   private _lightingTransitionTimer?: ReturnType<typeof setInterval>;
@@ -1199,15 +1201,15 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     });
   }
 
-  setVariable(key: string, val: any): void {
+  setVariable<T = unknown>(key: string, val: T): void {
     this.variables.mutate((variables) => {
       variables[key] = val;
     });
     this.syncChanges();
   }
 
-  getVariable<U = any>(key: string): U | undefined {
-    return this.variables()[key];
+  getVariable<T = unknown>(key: string): T | undefined {
+    return this.variables()[key] as T | undefined;
   }
 
   removeVariable(key: string): boolean {
@@ -1507,7 +1509,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     return BaseRoom.prototype.hooks;
   }
 
-  private _getClientListenerBucket(type: string) {
+  private _getClientListenerBucket(type: string): Set<(player: RpgPlayer, data: unknown) => void | Promise<void>> {
     let listeners = this._clientListeners.get(type);
     if (!listeners) {
       listeners = new Set();
@@ -1516,7 +1518,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     return listeners;
   }
 
-  private async _dispatchClientEvent(type: string, player: RpgPlayer, data: any) {
+  private async _dispatchClientEvent(type: string, player: RpgPlayer, data: unknown): Promise<void> {
     const listeners = [...(this._clientListeners.get(type) ?? [])];
     for (const callback of listeners) {
       await callback(player, data);
@@ -1594,8 +1596,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   @Action('action')
-  onAction(player: RpgPlayer, action: any) {
-    const actionName = action?.action ?? action?.input ?? action;
+  onAction(player: RpgPlayer, action: RpgActionInput<unknown>): void {
+    const legacyAction = action as RpgActionInput<unknown> & { input?: string };
+    const actionName = action?.action ?? legacyAction.input ?? action;
     const isDefaultAction = actionName === Control.Action || actionName === "action";
 
     if (isDefaultAction) {
@@ -1772,8 +1775,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * });
    * ```
    */
-  on(type: string, cb: (player: RpgPlayer, data: any) => void | Promise<void>) {
-    this._getClientListenerBucket(type).add(cb);
+  on<T = unknown>(type: string, cb: (player: RpgPlayer, data: T) => void | Promise<void>): void {
+    this._getClientListenerBucket(type).add(cb as (player: RpgPlayer, data: unknown) => void | Promise<void>);
   }
 
   /**
@@ -1818,7 +1821,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * });
    * ```
    */
-  broadcast(type: string, value?: any) {
+  broadcast<T = unknown>(type: string, value?: T): void {
     this.$broadcast({
       type,
       value,
@@ -1826,7 +1829,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   }
 
   @UnhandledAction()
-  async _onUnhandledAction(player: RpgPlayer, message: { action: string; value: any }) {
+  async _onUnhandledAction(player: RpgPlayer, message: { action: string; value: unknown }): Promise<void> {
     if (!player) return;
     await player._dispatchClientEvent(message.action, message.value);
     await this._dispatchClientEvent(message.action, player, message.value);
@@ -2584,7 +2587,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       class DynamicEvent extends RpgEvent {
         onInit?: (this: RpgEvent) => void;
         onChanges?: (this: RpgEvent, player: RpgPlayer) => void;
-        onAction?: (this: RpgEvent, player: RpgPlayer) => void;
+        onAction?: (this: RpgEvent, player: RpgPlayer, input: RpgActionInput<unknown>) => void | Promise<void>;
         onPlayerTouch?: (this: RpgEvent, player: RpgPlayer) => void;
         onTouch?: (this: RpgEvent, other: RpgPlayer | RpgEvent, context: RpgTouchContext) => void | Promise<void>;
         onTouchEnd?: (this: RpgEvent, other: RpgPlayer | RpgEvent, context: RpgTouchContext) => void | Promise<void>;
@@ -3479,7 +3482,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * });
    * ```
    */
-  clientVisual(name: string, data: Record<string, any> = {}): void {
+  clientVisual<TData extends Record<string, unknown> = Record<string, unknown>>(
+    name: string,
+    data: TData = {} as TData
+  ): void {
     this.$broadcast({
       type: "clientVisual",
       value: {

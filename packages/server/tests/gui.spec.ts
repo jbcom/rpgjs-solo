@@ -4,6 +4,7 @@ import {
   DialogPosition,
   GameoverGui,
   Gui,
+  InputGui,
   MenuGui,
   NotificationGui,
   RpgPlayer,
@@ -14,6 +15,90 @@ import {
 } from "../src";
 
 describe("GUI", () => {
+  test("input gui returns typed text and number values", async () => {
+    const player: any = { canMove: true, emit: vi.fn() };
+
+    const textGui = new InputGui(player);
+    const textPending = textGui.openInput("Name", { required: true, minLength: 2 });
+    await textGui.emit("submit", { value: "Hero" });
+    await expect(textPending).resolves.toBe("Hero");
+
+    const numberGui = new InputGui(player);
+    const numberPending = numberGui.openInput("Age", { type: "number", min: 1, max: 120 });
+    await numberGui.emit("submit", { value: "42" });
+    await expect(numberPending).resolves.toBe(42);
+    expect(player.canMove).toBe(true);
+  });
+
+  test("input gui keeps invalid submissions open and returns null for an empty optional number", async () => {
+    const sent: any[] = [];
+    const player: any = {
+      canMove: true,
+      emit(type: string, value: any) {
+        sent.push({ type, value });
+      },
+    };
+    const gui = new InputGui(player);
+    const pending = gui.openInput("Age", { type: "number", required: true, min: 18 });
+
+    await gui.emit("submit", { value: "nope" });
+    expect(player.canMove).toBe(false);
+    expect(sent.at(-1)).toMatchObject({
+      type: "gui.update",
+      value: { guiId: "rpg-input", data: { errorKey: "rpg.input.error.number" } },
+    });
+
+    await gui.emit("submit", { value: "18" });
+    await expect(pending).resolves.toBe(18);
+
+    const optionalGui = new InputGui(player);
+    const optionalPending = optionalGui.openInput("Score", { type: "number" });
+    await optionalGui.emit("submit", { value: "" });
+    await expect(optionalPending).resolves.toBeNull();
+  });
+
+  test("input gui validates text constraints and supports cancellation", async () => {
+    const player: any = { canMove: true, emit: vi.fn() };
+    const gui = new InputGui(player);
+    const pending = gui.openInput("Email", { type: "email", required: true, maxLength: 30 });
+
+    await gui.emit("submit", { value: "invalid" });
+    expect(player.emit).toHaveBeenLastCalledWith("gui.update", expect.objectContaining({
+      data: expect.objectContaining({ errorKey: "rpg.input.error.email" }),
+    }));
+
+    await gui.emit("cancel", {});
+    await expect(pending).resolves.toBeNull();
+    expect(player.canMove).toBe(true);
+  });
+
+  test("dialog gui reuses typed input validation and stays open on errors", async () => {
+    const sent: any[] = [];
+    const player: any = {
+      canMove: true,
+      emit(type: string, value: any) {
+        sent.push({ type, value });
+      },
+    };
+    const gui = new DialogGui(player);
+    const pending = gui.openDialog("How old are you?", {
+      input: { type: "number", required: true, min: 18 },
+    });
+
+    await gui.emit("submit", { value: "17" });
+    expect(player.canMove).toBe(false);
+    expect(sent.at(-1)).toMatchObject({
+      type: "gui.update",
+      value: {
+        guiId: "rpg-dialog",
+        data: { input: { errorKey: "rpg.input.error.min", errorParams: { min: 18 } } },
+      },
+    });
+
+    await gui.emit("submit", { value: "21" });
+    await expect(pending).resolves.toBe(21);
+    expect(player.canMove).toBe(true);
+  });
   test("main menu sends cloneable data when inventory data contains signals", () => {
     const inventoryItem = {
       id: signal("sword"),

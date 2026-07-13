@@ -1,4 +1,6 @@
 const LOAD_FAILURE_SRC = 'LOAD_FAILURE_SRC';
+
+export {};
 const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
 
@@ -69,15 +71,16 @@ if (typeof HTMLCanvasElement !== "undefined") {
     const getContext = HTMLCanvasElement.prototype.getContext;
 
     HTMLCanvasElement.prototype.getContext = function (
+        this: HTMLCanvasElement,
         contextId: string,
         options?: CanvasRenderingContext2DSettings | WebGLContextAttributes,
     ) {
         if (contextId === "webgl2") {
-            return getContext.call(this, "webgl", options as WebGLContextAttributes);
+            return Reflect.apply(getContext, this, ["webgl", options]);
         }
 
         if (contextId === "2d" || contextId === "webgl" || contextId === "experimental-webgl") {
-            return getContext.call(this, contextId, options as never);
+            return Reflect.apply(getContext, this, [contextId, options]);
         }
 
         return null;

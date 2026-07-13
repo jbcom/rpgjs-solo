@@ -152,6 +152,10 @@ in `provideRpg()` and `provideMmorpg()`.
 
 Use `player.snapshot()` if you need to serialize or inspect state without saving.
 
+`RpgPlayerHooks.onLoad(player, snapshot)` runs after any snapshot is applied.
+`RpgPlayerHooks.onSave(player, snapshot)` runs before a slot snapshot is handed to
+the storage strategy. Both hooks receive the exported `RpgPlayerSnapshot` type.
+
 Examples:
 
 ```ts

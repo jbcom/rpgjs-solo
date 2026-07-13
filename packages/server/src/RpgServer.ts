@@ -2,8 +2,11 @@ import { MapOptions } from "./decorators/map"
 import { RpgPlayer } from "./Player/Player"
 import { type RpgMap } from "./rooms/map"
 import { RpgServerEngine } from "./RpgServerEngine"
-import { WorldMapConfig, RpgShape, type I18nMessages, type MapPhysicsInitContext, type MapPhysicsEntityContext } from "@rpgjs/common"
+import { WorldMapConfig, RpgShape, type I18nMessages, type MapPhysicsInitContext, type MapPhysicsEntityContext, type RpgActionInput } from "@rpgjs/common"
 import { RpgEvent } from "./Player/Player"
+import type { MaybePromise, RpgMapChangeTarget, RpgPlayerSnapshot, RpgSyncSchema } from "./Player/types"
+import type { EventPosOption, RpgTouchContext } from "./rooms/map"
+import type { DamageFormulas } from "./Player/BattleManager"
 import type { SkillChangePayload } from "./Player/SkillManager"
 import type {
     ProjectileDestroyHookContext,
@@ -12,10 +15,28 @@ import type {
 } from "./projectiles"
 
 type RpgClassMap<T> = new () => T
-type RpgClassEvent<T> = RpgEvent
-type MatchMakerOption = any
-type RpgMatchMaker = any
-type IStoreState = any
+type RpgClassEvent<T> = new () => T
+type MatchMakerOption = unknown
+type RpgMatchMaker = unknown
+type IStoreState = unknown
+
+export type ServerDatabase = Record<string, unknown> | unknown[]
+
+export interface RpgServerModuleSide {
+    client?: unknown
+    server?: unknown
+}
+
+export type RpgServerModuleImport = RpgServerModuleSide | [RpgServerModuleSide, RpgServerModuleSide]
+
+export interface RpgServerAuthSocket {
+    conn: unknown
+    request?: unknown
+    handshake: {
+        query: Record<string, string>
+        headers: Record<string, string>
+    }
+}
 
 /**
  * Interface for world map configuration
@@ -51,18 +72,18 @@ export interface RpgServerEngineHooks {
     /**
      *  When the server starts
      * 
-     * @prop { (engine: RpgServerEngine) => any } [onStart]
+     * @prop { (engine: RpgServerEngine) => void | Promise<void> } [onStart]
      * @memberof RpgServerEngineHooks
      */
-    onStart?: (server: RpgServerEngine) => any
+    onStart?: (server: RpgServerEngine) => MaybePromise<void>
 
     /**
      *  At each server frame. Normally represents 60FPS
      * 
-     * @prop { (engine: RpgServerEngine) => any } [onStep]
+     * @prop { (engine: RpgServerEngine) => void | Promise<void> } [onStep]
      * @memberof RpgServerEngineHooks
      */
-    onStep?: (server: RpgServerEngine) => any
+    onStep?: (server: RpgServerEngine) => MaybePromise<void>
 
    /**
      * Flexible authentication function for RPGJS.
@@ -92,7 +113,7 @@ export interface RpgServerEngineHooks {
      * };
      * ```
      */
-    auth?: (server: RpgServerEngine, socket: any) => Promise<string> | string | never | undefined
+    auth?: (server: RpgServerEngine, socket: RpgServerAuthSocket) => MaybePromise<string | undefined>
 }
 
 export interface RpgPlayerHooks {
@@ -164,117 +185,147 @@ export interface RpgPlayerHooks {
      * @since 3.0.0-beta.9
      * @memberof RpgPlayerHooks
      */
-    props?: {
-        [key: string]: any
-    }
+    props?: RpgSyncSchema
 
     /**
     *  When the player joins the map
     * 
-    * @prop { (player: RpgPlayer, map: RpgMap) => any } [onJoinMap]
+    * @prop { (player: RpgPlayer, map: RpgMap) => void | Promise<void> } [onJoinMap]
     * @memberof RpgPlayerHooks
     */
-    onJoinMap?: (player: RpgPlayer, map: RpgMap) => any
+    onJoinMap?: (player: RpgPlayer, map: RpgMap) => MaybePromise<void>
 
     /**
     *  When the player is connected to the server
     * 
-    * @prop { (player: RpgPlayer) => any } [onConnected]
+    * @prop { (player: RpgPlayer) => void | Promise<void> } [onConnected]
     * @memberof RpgPlayerHooks
     */
-    onConnected?: (player: RpgPlayer) => any
+    onConnected?: (player: RpgPlayer) => MaybePromise<void>
 
     /**
     *  When the player starts the game from the lobby
     * 
-    * @prop { (player: RpgPlayer) => any } [onStart]
+    * @prop { (player: RpgPlayer) => void | Promise<void> } [onStart]
     * @memberof RpgPlayerHooks
     */
-    onStart?: (player: RpgPlayer) => any
+    onStart?: (player: RpgPlayer) => MaybePromise<void>
 
     /**
     *  When the player presses a key on the client side
     * 
-    * @prop { (player: RpgPlayer, data: { input?: Direction | Control | string, action?: Direction | Control | string, data?: any, moving?: boolean }) => any } [onInput]
+    * @prop { (player: RpgPlayer, input: RpgActionInput<unknown>) => void | Promise<void> } [onInput]
     * @memberof RpgPlayerHooks
     */
-    onInput?: (player: RpgPlayer, data: any) => any
+    onInput?: (player: RpgPlayer, data: RpgActionInput<unknown>) => MaybePromise<void>
 
     /**
     *  When the player leaves the map
     * 
-    * @prop { (player: RpgPlayer, map: RpgMap) => any } [onLeaveMap]
+    * @prop { (player: RpgPlayer, map: RpgMap) => void | Promise<void> } [onLeaveMap]
     * @memberof RpgPlayerHooks
     */
-    onLeaveMap?: (player: RpgPlayer, map: RpgMap) => any
+    onLeaveMap?: (player: RpgPlayer, map: RpgMap) => MaybePromise<void>
 
     /**
     *  When the player increases one level
     * 
-    * @prop { (player: RpgPlayer, nbLevel: number) => any } [onLevelUp]
+    * @prop { (player: RpgPlayer, nbLevel: number) => void | Promise<void> } [onLevelUp]
     * @memberof RpgPlayerHooks
     */
-    onLevelUp?: (player: RpgPlayer, nbLevel: number) => any
+    onLevelUp?: (player: RpgPlayer, nbLevel: number) => MaybePromise<void>
 
     /**
     *  When a player learns or forgets a skill
     * 
-    * @prop { (player: RpgPlayer, payload: SkillChangePayload) => any } [onSkillChange]
+    * @prop { (player: RpgPlayer, payload: SkillChangePayload) => void | Promise<void> } [onSkillChange]
     * @memberof RpgPlayerHooks
     */
-    onSkillChange?: (player: RpgPlayer, payload: SkillChangePayload) => any
+    onSkillChange?: (player: RpgPlayer, payload: SkillChangePayload) => MaybePromise<void>
 
     /**
     *  When the player's HP drops to 0
     * 
-    * @prop { (player: RpgPlayer) => any } [onDead]
+    * @prop { (player: RpgPlayer) => void | Promise<void> } [onDead]
     * @memberof RpgPlayerHooks
     */
-    onDead?: (player: RpgPlayer) => any,
+    onDead?: (player: RpgPlayer) => MaybePromise<void>,
 
     /**
     *  When the player leaves the server
     * 
-    * @prop { (player: RpgPlayer) => any } [onDisconnected]
+    * @prop { (player: RpgPlayer) => void | Promise<void> } [onDisconnected]
     * @memberof RpgPlayerHooks
     */
-    onDisconnected?: (player: RpgPlayer) => any
+    onDisconnected?: (player: RpgPlayer) => MaybePromise<void>
 
     /**
     *  When the player enters the shape
     * 
-    * @prop { (player: RpgPlayer, shape: RpgShape) => any } [onInShape]
+    * @prop { (player: RpgPlayer, shape: RpgShape) => void | Promise<void> } [onInShape]
     * 3.0.0-beta.3
     * @memberof RpgPlayerHooks
     */
-    onInShape?: (player: RpgPlayer, shape: RpgShape) => any
+    onInShape?: (player: RpgPlayer, shape: RpgShape) => MaybePromise<void>
 
     /**
      *  When the player leaves the shape
      * 
-     * @prop { (player: RpgPlayer, shape: RpgShape) => any } [onOutShape]
+     * @prop { (player: RpgPlayer, shape: RpgShape) => void | Promise<void> } [onOutShape]
      * 3.0.0-beta.3
      * @memberof RpgPlayerHooks
      */
-    onOutShape?: (player: RpgPlayer, shape: RpgShape) => any
+    onOutShape?: (player: RpgPlayer, shape: RpgShape) => MaybePromise<void>
 
     /**
     * When the x, y positions change
     * 
-    * @prop { (player: RpgPlayer) => any } [onMove]
+    * @prop { (player: RpgPlayer) => void | Promise<void> } [onMove]
     * @since 3.0.0-beta.4
     * @memberof RpgPlayerHooks
     */
-    onMove?: (player: RpgPlayer) => any
+    onMove?: (player: RpgPlayer) => MaybePromise<void>
 
     /**
-    * Allow or not the player to switch maps. `nexMap` parameter is the retrieved RpgMap class and not the instance
+     * Called after a snapshot has been resolved and applied to the player.
+     *
+     * @prop { (player: RpgPlayer, snapshot: RpgPlayerSnapshot) => void | Promise<void> } [onLoad]
+     * @memberof RpgPlayerHooks
+     * @example
+     * ```ts
+     * const player: RpgPlayerHooks = {
+     *   onLoad(player, snapshot) {
+     *     console.log(player.id, snapshot)
+     *   }
+     * }
+     * ```
+     */
+    onLoad?: (player: RpgPlayer, snapshot: RpgPlayerSnapshot) => MaybePromise<void>
+
+    /**
+     * Called before a snapshot is persisted into a save slot.
+     *
+     * @prop { (player: RpgPlayer, snapshot: RpgPlayerSnapshot) => void | Promise<void> } [onSave]
+     * @memberof RpgPlayerHooks
+     * @example
+     * ```ts
+     * const player: RpgPlayerHooks = {
+     *   async onSave(player, snapshot) {
+     *     await auditSave(player.id, snapshot)
+     *   }
+     * }
+     * ```
+     */
+    onSave?: (player: RpgPlayer, snapshot: RpgPlayerSnapshot) => MaybePromise<void>
+
+    /**
+    * Allow or prevent the player from switching maps. `nextMap` contains the destination map ID.
     * 
-    * @prop { (player: RpgPlayer, nextMap: RpgClassMap<RpgMap>) =>  boolean | Promise<boolean> } [canChangeMap]
+    * @prop { (player: RpgPlayer, nextMap: RpgMapChangeTarget) => boolean | Promise<boolean> } [canChangeMap]
     * @since 3.0.0-beta.8
     * @memberof RpgPlayerHooks
     */
-    canChangeMap?: (player: RpgPlayer, nextMap: RpgClassMap<RpgMap>) => boolean | Promise<boolean>
+    canChangeMap?: (player: RpgPlayer, nextMap: RpgMapChangeTarget) => MaybePromise<boolean>
 }
 
 /**
@@ -288,7 +339,7 @@ export interface RpgEventHooks {
      * Called as soon as the event is created on the map
      * 
      * @param {RpgEvent} event - The event instance being initialized
-     * @returns {any} 
+     * @returns {void | Promise<void>}
      * @memberof RpgEventHooks
      * @example
      * ```ts
@@ -300,14 +351,14 @@ export interface RpgEventHooks {
      * }
      * ```
      */
-    onInit?: (event: RpgEvent) => any,
+    onInit?: (event: RpgEvent) => MaybePromise<void>,
 
     /**
      * Called when the event collides with a player and the player presses the action key
      * 
      * @param {RpgEvent} event - The event being interacted with
      * @param {RpgPlayer} player - The player performing the action
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgEventHooks
      * @example
      * ```ts
@@ -319,15 +370,15 @@ export interface RpgEventHooks {
      * }
      * ```
      */
-    onAction?: (event: RpgEvent, player: RpgPlayer) => any
+    onAction?: (event: RpgEvent, player: RpgPlayer, input: RpgActionInput<unknown>) => MaybePromise<void>
 
     /**
      * Called before an event object is created and added to the map
      * Allows modification of event properties before instantiation
      * 
-     * @param {any} object - The event object data before creation
+     * @param {EventPosOption} object - The event object data before creation
      * @param {RpgMap} map - The map where the event will be created
-     * @returns {any}
+     * @returns {EventPosOption | void | Promise<EventPosOption | void>}
      * @memberof RpgEventHooks
      * @example
      * ```ts
@@ -341,7 +392,7 @@ export interface RpgEventHooks {
      * }
      * ```
      */
-    onBeforeCreated?: (object: any, map: RpgMap) => any
+    onBeforeCreated?: (object: EventPosOption, map: RpgMap) => MaybePromise<EventPosOption | void>
 
     /**
      * Called when a player or another event enters a shape attached to this event
@@ -349,7 +400,7 @@ export interface RpgEventHooks {
      * @param {RpgEvent} event - The event with the attached shape
      * @param {RpgPlayer} player - The player entering the shape
      * @param {RpgShape} shape - The shape being entered
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @since 4.1.0
      * @memberof RpgEventHooks
      * @example
@@ -362,7 +413,7 @@ export interface RpgEventHooks {
      * }
      * ```
      */
-    onDetectInShape?: (event: RpgEvent, player: RpgPlayer, shape: RpgShape) => any
+    onDetectInShape?: (event: RpgEvent, player: RpgPlayer, shape: RpgShape) => MaybePromise<void>
 
     /**
      * Called when a player or another event leaves a shape attached to this event
@@ -370,7 +421,7 @@ export interface RpgEventHooks {
      * @param {RpgEvent} event - The event with the attached shape
      * @param {RpgPlayer} player - The player leaving the shape
      * @param {RpgShape} shape - The shape being left
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @since 4.1.0
      * @memberof RpgEventHooks
      * @example
@@ -383,14 +434,14 @@ export interface RpgEventHooks {
      * }
      * ```
      */
-    onDetectOutShape?: (event: RpgEvent, player: RpgPlayer, shape: RpgShape) => any
+    onDetectOutShape?: (event: RpgEvent, player: RpgPlayer, shape: RpgShape) => MaybePromise<void>
 
     /**
      * Called when the event enters a shape on the map
      * 
      * @param {RpgEvent} event - The event entering the shape
      * @param {RpgShape} shape - The shape being entered
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgEventHooks
      * @example
      * ```ts
@@ -402,14 +453,14 @@ export interface RpgEventHooks {
      * }
      * ```
      */
-    onInShape?: (event: RpgEvent, shape: RpgShape) => any
+    onInShape?: (event: RpgEvent, shape: RpgShape, actor: RpgPlayer | RpgEvent) => MaybePromise<void>
 
     /**
      * Called when the event leaves a shape on the map
      * 
      * @param {RpgEvent} event - The event leaving the shape
      * @param {RpgShape} shape - The shape being left
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgEventHooks
      * @example
      * ```ts
@@ -421,14 +472,14 @@ export interface RpgEventHooks {
      * }
      * ```
      */
-    onOutShape?: (event: RpgEvent, shape: RpgShape) => any
+    onOutShape?: (event: RpgEvent, shape: RpgShape, actor: RpgPlayer | RpgEvent) => MaybePromise<void>
 
     /**
      * Called when the event collides with a player (without requiring action key press)
      * 
      * @param {RpgEvent} event - The event touching the player
      * @param {RpgPlayer} player - The player being touched
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgEventHooks
      * @example
      * ```ts
@@ -440,7 +491,13 @@ export interface RpgEventHooks {
      * }
      * ```
      */
-    onPlayerTouch?: (event: RpgEvent, player: RpgPlayer) => any
+    onPlayerTouch?: (event: RpgEvent, player: RpgPlayer) => MaybePromise<void>
+
+    /** Called when an event starts touching a player or another event. */
+    onTouch?: (event: RpgEvent, other: RpgPlayer | RpgEvent, context: RpgTouchContext) => MaybePromise<void>
+
+    /** Called when an event stops touching a player or another event. */
+    onTouchEnd?: (event: RpgEvent, other: RpgPlayer | RpgEvent, context: RpgTouchContext) => MaybePromise<void>
 
     /**
      * Called whenever any event on the map (including itself) is executed or changes state
@@ -448,7 +505,7 @@ export interface RpgEventHooks {
      * 
      * @param {RpgEvent} event - The event listening for changes
      * @param {RpgPlayer} player - The player involved in the change
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgEventHooks
      * @example
      * ```ts
@@ -464,7 +521,7 @@ export interface RpgEventHooks {
      * }
      * ```
      */
-    onChanges?: (event: RpgEvent, player: RpgPlayer) => any
+    onChanges?: (event: RpgEvent, player: RpgPlayer) => MaybePromise<void>
 }
 
 /**
@@ -502,7 +559,6 @@ export interface RpgMapHooks {
      *         // Add custom properties from external data
      *         map.customProperty = mapData.customValue
      *         
-     *         return map
      *     }
      * }
      * ```
@@ -524,7 +580,7 @@ export interface RpgMapHooks {
      * }
      * ```
      */
-    onBeforeUpdate<T, U = RpgMap>(mapData: T, map: U): U | Promise<U>
+    onBeforeUpdate?: (mapData: unknown, map: RpgMap) => MaybePromise<void>
 
     /**
      * Called when a map is loaded and initialized
@@ -534,7 +590,7 @@ export interface RpgMapHooks {
      * or setup that should happen for every map.
      * 
      * @param {RpgMap} map - The map instance that was loaded
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgMapHooks
      * @example
      * ```ts
@@ -546,7 +602,7 @@ export interface RpgMapHooks {
      * }
      * ```
      */
-    onLoad?: (map: RpgMap) => any
+    onLoad?: (map: RpgMap) => MaybePromise<void>
 
     /**
      * Called when a player joins any map
@@ -557,7 +613,7 @@ export interface RpgMapHooks {
      * 
      * @param {RpgPlayer} player - The player joining the map
      * @param {RpgMap} map - The map instance the player joined
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgMapHooks
      * @example
      * ```ts
@@ -569,7 +625,7 @@ export interface RpgMapHooks {
      * }
      * ```
      */
-    onJoin?: (player: RpgPlayer, map: RpgMap) => any
+    onJoin?: (player: RpgPlayer, map: RpgMap) => MaybePromise<void>
 
     /**
      * Called when a player leaves any map
@@ -580,7 +636,7 @@ export interface RpgMapHooks {
      * 
      * @param {RpgPlayer} player - The player leaving the map
      * @param {RpgMap} map - The map instance the player left
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgMapHooks
      * @example
      * ```ts
@@ -592,7 +648,7 @@ export interface RpgMapHooks {
      * }
      * ```
      */
-    onLeave?: (player: RpgPlayer, map: RpgMap) => any
+    onLeave?: (player: RpgPlayer, map: RpgMap) => MaybePromise<void>
 
     /**
      * Called when the map physics world is initialized.
@@ -602,39 +658,39 @@ export interface RpgMapHooks {
      *
      * @param {RpgMap} map - The map instance
      * @param {MapPhysicsInitContext} context - Physics initialization context
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgMapHooks
      */
-    onPhysicsInit?: (map: RpgMap, context: MapPhysicsInitContext) => any
+    onPhysicsInit?: (map: RpgMap, context: MapPhysicsInitContext) => MaybePromise<void>
 
     /**
      * Called when a dynamic character physics body is added to the map.
      *
      * @param {RpgMap} map - The map instance
      * @param {MapPhysicsEntityContext} context - Added entity context
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgMapHooks
      */
-    onPhysicsEntityAdd?: (map: RpgMap, context: MapPhysicsEntityContext) => any
+    onPhysicsEntityAdd?: (map: RpgMap, context: MapPhysicsEntityContext) => MaybePromise<void>
 
     /**
      * Called when a dynamic character physics body is removed from the map.
      *
      * @param {RpgMap} map - The map instance
      * @param {MapPhysicsEntityContext} context - Removed entity context
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgMapHooks
      */
-    onPhysicsEntityRemove?: (map: RpgMap, context: MapPhysicsEntityContext) => any
+    onPhysicsEntityRemove?: (map: RpgMap, context: MapPhysicsEntityContext) => MaybePromise<void>
 
     /**
      * Called when the map physics world is reset (before reload).
      *
      * @param {RpgMap} map - The map instance
-     * @returns {any}
+     * @returns {void | Promise<void>}
      * @memberof RpgMapHooks
      */
-    onPhysicsReset?: (map: RpgMap) => any
+    onPhysicsReset?: (map: RpgMap) => MaybePromise<void>
 }
 
 export interface RpgProjectileHooks {
@@ -642,18 +698,18 @@ export interface RpgProjectileHooks {
      * Called when a projectile is emitted by `map.projectiles.emit()` or
      * `player.projectiles.emit()`.
      */
-    onEmit?: (context: ProjectileHookContext) => any
+    onEmit?: (context: ProjectileHookContext) => MaybePromise<void>
 
     /**
      * Called when the authoritative server projectile hits an entity or obstacle.
      */
-    onImpact?: (context: ProjectileImpactHookContext) => any
+    onImpact?: (context: ProjectileImpactHookContext) => MaybePromise<void>
 
     /**
      * Called when a projectile is destroyed because it hit something, reached its
      * range, expired, or was removed manually.
      */
-    onDestroy?: (context: ProjectileDestroyHookContext) => any
+    onDestroy?: (context: ProjectileDestroyHookContext) => MaybePromise<void>
 }
 
 export interface RpgServer {
@@ -716,7 +772,7 @@ export interface RpgServer {
      * @prop { { client: null | Function, server: null | Function }[]} [imports]
      * @memberof RpgServer
      */
-    imports?: any
+    imports?: RpgServerModuleImport[]
 
     /**
      * Object containing the hooks concerning the engine
@@ -782,7 +838,7 @@ export interface RpgServer {
      * @prop { { [dataName]: data } | (engine: RpgMap) => { [dataName]: data } | Promise<{ [dataName]: data }> } [database]
      * @memberof RpgServer
      * */
-    database?: object | any[] | ((engine: RpgMap) => object | any[] | Promise<object | any[]>),
+    database?: ServerDatabase | ((engine: RpgMap) => MaybePromise<ServerDatabase>),
 
     /** 
      * Array of all maps. Each element can be either a class (decorated with `@MapData` or not) or a `MapOptions` object
@@ -845,10 +901,10 @@ export interface RpgServer {
      * })
      * ``` 
      * 
-     * @prop {(new () => any) | MapOptions)[]} [maps]
+     * @prop {(RpgClassMap<RpgMap> | MapOptions)[]} [maps]
      * @memberof RpgServer
      * */
-    maps?: ((new () => any) | MapOptions)[],
+    maps?: (RpgClassMap<RpgMap> | MapOptions)[],
 
     /** 
      * Global map hooks that apply to all maps in the game
@@ -1010,12 +1066,7 @@ export interface RpgServer {
      * @prop {object} damageFormulas
      * @memberof RpgServer
      * */
-    damageFormulas?: {
-        damageSkill?: (a, b, skill) => number,
-        damagePhysic?: (a, b) => number,
-        damageCritical?: (damage, a, b) => number
-        coefficientElements?: (a, b, bDef) => number
-    }
+    damageFormulas?: DamageFormulas
 
     /*
     * Scalability configuration for the server

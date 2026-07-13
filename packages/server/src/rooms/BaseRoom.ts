@@ -227,7 +227,7 @@ export abstract class BaseRoom {
           requestId: value?.requestId,
           index: value.index,
           ok: result.ok,
-          slot: result.slot
+          slot: result.ok ? result.slot : undefined
         });
       } catch (error: any) {
         player.emit('save.error', { requestId: value?.requestId, message: error?.message || 'save.load failed' });

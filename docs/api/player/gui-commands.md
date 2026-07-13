@@ -17,6 +17,7 @@ Dialogs, menus, notifications, and custom GUI commands.
 - [Displays a notification](#displays-a-notification)
 - [Hide to GUI attached](#hide-to-gui-attached)
 - [Show Choices](#show-choices)
+- [Show Input](#show-input)
 - [Show Load](#show-load)
 - [Show Save](#show-save)
 - [Show Save/Load](#show-save-load)
@@ -244,7 +245,50 @@ player.showChoices(text,choices)
 
 - `msg`: `string`
 - `choices`: `Choice[]`
-- `options?`: `DialogOptions`
+- `options?`: `DialogBaseOptions`
+
+## Show Input
+
+Opens the prebuilt input GUI and waits for the player to submit or cancel it.
+The player cannot move while the form is open. Number inputs resolve to a
+`number`; text inputs and textareas resolve to a `string`; cancellation and
+an empty optional number input resolve to `null`.
+
+```ts
+const age = await player.showInput('Your age', {
+  type: 'number',
+  required: true,
+  min: 1
+})
+// age is number | null
+
+const biography = await player.showInput('Biography', {
+  control: 'textarea',
+  rows: 6,
+  maxLength: 500
+})
+// biography is string | null
+```
+
+- Source: `packages/server/src/Player/GuiManager.ts`
+- Kind: `method`
+- Member of: `GuiManager`
+- Defined in: `IGuiManager`
+
+### Signature
+
+```ts
+player.showInput(message,options)
+```
+
+### Parameters
+
+- `message`: `string`
+- `options`: `InputOptions`
+
+### Returns
+
+The typed submitted value, or `null` when cancelled or when an optional number is empty.
 
 ## Show Load
 
@@ -346,6 +390,21 @@ You can define how the dialog box is displayed:
 player.showText('Hello World', {
      position: 'top'
 })
+```
+
+Add a typed input directly below the dialog text:
+
+```ts
+const age = await player.showText('How old are you?', {
+  input: {
+    type: 'number',
+    required: true,
+    min: 1,
+    confirmText: 'Validate',
+    cancelButton: false
+  }
+})
+// age is number | null
 ```
 
 **Option: fullWidth**

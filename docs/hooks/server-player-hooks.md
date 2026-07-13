@@ -113,6 +113,36 @@ const player: RpgPlayerHooks = {
 }
 ```
 
+### onLoad
+
+**Description:** Called after a JSON or slot snapshot has been applied to the player.
+
+**Parameters:**
+- `player: RpgPlayer` - The hydrated player instance
+- `snapshot: RpgPlayerSnapshot` - The resolved snapshot applied to the player
+
+```ts
+const player: RpgPlayerHooks = {
+    onLoad(player, snapshot) {
+        console.log(`Loaded ${player.id}`, snapshot)
+    }
+}
+```
+
+### onSave
+
+**Description:** Called after the snapshot is created and before a slot is persisted.
+Calling the legacy `player.save()` overload without a slot only serializes the snapshot
+and does not emit this hook.
+
+```ts
+const player: RpgPlayerHooks = {
+    async onSave(player, snapshot) {
+        await auditSave(player.id, snapshot)
+    }
+}
+```
+
 ### onJoinMap
 
 **Description:** Called when a player joins a map
@@ -192,28 +222,22 @@ const player: RpgPlayerHooks = {
 
 ### onInput
 
-**Description:** Called when a player presses a key on the client side
+**Description:** Called when the server receives an action from the client.
 
 **Parameters:**
 - `player: RpgPlayer` - The player instance
-- `data: { input: string, moving: boolean }` - Input data
+- `input: RpgActionInput<unknown>` - Action name and optional custom data
 
 **Example:**
 ```ts
 const player: RpgPlayerHooks = {
-    onInput(player: RpgPlayer, { input, moving }) {
-        if (input === 'action' && !moving) {
-            // Player pressed action key while standing still
-            const nearbyEvents = player.getEventsInRadius(32)
-            if (nearbyEvents.length > 0) {
-                nearbyEvents[0].execMethod('onAction', [player])
-            }
-        }
-        
-        if (input === 'escape') {
+    onInput(player, { action, data }) {
+        if (action === 'escape') {
             // Open menu
             player.gui('main-menu').open()
         }
+
+        console.log('Custom action data:', data)
     }
 }
 ```
@@ -395,7 +419,7 @@ const player: RpgPlayerHooks = {
 
 **Parameters:**
 - `player: RpgPlayer` - The player instance
-- `nextMap: RpgClassMap<RpgMap>` - The map class the player wants to enter
+- `nextMap: RpgMapChangeTarget` - A descriptor containing the destination map ID
 
 **Returns:**
 - `boolean | Promise<boolean>` - Whether the player can change maps
@@ -403,19 +427,7 @@ const player: RpgPlayerHooks = {
 **Example:**
 ```ts
 const player: RpgPlayerHooks = {
-    async canChangeMap(player: RpgPlayer, nextMap: any) {
-        // Check if player has required level
-        if (nextMap.requiredLevel && player.level < nextMap.requiredLevel) {
-            player.showText(`You need level ${nextMap.requiredLevel} to enter this area.`)
-            return false
-        }
-        
-        // Check if player has required item
-        if (nextMap.requiredItem && !player.hasItem(nextMap.requiredItem)) {
-            player.showText(`You need ${nextMap.requiredItem} to enter this area.`)
-            return false
-        }
-        
+    async canChangeMap(player, nextMap) {
         // Check with external service
         const hasPermission = await checkMapPermission(player.id, nextMap.id)
         if (!hasPermission) {
@@ -462,13 +474,13 @@ const player: RpgPlayerHooks = {
         
         // Auto-save when entering important maps
         if (map.isImportant) {
-            player.save()
+            player.save('auto')
             player.lastSaveTime = Date.now()
         }
     },
     
-    onInput(player: RpgPlayer, { input }) {
-        if (input === 'menu') {
+    onInput(player: RpgPlayer, { action }) {
+        if (action === 'menu') {
             player.gui('inventory').open()
         }
     },

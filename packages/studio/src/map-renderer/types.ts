@@ -64,10 +64,24 @@ export interface StudioTerrainMorphologyOperation {
   stroke: StudioTerrainStroke;
 }
 
+/**
+ * Extensible rendering parameters persisted on a Studio terrain morphology
+ * feature. Wave overrides apply to filled holes and inherit map defaults when
+ * omitted.
+ */
+export interface StudioTerrainMorphologyParams extends Record<string, unknown> {
+  /** Filled-hole animation speed override, clamped from 0.1 to 4. */
+  waveSpeed?: number;
+  /** Filled-hole animation strength from 0 (static) to 1. */
+  waveIntensity?: number;
+  /** Clockwise screen-space travel angle in degrees: 0 right, 90 down. */
+  waveDirection?: number;
+}
+
 export interface StudioTerrainMorphologyFeature {
   id: string;
   kind: "hole" | "wall";
-  params: Record<string, unknown>;
+  params: StudioTerrainMorphologyParams;
   strokes: StudioTerrainStroke[];
   eraserStrokes?: StudioTerrainStroke[];
   operations?: StudioTerrainMorphologyOperation[];
@@ -88,10 +102,20 @@ export interface StudioTerrainRenderData {
   version: string;
 }
 
+/**
+ * Client-side visual settings for animated Studio liquids.
+ * Filled terrain holes may override speed, intensity, and direction through
+ * their morphology params without changing gameplay or server authority.
+ */
 export interface StudioWaterAnimationOptions {
+  /** Whether painted water terrain receives the animated overlay. */
   enabled: boolean;
+  /** Animation speed multiplier, clamped from 0.1 to 4. */
   speed: number;
+  /** Overlay strength from 0 (static) to 1. */
   intensity: number;
+  /** Clockwise screen-space travel angle in degrees: 0 right, 90 down. */
+  direction: number;
 }
 
 export interface StudioTerrainControlTexture {

@@ -1,8 +1,8 @@
 {
   "name": "@rpgjs/tiledmap",
-  "version": "5.0.0-beta.24",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "version": "5.0.0-beta.25",
+  "main": "dist/client/index.js",
+  "types": "dist/client/index.d.ts",
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build"
@@ -10,15 +10,15 @@
   "exports": {
     ".": {
       "import": "./dist/client/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/client/index.d.ts"
     },
     "./client": {
       "import": "./dist/client/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/client/index.d.ts"
     },
     "./server": {
       "import": "./dist/server/index.js",
-      "types": "./dist/server.d.ts"
+      "types": "./dist/server/index.d.ts"
     }
   },
   "keywords": [],
