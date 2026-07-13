@@ -212,3 +212,6 @@ Supported fields from `variableSchema`:
 - The API generates a slug-like `id` automatically from the name.
 - For updates, send only the fields to change.
 - If the user only knows a record name, search the collection first and match the returned `_id`.
+# Semantic search
+
+`GET /api/database/:type` accepts `query` and optional `minScore` (`0..1`, default `0.40`). Results are restricted to the requested database type and the API key project.

@@ -39,9 +39,10 @@ Use this skill to execute content-management tasks against an RPGJS Studio insta
    - `references/maps.md`
    - `references/events.md`
    - `references/event-examples.md`
-   - `references/blocks.md`
-   - `references/media.md`
-   - `references/settings.md`
+  - `references/blocks.md`
+  - `references/media.md`
+  - `references/settings.md`
+  - `references/project-env.md`
 
 ## Local memory file
 
@@ -115,9 +116,21 @@ curl -sS -X POST "$BASE_URL/..." \
 - `event workflow block` task: read [references/blocks.md](./references/blocks.md)
 - `media` task: read [references/media.md](./references/media.md)
 - `settings` task: read [references/settings.md](./references/settings.md)
+- `project env` task: read [references/project-env.md](./references/project-env.md)
 
 ## Current schema notes
 
+- `show_text` blocks may set `inputEnabled: true` and must then provide
+  `inputVariableId`, the `_id` of a database variable receiving the submitted
+  string or number. Cancelling the input stores `null`; see
+  `references/blocks.md` for the typed input options.
+- Maps, events, block collections, and database records support multilingual semantic search through their existing list endpoints with `query`. The optional `minScore` parameter accepts `0..1` and defaults to `0.40`; see the matching resource reference for endpoint-specific filters and response shapes.
+- Project environment variables are managed with authenticated project routes:
+  `GET /api/projects/:projectId/env`,
+  `PUT /api/projects/:projectId/env/:name`, and
+  `DELETE /api/projects/:projectId/env/:name`. Plain values are returned in
+  responses; secret values expose only `isSet` and must never be logged or
+  printed.
 - Maps may expose a shader terrain `terrainLayer` object with `version: 1`, `mode: "control-texture"`, pixel `width`/`height`, `tileSize`, `palette`, and `controlTexture` metadata. The control texture is RGBA8; terrain palette index is encoded as `R + G * 256`, optional light uses `B` with `128` as neutral, and `A` stores terrain mask coverage for pixel brush strokes. Soft edges are computed from transition/blend metadata at render time. Legacy tile grids are normalized into `tileSize x tileSize` blocks, but brush edits can update individual world pixels in the control texture.
 - Maps may expose a terrain morphology `terrainMorphologyLayer` object with `version: 1`, `mode: "terrain-morphology"`, pixel `width`/`height`, `tileSize`, and `features[]`. Each feature is either `{ kind: "hole", params, strokes }` or `{ kind: "wall", params, strokes }`; strokes store world-pixel `points[]` and `radius`. Hole params support `depth`, `roundness`, `roughness`, optional facade `textureId`, optional bottom-fill `fillTextureId`, and `fillHeight` clamped to `0..100`; `textureId` is not used as the bottom-fill fallback. Wall params support `height`, `roundness`, `roughness`, and optional facade `textureId`; the editor's wall smoothness control maps to `roughness = 1 - smoothness`. The brush tool modifies the terrain surface; hole/wall tools use the selected terrain texture as the vertical facade while the top surface remains the already-painted base terrain. The renderer merges hole/wall masks as signed terrain levels before drawing, so overlapping strokes are clipped or neutralized instead of being rendered as independent overlays. The editor renders morphology after the base terrain control texture and merges morphology strokes into terrain collision as blocking cells.
 - `PUT /api/maps/:mapId` supports partial section updates. Omitted map fields are preserved, so prefer sending only changed sections: `startX/startY` for start position, `events` for placements, `terrainMorphologyLayer` for morphology, terrain fields for terrain/control texture, element layer arrays for objects, and tileset params for media selection.

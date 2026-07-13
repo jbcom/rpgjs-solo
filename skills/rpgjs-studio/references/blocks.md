@@ -359,6 +359,32 @@ Allowed `position`:
 - `middle`
 - `bottom`
 
+To collect a value in the same dialog, enable input and select an existing
+database variable (or create one through the Studio variable picker):
+
+```json
+{
+  "type": "show_text",
+  "data": {
+    "text": "How old are you?",
+    "inputEnabled": true,
+    "inputVariableId": "VARIABLE_ID",
+    "inputControl": "input",
+    "inputType": "number",
+    "inputRequired": true,
+    "inputMin": 1,
+    "inputMax": 120
+  }
+}
+```
+
+`inputControl` accepts `input` or `textarea`. Single-line inputs accept
+`text`, `number`, `password`, or `email`; textareas always resolve to text.
+Optional settings include placeholder/default value, confirm/cancel labels,
+cancel-button visibility, length limits, numeric min/max/step, and textarea
+rows. The submitted string or number is stored in `inputVariableId`; cancelling
+stores `null`.
+
 ### `show_choices`
 
 Use for player decisions. Supports 2 to 4 choices.
@@ -1189,3 +1215,6 @@ Use to execute another reusable event workflow in the current context.
 - Create a new variable only if no existing one matches the intended meaning.
 - For event page conditions, use variable IDs for `switch1`, `switch2`, `variable`, and `goldVariableId`.
 - Stay inside the allowed block list only.
+# Semantic search
+
+`GET /api/blocks` accepts `query` and optional `minScore` (`0..1`, default `0.40`). Block collections expose root `name` and `description`; legacy metadata values remain readable.

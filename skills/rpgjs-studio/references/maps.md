@@ -110,3 +110,6 @@ curl -sS -X PUT "$BASE_URL/api/maps/$MAP_ID/params" \
 - Use IDs returned by the API. Do not invent `mapId` values.
 - If the user wants a full map creation flow and the exact payload shape is unclear, fetch one existing map first and mirror its shape minimally.
 - `POST /api/maps/generate` now captures and logs failures across the whole generation pipeline, including tileset generation, tileset storage reads, terrain generation, map synthesis, and final map insertion.
+# Semantic search
+
+`GET /api/maps` accepts `query` and optional `minScore` (`0..1`, default `0.40`). Search results are ordered by Vectorize relevance and remain scoped to the API key project.

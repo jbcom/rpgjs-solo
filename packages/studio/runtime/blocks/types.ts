@@ -54,6 +54,24 @@ export interface ShowTextParams {
   faceset?: string | { id?: string; facesetId?: string; expression?: string };
   /** Expression to display (optional) */
   expression?: string;
+  /** Display an input control inside the dialog. */
+  inputEnabled?: boolean;
+  /** Database variable receiving the submitted value or null when cancelled. */
+  inputVariableId?: string;
+  inputControl?: 'input' | 'textarea';
+  inputType?: 'text' | 'number' | 'password' | 'email';
+  inputPlaceholder?: string;
+  inputDefaultValue?: string | number;
+  inputRequired?: boolean;
+  inputConfirmText?: string;
+  inputCancelText?: string;
+  inputCancelButton?: boolean;
+  inputMinLength?: number;
+  inputMaxLength?: number;
+  inputMin?: number;
+  inputMax?: number;
+  inputStep?: number;
+  inputRows?: number;
 }
 
 /**
@@ -1258,7 +1276,7 @@ export type AnyBlockDefinition = BlockDefinition<BlockType> | BlockDefinition;
  */
 export interface ExecutionPlayer {
   /** Display a text dialog */
-  showText(text: string, options?: { talkWith?: unknown; position?: string }): Promise<void>;
+  showText(text: string, options?: { talkWith?: unknown; position?: string; input?: Record<string, unknown>; [key: string]: unknown }): Promise<string | number | null | void>;
   /** Display choices and get player selection */
   showChoices(question: string, choices: Array<{ text: string; value: number }>): Promise<{ value: number }>;
   /** Get a variable value */

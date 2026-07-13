@@ -11,6 +11,12 @@ export default defineConfig({
   server: {
     port: playgroundConfig.port,
     strictPort: true,
+     proxy: {
+      '/api': {
+        target: 'http://localhost:5173',
+        changeOrigin: true,
+      },
+    },
   },
   plugins: [
     ...rpgjs({

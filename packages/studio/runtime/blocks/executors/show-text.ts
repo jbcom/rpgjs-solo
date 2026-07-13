@@ -1,7 +1,7 @@
 import { excludeTriggers } from '../context-helpers';
+import { variableSchema } from '../../schemas/database';
 import type {
   GameExecutionContext,
-  BlockExecutor,
   ShowTextParams
 } from '../types';
 import { getEvent } from './utils';
@@ -42,11 +42,112 @@ export const schemaShowText = {
         title: 'Dialog Position',
         enum: ['top', 'middle', 'bottom'],
         default: 'bottom'
+      },
+      inputEnabled: {
+        type: 'boolean',
+        title: 'block.show text.input enabled',
+        description: 'block.show text.input enabled description',
+        default: false
       }
     },
+    allOf: [
+      {
+        if: { properties: { inputEnabled: { const: true } } },
+        then: {
+          properties: {
+            inputVariableId: {
+              type: 'string',
+              title: 'block.show text.input variable',
+              description: 'block.show text.input variable description',
+              $ref: '#/functions/variable',
+              format: { add: { schema: variableSchema } }
+            },
+            inputControl: { type: 'string', title: 'block.show text.input control', enum: ['input', 'textarea'], default: 'input' },
+            inputType: { type: 'string', title: 'block.show text.input type', enum: ['text', 'number', 'password', 'email'], default: 'text' },
+            inputPlaceholder: { type: 'string', title: 'block.show text.input placeholder' },
+            inputRequired: { type: 'boolean', title: 'block.show text.input required', default: false },
+            inputConfirmText: { type: 'string', title: 'block.show text.input confirm text' },
+            inputCancelText: { type: 'string', title: 'block.show text.input cancel text' },
+            inputCancelButton: { type: 'boolean', title: 'block.show text.input cancel button', default: true }
+          },
+          required: ['inputVariableId']
+        }
+      },
+      {
+        if: { properties: { inputEnabled: { const: true }, inputControl: { const: 'textarea' } } },
+        then: { properties: {
+          inputType: { const: 'text', default: 'text' },
+          inputDefaultValue: { type: 'string', title: 'block.show text.input default value' },
+          inputMinLength: { type: 'number', title: 'block.show text.input min length', minimum: 0 },
+          inputMaxLength: { type: 'number', title: 'block.show text.input max length', minimum: 0 },
+          inputRows: { type: 'number', title: 'block.show text.input rows', minimum: 1, default: 4 }
+        } }
+      },
+      {
+        if: { properties: { inputEnabled: { const: true }, inputControl: { const: 'input' }, inputType: { const: 'number' } } },
+        then: { properties: {
+          inputDefaultValue: { type: 'number', title: 'block.show text.input default value' },
+          inputMin: { type: 'number', title: 'block.show text.input min' },
+          inputMax: { type: 'number', title: 'block.show text.input max' },
+          inputStep: { type: 'number', title: 'block.show text.input step', exclusiveMinimum: 0 }
+        } }
+      },
+      {
+        if: { properties: {
+          inputEnabled: { const: true },
+          inputControl: { const: 'input' },
+          inputType: { enum: ['text', 'password', 'email'] }
+        } },
+        then: { properties: {
+          inputDefaultValue: { type: 'string', title: 'block.show text.input default value' },
+          inputMinLength: { type: 'number', title: 'block.show text.input min length', minimum: 0 },
+          inputMaxLength: { type: 'number', title: 'block.show text.input max length', minimum: 0 }
+        } }
+      }
+    ],
     required: ['text']
   }
 } as const;
+
+export const buildShowTextInputOptions = (params: ShowTextParams): Record<string, unknown> => {
+  const common = {
+    placeholder: params.inputPlaceholder,
+    required: params.inputRequired,
+    confirmText: params.inputConfirmText,
+    cancelText: params.inputCancelText,
+    cancelButton: params.inputCancelButton,
+  };
+  if (params.inputControl === 'textarea') {
+    return {
+      ...common,
+      control: 'textarea',
+      type: 'text',
+      defaultValue: typeof params.inputDefaultValue === 'string' ? params.inputDefaultValue : undefined,
+      minLength: params.inputMinLength,
+      maxLength: params.inputMaxLength,
+      rows: params.inputRows,
+    };
+  }
+  if (params.inputType === 'number') {
+    return {
+      ...common,
+      control: 'input',
+      type: 'number',
+      defaultValue: typeof params.inputDefaultValue === 'number' ? params.inputDefaultValue : undefined,
+      min: params.inputMin,
+      max: params.inputMax,
+      step: params.inputStep,
+    };
+  }
+  return {
+    ...common,
+    control: 'input',
+    type: params.inputType === 'password' || params.inputType === 'email' ? params.inputType : 'text',
+    defaultValue: typeof params.inputDefaultValue === 'string' ? params.inputDefaultValue : undefined,
+    minLength: params.inputMinLength,
+    maxLength: params.inputMaxLength,
+  };
+};
 
 /**
  * Displays a text message dialog to the player
@@ -67,10 +168,32 @@ export const schemaShowText = {
  * });
  * ```
  */
-export const show_text: BlockExecutor<'show_text'> = async (context, params) => {
-    await context.player.showText(params.text, {
+type ShowTextExecutionContext = Pick<GameExecutionContext, 'player' | 'event'>
+  & Partial<Pick<GameExecutionContext, 'setVariable'>>;
+
+export const show_text = async (
+  context: ShowTextExecutionContext,
+  params: ShowTextParams,
+): Promise<void> => {
+    const options = {
       talkWith: getEvent(context, { eventId: params.speaker }),
       position: params.position,
       face: params.faceset
+    };
+    if (!params.inputEnabled) {
+      await context.player.showText(params.text, options);
+      return;
+    }
+    const result = await context.player.showText(params.text, {
+      ...options,
+      input: buildShowTextInputOptions(params),
     });
+    if (params.inputVariableId) {
+      const setVariable = context.setVariable
+        ?? context.player?.setVariable?.bind(context.player);
+      if (!setVariable) {
+        throw new Error('show_text input requires variable storage');
+      }
+      setVariable(params.inputVariableId, result);
+    }
 };

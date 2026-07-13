@@ -272,3 +272,6 @@ For ready-made scenario patterns such as chests, also use `references/event-exam
 - `eventType` must be a valid normalized event type. If unsure, start with `character`.
 - Use `GET /api/maps/:mapId/events` first when the task is map-scoped.
 - Use the existing events on the same map as context before inventing a new scenario.
+# Semantic search
+
+`GET /api/events` accepts `query` and optional `minScore` (`0..1`, default `0.40`). Existing `eventType`, `assignment`, `page`, and `limit` filters remain available.
