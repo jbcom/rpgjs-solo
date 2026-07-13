@@ -2165,7 +2165,7 @@ export interface IMoveManager {
    * 
    * @param routes - Array of movement instructions to repeat infinitely
    */
-  infiniteMoveRoute(routes: Routes): void;
+  infiniteMoveRoute(routes: Routes, options?: MoveRoutesOptions): void;
 
   /**
    * Stop an infinite movement

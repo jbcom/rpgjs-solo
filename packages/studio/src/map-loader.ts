@@ -994,3 +994,4 @@ export const loadMap = async (mapId: string) => {
 };
 
 export default loadMap;
+/// <reference path="./types/canvas-engine.d.ts" />

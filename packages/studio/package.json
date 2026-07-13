@@ -2,7 +2,7 @@
   "name": "@rpgjs/studio",
   "version": "5.0.0-beta.24",
   "main": "dist/client/index.js",
-  "types": "dist/src/index.d.ts",
+  "types": "dist/client/index.d.ts",
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build"
@@ -10,7 +10,7 @@
   "exports": {
     ".": {
       "import": "./dist/client/index.js",
-      "types": "./dist/src/index.d.ts"
+      "types": "./dist/client/index.d.ts"
     },
     "./runtime": {
       "import": "./dist/runtime/index.js",
@@ -22,11 +22,11 @@
     },
     "./client": {
       "import": "./dist/client/index.js",
-      "types": "./dist/src/index.d.ts"
+      "types": "./dist/client/index.d.ts"
     },
     "./server": {
       "import": "./dist/server/index.js",
-      "types": "./dist/src/server.d.ts"
+      "types": "./dist/server/index.d.ts"
     }
   },
   "keywords": [],
@@ -54,5 +54,8 @@
     "vite": "^8.0.16",
     "vite-plugin-dts": "^5.0.2"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "json-schema-to-ts": "^3.1.1"
+  }
 }

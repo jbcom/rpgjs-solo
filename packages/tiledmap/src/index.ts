@@ -1,3 +1,5 @@
+/// <reference path="./types/canvas-engine.d.ts" />
+
 import server from "./server";
 import client from "./client";
 import { createModule } from "@rpgjs/common";

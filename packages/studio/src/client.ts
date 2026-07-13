@@ -273,7 +273,7 @@ export default (config: StudioGameModuleConfig) => {
       },
       onAfterLoading: async (scene) => {
         const gui = inject(RpgGui);
-        const engine = inject(RpgClientEngine);
+        const engine = inject(RpgClientEngine) as RpgClientEngineWithConfig;
         engine.scene.clearLocalWeather?.();
         bindInitialStudioEventHitboxes(scene);
         fadeTrigger.start();
@@ -298,7 +298,7 @@ export default (config: StudioGameModuleConfig) => {
         id: "hud",
         component: HudComponent,
         dependencies: () => {
-          const engine = inject(RpgClientEngine);
+          const engine = inject(RpgClientEngine) as RpgClientEngineWithConfig;
           return [engine.scene.currentPlayer];
         },
       },
@@ -327,3 +327,4 @@ export default (config: StudioGameModuleConfig) => {
     ],
   });
 };
+/// <reference path="./types/canvas-engine.d.ts" />

@@ -1,4 +1,4 @@
-import { defineConfig, build } from "vite";
+import { defineConfig, build, type PluginOption } from "vite";
 import canvasengine from "@canvasengine/compiler";
 import dts from "vite-plugin-dts";
 import { existsSync } from "node:fs";
@@ -33,7 +33,7 @@ function createBuildConfig({ side, watch }: { side: 'client' | 'server', watch: 
       }
     : undefined;
   
-  const plugins = isClient 
+  const plugins: PluginOption[] = isClient
     ? [
         canvasengine(),
         removeImportsPlugin({ patterns: [/server/] }),
@@ -51,7 +51,9 @@ function createBuildConfig({ side, watch }: { side: 'client' | 'server', watch: 
       ...plugins,
       dts({ 
         include: ['src/**/*.ts'],
-        outDir: 'dist'
+        afterDiagnostic(diagnostics) {
+          if (diagnostics.length > 0) throw new Error(`Declaration generation failed with ${diagnostics.length} TypeScript diagnostic(s)`)
+        }
       })
     ],
     build: {

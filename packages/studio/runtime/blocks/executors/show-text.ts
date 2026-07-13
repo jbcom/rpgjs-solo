@@ -1,7 +1,6 @@
 import { excludeTriggers } from '../context-helpers';
 import type {
   GameExecutionContext,
-  BlockExecutor,
   ShowTextParams
 } from '../types';
 import { getEvent } from './utils';
@@ -67,7 +66,10 @@ export const schemaShowText = {
  * });
  * ```
  */
-export const show_text: BlockExecutor<'show_text'> = async (context, params) => {
+export const show_text = async (
+  context: Pick<GameExecutionContext, 'player' | 'event'>,
+  params: ShowTextParams,
+): Promise<void> => {
     await context.player.showText(params.text, {
       talkWith: getEvent(context, { eventId: params.speaker }),
       position: params.position,

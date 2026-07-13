@@ -1,5 +1,5 @@
 import { Move, RpgEvent, RpgMap, RpgPlayer, RpgServer } from "@rpgjs/server";
-import { defineModule, normalizeLightingState, WorldMapsManager } from "@rpgjs/common";
+import { defineModule, normalizeLightingState, WorldMapsManager, type RpgActionInput } from "@rpgjs/common";
 import { BlockExecutionService } from "./block-executor";
 import { apiUrl } from "./constants";
 import { RATIO_MAP_X, RATIO_MAP_Y } from "@common/map";
@@ -657,7 +657,7 @@ export default (_config?: unknown) => {
 
         await applyStartGameOnce(player, map);
       },
-      onInput: (player: RpgPlayer, input: { action: string }) => {
+      onInput: (player: RpgPlayer, input: RpgActionInput<unknown>) => {
         if (input.action == "escape") {
           player.callMainMenu({
             menus: [
@@ -779,8 +779,12 @@ export default (_config?: unknown) => {
       },
     },
     event: {
-      onBeforeCreated({ event: object }, map: RpgMap) {
+      onBeforeCreated(eventPlacement, map: RpgMap) {
         const mapExtended = map as RpgMapExtended;
+        if (typeof eventPlacement.event === "function") {
+          return eventPlacement;
+        }
+        let object = eventPlacement.event as Record<string, any>;
 
         const objectRefId = String(object?.eventId ?? object?.id ?? object?._id ?? "");
         const hasDetailedEventData =

@@ -1128,6 +1128,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * @param nbTimes - Number of times to repeat the animation (default: Infinity for continuous)
    */
   setGraphicAnimation(animationName: string, nbTimes: number): void;
+  setGraphicAnimation(animationName: string): void;
   /**
    * Set the current animation of the player's sprite with a temporary graphic change
    *

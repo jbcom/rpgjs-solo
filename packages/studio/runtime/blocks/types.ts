@@ -923,6 +923,8 @@ export interface PlaySeParams {
 export interface CallCommonEventParams {
   /** ID of the event to call */
   commonEventId: string;
+  /** @deprecated v4 compatibility alias for `commonEventId`. */
+  eventId?: string;
   /** Parameters to pass to the event */
   parameters?: Record<string, unknown>;
   /** Recursion guard for nested event calls */
@@ -952,6 +954,8 @@ export interface CommonEventPositionParams {
 export interface SpawnCommonEventParams extends CommonEventPositionParams {
   /** ID of the event to spawn */
   commonEventId: string;
+  /** @deprecated v4 compatibility alias for `commonEventId`. */
+  eventId?: string;
   /** Runtime event mode */
   mode?: 'shared' | 'scenario';
 }
@@ -1360,13 +1364,13 @@ export interface ExecutionEvent {
   /** Event ID */
   id?: string;
   /** Move to a position */
-  moveTo(position: { x: number; y: number }): Promise<void>;
+  moveTo(position: { x: number; y: number }): Promise<void> | void;
   /** Move in a direction */
   moveDirection?(direction: string, speed: number): Promise<void>;
   /** Follow a route */
   followRoute?(route: unknown, speed: number): Promise<void>;
   /** Set the graphic/spritesheet */
-  setGraphic(spritesheet: string): Promise<void>;
+  setGraphic(spritesheet: string): Promise<void> | void;
   /** Set collision hitbox size */
   setHitbox?(width: number, height: number): void;
   /** Set the current animation */
@@ -1374,9 +1378,9 @@ export interface ExecutionEvent {
   /** Show a spritesheet animation attached to the event */
   showAnimation?(graphic: string, animationName?: string): Promise<void> | void;
   /** Event world X position */
-  x?: number;
+  x?: number | (() => number);
   /** Event world Y position */
-  y?: number;
+  y?: number | (() => number);
   /** Optional position object */
   position?: { x: number; y: number };
 }

@@ -297,7 +297,7 @@ export function getItemCount(player: ExecutionPlayer, itemId: string): number {
  * ```
  */
 export function getEvent(
-  context: GameExecutionContext,
+  context: Pick<GameExecutionContext, 'player' | 'event'> & Partial<Pick<GameExecutionContext, 'map'>>,
   params: { eventId?: string }
 ): ExecutionEvent | undefined {
   if (!params.eventId) {
