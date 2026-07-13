@@ -1,5 +1,12 @@
 # @rpgjs/studio
 
+## 5.0.0-beta.26
+
+### Patch Changes
+
+- 4441d3f: Keep Studio map elements constrained to their repeat axis when a placed element only overrides one dimension, and render repeat/edge-repeat segments by tiling the repeated slice instead of scaling every segment across the resized axis.
+- eb4a3a7: Add reusable Studio string templates for nested player properties and persistent variables, and resolve them in player-visible block text.
+
 ## 5.0.0-beta.25
 
 ### Minor Changes
