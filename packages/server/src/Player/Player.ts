@@ -14,14 +14,14 @@ import {
 } from "@rpgjs/common";
 import { Entity, Vector2 } from "@rpgjs/physic";
 import { IComponentManager, WithComponentManager } from "./ComponentManager";
-import { RpgMap } from "../rooms/map";
+import { RpgMap, type EventPosOption } from "../rooms/map";
 import { Context, inject } from "@signe/di";
 import { IGuiManager, WithGuiManager } from "./GuiManager";
 import { IMoveManager, WithMoveManager } from "./MoveManager";
 import { IGoldManager, WithGoldManager } from "./GoldManager";
 import { WithVariableManager, type IVariableManager } from "./VariableManager";
 import { createStatesSnapshotDeep, load, sync, type } from "@signe/sync";
-import { computed, signal } from "@signe/reactive";
+import { computed, signal, type ComputedSignal } from "@signe/reactive";
 import {
   IParameterManager,
   WithParameterManager,
@@ -48,6 +48,17 @@ import {
 } from "../services/save";
 import type { SaveSlotMeta } from "@rpgjs/common";
 import { RpgPlayerProjectiles } from "../projectiles";
+import type {
+  RpgPlayerSaveResult,
+  RpgPlayerSlotLoadResult,
+  RpgPlayerSnapshot,
+  RpgPlayerSnapshotLoadResult,
+} from "./types";
+import type { RpgSyncSchema } from "./types";
+
+export interface RpgTiledTile {
+  [key: string]: unknown;
+}
 
 /**
  * Combines multiple RpgCommonPlayer mixins into one
@@ -137,7 +148,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   context?: Context;
   conn: Parameters<RpgMap["$send"]>[0] | null = null;
   touchSide: boolean = false; // Protection against map change loops
-  private _clientListeners = new Map<string, Set<(data: any) => void | Promise<void>>>();
+  private _clientListeners = new Map<string, Set<(data: unknown) => void | Promise<void>>>();
   private _projectiles?: RpgPlayerProjectiles;
   private locale?: string;
   private _syncChangesDepth = 0;
@@ -174,9 +185,9 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     return this._getComputedWorldPosition('y');
   }
 
-  private _worldPositionSignals = new WeakMap<any, any>();
+  private _worldPositionSignals = new WeakMap<object, Partial<Record<'x' | 'y', ComputedSignal<number>>>>();
 
-  private _getComputedWorldPosition(axis: 'x' | 'y') {
+  private _getComputedWorldPosition(axis: 'x' | 'y'): ComputedSignal<number> {
     // We use a WeakMap to cache the computed signal per instance
     // This ensures that if the player object is copied (e.g. in tests),
     // the new instance gets its own signal bound to itself.
@@ -263,7 +274,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       })
   }
 
-  private _getClientListenerBucket(key: string) {
+  private _getClientListenerBucket(key: string): Set<(data: unknown) => void | Promise<void>> {
     let listeners = this._clientListeners.get(key);
     if (!listeners) {
       listeners = new Set();
@@ -272,7 +283,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     return listeners;
   }
 
-  async _dispatchClientEvent(key: string, data: any) {
+  async _dispatchClientEvent(key: string, data: unknown): Promise<void> {
     const listeners = [...(this._clientListeners.get(key) ?? [])];
     for (const callback of listeners) {
       await callback(data);
@@ -377,11 +388,12 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     this.frames = []
   }
 
-  async execMethod(method: string, methodData: any[] = [], target?: any) {
-    let ret: any;
+  async execMethod<TResult = unknown>(method: string, methodData: unknown[] = [], target?: object): Promise<TResult | undefined> {
+    let ret: unknown;
     if (target) {
-      if (typeof target[method] === 'function') {
-        ret = await target[method](...methodData);
+      const callback = (target as Record<string, unknown>)[method];
+      if (typeof callback === 'function') {
+        ret = await callback.apply(target, methodData);
       }
     }
     else {
@@ -389,7 +401,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
         .callHooks(`server-player-${method}`, target ?? this, ...methodData));
     }
     this.syncChanges()
-    return ret;
+    return ret as TResult | undefined;
   }
 
   /**
@@ -414,7 +426,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   async changeMap(
     mapId: string,
     positions?: { x: number; y: number; z?: number } | string
-  ): Promise<any | null | boolean> {
+  ): Promise<boolean> {
     const realMapId = 'map-' + mapId;
     const room = this.getCurrentMap();
 
@@ -601,7 +613,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * @param eventObj - Event definition and position.
    * @returns The created event id, or `undefined` if the player is not on a map.
    */
-  createDynamicEvent(eventObj: any): Promise<string | undefined> | undefined {
+  createDynamicEvent(eventObj: EventPosOption): Promise<string | undefined> | undefined {
     return this.getCurrentMap()?.createDynamicEvent(eventObj);
   }
 
@@ -626,7 +638,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * @deprecated Use Tiled map APIs from `player.getCurrentMap()?.tiled` instead.
    * @returns Tile information for each Tiled cell touched by the player.
    */
-  get tiles(): any[] {
+  get tiles(): RpgTiledTile[] {
     const map = this.getCurrentMap() as any;
     const tiled = map?.tiled;
     if (!tiled || typeof tiled.getTileByPosition !== "function") {
@@ -640,7 +652,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     const minTileY = Math.floor(this.y() / tileHeight);
     const maxTileX = Math.floor((this.x() + Math.max(hitbox.w, 1) - 1) / tileWidth);
     const maxTileY = Math.floor((this.y() + Math.max(hitbox.h, 1) - 1) / tileHeight);
-    const tiles: any[] = [];
+    const tiles: RpgTiledTile[] = [];
 
     for (let tileY = minTileY; tileY <= maxTileY; tileY++) {
       for (let tileX = minTileX; tileX <= maxTileX; tileX++) {
@@ -726,13 +738,13 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * @param z - Optional layer index.
    * @returns Tiled tile information, or `undefined` when unavailable.
    */
-  getTile(x: number, y: number, z?: number): any {
+  getTile(x: number, y: number, z?: number): RpgTiledTile | undefined {
     const tiled = (this.getCurrentMap() as any)?.tiled;
     if (!tiled || typeof tiled.getTileByPosition !== "function") {
       return undefined;
     }
     const layers = typeof z === "number" ? [z, z] : undefined;
-    return tiled.getTileByPosition(x, y, layers, { populateTiles: true });
+    return tiled.getTileByPosition(x, y, layers, { populateTiles: true }) as RpgTiledTile | undefined;
   }
 
   /**
@@ -766,7 +778,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * });
    * ```
    */
-  emit(type: string, value?: any) {
+  emit<T = unknown>(type: string, value?: T): void {
     const map = this.getCurrentMap();
     if (!map || !this.conn) return;
     map.$send(this.conn, {
@@ -800,14 +812,17 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * });
    * ```
    */
-  clientVisual(name: string, data: Record<string, any> = {}): void {
+  clientVisual<TData extends Record<string, unknown> = Record<string, unknown>>(
+    name: string,
+    data: TData = {} as TData
+  ): void {
     this.emit("clientVisual", {
       name,
       data,
     });
   }
 
-  prepareSnapshotForObjectLoad(snapshot: any) {
+  prepareSnapshotForObjectLoad(snapshot: RpgPlayerSnapshot): RpgPlayerSnapshot {
     if (!snapshot || typeof snapshot !== "object") {
       return snapshot;
     }
@@ -823,13 +838,14 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     return rest;
   }
 
-  private normalizeSnapshotHitbox(hitbox: any): { w: number; h: number } | null {
+  private normalizeSnapshotHitbox(hitbox: unknown): { w: number; h: number } | null {
     if (!hitbox || typeof hitbox !== "object") {
       return null;
     }
 
-    const width = this.normalizeSnapshotHitboxDimension(hitbox.w ?? hitbox.width);
-    const height = this.normalizeSnapshotHitboxDimension(hitbox.h ?? hitbox.height);
+    const value = hitbox as Record<string, unknown>;
+    const width = this.normalizeSnapshotHitboxDimension(value.w ?? value.width);
+    const height = this.normalizeSnapshotHitboxDimension(value.h ?? value.height);
     return width && height ? { w: width, h: height } : null;
   }
 
@@ -840,8 +856,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       : null;
   }
 
-  snapshot() {
-    const snapshot = createStatesSnapshotDeep(this);
+  snapshot(): RpgPlayerSnapshot {
+    const snapshot = createStatesSnapshotDeep(this) as RpgPlayerSnapshot;
     delete (snapshot as any).pendingMapPosition;
     if ((snapshot as any)._name !== undefined && (snapshot as any).name === undefined) {
       (snapshot as any).name = (snapshot as any)._name;
@@ -863,8 +879,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     return snapshot;
   }
 
-  async applySnapshot(snapshot: string | object) {
-    const data = typeof snapshot === "string" ? JSON.parse(snapshot) : snapshot;
+  async applySnapshot(snapshot: string | RpgPlayerSnapshot): Promise<RpgPlayerSnapshot> {
+    const data = (typeof snapshot === "string" ? JSON.parse(snapshot) : snapshot) as RpgPlayerSnapshot;
     if (data && typeof data === "object" && typeof (data as any).locale === "string") {
       this.setLocale((data as any).locale);
     }
@@ -881,16 +897,16 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     const withSkills = (this as any).resolveSkillsSnapshot?.(withItems) ?? withItems;
     const withStates = (this as any).resolveStatesSnapshot?.(withSkills) ?? withSkills;
     const withClass = (this as any).resolveClassSnapshot?.(withStates) ?? withStates;
-    const resolvedSnapshot = (this as any).resolveEquipmentsSnapshot?.(withClass) ?? withClass;
+    const resolvedSnapshot = ((this as any).resolveEquipmentsSnapshot?.(withClass) ?? withClass) as RpgPlayerSnapshot;
     load(this, resolvedSnapshot);
     if (resolvedSnapshot.expCurve) {
       (this as any).expCurve = resolvedSnapshot.expCurve;
     }
     if (Array.isArray(resolvedSnapshot.items)) {
-      this.items.set(resolvedSnapshot.items);
+      this.items.set(resolvedSnapshot.items as never);
     }
     if (Array.isArray(resolvedSnapshot.skills)) {
-      this.skills.set(resolvedSnapshot.skills);
+      this.skills.set(resolvedSnapshot.skills as never);
     }
     if (Array.isArray(resolvedSnapshot.states)) {
       this.states.set(resolvedSnapshot.states);
@@ -899,7 +915,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       this._class.set(resolvedSnapshot._class);
     }
     if (Array.isArray(resolvedSnapshot.equipments)) {
-      this.equipments.set(resolvedSnapshot.equipments);
+      this.equipments.set(resolvedSnapshot.equipments as never);
     }
     if (this.context) {
       await lastValueFrom(this.hooks.callHooks("server-player-onLoad", this, resolvedSnapshot));
@@ -907,7 +923,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     return resolvedSnapshot;
   }
 
-  private _isSnapshotInput(input: unknown): input is string | object {
+  private _isSnapshotInput(input: unknown): input is string | RpgPlayerSnapshot {
     if (input && typeof input === "object" && !Array.isArray(input)) {
       return true;
     }
@@ -926,8 +942,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * strategy.
    */
   async save(): Promise<string>;
-  async save(slot: SaveSlotIndex, meta?: SaveSlotMeta, context?: SaveRequestContext): Promise<{ index: number; meta: SaveSlotMeta } | null>;
-  async save(slot?: SaveSlotIndex, meta: SaveSlotMeta = {}, context: SaveRequestContext = {}) {
+  async save(slot: SaveSlotIndex, meta?: SaveSlotMeta, context?: SaveRequestContext): Promise<RpgPlayerSaveResult | null>;
+  async save(slot?: SaveSlotIndex, meta: SaveSlotMeta = {}, context: SaveRequestContext = {}): Promise<string | RpgPlayerSaveResult | null> {
     if (arguments.length === 0) {
       return JSON.stringify(this.snapshot());
     }
@@ -955,11 +971,13 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * it directly. Pass a slot (`"auto"` or a number) to use the v5 storage
    * strategy.
    */
+  async load(slot: SaveSlotIndex, context?: SaveRequestContext, options?: { changeMap?: boolean }): Promise<RpgPlayerSlotLoadResult>;
+  async load(snapshot: string | RpgPlayerSnapshot, context?: SaveRequestContext, options?: { changeMap?: boolean }): Promise<RpgPlayerSnapshotLoadResult>;
   async load(
-    slot: SaveSlotIndex | string | object = "auto",
+    slot: SaveSlotIndex | string | RpgPlayerSnapshot = "auto",
     context: SaveRequestContext = {},
     options: { changeMap?: boolean } = {}
-  ) {
+  ): Promise<RpgPlayerSlotLoadResult | RpgPlayerSnapshotLoadResult> {
     if (this._isSnapshotInput(slot)) {
       const resolvedSnapshot = await this.applySnapshot(slot);
       return { ok: true, snapshot: resolvedSnapshot };
@@ -1046,8 +1064,8 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * socket.emit("chat:message", { text: "Hello server" });
    * ```
    */
-  on(key: string, cb: (data: any) => void | Promise<void>) {
-    this._getClientListenerBucket(key).add(cb);
+  on<T = unknown>(key: string, cb: (data: T) => void | Promise<void>): void {
+    this._getClientListenerBucket(key).add(cb as (data: unknown) => void | Promise<void>);
   }
 
   /**
@@ -1070,10 +1088,10 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * });
    * ```
    */
-  once(key: string, cb: (data: any) => void | Promise<void>) {
-    const onceCallback = async (data: any) => {
+  once<T = unknown>(key: string, cb: (data: T) => void | Promise<void>): void {
+    const onceCallback = async (data: unknown) => {
       this._clientListeners.get(key)?.delete(onceCallback);
-      await cb(data);
+      await cb(data as T);
     };
     this.on(key, onceCallback);
   }
@@ -1198,7 +1216,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     }
   }
 
-  databaseById(id: string) {
+  databaseById<T = unknown>(id: string): T | undefined {
     // Use this.map directly to support both RpgMap and LobbyRoom
     const map = this.map as any;
     if (!map || !map.database) return;
@@ -1207,7 +1225,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
       throw new Error(
         `The ID=${id} data is not found in the database. Add the data in the property "database"`
       );
-    return data;
+    return data as T;
   }
 
   private _eventChanges() {
@@ -1518,7 +1536,10 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * });
    * ```
    */
-  showComponentAnimation(id: string, params: any = {}) {
+  showComponentAnimation<TParams extends Record<string, unknown> = Record<string, unknown>>(
+    id: string,
+    params: TParams = {} as TParams
+  ): void {
     const map = this.getCurrentMap();
     if (!map) return;
     map.$broadcast({
@@ -1875,11 +1896,14 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
    * Set the sync schema for the map
    * @param schema - The schema to set
    */
-  setSync(schema: any) {
+  setSync(schema: RpgSyncSchema): void {
     for (let key in schema) {
+      const options = schema[key] && typeof schema[key] === 'object' && !Array.isArray(schema[key])
+        ? schema[key] as { $syncWithClient?: boolean; $permanent?: boolean }
+        : {};
       this[key] = type(signal<unknown>(null) as never, key, {
-        syncToClient: schema[key]?.$syncWithClient,
-        persist: schema[key]?.$permanent,
+        syncToClient: options.$syncWithClient,
+        persist: options.$permanent,
       }, this as never)
     }
   }
@@ -1896,14 +1920,14 @@ export class RpgEvent extends RpgPlayer {
     this.initializeDefaultStats()
   }
 
-  override async execMethod(methodName: string, methodData: any[] = [], instance = this) {
+  override async execMethod<TResult = unknown>(methodName: string, methodData: unknown[] = [], instance: object = this): Promise<TResult | undefined> {
     await lastValueFrom(this.hooks
       .callHooks(`server-event-${methodName}`, instance, ...methodData));
-    if (!instance[methodName]) {
+    const callback = (instance as Record<string, unknown>)[methodName];
+    if (typeof callback !== 'function') {
       return;
     }
-    const ret = instance[methodName](...methodData);
-    return ret;
+    return callback.apply(instance, methodData) as TResult;
   }
 
   /**
@@ -1937,7 +1961,7 @@ export class RpgEvent extends RpgPlayer {
    */
   remove(options?: {
     reason?: string;
-    data?: any;
+    data?: unknown;
     transition?: {
       animation?: string;
       graphic?: string | string[];

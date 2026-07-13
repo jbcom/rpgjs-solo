@@ -1,7 +1,27 @@
 import { Constructor, isString, PlayerCtor, RpgCommonPlayer } from "@rpgjs/common";
 
-type ClassClass = any;
-type ActorClass = any;
+export interface ClassData {
+  id?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
+export interface ActorData {
+  id?: string;
+  name?: string;
+  initialLevel?: number;
+  finalLevel?: number;
+  expCurve?: Record<string, number>;
+  parameters?: Record<string, { start: number; end: number }>;
+  startingEquipment?: unknown[];
+  class?: ClassConstructor | string;
+  [key: string]: unknown;
+}
+
+export type ClassConstructor = new () => ClassData;
+export type ActorConstructor = new () => ActorData;
+type ClassClass = ClassConstructor;
+type ActorClass = ActorConstructor;
 
 interface PlayerWithMixins extends RpgCommonPlayer {
   databaseById(id: string): any;
@@ -39,8 +59,8 @@ export function WithClassManager<TBase extends PlayerCtor>(Base: TBase) {
     private _resolveClassInput(classInput: ClassClass | string, databaseByIdOverride?: (id: string) => any) {
       if (isString(classInput)) {
         return databaseByIdOverride
-          ? databaseByIdOverride(classInput)
-          : (this as any).databaseById(classInput);
+          ? databaseByIdOverride(classInput as string)
+          : (this as any).databaseById(classInput as string);
       }
       return classInput;
     }
@@ -91,23 +111,23 @@ export function WithClassManager<TBase extends PlayerCtor>(Base: TBase) {
       return { ...snapshot, _class: instance };
     }
 
-    setClass(_class: ClassClass | string) {
+    setClass(_class: ClassClass | string): ClassData {
       const { instance } = this._createClassInstance(_class);
       const classInstance = instance;
       (this as any)["execMethod"]("onSet", [this], classInstance);
       return classInstance;
     }
 
-    setActor(actorClass: ActorClass | string) {
+    setActor(actorClass: ActorClass | string): ActorData {
       if (isString(actorClass)) actorClass = (this as any).databaseById(actorClass);
       const actor = new (actorClass as ActorClass)();
       ["name", "initialLevel", "finalLevel", "expCurve"].forEach((key) => {
         if (actor[key]) (this as any)[key] = actor[key];
       });
-      for (let param in actor.parameters) {
-        (this as any).addParameter(param, actor.parameters[param]);
+      for (let param in actor.parameters ?? {}) {
+        (this as any).addParameter(param, actor.parameters![param]);
       }
-      for (let item of actor.startingEquipment) {
+      for (let item of actor.startingEquipment ?? []) {
         const inventory = (this as any).addItem(item);
         const itemId = inventory?.id?.();
         if (itemId) {
@@ -134,7 +154,7 @@ export interface IClassManager {
    * @param _class - The class constructor or class ID to assign to the player
    * @returns The instantiated class object
    */
-  setClass(_class: ClassClass | string): any;
+  setClass(_class: ClassConstructor | string): ClassData;
 
   /**
    * Set up the player as a specific actor archetype
@@ -142,5 +162,5 @@ export interface IClassManager {
    * @param actorClass - The actor constructor or actor ID to assign to the player
    * @returns The instantiated actor object
    */
-  setActor(actorClass: ActorClass | string): any;
+  setActor(actorClass: ActorConstructor | string): ActorData;
 }

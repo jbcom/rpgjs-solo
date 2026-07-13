@@ -14,7 +14,8 @@ export default defineConfig({
   plugins: [
     dts({ 
       include: ['src/**/*.ts'],
-      outDir: 'dist'
+      outDir: 'dist',
+      aliasesExclude: [/^@rpgjs\//]
     })
   ],
   build: {

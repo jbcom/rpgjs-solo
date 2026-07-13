@@ -1,5 +1,6 @@
 import { RpgPlayer } from "./Player";
 import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui, GameoverGui, InputGui } from "../Gui";
+import type { ShopGuiOptions, ShopItemInput } from "../Gui/ShopGui";
 import { DialogOptions, DialogBaseOptions, Choice } from "../Gui/DialogGui";
 import { SaveLoadOptions, SaveSlot } from "../Gui/SaveLoadGui";
 import { MenuGuiOptions } from "../Gui/MenuGui";
@@ -40,8 +41,8 @@ export function WithGuiManager<TBase extends PlayerCtor>(
 
     showText(msg: string, options: DialogBaseOptions & { input: NumberInputOptions }): Promise<number | null>;
     showText(msg: string, options: DialogBaseOptions & { input: TextInputOptions | TextareaInputOptions }): Promise<string | null>;
-    showText(msg: string, options?: DialogOptions): Promise<any>;
-    showText(msg: string, options: DialogOptions = {}): Promise<any> {
+    showText(msg: string, options?: DialogOptions): Promise<string | number | null>;
+    showText(msg: string, options: DialogOptions = {}): Promise<string | number | null> {
       const gui = new DialogGui(<any>this);
       this._gui[gui.id] = gui;
       return gui.openDialog(msg, options);
@@ -55,7 +56,8 @@ export function WithGuiManager<TBase extends PlayerCtor>(
       return this.showText(msg, {
         choices,
         ...options,
-      }).then((indexSelected: number) => {
+      }).then((indexSelected) => {
+        if (typeof indexSelected !== 'number') return null;
         if (!choices[indexSelected]) return null;
         return choices[indexSelected];
       });
@@ -64,7 +66,7 @@ export function WithGuiManager<TBase extends PlayerCtor>(
     showNotification(
       message: string,
       options: { time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" } = {}
-    ): Promise<any> {
+    ): Promise<boolean> {
       ;(this as unknown as { emit(type: string, value?: unknown): void }).emit('notification', {
         message,
         ...options,
@@ -118,13 +120,7 @@ export function WithGuiManager<TBase extends PlayerCtor>(
      * @returns {void}
      * @memberof GuiManager
      */
-    callShop(items: any[] | {
-      items: any[]
-      sell?: Record<string, number> | Array<{ id: string; multiplier: number }>
-      sellMultiplier?: number
-      message?: string
-      face?: { id: string; expression?: string }
-    }) {
+    callShop(items: ShopItemInput[] | ShopGuiOptions): Promise<unknown | null> {
       const gui = new ShopGui(<any>this);
       this._gui[gui.id] = gui;
       return gui.open(items);
@@ -185,7 +181,7 @@ export function WithGuiManager<TBase extends PlayerCtor>(
      * @returns {Gui}
      * @memberof GuiManager
      */
-    removeGui(guiId: string, data?: any, guiOpenId?: unknown) {
+    removeGui(guiId: string, data?: unknown, guiOpenId?: unknown): void {
       if (this._gui[guiId]) {
         if (!this._gui[guiId].matchesOpenId(guiOpenId)) {
           return;
@@ -394,7 +390,7 @@ export interface IGuiManager {
    */
   showText(msg: string, options: DialogBaseOptions & { input: NumberInputOptions }): Promise<number | null>;
   showText(msg: string, options: DialogBaseOptions & { input: TextInputOptions | TextareaInputOptions }): Promise<string | null>;
-  showText(msg: string, options?: DialogOptions): Promise<any>;
+  showText(msg: string, options?: DialogOptions): Promise<string | number | null>;
 
   /**
    * Shows a dialog box with a choice. Opens the GUI named `rpg-dialog`
@@ -440,7 +436,7 @@ export interface IGuiManager {
   showNotification(
     message: string,
     options?: { time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" }
-  ): Promise<any>;
+  ): Promise<boolean>;
 
   /**
    * Display a save/load slots screen. Opens the GUI named `rpg-save`
@@ -520,16 +516,10 @@ export interface IGuiManager {
    * @memberof GuiManager
    */
   callGameover(options?: GameoverGuiOptions): Promise<GameoverGuiSelection | null>;
-  callShop(items: any[] | {
-    items: any[]
-    sell?: Record<string, number> | Array<{ id: string; multiplier: number }>
-    sellMultiplier?: number
-    message?: string
-    face?: { id: string; expression?: string }
-  }): void;
+  callShop(items: ShopItemInput[] | ShopGuiOptions): Promise<unknown | null>;
   gui(guiId: string): Gui;
   getGui(guiId: string): Gui;
-  removeGui(guiId: string, data?: any, guiOpenId?: unknown): void;
+  removeGui(guiId: string, data?: unknown, guiOpenId?: unknown): void;
   showAttachedGui(players?: RpgPlayer[] | RpgPlayer): void;
   hideAttachedGui(players?: RpgPlayer[] | RpgPlayer): void;
 }

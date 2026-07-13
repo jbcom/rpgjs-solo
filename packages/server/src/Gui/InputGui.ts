@@ -17,7 +17,7 @@ export class InputGui extends Gui {
         return super.open(this.form.data, {
             waitingAction: true,
             blockPlayerInput: true,
-        })
+        }) as Promise<string | number | null>
     }
 
     private submit(rawValue: unknown): void {

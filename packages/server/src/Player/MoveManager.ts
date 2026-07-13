@@ -127,15 +127,17 @@ interface PlayerWithMixins extends RpgCommonPlayer {
 }
 
 
-function wait(sec: number) {
+function wait(sec: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, sec * 1000)
   })
 }
 
-type CallbackTileMove = (player: RpgPlayer, map) => Direction[]
-type CallbackTurnMove = (player: RpgPlayer, map) => string
-type Routes = (string | Promise<any> | Direction | Direction[] | Function)[]
+export type CallbackTileMove = (player: RpgPlayer, map: RpgMap) => Direction[]
+export type CallbackTurnMove = (player: RpgPlayer, map: RpgMap) => string
+export type MoveRouteCallback = (player: RpgPlayer, map: RpgMap) => string | Direction | Direction[] | Promise<void> | undefined
+export type MoveRoute = string | Promise<void> | Direction | Direction[] | MoveRouteCallback
+export type Routes = MoveRoute[]
 
 // Re-export MovementOptions from @rpgjs/common for convenience
 export type { MovementOptions };
@@ -374,7 +376,7 @@ class MoveList {
     return this.repeatMove(Direction.Down, repeat)
   }
 
-  wait(sec: number): Promise<unknown> {
+  wait(sec: number): Promise<void> {
     return wait(sec)
   }
 
@@ -476,7 +478,7 @@ class MoveList {
     return newDirection
   }
 
-  private _awayFromPlayer({ isTile, typeMov }: { isTile: boolean, typeMov: string }, otherPlayer: RpgPlayer, repeat: number = 1) {
+  private _awayFromPlayer({ isTile, typeMov }: { isTile: boolean, typeMov: string }, otherPlayer: RpgPlayer, repeat: number = 1): CallbackTileMove {
     const method = (dir: Direction) => {
       const direction: string = DirectionNames[dir as any] || 'down'
       return this[isTile ? 'tile' + capitalize(direction) : direction](repeat)
@@ -499,11 +501,11 @@ class MoveList {
     }
   }
 
-  towardPlayer(player: RpgPlayer, repeat: number = 1) {
+  towardPlayer(player: RpgPlayer, repeat: number = 1): CallbackTileMove {
     return this._awayFromPlayer({ isTile: false, typeMov: 'toward' }, player, repeat)
   }
 
-  tileTowardPlayer(player: RpgPlayer, repeat: number = 1) {
+  tileTowardPlayer(player: RpgPlayer, repeat: number = 1): CallbackTileMove {
     return this._awayFromPlayer({ isTile: true, typeMov: 'toward' }, player, repeat)
   }
 
@@ -1241,13 +1243,13 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
         // Process function routes first
         const processedRoutes = await Promise.all(
-          routes.map(async (route: any) => {
+          routes.map(async (route: MoveRoute) => {
             if (typeof route === 'function') {
               const map = player.getCurrentMap() as any;
               if (!map) {
                 return undefined;
               }
-              return route.apply(route, [player, map]);
+              return route.apply(route, [player as unknown as RpgPlayer, map]);
             }
             return route;
           })
@@ -1255,7 +1257,8 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
 
         // Flatten nested arrays
         // Note: We keep promises in the routes array and handle them in the strategy
-        const finalRoutes = this.flattenRoutes(processedRoutes);
+        const definedRoutes = processedRoutes.filter(route => route !== undefined) as Array<string | Direction | Direction[]>;
+        const finalRoutes = this.flattenRoutes(definedRoutes);
 
         if (selfAny.__moveRouteSequence__ !== routeSequence) {
           resolve(false);
@@ -1387,7 +1390,7 @@ export function WithMoveManager<TBase extends PlayerCtor>(Base: TBase) {
                 this.promiseDuration = 1000; // Default 1 second, will be updated when promise resolves
 
                 // Set up promise resolution handler
-                (currentRoute as Promise<any>).then(() => {
+                (currentRoute as Promise<void>).then(() => {
                   this.debugLog('WAIT promise resolved');
                   this.waitingForPromise = false;
                   this.processNextRoute();

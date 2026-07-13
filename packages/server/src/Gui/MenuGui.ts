@@ -141,7 +141,7 @@ export class MenuGui extends Gui {
         this.menuOptions = options
         const data = this.buildMenuData(options)
 
-        this.on('useItem', ({ id, clientActionId }) => {
+        this.on('useItem', ({ id, clientActionId }: { id: string; clientActionId?: string }) => {
             try {
                 this.player.useItem(id)
                 this.player.syncChanges()
@@ -153,7 +153,7 @@ export class MenuGui extends Gui {
                 this.refreshMenu(clientActionId)
             }
         })
-        this.on('equipItem', ({ id, equip, clientActionId }) => {
+        this.on('equipItem', ({ id, equip, clientActionId }: { id: string; equip?: boolean | 'auto'; clientActionId?: string }) => {
             try {
                 this.player.equip(id, equip)
                 this.player.syncChanges()

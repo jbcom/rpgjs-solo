@@ -10,7 +10,7 @@ export enum DialogPosition {
     Middle = 'middle'
 }
 
-export type Choice = { text: string, value: any }
+export type Choice<T = unknown> = { text: string, value: T }
 
 /** Shared presentation options for text, choice, and input dialogs. */
 export interface DialogBaseOptions {
@@ -47,7 +47,7 @@ export class DialogGui extends Gui {
         })
     }
 
-    openDialog(message: string, options: DialogOptions): Promise<any> {
+    openDialog(message: string, options: DialogOptions): Promise<string | number | null> {
         const choices = options.choices ?? []
         const autoClose = options.autoClose ?? false
         const position = options.position ?? DialogPosition.Bottom
@@ -88,12 +88,12 @@ export class DialogGui extends Gui {
         }, {
             waitingAction: true,
             blockPlayerInput: true
-        }).then((val: any) => {
+        }).then((val) => {
             if (event) {
                 event.replayRoutes()
                 event.changeDirection(memoryDir)
             }
-            return val
+            return val as string | number | null
         })
     }
 
