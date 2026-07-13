@@ -834,7 +834,7 @@ export interface CameraFollowParams {
  * Displays a component animation above the player with optional icon and sound.
  */
 export interface ShowUpAnimationParams {
-  /** Text to display (supports {variables}) */
+  /** Text to display (supports Studio string templates and legacy {hp}/{level} placeholders) */
   text: string;
   /** Optional icon to display before the text */
   icon?: string;

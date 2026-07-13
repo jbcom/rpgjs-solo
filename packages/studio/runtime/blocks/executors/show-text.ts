@@ -5,6 +5,11 @@ import type {
   ShowTextParams
 } from '../types';
 import { getEvent } from './utils';
+import {
+  resolveStringTemplate,
+  studioStringTemplateFormat,
+  studioTextareaTemplateFormat,
+} from '../resolve-text';
 
 export const schemaShowText = {
   type: 'show_text',
@@ -21,7 +26,7 @@ export const schemaShowText = {
         type: 'string', 
         title: 'Message Text',
         description: 'The text to display in the dialog',
-        format: 'textarea'
+        format: studioTextareaTemplateFormat
       },
       speaker: { 
         type: 'string', 
@@ -64,10 +69,10 @@ export const schemaShowText = {
             },
             inputControl: { type: 'string', title: 'block.show text.input control', enum: ['input', 'textarea'], default: 'input' },
             inputType: { type: 'string', title: 'block.show text.input type', enum: ['text', 'number', 'password', 'email'], default: 'text' },
-            inputPlaceholder: { type: 'string', title: 'block.show text.input placeholder' },
+            inputPlaceholder: { type: 'string', title: 'block.show text.input placeholder', format: studioStringTemplateFormat },
             inputRequired: { type: 'boolean', title: 'block.show text.input required', default: false },
-            inputConfirmText: { type: 'string', title: 'block.show text.input confirm text' },
-            inputCancelText: { type: 'string', title: 'block.show text.input cancel text' },
+            inputConfirmText: { type: 'string', title: 'block.show text.input confirm text', format: studioStringTemplateFormat },
+            inputCancelText: { type: 'string', title: 'block.show text.input cancel text', format: studioStringTemplateFormat },
             inputCancelButton: { type: 'boolean', title: 'block.show text.input cancel button', default: true }
           },
           required: ['inputVariableId']
@@ -77,7 +82,7 @@ export const schemaShowText = {
         if: { properties: { inputEnabled: { const: true }, inputControl: { const: 'textarea' } } },
         then: { properties: {
           inputType: { const: 'text', default: 'text' },
-          inputDefaultValue: { type: 'string', title: 'block.show text.input default value' },
+          inputDefaultValue: { type: 'string', title: 'block.show text.input default value', format: studioStringTemplateFormat },
           inputMinLength: { type: 'number', title: 'block.show text.input min length', minimum: 0 },
           inputMaxLength: { type: 'number', title: 'block.show text.input max length', minimum: 0 },
           inputRows: { type: 'number', title: 'block.show text.input rows', minimum: 1, default: 4 }
@@ -99,7 +104,7 @@ export const schemaShowText = {
           inputType: { enum: ['text', 'password', 'email'] }
         } },
         then: { properties: {
-          inputDefaultValue: { type: 'string', title: 'block.show text.input default value' },
+          inputDefaultValue: { type: 'string', title: 'block.show text.input default value', format: studioStringTemplateFormat },
           inputMinLength: { type: 'number', title: 'block.show text.input min length', minimum: 0 },
           inputMaxLength: { type: 'number', title: 'block.show text.input max length', minimum: 0 }
         } }
@@ -169,24 +174,39 @@ export const buildShowTextInputOptions = (params: ShowTextParams): Record<string
  * ```
  */
 type ShowTextExecutionContext = Pick<GameExecutionContext, 'player' | 'event'>
-  & Partial<Pick<GameExecutionContext, 'setVariable'>>;
+  & Partial<Pick<GameExecutionContext, 'getVariable' | 'setVariable'>>;
+
+const resolveOptionalTemplate = (
+  value: string | undefined,
+  context: ShowTextExecutionContext,
+): string | undefined => value === undefined ? undefined : resolveStringTemplate(value, context);
 
 export const show_text = async (
   context: ShowTextExecutionContext,
   params: ShowTextParams,
 ): Promise<void> => {
+    const text = resolveStringTemplate(params.text, context);
     const options = {
       talkWith: getEvent(context, { eventId: params.speaker }),
       position: params.position,
       face: params.faceset
     };
     if (!params.inputEnabled) {
-      await context.player.showText(params.text, options);
+      await context.player.showText(text, options);
       return;
     }
-    const result = await context.player.showText(params.text, {
+    const resolvedInputParams: ShowTextParams = {
+      ...params,
+      inputPlaceholder: resolveOptionalTemplate(params.inputPlaceholder, context),
+      inputConfirmText: resolveOptionalTemplate(params.inputConfirmText, context),
+      inputCancelText: resolveOptionalTemplate(params.inputCancelText, context),
+      inputDefaultValue: typeof params.inputDefaultValue === 'string'
+        ? resolveStringTemplate(params.inputDefaultValue, context)
+        : params.inputDefaultValue,
+    };
+    const result = await context.player.showText(text, {
       ...options,
-      input: buildShowTextInputOptions(params),
+      input: buildShowTextInputOptions(resolvedInputParams),
     });
     if (params.inputVariableId) {
       const setVariable = context.setVariable

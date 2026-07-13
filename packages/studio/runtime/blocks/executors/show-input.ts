@@ -2,6 +2,7 @@ import type { InputOptions } from '@rpgjs/server'
 import { variableSchema } from '../../schemas/database'
 import { excludeTriggers } from '../context-helpers'
 import type { BlockExecutor, ShowInputParams } from '../types'
+import { resolveStringTemplate, studioStringTemplateFormat } from '../resolve-text'
 
 export const schemaShowInput = {
   type: 'show_input',
@@ -14,7 +15,7 @@ export const schemaShowInput = {
   schema: {
     type: 'object',
     properties: {
-      message: { type: 'string', title: 'Message' },
+      message: { type: 'string', title: 'Message', format: studioStringTemplateFormat },
       variableId: {
         type: 'string',
         title: 'Result Variable',
@@ -43,10 +44,10 @@ export const schemaShowInput = {
         default: 'text',
         format: { labels: ['Text', 'Number', 'Password', 'Email'] }
       },
-      placeholder: { type: 'string', title: 'Placeholder' },
+      placeholder: { type: 'string', title: 'Placeholder', format: studioStringTemplateFormat },
       required: { type: 'boolean', title: 'Required', default: false },
-      confirmText: { type: 'string', title: 'Confirm Button Label' },
-      cancelText: { type: 'string', title: 'Cancel Button Label' },
+      confirmText: { type: 'string', title: 'Confirm Button Label', format: studioStringTemplateFormat },
+      cancelText: { type: 'string', title: 'Cancel Button Label', format: studioStringTemplateFormat },
       cancelButton: { type: 'boolean', title: 'Show Cancel Button', default: true }
     },
     allOf: [
@@ -61,14 +62,14 @@ export const schemaShowInput = {
           typewriterEffect: { type: 'boolean', title: 'Typewriter Effect', default: true }
         } },
         else: { properties: {
-          title: { type: 'string', title: 'Title' }
+          title: { type: 'string', title: 'Title', format: studioStringTemplateFormat }
         } }
       },
       {
         if: { properties: { control: { const: 'textarea' } } },
         then: { properties: {
           type: { const: 'text', default: 'text' },
-          defaultValue: { type: 'string', title: 'Default Value' },
+          defaultValue: { type: 'string', title: 'Default Value', format: studioStringTemplateFormat },
           minLength: { type: 'number', title: 'Minimum Length', minimum: 0 },
           maxLength: { type: 'number', title: 'Maximum Length', minimum: 0 },
           rows: { type: 'number', title: 'Rows', minimum: 1, default: 4 }
@@ -82,7 +83,7 @@ export const schemaShowInput = {
             step: { type: 'number', title: 'Step', exclusiveMinimum: 0 }
           } },
           else: { properties: {
-            defaultValue: { type: 'string', title: 'Default Value' },
+            defaultValue: { type: 'string', title: 'Default Value', format: studioStringTemplateFormat },
             minLength: { type: 'number', title: 'Minimum Length', minimum: 0 },
             maxLength: { type: 'number', title: 'Maximum Length', minimum: 0 }
           } }
@@ -142,9 +143,23 @@ const resolveFace = (params: ShowInputParams) => {
 }
 
 export const show_input: BlockExecutor<'show_input'> = async (context, params) => {
-  const input = buildInputOptions(params)
+  const resolveOptional = (value: string | undefined) => value === undefined
+    ? undefined
+    : resolveStringTemplate(value, context)
+  const resolvedParams: ShowInputParams = {
+    ...params,
+    title: resolveOptional(params.title),
+    placeholder: resolveOptional(params.placeholder),
+    confirmText: resolveOptional(params.confirmText),
+    cancelText: resolveOptional(params.cancelText),
+    defaultValue: typeof params.defaultValue === 'string'
+      ? resolveStringTemplate(params.defaultValue, context)
+      : params.defaultValue,
+  }
+  const message = resolveStringTemplate(params.message, context)
+  const input = buildInputOptions(resolvedParams)
   const result = params.presentation === 'dialog'
-    ? await context.player.showText(params.message, {
+    ? await context.player.showText(message, {
         input,
         speaker: params.speaker,
         position: params.position,
@@ -152,7 +167,7 @@ export const show_input: BlockExecutor<'show_input'> = async (context, params) =
         fullWidth: params.fullWidth,
         typewriterEffect: params.typewriterEffect,
       })
-    : await context.player.showInput(params.message, input)
+    : await context.player.showInput(message, input)
 
   context.setVariable(params.variableId, result)
 }
