@@ -42,7 +42,7 @@ import { EventMode } from "../decorators/event";
 import { BaseRoom } from "./BaseRoom";
 import { buildSaveSlotMeta, resolveSaveStorageStrategy } from "../services/save";
 import { Log } from "../logs/log";
-import { isMapUpdateAuthorized, MAP_UPDATE_TOKEN_ENV, MAP_UPDATE_TOKEN_HEADER } from "../node/map";
+import { createMapUpdateHeaders, isMapUpdateAuthorized, MAP_UPDATE_TOKEN_ENV, MAP_UPDATE_TOKEN_HEADER } from "../map-update";
 import { RpgMapProjectiles } from "../projectiles";
 import type { DamageFormulas } from "../Player/BattleManager";
 
@@ -311,9 +311,13 @@ interface LightingSetOptions {
 
 @Room({
   path: "map-{id}",
-  persistState: false
+  persistState: true
 })
 export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
+  private readonly partyRoom: {
+    env: Record<string, unknown>;
+    getConnections(): Iterable<unknown>;
+  };
   private _clientListeners = new Map<string, Set<(player: RpgPlayer, data: unknown) => void | Promise<void>>>();
   private activeTouchCollisions = new Set<string>();
   private trackedTouchCollisions = new Map<string, TrackedTouchCollision>();
@@ -458,6 +462,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   constructor(room) {
     super();
+    this.partyRoom = room;
     this.hooks.callHooks("server-map-onStart", this).subscribe();
     const isTest = room.env.TEST === 'true' ? true : false;
     if (isTest) {
@@ -477,6 +482,29 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
   onStart() {
     return BaseRoom.prototype.onStart.call(this)
+  }
+
+  /** Rebuild non-serializable map resources after a room restart or hibernation. */
+  async onRestore() {
+    const restoredMap = this.data();
+    if (!restoredMap?.id) return;
+    const token = this.getRuntimeMapUpdateToken();
+    await this.updateMap({
+      url: `http://localhost/parties/main/map-${restoredMap.id}/map/update`,
+      method: "POST",
+      headers: createMapUpdateHeaders(token),
+      json: async () => restoredMap,
+      text: async () => JSON.stringify(restoredMap),
+    } as Request);
+  }
+
+  private getRuntimeMapUpdateToken(): string | undefined {
+    const token = this.partyRoom.env[MAP_UPDATE_TOKEN_ENV];
+    return typeof token === "string" && token.length > 0 ? token : undefined;
+  }
+
+  private hasActiveConnections(): boolean {
+    return Array.from(this.partyRoom.getConnections()).length > 0;
   }
 
   protected emitPhysicsInit(context: MapPhysicsInitContext): void {
@@ -1367,6 +1395,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   onJoin(player: RpgPlayer, conn: Parameters<RoomMethods["$send"]>[0]) {
+    if (this.data()?.id) {
+      this.setAutoTick(true);
+    }
     const alignPlayerBodyWithSignals = () => {
       const hitbox = (typeof player.hitbox === 'function' ? player.hitbox() : player.hitbox) as any;
       const width = hitbox?.w ?? hitbox?.width ?? 32;
@@ -1489,6 +1520,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     player.pendingInputs = [];
     player.lastProcessedInputTs = 0;
     player._lastFramePositions = null;
+    if (!this.hasActiveConnections()) {
+      this.setAutoTick(false);
+    }
   }
 
   /**
@@ -1866,7 +1900,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     method: "POST"
   }, MapUpdateSchema as any)
   async updateMap(request: Request) {
-    if (!isMapUpdateAuthorized(request.headers)) {
+    if (!isMapUpdateAuthorized(request.headers, this.getRuntimeMapUpdateToken())) {
       return new Response(JSON.stringify({
         error: "Unauthorized map update",
         message: `Provide ${MAP_UPDATE_TOKEN_HEADER} or Authorization: Bearer <token> to call /map/update when ${MAP_UPDATE_TOKEN_ENV} is set.`,
@@ -1981,6 +2015,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     // Execute map-specific hooks (from @MapData or MapOptions)
     if (typeof (this as any)._onLoad === 'function') {
       await (this as any)._onLoad();
+    }
+
+    if (!this.hasActiveConnections()) {
+      this.setAutoTick(false);
     }
 
     // TODO: Update map

@@ -1,6 +1,7 @@
 import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import type { RpgServerEngine } from "../RpgServerEngine";
+import type { NodeRoomStorageFactory, NodeRoomStorageProvider } from "@signe/room/node";
 
 export interface RpgWebSocketConnection {
   readyState: number;
@@ -45,10 +46,14 @@ export type RpgTransportServer = RpgServerEngine & {
 export type RpgTransportServerConstructor = new (room: any) => RpgTransportServer;
 
 export interface CreateRpgServerTransportOptions {
+  /** Runtime values exposed through `room.env`. */
+  env?: Record<string, unknown>;
   initializeMaps?: boolean;
   mapUpdateToken?: string;
   partiesPath?: string;
   tiledBasePaths?: string[];
+  /** Room persistence provider. Memory is used when omitted. */
+  storage?: NodeRoomStorageFactory | NodeRoomStorageProvider;
 }
 
 export interface HandleNodeRequestOptions {
@@ -58,4 +63,9 @@ export interface HandleNodeRequestOptions {
 export interface SendMapUpdateOptions {
   headers?: HeadersInit | IncomingHttpHeaders | Map<string, string | undefined>;
   host?: string;
+}
+
+export interface PublishMapOptions extends SendMapUpdateOptions {
+  /** Base URL of the trusted RPGJS server, for example `http://127.0.0.1:8787`. */
+  target: string;
 }

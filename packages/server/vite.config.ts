@@ -28,7 +28,8 @@ export default defineConfig({
     lib: {
       entry: {
         index: 'src/index.ts',
-        'node/index': 'src/node/index.ts'
+        'node/index': 'src/node/index.ts',
+        'cloudflare/index': 'src/cloudflare/index.ts'
       },
       formats: ['es'],
       fileName: (format, entryName) => `${entryName}.js`
@@ -36,7 +37,8 @@ export default defineConfig({
     rollupOptions: {
       external: [
         ...nodeBuiltins,
-        /^node:/
+        /^node:/,
+        '@signe/room/cloudflare'
       ]
     }
   },

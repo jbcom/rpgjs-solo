@@ -2,6 +2,15 @@ import { createRpgServerTransport, logNetworkSimulationStatus } from "@rpgjs/ser
 import type { RpgTransportServerConstructor, RpgWebSocketServer } from "@rpgjs/server/node";
 import type { ViteDevServer } from "vite";
 
+export interface RpgjsDevServerOptions {
+  /** Remote Node or Wrangler origin. When omitted, Vite hosts the Node transport. */
+  target?: string;
+  /** Map ids published to the remote administration endpoint. */
+  mapIds?: string[];
+  mapUpdateToken?: string;
+  tiledBasePaths?: string[];
+}
+
 async function importWebSocketServer(): Promise<any> {
   if (typeof process === "undefined" || !process.versions?.node) {
     console.warn("Not in Node.js environment, WebSocket server not available");
@@ -19,14 +28,77 @@ async function importWebSocketServer(): Promise<any> {
   }
 }
 
-export function serverPlugin(serverModule: RpgTransportServerConstructor) {
+export function serverPlugin(
+  serverModule: RpgTransportServerConstructor,
+  options: RpgjsDevServerOptions = {},
+) {
   let wsServer: RpgWebSocketServer | null = null;
-  const transport = createRpgServerTransport(serverModule);
+  const isRemote = Boolean(options.target);
+  const transport = createRpgServerTransport(serverModule, {
+    initializeMaps: !isRemote,
+    mapUpdateToken: options.mapUpdateToken,
+    tiledBasePaths: options.tiledBasePaths,
+  });
+  let publishTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const publishMaps = async () => {
+    if (!options.target) return;
+    await Promise.all((options.mapIds ?? []).map(async (mapId) => {
+      const response = await transport.publishMap(mapId, { target: options.target! });
+      if (!response.ok) {
+        throw new Error(`Unable to publish map ${mapId}: ${response.status} ${await response.text()}`);
+      }
+    }));
+  };
+
+  const publishMapsWithRetry = async (attempts = 20, delayMs = 250): Promise<void> => {
+    try {
+      await publishMaps();
+    } catch (error) {
+      if (attempts <= 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await publishMapsWithRetry(attempts - 1, delayMs);
+    }
+  };
 
   return {
     name: "server-plugin",
 
+    config() {
+      if (!options.target) return;
+      return {
+        server: {
+          proxy: {
+            "/parties": {
+              target: options.target,
+              ws: true,
+              changeOrigin: true,
+            },
+          },
+        },
+      };
+    },
+
     async configureServer(server: ViteDevServer) {
+      if (isRemote) {
+        server.httpServer?.once("listening", () => {
+          void publishMapsWithRetry()
+            .catch((error) => console.error("[RPGJS] Map publication failed:", error));
+        });
+        server.watcher.on("change", (file) => {
+          const normalizedFile = file.replaceAll("\\", "/");
+          if (/(?:^|\/)(?:\.git|\.wrangler|dist|node_modules)(?:\/|$)/.test(normalizedFile)) {
+            return;
+          }
+          if (publishTimer) clearTimeout(publishTimer);
+          publishTimer = setTimeout(() => {
+            void publishMapsWithRetry(5)
+              .catch((error) => console.error("[RPGJS] Map republication failed:", error));
+          }, 100);
+        });
+        return;
+      }
+
       try {
         const WebSocketServerClass = await importWebSocketServer();
         if (WebSocketServerClass) {
@@ -65,6 +137,7 @@ export function serverPlugin(serverModule: RpgTransportServerConstructor) {
     },
 
     buildEnd() {
+      if (publishTimer) clearTimeout(publishTimer);
       if (wsServer) {
         wsServer.close();
       }

@@ -18,7 +18,9 @@ Use it when you want to mount the server in your own Node stack:
 
 ## Dev vs production
 
-In development with `@rpgjs/vite`, map rooms are initialized automatically by the Vite plugin.
+In development with `@rpgjs/vite`, Vite acts as a trusted map publisher. It
+builds the map payload and calls the same administration endpoint used by an
+editor or deployment pipeline. Gameplay clients never publish map definitions.
 
 In production, map updates must come from a trusted backend source. To protect `/map/update`, set `RPGJS_MAP_UPDATE_TOKEN`.
 
@@ -34,7 +36,10 @@ When this environment variable is set:
 import http from "node:http"
 import express from "express"
 import { WebSocketServer } from "ws"
-import { createRpgServerTransport } from "@rpgjs/server/node"
+import {
+  createRpgServerTransport,
+  createSqliteNodeRoomStorage,
+} from "@rpgjs/server/node"
 import ServerModule from "./server"
 
 const app = express()
@@ -44,6 +49,9 @@ const wsServer = new WebSocketServer({ noServer: true })
 const transport = createRpgServerTransport(ServerModule, {
   initializeMaps: false,
   mapUpdateToken: process.env.RPGJS_MAP_UPDATE_TOKEN,
+  storage: createSqliteNodeRoomStorage({
+    databasePath: "./data/rooms.sqlite",
+  }),
 })
 
 app.use("/parties", (req, res, next) => {
@@ -115,6 +123,11 @@ You can also send the token as:
 3. Keep `initializeMaps: false` in production.
 4. From a trusted backend source, call `transport.updateMap()` or `POST /parties/main/map-<id>/map/update`.
 5. Let gameplay clients use only normal movement and game actions.
+
+The memory storage remains the default for tests and short-lived development
+servers. Configure SQLite for a production process so synchronized room state
+and sessions survive a restart. This Node adapter deliberately targets one
+process; horizontal coordination is a separate World/Shard deployment concern.
 
 ## WebSocket session ids
 

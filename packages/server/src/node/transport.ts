@@ -10,7 +10,7 @@ import {
 import { context as serverContext } from "../core/context";
 import { setInject } from "../core/inject";
 import { provideServerModules } from "../module";
-import { createMapUpdateHeaders, resolveMapUpdateToken, updateMap } from "./map";
+import { createMapUpdateHeaders, createMapUpdatePayload, MAP_UPDATE_TOKEN_ENV, resolveMapUpdateToken, updateMap } from "./map";
 import type {
   CreateRpgServerTransportOptions,
   HandleNodeRequestOptions,
@@ -21,6 +21,7 @@ import type {
   RpgWebSocketRequestLike,
   RpgWebSocketServer,
   SendMapUpdateOptions,
+  PublishMapOptions,
 } from "./types";
 
 function normalizePathPrefix(path: string, fallback: string): string {
@@ -245,7 +246,11 @@ export class RpgServerTransport {
 
     this.transport = createNodeRoomTransport(RpgNodeServer as any, {
       partiesPath: this.partiesPath,
-      storage: createMemoryNodeRoomStorage(),
+      env: {
+        ...(options.env ?? {}),
+        ...(this.mapUpdateToken ? { [MAP_UPDATE_TOKEN_ENV]: this.mapUpdateToken } : {}),
+      },
+      storage: options.storage ?? createMemoryNodeRoomStorage(),
     });
   }
 
@@ -325,6 +330,23 @@ export class RpgServerTransport {
       ),
       options.host ?? this.lastKnownHost,
     );
+  }
+
+  /** Build and publish a trusted map payload to another RPGJS runtime. */
+  async publishMap(mapId: string, options: PublishMapOptions): Promise<Response> {
+    const roomId = mapId.startsWith("map-") ? mapId : `map-${mapId}`;
+    const { rpgServer } = await this.ensureRoomAndServer(roomId, options.host);
+    const payload = await createMapUpdatePayload(roomId, rpgServer, {
+      host: options.host ?? this.lastKnownHost,
+      mapUpdateToken: this.mapUpdateToken,
+      tiledBasePaths: this.tiledBasePaths,
+    });
+    const target = options.target.replace(/\/+$/, "");
+    return fetch(`${target}${this.partiesPath}/${roomId}/map/update`, {
+      method: "POST",
+      headers: createMapUpdateHeaders(this.mapUpdateToken, options.headers),
+      body: JSON.stringify(payload),
+    });
   }
 
   async handleNodeRequest(

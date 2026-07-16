@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 import { createServer, provideServerModules } from "../src";
 import { RpgServerEngine } from "../src/RpgServerEngine";
 import {
   MAP_UPDATE_TOKEN_ENV,
   PartyConnection,
+  createMapUpdatePayload,
   createRpgServerTransport,
 } from "../src/node";
 
@@ -422,6 +424,29 @@ describe("createRpgServerTransport", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
+  });
+
+  it("builds a publishable map payload from a local Tiled base path", async () => {
+    const tiledBasePath = resolve(process.cwd(), "../../samples/cloudflare-mmorpg/src/tiled");
+    const payload = await createMapUpdatePayload(
+      "map-demo",
+      { maps: [] } as any,
+      { tiledBasePaths: [tiledBasePath] },
+    );
+
+    expect(payload).toMatchObject({
+      id: "demo",
+      width: 320,
+      height: 320,
+      events: [],
+      parsedMap: {
+        width: 10,
+        height: 10,
+        tilewidth: 32,
+        tileheight: 32,
+      },
+    });
+    expect(payload.data).toContain("<map");
   });
 
   it("exposes public room information and global config for the current map room", async () => {
