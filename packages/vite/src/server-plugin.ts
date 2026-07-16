@@ -11,6 +11,15 @@ export interface RpgjsDevServerOptions {
   tiledBasePaths?: string[];
 }
 
+class MapPublicationError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+  ) {
+    super(message);
+  }
+}
+
 async function importWebSocketServer(): Promise<any> {
   if (typeof process === "undefined" || !process.versions?.node) {
     console.warn("Not in Node.js environment, WebSocket server not available");
@@ -46,7 +55,13 @@ export function serverPlugin(
     await Promise.all((options.mapIds ?? []).map(async (mapId) => {
       const response = await transport.publishMap(mapId, { target: options.target! });
       if (!response.ok) {
-        throw new Error(`Unable to publish map ${mapId}: ${response.status} ${await response.text()}`);
+        const retryable = response.status === 408
+          || response.status === 429
+          || response.status >= 500;
+        throw new MapPublicationError(
+          `Unable to publish map ${mapId}: ${response.status} ${await response.text()}`,
+          retryable,
+        );
       }
     }));
   };
@@ -55,7 +70,9 @@ export function serverPlugin(
     try {
       await publishMaps();
     } catch (error) {
-      if (attempts <= 1) throw error;
+      if (attempts <= 1 || (error instanceof MapPublicationError && !error.retryable)) {
+        throw error;
+      }
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       await publishMapsWithRetry(attempts - 1, delayMs);
     }

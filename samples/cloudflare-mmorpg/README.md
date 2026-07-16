@@ -11,6 +11,10 @@ pnpm install
 pnpm dev
 ```
 
+The value of `RPGJS_MAP_UPDATE_TOKEN` must be strictly identical in
+`.env.local` (Vite publisher) and `.dev.vars` (Wrangler Worker). A mismatch is
+rejected with `401 Unauthorized`.
+
 Vite serves the client on `http://localhost:5173` and proxies `/parties` to
 Wrangler on `http://127.0.0.1:8787`.
 
