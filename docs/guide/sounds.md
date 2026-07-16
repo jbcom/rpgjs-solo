@@ -252,13 +252,12 @@ provideServerModules([
 ])
 ```
 
-### Using defineModule (Alternative)
+### Using defineModule
 
 You can also use `defineModule` to define your server configuration separately:
 
 ```typescript
-import { defineModule, type RpgServer } from '@rpgjs/common';
-import { provideServerModules } from '@rpgjs/server';
+import { defineModule, provideServerModules, type RpgServer } from '@rpgjs/server';
 
 // Define your server module
 const serverModule = defineModule<RpgServer>({
@@ -789,4 +788,3 @@ const player: RpgPlayerHooks = {
 - [Spritesheets Guide](/guide/spritesheets) - Learn about dynamic spritesheet resolution (similar pattern)
 - [Display Animations Guide](/guide/display-animations) - Combine sounds with visual effects
 - [Dialog Box Guide](/gui/dialog-box) - Using sounds in dialog boxes
-

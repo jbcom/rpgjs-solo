@@ -1,7 +1,7 @@
 import { createServer, Move, provideServerModules, RpgMap, RpgPlayer, DialogPosition, RpgShape, Components, MAXHP, RpgEvent, EventData, MapData, Frequency, ATK, PDEF, LocalStorageSaveStorageStrategy, provideAutoSave, RpgServerEngine, EventDefinition } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 import { Item } from '@rpgjs/database'
-import { provideMain } from "./modules/main";
+import mainServerModule from "./modules/server";
 import { Direction } from "@rpgjs/common";
 import {
   ACTION_BATTLE_HIT_FX_COMPONENT_ID,
@@ -419,7 +419,6 @@ export function AiTreeElite(
 export default createServer({
   providers: [
   //  provideTiledMap(),
-    provideMain(),
     provideActionBattle({
       combat: {
         pvp: true,
@@ -501,6 +500,7 @@ export default createServer({
     }),
 
     provideServerModules([
+      mainServerModule,
       {
         // Register weapons and armor in database
         database: async () => {

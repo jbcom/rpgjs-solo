@@ -87,12 +87,12 @@ It should not:
 Example:
 
 ```ts
-import { createServer } from "@rpgjs/server"
-import { provideMain } from "./modules/main"
+import { createServer, provideServerModules } from "@rpgjs/server"
+import mainServerModule from "./modules/server"
 
 export default createServer({
   providers: [
-    provideMain(),
+    provideServerModules([mainServerModule]),
   ],
 })
 ```
@@ -167,9 +167,21 @@ dist/
 
 Meaning of each output:
 
-- `dist/client`: browser assets
+- `dist/client`: browser assets containing client and explicitly shared modules
 - `dist/server/server.js`: built version of your agnostic `src/server.ts`
 - `dist/server/express.js`: built version of your Express adapter
+
+The MMORPG client build does not include modules imported only by
+`src/server.ts`. Conversely, client-only modules and components are not part of
+the server entry. Files imported by both entry graphs are shared code and may be
+present in both outputs.
+
+<Warning>
+Do not import a server module, a server adapter, or a combined module index from
+the client entry graph. Any file reachable from browser code can be included in
+`dist/client`. Keep secrets in the deployment environment, never in source code
+that a browser build can reach.
+</Warning>
 
 Start the built Express server with:
 

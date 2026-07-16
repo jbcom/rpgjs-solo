@@ -35,58 +35,28 @@ interface VueGuiProviderOptions {
  * @example
  * ```typescript
  * import { provideVueGui } from '@rpgjs/vue'
- * import { createModule } from '@rpgjs/common'
  * 
- * // Basic usage with automatic element creation
- * export function provideVueUIModule() {
- *   return createModule("VueUI", [
+ * export default {
+ *   providers: [
  *     provideVueGui({
  *       selector: '#vue-gui-container',
  *       createIfNotFound: true
  *     })
- *   ])
- * }
- * 
- * // Advanced usage with custom mount element
- * export function provideCustomVueUI() {
- *   return createModule("CustomVueUI", [
- *     provideVueGui({
- *       mountElement: document.getElementById('my-ui-overlay'),
- *       createIfNotFound: false
- *     })
- *   ])
- * }
- * 
- * // Usage with CSS selector
- * export function provideModalVueUI() {
- *   return createModule("ModalVueUI", [
- *     provideVueGui({
- *       selector: '.modal-overlay',
- *       createIfNotFound: true
- *     })
- *   ])
+ *   ]
  * }
  * ```
  * 
  * **Integration in your client:**
  * ```typescript
- * import { RpgClient } from '@rpgjs/client'
  * import { provideVueGui } from '@rpgjs/vue'
  * 
- * @RpgClient({
+ * export default {
  *   providers: [
  *     provideVueGui({
  *       selector: '#vue-gui-overlay'
  *     })
- *   ],
- *   gui: [
- *     // Vue components will be automatically handled by VueGui
- *     InventoryVueComponent,
- *     // CanvasEngine components continue to work normally
- *     DialogCanvasComponent
  *   ]
- * })
- * export class MyRpgClient {}
+ * }
  * ```
  * 
  * **Available injections in Vue components:**
