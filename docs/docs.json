@@ -107,7 +107,9 @@
           {
             "group": "Advanced",
             "pages": [
+              "philosophy",
               "roadmap",
+              "migration/v4-to-v5",
               "advanced/mmorpg-entries",
               "advanced/node-server-production",
               "advanced/latency-simulation",
