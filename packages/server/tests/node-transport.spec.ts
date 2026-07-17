@@ -436,17 +436,24 @@ describe("createRpgServerTransport", () => {
 
     expect(payload).toMatchObject({
       id: "demo",
-      width: 320,
-      height: 320,
+      width: 800,
+      height: 640,
       events: [],
       parsedMap: {
-        width: 10,
-        height: 10,
+        width: 25,
+        height: 20,
         tilewidth: 32,
         tileheight: 32,
       },
     });
     expect(payload.data).toContain("<map");
+    expect(payload.parsedMap.tilesets).toHaveLength(4);
+    expect(payload.parsedMap.tilesets[0]).toMatchObject({
+      source: "[Base]BaseChip_pipo.tsx",
+      image: {
+        source: "[Base]BaseChip_pipo.png",
+      },
+    });
   });
 
   it("exposes public room information and global config for the current map room", async () => {

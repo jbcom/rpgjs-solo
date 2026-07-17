@@ -110,6 +110,15 @@ async function readTextByFilePath(pathLike: string): Promise<string | null> {
   return null;
 }
 
+async function readTextNextToFile(filePath: string, relativePath: string): Promise<string | null> {
+  try {
+    const { dirname, resolve } = await import("node:path");
+    return await readTextByFilePath(resolve(dirname(filePath), relativePath));
+  } catch {
+    return null;
+  }
+}
+
 function getTiledBasePaths(paths?: string[]): string[] {
   const values = [
     ...(paths || []),
@@ -127,7 +136,7 @@ async function resolveMapDocument(
   mapId: string,
   mapDefinition: any,
   options: ResolveMapOptions,
-): Promise<{ xml: string; sourceUrl?: string }> {
+): Promise<{ xml: string; sourceUrl?: string; sourcePath?: string }> {
   if (typeof mapDefinition?.data === "string" && mapDefinition.data.includes("<map")) {
     return { xml: mapDefinition.data };
   }
@@ -152,7 +161,7 @@ async function resolveMapDocument(
     }
     const xmlFromFile = await readTextByFilePath(file);
     if (xmlFromFile) {
-      return { xml: xmlFromFile };
+      return { xml: xmlFromFile, sourcePath: file };
     }
   }
 
@@ -160,7 +169,7 @@ async function resolveMapDocument(
     const candidatePath = `${basePath.replace(/\/+$/, "")}/${mapId}.tmx`;
     const xml = await readTextByFilePath(candidatePath);
     if (xml) {
-      return { xml };
+      return { xml, sourcePath: candidatePath };
     }
   }
 
@@ -226,7 +235,9 @@ export async function enrichMapWithParsedTiledData(payload: any, options: Resolv
 
       const tilesetRaw = tilesetUrl
         ? await fetchTextByUrl(tilesetUrl)
-        : await readTextByFilePath(tileset.source);
+        : mapDoc.sourcePath
+          ? await readTextNextToFile(mapDoc.sourcePath, tileset.source)
+          : await readTextByFilePath(tileset.source);
 
       if (!tilesetRaw) {
         mergedTilesets.push(tileset);

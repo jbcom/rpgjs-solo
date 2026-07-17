@@ -1994,6 +1994,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this._eventOwnerById.clear();
     this._scenarioEventIdsByPlayer.clear();
 
+    for (const eventId of Object.keys(this.events())) {
+      this.removeEvent(eventId);
+    }
+
     this.loadPhysic()
 
     for (let event of map.events ?? []) {
@@ -2007,6 +2011,12 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
 
     for (const player of this.getPlayers()) {
+      const graphics = [...player.graphics()];
+      if (graphics.length > 0) {
+        // A client reloads its Tiled scene when map data changes. Re-emit the
+        // current graphic so its player sprite is restored in that new scene.
+        player.setGraphic(graphics);
+      }
       await this.spawnScenarioEventsForPlayer(player);
     }
 
@@ -2679,9 +2689,16 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
 
     await eventInstance.teleport({ x, y });
-    await eventInstance.execMethod('onInit');
-
     this.events()[id] = eventInstance;
+    try {
+      // Register the event before onInit so changes to nested synchronized
+      // values (notably graphics) are observed by every transport runtime.
+      await eventInstance.execMethod('onInit');
+    }
+    catch (error) {
+      this.removeEvent(id);
+      throw error;
+    }
     if (hitbox) {
       eventInstance.setHitbox(hitbox.width, hitbox.height);
     }

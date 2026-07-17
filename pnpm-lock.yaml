@@ -218,7 +218,7 @@ importers:
         version: 3.1.0
       '@signe/room':
         specifier: 3.1.0
-        version: link:../../../signe/packages/room
+        version: 3.1.0(react@19.2.7)
       '@signe/sync':
         specifier: 3.1.0
         version: 3.1.0(react@19.2.7)
