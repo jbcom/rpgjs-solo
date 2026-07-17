@@ -22,6 +22,10 @@ startGame({
         ],
       },
     ]),
-    provideMmorpg({ connectionIdScope: "session" }),
+    provideMmorpg({
+      connectionIdScope: "session",
+      connectionAcceptanceTimeoutMs: 30_000,
+      socketOptions: { connectionTimeout: 30_000 },
+    }),
   ],
 });

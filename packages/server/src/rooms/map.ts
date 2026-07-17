@@ -28,7 +28,7 @@ import {
   type WorldMapConfig,
 } from "@rpgjs/common";
 import { RpgPlayer, RpgEvent } from "../Player/Player";
-import { generateShortUUID, sync, type, users } from "@signe/sync";
+import { createStatesSnapshotDeep, generateShortUUID, sync, type, users } from "@signe/sync";
 import { signal, type WritableSignal } from "@signe/reactive";
 import { inject } from "@signe/di";
 import { context } from "../core/context";;
@@ -45,6 +45,12 @@ import { Log } from "../logs/log";
 import { createMapUpdateHeaders, isMapUpdateAuthorized, MAP_UPDATE_TOKEN_ENV, MAP_UPDATE_TOKEN_HEADER } from "../map-update";
 import { RpgMapProjectiles } from "../projectiles";
 import type { DamageFormulas } from "../Player/BattleManager";
+import {
+  filterMapStreamingProjectilePacket,
+  isMapStreamingPositionVisible,
+  refreshMapStreaming,
+  removeMapStreamingPlayer,
+} from "../map-streaming";
 
 const DEFAULT_DASH_COOLDOWN_MS = 450;
 const GROUND_TOUCH_SENSOR_COVERAGE_THRESHOLD = 0.8;
@@ -321,6 +327,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   private _clientListeners = new Map<string, Set<(player: RpgPlayer, data: unknown) => void | Promise<void>>>();
   private activeTouchCollisions = new Set<string>();
   private trackedTouchCollisions = new Map<string, TrackedTouchCollision>();
+  private spatialVisibleEventIds = new Map<string, Set<string>>();
+  private spatialVisiblePlayerIds = new Map<string, Set<string>>();
 
   /** 
    * Synchronized signal containing all players currently on the map
@@ -537,6 +545,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         this.refreshTrackedTouchCollisions();
         hooks?.afterStep?.(tick);
         this.projectiles.step(fixedStep);
+        refreshMapStreaming(this);
       },
     });
   }
@@ -555,6 +564,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
         this.refreshTrackedTouchCollisions();
         await hooks?.afterStep?.(tick);
         this.projectiles.step(fixedStep);
+        refreshMapStreaming(this);
       },
     });
   }
@@ -1312,6 +1322,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     if (!player) {
       return null
     }
+    packet = filterMapStreamingProjectilePacket(this, player, packet);
+    if (!packet) return null;
+    packetValue = packet?.value;
 
     // Add timestamp to sync packets for client-side prediction reconciliation
     if (packet && typeof packet === 'object') {
@@ -1340,18 +1353,53 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       }
     }
 
-    if (packetValue && typeof packetValue === "object" && packetValue.events && typeof packetValue.events === "object") {
-      const eventEntries = Object.entries(packetValue.events);
-      const filteredEntries = eventEntries.filter(([eventId]) => this.isEventVisibleForPlayer(eventId, player));
-      if (filteredEntries.length !== eventEntries.length) {
-        packetValue = { ...packetValue };
-        if (filteredEntries.length === 0) {
-          delete (packetValue as any).events;
-        }
-        else {
-          (packetValue as any).events = Object.fromEntries(filteredEntries);
+    if (packet?.type === "sync" && packetValue && typeof packetValue === "object") {
+      packetValue = { ...packetValue };
+      const visibleEvents = new Set(
+        Object.entries(this.events())
+          .filter(([eventId, event]: [string, any]) => this.isEventVisibleForPlayer(eventId, player)
+            && isMapStreamingPositionVisible(this, player, event.x(), event.y()))
+          .map(([eventId]) => eventId),
+      );
+      const previousEvents = this.spatialVisibleEventIds.get(player.id) ?? new Set<string>();
+      const eventChanges: Record<string, unknown> = {};
+      for (const [eventId, value] of Object.entries(packetValue.events ?? {})) {
+        if (visibleEvents.has(eventId)) eventChanges[eventId] = value;
+      }
+      for (const eventId of visibleEvents) {
+        if (!previousEvents.has(eventId)) {
+          eventChanges[eventId] = createStatesSnapshotDeep(this.events()[eventId]);
         }
       }
+      for (const eventId of previousEvents) {
+        if (!visibleEvents.has(eventId)) eventChanges[eventId] = "$delete";
+      }
+      if (Object.keys(eventChanges).length > 0) packetValue.events = eventChanges;
+      else delete packetValue.events;
+      this.spatialVisibleEventIds.set(player.id, visibleEvents);
+
+      const visiblePlayers = new Set(
+        Object.entries(this.players())
+          .filter(([otherId, other]: [string, any]) => otherId === player.id
+            || isMapStreamingPositionVisible(this, player, other.x(), other.y()))
+          .map(([otherId]) => otherId),
+      );
+      const previousPlayers = this.spatialVisiblePlayerIds.get(player.id) ?? new Set<string>();
+      const playerChanges: Record<string, unknown> = {};
+      for (const [otherId, value] of Object.entries(packetValue.players ?? {})) {
+        if (visiblePlayers.has(otherId)) playerChanges[otherId] = value;
+      }
+      for (const otherId of visiblePlayers) {
+        if (!previousPlayers.has(otherId)) {
+          playerChanges[otherId] = createStatesSnapshotDeep(this.players()[otherId]);
+        }
+      }
+      for (const otherId of previousPlayers) {
+        if (!visiblePlayers.has(otherId)) playerChanges[otherId] = "$delete";
+      }
+      if (Object.keys(playerChanges).length > 0) packetValue.players = playerChanges;
+      else delete packetValue.players;
+      this.spatialVisiblePlayerIds.set(player.id, visiblePlayers);
     }
 
     if (typeof packet.value == 'string') {
@@ -1506,6 +1554,9 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   async onLeave(player: RpgPlayer, conn: Parameters<RoomMethods["$send"]>[0]) {
+    removeMapStreamingPlayer(this, player);
+    this.spatialVisibleEventIds.delete(player.id);
+    this.spatialVisiblePlayerIds.delete(player.id);
     // Execute global map hooks (from RpgServer.map)
     await lastValueFrom(this.hooks.callHooks("server-map-onLeave", player, this));
 
@@ -1993,6 +2044,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     this._eventModeById.clear();
     this._eventOwnerById.clear();
     this._scenarioEventIdsByPlayer.clear();
+    this.spatialVisibleEventIds.clear();
+    this.spatialVisiblePlayerIds.clear();
 
     for (const eventId of Object.keys(this.events())) {
       this.removeEvent(eventId);

@@ -13,9 +13,11 @@ Reference for the `RpgMap` class.
 - [applySyncToClient](#applysynctoclient)
 - [broadcast](#broadcast)
 - [clear](#clear)
+- [Clear streamed static hitboxes](#clear-streamed-static-hitboxes)
 - [clearLighting](#clearlighting)
 - [clearPhysic](#clearphysic)
 - [clearWeather](#clearweather)
+- [clientVisual](#clientvisual)
 - [createDynamicEvent](#createdynamicevent)
 - [createDynamicWorldMaps](#createdynamicworldmaps)
 - [createMovingHitbox](#createmovinghitbox)
@@ -57,6 +59,7 @@ Reference for the `RpgMap` class.
 - [onInput](#oninput)
 - [onJoin](#onjoin)
 - [onLeave](#onleave)
+- [onRestore](#onrestore)
 - [patchLighting](#patchlighting)
 - [patchWeather](#patchweather)
 - [players](#players)
@@ -64,10 +67,12 @@ Reference for the `RpgMap` class.
 - [processInput](#processinput)
 - [queryArea](#queryarea)
 - [queryHitbox](#queryhitbox)
+- [refreshCharacterHitboxes](#refreshcharacterhitboxes)
 - [removeEvent](#removeevent)
 - [removeFromWorldMaps](#removefromworldmaps)
 - [removeInDatabase](#removeindatabase)
 - [removeShape](#removeshape)
+- [Replace streamed static hitboxes](#replace-streamed-static-hitboxes)
 - [setAutoTick](#setautotick)
 - [setBodyPosition](#setbodyposition)
 - [setDay](#setday)
@@ -176,7 +181,7 @@ map.broadcast(type, value)
 ### Parameters
 
 - `type`: `string`
-- `value?`: `any`
+- `value?`: `T`
 
 ### Examples
 
@@ -228,6 +233,25 @@ afterEach(() => {
   map.clear();
 });
 ```
+
+## Clear streamed static hitboxes
+
+Remove prediction collision geometry previously registered for a map chunk.
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Member of: `RpgCommonMap`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+map.clearStreamedStaticHitboxes
+```
+
+### Parameters
+
+- `namespace`: `string`
 
 ## clearLighting
 
@@ -299,6 +323,44 @@ clearWeather(options?: WeatherSetOptions): void
 ### Parameters
 
 - `options?`: `WeatherSetOptions`
+
+## clientVisual
+
+Trigger a named client visual for all players on the map.
+
+Client visuals are registered in the client module with `clientVisuals`.
+They are client-side macros for grouping existing visual primitives such as
+flash, sound, component animations, sprite animations, or camera shake.
+The map broadcasts one compact packet containing the visual name and a
+serializable payload; each client resolves and renders the visual locally.
+
+Prefer direct APIs such as `playSound()`, `showComponentAnimation()`, or
+`flash()` for a single visual operation. Use `clientVisual()` when one
+gameplay moment should trigger several client-side visuals together.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+clientVisual(name: string, data?: TData): void
+```
+
+### Parameters
+
+- `name`: `string`
+- `data?`: `TData`
+
+### Examples
+
+```ts
+map.clientVisual("explosion", {
+  position: { x: 320, y: 180 },
+  power: 2,
+});
+```
 
 ## createDynamicEvent
 
@@ -549,7 +611,7 @@ with custom formulas when the map is loaded.
 ### Signature
 
 ```ts
-damageFormulas: any
+damageFormulas: DamageFormulas
 ```
 
 ## database
@@ -1161,13 +1223,13 @@ It removes the GUI from the player's active GUIs.
 ### Signature
 
 ```ts
-guiExit(player: RpgPlayer, { guiId, data })
+guiExit(player: RpgPlayer, { guiId, data, guiOpenId })
 ```
 
 ### Parameters
 
 - `player`: `RpgPlayer`
-- `{ guiId, data }`
+- `{ guiId, data, guiOpenId }`
 
 ### Examples
 
@@ -1457,7 +1519,7 @@ map.on(type, cb)
 ### Parameters
 
 - `type`: `string`
-- `cb`: `(player: RpgPlayer, data: any) => void | Promise<void>`
+- `cb`: `(player: RpgPlayer, data: T) => void | Promise<void>`
 
 ### Examples
 
@@ -1487,13 +1549,13 @@ It checks for collisions with events and triggers the appropriate hooks.
 ### Signature
 
 ```ts
-onAction(player: RpgPlayer, action: any)
+onAction(player: RpgPlayer, action: RpgActionInput<unknown>): void
 ```
 
 ### Parameters
 
 - `player`: `RpgPlayer`
-- `action`: `any`
+- `action`: `RpgActionInput<unknown>`
 
 ### Examples
 
@@ -1598,6 +1660,20 @@ onLeave(player: RpgPlayer, conn: Parameters<RoomMethods["$send"]>[0])
 server.addHook('server-player-onLeaveMap', (player, map) => {
 console.log(`Player ${player.id} left map ${map.id}`);
 });
+```
+
+## onRestore
+
+Rebuild non-serializable map resources after a room restart or hibernation.
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `method`
+- Defined in: `RpgMap`
+
+### Signature
+
+```ts
+onRestore()
 ```
 
 ## patchLighting
@@ -1743,7 +1819,7 @@ the physics engine. Physics simulation is handled centrally by the game loop
 ```ts
 processInput(playerId: string, controls?: Controls): Promise<{
     player: RpgPlayer,
-    inputs: string[]
+    inputs: any[]
   }>
 ```
 
@@ -1754,7 +1830,7 @@ processInput(playerId: string, controls?: Controls): Promise<{
 
 ### Returns
 
-Promise containing the player and processed input strings
+Promise containing the player and processed movement inputs
 
 ### Examples
 
@@ -1811,8 +1887,8 @@ Each hit includes `target`, `id`, `kind`, `x`, `y`, `bounds`, `distance`,
 `distanceRatio`, and `falloff`.
 
 `distanceRatio` is clamped between `0` and `1`. `falloff.linear()` returns
-strong values near the center and weaker values near the edge, which is useful
-for explosions and other radial effects.
+strong values near the center and weaker values near the edge, which is
+useful for explosions and other radial effects.
 
 - Source: `packages/common/src/rooms/Map.ts`
 - Kind: `method`
@@ -1908,6 +1984,18 @@ queryHitbox(rect: MapHitboxQueryRect, options?: MapHitboxQueryOptions): Array<T 
 
 - `rect`: `MapHitboxQueryRect`
 - `options?`: `MapHitboxQueryOptions`
+
+## refreshCharacterHitboxes
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+refreshCharacterHitboxes(): void
+```
 
 ## removeEvent
 
@@ -2050,13 +2138,36 @@ const shape = map.createShape({
 map.removeShape("temp-zone");
 ```
 
+## Replace streamed static hitboxes
+
+Replace the client-prediction collision geometry owned by one streamed map chunk.
+
+The authoritative server still owns collision results. This method only keeps
+the predicting client aligned with chunks that the server has disclosed.
+
+- Source: `packages/common/src/rooms/Map.ts`
+- Kind: `method`
+- Member of: `RpgCommonMap`
+- Defined in: `RpgCommonMap`
+
+### Signature
+
+```ts
+map.replaceStreamedStaticHitboxes
+```
+
+### Parameters
+
+- `namespace`: `string`
+- `hitboxes`: `MapChunkHitbox[]`
+
 ## setAutoTick
 
-Enable or disable automatic tick processing
+Enable or disable automatic server tick processing
 
-When disabled, the input processing loop will not run automatically.
-This is useful for unit tests where you want manual control over when
-inputs are processed.
+When disabled, the unified input/physics/projectile loop will not run
+automatically. This is useful for unit tests where you want manual control
+over server ticks.
 
 - Source: `packages/server/src/rooms/map.ts`
 - Kind: `method`
@@ -2079,7 +2190,7 @@ setAutoTick(enabled: boolean): void
 map.setAutoTick(false);
 
 // Manually trigger tick processing
-await map.processInput('player1');
+await map.nextTickAsync();
 ```
 
 ## setBodyPosition
@@ -2479,9 +2590,9 @@ map.stopSound("battle-theme");
 
 Observable representing the game loop tick
 
-This observable emits the current timestamp every 16ms (approximately 60fps).
-It's shared using the share() operator, meaning that all subscribers will receive
-events from a single interval rather than creating multiple intervals.
+This observable emits elapsed time and the current epoch timestamp at roughly
+60fps. It is shared using the share() operator, meaning that all subscribers
+receive events from a single timer rather than creating multiple timers.
 
 ## Physics Loop Architecture
 

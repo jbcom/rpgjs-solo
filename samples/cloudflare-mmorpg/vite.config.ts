@@ -17,6 +17,9 @@ export default defineConfig(({ mode }) => {
         sourceFolder: "./src/tiled",
         publicPath: "/map",
         buildOutputPath: "map",
+        // The worker compiles TMX/TSX privately. Browsers receive only image
+        // assets plus the render/physics chunks sent by the room.
+        allowedExtensions: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"],
       }),
       ...rpgjs({
         server: serverModule,

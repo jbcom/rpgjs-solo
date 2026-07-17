@@ -4,6 +4,13 @@ This sample runs the browser client with Vite and the authoritative RPGJS
 server with Wrangler. Vite acts as a trusted development editor: it builds the
 `demo` map payload and publishes it to the Worker administration endpoint.
 
+The `map-demo` room is a Cloudflare Durable Object and remains authoritative for
+movement, collisions, NPCs, events, and projectiles. It keeps the complete TMX/TSX
+payload private. The browser receives only nearby tile/image references and static
+hitboxes, then adds or removes them as the authoritative player crosses chunks.
+The NPC uses the same interest stream and is sent with its complete `hero` graphic
+snapshot when it becomes visible.
+
 ```bash
 cp .env.example .env.local
 cp .dev.vars.example .dev.vars
@@ -17,6 +24,11 @@ rejected with `401 Unauthorized`.
 
 Vite serves the client on `http://localhost:5173` and proxies `/parties` to
 Wrangler on `http://127.0.0.1:8787`.
+
+Open the browser build output after `pnpm build`: `dist/client/map` contains image
+assets, but no `.tmx` or `.tsx`. The Worker bundle is the only runtime that reads
+the source map. The game server module itself is provider-neutral and can also be
+mounted by the RPGJS Node.js transport without changing gameplay code.
 
 In production, an editor, deployment pipeline, or trusted backend sends the
 same authenticated request:

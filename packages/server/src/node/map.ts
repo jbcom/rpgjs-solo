@@ -138,7 +138,11 @@ async function resolveMapDocument(
   options: ResolveMapOptions,
 ): Promise<{ xml: string; sourceUrl?: string; sourcePath?: string }> {
   if (typeof mapDefinition?.data === "string" && mapDefinition.data.includes("<map")) {
-    return { xml: mapDefinition.data };
+    const file = typeof mapDefinition?.file === "string" ? mapDefinition.file.trim() : "";
+    if (file && !file.includes("<map") && !/^https?:\/\//i.test(file)) {
+      return { xml: mapDefinition.data, sourcePath: file };
+    }
+    return { xml: mapDefinition.data, sourceUrl: /^https?:\/\//i.test(file) ? file : undefined };
   }
 
   if (typeof mapDefinition?.file === "string") {
@@ -218,26 +222,30 @@ export async function enrichMapWithParsedTiledData(payload: any, options: Resolv
         continue;
       }
 
-      let tilesetUrl: string | undefined;
+      let sourceTilesetUrl: string | undefined;
       if (mapDoc.sourceUrl) {
         try {
-          tilesetUrl = new URL(tileset.source, mapDoc.sourceUrl).toString();
+          sourceTilesetUrl = new URL(tileset.source, mapDoc.sourceUrl).toString();
         } catch {
-          tilesetUrl = undefined;
+          sourceTilesetUrl = undefined;
         }
-      } else if (options.host) {
+      }
+
+      let tilesetRaw = mapDoc.sourcePath
+        ? await readTextNextToFile(mapDoc.sourcePath, tileset.source)
+        : null;
+      if (!tilesetRaw && sourceTilesetUrl) {
+        tilesetRaw = await fetchTextByUrl(sourceTilesetUrl);
+      }
+      if (!tilesetRaw && options.host) {
         const prefix = toBasePathPrefix(getTiledBasePaths(options.tiledBasePaths)[0] || "map");
         const candidatePath = tileset.source.startsWith("/")
           ? tileset.source
           : `${prefix}/${tileset.source}`.replace(/\/{2,}/g, "/");
-        tilesetUrl = `http://${options.host}${candidatePath.startsWith("/") ? candidatePath : `/${candidatePath}`}`;
+        const hostedTilesetUrl = `http://${options.host}${candidatePath.startsWith("/") ? candidatePath : `/${candidatePath}`}`;
+        tilesetRaw = await fetchTextByUrl(hostedTilesetUrl);
       }
-
-      const tilesetRaw = tilesetUrl
-        ? await fetchTextByUrl(tilesetUrl)
-        : mapDoc.sourcePath
-          ? await readTextNextToFile(mapDoc.sourcePath, tileset.source)
-          : await readTextByFilePath(tileset.source);
+      tilesetRaw ??= await readTextByFilePath(tileset.source);
 
       if (!tilesetRaw) {
         mergedTilesets.push(tileset);

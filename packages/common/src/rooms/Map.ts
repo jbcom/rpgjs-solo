@@ -16,6 +16,7 @@ import { MovementManager } from "../movement";
 import { WorldMapsManager, type RpgWorldMaps } from "./WorldMaps";
 import { queryArea as queryMapArea } from "./area/query";
 import type { MapAreaHit, MapAreaQueryOptions } from "./area/types";
+import type { MapChunkHitbox } from "../map-streaming";
 
 export type PhysicsEntityKind = "hero" | "npc" | "generic";
 
@@ -98,6 +99,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
   eventsSubscription?: Subscription | null;
   private physicsAccumulatorMs = 0;
   private physicsSyncDepth = 0;
+  private streamedStaticHitboxIds = new Map<string, Set<string>>();
   protected maxFixedStepsPerTick = DEFAULT_MAX_FIXED_STEPS_PER_TICK;
   protected maxTickDeltaMs = DEFAULT_MAX_TICK_DELTA_MS;
 
@@ -335,6 +337,7 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
 
     // Clear all hitboxes and zones from physics system
     this.clearAll();
+    this.streamedStaticHitboxIds.clear();
 
     // Reset movement manager
     this.moveManager.clearAll();
@@ -1361,6 +1364,56 @@ export abstract class RpgCommonMap<T extends RpgCommonPlayer> {
     options: MapAreaQueryOptions<TCustom>
   ): Array<MapAreaHit<TCustom | T | any>> {
     return queryMapArea(this, options);
+  }
+
+  /**
+   * Replace the client-prediction collision geometry owned by one streamed map chunk.
+   *
+   * The authoritative server still owns collision results. This method only keeps
+   * the predicting client aligned with chunks that the server has disclosed.
+   *
+   * @title Replace streamed static hitboxes
+   * @method map.replaceStreamedStaticHitboxes
+   * @param namespace - Stable chunk key or provider namespace.
+   * @param hitboxes - Serializable rectangles or polygons for that chunk.
+   * @returns {void}
+   * @memberof RpgCommonMap
+   */
+  replaceStreamedStaticHitboxes(namespace: string, hitboxes: MapChunkHitbox[]): void {
+    this.clearStreamedStaticHitboxes(namespace);
+    const ids = new Set<string>();
+
+    hitboxes.forEach((hitbox, index) => {
+      const suffix = hitbox.id ?? String(index);
+      const id = `__map_stream__:${namespace}:${index}:${suffix}`;
+      if ("points" in hitbox) {
+        this.addStaticHitbox(id, hitbox.points);
+      }
+      else {
+        this.addStaticHitbox(id, hitbox.x, hitbox.y, hitbox.width, hitbox.height);
+      }
+      ids.add(id);
+    });
+
+    if (ids.size > 0) {
+      this.streamedStaticHitboxIds.set(namespace, ids);
+    }
+  }
+
+  /**
+   * Remove prediction collision geometry previously registered for a map chunk.
+   *
+   * @title Clear streamed static hitboxes
+   * @method map.clearStreamedStaticHitboxes
+   * @param namespace - Stable chunk key or provider namespace.
+   * @returns {void}
+   * @memberof RpgCommonMap
+   */
+  clearStreamedStaticHitboxes(namespace: string): void {
+    const ids = this.streamedStaticHitboxIds.get(namespace);
+    if (!ids) return;
+    ids.forEach((id) => this.removeHitbox(id));
+    this.streamedStaticHitboxIds.delete(namespace);
   }
 
   /**

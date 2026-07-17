@@ -19,6 +19,11 @@ export * from "./Gui";
 export * from "./services/save";
 export * from "./storage";
 export * from "./projectiles";
+export { provideServerMapStreaming } from "./map-streaming";
+export type {
+  ServerMapStreamingAdapter,
+  ServerMapStreamingOptions,
+} from "./map-streaming";
 export * from "./i18n";
 export { AreaShape, RpgShape, RpgModule, defineModule, MAXHP, MAXSP, ATK, PDEF, SDEF, STR, AGI, INT, DEX } from "@rpgjs/common";
 export type {

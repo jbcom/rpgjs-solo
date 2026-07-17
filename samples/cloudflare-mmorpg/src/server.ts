@@ -4,6 +4,7 @@ import {
   type EventDefinition,
   type RpgPlayer,
 } from "@rpgjs/server";
+import { provideTiledMap } from "@rpgjs/tiledmap/server";
 
 function TestNpc(): EventDefinition {
   return {
@@ -11,11 +12,22 @@ function TestNpc(): EventDefinition {
       this.name = "Cloudflare NPC";
       this.setGraphic("hero");
     },
+    onAction(player: RpgPlayer) {
+      player.showText('Hello')
+    }
   };
 }
 
 export default createServer({
   providers: [
+    ...provideTiledMap({
+      basePath: "/map",
+      streaming: {
+        chunkSize: 16,
+        loadRadius: 2,
+        retainRadius: 3,
+      },
+    }),
     provideServerModules([
       {
         player: {

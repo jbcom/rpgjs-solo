@@ -55,6 +55,8 @@ export default defineConfig({
       sourceFolder: "./src/tiled",
       publicPath: "/map",
       buildOutputPath: "assets/data",
+      // Keep authoritative Tiled sources out of the browser build.
+      allowedExtensions: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"],
     }),
     ...rpgjs({
       server: serverModule,
@@ -182,6 +184,18 @@ the client entry graph. Any file reachable from browser code can be included in
 `dist/client`. Keep secrets in the deployment environment, never in source code
 that a browser build can reach.
 </Warning>
+
+### Keep source maps server-side
+
+Map assets follow the same entry boundary as modules. In MMORPG mode, install the
+server side of a map provider in `src/server.ts`; its compiler reads the complete
+map and streams only nearby render and prediction chunks. The client side applies
+those chunks but does not fetch the source document.
+
+For Tiled, expose image files through `tiledMapFolderPlugin()` and omit `.tmx` and
+`.tsx` from `allowedExtensions`. Event definitions, object properties, collision
+rules and the raw tile layer stay in the map room. The same provider module works
+with a Node.js transport or a Cloudflare Durable Object.
 
 Start the built Express server with:
 

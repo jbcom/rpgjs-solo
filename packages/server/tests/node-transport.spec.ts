@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createServer, provideServerModules } from "../src";
 import { RpgServerEngine } from "../src/RpgServerEngine";
@@ -454,6 +455,28 @@ describe("createRpgServerTransport", () => {
         source: "[Base]BaseChip_pipo.png",
       },
     });
+  });
+
+  it("resolves external tilesets next to a preloaded local TMX document", async () => {
+    const tiledBasePath = resolve(process.cwd(), "../../samples/cloudflare-mmorpg/src/tiled");
+    const mapFile = resolve(tiledBasePath, "demo.tmx");
+    const payload = await createMapUpdatePayload(
+      "map-demo",
+      {
+        maps: [{
+          id: "demo",
+          file: mapFile,
+          data: await readFile(mapFile, "utf8"),
+        }],
+      } as any,
+      {
+        host: "127.0.0.1:1",
+        tiledBasePaths: [tiledBasePath],
+      },
+    );
+
+    expect(payload.parsedMap.tilesets).toHaveLength(4);
+    expect(payload.parsedMap.tilesets[0].image.source).toBe("[Base]BaseChip_pipo.png");
   });
 
   it("exposes public room information and global config for the current map room", async () => {

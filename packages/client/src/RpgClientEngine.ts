@@ -231,6 +231,7 @@ export class RpgClientEngine<T = any> {
   private sceneResetQueued = false;
   private mapTransitionInProgress = false;
   private currentMapRoomId?: string;
+  private activeMapStreamController?: { attach(map: RpgClientMap): void; detach(): void };
   private socketListenersInitialized = false;
   private clientReadyForMapChanges = false;
   private pendingMapChanges: any[] = [];
@@ -383,6 +384,7 @@ export class RpgClientEngine<T = any> {
     this.sceneMap.loadPhysic();
     this.resolveSceneMapComponent();
 
+    this.loadMapService.initialize?.();
     const saveClient = inject(SaveClientService);
     saveClient.initialize();
     this.initListeners();
@@ -1067,6 +1069,8 @@ export class RpgClientEngine<T = any> {
   }
 
   private async loadScene(mapId: string, transferToken?: string) {
+    this.activeMapStreamController?.detach();
+    this.activeMapStreamController = undefined;
     await lastValueFrom(this.hooks.callHooks("client-sceneMap-onBeforeLoading", this.sceneMap));
 
     // Clear client prediction states when changing maps
@@ -1130,6 +1134,11 @@ export class RpgClientEngine<T = any> {
     this.mapTransitionInProgress = false;
     this.sceneMap.configureClientPrediction(this.predictionEnabled);
     this.sceneMap.loadPhysic()
+    if (res?.streamController) {
+      const controller = res.streamController;
+      this.activeMapStreamController = controller;
+      controller.attach(this.sceneMap);
+    }
   }
 
   addSpriteSheet<T = any>(spritesheetClass: any, id?: string): any {

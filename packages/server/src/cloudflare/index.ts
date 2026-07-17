@@ -31,6 +31,14 @@ export function createRpgServerWorker(
   const requireMapUpdateToken = options.requireMapUpdateToken ?? true;
   class RpgCloudflareServer extends serverModule {
     async onConnect(connection: any, context: any) {
+      // Older Workerd versions can report CONNECTING immediately after
+      // acceptWebSocket(), even though Durable Objects already permit sends.
+      // @signe/room 3.1.0 guards on readyState and would otherwise discard the
+      // initial sync, map stream, and connection acceptance packets.
+      const acceptedSocket = connection?.rawWebSocket;
+      if (acceptedSocket?.readyState === 0 && typeof acceptedSocket.send === "function") {
+        connection.send = acceptedSocket.send.bind(acceptedSocket);
+      }
       await super.onConnect?.(connection, context);
       await connection.send(JSON.stringify({
         type: "connected",
