@@ -1,5 +1,16 @@
-import { provideMmorpg, startGame } from "@rpgjs/client";
+import {
+  provideClientGlobalConfig,
+  provideClientModules,
+  provideMmorpg,
+  startGame,
+} from "@rpgjs/client";
+import { provideTiledMap } from "@rpgjs/tiledmap/client";
 
 startGame({
-  providers: [provideMmorpg({ connectionIdScope: "session" })],
+  providers: [
+    provideTiledMap({ basePath: "map" }),
+    provideClientGlobalConfig(),
+    provideClientModules([]),
+    provideMmorpg({ connectionIdScope: "session" }),
+  ],
 });

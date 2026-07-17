@@ -29,7 +29,17 @@ export function createRpgServerWorker(
   options: CreateRpgServerWorkerOptions,
 ) {
   const requireMapUpdateToken = options.requireMapUpdateToken ?? true;
-  const worker = createCloudflareRoomWorker(serverModule as any, options);
+  class RpgCloudflareServer extends serverModule {
+    async onConnect(connection: any, context: any) {
+      await super.onConnect?.(connection, context);
+      await connection.send(JSON.stringify({
+        type: "connected",
+        id: connection.id,
+        message: "Connected to RPG-JS server",
+      }));
+    }
+  }
+  const worker = createCloudflareRoomWorker(RpgCloudflareServer as any, options);
 
   return {
     async fetch(request: Request, env: CloudflareRoomEnv, ctx: unknown): Promise<Response> {

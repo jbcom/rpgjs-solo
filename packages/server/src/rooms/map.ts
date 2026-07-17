@@ -1912,7 +1912,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       });
     }
 
-    const map = await request.json()
+    // Signe exposes the schema-validated body on `request.data`. Native Fetch
+    // bodies are single-use, so prefer it before falling back to `json()` for
+    // direct calls that do not pass through the request decorator.
+    const map = (request as Request & { data?: any }).data ?? await request.json()
     this.data.set(map)
     this.globalConfig = map.config
     this.damageFormulas = map.damageFormulas || {};

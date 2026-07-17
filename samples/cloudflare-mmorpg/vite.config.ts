@@ -9,11 +9,14 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    optimizeDeps: {
+      include: ['pixi.js > @xmldom/xmldom']
+    },
     plugins: [
       tiledMapFolderPlugin({
         sourceFolder: "./src/tiled",
         publicPath: "/map",
-        buildOutputPath: "assets/data",
+        buildOutputPath: "map",
       }),
       ...rpgjs({
         server: serverModule,

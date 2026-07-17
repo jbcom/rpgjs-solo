@@ -15,6 +15,7 @@
   "dependencies": {
     "@rpgjs/client": "workspace:*",
     "@rpgjs/server": "workspace:*",
+    "@rpgjs/tiledmap": "workspace:*",
     "@rpgjs/vite": "workspace:*"
   },
   "devDependencies": {

@@ -57,7 +57,9 @@ export function serverPlugin(
       if (!response.ok) {
         const retryable = response.status === 408
           || response.status === 429
-          || response.status >= 500;
+          || response.status === 502
+          || response.status === 503
+          || response.status === 504;
         throw new MapPublicationError(
           `Unable to publish map ${mapId}: ${response.status} ${await response.text()}`,
           retryable,
