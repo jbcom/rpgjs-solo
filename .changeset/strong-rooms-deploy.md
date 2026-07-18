@@ -26,3 +26,5 @@ Preserve custom streaming providers when Studio's built-in streaming is disabled
 Avoid dereferencing an empty Studio weather state while switching maps.
 
 Publish authenticated world topology updates to every map room, persist them across Durable Object hibernation, and refresh automatic world-map transitions without restarting the MMORPG server.
+
+Document the Durable Object room model, map-and-world publication flow, hibernation recovery, production deployment, and common Cloudflare diagnostics.

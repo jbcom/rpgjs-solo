@@ -47,6 +47,19 @@ pnpm wrangler secret put RPGJS_MAP_UPDATE_TOKEN --env production
 Before deployment, run `pnpm build`, `pnpm types`, `pnpm test`, and
 `pnpm deploy:dry-run`.
 
+Deploy with the same environment used when creating the secret, then inspect the
+Worker logs during the first map publication:
+
+```bash
+pnpm wrangler deploy --env production
+pnpm wrangler tail --env production
+```
+
+For multi-map worlds, a complete trusted publisher must also call
+`POST /parties/main/map-<each-map>/world/<world-id>/update` for every map room.
+The RPGJS Vite publisher performs that fan-out automatically when the resolved
+map payload contains `worldUpdates`.
+
 This sample pins the last Wrangler 3 runtime that supports the GLIBC 2.31
 development host used by the repository. Projects on a newer operating system
 should update Wrangler and `@cloudflare/vitest-pool-workers` together to their

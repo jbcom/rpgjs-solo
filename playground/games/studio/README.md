@@ -101,6 +101,11 @@ The token must match `.dev.vars`. A missing or invalid token returns `401`. A
 successful update returns a 2xx response and creates or refreshes the map room
 even before a player connects.
 
+This direct `curl` updates only `map-seed-studio`. It does not propagate world
+topology to other rooms. For a real Studio project, prefer the complete
+`seed:cloudflare --studio` command shown above; it publishes the map and calls
+`/world/:id/update` for every map in the project.
+
 ## Checks and deployment
 
 ```bash
@@ -110,6 +115,14 @@ pnpm types
 pnpm deploy:dry-run
 ```
 
-For production, set `RPGJS_MAP_UPDATE_TOKEN` with `wrangler secret put`, deploy
-the Worker, and point the trusted Studio publisher at the deployed Worker URL.
-Never expose the update token through Vite client variables.
+For production, use the same explicit Wrangler environment for the secret and
+the deployment:
+
+```bash
+pnpm wrangler secret put RPGJS_MAP_UPDATE_TOKEN --env production
+pnpm wrangler deploy --env production
+pnpm wrangler tail --env production
+```
+
+Then point the trusted Studio publisher at the deployed Worker URL. Never expose
+the update token through Vite client variables.

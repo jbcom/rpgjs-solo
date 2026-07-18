@@ -114,6 +114,22 @@ X-RPGJS-Map-Update-Token: <secret>
 `RPGJS_MAP_UPDATE_TOKEN` only on the Node server or Worker. Never put it in browser
 code or in a `VITE_` environment variable.
 
+Map content and world topology are separate authoritative updates. After
+publishing a prepared map, the trusted publisher sends the current topology to
+every map room in that world:
+
+```http
+POST /parties/main/map-<eachMapId>/world/<worldId>/update
+Content-Type: application/json
+X-RPGJS-Map-Update-Token: <secret>
+
+{ "id": "<worldId>", "maps": [/* complete runtime topology */] }
+```
+
+This fan-out matters because each map is a separate Node room or Durable Object
+with its own world manager. Updating only the room for `marsh`, for example,
+does not update a player who is still connected to `port`.
+
 The easiest development publisher is the RPGJS Vite plugin:
 
 ```ts
@@ -136,6 +152,8 @@ rpgjs({
 
 Vite republishes the resolved map after relevant development changes. The same
 callback works with a local Node room provider or a Wrangler Durable Object.
+`createStudioMapUpdatePayload()` supplies `worldUpdates`, and the RPGJS remote
+publisher automatically sends them to every referenced map room.
 
 To test the HTTP contract directly, send a previously prepared Studio v2 payload:
 
@@ -152,7 +170,9 @@ The payload must be complete because `/map/update` replaces the authoritative ma
 revision. Use `createStudioMapUpdatePayload()` rather than assembling production
 payloads by hand. Its result includes the normalized v2 render data, dimensions,
 server collisions, events, project configuration, and database records needed by
-the room.
+the room. This direct `curl` updates only one map revision; it does not perform
+the world fan-out. Use the RPGJS publisher or the Studio seed command for a full
+map-and-world publication.
 
 For a runnable local Worker, deterministic fixture, seed script, and real Studio
 API seed command, see the
