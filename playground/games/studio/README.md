@@ -82,7 +82,9 @@ pnpm seed:cloudflare -- \
 `RPGJS_STUDIO_PROJECT_ID` can replace `--project-id`. Use `--target` for another
 Worker origin or `--file` to publish a different prepared JSON fixture. The seed
 reads `RPGJS_MAP_UPDATE_TOKEN` from the environment or `.dev.vars` and does not
-print it.
+print it. Studio seeds also publish the runtime world topology through the
+authenticated `/world/:id/update` endpoint for every map room in the project,
+so moving maps in Studio does not require restarting the MMORPG server.
 
 The equivalent direct HTTP request is:
 

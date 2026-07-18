@@ -70,6 +70,18 @@ async function publish(url, token, payload) {
   throw lastError ?? new Error("Unable to reach the Worker");
 }
 
+async function publishWorldUpdates(target, token, worldUpdates) {
+  for (const world of Array.isArray(worldUpdates) ? worldUpdates : []) {
+    if (!world?.id || !Array.isArray(world.maps)) continue;
+    await Promise.all(world.maps.map(async (map) => {
+      const targetMapId = String(map?.id ?? "").replace(/^map-/, "");
+      if (!targetMapId) return;
+      const url = `${target}/parties/main/map-${targetMapId}/world/${encodeURIComponent(String(world.id))}/update`;
+      await publish(url, token, { id: world.id, maps: world.maps });
+    }));
+  }
+}
+
 const devVars = await readDevVars();
 const token = process.env.RPGJS_MAP_UPDATE_TOKEN ?? devVars.RPGJS_MAP_UPDATE_TOKEN;
 if (!token) throw new Error("Set RPGJS_MAP_UPDATE_TOKEN or copy .dev.vars.example to .dev.vars");
@@ -82,4 +94,5 @@ if (!mapId) throw new Error("The payload must contain an id or be used with --ma
 const url = `${target}/parties/main/map-${String(mapId).replace(/^map-/, "")}/map/update`;
 
 await publish(url, token, { ...preliminaryPayload, id: String(mapId).replace(/^map-/, "") });
+await publishWorldUpdates(target, token, preliminaryPayload.worldUpdates);
 console.log(`Studio map '${mapId}' published successfully to ${target}`);

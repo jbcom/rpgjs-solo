@@ -58,6 +58,12 @@ import {
 const DEFAULT_DASH_COOLDOWN_MS = 450;
 const GROUND_TOUCH_SENSOR_COVERAGE_THRESHOLD = 0.8;
 const MAP_SOURCE_STORAGE_KEY = "$room:rpgjs-map-source";
+const WORLD_MAPS_STORAGE_KEY = "$room:rpgjs-world-maps";
+
+type StoredWorldMaps = {
+  id: string;
+  maps: WorldMapConfig[];
+};
 
 type PhysicsCollisionEntity = {
   uuid: string;
@@ -512,6 +518,7 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       json: async () => restoredMap,
       text: async () => JSON.stringify(restoredMap),
     } as Request);
+    await this.restoreWorldMapsRuntime();
   }
 
   private getRuntimeMapUpdateToken(): string | undefined {
@@ -532,6 +539,13 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       json: async () => storedMap,
       text: async () => JSON.stringify(storedMap),
     } as unknown as Request);
+    await this.restoreWorldMapsRuntime();
+  }
+
+  private async restoreWorldMapsRuntime(): Promise<void> {
+    const storedWorld = await this.partyRoom.storage.get<StoredWorldMaps>(WORLD_MAPS_STORAGE_KEY);
+    if (!storedWorld?.id || !Array.isArray(storedWorld.maps)) return;
+    await this.updateWorldMaps(storedWorld.id, storedWorld.maps);
   }
 
   private hasActiveConnections(): boolean {
@@ -2154,10 +2168,11 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * 
    * ## Architecture
    * 
-   * 1. Extracts world ID from URL path parameter
-   * 2. Normalizes input to array of WorldMapConfig
-   * 3. Ensures all required map properties are present (width, height, tile sizes)
-   * 4. Creates or updates the world manager
+   * 1. Authenticates the administrative update request
+   * 2. Extracts the world ID from the `/world/:id/update` path segment
+   * 3. Normalizes input to array of WorldMapConfig
+   * 4. Persists the topology so it survives Durable Object hibernation
+   * 5. Creates or updates the world manager
    * 
    * Expected payload examples:
    * - `{ id: string, maps: WorldMapConfig[] }`
@@ -2180,14 +2195,26 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     method: "POST",
   })
   async updateWorld(request: Request) {
-    // Extract world id from URL: /world/:id/update
+    if (!isMapUpdateAuthorized(request.headers, this.getRuntimeMapUpdateToken())) {
+      return new Response(JSON.stringify({
+        error: "Unauthorized world update",
+        message: `Provide ${MAP_UPDATE_TOKEN_HEADER} or Authorization: Bearer <token> to call /world/:id/update when ${MAP_UPDATE_TOKEN_ENV} is set.`,
+      }), {
+        status: 401,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    }
+
+    // The request URL can be either the room-local path or the complete
+    // `/parties/<namespace>/<room>/world/:id/update` transport path.
     let worldId = '';
     try {
       const reqUrl = (request as any).url as string;
       const urlObj = new URL(reqUrl, 'http://localhost');
-      const parts = urlObj.pathname.split('/');
-      // ['', 'world', ':id', 'update'] → index 2
-      worldId = parts[2] ?? '';
+      const match = urlObj.pathname.match(/\/world\/([^/]+)\/update\/?$/);
+      worldId = match?.[1] ? decodeURIComponent(match[1]) : '';
     } catch { }
     const payload = await request.json();
 
@@ -2209,6 +2236,8 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       } as WorldMapConfig;
     });
 
+    const storedWorld: StoredWorldMaps = { id: worldId, maps: normalized };
+    await this.partyRoom.storage.put(WORLD_MAPS_STORAGE_KEY, storedWorld);
     await this.updateWorldMaps(worldId, normalized);
     return { ok: true } as any;
   }

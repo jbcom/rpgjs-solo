@@ -5,6 +5,7 @@ import {
   type MapStreamChunk,
   type MapStreamDefinition,
   type MapStreamManifest,
+  type WorldMapConfig,
 } from "@rpgjs/common";
 import {
   buildStudioTerrainCollisionPolygons,
@@ -42,6 +43,11 @@ export interface PreparedStudioMapPayload {
   config?: Record<string, any>;
   database?: any[] | Record<string, any>;
   revision?: string;
+  /** Runtime-ready world topology published to every authoritative map room. */
+  worldUpdates?: Array<{
+    id: string;
+    maps: WorldMapConfig[];
+  }>;
 }
 
 export const STUDIO_TERRAIN_CONTROL_REGIONS = "__studioTerrainControlRegions";

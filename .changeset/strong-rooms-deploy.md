@@ -24,3 +24,5 @@ Make initial map streaming explicit and hibernation-safe: clients request a fres
 Preserve custom streaming providers when Studio's built-in streaming is disabled, refresh cached client controllers after Durable Object hibernation, and key terrain-control buffers by their complete streamed region content to prevent stale masks.
 
 Avoid dereferencing an empty Studio weather state while switching maps.
+
+Publish authenticated world topology updates to every map room, persist them across Durable Object hibernation, and refresh automatic world-map transitions without restarting the MMORPG server.

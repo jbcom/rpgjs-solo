@@ -434,6 +434,68 @@ describe("createRpgServerTransport", () => {
     expect(response.headers.get("content-type")).toContain("application/json");
   });
 
+  it("authenticates and durably restores world updates", async () => {
+    process.env[MAP_UPDATE_TOKEN_ENV] = "prod-secret";
+    const transport = createRpgServerTransport(RealServer as any, {
+      initializeMaps: false,
+      mapUpdateToken: "prod-secret",
+    });
+    await transport.updateMap("port", {
+      id: "port",
+      width: 1440,
+      height: 960,
+      events: [],
+    });
+    const worldMaps = [
+      { id: "port", worldX: 0, worldY: 0, width: 1440, height: 960 },
+      { id: "marsh", worldX: 0, worldY: 960, width: 1440, height: 960 },
+    ];
+    const response = await transport.fetch(
+      "http://localhost/parties/main/map-port/world/main-world/update",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-rpgjs-map-update-token": "prod-secret",
+        },
+        body: JSON.stringify({ id: "main-world", maps: worldMaps }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const server = transport.getServer("map-port") as RealServer;
+    const mapRoom = server.getCurrentRoom<any>();
+    expect(mapRoom.getWorldMapsManager()?.getMapInfo("marsh")?.worldY).toBe(960);
+    expect(await transport.getRoom("map-port")!.storage.get("$room:rpgjs-world-maps"))
+      .toEqual({
+        id: "main-world",
+        maps: expect.arrayContaining(worldMaps.map((map) => expect.objectContaining(map))),
+      });
+
+    mapRoom.worldMapsManager = undefined;
+    await mapRoom.onRestore();
+    expect(mapRoom.getWorldMapsManager()?.getMapInfo("marsh")?.worldY).toBe(960);
+  });
+
+  it("rejects world updates when the administration token is missing", async () => {
+    process.env[MAP_UPDATE_TOKEN_ENV] = "prod-secret";
+    const transport = createRpgServerTransport(RealServer as any, {
+      initializeMaps: false,
+    });
+
+    const response = await transport.fetch(
+      "http://localhost/parties/main/map-port/world/main-world/update",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ maps: [] }),
+      },
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: "Unauthorized world update" });
+  });
+
   it("builds a publishable map payload from a local Tiled base path", async () => {
     const tiledBasePath = resolve(process.cwd(), "../../samples/cloudflare-mmorpg/src/tiled");
     const payload = await createMapUpdatePayload("map-demo", { maps: [] } as any, { tiledBasePaths: [tiledBasePath] });
@@ -480,6 +542,40 @@ describe("createRpgServerTransport", () => {
       id: "town",
       mapId: "town",
       provider: "studio",
+    });
+  });
+
+  it("publishes runtime world topology to every map room", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    const transport = createRpgServerTransport(RealServer as any, {
+      initializeMaps: false,
+      mapUpdateToken: "prod-secret",
+    });
+    const maps = [
+      { id: "port", worldX: 0, worldY: 0, width: 1440, height: 960 },
+      { id: "marsh", worldX: 0, worldY: 960, width: 1440, height: 960 },
+    ];
+
+    const response = await transport.publishMap("port", {
+      target: "http://127.0.0.1:8787",
+      transformPayload(payload) {
+        return {
+          ...(payload as object),
+          worldUpdates: [{ id: "main-world", maps }],
+        };
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "http://127.0.0.1:8787/parties/main/map-port/map/update",
+      "http://127.0.0.1:8787/parties/main/map-port/world/main-world/update",
+      "http://127.0.0.1:8787/parties/main/map-marsh/world/main-world/update",
+    ]);
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toEqual({
+      id: "main-world",
+      maps,
     });
   });
 

@@ -1,5 +1,5 @@
 import { Move, RpgEvent, RpgMap, RpgPlayer, RpgServer, provideServerMapStreaming } from "@rpgjs/server";
-import { defineModule, normalizeLightingState, WorldMapsManager, type RpgActionInput } from "@rpgjs/common";
+import { defineModule, normalizeLightingState, WorldMapsManager, type RpgActionInput, type WorldMapConfig } from "@rpgjs/common";
 import { BlockExecutionService } from "./block-executor";
 import { apiUrl, configureStudioConstants } from "./constants";
 import { RATIO_MAP_X, RATIO_MAP_Y } from "@common/map";
@@ -296,6 +296,13 @@ export interface CreateStudioMapUpdatePayloadOptions {
 
 type StudioServerConfig = CreateStudioMapUpdatePayloadOptions;
 
+const prepareStudioWorldMaps = (worldMaps: unknown): WorldMapConfig[] =>
+  parseArrayValue(worldMaps).map((worldMap: any) => ({
+    ...worldMap,
+    worldX: Number(worldMap?.worldX ?? 0) * RATIO_MAP_X,
+    worldY: Number(worldMap?.worldY ?? 0) * RATIO_MAP_Y,
+  }));
+
 const ensureLeadingSlash = (value: string): string => {
   if (!value) return "/game-data";
   return value.startsWith("/") ? value : `/${value}`;
@@ -586,15 +593,23 @@ export async function createStudioMapUpdatePayload(mapId: string, config: Create
   );
   const projectId = config.projectId?.trim() || normalized.config?._id || normalized.data?.projectId;
   const database = projectId ? await getGameDataProvider().getDatabase(projectId) : [];
-  const prepared = prepareStudioMapPayload(normalized, {
+  const preparedMap = prepareStudioMapPayload(normalized, {
     id: mapId,
     config: normalized.config,
     database,
   });
-  return prepareStudioTerrainControlRegions(
-    prepared,
+  const prepared = await prepareStudioTerrainControlRegions(
+    preparedMap,
     config.streaming === false ? 16 : config.streaming?.chunkSize
   );
+  const worldMaps = prepareStudioWorldMaps(normalized.config?.worldMaps);
+  if (worldMaps.length > 0) {
+    prepared.worldUpdates = [{
+      id: String(normalized.config?._id ?? projectId ?? "studio-world"),
+      maps: worldMaps,
+    }];
+  }
+  return prepared;
 }
 
 export default (_config?: unknown) => {
@@ -736,11 +751,7 @@ export default (_config?: unknown) => {
 
         if (mapData.config?.worldMaps) {
           const worldManager = new WorldMapsManager();
-          const worldMaps = mapData.config.worldMaps.map((worldMap: any) => ({
-            ...worldMap,
-            worldX: worldMap.worldX * RATIO_MAP_X,
-            worldY: worldMap.worldY * RATIO_MAP_Y,
-          }));
+          const worldMaps = prepareStudioWorldMaps(mapData.config.worldMaps);
           worldManager.configure(worldMaps);
           mapExtended.setInWorldMaps(worldManager);
         }

@@ -329,11 +329,37 @@ export class RpgServerTransport {
     });
     const payload = options.transformPayload ? await options.transformPayload(defaultPayload, mapId.replace(/^map-/, "")) : defaultPayload;
     const target = options.target.replace(/\/+$/, "");
-    return fetch(`${target}${this.partiesPath}/${roomId}/map/update`, {
+    const mapResponse = await fetch(`${target}${this.partiesPath}/${roomId}/map/update`, {
       method: "POST",
       headers: createMapUpdateHeaders(this.mapUpdateToken, options.headers),
       body: JSON.stringify(payload),
     });
+    if (!mapResponse.ok) return mapResponse;
+
+    const worldUpdates = Array.isArray((payload as any)?.worldUpdates)
+      ? (payload as any).worldUpdates
+      : [];
+    for (const world of worldUpdates) {
+      if (!world?.id || !Array.isArray(world.maps)) continue;
+      const responses = await Promise.all(
+        world.maps.map((map: any) => {
+          const targetMapId = String(map?.id ?? "").replace(/^map-/, "");
+          if (!targetMapId) return Promise.resolve(new Response(null, { status: 204 }));
+          return fetch(
+            `${target}${this.partiesPath}/map-${targetMapId}/world/${encodeURIComponent(String(world.id))}/update`,
+            {
+              method: "POST",
+              headers: createMapUpdateHeaders(this.mapUpdateToken, options.headers),
+              body: JSON.stringify({ id: world.id, maps: world.maps }),
+            },
+          );
+        }),
+      );
+      const failedResponse = responses.find((response) => !response.ok);
+      if (failedResponse) return failedResponse;
+    }
+
+    return mapResponse;
   }
 
   async handleNodeRequest(req: IncomingMessage, res: ServerResponse, next?: () => void, options: HandleNodeRequestOptions = {}): Promise<boolean> {

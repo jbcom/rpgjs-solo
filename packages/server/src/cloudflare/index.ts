@@ -51,7 +51,7 @@ export function createRpgServerWorker(
 
   return {
     async fetch(request: Request, env: CloudflareRoomEnv, ctx: unknown): Promise<Response> {
-      if (requireMapUpdateToken && isMapUpdateRequest(request)) {
+      if (requireMapUpdateToken && isAdministrationUpdateRequest(request)) {
         const token = env[MAP_UPDATE_TOKEN_ENV];
         if (typeof token !== "string" || token.length === 0) {
           return Response.json(
@@ -66,8 +66,8 @@ export function createRpgServerWorker(
   };
 }
 
-function isMapUpdateRequest(request: Request): boolean {
+function isAdministrationUpdateRequest(request: Request): boolean {
   const url = new URL(request.url);
-  return request.method.toUpperCase() === "POST"
-    && /(?:^|\/)map-[^/]+\/map\/update\/?$/.test(url.pathname);
+  if (request.method.toUpperCase() !== "POST") return false;
+  return /(?:^|\/)map-[^/]+\/(?:map\/update|world\/[^/]+\/update)\/?$/.test(url.pathname);
 }

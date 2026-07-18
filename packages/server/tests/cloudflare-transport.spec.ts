@@ -48,4 +48,25 @@ describe("Cloudflare room transport", () => {
       id: "player-1",
     });
   });
+
+  it("requires the administration secret for world updates", async () => {
+    class TestServer {}
+    const worker = createRpgServerWorker(TestServer as any, {
+      binding: "ROOMS",
+      partiesPath: "/parties/main",
+    });
+
+    const response = await worker.fetch(
+      new Request("https://example.com/parties/main/map-port/world/main-world/update", {
+        method: "POST",
+      }),
+      {} as any,
+      {},
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: "Missing required Worker secret: RPGJS_MAP_UPDATE_TOKEN",
+    });
+  });
 });
