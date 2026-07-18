@@ -85,6 +85,50 @@ describe("Prediction + Reconciliation Server Protocol", () => {
     );
   });
 
+  test("should reset spatial entity visibility when a public player id reconnects", () => {
+    serverMap.spatialVisibleEventIds.set(player.id, new Set(["old-event"]));
+    serverMap.spatialVisiblePlayerIds.set(player.id, new Set([player.id]));
+
+    serverMap.onJoin(player, player.conn);
+
+    expect(serverMap.spatialVisibleEventIds.has(player.id)).toBe(false);
+    expect(serverMap.spatialVisiblePlayerIds.has(player.id)).toBe(false);
+  });
+
+  test("should mark an existing visible player as connected in a new client's initial snapshot", () => {
+    const existingPlayer = new RpgPlayer();
+    existingPlayer.id = "existing-player";
+    existingPlayer.x.set(player.x());
+    existingPlayer.y.set(player.y());
+    existingPlayer.isConnected.set(true);
+    existingPlayer.setGraphic("hero");
+    serverMap.players()[existingPlayer.id] = existingPlayer;
+
+    const intercepted = serverMap.interceptorPacket(
+      player,
+      {
+        type: "sync",
+        value: {
+          players: {
+            [existingPlayer.id]: {
+              graphics: ["hero"],
+              x: existingPlayer.x(),
+              y: existingPlayer.y(),
+            },
+          },
+        },
+      },
+      player.conn,
+    );
+
+    expect(intercepted?.value?.players?.[existingPlayer.id]).toEqual(
+      expect.objectContaining({
+        graphics: ["hero"],
+        isConnected: true,
+      }),
+    );
+  });
+
   test("should align ack position with the synced local player payload when available", () => {
     player._lastFramePositions = {
       frame: 21,

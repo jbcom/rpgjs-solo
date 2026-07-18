@@ -4,6 +4,7 @@ import {
   isMapStreamingPositionVisible,
   provideServerMapStreaming,
   refreshMapStreaming,
+  sendInitialMapStreaming,
 } from "../src/map-streaming";
 import { getMapChunkKey, type MapStreamDefinition } from "@rpgjs/common";
 
@@ -143,7 +144,7 @@ describe("server map streaming", () => {
     }, { loadRadius: 0, retainRadius: 1 });
 
     await module.map!.onBeforeUpdate!({}, map as any);
-    module.map!.onJoin!(player as any, map as any);
+    sendInitialMapStreaming(map as any, player as any);
 
     expect(emit).toHaveBeenCalledTimes(2);
     expect(emit.mock.calls[0][1].chunks).toEqual([{ key: "0:0", ...createDefinition().chunks["0:0"] }]);

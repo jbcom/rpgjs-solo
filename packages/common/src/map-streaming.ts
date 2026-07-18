@@ -1,6 +1,9 @@
 /** WebSocket event used to transport server-authoritative map chunks. */
 export const MAP_STREAM_EVENT = "map:stream";
 
+/** Client action requesting a fresh manifest and initial interest chunks. */
+export const MAP_STREAM_REQUEST_EVENT = "map.stream.request";
+
 /** Coordinates of one map chunk in the provider-defined grid. */
 export interface MapChunkCoordinates {
   /** Zero-based horizontal chunk index. */

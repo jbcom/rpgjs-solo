@@ -38,6 +38,7 @@
 
 <script>
     import { computed, effect } from 'canvasengine'
+    import './weather-lifecycle-compat'
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
     import { Weather } from '@canvasengine/presets'

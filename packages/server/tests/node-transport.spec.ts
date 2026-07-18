@@ -1,14 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createServer, provideServerModules } from "../src";
 import { RpgServerEngine } from "../src/RpgServerEngine";
-import {
-  MAP_UPDATE_TOKEN_ENV,
-  PartyConnection,
-  createMapUpdatePayload,
-  createRpgServerTransport,
-} from "../src/node";
+import { MAP_UPDATE_TOKEN_ENV, PartyConnection, createMapUpdatePayload, createRpgServerTransport } from "../src/node";
 
 function wait(ms = 0): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -43,9 +38,17 @@ class MockWebSocket {
 
 class MockServer extends RpgServerEngine {
   requests: Array<{ method: string; roomId: string; url: string; body: any }> = [];
-  messages: Array<{ connectionId: string; sessionId: string; message: string }> = [];
+  messages: Array<{
+    connectionId: string;
+    sessionId: string;
+    message: string;
+  }> = [];
   closedConnections: string[] = [];
-  connectedContexts: Array<{ connectionId: string; sessionId: string; url: string }> = [];
+  connectedContexts: Array<{
+    connectionId: string;
+    sessionId: string;
+    url: string;
+  }> = [];
 
   constructor(public room: any) {
     super();
@@ -137,6 +140,7 @@ describe("createRpgServerTransport", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     if (typeof originalMapUpdateToken === "string") {
       process.env[MAP_UPDATE_TOKEN_ENV] = originalMapUpdateToken;
       return;
@@ -235,10 +239,7 @@ describe("createRpgServerTransport", () => {
 
     const server = transport.getServer("lobby") as MockServer;
     expect(server.connectedContexts).toHaveLength(2);
-    expect(server.connectedContexts.map((context) => context.sessionId)).toEqual([
-      "shared-session",
-      "shared-session",
-    ]);
+    expect(server.connectedContexts.map((context) => context.sessionId)).toEqual(["shared-session", "shared-session"]);
     expect(server.connectedContexts[0].connectionId).not.toBe(server.connectedContexts[1].connectionId);
 
     const room = transport.getRoom("lobby")!;
@@ -257,19 +258,19 @@ describe("createRpgServerTransport", () => {
     });
     const ws = new MockWebSocket();
 
-    expect(await transport.acceptWebSocket(ws as any, {
-      url: "http://localhost/parties/main/lobby-1?id=browser-session&token=valid-token",
-      method: "GET",
-      headers: {
-        host: "localhost",
-      },
-    })).toBe(true);
+    expect(
+      await transport.acceptWebSocket(ws as any, {
+        url: "http://localhost/parties/main/lobby-1?id=browser-session&token=valid-token",
+        method: "GET",
+        headers: {
+          host: "localhost",
+        },
+      }),
+    ).toBe(true);
 
     await wait(10);
 
-    const syncMessage = ws.sent
-      .map((message) => JSON.parse(message))
-      .find((message) => message.type === "sync");
+    const syncMessage = ws.sent.map((message) => JSON.parse(message)).find((message) => message.type === "sync");
 
     expect(syncMessage).toMatchObject({
       type: "sync",
@@ -294,13 +295,15 @@ describe("createRpgServerTransport", () => {
     });
     const ws = new MockWebSocket();
 
-    expect(await transport.acceptWebSocket(ws as any, {
-      url: "http://localhost/parties/main/lobby-1?id=browser-session",
-      method: "GET",
-      headers: {
-        host: "localhost",
-      },
-    })).toBe(true);
+    expect(
+      await transport.acceptWebSocket(ws as any, {
+        url: "http://localhost/parties/main/lobby-1?id=browser-session",
+        method: "GET",
+        headers: {
+          host: "localhost",
+        },
+      }),
+    ).toBe(true);
 
     await wait(10);
 
@@ -324,16 +327,18 @@ describe("createRpgServerTransport", () => {
   it("calls the server engine auth hook during room connection", async () => {
     const GameServer = createServer({
       providers: [
-        provideServerModules([{
-          engine: {
-            auth(_server: RpgServerEngine, socket: any) {
-              if (socket.handshake.query.token !== "valid-token") {
-                throw new Error("Authentication failed");
-              }
-              return "hook-user";
+        provideServerModules([
+          {
+            engine: {
+              auth(_server: RpgServerEngine, socket: any) {
+                if (socket.handshake.query.token !== "valid-token") {
+                  throw new Error("Authentication failed");
+                }
+                return "hook-user";
+              },
             },
           },
-        }]),
+        ]),
       ],
     });
     const transport = createRpgServerTransport(GameServer as any, {
@@ -341,19 +346,19 @@ describe("createRpgServerTransport", () => {
     });
     const ws = new MockWebSocket();
 
-    expect(await transport.acceptWebSocket(ws as any, {
-      url: "http://localhost/parties/main/lobby-1?id=hook-session&token=valid-token",
-      method: "GET",
-      headers: {
-        host: "localhost",
-      },
-    })).toBe(true);
+    expect(
+      await transport.acceptWebSocket(ws as any, {
+        url: "http://localhost/parties/main/lobby-1?id=hook-session&token=valid-token",
+        method: "GET",
+        headers: {
+          host: "localhost",
+        },
+      }),
+    ).toBe(true);
 
     await wait(10);
 
-    const syncMessage = ws.sent
-      .map((message) => JSON.parse(message))
-      .find((message) => message.type === "sync");
+    const syncMessage = ws.sent.map((message) => JSON.parse(message)).find((message) => message.type === "sync");
 
     expect(syncMessage.value.pId).toBe("hook-user");
     expect(await transport.getRoom("lobby-1")!.storage.get("session:hook-session")).toMatchObject({
@@ -367,13 +372,15 @@ describe("createRpgServerTransport", () => {
     });
     const ws = new MockWebSocket();
 
-    expect(await transport.acceptWebSocket(ws as any, {
-      url: "http://localhost/parties/main/lobby-1?id=browser-session&token=invalid-token",
-      method: "GET",
-      headers: {
-        host: "localhost",
-      },
-    })).toBe(true);
+    expect(
+      await transport.acceptWebSocket(ws as any, {
+        url: "http://localhost/parties/main/lobby-1?id=browser-session&token=invalid-token",
+        method: "GET",
+        headers: {
+          host: "localhost",
+        },
+      }),
+    ).toBe(true);
 
     await wait(10);
 
@@ -429,11 +436,7 @@ describe("createRpgServerTransport", () => {
 
   it("builds a publishable map payload from a local Tiled base path", async () => {
     const tiledBasePath = resolve(process.cwd(), "../../samples/cloudflare-mmorpg/src/tiled");
-    const payload = await createMapUpdatePayload(
-      "map-demo",
-      { maps: [] } as any,
-      { tiledBasePaths: [tiledBasePath] },
-    );
+    const payload = await createMapUpdatePayload("map-demo", { maps: [] } as any, { tiledBasePaths: [tiledBasePath] });
 
     expect(payload).toMatchObject({
       id: "demo",
@@ -457,17 +460,42 @@ describe("createRpgServerTransport", () => {
     });
   });
 
+  it("transforms a trusted payload before publishing it remotely", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    const transport = createRpgServerTransport(RealServer as any, {
+      initializeMaps: false,
+    });
+
+    const response = await transport.publishMap("town", {
+      target: "http://127.0.0.1:8787",
+      transformPayload(payload, mapId) {
+        return { ...(payload as object), mapId, provider: "studio" };
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [, options] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(options?.body))).toMatchObject({
+      id: "town",
+      mapId: "town",
+      provider: "studio",
+    });
+  });
+
   it("resolves external tilesets next to a preloaded local TMX document", async () => {
     const tiledBasePath = resolve(process.cwd(), "../../samples/cloudflare-mmorpg/src/tiled");
     const mapFile = resolve(tiledBasePath, "demo.tmx");
     const payload = await createMapUpdatePayload(
       "map-demo",
       {
-        maps: [{
-          id: "demo",
-          file: mapFile,
-          data: await readFile(mapFile, "utf8"),
-        }],
+        maps: [
+          {
+            id: "demo",
+            file: mapFile,
+            data: await readFile(mapFile, "utf8"),
+          },
+        ],
       } as any,
       {
         host: "127.0.0.1:1",

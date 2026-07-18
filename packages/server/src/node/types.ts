@@ -11,12 +11,7 @@ export interface RpgWebSocketConnection {
 }
 
 export interface RpgWebSocketServer {
-  handleUpgrade(
-    request: IncomingMessage,
-    socket: Duplex,
-    head: Buffer,
-    callback: (ws: RpgWebSocketConnection) => void,
-  ): void;
+  handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer, callback: (ws: RpgWebSocketConnection) => void): void;
   close(): void;
 }
 
@@ -68,4 +63,6 @@ export interface SendMapUpdateOptions {
 export interface PublishMapOptions extends SendMapUpdateOptions {
   /** Base URL of the trusted RPGJS server, for example `http://127.0.0.1:8787`. */
   target: string;
+  /** Optional trusted transformation applied before the payload is sent remotely. */
+  transformPayload?: (payload: unknown, mapId: string) => unknown | Promise<unknown>;
 }

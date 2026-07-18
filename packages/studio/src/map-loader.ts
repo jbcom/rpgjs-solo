@@ -9,6 +9,7 @@ import {
   createStudioTerrainRenderData,
 } from "./map-renderer";
 import { resolveStudioElementSize } from "./studio-element-size";
+import { STUDIO_DIRECT_LOAD_MARKER } from "./map-streaming";
 
 // Type definitions for better type safety
 interface GlobalConfig {
@@ -970,6 +971,7 @@ export const loadMap = async (mapId: string) => {
   await waitForMapImages(map);
 
   return {
+    [STUDIO_DIRECT_LOAD_MARKER]: true,
     id: finalMapId,
     data: {
       ...map,

@@ -9,13 +9,12 @@ export interface RpgjsDevServerOptions {
   mapIds?: string[];
   mapUpdateToken?: string;
   tiledBasePaths?: string[];
+  /** Build a provider-specific authoritative payload before remote publication. */
+  resolveMapPayload?: (context: { mapId: string; defaultPayload: unknown }) => unknown | Promise<unknown>;
 }
 
 class MapPublicationError extends Error {
-  constructor(
-    message: string,
-    readonly retryable: boolean,
-  ) {
+  constructor(message: string, readonly retryable: boolean) {
     super(message);
   }
 }
@@ -37,10 +36,7 @@ async function importWebSocketServer(): Promise<any> {
   }
 }
 
-export function serverPlugin(
-  serverModule: RpgTransportServerConstructor,
-  options: RpgjsDevServerOptions = {},
-) {
+export function serverPlugin(serverModule: RpgTransportServerConstructor, options: RpgjsDevServerOptions = {}) {
   let wsServer: RpgWebSocketServer | null = null;
   const isRemote = Boolean(options.target);
   const transport = createRpgServerTransport(serverModule, {
@@ -52,20 +48,24 @@ export function serverPlugin(
 
   const publishMaps = async () => {
     if (!options.target) return;
-    await Promise.all((options.mapIds ?? []).map(async (mapId) => {
-      const response = await transport.publishMap(mapId, { target: options.target! });
-      if (!response.ok) {
-        const retryable = response.status === 408
-          || response.status === 429
-          || response.status === 502
-          || response.status === 503
-          || response.status === 504;
-        throw new MapPublicationError(
-          `Unable to publish map ${mapId}: ${response.status} ${await response.text()}`,
-          retryable,
-        );
-      }
-    }));
+    await Promise.all(
+      (options.mapIds ?? []).map(async (mapId) => {
+        const response = await transport.publishMap(mapId, {
+          target: options.target!,
+          transformPayload: options.resolveMapPayload
+            ? (defaultPayload, normalizedMapId) =>
+                options.resolveMapPayload!({
+                  mapId: normalizedMapId,
+                  defaultPayload,
+                })
+            : undefined,
+        });
+        if (!response.ok) {
+          const retryable = response.status === 408 || response.status === 429 || response.status === 502 || response.status === 503 || response.status === 504;
+          throw new MapPublicationError(`Unable to publish map ${mapId}: ${response.status} ${await response.text()}`, retryable);
+        }
+      }),
+    );
   };
 
   const publishMapsWithRetry = async (attempts = 20, delayMs = 250): Promise<void> => {
@@ -101,8 +101,7 @@ export function serverPlugin(
     async configureServer(server: ViteDevServer) {
       if (isRemote) {
         server.httpServer?.once("listening", () => {
-          void publishMapsWithRetry()
-            .catch((error) => console.error("[RPGJS] Map publication failed:", error));
+          void publishMapsWithRetry().catch((error) => console.error("[RPGJS] Map publication failed:", error));
         });
         server.watcher.on("change", (file) => {
           const normalizedFile = file.replaceAll("\\", "/");
@@ -111,8 +110,7 @@ export function serverPlugin(
           }
           if (publishTimer) clearTimeout(publishTimer);
           publishTimer = setTimeout(() => {
-            void publishMapsWithRetry(5)
-              .catch((error) => console.error("[RPGJS] Map republication failed:", error));
+            void publishMapsWithRetry(5).catch((error) => console.error("[RPGJS] Map republication failed:", error));
           }, 100);
         });
         return;

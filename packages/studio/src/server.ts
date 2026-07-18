@@ -1,41 +1,25 @@
-import { Move, RpgEvent, RpgMap, RpgPlayer, RpgServer } from "@rpgjs/server";
+import { Move, RpgEvent, RpgMap, RpgPlayer, RpgServer, provideServerMapStreaming } from "@rpgjs/server";
 import { defineModule, normalizeLightingState, WorldMapsManager, type RpgActionInput } from "@rpgjs/common";
 import { BlockExecutionService } from "./block-executor";
-import { apiUrl } from "./constants";
+import { apiUrl, configureStudioConstants } from "./constants";
 import { RATIO_MAP_X, RATIO_MAP_Y } from "@common/map";
 import { matchesPageConditions } from "@common/blocks";
 import type { ProjectBasic } from "@common/types/project";
-import {
-  applyTriggerSettings,
-  getEventTypeRuntime,
-  getGraphicKey,
-  getGraphicScale,
-  RpgMapExtended,
-} from "./event-type-runtime";
+import { applyTriggerSettings, getEventTypeRuntime, getGraphicKey, getGraphicScale, RpgMapExtended } from "./event-type-runtime";
 import { normalizeEventType } from "@common/event-types";
 import { normalizeWeatherState } from "@common/weather";
-import {
-  getGameDataProvider,
-  getStudioGameRuntimeConfig,
-} from "./data-provider";
+import { getGameDataProvider, getStudioGameRuntimeConfig, configureStudioGameRuntime, resetGameDataProvider } from "./data-provider";
 import type { GameRuntimeMode } from "./data-provider";
-import {
-  normalizeStudioDatabase,
-  normalizeStudioDatabaseRecord,
-} from "./database-normalizer";
+import { normalizeStudioDatabase, normalizeStudioDatabaseRecord } from "./database-normalizer";
 import { createStudioDefaultClass } from "./skills-to-learn";
 import { getStudioSkillChangeNotification } from "./skill-notification";
 import { triggerMatchesExecution, type StudioTouchTarget } from "./touch-runtime";
+import { compileStudioMapStream, isStudioDirectLoadPayload, prepareStudioMapPayload, type PreparedStudioMapPayload } from "./map-streaming";
+import { prepareStudioTerrainControlRegions } from "./terrain-control-streaming";
 export { createStudioActionBattleAnimations } from "./action-battle-animations";
-export type {
-  StudioCombatAnimationIds,
-  StudioCombatAnimationOptions,
-} from "./action-battle-animations";
+export type { StudioCombatAnimationIds, StudioCombatAnimationOptions } from "./action-battle-animations";
 
-const mergePlayerConfig = (
-  baseConfig: ProjectBasic = {},
-  overrideConfig?: Partial<ProjectBasic> | null,
-): ProjectBasic => {
+const mergePlayerConfig = (baseConfig: ProjectBasic = {}, overrideConfig?: Partial<ProjectBasic> | null): ProjectBasic => {
   if (!overrideConfig) {
     return {
       ...baseConfig,
@@ -51,11 +35,7 @@ const mergePlayerConfig = (
       ...(overrideConfig.parameters ?? {}),
     },
     startingInventory: overrideConfig.startingInventory ?? baseConfig.startingInventory,
-    skillsToLearn:
-      overrideConfig.skillsToLearn ??
-      overrideConfig.skills ??
-      baseConfig.skillsToLearn ??
-      baseConfig.skills,
+    skillsToLearn: overrideConfig.skillsToLearn ?? overrideConfig.skills ?? baseConfig.skillsToLearn ?? baseConfig.skills,
     startingEquipment: {
       ...(baseConfig.startingEquipment ?? {}),
       ...(overrideConfig.startingEquipment ?? {}),
@@ -73,8 +53,7 @@ const createMapVariableConditionSubject = (map: RpgMap | null) => {
   }
   return {
     getVariable: (variableId: string) => (map as any).getVariable(variableId),
-    setVariable: (variableId: string, value: unknown) =>
-      (map as any).setVariable?.(variableId, value),
+    setVariable: (variableId: string, value: unknown) => (map as any).setVariable?.(variableId, value),
     hasItem: () => false,
     getItemCount: () => 0,
     gold: 0,
@@ -108,28 +87,17 @@ const normalizeRuntimeHitbox = (value: unknown): { width: number; height: number
 
 export const resolveRuntimeEventHitbox = (object: any, params: any): { width: number; height: number } | undefined => {
   const triggerHitbox = Array.isArray(object?.triggers)
-    ? [...object.triggers]
-      .reverse()
-      .find((trigger: any) => trigger?.enabled !== false && normalizeRuntimeHitbox(trigger?.hitbox))
-      ?.hitbox
+    ? [...object.triggers].reverse().find((trigger: any) => trigger?.enabled !== false && normalizeRuntimeHitbox(trigger?.hitbox))?.hitbox
     : undefined;
 
-  return (
-    normalizeRuntimeHitbox(object?.hitbox) ??
-    normalizeRuntimeHitbox(triggerHitbox) ??
-    normalizeRuntimeHitbox(params?.hitbox)
-  );
+  return normalizeRuntimeHitbox(object?.hitbox) ?? normalizeRuntimeHitbox(triggerHitbox) ?? normalizeRuntimeHitbox(params?.hitbox);
 };
 
 const resolvePlayerConfig = async (player: RpgPlayer): Promise<ProjectBasic> => {
   const gameConfig = readGameConfig();
   const baseHeroConfig = {
     ...(gameConfig.hero ?? {}),
-    skillsToLearn:
-      gameConfig.skillsToLearn ??
-      gameConfig.skills ??
-      gameConfig.hero?.skillsToLearn ??
-      gameConfig.hero?.skills,
+    skillsToLearn: gameConfig.skillsToLearn ?? gameConfig.skills ?? gameConfig.hero?.skillsToLearn ?? gameConfig.hero?.skills,
     animations: gameConfig.animations ?? gameConfig.hero?.animations,
   } as ProjectBasic;
   const provider = getGameDataProvider();
@@ -166,7 +134,9 @@ const startGame = async (player: RpgPlayer, map?: RpgMap) => {
 };
 
 const applyStartGameOnce = async (player: RpgPlayer, map?: RpgMap) => {
-  const runtimePlayer = player as RpgPlayer & { __studioStartGameApplied?: boolean };
+  const runtimePlayer = player as RpgPlayer & {
+    __studioStartGameApplied?: boolean;
+  };
   if (runtimePlayer.__studioStartGameApplied) return;
   await startGame(player, map);
   runtimePlayer.__studioStartGameApplied = true;
@@ -192,17 +162,10 @@ const applyPlayerHitbox = (player: RpgPlayer, config: ProjectBasic): void => {
   (player as any).setHitbox(hitbox.width, hitbox.height);
 };
 
-const assignPlayerStartParams = (
-  player: RpgPlayer,
-  config: ProjectBasic,
-  startingItems: Record<string, any> = {},
-) => {
+const assignPlayerStartParams = (player: RpgPlayer, config: ProjectBasic, startingItems: Record<string, any> = {}) => {
   const defaultClass = createStudioDefaultClass(config.skillsToLearn);
   const currentClass = (player as any)._class?.();
-  const hasCurrentClass =
-    currentClass &&
-    typeof currentClass === "object" &&
-    Object.keys(currentClass).length > 0;
+  const hasCurrentClass = currentClass && typeof currentClass === "object" && Object.keys(currentClass).length > 0;
   if (defaultClass && !hasCurrentClass && (player as any)._class?.set) {
     (player as any)._class.set(defaultClass);
   }
@@ -257,11 +220,7 @@ const notifySkillChange = (player: RpgPlayer, payload: any) => {
   player.showNotification(notification.message, { type: notification.type });
 };
 
-const ensureStartingItemsInDatabase = async (
-  player: RpgPlayer,
-  config: ProjectBasic,
-  mapOverride?: RpgMap,
-): Promise<Record<string, any>> => {
+const ensureStartingItemsInDatabase = async (player: RpgPlayer, config: ProjectBasic, mapOverride?: RpgMap): Promise<Record<string, any>> => {
   const itemIds = collectStartingItemIds(config);
   if (itemIds.length === 0) return {};
 
@@ -304,11 +263,38 @@ const databaseCacheByProjectId = new Map<string, any>();
 const eventsCacheByBundlePath = new Map<string, Promise<any[]>>();
 const projectCacheByKey = new Map<string, Promise<any>>();
 
-type StudioServerConfig = {
+/** Server-side and trusted-publisher options for a Studio game. */
+export interface CreateStudioMapUpdatePayloadOptions {
+  /** Studio project identifier used to load project and database records. */
   projectId?: string | null;
+  /** Map used when the project does not define another starting map. */
   startMapId?: string;
+  /** Studio data source. Trusted publishers normally use `online`. */
   runtimeMode?: GameRuntimeMode;
-};
+  /** Compatibility alias for `apiUrl`. */
+  apiBaseUrl?: string;
+  /** Studio API root. Defaults to `<baseUrl>/api`. */
+  apiUrl?: string;
+  /** Public Studio media root used by render descriptors. */
+  assetsUrl?: string;
+  /** Studio application root. Defaults to `https://rpgjs.studio`. */
+  baseUrl?: string;
+  /** Exported Studio bundle root when using offline or auto mode. */
+  bundleBasePath?: string;
+  /** Authoritative chunk-streaming settings applied by the map room. */
+  streaming?:
+    | false
+    | {
+        /** Width and height of one chunk in Studio cells. Defaults to 16. */
+        chunkSize?: number;
+        /** Radius sent around the authoritative player position. Defaults to 2. */
+        loadRadius?: number;
+        /** Radius retained by the client to avoid boundary churn. Defaults to 3. */
+        retainRadius?: number;
+      };
+}
+
+type StudioServerConfig = CreateStudioMapUpdatePayloadOptions;
 
 const ensureLeadingSlash = (value: string): string => {
   if (!value) return "/game-data";
@@ -357,12 +343,7 @@ const toIdentifierString = (value: unknown): string => {
   }
   if (!value || typeof value !== "object") return "";
   const record = value as Record<string, unknown>;
-  return (
-    toIdentifierString(record._id) ||
-    toIdentifierString(record.id) ||
-    toIdentifierString(record.mediaId) ||
-    toIdentifierString(record.referenceId)
-  );
+  return toIdentifierString(record._id) || toIdentifierString(record.id) || toIdentifierString(record.mediaId) || toIdentifierString(record.referenceId);
 };
 
 const resolveMediaReference = async (value: unknown): Promise<unknown> => {
@@ -370,20 +351,13 @@ const resolveMediaReference = async (value: unknown): Promise<unknown> => {
   const referenceId = toIdentifierString(value);
   if (!referenceId) return value;
 
-  const candidateIds = Array.from(
-    new Set([
-      referenceId,
-      referenceId.startsWith("#") ? referenceId.slice(1) : referenceId,
-    ].filter(Boolean)),
-  );
+  const candidateIds = Array.from(new Set([referenceId, referenceId.startsWith("#") ? referenceId.slice(1) : referenceId].filter(Boolean)));
 
   for (const candidateId of candidateIds) {
     try {
       const media = await getGameDataProvider().getMedia(candidateId);
       if (media && !media.__placeholder) {
-        return value && typeof value === "object"
-          ? { ...(value as Record<string, unknown>), ...media }
-          : media;
+        return value && typeof value === "object" ? { ...(value as Record<string, unknown>), ...media } : media;
       }
     } catch {
       // Keep the original reference when Studio cannot resolve it as media.
@@ -394,27 +368,31 @@ const resolveMediaReference = async (value: unknown): Promise<unknown> => {
 };
 
 const hydrateEventMediaReferences = async (events: any[]): Promise<any[]> => {
-  return Promise.all(events.map(async (event) => {
-    if (!event || typeof event !== "object") return event;
-    const nextEvent = { ...event };
-    if (nextEvent.params?.graphic) {
-      nextEvent.params = {
-        ...nextEvent.params,
-        graphic: await resolveMediaReference(nextEvent.params.graphic),
-      };
-    }
-    if (Array.isArray(nextEvent.triggers)) {
-      nextEvent.triggers = await Promise.all(nextEvent.triggers.map(async (trigger: any) => {
-        if (!trigger || typeof trigger !== "object") return trigger;
-        if (!trigger.graphic) return trigger;
-        return {
-          ...trigger,
-          graphic: await resolveMediaReference(trigger.graphic),
+  return Promise.all(
+    events.map(async (event) => {
+      if (!event || typeof event !== "object") return event;
+      const nextEvent = { ...event };
+      if (nextEvent.params?.graphic) {
+        nextEvent.params = {
+          ...nextEvent.params,
+          graphic: await resolveMediaReference(nextEvent.params.graphic),
         };
-      }));
-    }
-    return nextEvent;
-  }));
+      }
+      if (Array.isArray(nextEvent.triggers)) {
+        nextEvent.triggers = await Promise.all(
+          nextEvent.triggers.map(async (trigger: any) => {
+            if (!trigger || typeof trigger !== "object") return trigger;
+            if (!trigger.graphic) return trigger;
+            return {
+              ...trigger,
+              graphic: await resolveMediaReference(trigger.graphic),
+            };
+          }),
+        );
+      }
+      return nextEvent;
+    }),
+  );
 };
 
 const shouldUseLocalBundleEvents = (config: StudioServerConfig = {}): boolean => {
@@ -423,29 +401,17 @@ const shouldUseLocalBundleEvents = (config: StudioServerConfig = {}): boolean =>
   if (runtimeMode === "online") return false;
 
   const gameConfig = readGameConfig();
-  const projectId =
-    config.projectId?.trim?.() ||
-    runtimeConfig.projectId?.trim?.() ||
-    gameConfig?._id ||
-    null;
+  const projectId = config.projectId?.trim?.() || runtimeConfig.projectId?.trim?.() || gameConfig?._id || null;
 
   return !projectId;
 };
 
-const resolveMapEventReferences = async (
-  events: unknown,
-  options: { useLocalBundleEvents: boolean },
-): Promise<any[]> => {
+const resolveMapEventReferences = async (events: unknown, options: { useLocalBundleEvents: boolean }): Promise<any[]> => {
   const list = parseArrayValue(events);
   if (list.length === 0) return [];
   if (!options.useLocalBundleEvents) return list;
 
-  const hasEventIdReference = list.some(
-    (entry) =>
-      entry &&
-      typeof entry === "object" &&
-      typeof (entry as Record<string, unknown>).eventId === "string",
-  );
+  const hasEventIdReference = list.some((entry) => entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).eventId === "string");
 
   if (!hasEventIdReference) {
     return list;
@@ -458,12 +424,7 @@ const resolveMapEventReferences = async (
 
   const byId = new Map<string, any>();
   bundleEvents.forEach((entry) => {
-    const ids = [
-      entry?.eventId,
-      entry?.id,
-      entry?._id,
-    ]
-      .filter((value): value is string => typeof value === "string" && value.length > 0);
+    const ids = [entry?.eventId, entry?.id, entry?._id].filter((value): value is string => typeof value === "string" && value.length > 0);
     ids.forEach((id) => byId.set(id, entry));
   });
 
@@ -508,17 +469,10 @@ const parseJsonValue = (value: unknown, fallback: any): any => {
   }
 };
 
-const resolveStudioProject = async (
-  mapId?: string,
-  config: StudioServerConfig = {},
-): Promise<any> => {
+const resolveStudioProject = async (mapId?: string, config: StudioServerConfig = {}): Promise<any> => {
   const runtimeConfig = getStudioGameRuntimeConfig();
   const gameConfig = readGameConfig();
-  const projectId =
-    config.projectId?.trim?.() ||
-    runtimeConfig.projectId?.trim?.() ||
-    gameConfig?._id ||
-    null;
+  const projectId = config.projectId?.trim?.() || runtimeConfig.projectId?.trim?.() || gameConfig?._id || null;
   const cacheKey = projectId ? `project:${projectId}` : `map:${mapId ?? ""}`;
 
   if (!projectCacheByKey.has(cacheKey)) {
@@ -545,31 +499,17 @@ const resolveStartMapId = async (config: StudioServerConfig): Promise<string> =>
   return project?.startMapId || "simplemap";
 };
 
-const normalizeStudioMapPayload = async (
-  mapId: string,
-  initialMapData: any,
-  config: StudioServerConfig,
-): Promise<any> => {
+const normalizeStudioMapPayload = async (mapId: string, initialMapData: any, config: StudioServerConfig): Promise<any> => {
   if (initialMapData?.data?.params) return initialMapData;
 
-  const [project, mapResponse] = await Promise.all([
-    resolveStudioProject(mapId, config),
-    getGameDataProvider().getMap(mapId),
-  ]);
+  const [project, mapResponse] = await Promise.all([resolveStudioProject(mapId, config), getGameDataProvider().getMap(mapId)]);
   const useLocalBundleEvents = shouldUseLocalBundleEvents(config);
   const params = mapResponse.params ?? {};
   const isV2 = mapResponse.creationDetails?.version === "v2";
-  const resolvedEvents = await resolveMapEventReferences(
-    mapResponse.events ?? mapResponse.data?.events,
-    { useLocalBundleEvents },
-  );
+  const resolvedEvents = await resolveMapEventReferences(mapResponse.events ?? mapResponse.data?.events, { useLocalBundleEvents });
   const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents);
-  const hydratedCommonEvents = await hydrateEventMediaReferences(
-    parseArrayValue(mapResponse.commonEvents ?? mapResponse.data?.commonEvents),
-  );
-  const mapDataValue = Array.isArray(mapResponse.data)
-    ? mapResponse.data
-    : parseJsonValue(mapResponse.data, []);
+  const hydratedCommonEvents = await hydrateEventMediaReferences(parseArrayValue(mapResponse.commonEvents ?? mapResponse.data?.commonEvents));
+  const mapDataValue = Array.isArray(mapResponse.data) ? mapResponse.data : parseJsonValue(mapResponse.data, []);
   const mergedHitboxes = [...(mapResponse.hitboxes ?? [])];
 
   if (Array.isArray(mapResponse.polygons)) {
@@ -605,16 +545,8 @@ const normalizeStudioMapPayload = async (
     events: hydratedEvents,
     commonEvents: hydratedCommonEvents,
     hitboxes: mergedHitboxes,
-    width:
-      initialMapData?.width ||
-      (isV2 ? params.width * 48 : params.width) ||
-      mapResponse.width ||
-      1,
-    height:
-      initialMapData?.height ||
-      (isV2 ? params.height * 48 : params.height) ||
-      mapResponse.height ||
-      1,
+    width: initialMapData?.width || (isV2 ? params.width * 48 : params.width) || mapResponse.width || 1,
+    height: initialMapData?.height || (isV2 ? params.height * 48 : params.height) || mapResponse.height || 1,
     config: {
       ...project,
       ...(initialMapData?.config ?? {}),
@@ -623,8 +555,64 @@ const normalizeStudioMapPayload = async (
   };
 };
 
+/**
+ * Load and prepare a complete Studio v2 map for an authenticated `/map/update` call.
+ * This function is intended for Vite, Studio, CI, or another trusted Node process.
+ */
+export async function createStudioMapUpdatePayload(mapId: string, config: CreateStudioMapUpdatePayloadOptions = {}): Promise<PreparedStudioMapPayload> {
+  const resolvedBaseUrl = config.baseUrl ?? "https://rpgjs.studio";
+  const resolvedApiUrl = config.apiUrl ?? config.apiBaseUrl ?? `${resolvedBaseUrl}/api`;
+  configureStudioConstants({
+    baseUrl: resolvedBaseUrl,
+    apiUrl: resolvedApiUrl,
+    assetsUrl: config.assetsUrl ?? "https://assets.rpgjs.studio",
+  });
+  configureStudioGameRuntime({
+    projectId: config.projectId ?? null,
+    runtimeMode: config.runtimeMode ?? "online",
+    apiBaseUrl: resolvedApiUrl,
+    bundleBasePath: config.bundleBasePath,
+  });
+  resetGameDataProvider();
+  const normalized = await normalizeStudioMapPayload(
+    mapId,
+    {
+      id: mapId,
+      width: 0,
+      height: 0,
+      events: [],
+    },
+    config,
+  );
+  const projectId = config.projectId?.trim() || normalized.config?._id || normalized.data?.projectId;
+  const database = projectId ? await getGameDataProvider().getDatabase(projectId) : [];
+  const prepared = prepareStudioMapPayload(normalized, {
+    id: mapId,
+    config: normalized.config,
+    database,
+  });
+  return prepareStudioTerrainControlRegions(
+    prepared,
+    config.streaming === false ? 16 : config.streaming?.chunkSize
+  );
+}
+
 export default (_config?: unknown) => {
   const config = (_config ?? {}) as StudioServerConfig;
+  const streamingOptions = config.streaming === false ? undefined : config.streaming ?? {};
+  const streamingModule = streamingOptions
+    ? provideServerMapStreaming(
+        {
+          compile(mapData: PreparedStudioMapPayload) {
+            if (isStudioDirectLoadPayload(mapData)) return undefined;
+            return compileStudioMapStream(mapData, {
+              chunkSize: streamingOptions.chunkSize,
+            });
+          },
+        },
+        streamingOptions,
+      )
+    : undefined;
 
   return defineModule<RpgServer>({
     player: {
@@ -637,12 +625,7 @@ export default (_config?: unknown) => {
         const heroGraphic = (mapExtended.globalConfig.hero as any)?.graphic;
         const heroGraphicKey = getGraphicKey(heroGraphic);
         if (heroGraphicKey) {
-          (player as any)._graphicScale?.set(
-            getGraphicScale(
-              (mapExtended.globalConfig.hero as any)?.params,
-              mapExtended.globalConfig.hero,
-            ) ?? null,
-          );
+          (player as any)._graphicScale?.set(getGraphicScale((mapExtended.globalConfig.hero as any)?.params, mapExtended.globalConfig.hero) ?? null);
           player.setGraphic(heroGraphicKey);
         } else {
           (player as any)._graphicScale?.set(null);
@@ -699,19 +682,25 @@ export default (_config?: unknown) => {
     map: {
       async onBeforeUpdate(mapData: any, map) {
         const mapExtended = map as RpgMapExtended;
+        const isDirectLoad = isStudioDirectLoadPayload(mapData);
         const useLocalBundleEvents = shouldUseLocalBundleEvents(config);
-        const hydratedMapData = await normalizeStudioMapPayload(
-          mapData?.id ?? mapData?.data?._id ?? mapData?.data?.id,
-          mapData,
-          config,
-        );
+        const hydratedMapData = await normalizeStudioMapPayload(mapData?.id ?? mapData?.data?._id ?? mapData?.data?.id, mapData, config);
         Object.assign(mapData, hydratedMapData);
+        if (!isDirectLoad && !mapData?.data?.__studioPrepared) {
+          const preparedMapData = prepareStudioMapPayload(mapData, {
+            id: mapData?.id,
+            config: mapData?.config,
+            database: mapData?.database,
+          });
+          await prepareStudioTerrainControlRegions(
+            preparedMapData,
+            streamingOptions?.chunkSize
+          );
+          Object.assign(mapData, preparedMapData);
+        }
         mapExtended.globalConfig = mapData.config ?? {};
 
-        const resolvedEvents = await resolveMapEventReferences(
-          mapData?.events ?? mapData?.data?.events,
-          { useLocalBundleEvents },
-        );
+        const resolvedEvents = await resolveMapEventReferences(mapData?.events ?? mapData?.data?.events, { useLocalBundleEvents });
         const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents);
         const resolvedEventsById = new Map<string, any>();
         hydratedEvents.forEach((entry) => {
@@ -720,22 +709,14 @@ export default (_config?: unknown) => {
         });
         (mapExtended as any).__resolvedEventsById = resolvedEventsById;
 
-        const hydratedCommonEvents = await hydrateEventMediaReferences(
-          parseArrayValue(mapData?.commonEvents ?? mapData?.data?.commonEvents),
-        );
+        const hydratedCommonEvents = await hydrateEventMediaReferences(parseArrayValue(mapData?.commonEvents ?? mapData?.data?.commonEvents));
         const commonEventsById = new Map<string, any>();
         hydratedCommonEvents.forEach((entry) => {
-          const ids = [
-            entry?.eventId,
-            entry?.id,
-            entry?._id,
-          ].filter((value): value is string => typeof value === "string" && value.length > 0);
+          const ids = [entry?.eventId, entry?.id, entry?._id].filter((value): value is string => typeof value === "string" && value.length > 0);
           ids.forEach((id) => commonEventsById.set(id, entry));
         });
         (mapExtended as any).__studioCommonEventsById = commonEventsById;
-        (mapExtended as any).__studioMapLoadBlocks = parseArrayValue(
-          mapData?.mapLoadBlocks ?? mapData?.data?.mapLoadBlocks,
-        );
+        (mapExtended as any).__studioMapLoadBlocks = parseArrayValue(mapData?.mapLoadBlocks ?? mapData?.data?.mapLoadBlocks);
 
         mapData.events = hydratedEvents;
         mapData.commonEvents = hydratedCommonEvents;
@@ -745,9 +726,7 @@ export default (_config?: unknown) => {
         }
         mapExtended.startPosition = mapData.data?.start;
         mapExtended.scale = mapData.data?.params?.scale || 1;
-        const normalizedInitialWeather = normalizeWeatherState(
-          mapData?.data?.weather,
-        );
+        const normalizedInitialWeather = normalizeWeatherState(mapData?.data?.weather);
         if (mapData?.data) {
           mapData.data.weather = normalizedInitialWeather;
           mapData.data.lighting = normalizeLightingState(mapData?.data?.lighting);
@@ -766,6 +745,8 @@ export default (_config?: unknown) => {
           mapExtended.setInWorldMaps(worldManager);
         }
 
+        await streamingModule?.map?.onBeforeUpdate?.(mapData, map);
+
         return map as any;
       },
       async onJoin(player: RpgPlayer, map: RpgMap) {
@@ -777,6 +758,9 @@ export default (_config?: unknown) => {
         const blockExecutor = new BlockExecutionService(player, null, map);
         await blockExecutor.executeBlockSequence(blocks);
       },
+      onLeave(player: RpgPlayer, map: RpgMap) {
+        return streamingModule?.map?.onLeave?.(player, map);
+      },
     },
     event: {
       onBeforeCreated(eventPlacement, map: RpgMap) {
@@ -787,25 +771,13 @@ export default (_config?: unknown) => {
         let object = eventPlacement.event as Record<string, any>;
 
         const objectRefId = String(object?.eventId ?? object?.id ?? object?._id ?? "");
-        const hasDetailedEventData =
-          Boolean(object?.triggers && Array.isArray(object.triggers)) ||
-          Boolean(object?.params && typeof object.params === "object");
+        const hasDetailedEventData = Boolean(object?.triggers && Array.isArray(object.triggers)) || Boolean(object?.params && typeof object.params === "object");
 
         if (!hasDetailedEventData && objectRefId) {
           const resolved = (mapExtended as any).__resolvedEventsById?.get?.(objectRefId);
           if (resolved) {
-            const x =
-              typeof object?.x === "number"
-                ? object.x
-                : typeof resolved?.x === "number"
-                  ? resolved.x
-                  : resolved?.position?.x;
-            const y =
-              typeof object?.y === "number"
-                ? object.y
-                : typeof resolved?.y === "number"
-                  ? resolved.y
-                  : resolved?.position?.y;
+            const x = typeof object?.x === "number" ? object.x : typeof resolved?.x === "number" ? resolved.x : resolved?.position?.x;
+            const y = typeof object?.y === "number" ? object.y : typeof resolved?.y === "number" ? resolved.y : resolved?.position?.y;
 
             object = {
               ...resolved,
@@ -822,9 +794,7 @@ export default (_config?: unknown) => {
         const params = object.params;
         const hitbox = resolveRuntimeEventHitbox(object, params);
         const scale = mapExtended.scale;
-        const eventType =
-          normalizeEventType(object.eventType || object.type || "character") ||
-          "character";
+        const eventType = normalizeEventType(object.eventType || object.type || "character") || "character";
         const runtime = getEventTypeRuntime(eventType);
 
         // Add block execution utility to the event
@@ -832,12 +802,8 @@ export default (_config?: unknown) => {
 
         // If the event has triggers defined, add execution methods
         if (object.triggers && Array.isArray(object.triggers)) {
-          eventObj.resolveActiveTrigger = function (
-            player: RpgPlayer | null,
-            event: RpgEvent,
-          ) {
-            const conditionPlayer =
-              player ?? createMapVariableConditionSubject(event.getCurrentMap?.() ?? map);
+          eventObj.resolveActiveTrigger = function (player: RpgPlayer | null, event: RpgEvent) {
+            const conditionPlayer = player ?? createMapVariableConditionSubject(event.getCurrentMap?.() ?? map);
             for (let i = object.triggers.length - 1; i >= 0; i--) {
               const trigger = object.triggers[i];
               const isEnabled = trigger?.enabled !== false;
@@ -854,15 +820,10 @@ export default (_config?: unknown) => {
             return null;
           };
 
-          eventObj.applyActiveTrigger = function (
-            player: RpgPlayer | null,
-            event: RpgEvent,
-          ) {
+          eventObj.applyActiveTrigger = function (player: RpgPlayer | null, event: RpgEvent) {
             let resolved = eventObj.resolveActiveTrigger(player, event);
             if (!resolved && !player) {
-              const fallbackIndex = object.triggers.findIndex(
-                (trigger: any) => trigger?.enabled !== false,
-              );
+              const fallbackIndex = object.triggers.findIndex((trigger: any) => trigger?.enabled !== false);
               if (fallbackIndex >= 0) {
                 resolved = {
                   trigger: object.triggers[fallbackIndex],
@@ -893,12 +854,7 @@ export default (_config?: unknown) => {
               variableScope?: "player" | "map";
             },
           ) {
-            const blockExecutor = new BlockExecutionService(
-              player,
-              event,
-              event.getCurrentMap?.() ?? map,
-              { variableScope: options?.variableScope },
-            );
+            const blockExecutor = new BlockExecutionService(player, event, event.getCurrentMap?.() ?? map, { variableScope: options?.variableScope });
             const conditionPlayer = options?.variableScope === "map" ? null : player;
             const trigger = eventObj.applyActiveTrigger(conditionPlayer, event);
             if (!triggerMatchesExecution(trigger, triggerType, options?.touchTarget)) {
@@ -916,18 +872,13 @@ export default (_config?: unknown) => {
               const [player] = map?.getPlayers() ?? [];
               const runParallelLoop = () => {
                 const loop = () => {
-                  eventObj
-                    .executeBlocks(player, "onParallel", this)
-                    .then(() => {
-                      setTimeout(loop, 1000);
-                    });
+                  eventObj.executeBlocks(player, "onParallel", this).then(() => {
+                    setTimeout(loop, 1000);
+                  });
                 };
                 loop();
               };
-              const runInitLifecycle = async (options?: {
-                runInitBlocks?: boolean;
-                startParallelLoop?: boolean;
-              }) => {
+              const runInitLifecycle = async (options?: { runInitBlocks?: boolean; startParallelLoop?: boolean }) => {
                 eventObj.applyActiveTrigger(player, this);
                 this.teleport({
                   x: object.x * mapExtended.scale,
@@ -963,12 +914,7 @@ export default (_config?: unknown) => {
             }, 0);
           };
 
-          const createContext = (
-            player: RpgPlayer | null,
-            event: RpgEvent,
-            triggerType: string,
-            touchContext?: any,
-          ) => {
+          const createContext = (player: RpgPlayer | null, event: RpgEvent, triggerType: string, touchContext?: any) => {
             return {
               event,
               player,
@@ -1013,10 +959,7 @@ export default (_config?: unknown) => {
             }
           };
 
-          eventObj.onTouch = async function (
-            _other: RpgPlayer | RpgEvent,
-            touchContext: any,
-          ) {
+          eventObj.onTouch = async function (_other: RpgPlayer | RpgEvent, touchContext: any) {
             if (touchContext?.otherType !== "event") {
               return;
             }
@@ -1061,9 +1004,19 @@ export default (_config?: unknown) => {
         };
       },
     },
-    database: async () => {
-      const configuredProjectId =
-        getStudioGameRuntimeConfig().projectId?.trim() || null;
+    database: async (map: RpgMap) => {
+      const publishedMapData =
+        typeof (map as any)?.data === "function"
+          ? (map as any).data()
+          : undefined;
+      const publishedDatabase = publishedMapData?.database;
+      if (Array.isArray(publishedDatabase)) {
+        return normalizeStudioDatabase(publishedDatabase);
+      }
+      if (publishedDatabase && typeof publishedDatabase === "object") {
+        return publishedDatabase;
+      }
+      const configuredProjectId = getStudioGameRuntimeConfig().projectId?.trim() || null;
       const gameConfig = readGameConfig();
       const resolvedProjectId = configuredProjectId || gameConfig?._id || "";
 
@@ -1071,9 +1024,7 @@ export default (_config?: unknown) => {
         return databaseCacheByProjectId.get(resolvedProjectId);
       }
 
-      const response = await getGameDataProvider().getDatabase(
-        configuredProjectId || gameConfig?._id,
-      );
+      const response = await getGameDataProvider().getDatabase(configuredProjectId || gameConfig?._id);
       const database = normalizeStudioDatabase(response);
       databaseCacheByProjectId.set(resolvedProjectId, database);
       return database;

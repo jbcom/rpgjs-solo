@@ -95,7 +95,7 @@ function createBuildConfig(target: BuildTarget, watch: boolean) {
       minify: false,
       lib: {
         entry: {
-          index: "src/index.ts",
+          index: isClient ? "src/index.ts" : "src/server-entry.ts",
         },
         fileName: "index",
         formats: ["es" as const],

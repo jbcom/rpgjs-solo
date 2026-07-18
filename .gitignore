@@ -26,4 +26,7 @@ public
 !playground/games/pressure-plate/public/
 !playground/games/pressure-plate/public/hero.png
 .partykit
+.wrangler
 .vite
+.env.local
+.dev.vars

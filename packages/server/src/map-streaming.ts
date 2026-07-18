@@ -179,7 +179,23 @@ class ServerMapStreamingRuntime {
   }
 }
 
-const runtimes = new WeakMap<RpgMap, ServerMapStreamingRuntime>();
+// The server package has independent root, Node and Cloudflare bundle entries.
+// A module-local WeakMap would therefore be duplicated when a provider imports
+// a different entry from the map room. Keep the runtime on the shared map
+// instance so every bundle entry observes the same state.
+const MAP_STREAMING_RUNTIME = Symbol.for("@rpgjs/server/map-streaming-runtime");
+
+function getRuntime(map: RpgMap): ServerMapStreamingRuntime | undefined {
+  return (map as any)[MAP_STREAMING_RUNTIME];
+}
+
+function setRuntime(map: RpgMap, runtime: ServerMapStreamingRuntime): void {
+  Object.defineProperty(map, MAP_STREAMING_RUNTIME, {
+    configurable: true,
+    writable: true,
+    value: runtime,
+  });
+}
 
 export function installMapStreaming(
   map: RpgMap,
@@ -187,20 +203,30 @@ export function installMapStreaming(
   options: ServerMapStreamingOptions = {},
 ): void {
   const runtime = new ServerMapStreamingRuntime(map, definition, options);
-  runtimes.set(map, runtime);
+  setRuntime(map, runtime);
   map.getPlayers().forEach((player) => runtime.sendInitial(player));
 }
 
 export function clearMapStreaming(map: RpgMap): void {
-  runtimes.delete(map);
+  delete (map as any)[MAP_STREAMING_RUNTIME];
 }
 
 export function refreshMapStreaming(map: RpgMap): void {
-  runtimes.get(map)?.refreshPlayers();
+  getRuntime(map)?.refreshPlayers();
 }
 
 export function removeMapStreamingPlayer(map: RpgMap, player: RpgPlayer): void {
-  runtimes.get(map)?.removePlayer(player);
+  getRuntime(map)?.removePlayer(player);
+}
+
+/** Send a fresh manifest and initial chunks after the room attaches a connection. */
+export function sendInitialMapStreaming(map: RpgMap, player: RpgPlayer): void {
+  getRuntime(map)?.sendInitial(player);
+}
+
+/** Whether this concrete room instance has compiled authoritative chunks. */
+export function hasMapStreamingRuntime(map: RpgMap): boolean {
+  return Boolean(getRuntime(map));
 }
 
 export function isMapStreamingPositionVisible(
@@ -209,11 +235,11 @@ export function isMapStreamingPositionVisible(
   x: number,
   y: number,
 ): boolean {
-  return runtimes.get(map)?.isPositionVisible(player, x, y) ?? true;
+  return getRuntime(map)?.isPositionVisible(player, x, y) ?? true;
 }
 
 export function filterMapStreamingProjectilePacket(map: RpgMap, player: RpgPlayer, packet: any): any {
-  return runtimes.get(map)?.filterProjectilePacket(player, packet) ?? packet;
+  return getRuntime(map)?.filterProjectilePacket(player, packet) ?? packet;
 }
 
 /**
@@ -247,9 +273,6 @@ export function provideServerMapStreaming<TMapData, TManifestData, TChunkData>(
           return;
         }
         installMapStreaming(map, definition, options);
-      },
-      onJoin(player, map) {
-        runtimes.get(map)?.sendInitial(player);
       },
       onLeave(player, map) {
         removeMapStreamingPlayer(map, player);

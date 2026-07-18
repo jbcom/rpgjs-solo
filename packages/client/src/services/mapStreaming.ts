@@ -1,6 +1,7 @@
 import { Context, inject } from "@signe/di";
 import {
   MAP_STREAM_EVENT,
+  MAP_STREAM_REQUEST_EVENT,
   type MapChunkHitbox,
   type MapStreamChunk,
   type MapStreamManifest,
@@ -148,7 +149,7 @@ class MapStreamingClientService<TManifestData, TChunkData, TState> {
   private readonly waiters = new Map<string, Waiter[]>();
 
   constructor(
-    socket: AbstractWebsocket,
+    private readonly socket: AbstractWebsocket,
     private readonly options: ClientMapStreamingOptions<TManifestData, TChunkData, TState>,
   ) {
     socket.on(MAP_STREAM_EVENT, (packet) => this.receive(packet));
@@ -159,7 +160,7 @@ class MapStreamingClientService<TManifestData, TChunkData, TState> {
     const existing = this.controllers.get(normalizedId);
     if (existing) return existing.toMapData();
 
-    const controller = await new Promise<MapStreamClientController<TManifestData, TChunkData, TState>>((resolve, reject) => {
+    const controllerPromise = new Promise<MapStreamClientController<TManifestData, TChunkData, TState>>((resolve, reject) => {
       const timeoutMs = Math.max(1, this.options.timeoutMs ?? 10_000);
       const waiter: Waiter = { resolve, reject, timer: undefined as unknown as ReturnType<typeof setTimeout> };
       const timer = setTimeout(() => {
@@ -174,7 +175,11 @@ class MapStreamingClientService<TManifestData, TChunkData, TState> {
       waiters.push(waiter);
       this.waiters.set(normalizedId, waiters);
     });
-    return controller.toMapData();
+    // The map-room connection is established before load() runs. Request the
+    // initial packet only after the waiter is registered so fast local and DO
+    // transports cannot deliver it before the client is ready.
+    this.socket.emit(MAP_STREAM_REQUEST_EVENT, { mapId: normalizedId });
+    return (await controllerPromise).toMapData();
   }
 
   private receive(packet: MapStreamPacket<TManifestData, TChunkData>): void {

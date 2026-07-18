@@ -14,6 +14,7 @@ import {
   type MapPhysicsInitContext,
   type MapPhysicsEntityContext,
   type RpgActionInput,
+  MAP_STREAM_REQUEST_EVENT,
 } from "@rpgjs/common";
 import {
   DEFAULT_DAY_LIGHTING,
@@ -47,13 +48,16 @@ import { RpgMapProjectiles } from "../projectiles";
 import type { DamageFormulas } from "../Player/BattleManager";
 import {
   filterMapStreamingProjectilePacket,
+  hasMapStreamingRuntime,
   isMapStreamingPositionVisible,
   refreshMapStreaming,
   removeMapStreamingPlayer,
+  sendInitialMapStreaming,
 } from "../map-streaming";
 
 const DEFAULT_DASH_COOLDOWN_MS = 450;
 const GROUND_TOUCH_SENSOR_COVERAGE_THRESHOLD = 0.8;
+const MAP_SOURCE_STORAGE_KEY = "$room:rpgjs-map-source";
 
 type PhysicsCollisionEntity = {
   uuid: string;
@@ -323,6 +327,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   private readonly partyRoom: {
     env: Record<string, unknown>;
     getConnections(): Iterable<unknown>;
+    storage: {
+      get<T = unknown>(key: string): Promise<T | undefined>;
+      put(key: string, value: unknown): Promise<void>;
+    };
   };
   private _clientListeners = new Map<string, Set<(player: RpgPlayer, data: unknown) => void | Promise<void>>>();
   private activeTouchCollisions = new Set<string>();
@@ -509,6 +517,21 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
   private getRuntimeMapUpdateToken(): string | undefined {
     const token = this.partyRoom.env[MAP_UPDATE_TOKEN_ENV];
     return typeof token === "string" && token.length > 0 ? token : undefined;
+  }
+
+  private async restoreMapStreamingRuntime(): Promise<void> {
+    if (hasMapStreamingRuntime(this)) return;
+    const storedMap = await this.partyRoom.storage.get<any>(MAP_SOURCE_STORAGE_KEY);
+    if (!storedMap?.id) return;
+    const token = this.getRuntimeMapUpdateToken();
+    await this.updateMap({
+      url: `http://localhost/parties/main/map-${storedMap.id}/map/update`,
+      method: "POST",
+      headers: createMapUpdateHeaders(token),
+      data: storedMap,
+      json: async () => storedMap,
+      text: async () => JSON.stringify(storedMap),
+    } as unknown as Request);
   }
 
   private hasActiveConnections(): boolean {
@@ -1391,7 +1414,16 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       }
       for (const otherId of visiblePlayers) {
         if (!previousPlayers.has(otherId)) {
-          playerChanges[otherId] = createStatesSnapshotDeep(this.players()[otherId]);
+          const otherPlayer = this.players()[otherId];
+          const existingPatch = playerChanges[otherId];
+          playerChanges[otherId] = {
+            ...createStatesSnapshotDeep(otherPlayer),
+            ...(existingPatch && typeof existingPatch === "object" ? existingPatch : {}),
+            // createStatesSnapshotDeep intentionally excludes persist:false
+            // signals. `isConnected` is one of them, but the client uses it to
+            // decide whether the character sprite is visible.
+            isConnected: otherPlayer.isConnected(),
+          };
         }
       }
       for (const otherId of previousPlayers) {
@@ -1443,6 +1475,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
    * ```
    */
   onJoin(player: RpgPlayer, conn: Parameters<RoomMethods["$send"]>[0]) {
+    // A reconnect reuses the public player id but starts with an empty client
+    // entity cache. Force the next sync packet to include every visible entity.
+    this.spatialVisibleEventIds.delete(player.id);
+    this.spatialVisiblePlayerIds.delete(player.id);
     if (this.data()?.id) {
       this.setAutoTick(true);
     }
@@ -1484,6 +1520,10 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     }
     player.context = context;
     player.conn = conn;
+    // Deliver opportunistically when this room instance is already compiled.
+    // The explicit client request below remains the reliable fallback when a
+    // hibernating provider recreated the room or the transport was not ready.
+    sendInitialMapStreaming(this, player);
     player.pendingInputs = [];
     player.lastProcessedInputTs = 0;
     player._lastFramePositions = null;
@@ -1826,6 +1866,17 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     });
   }
 
+  @Action(MAP_STREAM_REQUEST_EVENT)
+  async onMapStreamRequest(player: RpgPlayer, payload?: { mapId?: string }) {
+    const requestedMapId = payload?.mapId?.replace(/^map-/, "");
+    const currentMapId = String(this.data()?.id ?? this.id ?? "").replace(/^map-/, "");
+    if (requestedMapId && currentMapId && requestedMapId !== currentMapId) {
+      return;
+    }
+    await this.restoreMapStreamingRuntime();
+    sendInitialMapStreaming(this, player);
+  }
+
   @Action('save.save')
   async saveSlot(player: RpgPlayer, value: { requestId: string; index: number; meta?: any }) {
     BaseRoom.prototype.saveSlot(player, value);
@@ -1967,6 +2018,11 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
     // bodies are single-use, so prefer it before falling back to `json()` for
     // direct calls that do not pass through the request decorator.
     const map = (request as Request & { data?: any }).data ?? await request.json()
+    // Hibernating Durable Objects may freeze before Signe's debounced reactive
+    // persistence runs. Persist the trusted private source explicitly and await
+    // it before acknowledging publication, so a later WebSocket instance can
+    // rebuild render chunks, physics and events reliably.
+    await this.partyRoom.storage.put(MAP_SOURCE_STORAGE_KEY, map)
     this.data.set(map)
     this.globalConfig = map.config
     this.damageFormulas = map.damageFormulas || {};

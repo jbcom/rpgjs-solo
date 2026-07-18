@@ -4,6 +4,12 @@ import { configClient } from "./config/config.client";
 
 startGame(
   mergeConfig(configClient, {
-    providers: [provideMmorpg({ connectionIdScope: "ephemeral" })],
-  })
+    providers: [
+      provideMmorpg({
+        connectionIdScope: "session",
+        connectionAcceptanceTimeoutMs: 30_000,
+        socketOptions: { connectionTimeout: 30_000 },
+      }),
+    ],
+  }),
 );
