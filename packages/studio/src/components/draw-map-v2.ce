@@ -8,21 +8,21 @@
 
 @if (weatherOptions()) {
   <Weather
-      effect={weatherOptions().effect}
-      density={weatherOptions().density}
-      speed={weatherOptions().speed}
-      windDirection={weatherOptions().windDirection}
-      windStrength={weatherOptions().windStrength}
-      maxDrops={weatherOptions().maxDrops}
-      scale={weatherOptions().scale}
-      height={weatherOptions().height}
-      sunIntensity={weatherOptions().sunIntensity}
-      sunAngle={weatherOptions().sunAngle}
-      raySpread={weatherOptions().raySpread}
-      rayTwinkle={weatherOptions().rayTwinkle}
-      rayTwinkleSpeed={weatherOptions().rayTwinkleSpeed}
-      alpha={weatherOptions().alpha}
-      zIndex={weatherOptions().zIndex}
+      effect={weatherOptions()?.effect}
+      density={weatherOptions()?.density}
+      speed={weatherOptions()?.speed}
+      windDirection={weatherOptions()?.windDirection}
+      windStrength={weatherOptions()?.windStrength}
+      maxDrops={weatherOptions()?.maxDrops}
+      scale={weatherOptions()?.scale}
+      height={weatherOptions()?.height}
+      sunIntensity={weatherOptions()?.sunIntensity}
+      sunAngle={weatherOptions()?.sunAngle}
+      raySpread={weatherOptions()?.raySpread}
+      rayTwinkle={weatherOptions()?.rayTwinkle}
+      rayTwinkleSpeed={weatherOptions()?.rayTwinkleSpeed}
+      alpha={weatherOptions()?.alpha}
+      zIndex={weatherOptions()?.zIndex}
     />
 }
 
