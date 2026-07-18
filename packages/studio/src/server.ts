@@ -686,7 +686,7 @@ export default (_config?: unknown) => {
         const useLocalBundleEvents = shouldUseLocalBundleEvents(config);
         const hydratedMapData = await normalizeStudioMapPayload(mapData?.id ?? mapData?.data?._id ?? mapData?.data?.id, mapData, config);
         Object.assign(mapData, hydratedMapData);
-        if (!isDirectLoad && !mapData?.data?.__studioPrepared) {
+        if (streamingOptions && !isDirectLoad && !mapData?.data?.__studioPrepared) {
           const preparedMapData = prepareStudioMapPayload(mapData, {
             id: mapData?.id,
             config: mapData?.config,

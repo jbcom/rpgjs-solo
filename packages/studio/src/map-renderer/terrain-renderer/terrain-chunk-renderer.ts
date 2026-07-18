@@ -2034,7 +2034,7 @@ export class StudioTerrainChunkRenderer {
     const key = `stream:${control.width}x${control.height}:${regions
       .map(
         (region) =>
-          `${region.key}:${region.data.length}:${region.data.slice(0, 8)}`
+          `${region.key}:${region.x},${region.y},${region.width}x${region.height}:${region.encoding}:${region.data}`
       )
       .sort()
       .join("|")}`;

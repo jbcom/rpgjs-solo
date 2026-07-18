@@ -1,6 +1,10 @@
+import { Context, inject, injector } from "@signe/di";
+import { MAP_STREAM_EVENT, MAP_STREAM_REQUEST_EVENT, UpdateMapToken } from "@rpgjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { MapStreamChunk, MapStreamManifest } from "@rpgjs/common";
-import { MapStreamClientController } from "./mapStreaming";
+import { LoadMapToken } from "./loadMap";
+import { WebSocketToken } from "./AbstractSocket";
+import { MapStreamClientController, provideClientMapStreaming } from "./mapStreaming";
 
 type State = { keys: Set<string> };
 
@@ -70,5 +74,43 @@ describe("MapStreamClientController", () => {
     expect(map.clearStreamedStaticHitboxes).toHaveBeenCalledWith("0:0");
     expect(map.replaceStreamedStaticHitboxes).toHaveBeenCalledWith("1:0", chunk("1:0", 1).hitboxes);
     expect(current.data).toEqual(["1:0"]);
+  });
+
+  it("requests fresh streaming data when a cached map is loaded again", async () => {
+    const listeners = new Map<string, (packet: unknown) => void>();
+    const socket = {
+      on: vi.fn((event: string, callback: (packet: unknown) => void) => listeners.set(event, callback)),
+      emit: vi.fn((event: string) => {
+        if (event !== MAP_STREAM_REQUEST_EVENT) return;
+        listeners.get(MAP_STREAM_EVENT)?.({
+          mapId: "demo",
+          revision: "one",
+          manifest: manifest("one"),
+          chunks: [chunk("0:0", 0)],
+          removed: [],
+        });
+      }),
+    };
+    const context = new Context();
+    await injector(context, [
+      { provide: WebSocketToken, useValue: socket },
+      { provide: UpdateMapToken, useValue: { update: vi.fn() } },
+      ...provideClientMapStreaming({
+        adapter: {
+          component: {},
+          createState: () => ({ keys: new Set<string>() }),
+          applyChunk: (state: State, value) => state.keys.add(value.key),
+          removeChunk: (state: State, key) => state.keys.delete(key),
+          getData: (state: State) => [...state.keys],
+        },
+      }),
+    ]);
+    const loader = inject<{ load(mapId: string): Promise<unknown> }>(context, LoadMapToken);
+
+    await loader.load("map-demo");
+    await loader.load("map-demo");
+
+    expect(socket.emit).toHaveBeenCalledTimes(2);
+    expect(socket.emit).toHaveBeenNthCalledWith(2, MAP_STREAM_REQUEST_EVENT, { mapId: "demo" });
   });
 });
