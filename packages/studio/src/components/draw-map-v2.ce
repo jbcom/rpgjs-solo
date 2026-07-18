@@ -6,7 +6,7 @@
     <Container sortableChildren={true} pixiChildren={elementsHighPixiChildren} />
 </Container>
 
-@if (weatherOptions) {
+@if (weatherOptions()) {
   <Weather
       effect={weatherOptions().effect}
       density={weatherOptions().density}
