@@ -28,3 +28,7 @@ Avoid dereferencing an empty Studio weather state while switching maps.
 Publish authenticated world topology updates to every map room, persist them across Durable Object hibernation, and refresh automatic world-map transitions without restarting the MMORPG server.
 
 Document the Durable Object room model, map-and-world publication flow, hibernation recovery, production deployment, and common Cloudflare diagnostics.
+
+Declare the RPGJS Durable Object binding explicitly in Wrangler staging and production environments so isolated deployments keep their room namespace.
+
+Unmount the previous Studio scene immediately during World transfers, preserve recent directional movement into the destination room, then reveal the new map with a short fade and a delayed loader so stale visuals cannot flash and fast local transitions stay unobtrusive.

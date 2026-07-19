@@ -269,6 +269,8 @@ export default (config: StudioGameModuleConfig) => {
         const gui = inject(RpgGui);
         gui.display("fade", {
           fadeTrigger,
+          duration: 180,
+          loaderDelay: 500,
         });
       },
       onAfterLoading: async (scene) => {
@@ -276,13 +278,14 @@ export default (config: StudioGameModuleConfig) => {
         const engine = inject(RpgClientEngine) as RpgClientEngineWithConfig;
         engine.scene.clearLocalWeather?.();
         bindInitialStudioEventHitboxes(scene);
-        fadeTrigger.start();
         gui.display("hud", {
           faceset: {
             id: resolveMediaId(engine.globalConfig?.hero?.faceset),
             expression: "happy",
           },
         });
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        fadeTrigger.start();
       },
     },
     gui: [

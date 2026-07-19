@@ -9,7 +9,7 @@
 
   <Container>
     @if (map() && sceneComponent()) {
-      <sceneComponent() data={map().data} params={map().params} />
+      <sceneComponent() data={map()?.data ?? emptySceneData} params={map()?.params ?? emptySceneParams} />
     }
   </Container>
 
@@ -48,6 +48,8 @@
     const componentAnimations = engine.componentAnimations
     const projectiles = engine.projectiles.current
     const map = engine.sceneMap?.data
+    const emptySceneData = { params: {} }
+    const emptySceneParams = {}
     const sceneComponent = computed(() => map()?.component)
     const weather = engine.sceneMap.weather
     const backgroundMusic = computed(() => {

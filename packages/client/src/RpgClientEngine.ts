@@ -218,6 +218,8 @@ export class RpgClientEngine<T = any> {
   private pingInterval: any = null;
   private readonly PING_INTERVAL_MS = 5000; // Send ping every 5 seconds
   private lastInputTime = 0;
+  private latestDirectionalInput?: RpgMovementInput;
+  private pendingMapTransferInput?: RpgMovementInput;
   private readonly MOVE_PATH_RESEND_INTERVAL_MS = 120;
   private readonly MAX_MOVE_TRAJECTORY_POINTS = 240;
   private lastMovePathSentAt = 0;
@@ -890,11 +892,21 @@ export class RpgClientEngine<T = any> {
     })
   }
 
-  private beginMapTransfer(nextMapId?: string) {
+  private beginMapTransfer(
+    nextMapId?: string,
+    continueMovement = false,
+  ) {
+    this.pendingMapTransferInput = continueMovement
+      ? this.latestDirectionalInput
+      : undefined;
     this.mapTransitionInProgress = true;
     this.currentMapRoomId = nextMapId;
     this.sceneResetQueued = false;
-    this.clearClientPredictionStates();
+    this.clearMapTransferPredictionStates();
+    // Unmount the previous map renderer immediately. reset() intentionally
+    // preserves map data, which otherwise leaves the previous map visible while
+    // the next room reconnects and its map payload is rendered.
+    this.sceneMap.data.set(null);
     this.sceneMap.weatherState.set(null);
     this.sceneMap.lightingState.set(null);
     this.sceneMap.clearLightSpots();
@@ -938,7 +950,7 @@ export class RpgClientEngine<T = any> {
 
   private handleChangeMap(data: any) {
     const nextMapId = typeof data?.mapId === "string" ? data.mapId : undefined;
-    this.beginMapTransfer(nextMapId);
+    this.beginMapTransfer(nextMapId, data?.continueMovement === true);
     const transferToken = typeof data?.transferToken === "string" ? data.transferToken : undefined;
     this.loadScene(data.mapId, transferToken);
   }
@@ -1073,8 +1085,14 @@ export class RpgClientEngine<T = any> {
     this.activeMapStreamController = undefined;
     await lastValueFrom(this.hooks.callHooks("client-sceneMap-onBeforeLoading", this.sceneMap));
 
-    // Clear client prediction states when changing maps
-    this.clearClientPredictionStates();
+    // A session-transferred player keeps the last acknowledged input frame on
+    // the server. Preserve the client's monotonic frame sequence so movement
+    // sent in the destination room is not discarded as stale.
+    if (this.mapTransitionInProgress) {
+      this.clearMapTransferPredictionStates();
+    } else {
+      this.clearClientPredictionStates();
+    }
 
     // Reset all conditions for new map loading
     this.mapLoadCompleted$.next(false);
@@ -1099,6 +1117,7 @@ export class RpgClientEngine<T = any> {
     }
     catch (error) {
       this.mapTransitionInProgress = false;
+      this.pendingMapTransferInput = undefined;
       this.stopPingPong();
       await this.callConnectError(error);
       throw error;
@@ -1138,6 +1157,28 @@ export class RpgClientEngine<T = any> {
       const controller = res.streamController;
       this.activeMapStreamController = controller;
       controller.attach(this.sceneMap);
+    }
+    const transferInput = this.pendingMapTransferInput;
+    this.pendingMapTransferInput = undefined;
+    if (transferInput !== undefined) {
+      void this.resumeMapTransferMovement(transferInput, mapId);
+    }
+  }
+
+  private async resumeMapTransferMovement(
+    input: RpgMovementInput,
+    mapId: string,
+  ): Promise<void> {
+    const repeatCount = 4;
+    const repeatIntervalMs = 50;
+    for (let index = 0; index < repeatCount; index += 1) {
+      if (this.mapTransitionInProgress || this.currentMapRoomId !== mapId) return;
+      await this.processInput({ input });
+      if (index < repeatCount - 1) {
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, repeatIntervalMs),
+        );
+      }
     }
   }
 
@@ -1869,6 +1910,9 @@ export class RpgClientEngine<T = any> {
       ? normalizeDashInput(input, currentPlayer?.direction?.())
       : input;
     if (!movementInput) return;
+    if (!isDashInput(movementInput)) {
+      this.latestDirectionalInput = movementInput;
+    }
     if (isDashInput(movementInput)) {
       const cooldown = movementInput.cooldown ?? DEFAULT_DASH_COOLDOWN_MS;
       if (timestamp < this.dashLockedUntil) return;
@@ -2305,6 +2349,15 @@ export class RpgClientEngine<T = any> {
     this.lastClientPhysicsStepAt = 0;
     this.lastMovePathSentAt = 0;
     this.lastMovePathSentFrame = 0;
+  }
+
+  private clearMapTransferPredictionStates(): void {
+    this.prediction?.clearPendingInputs();
+    this.frameOffset = 0;
+    this.pendingPredictionFrames = [];
+    this.lastClientPhysicsStepAt = 0;
+    this.lastMovePathSentAt = 0;
+    this.lastMovePathSentFrame = this.inputFrameCounter;
   }
 
   /**

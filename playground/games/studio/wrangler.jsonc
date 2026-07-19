@@ -24,7 +24,28 @@
     }
   ],
   "env": {
-    "staging": { "name": "rpgjs-playground-studio-staging" },
-    "production": { "name": "rpgjs-playground-studio-production" }
+    "staging": {
+      "name": "rpgjs-playground-studio-staging",
+      "workers_dev": true,
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "RPGJS_ROOMS",
+            "class_name": "RpgServerDurableObject"
+          }
+        ]
+      }
+    },
+    "production": {
+      "name": "rpgjs-playground-studio-production",
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "RPGJS_ROOMS",
+            "class_name": "RpgServerDurableObject"
+          }
+        ]
+      }
+    }
   }
 }

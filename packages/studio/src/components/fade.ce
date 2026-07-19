@@ -6,16 +6,18 @@
       height={height}
       fill={overlayColor}
     />
-    <Loading
-      x={centerX}
-      y={centerY}
-      size={loaderSize}
-      color={loaderColor}
-      speed={220}
-      segments={10}
-      segmentWidth={4}
-      inactiveAlpha={0.25}
-    />
+    @if (showLoader()) {
+      <Loading
+        x={centerX}
+        y={centerY}
+        size={loaderSize}
+        color={loaderColor}
+        speed={220}
+        segments={10}
+        segmentWidth={4}
+        inactiveAlpha={0.25}
+      />
+    }
 </Container>
 
 
@@ -33,6 +35,7 @@
     const overlayColor = computed(() => data().color ?? 'black')
     const loaderColor = computed(() => data().loaderColor ?? '#ffffff')
     const loaderSize = computed(() => data().loaderSize ?? 42)
+    const loaderDelay = computed(() => data().loaderDelay ?? 500)
     const fadeIn = computed(() => data().fadeIn ?? false)
     const fadeTrigger = data().fadeTrigger
 
@@ -41,10 +44,12 @@
   
     const width = signal(0)
     const height = signal(0)
+    const showLoader = signal(false)
     const centerX = computed(() => width() / 2)
     const centerY = computed(() => height() / 2)
 
     let loader = null;
+    let loaderTimer = null;
   
     // Animation: fade in from transparent to opaque, or fade out from opaque to transparent
     const opacity = animatedSignal(fadeIn() ? 0 : 1, {
@@ -58,6 +63,11 @@
     });
 
     const startFade = () => {
+      if (loaderTimer) {
+        clearTimeout(loaderTimer)
+        loaderTimer = null
+      }
+      showLoader.set(false)
       opacity.set(fadeIn() ? 1 : 0);
     }
 
@@ -80,9 +90,15 @@
 
     mount((element) => {
       loader = element.props.context?.globalLoader
+      loaderTimer = setTimeout(() => {
+        showLoader.set(true)
+      }, Math.max(0, loaderDelay()))
       effect(() => {
         width.set(element.props.context.canvasSize().width)
         height.set(element.props.context.canvasSize().height)
       })
+      return () => {
+        if (loaderTimer) clearTimeout(loaderTimer)
+      }
     });
   </script>

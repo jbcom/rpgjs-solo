@@ -30,7 +30,7 @@
 }
   
   <script>
-    import { computed, effect } from 'canvasengine'
+    import { computed, effect, untracked } from 'canvasengine'
     import { EventLayerComponent, RpgClientEngine, inject } from "@rpgjs/client";
     import ElementMap from './element-map.ce'
     import { Weather } from '@canvasengine/presets'
@@ -43,7 +43,8 @@
     const engine = inject(RpgClientEngine);
 
     effect(() => {
-      engine.sceneMap.setLocalWeather(data().weather ?? data().params?.weather ?? null);
+      const weather = data().weather ?? data().params?.weather ?? null;
+      untracked(() => engine.sceneMap.setLocalWeather(weather));
     })
 
     const weatherOptions = computed(() => {

@@ -27,7 +27,7 @@
 }
 
   <script>
-    import { computed, effect, mount, signal, tick } from 'canvasengine'
+    import { computed, effect, mount, signal, tick, untracked } from 'canvasengine'
     import { Weather } from "@canvasengine/presets";
     import { RpgClientEngine, inject } from "@rpgjs/client";
     import { Container as PixiContainer, Graphics } from "pixi.js";
@@ -564,7 +564,8 @@
     const events = computed(() => engine.sceneMap.events)
 
     effect(() => {
-      engine.sceneMap.setLocalWeather(data().weather ?? data().params?.weather ?? null);
+      const weather = data().weather ?? data().params?.weather ?? null;
+      untracked(() => engine.sceneMap.setLocalWeather(weather));
     })
 
     const weatherOptions = computed(() => {

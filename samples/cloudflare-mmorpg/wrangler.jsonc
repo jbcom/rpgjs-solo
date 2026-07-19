@@ -25,10 +25,27 @@
   ],
   "env": {
     "staging": {
-      "name": "rpgjs-cloudflare-mmorpg-staging"
+      "name": "rpgjs-cloudflare-mmorpg-staging",
+      "workers_dev": true,
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "RPGJS_ROOMS",
+            "class_name": "RpgServerDurableObject"
+          }
+        ]
+      }
     },
     "production": {
-      "name": "rpgjs-cloudflare-mmorpg-production"
+      "name": "rpgjs-cloudflare-mmorpg-production",
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "RPGJS_ROOMS",
+            "class_name": "RpgServerDurableObject"
+          }
+        ]
+      }
     }
   }
 }
