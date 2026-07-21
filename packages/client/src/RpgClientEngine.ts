@@ -903,9 +903,11 @@ export class RpgClientEngine<T = any> {
     this.currentMapRoomId = nextMapId;
     this.sceneResetQueued = false;
     this.clearMapTransferPredictionStates();
-    // Unmount the previous map renderer immediately. reset() intentionally
-    // preserves map data, which otherwise leaves the previous map visible while
-    // the next room reconnects and its map payload is rendered.
+  }
+
+  private resetSceneForMapTransfer(nextMapId?: string) {
+    // The before-loading hook has now covered the previous scene. Unmount it
+    // before reconnecting so stale map content cannot appear behind the loader.
     this.sceneMap.data.set(null);
     this.sceneMap.weatherState.set(null);
     this.sceneMap.lightingState.set(null);
@@ -1081,9 +1083,16 @@ export class RpgClientEngine<T = any> {
   }
 
   private async loadScene(mapId: string, transferToken?: string) {
+    // Keep the previous scene mounted while async before-loading hooks install
+    // and animate their transition UI. The hook contract is awaited, allowing
+    // modules to report when the old scene is fully covered.
+    await lastValueFrom(this.hooks.callHooks("client-sceneMap-onBeforeLoading", this.sceneMap));
+
     this.activeMapStreamController?.detach();
     this.activeMapStreamController = undefined;
-    await lastValueFrom(this.hooks.callHooks("client-sceneMap-onBeforeLoading", this.sceneMap));
+    if (this.mapTransitionInProgress) {
+      this.resetSceneForMapTransfer(mapId);
+    }
 
     // A session-transferred player keeps the last acknowledged input frame on
     // the server. Preserve the client's monotonic frame sequence so movement

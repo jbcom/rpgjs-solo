@@ -265,25 +265,43 @@ export default (config: StudioGameModuleConfig) => {
       },
     },
     sceneMap: {
-      onBeforeLoading: (scene) => {
+      onBeforeLoading: async (scene) => {
         const gui = inject(RpgGui);
-        gui.display("fade", {
-          fadeTrigger,
-          duration: 180,
-          loaderDelay: 500,
+        const engine = inject(RpgClientEngine) as RpgClientEngineWithConfig;
+        const hasPreviousMap = Boolean(engine.scene.data?.());
+        gui.hide("hud");
+        await new Promise<void>((resolve) => {
+          let completed = false;
+          const complete = () => {
+            if (completed) return;
+            completed = true;
+            clearTimeout(fallbackTimer);
+            resolve();
+          };
+          const fallbackTimer = setTimeout(complete, hasPreviousMap ? 500 : 100);
+          gui.display("fade", {
+            fadeTrigger,
+            coverDuration: hasPreviousMap ? 120 : 0,
+            duration: 180,
+            loaderDelay: 250,
+            maxAssetWait: 1_200,
+            loadingText: engine.t("rpg.transition.loading"),
+            onCovered: complete,
+            onRevealed: () => {
+              gui.display("hud", {
+                faceset: {
+                  id: resolveMediaId(engine.globalConfig?.hero?.faceset),
+                  expression: "happy",
+                },
+              });
+            },
+          });
         });
       },
       onAfterLoading: async (scene) => {
-        const gui = inject(RpgGui);
         const engine = inject(RpgClientEngine) as RpgClientEngineWithConfig;
         engine.scene.clearLocalWeather?.();
         bindInitialStudioEventHitboxes(scene);
-        gui.display("hud", {
-          faceset: {
-            id: resolveMediaId(engine.globalConfig?.hero?.faceset),
-            expression: "happy",
-          },
-        });
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         fadeTrigger.start();
       },
@@ -294,16 +312,16 @@ export default (config: StudioGameModuleConfig) => {
         component: TitleScreenComponent,
       },
       {
-        id: "fade",
-        component: FadeComponent,
-      },
-      {
         id: "hud",
         component: HudComponent,
         dependencies: () => {
           const engine = inject(RpgClientEngine) as RpgClientEngineWithConfig;
           return [engine.scene.currentPlayer];
         },
+      },
+      {
+        id: "fade",
+        component: FadeComponent,
       },
     ],
     spritesheetResolver: async (id: string) => {

@@ -31,4 +31,4 @@ Document the Durable Object room model, map-and-world publication flow, hibernat
 
 Declare the RPGJS Durable Object binding explicitly in Wrangler staging and production environments so isolated deployments keep their room namespace.
 
-Unmount the previous Studio scene immediately during World transfers, preserve recent directional movement into the destination room, then reveal the new map with a short fade and a delayed loader so stale visuals cannot flash and fast local transitions stay unobtrusive.
+Cover the previous Studio scene before unmounting it during World transfers, preserve recent directional movement into the destination room, then reveal the new map through a full-screen dark transition with a centered, delayed localized loader and a bounded asset wait so stale or white frames cannot flash while fast local transitions stay unobtrusive.
