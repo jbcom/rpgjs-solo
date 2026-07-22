@@ -259,7 +259,8 @@ export interface RpgSceneHooks<Scene> {
     onRemoveSprite?: (scene: Scene, sprite: RpgComponent) => any
 
      /**
-     * Before the scene is loaded
+     * Before the scene is loaded. Async hooks are awaited while the previous
+     * scene is still mounted, allowing transition UI to cover it before teardown.
      * 
      * @prop { (scene: RpgScene) => any } [onBeforeLoading]
      * @memberof RpgSceneHooks

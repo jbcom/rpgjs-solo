@@ -51,6 +51,7 @@ export const RpgClientBuiltinI18n = {
     "rpg.input.error.min-length": "Enter at least {minLength} characters.",
     "rpg.input.error.max-length": "Enter no more than {maxLength} characters.",
     "rpg.input.error.email": "Enter a valid email address.",
+    "rpg.transition.loading": "Loading area…",
     "rpg.shop.default-message": "Welcome to my shop!",
     "rpg.shop.choose-action": "Choose an action",
     "rpg.shop.buy": "Buy",

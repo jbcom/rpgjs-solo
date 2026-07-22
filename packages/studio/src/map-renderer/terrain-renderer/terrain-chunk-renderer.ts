@@ -245,7 +245,11 @@ export class StudioTerrainChunkRenderer {
         void this.renderMap(map, options);
       });
     }
-    if (data.terrainControl?.source && !controlImage) {
+    if (
+      data.terrainControl?.source &&
+      !controlImage &&
+      !data.terrainControl.regions?.length
+    ) {
       void this.loadImage(data.terrainControl.source).then((loadedImage) => {
         if (!loadedImage || this.destroyed) return;
         this.renderVersion = "";
@@ -604,11 +608,11 @@ export class StudioTerrainChunkRenderer {
     bounds: { x: number; y: number; width: number; height: number }
   ): boolean {
     const control = data.terrainControl;
-    if (!control || !data.asset || !image || !controlImage || control.palette.length === 0) {
+    if (!control || !data.asset || !image || control.palette.length === 0) {
       return false;
     }
 
-    const controlBuffer = this.getImageBuffer(control.source, controlImage);
+    const controlBuffer = this.getTerrainControlBuffer(control, controlImage);
     if (!controlBuffer) return false;
 
     const layers = createTerrainControlRenderLayers(data.asset, control.palette);
@@ -956,8 +960,8 @@ export class StudioTerrainChunkRenderer {
     bounds: { x: number; y: number; width: number; height: number }
   ): HTMLCanvasElement | null {
     const control = data.terrainControl;
-    if (!control || !data.asset || !controlImage) return null;
-    const controlBuffer = this.getImageBuffer(control.source, controlImage);
+    if (!control || !data.asset) return null;
+    const controlBuffer = this.getTerrainControlBuffer(control, controlImage);
     if (!controlBuffer) return null;
     const layers = createTerrainControlRenderLayers(data.asset, control.palette)
       .filter((layer) => layer.mode.type === "water" || isWaterTerrainTexture(data.asset, layer.terrainTextureId));
@@ -982,9 +986,10 @@ export class StudioTerrainChunkRenderer {
     blur: number
   ): HTMLCanvasElement | null {
     if (output.canvas.width <= 0 || output.canvas.height <= 0) return null;
-    const controlImage = this.loadedImages.get(control.source);
-    if (!controlImage) return null;
-    const controlBuffer = this.getImageBuffer(control.source, controlImage);
+    const controlImage = control.source
+      ? this.loadedImages.get(control.source) ?? null
+      : null;
+    const controlBuffer = this.getTerrainControlBuffer(control, controlImage);
     if (!controlBuffer) return null;
     const rawMask = this.buildTerrainControlRawMask(controlBuffer, control, paletteIndex, bounds);
     const edge = this.createCanvasBuffer(rawMask.width, rawMask.height);
@@ -2015,6 +2020,95 @@ export class StudioTerrainChunkRenderer {
     } catch {
       return null;
     }
+  }
+
+  private getTerrainControlBuffer(
+    control: StudioTerrainControlTexture,
+    image: HTMLImageElement | null
+  ): ImageBuffer | null {
+    const regions = control.regions ?? [];
+    if (regions.length === 0) {
+      return image ? this.getImageBuffer(control.source, image) : null;
+    }
+
+    const key = `stream:${control.width}x${control.height}:${regions
+      .map(
+        (region) =>
+          `${region.key}:${region.x},${region.y},${region.width}x${region.height}:${region.encoding}:${region.data}`
+      )
+      .sort()
+      .join("|")}`;
+    const cached = this.imageBufferCache.get(key);
+    if (cached) return cached;
+
+    const data = new Uint8ClampedArray(control.width * control.height * 4);
+    for (const region of regions) {
+      const pixels = decodeTerrainControlRegion(region);
+      if (!pixels) continue;
+      for (let y = 0; y < region.height; y += 1) {
+        const sourceStart = y * region.width * 4;
+        const targetStart =
+          ((region.y + y) * control.width + region.x) * 4;
+        data.set(
+          pixels.subarray(sourceStart, sourceStart + region.width * 4),
+          targetStart
+        );
+      }
+    }
+    const buffer = {
+      key,
+      width: control.width,
+      height: control.height,
+      data,
+    };
+    this.imageBufferCache.set(key, buffer);
+    return buffer;
+  }
+}
+
+function decodeTerrainControlRegion(
+  region: NonNullable<StudioTerrainControlTexture["regions"]>[number]
+): Uint8ClampedArray | null {
+  try {
+    const binary = atob(region.data);
+    const encoded = Uint8Array.from(binary, (character) =>
+      character.charCodeAt(0)
+    );
+    const expectedLength = region.width * region.height * 4;
+    if (region.encoding === "rgba8-base64") {
+      return encoded.length === expectedLength
+        ? new Uint8ClampedArray(encoded)
+        : null;
+    }
+
+    const output = new Uint8ClampedArray(expectedLength);
+    let sourceOffset = 0;
+    let targetOffset = 0;
+    while (
+      sourceOffset + 8 <= encoded.length &&
+      targetOffset < output.length
+    ) {
+      const run =
+        (encoded[sourceOffset] |
+          (encoded[sourceOffset + 1] << 8) |
+          (encoded[sourceOffset + 2] << 16) |
+          (encoded[sourceOffset + 3] << 24)) >>>
+        0;
+      const r = encoded[sourceOffset + 4];
+      const g = encoded[sourceOffset + 5];
+      const b = encoded[sourceOffset + 6];
+      const a = encoded[sourceOffset + 7];
+      sourceOffset += 8;
+      for (let index = 0; index < run && targetOffset < output.length; index += 1) {
+        output[targetOffset++] = r;
+        output[targetOffset++] = g;
+        output[targetOffset++] = b;
+        output[targetOffset++] = a;
+      }
+    }
+    return targetOffset === output.length ? output : null;
+  } catch {
+    return null;
   }
 }
 

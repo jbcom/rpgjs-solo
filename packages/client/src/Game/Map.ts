@@ -59,6 +59,7 @@ export class RpgClientMap extends RpgCommonMap<any> {
   currentPlayer = computed(() => this.players()[this.engine.playerIdSignal()!])
   weatherState = signal<WeatherState | null>(null);
   localWeatherOverride = signal<WeatherState | null>(null);
+  private localWeatherValue: WeatherState | null = null;
   lightingState = signal<LightingState | null>(null);
   localLightSpots = signal<Record<string, LightSpot>>({});
   weather = computed<WeatherState | null>(() => {
@@ -132,6 +133,7 @@ export class RpgClientMap extends RpgCommonMap<any> {
     );
     this.events.set({})
     this.weatherState.set(null);
+    this.localWeatherValue = null;
     this.localWeatherOverride.set(null);
     this.lightingState.set(null);
     this.localLightSpots.set({});
@@ -143,10 +145,15 @@ export class RpgClientMap extends RpgCommonMap<any> {
   }
 
   setLocalWeather(next: WeatherState | null): void {
+    if (this.localWeatherValue === next) {
+      return;
+    }
+    this.localWeatherValue = next;
     this.localWeatherOverride.set(next);
   }
 
   clearLocalWeather(): void {
+    this.localWeatherValue = null;
     this.localWeatherOverride.set(null);
   }
 

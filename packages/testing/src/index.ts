@@ -60,7 +60,7 @@ export function provideTestingLoadMap() {
 }
 
 /**
- * Normalizes modules input to extract server/client modules from createModule providers or direct module objects
+ * Normalizes direct runtime module definitions and advanced composed providers.
  *
  * @param modules - Array of modules that can be either:
  *   - Direct module objects: { server: RpgServer, client: RpgClient }
@@ -71,7 +71,7 @@ export function provideTestingLoadMap() {
  * // Direct modules
  * normalizeModules([{ server: serverModule, client: clientModule }])
  *
- * // createModule providers
+ * // Advanced createModule providers remain supported
  * const providers = createModule('MyModule', [{ server: serverModule, client: clientModule }])
  * normalizeModules(providers)
  * ```
@@ -182,7 +182,7 @@ export interface TestingFixture {
  *
  * @param modules - Array of modules that can be either:
  *   - Direct module objects: { server: RpgServer, client: RpgClient }
- *   - Providers returned by createModule(): Provider[] with meta.server/client and useValue
+ *   - Advanced providers returned by createModule()
  * @param clientConfig - Optional client configuration
  * @param serverConfig - Optional server configuration
  * @returns Testing fixture with createClient method
@@ -194,7 +194,7 @@ export interface TestingFixture {
  *   client: clientModule
  * }])
  *
- * // Using createModule
+ * // Advanced composed providers are also accepted
  * const myModule = createModule('MyModule', [{
  *   server: serverModule,
  *   client: clientModule

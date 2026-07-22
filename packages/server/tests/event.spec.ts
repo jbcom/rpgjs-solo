@@ -87,6 +87,8 @@ test('event without pushable stays immovable while keeping its configured mass',
     const body = map?.getBody(event.id)
     const playerBody = map?.getBody(player.id)
 
+    expect(event.graphics()).toEqual(["hero"])
+    expect(createStatesSnapshotDeep(map).events[event.id].graphics).toEqual(["hero"])
     expect(event.pushable).toBe(false)
     expect(event.mass).toBe(100)
     expect(body?.mass).toBe(100)

@@ -1,6 +1,6 @@
 import canvasengine from "@canvasengine/compiler";
 import { replaceConfigImport } from "./replace-config-import";
-import { serverPlugin } from "./server-plugin";
+import { serverPlugin, type RpgjsDevServerOptions } from "./server-plugin";
 import { entryPointPlugin } from "./entry-point-plugin";
 import { mmorpgBuildPlugin } from "./mmorpg-build-plugin";
 
@@ -22,8 +22,9 @@ type MmorpgEntryPoints =
       adapters?: Record<string, string>;
     };
 
-interface RpgjsPluginOptions {
+export interface RpgjsPluginOptions {
   server: any;
+  devServer?: RpgjsDevServerOptions;
   entryPoints?: {
     rpg?: string;
     mmorpg?: MmorpgEntryPoints;
@@ -48,6 +49,7 @@ function normalizeMmorpgEntryPoints(entryPoints?: MmorpgEntryPoints) {
 
 export function rpgjs({
   server,
+  devServer,
   entryPoints
 }: RpgjsPluginOptions) {
   const mmorpgEntryPoints = normalizeMmorpgEntryPoints(entryPoints?.mmorpg);
@@ -69,7 +71,7 @@ export function rpgjs({
     },
     canvasengine(),
     replaceConfigImport(),
-    serverPlugin(server),
+    serverPlugin(server, devServer),
     mmorpgBuildPlugin({
       rpgType: process.env.RPG_TYPE || "rpg",
       serverEntry: mmorpgEntryPoints.server,

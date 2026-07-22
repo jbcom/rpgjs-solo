@@ -17,6 +17,8 @@ Hooks for events created as plain objects, as shown in the create-event guide.
 - [onInShape](#oninshape)
 - [onOutShape](#onoutshape)
 - [onPlayerTouch](#onplayertouch)
+- [onTouch](#ontouch)
+- [onTouchEnd](#ontouchend)
 
 ## onAction
 
@@ -29,7 +31,7 @@ Called when a player performs an action on this event
 ### Signature
 
 ```ts
-onAction: (this: RpgEvent, player: RpgPlayer) => void
+onAction: (this: RpgEvent, player: RpgPlayer, input: RpgActionInput<unknown>) => void | Promise<void>
 ```
 
 ## onChanges
@@ -135,4 +137,32 @@ Called when a player touches this event
 
 ```ts
 onPlayerTouch: (this: RpgEvent, player: RpgPlayer) => void
+```
+
+## onTouch
+
+Called when this event starts touching a player or another event
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `property`
+- Defined in: `EventHooks`
+
+### Signature
+
+```ts
+onTouch: (this: RpgEvent, other: RpgPlayer | RpgEvent, context: RpgTouchContext) => void | Promise<void>
+```
+
+## onTouchEnd
+
+Called when this event stops touching a player or another event
+
+- Source: `packages/server/src/rooms/map.ts`
+- Kind: `property`
+- Defined in: `EventHooks`
+
+### Signature
+
+```ts
+onTouchEnd: (this: RpgEvent, other: RpgPlayer | RpgEvent, context: RpgTouchContext) => void | Promise<void>
 ```

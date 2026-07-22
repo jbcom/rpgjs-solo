@@ -170,7 +170,40 @@ export class RpgClientEngine<T = any> {
   componentAnimations: any[] = [];
   clientVisuals = new ClientVisualRegistry();
   projectiles: ProjectileManager;
+  /**
+   * Read the latest pointer position tracked by the client canvas. World
+   * coordinates are suitable for action payloads and map interactions.
+   *
+   * @title pointer
+   * @prop pointer: ClientPointerContext
+   * @memberof RpgClientEngine
+   * @example
+   * ```ts
+   * const target = engine.pointer.world()
+   * if (target) engine.processAction('projectile:shoot', { target })
+   * ```
+   */
   pointer: ClientPointerContext = createClientPointerContext();
+  /**
+   * Register client-only pointer behaviors for map sprites. Interactions remain
+   * local unless a behavior explicitly sends an action to the server.
+   *
+   * See the [client interactions guide](../../guide/interactions.md) for hover,
+   * selection, hit testing, drag-and-drop, overlays, and network rules.
+   *
+   * @title interactions
+   * @prop interactions: RpgClientInteractions
+   * @memberof RpgClientEngine
+   * @example
+   * ```ts
+   * engine.interactions.use('Guard', {
+   *   cursor: 'pointer',
+   *   click(ctx) {
+   *     ctx.action('guard:talk', { eventId: ctx.target.id })
+   *   }
+   * })
+   * ```
+   */
   interactions: RpgClientInteractions = new RpgClientInteractions(this);
   private spritesheetResolver?: (id: string | number) => any | Promise<any>;
   private soundResolver?: (id: string) => any | Promise<any>;
@@ -218,6 +251,8 @@ export class RpgClientEngine<T = any> {
   private pingInterval: any = null;
   private readonly PING_INTERVAL_MS = 5000; // Send ping every 5 seconds
   private lastInputTime = 0;
+  private latestDirectionalInput?: RpgMovementInput;
+  private pendingMapTransferInput?: RpgMovementInput;
   private readonly MOVE_PATH_RESEND_INTERVAL_MS = 120;
   private readonly MAX_MOVE_TRAJECTORY_POINTS = 240;
   private lastMovePathSentAt = 0;
@@ -231,6 +266,7 @@ export class RpgClientEngine<T = any> {
   private sceneResetQueued = false;
   private mapTransitionInProgress = false;
   private currentMapRoomId?: string;
+  private activeMapStreamController?: { attach(map: RpgClientMap): void; detach(): void };
   private socketListenersInitialized = false;
   private clientReadyForMapChanges = false;
   private pendingMapChanges: any[] = [];
@@ -383,6 +419,7 @@ export class RpgClientEngine<T = any> {
     this.sceneMap.loadPhysic();
     this.resolveSceneMapComponent();
 
+    this.loadMapService.initialize?.();
     const saveClient = inject(SaveClientService);
     saveClient.initialize();
     this.initListeners();
@@ -888,11 +925,23 @@ export class RpgClientEngine<T = any> {
     })
   }
 
-  private beginMapTransfer(nextMapId?: string) {
+  private beginMapTransfer(
+    nextMapId?: string,
+    continueMovement = false,
+  ) {
+    this.pendingMapTransferInput = continueMovement
+      ? this.latestDirectionalInput
+      : undefined;
     this.mapTransitionInProgress = true;
     this.currentMapRoomId = nextMapId;
     this.sceneResetQueued = false;
-    this.clearClientPredictionStates();
+    this.clearMapTransferPredictionStates();
+  }
+
+  private resetSceneForMapTransfer(nextMapId?: string) {
+    // The before-loading hook has now covered the previous scene. Unmount it
+    // before reconnecting so stale map content cannot appear behind the loader.
+    this.sceneMap.data.set(null);
     this.sceneMap.weatherState.set(null);
     this.sceneMap.lightingState.set(null);
     this.sceneMap.clearLightSpots();
@@ -936,7 +985,7 @@ export class RpgClientEngine<T = any> {
 
   private handleChangeMap(data: any) {
     const nextMapId = typeof data?.mapId === "string" ? data.mapId : undefined;
-    this.beginMapTransfer(nextMapId);
+    this.beginMapTransfer(nextMapId, data?.continueMovement === true);
     const transferToken = typeof data?.transferToken === "string" ? data.transferToken : undefined;
     this.loadScene(data.mapId, transferToken);
   }
@@ -1067,10 +1116,25 @@ export class RpgClientEngine<T = any> {
   }
 
   private async loadScene(mapId: string, transferToken?: string) {
+    // Keep the previous scene mounted while async before-loading hooks install
+    // and animate their transition UI. The hook contract is awaited, allowing
+    // modules to report when the old scene is fully covered.
     await lastValueFrom(this.hooks.callHooks("client-sceneMap-onBeforeLoading", this.sceneMap));
 
-    // Clear client prediction states when changing maps
-    this.clearClientPredictionStates();
+    this.activeMapStreamController?.detach();
+    this.activeMapStreamController = undefined;
+    if (this.mapTransitionInProgress) {
+      this.resetSceneForMapTransfer(mapId);
+    }
+
+    // A session-transferred player keeps the last acknowledged input frame on
+    // the server. Preserve the client's monotonic frame sequence so movement
+    // sent in the destination room is not discarded as stale.
+    if (this.mapTransitionInProgress) {
+      this.clearMapTransferPredictionStates();
+    } else {
+      this.clearClientPredictionStates();
+    }
 
     // Reset all conditions for new map loading
     this.mapLoadCompleted$.next(false);
@@ -1095,6 +1159,7 @@ export class RpgClientEngine<T = any> {
     }
     catch (error) {
       this.mapTransitionInProgress = false;
+      this.pendingMapTransferInput = undefined;
       this.stopPingPong();
       await this.callConnectError(error);
       throw error;
@@ -1130,6 +1195,33 @@ export class RpgClientEngine<T = any> {
     this.mapTransitionInProgress = false;
     this.sceneMap.configureClientPrediction(this.predictionEnabled);
     this.sceneMap.loadPhysic()
+    if (res?.streamController) {
+      const controller = res.streamController;
+      this.activeMapStreamController = controller;
+      controller.attach(this.sceneMap);
+    }
+    const transferInput = this.pendingMapTransferInput;
+    this.pendingMapTransferInput = undefined;
+    if (transferInput !== undefined) {
+      void this.resumeMapTransferMovement(transferInput, mapId);
+    }
+  }
+
+  private async resumeMapTransferMovement(
+    input: RpgMovementInput,
+    mapId: string,
+  ): Promise<void> {
+    const repeatCount = 4;
+    const repeatIntervalMs = 50;
+    for (let index = 0; index < repeatCount; index += 1) {
+      if (this.mapTransitionInProgress || this.currentMapRoomId !== mapId) return;
+      await this.processInput({ input });
+      if (index < repeatCount - 1) {
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, repeatIntervalMs),
+        );
+      }
+    }
   }
 
   addSpriteSheet<T = any>(spritesheetClass: any, id?: string): any {
@@ -1860,6 +1952,9 @@ export class RpgClientEngine<T = any> {
       ? normalizeDashInput(input, currentPlayer?.direction?.())
       : input;
     if (!movementInput) return;
+    if (!isDashInput(movementInput)) {
+      this.latestDirectionalInput = movementInput;
+    }
     if (isDashInput(movementInput)) {
       const cooldown = movementInput.cooldown ?? DEFAULT_DASH_COOLDOWN_MS;
       if (timestamp < this.dashLockedUntil) return;
@@ -1897,7 +1992,26 @@ export class RpgClientEngine<T = any> {
       : Date.now();
   }
 
-  async processDash(input: Partial<RpgDashInput> = {}) {
+  /**
+   * Start a predicted dash for the current player and send it through the
+   * authoritative movement channel.
+   *
+   * @title processDash
+   * @method processDash(input?: Partial<RpgDashInput>): Promise<void>
+   * @param input - Optional direction, speed, duration, and cooldown overrides.
+   * @returns A promise resolved after the dash input has been processed locally.
+   * @memberof RpgClientEngine
+   * @example
+   * ```ts
+   * await engine.processDash({
+   *   direction: { x: 1, y: 0 },
+   *   additionalSpeed: 10,
+   *   duration: 220,
+   *   cooldown: 600,
+   * })
+   * ```
+   */
+  async processDash(input: Partial<RpgDashInput> = {}): Promise<void> {
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
     const fallbackDirection =
       typeof currentPlayer?.direction === "function"
@@ -1908,6 +2022,24 @@ export class RpgClientEngine<T = any> {
     await this.processInput({ input: dashInput });
   }
 
+  /**
+   * Send an action intent to the authoritative server. Client-provided data
+   * must be validated by the receiving player input handler or action.
+   *
+   * @title processAction
+   * @method processAction(action: RpgActionName | RpgActionInput, data?: any): void
+   * @param action - Action name/control value, or a normalized action object.
+   * @param data - Optional serializable context sent with an action name.
+   * @returns Nothing.
+   * @memberof RpgClientEngine
+   * @example
+   * ```ts
+   * engine.processAction('projectile:shoot', {
+   *   target: engine.pointer.world(),
+   *   source: 'map-click',
+   * })
+   * ```
+   */
   processAction(action: RpgActionName, data?: any): void;
   processAction(action: RpgActionInput): void;
   processAction(action: RpgActionName | RpgActionInput, data?: any): void {
@@ -2296,6 +2428,15 @@ export class RpgClientEngine<T = any> {
     this.lastClientPhysicsStepAt = 0;
     this.lastMovePathSentAt = 0;
     this.lastMovePathSentFrame = 0;
+  }
+
+  private clearMapTransferPredictionStates(): void {
+    this.prediction?.clearPendingInputs();
+    this.frameOffset = 0;
+    this.pendingPredictionFrames = [];
+    this.lastClientPhysicsStepAt = 0;
+    this.lastMovePathSentAt = 0;
+    this.lastMovePathSentFrame = this.inputFrameCounter;
   }
 
   /**

@@ -14,6 +14,12 @@ export interface MmorpgOptions {
     connectionIdScope?: "local" | "session" | "ephemeral";
     query?: SocketQuery | (() => SocketQuery | undefined);
     socketOptions?: Record<string, any>;
+    /**
+     * Time allowed for a room to restore and send the RPGJS acceptance packet.
+     * Increase this for cold edge rooms or local Durable Object startup.
+     * Defaults to 10 seconds.
+     */
+    connectionAcceptanceTimeoutMs?: number;
 }
 
 export class BridgeWebsocket extends AbstractWebsocket {
@@ -89,7 +95,10 @@ export class BridgeWebsocket extends AbstractWebsocket {
     pendingOn
       .filter(({ event }) => !this.isNativeSocketEvent(event))
       .forEach(({ event, callback }) => this.attachEvent(event, callback));
-    await waitForRpgjsConnected(this.socket.conn);
+    await waitForRpgjsConnected(
+      this.socket.conn,
+      this.options.connectionAcceptanceTimeoutMs ?? 10_000,
+    );
     pendingOn
       .filter(({ event }) => this.isNativeSocketEvent(event))
       .forEach(({ event, callback }) => this.attachEvent(event, callback));
@@ -161,7 +170,11 @@ export class BridgeWebsocket extends AbstractWebsocket {
   async reconnect(_listeners?: (data: any) => void): Promise<void> {
     if (!this.socket?.conn) return;
     const conn = this.socket.conn;
-    const connected = waitForRpgjsConnected(conn, 10000, { ignoreCleanClose: true });
+    const connected = waitForRpgjsConnected(
+      conn,
+      this.options.connectionAcceptanceTimeoutMs ?? 10_000,
+      { ignoreCleanClose: true },
+    );
     conn.reconnect();
     await connected;
     this.emitAcceptedOpen();

@@ -51,110 +51,132 @@ When `projectId` is set, the runtime uses online Studio data by default.
 
 ## MMORPG mode
 
-In MMORPG mode, Studio data is loaded on both sides with different responsibilities:
+Studio MMORPG maps use an authoritative, chunked data path:
 
-- the server loads the Studio project, map, database, hitboxes, and events, then synchronizes players and events to clients;
-- the client loads Studio map data only to render the CanvasEngine map component.
+- a trusted publisher loads and normalizes the complete Studio map, project,
+  database, events, and collisions;
+- the Node server or Cloudflare Durable Object stores that authoritative payload,
+  runs physics and events, and decides which chunks surround each player;
+- the browser receives only the nearby render descriptors and collision barriers
+  required for display and client prediction.
 
-Players must not push map definitions to the MMORPG server. Server map rooms hydrate themselves from Studio data when they start, and authorized tools can still update a map through the server-side `/map/update` flow.
+Terrain transition control masks follow the same rule: the publisher splits
+them into overlapping regions and the server sends only the regions belonging
+to disclosed chunks. The client rebuilds the visible transition masks without
+receiving the complete control texture or the complete map.
+
+The complete map is never sent to the browser. Studio events, trigger logic,
+database records, project configuration, raw terrain structure, and collisions
+outside the streamed area remain server-side. Public image and audio assets are
+still downloaded by the browser because it needs them for rendering and playback.
+
+Authoritative streaming requires Studio map format v2. A v1 Studio map continues
+to work in standalone mode, but publication to an MMORPG map room fails explicitly
+instead of silently exposing or approximating its data.
+
+Configure the disclosure window on the shared Studio module:
+
+```ts
+provideStudioGame({
+  projectId: "your-project-id",
+  streaming: {
+    chunkSize: 16,
+    loadRadius: 2,
+    retainRadius: 3,
+  },
+});
+```
+
+`chunkSize` is expressed in Studio cells. `loadRadius` controls the chunks sent
+around the authoritative player position, while `retainRadius` keeps a slightly
+larger client cache to avoid loading churn at chunk boundaries. NPCs, events,
+players, and projectiles continue to use the generic RPGJS spatial synchronization
+path and are disclosed according to server interest management.
+
+Client prediction remains enabled with Studio. Movement is predicted against
+the collision barriers already disclosed for the active chunks, blocked at the
+edge of the streamed window, then reconciled with authoritative Node or Durable
+Object snapshots. Event behavior, NPC decisions, projectile impacts, and every
+collision outside that window remain server-authoritative.
 
 ### Live map updates from Studio
 
-When Studio pushes a live update to a running MMORPG server, it should call the map room update endpoint:
+Players must never publish map definitions. Studio, Vite, CI, an editor backend,
+or another trusted process sends the full payload to the map room:
 
 ```http
 POST /parties/main/map-<mapId>/map/update
 Content-Type: application/json
+X-RPGJS-Map-Update-Token: <secret>
 ```
 
-If the server defines `RPGJS_MAP_UPDATE_TOKEN`, Studio must also send one of these credentials:
+`Authorization: Bearer <secret>` is also accepted. Configure
+`RPGJS_MAP_UPDATE_TOKEN` only on the Node server or Worker. Never put it in browser
+code or in a `VITE_` environment variable.
+
+Map content and world topology are separate authoritative updates. After
+publishing a prepared map, the trusted publisher sends the current topology to
+every map room in that world:
 
 ```http
-X-RPGJS-Map-Update-Token: <token>
+POST /parties/main/map-<eachMapId>/world/<worldId>/update
+Content-Type: application/json
+X-RPGJS-Map-Update-Token: <secret>
+
+{ "id": "<worldId>", "maps": [/* complete runtime topology */] }
 ```
 
-or:
+This fan-out matters because each map is a separate Node room or Durable Object
+with its own world manager. Updating only the room for `marsh`, for example,
+does not update a player who is still connected to `port`.
 
-```http
-Authorization: Bearer <token>
+The easiest development publisher is the RPGJS Vite plugin:
+
+```ts
+import { createStudioMapUpdatePayload } from "@rpgjs/studio/server";
+
+rpgjs({
+  server: ServerModule,
+  devServer: {
+    target: "http://127.0.0.1:8787",
+    mapIds: ["your-map-id"],
+    mapUpdateToken: process.env.RPGJS_MAP_UPDATE_TOKEN,
+    resolveMapPayload: ({ mapId }) =>
+      createStudioMapUpdatePayload(mapId, {
+        projectId: "your-project-id",
+        startMapId: "your-map-id",
+      }),
+  },
+});
 ```
 
-The payload must describe the authoritative server map state. The minimum valid payload is:
+Vite republishes the resolved map after relevant development changes. The same
+callback works with a local Node room provider or a Wrangler Durable Object.
+`createStudioMapUpdatePayload()` supplies `worldUpdates`, and the RPGJS remote
+publisher automatically sends them to every referenced map room.
 
-```json
-{
-  "id": "map-id",
-  "width": 960,
-  "height": 576,
-  "events": []
-}
+To test the HTTP contract directly, send a previously prepared Studio v2 payload:
+
+```bash
+curl --fail-with-body \
+  -X POST \
+  -H 'content-type: application/json' \
+  -H 'x-rpgjs-map-update-token: local-map-update-token' \
+  --data-binary @prepared-studio-map.json \
+  http://127.0.0.1:8787/parties/main/map-<map-id>/map/update
 ```
 
-For Studio maps, send the complete normalized map payload whenever possible:
+The payload must be complete because `/map/update` replaces the authoritative map
+revision. Use `createStudioMapUpdatePayload()` rather than assembling production
+payloads by hand. Its result includes the normalized v2 render data, dimensions,
+server collisions, events, project configuration, and database records needed by
+the room. This direct `curl` updates only one map revision; it does not perform
+the world fan-out. Use the RPGJS publisher or the Studio seed command for a full
+map-and-world publication.
 
-```json
-{
-  "id": "map-id",
-  "width": 960,
-  "height": 576,
-  "config": {
-    "_id": "project-id",
-    "startMapId": "map-id",
-    "hero": {},
-    "worldMaps": []
-  },
-  "data": {
-    "_id": "map-id",
-    "id": "map-id",
-    "data": [],
-    "events": [],
-    "hitboxes": [],
-    "params": {
-      "width": 20,
-      "height": 12,
-      "scale": 1
-    },
-    "weather": null,
-    "lighting": null
-  },
-  "events": [
-    {
-      "id": "event-id",
-      "_id": "event-id",
-      "eventId": "event-id",
-      "x": 96,
-      "y": 144,
-      "eventType": "character",
-      "params": {},
-      "triggers": []
-    }
-  ],
-  "hitboxes": [],
-  "positions": {
-    "start": {
-      "x": 96,
-      "y": 144
-    }
-  },
-  "params": {
-    "backgroundMusic": null
-  },
-  "damageFormulas": {}
-}
-```
-
-Important fields:
-
-- `id`: Studio map id without the `map-` room prefix.
-- `width` and `height`: map dimensions in pixels, used by server movement and viewport logic.
-- `config`: project-level configuration used by server hooks, including `startMapId`, `hero`, and `worldMaps`.
-- `data`: Studio map document used by Studio server hooks. It should include `params`, `start`, `weather`, `lighting`, and map-specific metadata.
-- `events`: placed Studio events. These become authoritative RPGJS dynamic events and are synchronized to clients.
-- `hitboxes`: collision data used by server physics.
-- `positions`: named positions used by `player.changeMap("map-id", "position-name")`.
-- `damageFormulas`: optional formula overrides merged with RPGJS defaults.
-
-Studio may send partial updates during development, but the update endpoint replaces the runtime map state. For consistent MMORPG behavior, send the full map payload after each Studio edit that changes events, collisions, dimensions, weather, lighting, or project-level map configuration.
+For a runnable local Worker, deterministic fixture, seed script, and real Studio
+API seed command, see the
+[Studio playground](https://github.com/RSamaium/RPG-JS/tree/master/playground/games/studio).
 
 ## Offline mode
 
@@ -224,5 +246,9 @@ provideStudioGame({
 - `bundleBasePath`: public path for exported Studio data. Defaults to `/game-data`.
 - `displayTitleScreen`: display the Studio title screen when supported by the project.
 - `startMapId`: force the map used to start the player.
+- `streaming`: authoritative Studio v2 chunk settings for MMORPG mode. Set it to
+  `false` only when another server map provider replaces the built-in streaming
+  adapter. Standalone mode always uses the direct loader. Its options are
+  `chunkSize`, `loadRadius`, and `retainRadius`.
 - `debugCollisions`: display Studio collision debug overlays. This is a shortcut for the built-in Studio debug plugin.
 - `studioPlugins`: attach Studio client-side map renderer plugins. See [Create a Studio plugin](/studio/plugins).

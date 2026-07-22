@@ -6,28 +6,28 @@
     <Container sortableChildren={true} pixiChildren={elementsHighPixiChildren} />
 </Container>
 
-@if (weatherOptions) {
+@if (weatherOptions()) {
   <Weather
-      effect={weatherOptions().effect}
-      density={weatherOptions().density}
-      speed={weatherOptions().speed}
-      windDirection={weatherOptions().windDirection}
-      windStrength={weatherOptions().windStrength}
-      maxDrops={weatherOptions().maxDrops}
-      scale={weatherOptions().scale}
-      height={weatherOptions().height}
-      sunIntensity={weatherOptions().sunIntensity}
-      sunAngle={weatherOptions().sunAngle}
-      raySpread={weatherOptions().raySpread}
-      rayTwinkle={weatherOptions().rayTwinkle}
-      rayTwinkleSpeed={weatherOptions().rayTwinkleSpeed}
-      alpha={weatherOptions().alpha}
-      zIndex={weatherOptions().zIndex}
+      effect={weatherOptions()?.effect}
+      density={weatherOptions()?.density}
+      speed={weatherOptions()?.speed}
+      windDirection={weatherOptions()?.windDirection}
+      windStrength={weatherOptions()?.windStrength}
+      maxDrops={weatherOptions()?.maxDrops}
+      scale={weatherOptions()?.scale}
+      height={weatherOptions()?.height}
+      sunIntensity={weatherOptions()?.sunIntensity}
+      sunAngle={weatherOptions()?.sunAngle}
+      raySpread={weatherOptions()?.raySpread}
+      rayTwinkle={weatherOptions()?.rayTwinkle}
+      rayTwinkleSpeed={weatherOptions()?.rayTwinkleSpeed}
+      alpha={weatherOptions()?.alpha}
+      zIndex={weatherOptions()?.zIndex}
     />
 }
 
   <script>
-    import { computed, effect, mount, signal, tick } from 'canvasengine'
+    import { computed, effect, mount, signal, tick, untracked } from 'canvasengine'
     import { Weather } from "@canvasengine/presets";
     import { RpgClientEngine, inject } from "@rpgjs/client";
     import { Container as PixiContainer, Graphics } from "pixi.js";
@@ -564,7 +564,8 @@
     const events = computed(() => engine.sceneMap.events)
 
     effect(() => {
-      engine.sceneMap.setLocalWeather(data().weather ?? data().params?.weather ?? null);
+      const weather = data().weather ?? data().params?.weather ?? null;
+      untracked(() => engine.sceneMap.setLocalWeather(weather));
     })
 
     const weatherOptions = computed(() => {

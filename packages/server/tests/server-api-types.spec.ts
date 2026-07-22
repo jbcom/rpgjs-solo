@@ -1,5 +1,6 @@
 import { describe, expectTypeOf, test } from "vitest";
-import type { RpgActionInput } from "@rpgjs/common";
+import type { MapStreamDefinition, RpgActionInput } from "@rpgjs/common";
+import { provideServerMapStreaming } from "@rpgjs/server";
 import type {
   RpgEvent,
   RpgEventHooks,
@@ -12,6 +13,7 @@ import type {
   RpgPlayerSnapshot,
   RpgPlayerSnapshotLoadResult,
   StateData,
+  ServerMapStreamingAdapter,
 } from "@rpgjs/server";
 
 describe("server public API types", () => {
@@ -90,5 +92,21 @@ describe("server public API types", () => {
       onLoadd() {},
     };
     expectTypeOf(hooks).toEqualTypeOf<RpgPlayerHooks>();
+  });
+
+  test("map streaming adapters keep provider-specific data typed", () => {
+    type PrivateMap = { source: string };
+    type ManifestData = { theme: string };
+    type ChunkData = { tiles: number[] };
+    const definition = {} as MapStreamDefinition<ManifestData, ChunkData>;
+    const adapter = {
+      compile(mapData, map) {
+        expectTypeOf(mapData).toEqualTypeOf<PrivateMap>();
+        expectTypeOf(map).toEqualTypeOf<RpgMap>();
+        return definition;
+      },
+    } satisfies ServerMapStreamingAdapter<PrivateMap, ManifestData, ChunkData>;
+
+    expectTypeOf(provideServerMapStreaming(adapter)).toMatchTypeOf<object>();
   });
 });

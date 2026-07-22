@@ -26,7 +26,7 @@
     },
     "./server": {
       "import": "./dist/server/index.js",
-      "types": "./dist/server/index.d.ts"
+      "types": "./dist/server/server-entry.d.ts"
     }
   },
   "keywords": [],

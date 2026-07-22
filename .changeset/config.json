@@ -10,6 +10,7 @@
   "bumpVersionsWithWorkspaceProtocolOnly": true,
   "ignore": [
     "sample",
+    "@rpgjs/sample-cloudflare-mmorpg",
     "@rpgjs/playground-action-battle",
     "@rpgjs/playground-dash",
     "@rpgjs/playground-mouse-interactions",

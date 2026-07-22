@@ -1,7 +1,9 @@
-import { RpgMap, RpgServer } from "@rpgjs/server";
+import { RpgMap, RpgServer, provideServerMapStreaming } from "@rpgjs/server";
 import { MapClass } from "@canvasengine/tiled";
 import { defineModule } from "@rpgjs/common";
 import { applyTiledPointEvents, prepareTiledPhysicsData } from "./physics";
+import { compileTiledMapStream } from "./streaming";
+import type { TiledMapOptions } from "./index";
 
 declare module "@rpgjs/server" {
   interface RpgMap {
@@ -52,14 +54,39 @@ export interface RpgTiledMap extends RpgMap {
   tiled: MapClass;
 }
 
-export default defineModule<RpgServer>({
-  map: {
-    onBeforeUpdate(mapData: unknown, map: RpgMap): void {
-      prepareTiledPhysicsData(mapData, map);
-      applyTiledPointEvents(mapData);
+export function createTiledMapServerModule(
+  options: TiledMapOptions = { basePath: "map" },
+): RpgServer {
+  const streamingOptions = options.streaming === false ? undefined : options.streaming ?? {};
+  const streamingModule = streamingOptions
+    ? provideServerMapStreaming({
+        compile(mapData: unknown) {
+          return compileTiledMapStream(mapData, {
+            basePath: options.basePath,
+            chunkSize: streamingOptions.chunkSize,
+          });
+        },
+      }, streamingOptions)
+    : undefined;
+
+  return defineModule<RpgServer>({
+    map: {
+      async onBeforeUpdate(mapData: unknown, map: RpgMap): Promise<void> {
+        prepareTiledPhysicsData(mapData, map);
+        applyTiledPointEvents(mapData);
+        await streamingModule?.map?.onBeforeUpdate?.(mapData, map);
+      },
+      onJoin(player, map) {
+        return streamingModule?.map?.onJoin?.(player, map);
+      },
+      onLeave(player, map) {
+        return streamingModule?.map?.onLeave?.(player, map);
+      },
+      onPhysicsInit(map: any, context: { mapData: any }) {
+        prepareTiledPhysicsData(context?.mapData, map);
+      },
     },
-    onPhysicsInit(map: any, context: { mapData: any }) {
-      prepareTiledPhysicsData(context?.mapData, map);
-    },
-  },
-});
+  });
+}
+
+export default createTiledMapServerModule();

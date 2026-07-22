@@ -56,15 +56,14 @@ providers: [
 
 ```ts
 import { createServer, provideServerModules, LocalStorageSaveStorageStrategy } from "@rpgjs/server";
-import { provideMain } from "./modules/main";
+import mainServerModule from "./modules/server";
 import { provideSaveStorage } from "@rpgjs/server";
 import { provideTiledMap } from "@rpgjs/tiledmap/server";
 
 export default createServer({
   providers: [
-    provideMain(),
+    provideServerModules([mainServerModule]),
     provideSaveStorage(new LocalStorageSaveStorageStrategy({ key: "save" })),
-    provideServerModules([]),
     provideTiledMap()
   ]
 });
@@ -91,13 +90,19 @@ startGame(
 
 Use this entry when you want a single-player RPG running entirely from the client app.
 
+<Warning>
+Because standalone mode runs the server inside the browser, its production
+bundle includes the code imported by `server.ts`. Do not put secrets or private
+service credentials in a standalone game bundle.
+</Warning>
+
 ## `config/config.client.ts`
 
 `config.client.ts` contains the common client setup shared by MMORPG and standalone RPG:
 
 ```ts
 import { provideClientGlobalConfig, provideClientModules, Presets } from "@rpgjs/client";
-import { provideMain } from "../modules/main";
+import mainClientModule from "../modules/client";
 import { provideTiledMap } from "@rpgjs/tiledmap/client";
 
 export default {
@@ -106,8 +111,8 @@ export default {
       basePath: "map",
     }),
     provideClientGlobalConfig(),
-    provideMain(),
     provideClientModules([
+      mainClientModule,
       {
         spritesheets: [
           {
@@ -268,19 +273,26 @@ console.log(config.ui?.locale);
 This is useful in client services, GUI components, or custom systems that need access to
 global input bindings or project-specific client configuration.
 
-## `modules/main`
+## `modules/server.ts` and `modules/client.ts`
 
-The main module is usually where you declare your first server hooks and maps:
+The main module keeps client and server ownership explicit. Define server hooks
+in `modules/server.ts`:
 
 ```ts
-import { createModule } from "@rpgjs/common";
-import server from "./server";
+import { defineModule, type RpgServer } from "@rpgjs/server";
 
-export function provideMain() {
-  return createModule("main", [{
-    server
-  }]);
-}
+export default defineModule<RpgServer>({
+  player: {
+    onConnected(player) {
+      console.log("Player connected", player.id);
+    }
+  }
+});
 ```
 
-This keeps your game logic modular. You can add more modules later for battle, UI, quests, chat, or any custom feature.
+Define visual behavior in `modules/client.ts`, then install each definition with
+the matching runtime provider as shown above. This keeps server code out of the
+client bundle and client components out of the server bundle when building an
+MMORPG. This isolation depends on the import graph: never import the server
+module from client code. See [Creating Modules](/guide/create-module) for the
+complete bundle-ownership rules and the standalone exception.

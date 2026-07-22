@@ -9,7 +9,7 @@
 
   <Container>
     @if (map() && sceneComponent()) {
-      <sceneComponent() data={map().data} params={map().params} />
+      <sceneComponent() data={map()?.data ?? emptySceneData} params={map()?.params ?? emptySceneParams} />
     }
   </Container>
 
@@ -38,6 +38,7 @@
 
 <script>
     import { computed, effect } from 'canvasengine'
+    import './weather-lifecycle-compat'
     import { inject } from "../../core/inject";
     import { RpgClientEngine } from "../../RpgClientEngine";
     import { Weather } from '@canvasengine/presets'
@@ -47,6 +48,8 @@
     const componentAnimations = engine.componentAnimations
     const projectiles = engine.projectiles.current
     const map = engine.sceneMap?.data
+    const emptySceneData = { params: {} }
+    const emptySceneParams = {}
     const sceneComponent = computed(() => map()?.component)
     const weather = engine.sceneMap.weather
     const backgroundMusic = computed(() => {

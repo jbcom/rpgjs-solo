@@ -1,16 +1,11 @@
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import type { Duplex } from "node:stream";
 import { injector } from "@signe/di";
-import {
-  createMemoryNodeRoomStorage,
-  createNodeRoomTransport,
-  type NodeRoom,
-  type NodeRoomTransport,
-} from "@signe/room/node";
+import { createMemoryNodeRoomStorage, createNodeRoomTransport, type NodeRoom, type NodeRoomTransport } from "@signe/room/node";
 import { context as serverContext } from "../core/context";
 import { setInject } from "../core/inject";
 import { provideServerModules } from "../module";
-import { createMapUpdateHeaders, resolveMapUpdateToken, updateMap } from "./map";
+import { createMapUpdateHeaders, createMapUpdatePayload, MAP_UPDATE_TOKEN_ENV, resolveMapUpdateToken, updateMap } from "./map";
 import type {
   CreateRpgServerTransportOptions,
   HandleNodeRequestOptions,
@@ -21,6 +16,7 @@ import type {
   RpgWebSocketRequestLike,
   RpgWebSocketServer,
   SendMapUpdateOptions,
+  PublishMapOptions,
 } from "./types";
 
 function normalizePathPrefix(path: string, fallback: string): string {
@@ -81,9 +77,7 @@ function parseSocketRoute(pathname: string, partiesPath: string): { roomId: stri
   return { roomId: segments[0] };
 }
 
-function toHeaders(
-  input?: Headers | HeadersInit | IncomingHttpHeaders | Map<string, string | undefined>,
-): Headers {
+function toHeaders(input?: Headers | HeadersInit | IncomingHttpHeaders | Map<string, string | undefined>): Headers {
   if (!input) {
     return new Headers();
   }
@@ -175,7 +169,12 @@ async function readNodeBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-function resolveUrlFromSocketRequest(request: RpgWebSocketRequestLike): { headers: Headers; method?: string; rawUrl: string; url: URL } {
+function resolveUrlFromSocketRequest(request: RpgWebSocketRequestLike): {
+  headers: Headers;
+  method?: string;
+  rawUrl: string;
+  url: URL;
+} {
   const headers = toHeaders(request.headers);
   const host = headers.get("host") || "localhost";
   const rawUrl = request.url || "/";
@@ -209,10 +208,7 @@ export class RpgServerTransport {
   private readonly transport: NodeRoomTransport;
   private lastKnownHost = "";
 
-  constructor(
-    private readonly serverModule: RpgTransportServerConstructor,
-    options: CreateRpgServerTransportOptions = {},
-  ) {
+  constructor(private readonly serverModule: RpgTransportServerConstructor, options: CreateRpgServerTransportOptions = {}) {
     this.initializeMaps = options.initializeMaps ?? true;
     this.mapUpdateToken = resolveMapUpdateToken(options.mapUpdateToken);
     this.partiesPath = normalizePathPrefix(options.partiesPath || "/parties/main", "/parties/main");
@@ -245,7 +241,11 @@ export class RpgServerTransport {
 
     this.transport = createNodeRoomTransport(RpgNodeServer as any, {
       partiesPath: this.partiesPath,
-      storage: createMemoryNodeRoomStorage(),
+      env: {
+        ...(options.env ?? {}),
+        ...(this.mapUpdateToken ? { [MAP_UPDATE_TOKEN_ENV]: this.mapUpdateToken } : {}),
+      },
+      storage: options.storage ?? createMemoryNodeRoomStorage(),
     });
   }
 
@@ -301,11 +301,7 @@ export class RpgServerTransport {
     }
 
     const bodyText = await webRequest.text();
-    return this.dispatchRoomRequest(
-      route.roomId,
-      createRequestLike(webRequest.url, webRequest.method.toUpperCase(), toHeaders(webRequest.headers), bodyText),
-      url.host,
-    );
+    return this.dispatchRoomRequest(route.roomId, createRequestLike(webRequest.url, webRequest.method.toUpperCase(), toHeaders(webRequest.headers), bodyText), url.host);
   }
 
   async updateMap(mapId: string, payload: any, options: SendMapUpdateOptions = {}): Promise<Response> {
@@ -317,22 +313,56 @@ export class RpgServerTransport {
 
     return this.dispatchRoomRequest(
       roomId,
-      createRequestLike(
-        `http://localhost${this.partiesPath}/${roomId}/map/update`,
-        "POST",
-        headers,
-        JSON.stringify(payload),
-      ),
+      createRequestLike(`http://localhost${this.partiesPath}/${roomId}/map/update`, "POST", headers, JSON.stringify(payload)),
       options.host ?? this.lastKnownHost,
     );
   }
 
-  async handleNodeRequest(
-    req: IncomingMessage,
-    res: ServerResponse,
-    next?: () => void,
-    options: HandleNodeRequestOptions = {},
-  ): Promise<boolean> {
+  /** Build and publish a trusted map payload to another RPGJS runtime. */
+  async publishMap(mapId: string, options: PublishMapOptions): Promise<Response> {
+    const roomId = mapId.startsWith("map-") ? mapId : `map-${mapId}`;
+    const { rpgServer } = await this.ensureRoomAndServer(roomId, options.host);
+    const defaultPayload = await createMapUpdatePayload(roomId, rpgServer, {
+      host: options.host ?? this.lastKnownHost,
+      mapUpdateToken: this.mapUpdateToken,
+      tiledBasePaths: this.tiledBasePaths,
+    });
+    const payload = options.transformPayload ? await options.transformPayload(defaultPayload, mapId.replace(/^map-/, "")) : defaultPayload;
+    const target = options.target.replace(/\/+$/, "");
+    const mapResponse = await fetch(`${target}${this.partiesPath}/${roomId}/map/update`, {
+      method: "POST",
+      headers: createMapUpdateHeaders(this.mapUpdateToken, options.headers),
+      body: JSON.stringify(payload),
+    });
+    if (!mapResponse.ok) return mapResponse;
+
+    const worldUpdates = Array.isArray((payload as any)?.worldUpdates)
+      ? (payload as any).worldUpdates
+      : [];
+    for (const world of worldUpdates) {
+      if (!world?.id || !Array.isArray(world.maps)) continue;
+      const responses = await Promise.all(
+        world.maps.map((map: any) => {
+          const targetMapId = String(map?.id ?? "").replace(/^map-/, "");
+          if (!targetMapId) return Promise.resolve(new Response(null, { status: 204 }));
+          return fetch(
+            `${target}${this.partiesPath}/map-${targetMapId}/world/${encodeURIComponent(String(world.id))}/update`,
+            {
+              method: "POST",
+              headers: createMapUpdateHeaders(this.mapUpdateToken, options.headers),
+              body: JSON.stringify({ id: world.id, maps: world.maps }),
+            },
+          );
+        }),
+      );
+      const failedResponse = responses.find((response) => !response.ok);
+      if (failedResponse) return failedResponse;
+    }
+
+    return mapResponse;
+  }
+
+  async handleNodeRequest(req: IncomingMessage, res: ServerResponse, next?: () => void, options: HandleNodeRequestOptions = {}): Promise<boolean> {
     try {
       const headers = toHeaders(req.headers);
       const host = headers.get("host") || "localhost";
@@ -347,16 +377,7 @@ export class RpgServerTransport {
         return false;
       }
 
-      const response = await this.dispatchRoomRequest(
-        route.roomId,
-        createRequestLike(
-          normalizedUrl.toString(),
-          (req.method || "GET").toUpperCase(),
-          headers,
-          await readNodeBody(req),
-        ),
-        host,
-      );
+      const response = await this.dispatchRoomRequest(route.roomId, createRequestLike(normalizedUrl.toString(), (req.method || "GET").toUpperCase(), headers, await readNodeBody(req)), host);
 
       await sendNodeResponse(res, response);
       return true;
@@ -391,11 +412,13 @@ export class RpgServerTransport {
         }),
       );
 
-      await connection.send(JSON.stringify({
-        type: "connected",
-        id: connection.id,
-        message: "Connected to RPG-JS server",
-      }));
+      await connection.send(
+        JSON.stringify({
+          type: "connected",
+          id: connection.id,
+          message: "Connected to RPG-JS server",
+        }),
+      );
 
       return true;
     } catch (error) {
@@ -405,12 +428,7 @@ export class RpgServerTransport {
     }
   }
 
-  async handleUpgrade(
-    wsServer: RpgWebSocketServer,
-    request: IncomingMessage,
-    socket: Duplex,
-    head: Buffer,
-  ): Promise<boolean> {
+  async handleUpgrade(wsServer: RpgWebSocketServer, request: IncomingMessage, socket: Duplex, head: Buffer): Promise<boolean> {
     const headers = toHeaders(request.headers);
     const host = headers.get("host") || "localhost";
     const url = new URL(request.url || "/", `http://${host}`);
@@ -429,9 +447,6 @@ export class RpgServerTransport {
   }
 }
 
-export function createRpgServerTransport(
-  serverModule: RpgTransportServerConstructor,
-  options?: CreateRpgServerTransportOptions,
-): RpgServerTransport {
+export function createRpgServerTransport(serverModule: RpgTransportServerConstructor, options?: CreateRpgServerTransportOptions): RpgServerTransport {
   return new RpgServerTransport(serverModule, options);
 }

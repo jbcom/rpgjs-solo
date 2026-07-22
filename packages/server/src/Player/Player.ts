@@ -148,6 +148,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
   context?: Context;
   conn: Parameters<RpgMap["$send"]>[0] | null = null;
   touchSide: boolean = false; // Protection against map change loops
+  private continueMovementOnNextMapChange = false;
   private _clientListeners = new Map<string, Set<(data: unknown) => void | Promise<void>>>();
   private _projectiles?: RpgPlayerProjectiles;
   private locale?: string;
@@ -448,6 +449,7 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
     this.emit("changeMap", {
       mapId: realMapId,
       positions,
+      continueMovement: this.continueMovementOnNextMapChange,
       transferToken: typeof transferToken === 'string' ? transferToken : undefined,
     });
     return true;
@@ -484,7 +486,14 @@ export class RpgPlayer extends BasicPlayerMixins(RpgCommonPlayer) {
             }
             const id = nextMap.id as string
             const nextMapInfo = worldMaps.getMapInfo(id)
-            const changed = !!(await this.changeMap(id, to(nextMapInfo)))
+            this.continueMovementOnNextMapChange = true
+            let changed = false
+            try {
+                changed = !!(await this.changeMap(id, to(nextMapInfo)))
+            }
+            finally {
+                this.continueMovementOnNextMapChange = false
+            }
             if (changed) {
                 this.touchSide = true
             }

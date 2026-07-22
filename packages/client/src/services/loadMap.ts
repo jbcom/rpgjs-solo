@@ -1,5 +1,6 @@
 import { Context, inject } from "@signe/di";
 import { UpdateMapToken, UpdateMapService, type LightingState } from "@rpgjs/common";
+import type { RpgClientMap } from "../Game/Map";
 
 export const LoadMapToken = 'LoadMapToken'
 
@@ -9,7 +10,7 @@ export const LoadMapToken = 'LoadMapToken'
  * 
  * @interface MapData
  */
-type MapData = {
+export type MapData = {
   /** Raw map data that will be passed to the map component */
   data: any;
   /** CanvasEngine component that will render the map */
@@ -26,6 +27,10 @@ type MapData = {
   id?: string;
   /** Optional initial lighting state for the loaded map */
   lighting?: LightingState | null;
+  /** Optional render parameters passed to the map component. */
+  params?: Record<string, unknown>;
+  /** Internal controller used by a progressive map provider. */
+  streamController?: { attach(map: RpgClientMap): void; detach(): void };
 }
 
 /**
@@ -46,10 +51,12 @@ export class LoadMapService {
     if (context['side'] === 'server') {
       return
     }
-    this.updateMapService = inject(context, UpdateMapToken);
   }
 
+  initialize(): void {}
+
   async load(mapId: string) {
+    this.updateMapService ??= inject(this.context, UpdateMapToken);
     const map = await this.options(mapId.replace('map-', ''))
     await this.updateMapService.update(map);
     return map;

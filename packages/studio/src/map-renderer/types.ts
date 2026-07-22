@@ -125,6 +125,18 @@ export interface StudioTerrainControlTexture {
   tileSize: number;
   palette: string[];
   encoding?: string;
+  /** Client-safe control-texture regions disclosed with the active map chunks. */
+  regions?: StudioTerrainControlRegion[];
+}
+
+export interface StudioTerrainControlRegion {
+  key: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  encoding: "rgba8-base64" | "rgba8-rle-base64";
+  data: string;
 }
 
 export interface StudioCollisionPolygon {

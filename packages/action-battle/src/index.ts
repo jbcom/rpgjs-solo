@@ -239,7 +239,7 @@ export function provideActionBattle(options: ActionBattleOptions = {}) {
       server: createActionBattleServer?.(options),
       client: createActionBattleClient?.(options),
     },
-  ]); 
+  ]);
 }
 
 export default {

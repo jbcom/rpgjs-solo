@@ -10,21 +10,32 @@ Reference for the `RpgClientEngine` class.
 ## Members
 
 - [addComponentAnimation](#addcomponentanimation)
+- [addEventComponentResolver](#addeventcomponentresolver)
 - [addSound](#addsound)
 - [addSpriteComponentBehind](#addspritecomponentbehind)
 - [addSpriteComponentInFront](#addspritecomponentinfront)
+- [cameraFollowRevision](#camerafollowrevision)
+- [cameraFollowSmoothMove](#camerafollowsmoothmove)
 - [cameraFollowTargetId](#camerafollowtargetid)
 - [clear](#clear)
 - [clearClientPredictionStates](#clearclientpredictionstates)
 - [flash](#flash)
 - [getComponentAnimation](#getcomponentanimation)
 - [getSound](#getsound)
+- [getSpriteComponent](#getspritecomponent)
 - [getSpriteSheet](#getspritesheet)
+- [interactions](#interactions)
+- [interruptCurrentPlayerMovement](#interruptcurrentplayermovement)
 - [mapShakeTrigger](#mapshaketrigger)
+- [playClientVisual](#playclientvisual)
 - [playSound](#playsound)
+- [pointer](#pointer)
 - [processAction](#processaction)
 - [processDash](#processdash)
-- [pointer](#pointer)
+- [registerClientVisual](#registerclientvisual)
+- [registerClientVisuals](#registerclientvisuals)
+- [registerSpriteComponent](#registerspritecomponent)
+- [resolveEventComponent](#resolveeventcomponent)
 - [setCameraFollow](#setcamerafollow)
 - [setKeyboardControls](#setkeyboardcontrols)
 - [setSoundResolver](#setsoundresolver)
@@ -79,6 +90,31 @@ engine.addComponentAnimation({
   component: ExplosionComponent
 });
 ```
+
+## addEventComponentResolver
+
+Register a custom event component resolver.
+
+The last resolver returning a component wins. This lets later modules
+override earlier defaults without replacing the whole map scene.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+addEventComponentResolver(resolver: EventComponentResolver)
+```
+
+### Parameters
+
+- `resolver`: `EventComponentResolver`
+
+### Returns
+
+The registered resolver
 
 ## addSound
 
@@ -222,6 +258,34 @@ engine.addSpriteComponentInFront({
   props: (object) => ({ hp: object.hp(), maxHp: object.param.maxHp() }),
   dependencies: (object) => [object.hp, object.param.maxHp]
 });
+```
+
+## cameraFollowRevision
+
+Incremented for each camera follow command so repeated commands on the same target are applied
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `property`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+cameraFollowRevision
+```
+
+## cameraFollowSmoothMove
+
+Camera follow transition options used by character components when the target changes
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `property`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+cameraFollowSmoothMove: CameraFollowSmoothMove
 ```
 
 ## cameraFollowTargetId
@@ -437,6 +501,28 @@ const sound = engine.getSound('my-sound');
 const sound = await engine.getSound('dynamic-sound');
 ```
 
+## getSpriteComponent
+
+Get a reusable sprite component by id.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+getSpriteComponent(id: string)
+```
+
+### Parameters
+
+- `id`: `string`
+
+### Returns
+
+The CanvasEngine component, or undefined when missing
+
 ## getSpriteSheet
 
 Get a spritesheet by ID, using resolver if not found in cache
@@ -452,12 +538,12 @@ The resolved spritesheet is automatically cached for future use.
 ### Signature
 
 ```ts
-getSpriteSheet(id: string): any | Promise<any>
+getSpriteSheet(id: string | number): any | Promise<any>
 ```
 
 ### Parameters
 
-- `id`: `string`
+- `id`: `string | number`
 
 ### Returns
 
@@ -473,6 +559,68 @@ const spritesheet = engine.getSpriteSheet('my-sprite');
 const spritesheet = await engine.getSpriteSheet('dynamic-sprite');
 ```
 
+## interactions
+
+Register client-only pointer behaviors for map sprites. Interactions remain
+local unless a behavior explicitly sends an action to the server.
+
+See the [client interactions guide](../../guide/interactions.md) for hover,
+selection, hit testing, drag-and-drop, overlays, and network rules.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `property`
+- Member of: `RpgClientEngine`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+interactions: RpgClientInteractions
+```
+
+### Examples
+
+```ts
+engine.interactions.use('Guard', {
+  cursor: 'pointer',
+  click(ctx) {
+    ctx.action('guard:talk', { eventId: ctx.target.id })
+  }
+})
+```
+
+## interruptCurrentPlayerMovement
+
+Stop local movement immediately and discard pending predicted movement.
+
+Use this before a blocking action such as an A-RPG attack, dialog, dash
+startup, or any client-side state where already buffered movement inputs
+must not be replayed after server reconciliation.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+interruptCurrentPlayerMovement(player?: any): boolean
+```
+
+### Parameters
+
+- `player?`: `any`
+
+### Returns
+
+`true` when a player was found and interrupted.
+
+### Examples
+
+```ts
+engine.interruptCurrentPlayerMovement();
+```
+
 ## mapShakeTrigger
 
 Trigger for map shake animation
@@ -484,8 +632,29 @@ Trigger for map shake animation
 ### Signature
 
 ```ts
-mapShakeTrigger
+mapShakeTrigger: ConfigurableTrigger<MapShakeOptions>
 ```
+
+## playClientVisual
+
+Play a registered client visual locally.
+
+This is also used by the websocket listener when the server calls
+`player.clientVisual()` or `map.clientVisual()`.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+playClientVisual(packet: ClientVisualPacket)
+```
+
+### Parameters
+
+- `packet`: `ClientVisualPacket`
 
 ## playSound
 
@@ -523,593 +692,197 @@ engine.playSound('background-music', { volume: 0.5, loop: true });
 await engine.playSound('dynamic-sound', { volume: 0.8 });
 ```
 
-## processAction
-
-Send an action input to the server. Use the optional `data` payload for context
-such as a pointer position, selected target, or UI command details. The server
-receives the normalized payload in `player.onInput()`.
-
-For the full flow, including keyboard action bindings and the difference between
-custom actions and event interactions, see
-[`Custom action inputs`](../../guide/structure.md#custom-action-inputs).
-
-- Source: `packages/client/src/RpgClientEngine.ts`
-- Kind: `method`
-- Defined in: `RpgClientEngine`
-
-### Signature
-
-```ts
-processAction(action: string | number, data?: any): void
-processAction(input: { action: string | number, data?: any }): void
-```
-
-### Parameters
-
-- `action`: Action name or control value
-- `data?`: Optional custom payload sent with the action
-
-### Examples
-
-```ts
-// Existing simple action
-engine.processAction('action')
-
-// Action with custom context
-engine.processAction('projectile:shoot', {
-  target: { x: 320, y: 180 },
-  source: 'map-click'
-})
-```
-
-On the server:
-
-```ts
-const player = {
-  onInput(player, input) {
-    if (input.action === 'projectile:shoot') {
-      const target = input.data?.target
-    }
-  }
-}
-```
-
-## processDash
-
-Start a predicted dash for the current player. The dash is sent through the
-movement channel, so the client can simulate it immediately and the server can
-validate the authoritative result.
-
-- Source: `packages/client/src/RpgClientEngine.ts`
-- Kind: `method`
-- Defined in: `RpgClientEngine`
-
-### Signature
-
-```ts
-processDash(input?: {
-  direction?: { x: number, y: number },
-  additionalSpeed?: number,
-  duration?: number,
-  cooldown?: number
-}): Promise<void>
-```
-
-### Examples
-
-```ts
-// Dash in the current facing direction
-await engine.processDash()
-
-// Dash to the right with custom tuning
-await engine.processDash({
-  direction: { x: 1, y: 0 },
-  additionalSpeed: 10,
-  duration: 220,
-  cooldown: 600
-})
-```
-
 ## pointer
 
-Read the latest pointer position tracked by the client canvas. `world()` returns
-coordinates in map/world space, suitable for action payloads such as projectile
-targets. `screen()` returns the latest canvas/global pointer position.
+Read the latest pointer position tracked by the client canvas. World
+coordinates are suitable for action payloads and map interactions.
 
 - Source: `packages/client/src/RpgClientEngine.ts`
 - Kind: `property`
+- Member of: `RpgClientEngine`
 - Defined in: `RpgClientEngine`
 
 ### Signature
 
 ```ts
-pointer.screen(): { x: number, y: number } | null
-pointer.world(): { x: number, y: number } | null
-pointer.updateFromEvent(event: any): { x: number, y: number } | null
+pointer: ClientPointerContext
 ```
 
 ### Examples
 
 ```ts
 const target = engine.pointer.world()
-
-if (target) {
-  engine.processAction('projectile:shoot', {
-    target,
-    source: 'keyboard'
-  })
-}
+if (target) engine.processAction('projectile:shoot', { target })
 ```
 
-## interactions
+## processAction
 
-Register client-only pointer behaviors for map sprites. Use interactions for
-hover popovers, selection feedback, drag previews, cursor changes, and other
-CanvasEngine overlays. Nothing is sent to the server unless a behavior calls
-`ctx.action(...)`.
+Send an action intent to the authoritative server. Client-provided data
+must be validated by the receiving player input handler or action.
 
-- Source: `packages/client/src/services/interactions.ts`
-- Kind: `property`
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Member of: `RpgClientEngine`
 - Defined in: `RpgClientEngine`
 
-### Mental Model
-
-`interactions` is a client-side layer attached to rendered map sprites. It does
-not change gameplay state by itself.
-
-Use it for:
-
-- hover popovers
-- selection states
-- cursor changes
-- local highlights and drag previews
-- hitbox-based pointer filtering
-- explicit pointer-driven actions
-
-Do not use it as the authority for gameplay. When an interaction must change the
-world, call `ctx.action(...)` and validate the request on the server.
-
-### Registering A Behavior
+### Signature
 
 ```ts
-engine.interactions.use(target, behavior)
+processAction(action: RpgActionName | RpgActionInput, data?: any): void
 ```
 
-`target` can be:
+### Parameters
 
-- a sprite/event id
-- an event name
-- a sprite `_type`, such as `"event"` or `"player"`
-- `"*"` for every sprite
-- a function receiving `{ client, target, sprite }`
+- `action`: `RpgActionName`
+- `data?`: `any`
 
-The returned function unregisters the behavior:
+### Returns
 
-```ts
-const stop = engine.interactions.use('Guard', hoverPopover(GuardPopover))
+Nothing.
 
-stop()
-```
-
-### From A Client Module
-
-Use `interactions.setup()` when registering behaviors from a module:
+### Examples
 
 ```ts
-import { defineModule, hoverPopover } from '@rpgjs/client'
-import GuardPopover from './components/GuardPopover.ce'
-
-export default defineModule({
-  client: {
-    interactions: {
-      setup(engine) {
-        engine.interactions.use('Guard', hoverPopover(GuardPopover))
-      }
-    }
-  }
+engine.processAction('projectile:shoot', {
+  target: engine.pointer.world(),
+  source: 'map-click',
 })
 ```
 
-For simple lists, `interactions.use` is also accepted:
+## processDash
+
+Start a predicted dash for the current player and send it through the
+authoritative movement channel.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Member of: `RpgClientEngine`
+- Defined in: `RpgClientEngine`
+
+### Signature
 
 ```ts
-export default defineModule({
-  client: {
-    interactions: {
-      use: [
-        ['Guard', hoverPopover(GuardPopover)]
-      ]
-    }
-  }
+processDash(input?: Partial<RpgDashInput>): Promise<void>
+```
+
+### Parameters
+
+- `input?`: `Partial<RpgDashInput>`
+
+### Returns
+
+A promise resolved after the dash input has been processed locally.
+
+### Examples
+
+```ts
+await engine.processDash({
+  direction: { x: 1, y: 0 },
+  additionalSpeed: 10,
+  duration: 220,
+  cooldown: 600,
 })
 ```
 
-### Hover Popover
+## registerClientVisual
 
-Register a CanvasEngine component as an overlay for an existing event:
+Register a named client visual macro.
 
-```ts
-import { hoverPopover } from '@rpgjs/client'
-import GuardPopover from './components/GuardPopover.ce'
+Client visuals are small client-side functions that group existing visual
+primitives such as flash, sound, component animations, sprite animation, or
+map shake. The server sends only the visual name and a serializable payload.
 
-engine.interactions.use('Guard', hoverPopover(GuardPopover))
-```
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Defined in: `RpgClientEngine`
 
-The component receives:
-
-- `target` / `sprite`: the RPGJS client sprite
-- `state`: `{ hovered, pressed, selected, dragging, data, overlays }`
-- `bounds`: the default visual bounds
-- `hitboxBounds`: the gameplay hitbox bounds
-- `graphicBounds`: the rendered graphic bounds
-- `pointer`: the client pointer helper
-- `client`: the current `RpgClientEngine`
-
-In CanvasEngine components, values returned by `defineProps()` are prop accessors.
-Read the sprite with `sprite()` or `target()` before accessing its fields.
-Component bounds are local to the sprite, so `bounds()` can be used directly to
-draw overlays attached to that sprite.
-
-Example:
-
-```html
-<!-- GuardPopover.ce -->
-<Container>
-  @if (state().hovered) {
-    <DOMContainer x={bounds().centerX} y={bounds().top - 32} zIndex={10000}>
-      <div class="guard-popover">
-        Parler a {target().name}
-      </div>
-    </DOMContainer>
-  }
-</Container>
-
-<script>
-  const { target, state, bounds } = defineProps()
-</script>
-```
-
-The popover is local only. Hovering the guard does not call the server.
-
-### Client-Only Selection
-
-`selectable()` stores selection state locally. It does not send an action.
+### Signature
 
 ```ts
-import { selectable } from '@rpgjs/client'
-
-engine.interactions.use('Chest', selectable())
+registerClientVisual(name: string, handler: ClientVisualHandler)
 ```
 
-The overlay component can read `state().selected`:
+### Parameters
 
-```html
-<Container>
-  @if (state().selected) {
-    <Graphics draw={drawRing} />
-  }
-</Container>
+- `name`: `string`
+- `handler`: `ClientVisualHandler`
 
-<script>
-  const { state, bounds } = defineProps()
+### Returns
 
-  const drawRing = (g) => {
-    const box = bounds()
-    g.ellipse(box.centerX, box.bottom - 4, box.width / 2, 6)
-      .stroke({ color: 0xffd166, width: 2 })
-  }
-</script>
-```
+The registered handler
 
-### Explicit Server Action
+## registerClientVisuals
 
-Call `ctx.action(...)` only when the pointer gesture is meant to perform
-gameplay. This delegates to `engine.processAction(...)`.
+Register several named client visual macros.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Defined in: `RpgClientEngine`
+
+### Signature
 
 ```ts
-engine.interactions.use('Guard', {
-  cursor: 'pointer',
-
-  click(ctx) {
-    ctx.action('guard:talk', {
-      eventId: ctx.target.id
-    })
-  }
-})
+registerClientVisuals(visuals: ClientVisualMap)
 ```
 
-On the server, validate the request in the player input handler or a registered
-action. The client-sent `eventId` should be treated as intent, not authority.
+### Parameters
 
-### Hitbox-Based Interactions
+- `visuals`: `ClientVisualMap`
 
-Use `hitTest()` to choose the clickable or draggable area. This is useful when a
-sprite graphic is larger than its gameplay body.
-Inside handlers and `hitTest()`, `ctx.bounds()` returns world-space bounds so it
-can be compared directly with `ctx.pointer.world()`.
+## registerSpriteComponent
+
+Register a reusable sprite component that can be addressed by the server.
+
+Server-side component definitions only carry the component id and
+serializable props. The client registry maps that id to the CanvasEngine
+component that performs the actual rendering.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Defined in: `RpgClientEngine`
+
+### Signature
 
 ```ts
-engine.interactions.use('Tree', {
-  cursor: 'pointer',
-
-  hitTest(ctx) {
-    return ctx.bounds('hitbox').contains(ctx.pointer.world())
-  }
-})
+registerSpriteComponent(id: string, component: any)
 ```
 
-Available bounds:
+### Parameters
 
-- `ctx.bounds('hitbox')`: RPGJS gameplay hitbox
-- `ctx.bounds('graphic')`: rendered graphic bounds
-- `ctx.bounds()`: default bounds, currently graphic-first
+- `id`: `string`
+- `component`: `any`
 
-You can also implement custom areas:
+### Returns
+
+The registered component
+
+### Examples
 
 ```ts
-engine.interactions.use('Tree', {
-  hitTest(ctx) {
-    const point = ctx.pointer.world()
-    const box = ctx.bounds('graphic')
-
-    if (!point) return false
-
-    return (
-      point.x >= box.left &&
-      point.x <= box.right &&
-      point.y >= box.bottom - 24 &&
-      point.y <= box.bottom
-    )
-  },
-})
+engine.registerSpriteComponent('guildBadge', GuildBadgeComponent);
 ```
 
-### Drag And Drop To A Tile
+## resolveEventComponent
 
-`dragToTile()` starts a local drag state and sends an action on drop.
+Resolve the custom CanvasEngine component for an event, if any.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Defined in: `RpgClientEngine`
+
+### Signature
 
 ```ts
-import { dragToTile } from '@rpgjs/client'
-
-engine.interactions.use('Crate', dragToTile({
-  action: 'crate:move'
-}))
+resolveEventComponent(event: RpgClientEvent): EventComponentConfig | null
 ```
 
-The default payload is:
+### Parameters
 
-```ts
-{
-  eventId: ctx.target.id,
-  position: ctx.pointer.tile()
-}
-```
+- `event`: `RpgClientEvent`
 
-`ctx.pointer.tile()` returns:
+### Returns
 
-```ts
-{
-  x: number,
-  y: number,
-  worldX: number,
-  worldY: number,
-  width: number,
-  height: number
-}
-```
-
-Customize the payload with `data`:
-
-```ts
-engine.interactions.use('Crate', dragToTile({
-  action: 'crate:move',
-  data(ctx) {
-    return {
-      crateId: ctx.target.id,
-      tile: ctx.pointer.tile(),
-      source: 'mouse'
-    }
-  }
-}))
-```
-
-Or handle the drop yourself:
-
-```ts
-engine.interactions.use('Crate', dragToTile({
-  onDrop(ctx) {
-    const tile = ctx.pointer.tile()
-
-    if (!tile) {
-      ctx.cancel()
-      return
-    }
-
-    ctx.action('crate:move', {
-      eventId: ctx.target.id,
-      tile
-    })
-  }
-}))
-```
-
-### Custom Drag Preview
-
-For full control, use low-level handlers:
-
-```ts
-engine.interactions.use('Crate', {
-  cursor: 'grab',
-
-  hitTest(ctx) {
-    return ctx.bounds('hitbox').contains(ctx.pointer.world())
-  },
-
-  dragstart(ctx) {
-    ctx.overlay.render(CrateGhost, {
-      position: ctx.pointer.world()
-    })
-  },
-
-  dragmove(ctx) {
-    ctx.overlay.update({
-      position: ctx.pointer.world(),
-      tile: ctx.pointer.tile()
-    })
-  },
-
-  drop(ctx) {
-    ctx.overlay.clear()
-    ctx.action('crate:move', {
-      eventId: ctx.target.id,
-      position: ctx.pointer.tile()
-    })
-  },
-
-  cancel(ctx) {
-    ctx.overlay.clear()
-  }
-})
-```
-
-The overlay component can use any CanvasEngine primitive, including
-`DOMContainer`, `Graphics`, `Sprite`, or `Text`.
-
-```html
-<!-- CrateGhost.ce -->
-<Container>
-  @if (position()) {
-    <Graphics draw={drawPreview} zIndex={10000} />
-  }
-</Container>
-
-<script>
-  const { position, tile } = defineProps()
-
-  const drawPreview = (g) => {
-    const currentTile = tile()
-    const currentPosition = position()
-
-    if (currentTile) {
-      g.rect(currentTile.worldX, currentTile.worldY, currentTile.width, currentTile.height)
-        .stroke({ color: 0x66ff99, width: 2 })
-    }
-    if (currentPosition) {
-      g.circle(currentPosition.x, currentPosition.y, 6)
-        .fill({ color: 0xffffff, alpha: 0.6 })
-    }
-  }
-</script>
-```
-
-### Low-Level Behavior API
-
-A behavior can define these handlers:
-
-```ts
-engine.interactions.use('Chest', {
-  cursor: 'pointer',
-
-  pointerenter(ctx) {
-    ctx.overlay.render(ChestHint)
-  },
-
-  pointerleave(ctx) {
-    ctx.overlay.clear()
-  },
-
-  pointerdown(ctx) {
-    ctx.state.patch({ pressed: true })
-  },
-
-  pointerup(ctx) {
-    ctx.state.patch({ pressed: false })
-  },
-
-  click(ctx) {
-    ctx.select()
-  }
-})
-```
-
-Supported handler names:
-
-- `pointerenter`
-- `pointerleave`
-- `pointerover`
-- `pointerout`
-- `pointerdown`
-- `pointerup`
-- `pointermove`
-- `click`
-- `dragstart`
-- `dragmove`
-- `drop`
-- `cancel`
-
-### Interaction Context
-
-Every handler receives `ctx`:
-
-```ts
-type ctx = {
-  client: RpgClientEngine
-  target: RpgClientObject
-  sprite: RpgClientObject
-  event?: unknown
-  pointer: {
-    screen(): { x: number, y: number } | null
-    world(): { x: number, y: number } | null
-    tile(): {
-      x: number
-      y: number
-      worldX: number
-      worldY: number
-      width: number
-      height: number
-    } | null
-  }
-  bounds(kind?: 'bounds' | 'hitbox' | 'graphic' | string): Bounds
-  state: {
-    value(): InteractionState
-    get(key: string): unknown
-    set(key: string, value: unknown): void
-    patch(patch: Partial<InteractionState>): void
-  }
-  overlay: {
-    render(component: any, props?: Record<string, any>): void
-    update(props?: Record<string, any>): void
-    clear(): void
-  }
-  select(selected?: boolean): void
-  action(action: string | number, data?: any): void
-  cancel(): void
-}
-```
-
-### Helpers
-
-RPGJS exports small helpers for common cases:
-
-```ts
-hoverPopover(component, props?)
-selectable({ cursor?, onSelect? })
-draggable({ cursor?, start?, move?, drop?, cancel? })
-dragToTile({ action?, data?, onDrop?, cursor? })
-```
-
-These helpers are only shortcuts. For project-specific UX, pass a behavior
-object directly to `engine.interactions.use(...)`.
-
-### Network Rules
-
-- Pointer movement, hover, overlays, selection, drag previews, and cursor changes
-  are client-only.
-- `ctx.overlay.*`, `ctx.state.*`, and `ctx.select()` do not send packets.
-- `ctx.action(...)` is the only interaction helper that sends an action to the
-  server.
-- Server code must validate distance, permissions, target visibility, and map
-  state before applying gameplay changes.
+The component/config returned by the last matching resolver
 
 ## setCameraFollow
 
@@ -1122,10 +895,8 @@ The camera can smoothly animate to the target sprite before continuous follow st
 
 The camera follow target is stored in a signal that is read by sprite components.
 Each sprite checks if it should be followed by comparing its ID with the target ID.
-When smoothMove options are provided, the viewport animation is handled by CanvasEngine's
-viewport system. `time` and `ease` configure the transition to the target, while
-`speed`, `acceleration`, and `radius` configure the continuous follow behavior after
-the transition.
+When smoothMove options are provided, the transition is handled by pixi-viewport's
+animation plugin, then continuous follow is handled by CanvasEngine's viewport system.
 
 - Source: `packages/client/src/RpgClientEngine.ts`
 - Kind: `method`
@@ -1134,20 +905,13 @@ the transition.
 ### Signature
 
 ```ts
-setCameraFollow(targetId: string | null, smoothMove?: boolean | {
-  enabled?: boolean;
-  time?: number;
-  ease?: CameraFollowEase;
-  speed?: number;
-  acceleration?: number | null;
-  radius?: number | null;
-}): void
+setCameraFollow(targetId: string | null, smoothMove?: CameraFollowSmoothMove): void
 ```
 
 ### Parameters
 
 - `targetId`: `string | null`
-- `smoothMove?`: `boolean | { enabled?: boolean; time?: number; ease?: CameraFollowEase; speed?: number; acceleration?: number | null; radius?: number | null }`
+- `smoothMove?`: `CameraFollowSmoothMove`
 
 ### Examples
 
@@ -1159,15 +923,6 @@ engine.setCameraFollow(otherPlayerId, true);
 engine.setCameraFollow(eventId, {
   time: 1000,
   ease: "easeInOutQuad"
-});
-
-// Follow with a smooth transition and softer continuous follow
-engine.setCameraFollow(eventId, {
-  time: 1000,
-  ease: "easeInOutQuad",
-  speed: 12,
-  acceleration: 0.2,
-  radius: 80
 });
 
 // Follow without animation (instant)
@@ -1280,12 +1035,12 @@ The resolved spritesheet is automatically cached for future use.
 ### Signature
 
 ```ts
-setSpritesheetResolver(resolver: (id: string) => any | Promise<any>): void
+setSpritesheetResolver(resolver: (id: string | number) => any | Promise<any>): void
 ```
 
 ### Parameters
 
-- `resolver`: `(id: string) => any | Promise<any>`
+- `resolver`: `(id: string | number) => any | Promise<any>`
 
 ### Examples
 
@@ -1316,9 +1071,6 @@ Convenience method to display a transition by its ID using the GUI system.
 - Kind: `method`
 - Defined in: `RpgClientEngine`
 
-The returned promise resolves when the transition component calls its
-`onFinish` prop.
-
 ### Signature
 
 ```ts
@@ -1342,7 +1094,7 @@ engine.startTransition('fade', {
   onFinish: () => console.log('Fade complete')
 });
 
-// Wait until the transition finishes
+// Wait until the transition component calls onFinish
 await engine.startTransition('fade', { duration: 1000 });
 ```
 

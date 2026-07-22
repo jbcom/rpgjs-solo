@@ -40,7 +40,8 @@
               "guide/structure",
               "guide/create-your-first-map",
               "guide/create-hero-in-map",
-              "guide/create-spritesheet"
+              "guide/create-spritesheet",
+              "guide/deploy-mmorpg"
             ]
           },
           {
@@ -53,6 +54,7 @@
               "guide/create-shape",
               "guide/display-animations",
               "guide/client-visuals",
+              "guide/interactions",
               "guide/spritesheets",
               "guide/lighting",
               "guide/weather"
@@ -107,9 +109,12 @@
           {
             "group": "Advanced",
             "pages": [
+              "philosophy",
               "roadmap",
+              "migration/v4-to-v5",
               "advanced/mmorpg-entries",
               "advanced/node-server-production",
+              "advanced/cloudflare-server-production",
               "advanced/latency-simulation",
               "advanced/packet-loss-simulation"
             ]
