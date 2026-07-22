@@ -52,6 +52,25 @@ The engine may maintain render caches and view objects, but those are derived
 presentation state. There must not be a second gameplay-authoritative client
 model synchronized from a pretend server.
 
+## Solo packages
+
+The first additive package seam is intentionally small and independently
+publishable from the inherited RPGJS package graph:
+
+| Package | Responsibility |
+|---|---|
+| `@jbcom/rpgjs-solo` | Direct commands, deterministic local worlds, authoritative entities, pause, actions, and saves |
+| `@jbcom/rpgjs-solo-pixi` | PixiJS 8.19 ticker and display-object bindings; canvas ownership remains in the fleet `pixi-mount` package |
+| `@jbcom/rpgjs-solo-vite` | Production-bundle rejection of room/sync/socket/prediction regressions |
+
+All three are versioned against the exact RPGJS beta baseline and publish only
+to the Gitea `jbcom` npm registry.
+
+After the Node 24 build, tests, and Solo boundary pass, an authenticated
+maintainer publishes the filtered package set in dependency order with
+`pnpm publish:solo`. Credentials remain outside the repository; anonymous LAN
+consumers need only the committed `@jbcom` registry mapping.
+
 ## Non-negotiable release gates
 
 A Solo runtime release must prove all of the following:

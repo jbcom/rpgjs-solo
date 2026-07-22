@@ -16,6 +16,8 @@
     "rpgjs:version": "tsx bin/version.ts",
     "rpgjs:tag-latest": "tsx bin/tag-latest.ts",
     "rpgjs:publish": "pnpm run publish-packages",
+    "publish:solo": "pnpm --filter '@jbcom/rpgjs-solo*' -r publish --no-git-checks",
+    "verify:solo-boundary": "pnpm --filter @jbcom/rpgjs-solo verify:boundary",
     "test": "vitest"
   },
   "author": "Samuel Ronce",
