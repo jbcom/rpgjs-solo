@@ -78,7 +78,7 @@ manual port.
 6. Reductively omit the inherited standalone bridge and every network package
    from Solo release manifests and production bundles.
 7. Keep unavoidable mutations to inherited files narrow, separately committed,
-   and upstreamable where possible.
+   and independently replayable or droppable during upstream synchronization.
 8. Keep MMORPG packages as upstream migration inputs; do not publish them as
    Solo products.
 
@@ -101,7 +101,8 @@ CI must eventually enforce all of these mechanically:
 
 ## Upstream synchronization
 
-The `v5` branch tracks upstream. The `solo` branch is the product. Upstream
+The `v5` branch tracks upstream. Gitea `main` is the product branch; GitHub is a
+public downstream mirror. Upstream
 changes are classified as:
 
 - **portable:** RPG/content fixes independent of networking;

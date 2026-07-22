@@ -76,10 +76,11 @@ The accepted architecture decision is recorded in
 ## Branches and upstream sync
 
 - `v5` mirrors the upstream default branch and is not the product branch.
-- `solo` is the RPGJS Solo product branch.
-- changes target `solo` through reviewed feature branches.
+- Gitea `main` is the canonical RPGJS Solo product branch.
+- changes target Gitea `main` through reviewed feature branches.
+- GitHub is a public downstream mirror and is never the development record.
 - upstream changes are first audited on `v5`, then deliberately ported or
-  merged into `solo`; transport/MMORPG changes are not inherited by default.
+  merged into `main`; transport/MMORPG changes are not inherited by default.
 
 See [`docs/upstream-sync.md`](docs/upstream-sync.md) for the exact procedure and
 compatibility ledger.
@@ -96,7 +97,7 @@ Solo evolves **additively and reductively**:
 - prefer a new pure module plus a compatibility re-export over moving or
   rewriting an inherited implementation; and
 - keep unavoidable edits to inherited files small, separately committed, and
-  suitable for offering upstream whenever possible.
+  independently replayable or droppable during upstream synchronization.
 
 Large in-place rewrites of upstream packages are rejected unless an additive
 seam has been proven impossible. This keeps the fork syncable as RPGJS v5 moves
@@ -105,7 +106,7 @@ from beta to production.
 ## Development
 
 ```bash
-git clone https://github.com/jbcom/rpgjs-solo.git
+git clone https://git.local.jonbogaty.com/jbcom/rpgjs-solo.git
 cd rpgjs-solo
 nvm use
 corepack enable
@@ -121,8 +122,9 @@ Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before changing engine architecture.
 ## Upstream and license
 
 RPGJS Solo is based on [RSamaium/RPG-JS](https://github.com/RSamaium/RPG-JS)
-and preserves its MIT license and attribution. Improvements that strengthen
-RPGJS generally without reintroducing the dual-runtime constraint should be
-offered upstream when practical.
+and preserves its MIT license and attribution. The public
+[GitHub fork](https://github.com/jbcom/rpgjs-solo) mirrors the Gitea-canonical
+product for source availability. This project does not submit changes back to
+upstream.
 
 MIT. Free for commercial use.

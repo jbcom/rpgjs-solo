@@ -7,9 +7,12 @@ games that will never be multiplayer.
 ## Branch model
 
 - `v5` tracks `RSamaium/RPG-JS:v5`. Do not merge Solo product work into it.
-- `solo` is the product branch.
-- Start work from `solo` on a focused feature branch and open a PR back to
-  `solo`.
+- `main` on Gitea is the canonical RPGJS Solo product branch.
+- Start work from `main` on a focused feature branch and open a review back to
+  `main` on Gitea.
+- The public GitHub fork is a downstream mirror for discovery and source
+  availability. Do not treat GitHub branches or pull requests as the canonical
+  development record.
 - Audit upstream changes on the tracking branch before porting them. A newer
   upstream release is not adopted by copying package versions alone; relevant
   behavior, tests, migrations, and bundle effects must be reconciled.
@@ -55,7 +58,7 @@ RPGJS v5 stabilizes:
 - when reusable behavior is trapped in an inherited package, prefer extracting
   a new pure module and making the old package consume or re-export it;
 - isolate unavoidable inherited-file changes in small commits that can be
-  reviewed independently or offered upstream; and
+  reviewed, replayed, or dropped independently during an upstream sync; and
 - reject broad renames, directory moves, formatting sweeps, and in-place
   rewrites that manufacture merge conflicts without changing the product.
 
@@ -139,9 +142,10 @@ Solo packages remain prerelease until every non-negotiable gate in the root
 README passes. Published versions must identify the exact upstream baseline and
 carry no dependency range that silently moves the underlying engine.
 
-## Upstream contributions
+## Upstream boundary
 
-General RPGJS fixes that do not depend on Solo's product decision should be
-kept easy to offer upstream. Avoid mixing an upstreamable defect fix with a
-large Solo-only refactor. The fork's MIT lineage and attribution must remain
-clear.
+RPGJS Solo does not contribute changes back to `RSamaium/RPG-JS`. Keep general
+defect fixes isolated from Solo product work so they remain easy to re-evaluate
+or drop while syncing, not so they can be submitted upstream. Preserve the
+fork's MIT lineage, notices, and attribution, and record the exact adopted
+upstream baseline in each release.
