@@ -24,6 +24,12 @@ export interface SoloSpritesheetDefinition {
 
 export interface SoloEntityAppearance {
   spritesheet?: SoloSpritesheetDefinition
+  /**
+   * Selects the spritesheet animation from authoritative Solo entity state.
+   * A fixed string is useful for props; a resolver lets games project combat,
+   * interaction, or defeat state without teaching the renderer game rules.
+   */
+  animation?: string | SoloEntityAnimationResolver
   color?: string
   width?: number
   height?: number
@@ -32,6 +38,7 @@ export interface SoloEntityAppearance {
   visibleInFog?: 'always' | 'visible' | 'explored'
 }
 
+export type SoloEntityAnimationResolver = (entity: SoloEntityState) => string
 export type SoloAppearanceResolver = (entity: SoloEntityState) => SoloEntityAppearance | undefined
 
 export interface SoloFogOptions {

@@ -34,7 +34,12 @@ const renderer = new SoloRenderer({
   playerId: 'hero',
   maps: [field],
   appearances: {
-    hero: { spritesheet: createRpgMakerSpritesheet('/sprites/hero.png', 3, 4) }
+    hero: {
+      spritesheet: createRpgMakerSpritesheet('/sprites/hero.png', 3, 4),
+      animation: (entity) => typeof entity.data.animation === 'string'
+        ? entity.data.animation
+        : entity.moving ? 'walk' : 'stand'
+    }
   },
   fog: { radius: 160 },
   audio: { autoMuteInTests: true }
@@ -42,3 +47,8 @@ const renderer = new SoloRenderer({
 
 await renderer.start()
 ```
+
+`appearance.animation` may also be a fixed animation name. Resolver functions
+read the authoritative entity state on each runtime tick, so game packages can
+map their own `attack`, `hurt`, `down`, interaction, or other states onto a
+spritesheet without adding those rules to Solo's generic renderer.

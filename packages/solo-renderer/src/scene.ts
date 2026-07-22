@@ -38,7 +38,7 @@ const entityElement = (
     ? h(Sprite, {
       sheet: {
         definition: appearance.spritesheet,
-        playing: computed(() => entity.moving() ? 'walk' : 'stand'),
+        playing: entity.animation,
         params: { direction: entity.direction }
       },
       anchor: appearance.anchor ?? [0.5, 1]
