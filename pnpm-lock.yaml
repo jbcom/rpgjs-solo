@@ -758,7 +758,7 @@ importers:
         specifier: workspace:5.0.0-beta.26.solo.3
         version: link:../../../packages/solo
       '@jbcom/rpgjs-solo-renderer':
-        specifier: workspace:5.0.0-beta.26.solo.3
+        specifier: workspace:5.0.0-beta.26.solo.4
         version: link:../../../packages/solo-renderer
       '@rpgjs/ui-css':
         specifier: workspace:5.0.0-beta.23
