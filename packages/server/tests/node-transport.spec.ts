@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createServer, provideServerModules } from "../src";
@@ -7,6 +8,20 @@ import { MAP_UPDATE_TOKEN_ENV, PartyConnection, createMapUpdatePayload, createRp
 
 function wait(ms = 0): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getTiledFixturePath(): string {
+  const candidates = [
+    resolve(process.cwd(), "samples/cloudflare-mmorpg/src/tiled"),
+    resolve(process.cwd(), "../../samples/cloudflare-mmorpg/src/tiled"),
+  ];
+  const fixturePath = candidates.find(existsSync);
+
+  if (!fixturePath) {
+    throw new Error(`Unable to find the Cloudflare MMORPG Tiled fixtures from ${process.cwd()}`);
+  }
+
+  return fixturePath;
 }
 
 class MockWebSocket {
@@ -497,7 +512,7 @@ describe("createRpgServerTransport", () => {
   });
 
   it("builds a publishable map payload from a local Tiled base path", async () => {
-    const tiledBasePath = resolve(process.cwd(), "../../samples/cloudflare-mmorpg/src/tiled");
+    const tiledBasePath = getTiledFixturePath();
     const payload = await createMapUpdatePayload("map-demo", { maps: [] } as any, { tiledBasePaths: [tiledBasePath] });
 
     expect(payload).toMatchObject({
@@ -580,7 +595,7 @@ describe("createRpgServerTransport", () => {
   });
 
   it("resolves external tilesets next to a preloaded local TMX document", async () => {
-    const tiledBasePath = resolve(process.cwd(), "../../samples/cloudflare-mmorpg/src/tiled");
+    const tiledBasePath = getTiledFixturePath();
     const mapFile = resolve(tiledBasePath, "demo.tmx");
     const payload = await createMapUpdatePayload(
       "map-demo",
