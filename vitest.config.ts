@@ -9,6 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@rpgjs/testing": path.resolve(__dirname, "packages/testing/src"),
+      "@rpgjs/client": path.resolve(__dirname, "packages/client/src"),
       "@rpgjs/common": path.resolve(__dirname, "packages/common/src"),
       "@rpgjs/server": path.resolve(__dirname, "packages/server/src"),
       "@rpgjs/physic": path.resolve(__dirname, "packages/physic/src"),
