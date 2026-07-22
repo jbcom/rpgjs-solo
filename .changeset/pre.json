@@ -28,21 +28,27 @@
     "@rpgjs/playground-tiled": "1.0.0",
     "@rpgjs/playground-v4-compat": "1.0.3-beta.0",
     "@rpgjs/playground-vue-gui": "1.0.3-beta.0",
-    "@rpgjs/playground-pressure-plate": "1.0.0-beta.0"
+    "@rpgjs/playground-pressure-plate": "1.0.0-beta.0",
+    "@rpgjs/sample-cloudflare-mmorpg": "0.0.0"
   },
   "changesets": [
     "blue-holes-flow",
+    "brave-stable-foundations",
     "bright-readme-map",
     "calm-liquid-waves",
+    "canonical-module-api",
     "clean-package-type-builds",
     "clean-studio-hitbox-sync",
     "clean-workspace-internal-deps",
+    "clear-mmorpg-save-guide",
+    "fix-ci-test-discovery",
     "plain-studio-animations",
     "quiet-menu-hud-layout",
     "sharp-server-player-types",
     "sharp-studio-edge-repeat",
     "smart-studio-string-templates",
     "soft-studio-media-scale",
+    "strong-rooms-deploy",
     "tame-event-touch-plates",
     "tidy-tiled-vite-runtime",
     "warm-input-forms"

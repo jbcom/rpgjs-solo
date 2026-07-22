@@ -1,5 +1,17 @@
 # @rpgjs/testing
 
+## 5.0.0-beta.26
+
+### Patch Changes
+
+- b6ab003: Establish `defineModule()` as the canonical runtime module authoring API, export it from the client and server packages, keep `createModule()` for advanced provider composition, and align runtime-specific module installation documentation and examples.
+- Updated dependencies [b6ab003]
+- Updated dependencies [777541a]
+- Updated dependencies [48fcd25]
+- Updated dependencies [83fc2b7]
+  - @rpgjs/client@5.0.0-beta.26
+  - @rpgjs/server@5.0.0-beta.26
+
 ## 5.0.0-beta.25
 
 ### Patch Changes
