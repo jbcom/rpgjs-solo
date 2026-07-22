@@ -11,6 +11,11 @@ and Yuka governors all dispatch the same public `combat:use` and
 targeting, guard, projectile, status, damage, and defeat state lives on the
 authoritative Solo entities and therefore participates in normal snapshots.
 
+When a command includes `targetId` but omits `direction`, Solo aims from the
+attacker toward that authoritative target. An explicit direction still wins.
+This keeps targeted melee, projectile, and governed class actions correct after
+kiting or knockback changes the actor's old facing.
+
 ```ts
 import { SoloRuntime } from '@jbcom/rpgjs-solo'
 import { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'

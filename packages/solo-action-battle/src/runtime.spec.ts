@@ -158,6 +158,7 @@ describe('SoloActionBattle', () => {
 
   it('moves projectiles through Solo physics and resolves impacts without a transport copy', () => {
     const { runtime, battle } = createBattle()
+    runtime.getEntity('hero')!.direction = 'left'
     runtime.dispatch({ type: 'teleport', entityId: 'enemy', position: { x: 110, y: 80 }, source: 'system' })
     battle.registerAction({
       id: 'arrow',
@@ -175,7 +176,7 @@ describe('SoloActionBattle', () => {
       type: 'action',
       entityId: 'hero',
       action: 'combat:use',
-      payload: { actionId: 'arrow', targetId: 'enemy', direction: { x: 1, y: 0 } },
+      payload: { actionId: 'arrow', targetId: 'enemy' },
       source: 'ai'
     }).accepted).toBe(true)
     runtime.stepTicks(10)

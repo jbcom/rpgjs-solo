@@ -263,7 +263,7 @@ importers:
   packages/solo-action-battle:
     dependencies:
       '@jbcom/rpgjs-solo':
-        specifier: workspace:5.0.0-beta.26.solo.2
+        specifier: workspace:5.0.0-beta.26.solo.3
         version: link:../solo
     devDependencies:
       '@typescript/typescript6':
@@ -291,7 +291,7 @@ importers:
         specifier: 2.0.0
         version: 2.0.0
       '@jbcom/rpgjs-solo':
-        specifier: workspace:5.0.0-beta.26.solo.2
+        specifier: workspace:5.0.0-beta.26.solo.3
         version: link:../solo
       canvasengine:
         specifier: 2.0.1
@@ -755,10 +755,10 @@ importers:
   playground/games/solo:
     dependencies:
       '@jbcom/rpgjs-solo':
-        specifier: workspace:5.0.0-beta.26.solo.2
+        specifier: workspace:5.0.0-beta.26.solo.3
         version: link:../../../packages/solo
       '@jbcom/rpgjs-solo-renderer':
-        specifier: workspace:5.0.0-beta.26.solo.2
+        specifier: workspace:5.0.0-beta.26.solo.3
         version: link:../../../packages/solo-renderer
       '@rpgjs/ui-css':
         specifier: workspace:5.0.0-beta.23
@@ -768,7 +768,7 @@ importers:
         version: 8.19.0
     devDependencies:
       '@jbcom/rpgjs-solo-vite':
-        specifier: workspace:5.0.0-beta.26.solo.2
+        specifier: workspace:5.0.0-beta.26.solo.3
         version: link:../../../packages/solo-vite
       vite:
         specifier: 8.1.5
