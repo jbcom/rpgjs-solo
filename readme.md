@@ -44,7 +44,7 @@ player, touch, gamepad, or AI input
   -> typed game command
   -> one local RPG runtime
   -> reactive world state
-  -> CanvasEngine/Pixi rendering and UI
+  -> CanvasEngine rendering and UI (Pixi remains an internal backend)
   -> versioned save snapshot
 ```
 
@@ -60,15 +60,17 @@ publishable from the inherited RPGJS package graph:
 | Package | Responsibility |
 |---|---|
 | `@jbcom/rpgjs-solo` | Direct commands, deterministic local worlds, authoritative entities, pause, actions, and saves |
+| `@jbcom/rpgjs-solo-renderer` | Native Tiled maps, CanvasEngine scenes, camera, spritesheets, fog of war, direct input, `@rpgjs/ui-css` host, and test auto-mute |
 | `@jbcom/rpgjs-solo-vite` | Production-bundle rejection of room/sync/socket/prediction regressions |
 
-Both packages are versioned against the exact RPGJS beta baseline and publish only
+All Solo packages are versioned against the exact RPGJS beta baseline and publish only
 to the Gitea `jbcom` npm registry.
 
 After the Node 24 build, tests, and Solo boundary pass, an authenticated
 maintainer publishes the filtered package set in dependency order with
 `pnpm publish:solo`. Credentials remain outside the repository; anonymous LAN
-consumers need only the committed `@jbcom` registry mapping.
+access is not assumed, so consumers authenticate to the private `jbcom`
+registry through their user-level npm configuration.
 
 ## Non-negotiable release gates
 
@@ -107,7 +109,7 @@ compatibility ledger.
 
 Solo evolves **additively and reductively**:
 
-- add new Solo runtime, renderer-adapter, Vite, and testing packages beside the
+- add new Solo runtime, native renderer, Vite, and testing packages beside the
   inherited packages;
 - reuse stable upstream leaf packages and public RPG concepts;
 - remove room, sync, transport, prediction, and MMORPG packages from the Solo
