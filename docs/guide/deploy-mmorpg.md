@@ -67,9 +67,9 @@ In `vite.config.ts`, declare the MMORPG entries and publish only map images to
 the browser build:
 
 ```ts
-import { defineConfig } from "vite"
-import { rpgjs, tiledMapFolderPlugin } from "@rpgjs/vite"
-import serverModule from "./src/server"
+import { defineConfig } from "vite";
+import { rpgjs, tiledMapFolderPlugin } from "@rpgjs/vite";
+import serverModule from "./src/server";
 
 export default defineConfig({
   plugins: [
@@ -90,7 +90,7 @@ export default defineConfig({
       },
     }),
   ],
-})
+});
 ```
 
 The MMORPG build produces `dist/client` and `dist/server`; `.tmx` and `.tsx`
@@ -102,37 +102,37 @@ to this configuration later. Cloudflare compiles its Worker entry with Wrangler.
 Create `src/entries/publish-maps.ts`:
 
 ```ts
-import { createRpgServerTransport } from "@rpgjs/server/node"
-import serverModule from "../server"
+import { createRpgServerTransport } from "@rpgjs/server/node";
+import serverModule from "../server";
 
-const target = process.env.RPGJS_PUBLISH_TARGET
-const token = process.env.RPGJS_MAP_UPDATE_TOKEN
+const target = process.env.RPGJS_PUBLISH_TARGET;
+const token = process.env.RPGJS_MAP_UPDATE_TOKEN;
 const mapIds = (process.env.RPGJS_MAP_IDS ?? "simplemap")
   .split(",")
   .map((id) => id.trim())
-  .filter(Boolean)
+  .filter(Boolean);
 
-if (!target) throw new Error("RPGJS_PUBLISH_TARGET is required")
-if (!token) throw new Error("RPGJS_MAP_UPDATE_TOKEN is required")
-if (mapIds.length === 0) throw new Error("RPGJS_MAP_IDS must contain a map id")
+if (!target) throw new Error("RPGJS_PUBLISH_TARGET is required");
+if (!token) throw new Error("RPGJS_MAP_UPDATE_TOKEN is required");
+if (mapIds.length === 0) throw new Error("RPGJS_MAP_IDS must contain a map id");
 
 const publisher = createRpgServerTransport(serverModule, {
   initializeMaps: false,
   mapUpdateToken: token,
   tiledBasePaths: ["src/tiled"],
-})
+});
 
 for (const mapId of mapIds) {
-  const response = await publisher.publishMap(mapId, { target })
+  const response = await publisher.publishMap(mapId, { target });
   if (!response.ok) {
     throw new Error(
-      `Unable to publish ${mapId}: ${response.status} ${await response.text()}`,
-    )
+      `Unable to publish ${mapId}: ${response.status} ${await response.text()}`
+    );
   }
-  console.log(`Published map: ${mapId}`)
+  console.log(`Published map: ${mapId}`);
 }
 
-process.exit(0)
+process.exit(0);
 ```
 
 Add the publisher environment files to `.gitignore` before storing any real
@@ -153,10 +153,10 @@ same world topology.
 Both targets run the same `src/server.ts` game module and use the publisher from
 the previous step.
 
-| Target | Runtime | Persistent room state | Best fit |
-| --- | --- | --- | --- |
-| [Node and Docker](/advanced/node-server-production) | One persistent Node process | SQLite file on a mounted volume | A container host where you control the process and disk |
-| [Cloudflare](/advanced/cloudflare-server-production) | Worker plus one Durable Object per room | Durable Object SQLite | Managed edge hosting without maintaining a Node process |
+| Target                                               | Runtime                                 | Persistent room state           | Best fit                                                |
+| ---------------------------------------------------- | --------------------------------------- | ------------------------------- | ------------------------------------------------------- |
+| [Node and Docker](/advanced/node-server-production)  | One persistent Node process             | SQLite file on a mounted volume | A container host where you control the process and disk |
+| [Cloudflare](/advanced/cloudflare-server-production) | Worker plus one Durable Object per room | Durable Object SQLite           | Managed edge hosting without maintaining a Node process |
 
 Follow either page through its **First production deployment** section. Do not
 open the game to players until the initial map publication succeeds.
@@ -175,10 +175,41 @@ If the page loads but the map does not, check map publication first. A deployed
 client and server do not automatically mean that the authoritative map has been
 published.
 
-## Save data is a separate decision
+## 6. Add accounts and long-term saves
 
-The starter uses `LocalStorageSaveStorageStrategy`, which is intended for a
-standalone server running inside the browser. It does not persist MMORPG player
-saves on Node or Cloudflare. Room storage preserves synchronized room state, but
-your account and long-term save database must use a server-side storage strategy.
-See [Create a database](/guide/create-database) after the first deployment works.
+A deployed room and a saved character are two different things. Before opening
+an MMORPG to players, choose how accounts are authenticated and where character
+saves are stored.
+
+| Data                                | Purpose                                           | Long-term character save? |
+| ----------------------------------- | ------------------------------------------------- | ------------------------- |
+| WebSocket session                   | Reconnect a browser and transfer it between rooms | No                        |
+| Node or Durable Object room storage | Preserve synchronized room and map state          | No                        |
+| `SaveStorageStrategy`               | Store a player's save slots                       | Yes                       |
+
+The starter's `LocalStorageSaveStorageStrategy` is intended for a standalone
+server running inside the browser. It does not persist MMORPG saves on Node or
+Cloudflare. Without another strategy, the server falls back to memory-only
+storage, which is lost on restart and is not shared by several server instances.
+
+Use this beginner flow for persistent characters:
+
+1. Implement [`auth()`](/advanced/auth) so the same account always receives the
+   same `player.id`.
+2. Implement a server-side [`SaveStorageStrategy`](/guide/save-load) backed by a
+   shared database or trusted HTTP API.
+3. Register it with `provideSaveStorage()` in the server configuration.
+4. After authentication, either show the account's slots or explicitly call
+   `player.load(slot)` for the slot your game selected.
+5. Call `player.save(slot)` from server-controlled game logic or let the player
+   request a manual save through the built-in save GUI.
+
+<Warning>
+Authentication identifies the account, but it does not automatically load a
+save slot. Likewise, refreshing a browser may restore its current room session,
+but it does not call `player.load()` for you.
+</Warning>
+
+Do not load the long-term save again on every map change. RPGJS already transfers
+the current player between map rooms. Read the save when starting or resuming a
+character; use room transfer for normal movement through the game world.
