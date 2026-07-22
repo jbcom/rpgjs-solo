@@ -11,13 +11,15 @@ import {
   type ComponentFunction
 } from 'canvasengine'
 import { FogOfWar, TiledMap, createFogOfWarController, type FogOfWarController } from '@canvasengine/presets'
-import type { SoloFogOptions, SoloRendererOptions } from './types'
+import { createAuthoredFogElement } from './authoredFog'
+import { createSoloFogController } from './fog'
+import type { SoloFogController, SoloFogOptions, SoloRendererOptions } from './types'
 import type { SoloRenderEntity, SoloRendererModel } from './model'
 
 const entityElement = (
   entity: SoloRenderEntity,
   playerId: string,
-  fogController: FogOfWarController | null
+  fogController: SoloFogController | null
 ) => {
   const appearance = entity.appearance
   const fogMode = appearance.visibleInFog ?? (entity.id === playerId ? 'always' : 'visible')
@@ -78,14 +80,19 @@ const createFogElement = (
 
 export interface SoloSceneComposition {
   component: ComponentFunction
-  fogController: FogOfWarController | null
+  fogController: SoloFogController | null
 }
 
 export const createSoloScene = (
   model: SoloRendererModel,
   options: SoloRendererOptions
 ): SoloSceneComposition => {
-  const fogController = options.fog === false ? null : createFogOfWarController()
+  const fogOptions = options.fog || {}
+  const fogController: SoloFogController | null = options.fog === false
+    ? null
+    : fogOptions.visibility
+      ? createSoloFogController(fogOptions.visibility)
+      : createFogOfWarController()
   const component: ComponentFunction = () => h(Canvas, {
     width: options.width ?? '100%',
     height: options.height ?? '100%',
@@ -109,7 +116,21 @@ export const createSoloScene = (
     loop(model.entities, (entity: SoloRenderEntity) => entityElement(entity, options.playerId, fogController) as never, {
       track: (entity: SoloRenderEntity) => entity.id
     }),
-    ...(fogController ? [createFogElement(model, options.playerId, options.fog || {}, fogController)] : [])
+    ...(fogController
+      ? [fogOptions.visibility
+        ? createAuthoredFogElement(
+          fogOptions.visibility,
+          fogOptions,
+          model.worldWidth,
+          model.worldHeight
+        )
+        : createFogElement(
+          model,
+          options.playerId,
+          fogOptions,
+          fogController as FogOfWarController
+        )]
+      : [])
   ]))
 
   return { component, fogController }

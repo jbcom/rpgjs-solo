@@ -52,3 +52,25 @@ await renderer.start()
 read the authoritative entity state on each runtime tick, so game packages can
 map their own `attack`, `hurt`, `down`, interaction, or other states onto a
 spritesheet without adding those rules to Solo's generic renderer.
+
+For occlusion-aware and persistable exploration, supply a game-owned visibility
+snapshot. The renderer samples it in tile coordinates and owns only the display
+surface; line-of-sight rules and save migrations remain in the game:
+
+```ts
+fog: {
+  smooth: false,
+  visibility: () => ({
+    mapId: activeMap.id,
+    width: activeMap.width,
+    height: activeMap.height,
+    tileSize: 16,
+    revision: visibility.revision,
+    stateAt: (x, y) => visibility.visible.has(y * activeMap.width + x)
+      ? 'visible'
+      : visibility.discovered.has(y * activeMap.width + x)
+        ? 'explored'
+        : 'unknown'
+  })
+}
+```
