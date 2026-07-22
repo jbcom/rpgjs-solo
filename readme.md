@@ -66,6 +66,11 @@ publishable from the inherited RPGJS package graph:
 All three are versioned against the exact RPGJS beta baseline and publish only
 to the Gitea `jbcom` npm registry.
 
+After the Node 24 build, tests, and Solo boundary pass, an authenticated
+maintainer publishes the filtered package set in dependency order with
+`pnpm publish:solo`. Credentials remain outside the repository; anonymous LAN
+consumers need only the committed `@jbcom` registry mapping.
+
 ## Non-negotiable release gates
 
 A Solo runtime release must prove all of the following:
