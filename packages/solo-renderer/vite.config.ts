@@ -24,7 +24,13 @@ export default defineConfig({
       fileName: 'index'
     },
     rollupOptions: {
-      external: ['@jbcom/rpgjs-solo', '@canvasengine/presets', '@canvasengine/tiled', 'canvasengine']
+      external: [
+        '@jbcom/rpgjs-solo',
+        '@canvasengine/presets',
+        '@canvasengine/tiled',
+        'canvasengine',
+        'pixi.js'
+      ]
     }
   }
 })

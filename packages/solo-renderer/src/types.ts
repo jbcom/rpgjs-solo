@@ -41,6 +41,32 @@ export interface SoloEntityAppearance {
 export type SoloEntityAnimationResolver = (entity: SoloEntityState) => string
 export type SoloAppearanceResolver = (entity: SoloEntityState) => SoloEntityAppearance | undefined
 
+export type SoloFogVisibilityState = 'visible' | 'explored' | 'unknown'
+
+/**
+ * Immutable view of game-authored fog for the active map. The game owns
+ * exploration and persistence; the renderer only samples and displays it.
+ * Increment `revision` whenever `stateAt` can return a different value.
+ */
+export interface SoloFogVisibilitySnapshot {
+  mapId: string
+  width: number
+  height: number
+  tileSize: number
+  revision: number
+  stateAt(tileX: number, tileY: number): SoloFogVisibilityState
+}
+
+export type SoloFogVisibilityProvider = () => SoloFogVisibilitySnapshot | null
+
+export interface SoloFogController {
+  version(): number
+  clarityAt(x: number, y: number): number
+  isVisibleAt(x: number, y: number, threshold?: number): boolean
+  isExploredAt(x: number, y: number): boolean
+  stateAt(x: number, y: number, clearThreshold?: number): SoloFogVisibilityState
+}
+
 export interface SoloFogOptions {
   tileSize?: number
   radius?: number
@@ -50,6 +76,11 @@ export interface SoloFogOptions {
   updateHz?: number
   unknownColor?: [number, number, number, number]
   exploredColor?: [number, number, number, number]
+  /**
+   * Supplies occlusion-aware, persistable fog state owned by the game. When
+   * omitted, the renderer uses CanvasEngine's radial vision preset.
+   */
+  visibility?: SoloFogVisibilityProvider
 }
 
 export interface SoloInputOptions {
