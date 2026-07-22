@@ -1,0 +1,42 @@
+{
+  "name": "@jbcom/rpgjs-solo",
+  "version": "5.0.0-beta.26.solo.0",
+  "description": "Transport-free, deterministic single-player RPG runtime built from RPGJS v5",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "verify:boundary": "node scripts/verify-boundary.mjs"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://git.local.jonbogaty.com/api/packages/jbcom/npm/"
+  },
+  "devDependencies": {
+    "@rpgjs/physic": "workspace:5.0.2",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vite-plugin-dts": "^5.0.2",
+    "vitest": "^4.1.9"
+  }
+}

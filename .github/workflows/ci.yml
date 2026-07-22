@@ -35,6 +35,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build
         run: pnpm build
+      - name: Solo production boundary
+        run: pnpm verify:solo-boundary
       - name: Unit tests
         run: pnpm test -- --run
       - name: Cloudflare MMORPG runtime tests

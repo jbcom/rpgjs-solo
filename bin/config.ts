@@ -63,6 +63,20 @@ export const packages = (type: "build" | "dev") => {
       buildScript,
     },
     {
+      name: "solo",
+      buildScript,
+      dependencies: createDependencies(packagesPath, ['physic']),
+    },
+    {
+      name: "solo-vite",
+      buildScript,
+    },
+    {
+      name: "solo-pixi",
+      buildScript,
+      dependencies: createDependencies(packagesPath, ['solo']),
+    },
+    {
       name: "ui-css",
       buildScript,
     },
