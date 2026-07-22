@@ -12,6 +12,24 @@ const DIRECTION_KEYS: Record<string, SoloVector> = {
   KeyD: { x: 1, y: 0 }
 }
 
+const UI_INPUT_SELECTOR = [
+  'button',
+  'input',
+  'select',
+  'textarea',
+  '[contenteditable="true"]',
+  '[role="dialog"]',
+  '[data-solo-input-owner]'
+].join(',')
+
+/** UI overlays own keyboard events they already handled or received inside an interactive surface. */
+const uiOwnsEvent = (event: KeyboardEvent): boolean => {
+  if (event.defaultPrevented) return true
+  if (typeof Element === 'undefined') return false
+  const path = event.composedPath?.() ?? [event.target]
+  return path.some((target) => target instanceof Element && target.closest(UI_INPUT_SELECTOR) !== null)
+}
+
 export class SoloKeyboardInput {
   private readonly held = new Set<string>()
   private listening = false
@@ -40,6 +58,7 @@ export class SoloKeyboardInput {
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (uiOwnsEvent(event)) return
     if (DIRECTION_KEYS[event.code]) {
       this.held.add(event.code)
       this.dispatchMovement()

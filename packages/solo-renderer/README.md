@@ -14,6 +14,9 @@ release; renderer feature-completeness includes that alignment gate.
 `renderer.uiRoot` is a framework-neutral DOM overlay. Use the inherited,
 current `@rpgjs/ui-css` primitives there directly or mount the game's chosen UI
 framework into it; the renderer does not invent a second widget system.
+Keyboard input respects UI ownership: default-prevented events and keys whose
+composed path is inside a button, form control, dialog, editable region, or
+`data-solo-input-owner` surface do not leak into movement, interaction, or pause.
 
 ```ts
 import { SoloRuntime } from '@jbcom/rpgjs-solo'
