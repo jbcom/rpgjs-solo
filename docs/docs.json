@@ -40,7 +40,8 @@
               "guide/structure",
               "guide/create-your-first-map",
               "guide/create-hero-in-map",
-              "guide/create-spritesheet"
+              "guide/create-spritesheet",
+              "guide/deploy-mmorpg"
             ]
           },
           {

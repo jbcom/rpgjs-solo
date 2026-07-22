@@ -3,6 +3,7 @@ const guideMenu = [{
   collapsed: false,
   items: [
     { text: "Getting Started", link: "/guide/get-started" },
+    { text: "Put an MMORPG Online", link: "/guide/deploy-mmorpg" },
     { text: "Create Module", link: "/guide/create-module" },
     { text: "Create Shape", link: "/guide/create-shape" },
     { text: "Display Animations", link: "/guide/display-animations" },
@@ -46,6 +47,9 @@ const advancedMenu = [{
   text: 'Advanced',
   collapsed: false,
   items: [
+    { text: "MMORPG Entries", link: "/advanced/mmorpg-entries" },
+    { text: "Node Production", link: "/advanced/node-server-production" },
+    { text: "Cloudflare Production", link: "/advanced/cloudflare-server-production" },
     { text: "Authentication", link: "/advanced/auth" },
     { text: "Provide Load Map", link: "/advanced/provide-load-map" },
     { text: "Latency Simulation", link: "/advanced/latency-simulation" },

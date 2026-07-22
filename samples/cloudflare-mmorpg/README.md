@@ -26,9 +26,10 @@ Vite serves the client on `http://localhost:5173` and proxies `/parties` to
 Wrangler on `http://127.0.0.1:8787`.
 
 Open the browser build output after `pnpm build`: `dist/client/map` contains image
-assets, but no `.tmx` or `.tsx`. The Worker bundle is the only runtime that reads
-the source map. The game server module itself is provider-neutral and can also be
-mounted by the RPGJS Node.js transport without changing gameplay code.
+assets, but no `.tmx` or `.tsx`. Only the trusted publisher reads those project
+files; the Worker receives and persists the compiled authoritative payload. The
+game server module itself is provider-neutral and can also be mounted by the
+RPGJS Node.js transport without changing gameplay code.
 
 In production, an editor, deployment pipeline, or trusted backend sends the
 same authenticated request:
@@ -52,8 +53,27 @@ Worker logs during the first map publication:
 
 ```bash
 pnpm wrangler deploy --env production
+```
+
+Create an uncommitted `.env.publisher` containing the deployed URL, the same
+secret, and the map id:
+
+```dotenv
+RPGJS_PUBLISH_TARGET=https://rpgjs-cloudflare-mmorpg-production.<your-subdomain>.workers.dev
+RPGJS_MAP_UPDATE_TOKEN=the-production-secret
+RPGJS_MAP_IDS=demo
+```
+
+Publish the authoritative map, then inspect the Worker logs:
+
+```bash
+node --env-file=.env.publisher --import tsx src/publish-maps.ts
 pnpm wrangler tail --env production
 ```
+
+The publisher exits with an error on a non-2xx response and automatically fans
+out `worldUpdates` to every affected room. A successful run prints
+`Published map: demo`.
 
 For multi-map worlds, a complete trusted publisher must also call
 `POST /parties/main/map-<each-map>/world/<world-id>/update` for every map room.

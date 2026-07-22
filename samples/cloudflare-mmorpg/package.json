@@ -9,6 +9,7 @@
     "dev:vite": "vite",
     "dev:worker": "wrangler dev --port 8787",
     "deploy:dry-run": "wrangler deploy --dry-run",
+    "publish:maps": "tsx src/publish-maps.ts",
     "test": "vitest run",
     "types": "wrangler types ./src/worker-configuration.d.ts"
   },
@@ -25,6 +26,7 @@
     "@vitejs/plugin-vue": "^6.0.7",
     "concurrently": "^9.2.1",
     "esbuild": "0.28.1",
+    "tsx": "^4.22.4",
     "vite": "8.0.16",
     "vitest": "2.1.9",
     "wrangler": "3.100.0"

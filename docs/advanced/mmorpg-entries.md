@@ -18,6 +18,10 @@ Use this layout when you want to keep your game server portable across:
 - another Node host such as Fastify or Hono
 - a custom deployment target later
 
+`RPG_TYPE` defaults to `rpg` when it is not set. If this is your first online
+deployment, start with [Put an MMORPG online](/guide/deploy-mmorpg), which covers
+local verification, map publication, Node/Docker, and Cloudflare.
+
 ## Recommended structure
 
 Keep your game logic in `src/server.ts`, and put host-specific bootstraps in `src/entries`.
@@ -238,4 +242,6 @@ The build will emit one file per adapter in `dist/server`.
 
 ## Related pages
 
+- For the complete beginner deployment path, see [/guide/deploy-mmorpg](/guide/deploy-mmorpg)
 - For the Node transport API and protected map updates, see [/advanced/node-server-production](/advanced/node-server-production)
+- For a Cloudflare Durable Object deployment, see [/advanced/cloudflare-server-production](/advanced/cloudflare-server-production)

@@ -10,6 +10,10 @@ Node adapter. Each Signe namespace and room id is routed deterministically to a
 Durable Object. WebSockets remain attached during hibernation, while persisted
 room state lets RPGJS rebuild a new in-memory instance when the object wakes.
 
+If this is your first deployment, complete the shared project and publisher
+setup in [Put an MMORPG online](/guide/deploy-mmorpg) first. This page serves the
+built browser client and the room Worker from the same public Cloudflare URL.
+
 ## Mental model
 
 The Worker is the public HTTP and WebSocket entry point. It routes each RPGJS
@@ -35,16 +39,35 @@ treat class properties as durable storage. See Cloudflare's
 [WebSocket hibernation lifecycle](https://developers.cloudflare.com/durable-objects/best-practices/websockets/)
 for the underlying runtime behavior.
 
-## Worker entry
+## 1. Install Wrangler
+
+Install the current Wrangler CLI in your starter project:
+
+```bash
+npm install --save-dev wrangler@latest
+```
+
+The repository sample pins an older Wrangler release for its GLIBC 2.31 test
+host. A new project on a current operating system should use Wrangler 4 or later.
+
+## 2. Create the Worker entry
+
+Create `src/entries/cloudflare.ts`:
 
 ```ts
 import {
   RpgServerDurableObject,
   createRpgServerWorker,
 } from "@rpgjs/server/cloudflare";
-import ServerModule from "./server";
+import ServerModule from "../server";
 
 export { RpgServerDurableObject };
+
+interface Env extends Record<string, unknown> {
+  RPGJS_ROOMS: DurableObjectNamespace;
+  RPGJS_MAP_UPDATE_TOKEN: string;
+  ASSETS: { fetch(request: Request): Promise<Response> };
+}
 
 const rooms = createRpgServerWorker(ServerModule, {
   binding: "RPGJS_ROOMS",
@@ -52,11 +75,16 @@ const rooms = createRpgServerWorker(ServerModule, {
 });
 
 export default {
-  fetch(request, env, ctx) {
-    return rooms.fetch(request, env, ctx);
+  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    if (new URL(request.url).pathname.startsWith("/parties/")) {
+      return rooms.fetch(request, env, ctx);
+    }
+    return env.ASSETS.fetch(request);
   },
 };
 ```
+
+## 3. Configure the Durable Object and browser assets
 
 Configure `RPGJS_ROOMS` as a SQLite Durable Object class in `wrangler.jsonc` and
 export `RpgServerDurableObject` from the Worker entry:
@@ -66,8 +94,13 @@ export `RpgServerDurableObject` from the Worker entry:
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "my-rpgjs-game",
   "main": "src/entries/cloudflare.ts",
-  "compatibility_date": "2026-07-18",
+  "compatibility_date": "2026-07-22",
   "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
   "durable_objects": {
     "bindings": [
       {
@@ -89,6 +122,10 @@ Use a recent compatibility date and generate bindings with `wrangler types`.
 Keep the existing migration tags after deployment; add a new migration rather
 than rewriting an already deployed one. Cloudflare documents the available
 [Durable Object migration operations](https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/).
+
+The binding name in `wrangler.jsonc`, the `Env` interface, and
+`createRpgServerWorker()` must all be exactly `RPGJS_ROOMS`. SQLite-backed
+Durable Objects persist authoritative room state between Worker instances.
 
 ## Maps and worlds are published externally
 
@@ -203,6 +240,68 @@ It also documents the equivalent `curl` request and how to publish a real Studio
 project and map. Studio MMORPG streaming accepts v2 maps; v1 maps remain available
 to the standalone loader.
 
+## First production deployment
+
+The following sequence deploys the browser client and Worker, configures the
+secret, publishes the starter map, and verifies the live game.
+
+1. Authenticate and confirm which Cloudflare account Wrangler uses:
+
+   ```bash
+   npx wrangler login
+   npx wrangler whoami
+   ```
+
+2. Build the MMORPG client and validate the Worker configuration:
+
+   ```bash
+   npm run build:mmorpg
+   npx wrangler types ./src/worker-configuration.d.ts
+   npx wrangler deploy --dry-run
+   ```
+
+3. Deploy the Worker. Wrangler prints its public `workers.dev` URL:
+
+   ```bash
+   npx wrangler deploy
+   ```
+
+4. Create the administration secret through Wrangler's interactive prompt. Do
+   not put the value on the command line:
+
+   ```bash
+   npx wrangler secret put RPGJS_MAP_UPDATE_TOKEN
+   ```
+
+5. Create an uncommitted `.env.publisher` file on your trusted development or
+   CI machine. Use the URL printed by `wrangler deploy` and the same secret:
+
+   ```dotenv
+   RPGJS_PUBLISH_TARGET=https://my-rpgjs-game.<your-subdomain>.workers.dev
+   RPGJS_MAP_UPDATE_TOKEN=the-secret-entered-in-wrangler
+   RPGJS_MAP_IDS=simplemap
+   ```
+
+6. Run the publisher created in the beginner guide:
+
+   ```bash
+   node --env-file=.env.publisher --import tsx src/entries/publish-maps.ts
+   ```
+
+   A `Published map: simplemap` message confirms that the map and its world
+   updates were accepted. The Durable Object persists them before acknowledging
+   the request.
+
+7. Inspect logs while opening the public URL in two independent browsers:
+
+   ```bash
+   npx wrangler tail
+   ```
+
+For later releases, build and deploy the Worker first, then run the publisher
+whenever map source or world topology changes. Never rewrite the deployed `v1`
+migration tag; append a new migration if a future Durable Object class changes.
+
 ## Direct HTTP publication
 
 Prefer the Vite publisher, the Studio seed command, or a trusted backend because
@@ -232,27 +331,31 @@ world manager and persisted the topology.
 
 ## Production checklist
 
-1. Authenticate Wrangler with `pnpm wrangler login` or configure the appropriate
+These commands use the top-level Worker configuration shown above. If you add a
+named Wrangler environment, append the same `--env <name>` option to every
+secret, deploy, and tail command.
+
+1. Authenticate Wrangler with `npx wrangler login` or configure the appropriate
    CI API token.
 2. Build the MMORPG client and Worker entry.
 3. Verify the binding and the `new_sqlite_classes` migration in `wrangler.jsonc`.
-4. Configure the secret for the same environment that you will deploy:
+4. Deploy the Worker and note its public URL:
 
    ```bash
-   pnpm wrangler secret put RPGJS_MAP_UPDATE_TOKEN --env production
+   npx wrangler deploy
    ```
 
-5. Deploy the Worker:
+5. Configure the secret for that Worker through the interactive prompt:
 
    ```bash
-   pnpm wrangler deploy --env production
+   npx wrangler secret put RPGJS_MAP_UPDATE_TOKEN
    ```
 
 6. Point the trusted publisher at the deployed Worker URL and publish the start
    map. For Studio worlds, confirm that it reports successful world publication
    for every map room.
 7. Open two clients, change maps in both directions, and inspect production logs
-   with `pnpm wrangler tail --env production`.
+   with `npx wrangler tail`.
 
 Never expose `RPGJS_MAP_UPDATE_TOKEN` in browser code, a `VITE_` variable, a
 committed `.env` file, or a public build artifact.
