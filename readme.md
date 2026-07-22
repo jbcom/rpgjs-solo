@@ -60,10 +60,9 @@ publishable from the inherited RPGJS package graph:
 | Package | Responsibility |
 |---|---|
 | `@jbcom/rpgjs-solo` | Direct commands, deterministic local worlds, authoritative entities, pause, actions, and saves |
-| `@jbcom/rpgjs-solo-pixi` | PixiJS 8.19 ticker and display-object bindings; canvas ownership remains in the fleet `pixi-mount` package |
 | `@jbcom/rpgjs-solo-vite` | Production-bundle rejection of room/sync/socket/prediction regressions |
 
-All three are versioned against the exact RPGJS beta baseline and publish only
+Both packages are versioned against the exact RPGJS beta baseline and publish only
 to the Gitea `jbcom` npm registry.
 
 After the Node 24 build, tests, and Solo boundary pass, an authenticated
