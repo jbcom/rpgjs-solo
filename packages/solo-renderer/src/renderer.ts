@@ -1,4 +1,5 @@
-import { bootstrapCanvas } from 'canvasengine'
+import { installCanvasEnginePatches } from '@arcade-cabinet/rpgjs-patches'
+import { Sprite, Viewport, bootstrapCanvas } from 'canvasengine'
 import { resolveInitialMute, setSoloMuted } from './audio'
 import { SoloKeyboardInput } from './input'
 import { SoloRendererModel } from './model'
@@ -19,6 +20,7 @@ export class SoloRenderer implements SoloRendererHandle {
   private isMuted: boolean
 
   constructor(private readonly options: SoloRendererOptions) {
+    installCanvasEnginePatches({ Sprite, Viewport })
     this.model = new SoloRendererModel(options)
     const scene = createSoloScene(this.model, options)
     this.fogController = scene.fogController

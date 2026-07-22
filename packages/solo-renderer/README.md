@@ -1,5 +1,11 @@
 # @jbcom/rpgjs-solo-renderer
 
+The renderer installs the fleet's versioned
+`@arcade-cabinet/rpgjs-patches` compatibility layer before CanvasEngine scene
+creation. This keeps rapid standalone map replacement safe on CanvasEngine
+2.0.1 while centralizing the upstream lifecycle workarounds for every Solo
+consumer.
+
 The native rendering and authoring layer for RPGJS Solo. It keeps the RPGJS
 Tiled workflow and composes CanvasEngine's scene graph, camera, spritesheets,
 and fog-of-war directly around `SoloRuntime` state.
