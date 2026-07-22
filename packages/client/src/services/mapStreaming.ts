@@ -128,7 +128,11 @@ export class MapStreamClientController<TManifestData, TChunkData, TState> {
 
   private updatePredictionBoundary(): void {
     const map = this.attachedMap;
-    if (!map || this.chunks.size === 0) return;
+    if (!map) return;
+    if (this.chunks.size === 0) {
+      map.clearStreamedStaticHitboxes("__boundary__");
+      return;
+    }
     const chunks = [...this.chunks.values()];
     const left = Math.min(...chunks.map((chunk) => chunk.bounds.x));
     const top = Math.min(...chunks.map((chunk) => chunk.bounds.y));
@@ -163,6 +167,7 @@ class MapStreamingClientService<TManifestData, TChunkData, TState> {
       return existing.toMapData();
     }
 
+    const shouldRequest = !this.waiters.has(normalizedId);
     const controllerPromise = new Promise<MapStreamClientController<TManifestData, TChunkData, TState>>((resolve, reject) => {
       const timeoutMs = Math.max(1, this.options.timeoutMs ?? 10_000);
       const waiter: Waiter = { resolve, reject, timer: undefined as unknown as ReturnType<typeof setTimeout> };
@@ -181,7 +186,9 @@ class MapStreamingClientService<TManifestData, TChunkData, TState> {
     // The map-room connection is established before load() runs. Request the
     // initial packet only after the waiter is registered so fast local and DO
     // transports cannot deliver it before the client is ready.
-    this.socket.emit(MAP_STREAM_REQUEST_EVENT, { mapId: normalizedId });
+    if (shouldRequest) {
+      this.socket.emit(MAP_STREAM_REQUEST_EVENT, { mapId: normalizedId });
+    }
     return (await controllerPromise).toMapData();
   }
 

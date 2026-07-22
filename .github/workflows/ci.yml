@@ -37,6 +37,10 @@ jobs:
         run: pnpm build
       - name: Unit tests
         run: pnpm test -- --run
+      - name: Cloudflare MMORPG runtime tests
+        run: pnpm --dir samples/cloudflare-mmorpg test
+      - name: Cloudflare Studio runtime tests
+        run: pnpm --dir playground/games/studio test
 
   build_and_publish:
       needs: tests

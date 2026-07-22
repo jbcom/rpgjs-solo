@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   installMapStreaming,
+  filterMapStreamingProjectilePacket,
   isMapStreamingPositionVisible,
   getMapStreamingVisibleEntityIds,
   provideServerMapStreaming,
@@ -134,6 +135,56 @@ describe("server map streaming", () => {
       mapId: "test",
       projectiles: [{ id: "arrow-1", reason: "interest" }],
     });
+  });
+
+  it("keeps projectile impacts and destruction scoped to previously disclosed projectiles", () => {
+    const player = { id: "player", conn: {}, x: () => 10, y: () => 10, emit: vi.fn() };
+    const map = { getPlayers: () => [player] };
+
+    installMapStreaming(map as any, createDefinition(), { loadRadius: 0, retainRadius: 0 });
+
+    const spawn = filterMapStreamingProjectilePacket(map as any, player as any, {
+      type: "projectile:spawnBatch",
+      value: {
+        projectiles: [
+          { id: "visible", ownerId: "other", origin: { x: 10, y: 10 } },
+          { id: "hidden", ownerId: "other", origin: { x: 210, y: 10 } },
+          { id: "owned", ownerId: "player", origin: { x: 210, y: 10 } },
+        ],
+      },
+    });
+    expect(spawn.value.projectiles.map((projectile: any) => projectile.id)).toEqual([
+      "visible",
+      "owned",
+    ]);
+
+    const impacts = filterMapStreamingProjectilePacket(map as any, player as any, {
+      type: "projectile:impactBatch",
+      value: {
+        impacts: [
+          { id: "visible", targetId: "target" },
+          { id: "hidden", targetId: "target" },
+          { id: "owned", targetId: "target" },
+        ],
+      },
+    });
+    expect(impacts.value.impacts.map((impact: any) => impact.id)).toEqual(["visible", "owned"]);
+
+    const destroyed = filterMapStreamingProjectilePacket(map as any, player as any, {
+      type: "projectile:destroyBatch",
+      value: {
+        projectiles: [
+          { id: "hidden", reason: "hit" },
+          { id: "visible", reason: "hit" },
+        ],
+      },
+    });
+    expect(destroyed.value.projectiles).toEqual([{ id: "visible", reason: "hit" }]);
+
+    expect(filterMapStreamingProjectilePacket(map as any, player as any, {
+      type: "projectile:impactBatch",
+      value: { impacts: [{ id: "visible", targetId: "target" }] },
+    })).toBeNull();
   });
 
   it("resends initial chunks when the same player id reconnects", async () => {

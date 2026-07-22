@@ -227,6 +227,62 @@ describe("Prediction + Reconciliation Server Protocol", () => {
     expect(queryHitbox).toHaveBeenCalledTimes(3);
   });
 
+  test("should stream shared and owned scenario events only while they remain visible", async () => {
+    installMapStreaming(serverMap, createStreamingDefinition(), {
+      loadRadius: 0,
+      retainRadius: 0,
+    });
+    serverMap.spatialVisiblePlayerIds.delete(player.id);
+    serverMap.spatialVisibleEventIds.delete(player.id);
+
+    const sharedId = await serverMap.createDynamicEvent({
+      id: "shared-event",
+      x: player.x(),
+      y: player.y(),
+      event: { name: "Shared" },
+    });
+    const ownedId = await serverMap.createDynamicEvent({
+      id: "owned-event",
+      x: player.x(),
+      y: player.y(),
+      event: { name: "Owned" },
+    }, { mode: "scenario", scenarioOwnerId: player.id });
+    const privateId = await serverMap.createDynamicEvent({
+      id: "private-event",
+      x: player.x(),
+      y: player.y(),
+      event: { name: "Private" },
+    }, { mode: "scenario", scenarioOwnerId: "another-player" });
+    const sharedEvent = serverMap.events()[sharedId];
+    const ownedEvent = serverMap.events()[ownedId];
+    const privateEvent = serverMap.events()[privateId];
+
+    vi.spyOn(serverMap, "queryHitbox")
+      .mockReturnValueOnce([player, sharedEvent, ownedEvent, privateEvent])
+      .mockReturnValueOnce([player]);
+
+    const entering = serverMap.interceptorPacket(
+      player,
+      { type: "sync", value: {} },
+      player.conn,
+    );
+    expect(entering?.value?.events?.[sharedId]).toBeDefined();
+    expect(entering?.value?.events?.[ownedId]).toBeDefined();
+    expect(entering?.value?.events?.[privateId]).toBeUndefined();
+
+    sharedEvent.x.set(250);
+    ownedEvent.x.set(250);
+    const leaving = serverMap.interceptorPacket(
+      player,
+      { type: "sync", value: {} },
+      player.conn,
+    );
+    expect(leaving?.value?.events).toEqual({
+      [sharedId]: "$delete",
+      [ownedId]: "$delete",
+    });
+  });
+
   test("should align ack position with the synced local player payload when available", () => {
     player._lastFramePositions = {
       frame: 21,

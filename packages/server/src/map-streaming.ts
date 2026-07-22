@@ -285,7 +285,8 @@ export function getMapStreamingVisibleEntityIds(
 }
 
 export function filterMapStreamingProjectilePacket(map: RpgMap, player: RpgPlayer, packet: any): any {
-  return getRuntime(map)?.filterProjectilePacket(player, packet) ?? packet;
+  const runtime = getRuntime(map);
+  return runtime ? runtime.filterProjectilePacket(player, packet) : packet;
 }
 
 /**
