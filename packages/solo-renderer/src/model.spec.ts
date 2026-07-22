@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SoloRuntime } from '@jbcom/rpgjs-solo'
 import { SoloRendererModel } from './model'
-import type { SoloRenderedMap, SoloRendererOptions } from './types'
+import type { SoloAppearanceResolver, SoloRenderedMap, SoloRendererOptions } from './types'
 
 const renderedMap = (id: string): SoloRenderedMap => ({
   id,
@@ -10,7 +10,7 @@ const renderedMap = (id: string): SoloRenderedMap => ({
   runtime: { id, width: 640, height: 480 }
 })
 
-const createModel = () => {
+const createModel = (resolveAppearance?: SoloAppearanceResolver) => {
   const runtime = new SoloRuntime()
   const field = renderedMap('field')
   const town = renderedMap('town')
@@ -22,7 +22,8 @@ const createModel = () => {
     runtime,
     target: {} as HTMLElement,
     playerId: 'hero',
-    maps: [field, town]
+    maps: [field, town],
+    resolveAppearance
   } satisfies SoloRendererOptions
   return { runtime, model: new SoloRendererModel(options) }
 }
@@ -57,6 +58,26 @@ describe('SoloRendererModel', () => {
     expect(model.activeMap()?.id).toBe('town')
     expect(model.entities().map(({ id }) => id)).toEqual(['hero', 'guard'])
     expect(model.entities().find(({ id }) => id === 'hero')).toBe(hero)
+    model.dispose()
+  })
+
+  it('projects game-owned animation state without embedding combat rules', () => {
+    const { runtime, model } = createModel((entity) => entity.id === 'hero' ? {
+      animation: (state) => typeof state.data.animation === 'string'
+        ? state.data.animation
+        : state.moving ? 'walk' : 'stand'
+    } : undefined)
+    const hero = model.entities()[0]
+    runtime.registerAction('test:attack', ({ entity }) => {
+      entity.data.animation = 'attack'
+    })
+
+    expect(hero.animation()).toBe('stand')
+    runtime.dispatch({ type: 'action', entityId: 'hero', action: 'test:attack' })
+    runtime.stepTicks(1)
+
+    expect(model.entities()[0]).toBe(hero)
+    expect(hero.animation()).toBe('attack')
     model.dispose()
   })
 })

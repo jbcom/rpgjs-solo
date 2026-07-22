@@ -9,6 +9,7 @@ export interface SoloRenderEntity {
   readonly y: WritableSignal<number>
   readonly direction: WritableSignal<SoloDirection>
   readonly moving: WritableSignal<boolean>
+  readonly animation: WritableSignal<string>
   readonly visible: WritableSignal<boolean>
   readonly appearance: SoloEntityAppearance
 }
@@ -101,6 +102,7 @@ export class SoloRendererModel {
       y: signal(state.position.y),
       direction: signal(state.direction),
       moving: signal(state.moving),
+      animation: signal(this.resolveAnimation(appearance, state)),
       visible: signal(true),
       appearance
     }
@@ -111,5 +113,11 @@ export class SoloRendererModel {
     entity.y.set(entity.state.position.y)
     entity.direction.set(entity.state.direction)
     entity.moving.set(entity.state.moving)
+    entity.animation.set(this.resolveAnimation(entity.appearance, entity.state))
+  }
+
+  private resolveAnimation(appearance: SoloEntityAppearance, state: SoloEntityState): string {
+    if (typeof appearance.animation === 'function') return appearance.animation(state)
+    return appearance.animation ?? (state.moving ? 'walk' : 'stand')
   }
 }
