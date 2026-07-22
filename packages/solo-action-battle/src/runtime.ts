@@ -357,9 +357,17 @@ export class SoloActionBattle {
     const spCost = Math.max(0, action.spCost ?? 0)
     if (entity.stats.sp < spCost) return reject(`Not enough SP for ${action.id}`)
 
-    const direction = payload.direction ?? facingVector(entity)
-    const target = this.resolveRequestedTarget(entity, state, action, payload.targetId, direction)
+    const facing = payload.direction ?? facingVector(entity)
+    const target = this.resolveRequestedTarget(entity, state, action, payload.targetId, facing)
     if (typeof target === 'string') return reject(target)
+    const direction = payload.direction ?? (
+      target && target.id !== entity.id
+        ? normalize({
+            x: target.position.x - entity.position.x,
+            y: target.position.y - entity.position.y
+          })
+        : facing
+    )
     const useContext: SoloCombatUseContext = { runtime: this.runtime, attacker: entity, action, target, direction, source }
     const custom = action.canUse?.(useContext)
     if (custom === false) return reject(`${action.id} cannot be used now`)
