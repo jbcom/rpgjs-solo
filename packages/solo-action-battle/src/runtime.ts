@@ -485,6 +485,10 @@ export class SoloActionBattle {
       if (distanceBetween(attacker, target) > maxRange) return `Target ${requestedId} is out of range`
       return target
     }
+    // An attacker-centred action owns its impact origin. It may still rank an
+    // explicitly requested target first, but it must not require a target in
+    // order to start (for example, a defensive pulse or world-cutting rite).
+    if (action.area === 'attacker') return undefined
     const candidates = this.runtime.getEntities(attacker.mapId)
       .filter((target) => this.canTarget(attacker, attackerState, target, targetType))
       .filter((target) => distanceBetween(attacker, target) <= maxRange)

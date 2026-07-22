@@ -65,6 +65,41 @@ describe('SoloActionBattle', () => {
     expect(battle.canUseAction('hero', payload, 'ai')).toEqual({ available: true })
   })
 
+  it('starts attacker-centred area actions without an enemy target', () => {
+    const { runtime, battle } = createBattle()
+    const resolved = vi.fn()
+    battle.registerAction({
+      id: 'emberbrand',
+      name: 'Emberbrand',
+      mode: 'melee',
+      area: 'attacker',
+      range: 10,
+      radius: 10,
+      spCost: 5,
+      damage: { flat: 10, powerScale: 0 },
+      profile: { startupTicks: 0, activeTicks: 1, recoveryTicks: 1, cooldownTicks: 8 },
+      onResolve: resolved
+    })
+    battle.registerCombatant('hero', { faction: 'crown', actions: ['emberbrand'] })
+    battle.registerCombatant('enemy', { faction: 'hollow', actions: [] })
+    const payload = { actionId: 'emberbrand', direction: { x: 1, y: 0 } }
+
+    expect(battle.canUseAction('hero', payload)).toEqual({ available: true })
+    expect(runtime.dispatch({
+      type: 'action',
+      entityId: 'hero',
+      action: 'combat:use',
+      payload,
+      source: 'human'
+    })).toMatchObject({ accepted: true })
+    expect(battle.getCombatant('hero')!.active?.targetId).toBeUndefined()
+    expect(runtime.getEntity('hero')!.stats.sp).toBe(15)
+
+    runtime.stepTicks(1)
+    expect(resolved).toHaveBeenCalledOnce()
+    expect(runtime.getEntity('enemy')!.stats.hp).toBe(100)
+  })
+
   it('runs startup, active, recovery, damage, cooldown, and movement lock in fixed ticks', () => {
     const { runtime, battle } = createBattle()
     const events: SoloCombatEvent[] = []
