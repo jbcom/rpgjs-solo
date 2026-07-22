@@ -1,6 +1,6 @@
 {
   "name": "@jbcom/rpgjs-solo-action-battle",
-  "version": "5.0.0-beta.26.solo.3",
+  "version": "5.0.0-beta.26.solo.4",
   "description": "Transport-free deterministic action combat for RPGJS Solo",
   "license": "MIT",
   "type": "module",
