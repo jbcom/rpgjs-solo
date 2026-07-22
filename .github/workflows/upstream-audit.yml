@@ -1,0 +1,36 @@
+name: Upstream audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 13 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  compare-v5:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch tracking branches
+        run: |
+          git remote add upstream https://github.com/RSamaium/RPG-JS.git
+          git fetch origin v5
+          git fetch upstream v5
+      - name: Report upstream distance
+        run: |
+          behind="$(git rev-list --count origin/v5..upstream/v5)"
+          ahead="$(git rev-list --count upstream/v5..origin/v5)"
+          {
+            echo "## RPGJS upstream audit"
+            echo
+            echo "- fork v5 ahead: ${ahead}"
+            echo "- fork v5 behind: ${behind}"
+            echo
+            git log --oneline --max-count=30 origin/v5..upstream/v5 || true
+          } >> "$GITHUB_STEP_SUMMARY"
+          test "$ahead" = "0"
+          test "$behind" = "0"

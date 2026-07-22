@@ -11,3 +11,8 @@ Current proposals:
 - `002-signe-public-boundary.md`
 - `003-canvasengine-and-gui.md`
 - `004-v4-compatibility-policy.md`
+
+Fork decision records:
+
+- `005-solo-runtime.md` — **Accepted**; defines the single-process product and
+  the gates required before RPGJS Solo may release.

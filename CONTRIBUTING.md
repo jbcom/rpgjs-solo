@@ -1,153 +1,151 @@
-# Contributing to RPGJS
+# Contributing to RPGJS Solo
 
-RPGJS is a TypeScript framework for building both standalone RPGs and networked
-MMORPGs in the browser. Contributions should preserve that dual purpose: a
-feature should feel natural in a full client-side RPG, and it should also fit a
-client/server game where the server owns gameplay state.
+RPGJS Solo is a single-player-first fork of RPGJS v5. It exists to retain
+RPGJS's mature RPG authoring model while removing the client/server runtime from
+games that will never be multiplayer.
 
-## Project Principles
+## Branch model
 
-- Keep the engine RPG-focused. Prefer APIs that help with maps, players, events,
-  GUI, synchronization, movement, combat, save/load, and modular game features.
-- Design features to be plugin-ready. New systems should expose hooks, extension
-  points, or composable layers so packages and modules can extend them without
-  replacing core behavior.
-- Avoid single-project shortcuts in core packages. A feature should be reusable
-  by games, samples, Studio, and external modules.
-- Keep standalone RPG and MMORPG modes aligned. If a feature works in full
-  client mode, define how it behaves when the client is connected to an
-  authoritative server.
-- Prefer explicit ownership. Gameplay state belongs on the server when
-  multiplayer correctness matters; the client should render, predict, and react.
-- Keep APIs small and composable. Prefer focused methods, hooks, providers, and
-  components over large configuration objects that cannot be extended cleanly.
+- `v5` tracks `RSamaium/RPG-JS:v5`. Do not merge Solo product work into it.
+- `main` on Gitea is the canonical RPGJS Solo product branch.
+- Start work from `main` on a focused feature branch and open a review back to
+  `main` on Gitea.
+- The public GitHub fork is a downstream mirror for discovery and source
+  availability. Do not treat GitHub branches or pull requests as the canonical
+  development record.
+- Audit upstream changes on the tracking branch before porting them. A newer
+  upstream release is not adopted by copying package versions alone; relevant
+  behavior, tests, migrations, and bundle effects must be reconciled.
 
-## API and Documentation Rules
+## Product principles
 
-- When adding or changing a client-side or server-side API, update the
-  documentation in the same contribution.
-- Document how the API is used, which runtime owns the data, and whether it works
-  in standalone RPG mode, MMORPG mode, or both.
-- Include examples for the public shape of the API. Use existing docs style and
-  terminology.
-- Keep backward compatibility where practical. If a legacy path remains, document
-  the preferred new path.
-- Add complete JSDoc to every new or modified public API. Document parameters,
-  option fields, return values, runtime ownership, and at least one usage example,
-  using the RPGJS extractor tags (`@title`, `@method` or `@prop`, `@param`,
-  `@returns`, and `@memberof`) where the generated API reference requires them.
-- Give every public framework API precise TypeScript types. Avoid `any` in public
-  parameters, options, and return values; use discriminated unions, overloads,
-  or generics when the result depends on the provided options. Verify that the
-  generated `.d.ts` files preserve the intended inference and add type-level
-  tests (for example with `expectTypeOf`) for important public contracts.
-- Regenerate and review the affected committed API pages with `pnpm
-  docs:player-api`, `pnpm docs:map-api`, or `pnpm docs:client-api` whenever
-  their source JSDoc changes.
-- Route every player-visible label, message, validation error, and notification
-  through the RPGJS i18n service. Do not hard-code user-facing text in
-  components or services. Modules should provide default translation keys and
-  allow game-level messages to override them; explicit per-call labels may be
-  supported when the public API requires them.
+### One authoritative runtime
 
-## Plugin-Ready Design
+A Solo game has one in-process gameplay object graph. Player, map, event,
+inventory, combat, quest, and save behavior operate on that graph directly.
+Rendering may maintain derived caches or view objects, but they are not a
+second synchronized source of gameplay truth.
 
-Before adding a new feature, check whether it should provide one of these
-extension points:
+### Direct commands, not pretend networking
 
-- hooks for lifecycle or behavior customization
-- providers for replaceable services
-- registries for components or resolvers
-- composable CanvasEngine components with children
-- named layers or slots when several modules need to contribute UI or visuals
-- server-authoritative commands when state must be synchronized
+Keyboard, pointer, touch, gamepad, accessibility controls, replays, and AI
+governors emit the same typed commands into the runtime. They must not traverse
+a WebSocket-shaped adapter, fake HTTP request, room transport, serialization
+layer, prediction buffer, or reconciliation path.
 
-If a feature can be extended only by replacing a whole core component, it is
-probably not plugin-ready enough. Prefer a default implementation that can be
-wrapped, composed, or extended by modules.
+### Local maps, not multiplayer rooms
 
-New engine features should be designed as modules whenever they can stand on
-their own. This includes plugin features, new battle systems, new map rendering
-engines, optional gameplay systems, and other replaceable behavior. Prefer
-`defineModule` on the server side so the feature can be installed, configured,
-tested, and removed without coupling it to the application shell.
+Maps remain valuable loading, streaming, collision, event, and authoring
+boundaries. They are not network rooms. Map transfer must retain player and
+world state through explicit local lifecycle APIs.
 
-## UI and Components
+### Reuse the RPG framework
 
-Game UI components should be built with CanvasEngine by default. This keeps the
-runtime consistent with the rendering stack and makes components composable
-inside RPGJS scenes and modules.
+Do not replace RPGJS wholesale with a hand-built engine. Refactor and reuse its
+maps, players, events, database entries, GUI, Tiled integration, movement,
+physics, action battle, lighting, projectiles, saves, hooks, and module model.
+Break compatibility only when the old API encodes client/server ownership.
 
-Vue components belong in `@rpgjs/vue` only when they are low-level RPG building
-blocks or part of the base RPG experience, such as a dialog box. Do not add
-feature-specific Vue components to the shared Vue package.
+### Add and subtract before mutating
 
-If a UI belongs to a distinct system, create or extend a dedicated module that
-owns its components and integration points. Examples include a custom battle UI,
-inventory system, quest tracker, or specialized editor/runtime feature. The
-module should expose the necessary hooks, services, and documentation instead of
-placing system-specific UI in a shared base package.
+Keep the Solo divergence as an overlay that remains cheap to reconcile while
+RPGJS v5 stabilizes:
 
-## Client, Server, RPG, and MMORPG Behavior
+- add Solo-specific packages, entries, adapters, tests, and exports beside
+  inherited code;
+- reductively exclude multiplayer-only packages from Solo release manifests and
+  bundle entry points;
+- when reusable behavior is trapped in an inherited package, prefer extracting
+  a new pure module and making the old package consume or re-export it;
+- isolate unavoidable inherited-file changes in small commits that can be
+  reviewed, replayed, or dropped independently during an upstream sync; and
+- reject broad renames, directory moves, formatting sweeps, and in-place
+  rewrites that manufacture merge conflicts without changing the product.
 
-For every gameplay or rendering improvement, decide and document:
+An additive seam must be attempted and documented before a mutating refactor is
+accepted.
 
-- what runs only on the client
-- what is controlled by the server
-- what is synchronized over the network
-- what works in standalone RPG mode
-- what works in MMORPG mode
-- what happens when the feature is unavailable on one side
+### Local-first production quality
 
-Client-only visual features are acceptable, but they should not create gameplay
-authority. Server-driven features should use serializable data and avoid sending
-client-only implementation details across the network.
+Solo's priorities are deterministic stepping, pause/resume, replayable input,
+save integrity and migrations, browser/native lifecycle, controller and touch
+support, accessibility, fast startup, bounded bundles, and authored-game test
+coverage. Optional cloud saves or telemetry belong behind adapters and cannot
+become runtime authority.
 
-Server-side features must stay database-agnostic and server-agnostic. Do not
-couple engine packages to a specific database, ORM, HTTP framework, monitoring
-system, hosted server, payment provider, analytics provider, or external API.
-If a feature needs integration with an external system such as Stripe, Grafana,
-or a hosted API, prefer publishing an integration tutorial in the documentation
-instead of adding the dependency to the engine.
+## Migration rule
 
-RPGJS must remain a Node.js project while staying compatible with Bun and edge
-runtimes. When adding support for a runtime or server target beyond Node.js,
-study the structure in `packages/server/src/` and add a dedicated package or
-adapter instead of hard-coding the runtime into shared engine code.
+The inherited source still contains `client`, `server`, room, sync, and
+transport concepts. Each migration change must do at least one of these:
 
-The only exception to the external-service rule is Studio mode, because RPGJS
-Studio is an official RPGJS package and may need official Studio-specific
-integration points.
+1. establish a transport-free public boundary;
+2. move reusable RPG behavior behind that boundary;
+3. remove a network-only dependency from the Solo production graph; or
+4. prove compatibility while deleting an inherited dual-runtime path.
 
-For server/client synchronization, prefer `@signe/room` and `@signe/sync`.
-These packages provide a stateful model and an architecture built around room
-state transitions. Read their READMEs before changing synchronization behavior.
+Renaming a server class, wrapping a fake socket, or hiding network terminology
+without removing the second state model is not progress.
 
-## Code Guidelines
+## API and documentation rules
 
-- Follow the existing package structure and naming conventions.
-- Prefer existing dependency injection, module, hook, and service patterns before
-  introducing new architecture.
-- Design public APIs with a comfortable developer experience that follows the
-  existing RPGJS style.
-- Keep changes scoped. Avoid unrelated refactors in feature commits.
-- Add focused unit tests with Vitest when changing shared behavior,
-  synchronization, physics, gameplay state, or public APIs.
-- Ship documentation with every new feature, especially when it adds a new
-  module, client API, server API, synchronization behavior, or runtime adapter.
-- Update samples only when they clarify the new API or protect an important
-  integration path.
+- Document every changed public API in the same PR.
+- Give public APIs precise TypeScript types and JSDoc with runnable examples.
+- Avoid `any` in public contracts; use discriminated unions, generics, or
+  overloads where behavior varies.
+- Preserve content and authoring compatibility when it does not compromise the
+  Solo runtime contract.
+- Route player-visible framework text through the i18n service.
+- Prefer small modules, hooks, providers, and registries over game-specific
+  behavior in core packages.
 
-## External Package Notes
+## Rendering and UI
 
-If you use one of these packages directly, read its README first:
+CanvasEngine/Pixi remains the default world renderer. DOM frameworks such as
+React or Vue may provide application UI and accessible overlays through a
+documented bridge. Rendering reads reactive local state; it does not consume a
+network synchronization protocol.
 
-- `@signe/room`: https://raw.githubusercontent.com/RSamaium/signe/refs/heads/master/packages/room/readme.md
-- `@signe/reactive`: https://raw.githubusercontent.com/RSamaium/signe/refs/heads/master/packages/reactive/readme.md
-- `@signe/sync`: https://raw.githubusercontent.com/RSamaium/signe/refs/heads/master/packages/sync/readme.md
-- `@signe/di`: https://raw.githubusercontent.com/RSamaium/signe/refs/heads/master/packages/di/readme.md
+## Testing requirements
 
-If you create or modify CanvasEngine components (`*.ce`), use the CanvasEngine
-documentation table of contents:
+Changes must include the narrowest useful tests plus the affected integration
+lane. The Solo release train requires:
 
-https://canvasengine.net/llms.txt
+- direct command-to-state tests;
+- object-identity and single-source-of-truth tests;
+- deterministic fixed-step and replay tests;
+- real browser map, input, GUI, pause/resume, and save/load tests;
+- dependency and bundle audits banning multiplayer-only runtime code;
+- compatibility fixtures for retained RPGJS authoring APIs; and
+- at least one real-game vertical slice before a stable release.
+
+Use the committed toolchain and lockfile:
+
+```bash
+nvm use
+pnpm install --frozen-lockfile
+pnpm build
+pnpm test -- --run
+```
+
+Solo targets the current Node 24 LTS line. Do not retain an older inherited CI
+runtime merely because upstream still tests it.
+
+## Packages and releases
+
+Every publishable package change requires a Changeset:
+
+```bash
+pnpm changeset
+```
+
+Solo packages remain prerelease until every non-negotiable gate in the root
+README passes. Published versions must identify the exact upstream baseline and
+carry no dependency range that silently moves the underlying engine.
+
+## Upstream boundary
+
+RPGJS Solo does not contribute changes back to `RSamaium/RPG-JS`. Keep general
+defect fixes isolated from Solo product work so they remain easy to re-evaluate
+or drop while syncing, not so they can be submitted upstream. Preserve the
+fork's MIT lineage, notices, and attribution, and record the exact adopted
+upstream baseline in each release.

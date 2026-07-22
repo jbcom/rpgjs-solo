@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        node-version: [22]
+        node-version: [24]
     steps:
       - uses: actions/checkout@v4
       - name: Install pnpm
@@ -32,7 +32,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: "pnpm"
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - name: Build
         run: pnpm build
       - name: Unit tests
@@ -44,7 +44,7 @@ jobs:
 
   build_and_publish:
       needs: tests
-      if: github.ref == 'refs/heads/v5'
+      if: github.repository == 'RSamaium/RPG-JS' && github.ref == 'refs/heads/v5'
       runs-on: ubuntu-latest
       outputs:
         published: ${{ steps.changesets.outputs.published }}
@@ -113,7 +113,7 @@ jobs:
 
   starter_repo_update_dependencies:
       needs: build_and_publish
-      if: github.ref == 'refs/heads/v5' && needs.build_and_publish.outputs.published == 'true'
+      if: github.repository == 'RSamaium/RPG-JS' && github.ref == 'refs/heads/v5' && needs.build_and_publish.outputs.published == 'true'
       runs-on: ubuntu-latest
       strategy:
         matrix:
