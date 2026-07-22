@@ -32,6 +32,11 @@ type PlayerInterest = {
   projectiles: Set<string>;
 };
 
+export type MapStreamingVisibleEntityIds = {
+  players: Set<string>;
+  events: Set<string>;
+};
+
 class ServerMapStreamingRuntime {
   private readonly players = new Map<string, PlayerInterest>();
   private readonly loadRadius: number;
@@ -72,6 +77,39 @@ class ServerMapStreamingRuntime {
     if (state) return state.retained.has(targetKey);
     const center = getMapChunkCoordinates(player.x(), player.y(), manifest);
     return getMapInterestKeys(center, this.loadRadius, manifest).has(targetKey);
+  }
+
+  getVisibleEntityIds(player: RpgPlayer): MapStreamingVisibleEntityIds {
+    const players = new Set<string>([player.id]);
+    const events = new Set<string>();
+    const retained = this.players.get(player.id)?.retained;
+    if (!retained || retained.size === 0) return { players, events };
+
+    const visibleChunks = [...retained]
+      .map((key) => this.definition.chunks[key])
+      .filter((chunk) => !!chunk);
+    if (visibleChunks.length === 0) return { players, events };
+
+    const left = Math.min(...visibleChunks.map((chunk) => chunk.bounds.x));
+    const top = Math.min(...visibleChunks.map((chunk) => chunk.bounds.y));
+    const right = Math.max(...visibleChunks.map((chunk) => chunk.bounds.x + chunk.bounds.width));
+    const bottom = Math.max(...visibleChunks.map((chunk) => chunk.bounds.y + chunk.bounds.height));
+    const mapPlayers = this.map.players();
+    const mapEvents = this.map.events();
+
+    for (const entity of this.map.queryHitbox({
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+    })) {
+      const id = entity?.id;
+      if (!id || !this.isPositionVisible(player, entity.x(), entity.y())) continue;
+      if (mapPlayers[id]) players.add(id);
+      else if (mapEvents[id]) events.add(id);
+    }
+
+    return { players, events };
   }
 
   filterProjectilePacket(player: RpgPlayer, packet: any): any {
@@ -236,6 +274,14 @@ export function isMapStreamingPositionVisible(
   y: number,
 ): boolean {
   return getRuntime(map)?.isPositionVisible(player, x, y) ?? true;
+}
+
+/** Resolve nearby synchronized entities through the map physics spatial index. */
+export function getMapStreamingVisibleEntityIds(
+  map: RpgMap,
+  player: RpgPlayer,
+): MapStreamingVisibleEntityIds | undefined {
+  return getRuntime(map)?.getVisibleEntityIds(player);
 }
 
 export function filterMapStreamingProjectilePacket(map: RpgMap, player: RpgPlayer, packet: any): any {

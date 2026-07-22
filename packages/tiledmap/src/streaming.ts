@@ -89,16 +89,33 @@ function visitTileLayers(layers: any[], callback: (layer: any) => void): void {
   }
 }
 
-function hitboxCenter(hitbox: MapChunkHitbox): { x: number; y: number } {
+function hitboxBounds(hitbox: MapChunkHitbox): MapChunkBounds | undefined {
   if ("points" in hitbox) {
+    if (hitbox.points.length === 0) return undefined;
     const xs = hitbox.points.map((point) => point[0]);
     const ys = hitbox.points.map((point) => point[1]);
     return {
-      x: (Math.min(...xs) + Math.max(...xs)) / 2,
-      y: (Math.min(...ys) + Math.max(...ys)) / 2,
+      x: Math.min(...xs),
+      y: Math.min(...ys),
+      width: Math.max(...xs) - Math.min(...xs),
+      height: Math.max(...ys) - Math.min(...ys),
     };
   }
-  return { x: hitbox.x + hitbox.width / 2, y: hitbox.y + hitbox.height / 2 };
+  const right = hitbox.x + hitbox.width;
+  const bottom = hitbox.y + hitbox.height;
+  return {
+    x: Math.min(hitbox.x, right),
+    y: Math.min(hitbox.y, bottom),
+    width: Math.abs(hitbox.width),
+    height: Math.abs(hitbox.height),
+  };
+}
+
+function intersects(left: MapChunkBounds, right: MapChunkBounds): boolean {
+  return left.x < right.x + right.width
+    && left.x + left.width > right.x
+    && left.y < right.y + right.height
+    && left.y + left.height > right.y;
 }
 
 export function compileTiledMapStream(
@@ -180,11 +197,8 @@ export function compileTiledMapStream(
         bounds,
         renderData: { layers },
         hitboxes: hitboxes.filter((hitbox) => {
-          const center = hitboxCenter(hitbox);
-          return center.x >= bounds.x
-            && center.y >= bounds.y
-            && center.x < bounds.x + bounds.width
-            && center.y < bounds.y + bounds.height;
+          const geometryBounds = hitboxBounds(hitbox);
+          return geometryBounds ? intersects(geometryBounds, bounds) : false;
         }),
       };
     }

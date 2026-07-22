@@ -30,7 +30,11 @@ describe("Tiled map streaming adapter", () => {
           tiles: [{ id: 0, properties: { collision: true } }],
         }],
       },
-      hitboxes: [{ id: "wall", x: 0, y: 0, width: 32, height: 32 }],
+      hitboxes: [
+        { id: "wall", x: 0, y: 0, width: 32, height: 32 },
+        { id: "wide-wall", x: 48, y: 0, width: 32, height: 32 },
+        { id: "wide-polygon", points: [[48, 0], [80, 0], [80, 32], [48, 32]] },
+      ],
     }, { basePath: "/assets", chunkSize: 2 })!;
 
     expect(definition.manifest.renderData.map.objects).toBeUndefined();
@@ -39,7 +43,15 @@ describe("Tiled map streaming adapter", () => {
     expect(definition.manifest.renderData.map.tilesets[0].wangsets).toBeUndefined();
     expect(definition.manifest.renderData.map.tilesets[0].image.source).toBe("/assets/tiles.png");
     expect(definition.manifest.renderData.map.layers[1].objects).toEqual([]);
-    expect(definition.chunks["0:0"].hitboxes).toHaveLength(1);
+    expect(definition.chunks["0:0"].hitboxes.map((hitbox) => hitbox.id)).toEqual([
+      "wall",
+      "wide-wall",
+      "wide-polygon",
+    ]);
+    expect(definition.chunks["1:0"].hitboxes.map((hitbox) => hitbox.id)).toEqual([
+      "wide-wall",
+      "wide-polygon",
+    ]);
 
     const state = createTiledMapStreamState(definition.manifest);
     applyTiledMapStreamChunk(state, definition.chunks["0:0"]);

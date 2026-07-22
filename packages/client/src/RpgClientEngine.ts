@@ -170,7 +170,40 @@ export class RpgClientEngine<T = any> {
   componentAnimations: any[] = [];
   clientVisuals = new ClientVisualRegistry();
   projectiles: ProjectileManager;
+  /**
+   * Read the latest pointer position tracked by the client canvas. World
+   * coordinates are suitable for action payloads and map interactions.
+   *
+   * @title pointer
+   * @prop pointer: ClientPointerContext
+   * @memberof RpgClientEngine
+   * @example
+   * ```ts
+   * const target = engine.pointer.world()
+   * if (target) engine.processAction('projectile:shoot', { target })
+   * ```
+   */
   pointer: ClientPointerContext = createClientPointerContext();
+  /**
+   * Register client-only pointer behaviors for map sprites. Interactions remain
+   * local unless a behavior explicitly sends an action to the server.
+   *
+   * See the [client interactions guide](../../guide/interactions.md) for hover,
+   * selection, hit testing, drag-and-drop, overlays, and network rules.
+   *
+   * @title interactions
+   * @prop interactions: RpgClientInteractions
+   * @memberof RpgClientEngine
+   * @example
+   * ```ts
+   * engine.interactions.use('Guard', {
+   *   cursor: 'pointer',
+   *   click(ctx) {
+   *     ctx.action('guard:talk', { eventId: ctx.target.id })
+   *   }
+   * })
+   * ```
+   */
   interactions: RpgClientInteractions = new RpgClientInteractions(this);
   private spritesheetResolver?: (id: string | number) => any | Promise<any>;
   private soundResolver?: (id: string) => any | Promise<any>;
@@ -1959,7 +1992,26 @@ export class RpgClientEngine<T = any> {
       : Date.now();
   }
 
-  async processDash(input: Partial<RpgDashInput> = {}) {
+  /**
+   * Start a predicted dash for the current player and send it through the
+   * authoritative movement channel.
+   *
+   * @title processDash
+   * @method processDash(input?: Partial<RpgDashInput>): Promise<void>
+   * @param input - Optional direction, speed, duration, and cooldown overrides.
+   * @returns A promise resolved after the dash input has been processed locally.
+   * @memberof RpgClientEngine
+   * @example
+   * ```ts
+   * await engine.processDash({
+   *   direction: { x: 1, y: 0 },
+   *   additionalSpeed: 10,
+   *   duration: 220,
+   *   cooldown: 600,
+   * })
+   * ```
+   */
+  async processDash(input: Partial<RpgDashInput> = {}): Promise<void> {
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
     const fallbackDirection =
       typeof currentPlayer?.direction === "function"
@@ -1970,6 +2022,24 @@ export class RpgClientEngine<T = any> {
     await this.processInput({ input: dashInput });
   }
 
+  /**
+   * Send an action intent to the authoritative server. Client-provided data
+   * must be validated by the receiving player input handler or action.
+   *
+   * @title processAction
+   * @method processAction(action: RpgActionName | RpgActionInput, data?: any): void
+   * @param action - Action name/control value, or a normalized action object.
+   * @param data - Optional serializable context sent with an action name.
+   * @returns Nothing.
+   * @memberof RpgClientEngine
+   * @example
+   * ```ts
+   * engine.processAction('projectile:shoot', {
+   *   target: engine.pointer.world(),
+   *   source: 'map-click',
+   * })
+   * ```
+   */
   processAction(action: RpgActionName, data?: any): void;
   processAction(action: RpgActionInput): void;
   processAction(action: RpgActionName | RpgActionInput, data?: any): void {

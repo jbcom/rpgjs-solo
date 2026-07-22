@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   installMapStreaming,
   isMapStreamingPositionVisible,
+  getMapStreamingVisibleEntityIds,
   provideServerMapStreaming,
   refreshMapStreaming,
   sendInitialMapStreaming,
@@ -162,5 +163,33 @@ describe("server map streaming", () => {
 
     expect(isMapStreamingPositionVisible(map as any, player as any, 10, 10)).toBe(true);
     expect(isMapStreamingPositionVisible(map as any, player as any, 110, 10)).toBe(false);
+  });
+
+  it("queries visible synchronized entities through the retained chunk bounds", () => {
+    const emit = vi.fn();
+    const player = { id: "player", conn: {}, x: () => 10, y: () => 10, emit };
+    const event = { id: "event", x: () => 20, y: () => 20 };
+    const players = { player };
+    const events = { event };
+    const queryHitbox = vi.fn(() => [player, event]);
+    const map = {
+      getPlayers: () => [player],
+      players: () => players,
+      events: () => events,
+      queryHitbox,
+    };
+
+    installMapStreaming(map as any, createDefinition(), { loadRadius: 0, retainRadius: 1 });
+
+    expect(getMapStreamingVisibleEntityIds(map as any, player as any)).toEqual({
+      players: new Set(["player"]),
+      events: new Set(["event"]),
+    });
+    expect(queryHitbox).toHaveBeenCalledWith({
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+    });
   });
 });

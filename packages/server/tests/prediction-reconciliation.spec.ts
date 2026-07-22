@@ -1,7 +1,33 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { testing, type TestingFixture } from "@rpgjs/testing";
-import { createModule, defineModule, Direction } from "@rpgjs/common";
+import { createModule, defineModule, Direction, type MapStreamDefinition } from "@rpgjs/common";
 import { RpgPlayer, RpgServer } from "../src";
+import { installMapStreaming } from "../src/map-streaming";
+
+function createStreamingDefinition(): MapStreamDefinition {
+  return {
+    manifest: {
+      protocol: 1,
+      mapId: "test-map",
+      revision: "spatial-query",
+      width: 300,
+      height: 100,
+      chunkWidth: 100,
+      chunkHeight: 100,
+      columns: 3,
+      rows: 1,
+      renderData: {},
+    },
+    chunks: Object.fromEntries([0, 1, 2].map((x) => [`${x}:0`, {
+      key: `${x}:0`,
+      x,
+      y: 0,
+      bounds: { x: x * 100, y: 0, width: 100, height: 100 },
+      renderData: {},
+      hitboxes: [],
+    }])),
+  };
+}
 
 const serverModule = defineModule<RpgServer>({
   maps: [
@@ -127,6 +153,78 @@ describe("Prediction + Reconciliation Server Protocol", () => {
         isConnected: true,
       }),
     );
+  });
+
+  test("should use spatial candidates for streamed player visibility transitions", () => {
+    installMapStreaming(serverMap, createStreamingDefinition(), {
+      loadRadius: 0,
+      retainRadius: 0,
+    });
+    serverMap.spatialVisiblePlayerIds.delete(player.id);
+    serverMap.spatialVisibleEventIds.delete(player.id);
+
+    const nearbyPlayer = new RpgPlayer();
+    nearbyPlayer.id = "nearby-player";
+    nearbyPlayer.x.set(player.x());
+    nearbyPlayer.y.set(player.y());
+    nearbyPlayer.isConnected.set(true);
+    nearbyPlayer.setGraphic("hero");
+    serverMap.players()[nearbyPlayer.id] = nearbyPlayer;
+
+    const farPlayer = new RpgPlayer();
+    farPlayer.id = "far-player";
+    farPlayer.x.set(250);
+    farPlayer.y.set(player.y());
+    const farX = vi.fn(() => 250);
+    farPlayer.x = farX as any;
+    serverMap.players()[farPlayer.id] = farPlayer;
+    farX.mockClear();
+
+    const queryHitbox = vi.spyOn(serverMap, "queryHitbox")
+      .mockReturnValue([player])
+      .mockReturnValueOnce([player, nearbyPlayer])
+      .mockReturnValueOnce([player]);
+
+    const entering = serverMap.interceptorPacket(
+      player,
+      { type: "sync", value: {} },
+      player.conn,
+    );
+    expect(entering?.value?.players?.[nearbyPlayer.id]).toEqual(
+      expect.objectContaining({ isConnected: true, graphics: ["hero"] }),
+    );
+    expect(farX).not.toHaveBeenCalled();
+
+    nearbyPlayer.x.set(250);
+    const leaving = serverMap.interceptorPacket(
+      player,
+      { type: "sync", value: {} },
+      player.conn,
+    );
+    expect(leaving?.value?.players?.[nearbyPlayer.id]).toBe("$delete");
+
+    const pendingIndexPlayer = new RpgPlayer();
+    pendingIndexPlayer.id = "pending-index-player";
+    pendingIndexPlayer.x.set(player.x());
+    pendingIndexPlayer.y.set(player.y());
+    pendingIndexPlayer.isConnected.set(true);
+    serverMap.players()[pendingIndexPlayer.id] = pendingIndexPlayer;
+    const supplemented = serverMap.interceptorPacket(
+      player,
+      {
+        type: "sync",
+        value: {
+          players: {
+            [pendingIndexPlayer.id]: { x: player.x(), y: player.y() },
+          },
+        },
+      },
+      player.conn,
+    );
+    expect(supplemented?.value?.players?.[pendingIndexPlayer.id]).toEqual(
+      expect.objectContaining({ isConnected: true }),
+    );
+    expect(queryHitbox).toHaveBeenCalledTimes(3);
   });
 
   test("should align ack position with the synced local player payload when available", () => {

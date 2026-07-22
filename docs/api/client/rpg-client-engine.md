@@ -24,10 +24,14 @@ Reference for the `RpgClientEngine` class.
 - [getSound](#getsound)
 - [getSpriteComponent](#getspritecomponent)
 - [getSpriteSheet](#getspritesheet)
+- [interactions](#interactions)
 - [interruptCurrentPlayerMovement](#interruptcurrentplayermovement)
 - [mapShakeTrigger](#mapshaketrigger)
 - [playClientVisual](#playclientvisual)
 - [playSound](#playsound)
+- [pointer](#pointer)
+- [processAction](#processaction)
+- [processDash](#processdash)
 - [registerClientVisual](#registerclientvisual)
 - [registerClientVisuals](#registerclientvisuals)
 - [registerSpriteComponent](#registerspritecomponent)
@@ -555,6 +559,36 @@ const spritesheet = engine.getSpriteSheet('my-sprite');
 const spritesheet = await engine.getSpriteSheet('dynamic-sprite');
 ```
 
+## interactions
+
+Register client-only pointer behaviors for map sprites. Interactions remain
+local unless a behavior explicitly sends an action to the server.
+
+See the [client interactions guide](../../guide/interactions.md) for hover,
+selection, hit testing, drag-and-drop, overlays, and network rules.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `property`
+- Member of: `RpgClientEngine`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+interactions: RpgClientInteractions
+```
+
+### Examples
+
+```ts
+engine.interactions.use('Guard', {
+  cursor: 'pointer',
+  click(ctx) {
+    ctx.action('guard:talk', { eventId: ctx.target.id })
+  }
+})
+```
+
 ## interruptCurrentPlayerMovement
 
 Stop local movement immediately and discard pending predicted movement.
@@ -656,6 +690,98 @@ engine.playSound('background-music', { volume: 0.5, loop: true });
 
 // Play a sound asynchronously (when resolver returns Promise)
 await engine.playSound('dynamic-sound', { volume: 0.8 });
+```
+
+## pointer
+
+Read the latest pointer position tracked by the client canvas. World
+coordinates are suitable for action payloads and map interactions.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `property`
+- Member of: `RpgClientEngine`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+pointer: ClientPointerContext
+```
+
+### Examples
+
+```ts
+const target = engine.pointer.world()
+if (target) engine.processAction('projectile:shoot', { target })
+```
+
+## processAction
+
+Send an action intent to the authoritative server. Client-provided data
+must be validated by the receiving player input handler or action.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Member of: `RpgClientEngine`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+processAction(action: RpgActionName | RpgActionInput, data?: any): void
+```
+
+### Parameters
+
+- `action`: `RpgActionName`
+- `data?`: `any`
+
+### Returns
+
+Nothing.
+
+### Examples
+
+```ts
+engine.processAction('projectile:shoot', {
+  target: engine.pointer.world(),
+  source: 'map-click',
+})
+```
+
+## processDash
+
+Start a predicted dash for the current player and send it through the
+authoritative movement channel.
+
+- Source: `packages/client/src/RpgClientEngine.ts`
+- Kind: `method`
+- Member of: `RpgClientEngine`
+- Defined in: `RpgClientEngine`
+
+### Signature
+
+```ts
+processDash(input?: Partial<RpgDashInput>): Promise<void>
+```
+
+### Parameters
+
+- `input?`: `Partial<RpgDashInput>`
+
+### Returns
+
+A promise resolved after the dash input has been processed locally.
+
+### Examples
+
+```ts
+await engine.processDash({
+  direction: { x: 1, y: 0 },
+  additionalSpeed: 10,
+  duration: 220,
+  cooldown: 600,
+})
 ```
 
 ## registerClientVisual

@@ -48,6 +48,7 @@ import { RpgMapProjectiles } from "../projectiles";
 import type { DamageFormulas } from "../Player/BattleManager";
 import {
   filterMapStreamingProjectilePacket,
+  getMapStreamingVisibleEntityIds,
   hasMapStreamingRuntime,
   isMapStreamingPositionVisible,
   refreshMapStreaming,
@@ -1392,13 +1393,70 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
 
     if (packet?.type === "sync" && packetValue && typeof packetValue === "object") {
       packetValue = { ...packetValue };
-      const visibleEvents = new Set(
-        Object.entries(this.events())
-          .filter(([eventId, event]: [string, any]) => this.isEventVisibleForPlayer(eventId, player)
-            && isMapStreamingPositionVisible(this, player, event.x(), event.y()))
-          .map(([eventId]) => eventId),
-      );
       const previousEvents = this.spatialVisibleEventIds.get(player.id) ?? new Set<string>();
+      const previousPlayers = this.spatialVisiblePlayerIds.get(player.id) ?? new Set<string>();
+      const streamingVisibility = getMapStreamingVisibleEntityIds(this, player);
+      const visibleEvents = streamingVisibility?.events ?? new Set(previousEvents);
+      const visiblePlayers = streamingVisibility?.players ?? new Set(previousPlayers);
+
+      // Keep previously visible entities when their current authoritative
+      // position is still retained. This avoids a transient delete if the
+      // physics broad phase is one update behind synchronized state.
+      if (streamingVisibility) {
+        for (const eventId of previousEvents) {
+          const event = this.events()[eventId];
+          if (event && isMapStreamingPositionVisible(this, player, event.x(), event.y())) {
+            visibleEvents.add(eventId);
+          }
+        }
+        for (const otherId of previousPlayers) {
+          const other = this.players()[otherId];
+          if (other && (otherId === player.id
+            || isMapStreamingPositionVisible(this, player, other.x(), other.y()))) {
+            visiblePlayers.add(otherId);
+          }
+        }
+      }
+
+      // Packet entries supplement the physics query. This covers an entity
+      // created or moved immediately before the broad-phase index is updated.
+      for (const [eventId, value] of Object.entries(packetValue.events ?? {})) {
+        if (value === "$delete") {
+          visibleEvents.delete(eventId);
+          continue;
+        }
+        const event = this.events()[eventId];
+        if (event && this.isEventVisibleForPlayer(eventId, player)
+          && (!streamingVisibility || isMapStreamingPositionVisible(this, player, event.x(), event.y()))) {
+          visibleEvents.add(eventId);
+        }
+        else {
+          visibleEvents.delete(eventId);
+        }
+      }
+      for (const eventId of [...visibleEvents]) {
+        const event = this.events()[eventId];
+        if (!event || !this.isEventVisibleForPlayer(eventId, player)) {
+          visibleEvents.delete(eventId);
+        }
+      }
+
+      for (const [otherId, value] of Object.entries(packetValue.players ?? {})) {
+        if (value === "$delete") {
+          visiblePlayers.delete(otherId);
+          continue;
+        }
+        const other = this.players()[otherId];
+        if (other && (otherId === player.id || !streamingVisibility
+          || isMapStreamingPositionVisible(this, player, other.x(), other.y()))) {
+          visiblePlayers.add(otherId);
+        }
+        else {
+          visiblePlayers.delete(otherId);
+        }
+      }
+      visiblePlayers.add(player.id);
+
       const eventChanges: Record<string, unknown> = {};
       for (const [eventId, value] of Object.entries(packetValue.events ?? {})) {
         if (visibleEvents.has(eventId)) eventChanges[eventId] = value;
@@ -1415,13 +1473,6 @@ export class RpgMap extends RpgCommonMap<RpgPlayer> implements RoomOnJoin {
       else delete packetValue.events;
       this.spatialVisibleEventIds.set(player.id, visibleEvents);
 
-      const visiblePlayers = new Set(
-        Object.entries(this.players())
-          .filter(([otherId, other]: [string, any]) => otherId === player.id
-            || isMapStreamingPositionVisible(this, player, other.x(), other.y()))
-          .map(([otherId]) => otherId),
-      );
-      const previousPlayers = this.spatialVisiblePlayerIds.get(player.id) ?? new Set<string>();
       const playerChanges: Record<string, unknown> = {};
       for (const [otherId, value] of Object.entries(packetValue.players ?? {})) {
         if (visiblePlayers.has(otherId)) playerChanges[otherId] = value;

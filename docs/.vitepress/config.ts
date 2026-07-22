@@ -7,6 +7,7 @@ const guideMenu = [{
     { text: "Create Module", link: "/guide/create-module" },
     { text: "Create Shape", link: "/guide/create-shape" },
     { text: "Display Animations", link: "/guide/display-animations" },
+    { text: "Client Interactions", link: "/guide/interactions" },
     { text: "Create Movement", link: "/guide/create-movement" },
     { text: "Sprite Components", link: "/guide/sprite-components" },
     { text: "Spritesheets", link: "/guide/spritesheets" },
