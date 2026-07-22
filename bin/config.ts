@@ -68,6 +68,11 @@ export const packages = (type: "build" | "dev") => {
       dependencies: createDependencies(packagesPath, ['physic']),
     },
     {
+      name: "solo-renderer",
+      buildScript,
+      dependencies: createDependencies(packagesPath, ['solo']),
+    },
+    {
       name: "solo-vite",
       buildScript,
     },
