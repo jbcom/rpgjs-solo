@@ -158,6 +158,12 @@ export interface SoloCombatGuardPayload {
   active: boolean
 }
 
+/** A side-effect-free answer used by human UI and AI before dispatch. */
+export interface SoloCombatAvailability {
+  available: boolean
+  reason?: string
+}
+
 export type SoloCombatEvent =
   | { type: 'action-started'; entityId: string; actionId: string; targetId?: string; tick: number }
   | { type: 'action-phase'; entityId: string; actionId: string; phase: SoloCombatPhase; tick: number }

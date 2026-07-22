@@ -29,6 +29,42 @@ const createBattle = () => {
 }
 
 describe('SoloActionBattle', () => {
+  it('answers action and movement availability without speculative commands', () => {
+    const { runtime, battle } = createBattle()
+    battle.registerAction({
+      id: 'measured-slash',
+      name: 'Measured Slash',
+      mode: 'melee',
+      range: 40,
+      spCost: 2,
+      damage: { flat: 10, powerScale: 0 },
+      profile: { startupTicks: 2, activeTicks: 1, recoveryTicks: 2, cooldownTicks: 8 }
+    })
+    battle.registerCombatant('hero', { faction: 'crown', actions: ['measured-slash'] })
+    battle.registerCombatant('enemy', { faction: 'hollow', actions: [] })
+    const payload = { actionId: 'measured-slash', targetId: 'enemy' }
+
+    expect(battle.canUseAction('hero', payload, 'ai')).toEqual({ available: true })
+    expect(runtime.getEntity('hero')!.stats.sp).toBe(20)
+    expect(runtime.getCommandLog()).toHaveLength(0)
+
+    runtime.dispatch({ type: 'action', entityId: 'hero', action: 'combat:use', payload, source: 'ai' })
+    expect(battle.canUseAction('hero', payload, 'ai')).toEqual({
+      available: false,
+      reason: 'Combatant is already using measured-slash'
+    })
+    expect(battle.canMove('hero').available).toBe(false)
+
+    runtime.stepTicks(5)
+    expect(battle.canMove('hero')).toEqual({ available: true })
+    expect(battle.canUseAction('hero', payload, 'ai')).toEqual({
+      available: false,
+      reason: 'measured-slash is on cooldown until tick 8'
+    })
+    runtime.stepTicks(3)
+    expect(battle.canUseAction('hero', payload, 'ai')).toEqual({ available: true })
+  })
+
   it('runs startup, active, recovery, damage, cooldown, and movement lock in fixed ticks', () => {
     const { runtime, battle } = createBattle()
     const events: SoloCombatEvent[] = []

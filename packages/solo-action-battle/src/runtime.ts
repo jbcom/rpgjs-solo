@@ -2,6 +2,7 @@ import type {
   SoloActionContext,
   SoloCommand,
   SoloCommandRejection,
+  SoloCommandSource,
   SoloEntityState,
   SoloJsonValue,
   SoloRuntime,
@@ -13,6 +14,7 @@ import type {
   NormalizedSoloAttackProfile,
   SoloActiveCombatAction,
   SoloCombatActionDefinition,
+  SoloCombatAvailability,
   SoloCombatEvent,
   SoloCombatGuardPayload,
   SoloCombatHitContext,
@@ -43,6 +45,14 @@ interface SoloCombatProjectileState {
   lastPosition: SoloVector
   spawnTick: number
   appearance?: string
+}
+
+interface ValidatedCombatUse {
+  state: SoloCombatantState
+  action: SoloCombatActionDefinition
+  target: SoloEntityState | undefined
+  direction: SoloVector
+  spCost: number
 }
 
 const reject = (reason: string): SoloCommandRejection => ({ accepted: false, reason })
@@ -184,6 +194,35 @@ export class SoloActionBattle {
     return entity ? combatState(entity) : undefined
   }
 
+  canUseAction(
+    entityId: string,
+    payload: SoloCombatUsePayload,
+    source: SoloCommandSource = 'human'
+  ): SoloCombatAvailability {
+    const entity = this.runtime.getEntity(entityId)
+    if (!entity) return { available: false, reason: `Unknown entity: ${entityId}` }
+    const validation = this.validateActionUse(entity, payload, source)
+    return 'accepted' in validation
+      ? { available: false, reason: validation.reason }
+      : { available: true }
+  }
+
+  canGuard(entityId: string, active = true): SoloCombatAvailability {
+    const entity = this.runtime.getEntity(entityId)
+    if (!entity) return { available: false, reason: `Unknown entity: ${entityId}` }
+    const rejection = this.guardRejection(entity, active)
+    return rejection ? { available: false, reason: rejection.reason } : { available: true }
+  }
+
+  canMove(entityId: string): SoloCombatAvailability {
+    const entity = this.runtime.getEntity(entityId)
+    if (!entity) return { available: false, reason: `Unknown entity: ${entityId}` }
+    const state = combatState(entity)
+    if (!state) return { available: true }
+    const rejection = this.movementRejection(state)
+    return rejection ? { available: false, reason: rejection.reason } : { available: true }
+  }
+
   subscribe(listener: SoloCombatListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -231,38 +270,11 @@ export class SoloActionBattle {
   }
 
   private useAction(context: SoloActionContext): void | SoloCommandRejection {
-    if (this.runtime.paused) return reject('Combat is paused')
     const payload = readUsePayload(context.payload)
     if (!payload) return reject('combat:use requires an actionId payload')
-    const state = combatState(context.entity)
-    if (!state) return reject(`Entity is not a combatant: ${context.entity.id}`)
-    if (state.defeated || context.entity.stats.hp <= 0) return reject('Combatant is defeated')
-    if (this.hasStatus(state, 'stun')) return reject('Combatant is stunned')
-    if (state.active) return reject(`Combatant is already using ${state.active.id}`)
-    if (!state.actions.includes(payload.actionId)) return reject(`Combatant has not learned ${payload.actionId}`)
-    const action = this.actions.get(payload.actionId)
-    if (!action) return reject(`Unknown combat action: ${payload.actionId}`)
-    const cooldownUntil = state.cooldownUntil[action.id] ?? 0
-    if (cooldownUntil > this.runtime.tick) return reject(`${action.id} is on cooldown until tick ${cooldownUntil}`)
-    const missingStatus = action.requiresStatuses?.find((statusId) => !this.hasStatus(state, statusId))
-    if (missingStatus) return reject(`${action.id} requires status ${missingStatus}`)
-    const spCost = Math.max(0, action.spCost ?? 0)
-    if (context.entity.stats.sp < spCost) return reject(`Not enough SP for ${action.id}`)
-
-    const direction = payload.direction ?? facingVector(context.entity)
-    const target = this.resolveRequestedTarget(context.entity, state, action, payload.targetId, direction)
-    if (typeof target === 'string') return reject(target)
-    const useContext: SoloCombatUseContext = {
-      runtime: this.runtime,
-      attacker: context.entity,
-      action,
-      target,
-      direction,
-      source: context.source
-    }
-    const custom = action.canUse?.(useContext)
-    if (custom === false) return reject(`${action.id} cannot be used now`)
-    if (typeof custom === 'string') return reject(custom)
+    const validation = this.validateActionUse(context.entity, payload, context.source)
+    if ('accepted' in validation) return validation
+    const { state, action, target, direction, spCost } = validation
 
     context.entity.stats.sp -= spCost
     for (const statusId of action.consumesStatuses ?? []) delete state.statuses[statusId]
@@ -300,9 +312,8 @@ export class SoloActionBattle {
     if (!payload) return reject('combat:guard requires an active boolean payload')
     const state = combatState(context.entity)
     if (!state) return reject(`Entity is not a combatant: ${context.entity.id}`)
-    if (payload.active && (state.defeated || state.active || this.hasStatus(state, 'stun'))) {
-      return reject('Combatant cannot guard now')
-    }
+    const rejection = this.guardRejection(context.entity, payload.active)
+    if (rejection) return rejection
     state.guarding = payload.active
     if (payload.active) this.runtime.dispatch({ type: 'stop', entityId: context.entity.id, source: 'system' })
     this.emit({ type: 'guard-changed', entityId: context.entity.id, guarding: payload.active, tick: this.runtime.tick })
@@ -317,17 +328,62 @@ export class SoloActionBattle {
     const state = combatState(entity)
     if (!state) return
     if (command.type === 'move') {
-      if (state.defeated) return reject('Defeated combatants cannot move')
-      if (state.guarding) return reject('Guarding locks movement')
-      if (this.hasStatus(state, 'root')) return reject('Combatant is rooted')
-      if (this.hasStatus(state, 'stun')) return reject('Combatant is stunned')
-      const action = state.active ? this.actions.get(state.active.id) : undefined
-      if (action && normalizeSoloAttackProfile(action.profile).movementLock) {
-        return reject(`Movement is locked during ${action.id}`)
-      }
+      const rejection = this.movementRejection(state)
+      if (rejection) return rejection
     }
     if (command.type === 'action' && this.hasStatus(state, 'stun') && command.action !== 'combat:guard') {
       return reject('Combatant is stunned')
+    }
+  }
+
+  private validateActionUse(
+    entity: SoloEntityState,
+    payload: SoloCombatUsePayload,
+    source: SoloCommandSource
+  ): ValidatedCombatUse | SoloCommandRejection {
+    if (this.runtime.paused) return reject('Combat is paused')
+    const state = combatState(entity)
+    if (!state) return reject(`Entity is not a combatant: ${entity.id}`)
+    if (state.defeated || entity.stats.hp <= 0) return reject('Combatant is defeated')
+    if (this.hasStatus(state, 'stun')) return reject('Combatant is stunned')
+    if (state.active) return reject(`Combatant is already using ${state.active.id}`)
+    if (!state.actions.includes(payload.actionId)) return reject(`Combatant has not learned ${payload.actionId}`)
+    const action = this.actions.get(payload.actionId)
+    if (!action) return reject(`Unknown combat action: ${payload.actionId}`)
+    const cooldownUntil = state.cooldownUntil[action.id] ?? 0
+    if (cooldownUntil > this.runtime.tick) return reject(`${action.id} is on cooldown until tick ${cooldownUntil}`)
+    const missingStatus = action.requiresStatuses?.find((statusId) => !this.hasStatus(state, statusId))
+    if (missingStatus) return reject(`${action.id} requires status ${missingStatus}`)
+    const spCost = Math.max(0, action.spCost ?? 0)
+    if (entity.stats.sp < spCost) return reject(`Not enough SP for ${action.id}`)
+
+    const direction = payload.direction ?? facingVector(entity)
+    const target = this.resolveRequestedTarget(entity, state, action, payload.targetId, direction)
+    if (typeof target === 'string') return reject(target)
+    const useContext: SoloCombatUseContext = { runtime: this.runtime, attacker: entity, action, target, direction, source }
+    const custom = action.canUse?.(useContext)
+    if (custom === false) return reject(`${action.id} cannot be used now`)
+    if (typeof custom === 'string') return reject(custom)
+    return { state, action, target, direction, spCost }
+  }
+
+  private guardRejection(entity: SoloEntityState, active: boolean): SoloCommandRejection | undefined {
+    if (this.runtime.paused) return reject('Combat is paused')
+    const state = combatState(entity)
+    if (!state) return reject(`Entity is not a combatant: ${entity.id}`)
+    if (active && (state.defeated || state.active || this.hasStatus(state, 'stun'))) {
+      return reject('Combatant cannot guard now')
+    }
+  }
+
+  private movementRejection(state: SoloCombatantState): SoloCommandRejection | undefined {
+    if (state.defeated) return reject('Defeated combatants cannot move')
+    if (state.guarding) return reject('Guarding locks movement')
+    if (this.hasStatus(state, 'root')) return reject('Combatant is rooted')
+    if (this.hasStatus(state, 'stun')) return reject('Combatant is stunned')
+    const action = state.active ? this.actions.get(state.active.id) : undefined
+    if (action && normalizeSoloAttackProfile(action.profile).movementLock) {
+      return reject(`Movement is locked during ${action.id}`)
     }
   }
 

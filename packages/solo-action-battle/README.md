@@ -44,6 +44,22 @@ runtime.dispatch({
 })
 ```
 
+Human UI and Yuka observation adapters can query the exact same validation
+without issuing speculative commands:
+
+```ts
+const shot = combat.canUseAction('hero', {
+  actionId: 'hunter:longbow',
+  targetId: 'slime'
+}, 'ai')
+const movement = combat.canMove('hero')
+const guard = combat.canGuard('hero')
+```
+
+These queries include pause, defeat, stun/root, active/recovery, cooldown,
+learned-action, resource, target, status, and game-authored `canUse` rules. They
+never spend resources, start actions, or append commands.
+
 Game-authored class kits, enemy tuning, encounter eligibility, rewards, and
 story consequences remain in the game. The reusable fixed-tick mechanics and
 telemetry remain here.
