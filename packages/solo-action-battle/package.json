@@ -1,7 +1,7 @@
 {
-  "name": "@jbcom/rpgjs-solo-vite",
+  "name": "@jbcom/rpgjs-solo-action-battle",
   "version": "5.0.0-beta.26.solo.2",
-  "description": "Vite production-boundary enforcement for RPGJS Solo games",
+  "description": "Transport-free deterministic action combat for RPGJS Solo",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -10,7 +10,8 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": ["dist", "README.md"],
   "sideEffects": false,
@@ -18,7 +19,8 @@
     "build": "vite build",
     "dev": "vite build --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:boundary": "node scripts/verify-boundary.mjs"
   },
   "engines": {
     "node": ">=24 <25"
@@ -27,8 +29,8 @@
     "access": "public",
     "registry": "https://git.local.jonbogaty.com/api/packages/jbcom/npm/"
   },
-  "peerDependencies": {
-    "vite": "8.1.5"
+  "dependencies": {
+    "@jbcom/rpgjs-solo": "workspace:5.0.0-beta.26.solo.2"
   },
   "devDependencies": {
     "@typescript/typescript6": "6.0.2",

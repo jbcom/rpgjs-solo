@@ -4,6 +4,7 @@ import type {
   SoloCommand,
   SoloCommandRecord,
   SoloCommandResult,
+  SoloCommandInterceptor,
   SoloCommandSource,
   SoloDirection,
   SoloEntityDefinition,
@@ -100,6 +101,7 @@ export class SoloRuntime {
   private readonly physicalEntities = new Map<string, Entity>()
   private readonly listeners = new Set<SoloRuntimeListener>()
   private readonly actions = new Map<string, SoloActionHandler>()
+  private readonly commandInterceptors = new Set<SoloCommandInterceptor>()
   private readonly commandLog: SoloCommandRecord[] = []
   private accumulatorMs = 0
   private currentTick = 0
@@ -238,10 +240,22 @@ export class SoloRuntime {
     }
   }
 
+  registerCommandInterceptor(interceptor: SoloCommandInterceptor): () => void {
+    this.commandInterceptors.add(interceptor)
+    return () => this.commandInterceptors.delete(interceptor)
+  }
+
   dispatch(command: SoloCommand): SoloCommandResult {
     const source = command.source ?? 'human'
     const entity = this.entities.get(command.entityId)
     if (!entity) return { accepted: false, tick: this.currentTick, reason: `Unknown entity: ${command.entityId}` }
+
+    for (const interceptor of this.commandInterceptors) {
+      const rejection = interceptor(command, entity, source)
+      if (rejection?.accepted === false) {
+        return { accepted: false, tick: this.currentTick, reason: rejection.reason }
+      }
+    }
 
     switch (command.type) {
       case 'move': {
@@ -269,7 +283,10 @@ export class SoloRuntime {
         if (!handler) {
           return { accepted: false, tick: this.currentTick, reason: `Unknown action: ${command.action}` }
         }
-        handler({ entity, payload: command.payload, source })
+        const rejection = handler({ entity, payload: command.payload, source })
+        if (rejection?.accepted === false) {
+          return { accepted: false, tick: this.currentTick, reason: rejection.reason }
+        }
         break
       }
     }

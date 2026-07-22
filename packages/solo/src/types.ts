@@ -124,6 +124,11 @@ export interface SoloCommandResult {
   reason?: string
 }
 
+export interface SoloCommandRejection {
+  accepted: false
+  reason: string
+}
+
 export interface SoloRuntimeOptions {
   fixedStepMs?: number
   maxFrameDeltaMs?: number
@@ -166,5 +171,10 @@ export interface SoloActionContext {
   source: SoloCommandSource
 }
 
-export type SoloActionHandler = (context: SoloActionContext) => void
+export type SoloActionHandler = (context: SoloActionContext) => void | SoloCommandRejection
+export type SoloCommandInterceptor = (
+  command: SoloCommand,
+  entity: SoloEntityState,
+  source: SoloCommandSource
+) => void | SoloCommandRejection
 export type SoloRuntimeListener = (event: SoloRuntimeEvent) => void

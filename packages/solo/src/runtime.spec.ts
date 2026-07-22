@@ -103,6 +103,29 @@ describe('SoloRuntime', () => {
     expect(handler).toHaveBeenCalledOnce()
   })
 
+  it('lets reusable systems reject commands before they enter the log', () => {
+    const runtime = createRuntime()
+    runtime.registerCommandInterceptor((command) =>
+      command.type === 'teleport' ? { accepted: false, reason: 'teleport disabled' } : undefined
+    )
+    runtime.registerAction('requires-key', () => ({ accepted: false, reason: 'missing key' }))
+
+    expect(runtime.dispatch({
+      type: 'teleport',
+      entityId: 'hero',
+      position: { x: 100, y: 100 },
+      source: 'ai'
+    })).toMatchObject({ accepted: false, reason: 'teleport disabled' })
+    expect(runtime.dispatch({
+      type: 'action',
+      entityId: 'hero',
+      action: 'requires-key',
+      source: 'human'
+    })).toMatchObject({ accepted: false, reason: 'missing key' })
+    expect(runtime.getEntity('hero')!.position).toEqual({ x: 32, y: 32 })
+    expect(runtime.getCommandLog()).toHaveLength(0)
+  })
+
   it('round-trips a save without replacing existing entity identity', async () => {
     const runtime = createRuntime()
     const store = new MemorySoloSaveStore()
