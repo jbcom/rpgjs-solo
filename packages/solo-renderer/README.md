@@ -7,6 +7,10 @@ and fog-of-war directly around `SoloRuntime` state.
 There is no socket, room, sync, prediction, reconciliation, or game-facing
 Pixi adapter. Pixi remains an implementation detail of CanvasEngine.
 
+CanvasEngine, its Tiled/preset packages, Pixi, Vite, TypeScript, Vitest, and
+declaration tooling are pinned to versions checked as current for each private
+release; renderer feature-completeness includes that alignment gate.
+
 `renderer.uiRoot` is a framework-neutral DOM overlay. Use the inherited,
 current `@rpgjs/ui-css` primitives there directly or mount the game's chosen UI
 framework into it; the renderer does not invent a second widget system.

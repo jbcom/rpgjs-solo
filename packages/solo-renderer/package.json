@@ -1,6 +1,6 @@
 {
   "name": "@jbcom/rpgjs-solo-renderer",
-  "version": "5.0.0-beta.26.solo.0",
+  "version": "5.0.0-beta.26.solo.1",
   "description": "Native CanvasEngine renderer and Tiled authoring surface for RPGJS Solo",
   "license": "MIT",
   "type": "module",
@@ -35,17 +35,18 @@
   "dependencies": {
     "@canvasengine/presets": "2.0.0",
     "@canvasengine/tiled": "2.0.0",
-    "@jbcom/rpgjs-solo": "workspace:5.0.0-beta.26.solo.0",
+    "@jbcom/rpgjs-solo": "workspace:5.0.0-beta.26.solo.1",
     "canvasengine": "2.0.1"
   },
   "peerDependencies": {
     "pixi.js": "8.19.0"
   },
   "devDependencies": {
+    "@typescript/typescript6": "6.0.2",
     "pixi.js": "8.19.0",
-    "typescript": "^6.0.3",
-    "vite": "8.1.1",
-    "vite-plugin-dts": "^5.0.2",
-    "vitest": "^4.1.9"
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vite-plugin-dts": "5.0.3",
+    "vitest": "4.1.10"
   }
 }
