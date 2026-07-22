@@ -63,8 +63,11 @@ publishable from the inherited RPGJS package graph:
 | `@jbcom/rpgjs-solo-renderer` | Native Tiled maps, CanvasEngine scenes, camera, spritesheets, fog of war, direct input, `@rpgjs/ui-css` host, and test auto-mute |
 | `@jbcom/rpgjs-solo-vite` | Production-bundle rejection of room/sync/socket/prediction regressions |
 
-All Solo packages are versioned against the exact RPGJS beta baseline and publish only
-to the Gitea `jbcom` npm registry.
+All Solo packages are versioned against the exact RPGJS beta baseline and
+publish only to the Gitea `jbcom` npm registry. Their direct runtime and build
+dependencies are exact versions, and every release rechecks them against the
+current compatible upstream releases. A private Solo package is not
+feature-complete while that check reports a knowingly stale direct dependency.
 
 After the Node 24 build, tests, and Solo boundary pass, an authenticated
 maintainer publishes the filtered package set in dependency order with
@@ -89,6 +92,9 @@ A Solo runtime release must prove all of the following:
   a substantial real game vertical slice;
 - an automated bundle audit fails if multiplayer-only code leaks back into the
   shipped Solo packages.
+- the current Node 24 LTS and committed latest pnpm version install the frozen
+  lockfile, and each private package is built and tested with current compatible
+  TypeScript, Vite, Vitest, and declaration tooling.
 
 The accepted architecture decision is recorded in
 [`docs/internal/adr/005-solo-runtime.md`](docs/internal/adr/005-solo-runtime.md).
