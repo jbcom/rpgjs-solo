@@ -22,6 +22,10 @@ Pixi adapter. Pixi remains an implementation detail of CanvasEngine.
 CanvasEngine, its Tiled/preset packages, Pixi, Vite, TypeScript, Vitest, and
 declaration tooling are pinned to versions checked as current for each private
 release; renderer feature-completeness includes that alignment gate.
+Release this workspace package with `pnpm publish`, which rewrites its
+`workspace:` core dependency to the exact published Solo version. A publish
+guard rejects `npm publish` so registry consumers never receive an unresolved
+workspace protocol.
 
 `renderer.uiRoot` is a framework-neutral DOM overlay. Use the inherited,
 current `@rpgjs/ui-css` primitives there directly or mount the game's chosen UI
