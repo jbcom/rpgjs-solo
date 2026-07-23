@@ -217,4 +217,50 @@ describe('SoloRuntime', () => {
       position: { x: 128, y: 104 }
     })
   })
+
+  it('keeps teleports, transfers, restores, and fixed-step movement inside map bounds', () => {
+    const runtime = new SoloRuntime()
+    runtime.registerMap({ id: 'field', width: 100, height: 80 })
+    runtime.registerMap({ id: 'room', width: 50, height: 40 })
+    runtime.spawnEntity({
+      id: 'hero',
+      kind: 'player',
+      mapId: 'field',
+      x: 50,
+      y: 40,
+      hitbox: { radius: 6 },
+      speed: 120
+    })
+
+    runtime.dispatch({
+      type: 'teleport',
+      entityId: 'hero',
+      position: { x: 500, y: -100 },
+      source: 'system'
+    })
+    expect(runtime.getEntity('hero')!.position).toEqual({ x: 94, y: 6 })
+
+    runtime.dispatch({ type: 'move', entityId: 'hero', vector: { x: 1, y: -1 } })
+    runtime.stepTicks(120)
+    expect(runtime.getEntity('hero')).toMatchObject({
+      position: { x: 94, y: 6 },
+      velocity: { x: 0, y: 0 },
+      moving: false
+    })
+
+    runtime.dispatch({
+      type: 'transfer-map',
+      entityId: 'hero',
+      mapId: 'room',
+      position: { x: 500, y: 500 },
+      source: 'system'
+    })
+    expect(runtime.getEntity('hero')!.position).toEqual({ x: 44, y: 34 })
+
+    const snapshot = runtime.createSnapshot()
+    snapshot.entities[0]!.x = -200
+    snapshot.entities[0]!.y = 200
+    runtime.restoreSnapshot(snapshot)
+    expect(runtime.getEntity('hero')!.position).toEqual({ x: 6, y: 34 })
+  })
 })

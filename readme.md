@@ -70,9 +70,12 @@ dependencies are exact versions, and every release rechecks them against the
 current compatible upstream releases. A private Solo package is not
 feature-complete while that check reports a knowingly stale direct dependency.
 
-After the Node 24 build, tests, and Solo boundary pass, an authenticated
-maintainer publishes the filtered package set in dependency order with
-`pnpm publish:solo`. Credentials remain outside the repository; anonymous LAN
+After the Node 24 build, tests, Solo boundary, and
+`pnpm verify:solo-package-contracts` pass, an authenticated maintainer publishes
+the filtered package set in dependency order with `pnpm publish:solo`. The
+shared publish guard rejects npm for every Solo package, and the package check
+proves every pnpm-packed manifest is consumer-safe and contains no unresolved
+workspace protocol. Credentials remain outside the repository; anonymous LAN
 access is not assumed, so consumers authenticate to the private `jbcom`
 registry through their user-level npm configuration.
 

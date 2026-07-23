@@ -37,6 +37,34 @@ const cloneJson = <T extends SoloJsonValue | Record<string, SoloJsonValue>>(valu
 
 const cloneVector = (value: SoloVector): SoloVector => ({ x: value.x, y: value.y })
 
+const clamp = (value: number, minimum: number, maximum: number): number =>
+  Math.min(maximum, Math.max(minimum, value))
+
+const hitboxExtents = (hitbox: SoloEntityState['hitbox']): SoloVector => {
+  if (typeof hitbox === 'number') return { x: hitbox, y: hitbox }
+  if ('type' in hitbox) {
+    if (hitbox.type === 'circle') return { x: hitbox.radius, y: hitbox.radius }
+    if (hitbox.type === 'capsule') return { x: hitbox.radius, y: hitbox.height / 2 }
+    return { x: hitbox.width / 2, y: hitbox.height / 2 }
+  }
+  if ('radius' in hitbox) return { x: hitbox.radius, y: hitbox.radius }
+  return { x: hitbox.width / 2, y: hitbox.height / 2 }
+}
+
+const boundedPosition = (
+  map: SoloMapDefinition,
+  hitbox: SoloEntityState['hitbox'],
+  position: SoloVector
+): SoloVector => {
+  const extents = hitboxExtents(hitbox)
+  const insetX = Math.min(extents.x, map.width / 2)
+  const insetY = Math.min(extents.y, map.height / 2)
+  return {
+    x: clamp(position.x, insetX, map.width - insetX),
+    y: clamp(position.y, insetY, map.height - insetY)
+  }
+}
+
 const resolveStats = (stats: Partial<SoloStats> = {}): SoloStats => ({
   hp: stats.hp ?? stats.maxHp ?? 100,
   maxHp: stats.maxHp ?? 100,
@@ -196,7 +224,10 @@ export class SoloRuntime {
       id: definition.id,
       kind: definition.kind,
       mapId: definition.mapId,
-      position: { x: definition.x, y: definition.y },
+      position: boundedPosition(map.definition, definition.hitbox ?? DEFAULT_HITBOX, {
+        x: definition.x,
+        y: definition.y
+      }),
       velocity: { x: 0, y: 0 },
       direction: definition.direction ?? 'down',
       moving: false,
@@ -279,10 +310,20 @@ export class SoloRuntime {
       case 'stop':
         this.requireMap(entity.mapId).physics.moveEntity(this.requirePhysical(entity.id), 'idle')
         break
-      case 'teleport':
-        this.requireMap(entity.mapId).physics.teleportEntity(this.requirePhysical(entity.id), command.position)
+      case 'teleport': {
+        const map = this.requireMap(entity.mapId)
+        const physical = this.requirePhysical(entity.id)
+        const bounded = boundedPosition(map.definition, entity.hitbox, command.position)
+        map.physics.teleportEntity(physical, bounded)
+        if (bounded.x !== command.position.x || bounded.y !== command.position.y) {
+          physical.setVelocity({
+            x: bounded.x !== command.position.x ? 0 : physical.velocity.x,
+            y: bounded.y !== command.position.y ? 0 : physical.velocity.y
+          })
+        }
         this.syncEntity(entity)
         break
+      }
       case 'transfer-map':
         this.transferEntity(entity, command.mapId, command.position)
         break
@@ -412,20 +453,28 @@ export class SoloRuntime {
       }
       state.kind = saved.kind
       state.mapId = saved.mapId
-      state.position.x = saved.x
-      state.position.y = saved.y
-      state.velocity.x = saved.velocity.x
-      state.velocity.y = saved.velocity.y
-      state.direction = saved.direction ?? directionFromVelocity(saved.velocity, 'down')
-      state.moving = saved.velocity.x !== 0 || saved.velocity.y !== 0
       state.hitbox = cloneJson((saved.hitbox ?? DEFAULT_HITBOX) as SoloJsonValue) as SoloEntityState['hitbox']
+      const bounded = boundedPosition(this.requireMap(saved.mapId).definition, state.hitbox, {
+        x: saved.x,
+        y: saved.y
+      })
+      const restoredVelocity = {
+        x: bounded.x === saved.x ? saved.velocity.x : 0,
+        y: bounded.y === saved.y ? saved.velocity.y : 0
+      }
+      state.position.x = bounded.x
+      state.position.y = bounded.y
+      state.velocity.x = restoredVelocity.x
+      state.velocity.y = restoredVelocity.y
+      state.direction = saved.direction ?? directionFromVelocity(restoredVelocity, 'down')
+      state.moving = restoredVelocity.x !== 0 || restoredVelocity.y !== 0
       state.speed = saved.speed ?? DEFAULT_SPEED
       state.immovable = saved.immovable ?? false
       assignStats(state.stats, saved.stats ?? {})
       assignData(state.data, saved.data)
 
       const physical = this.requirePhysical(saved.id)
-      physical.setVelocity(saved.velocity)
+      physical.setVelocity(restoredVelocity)
       this.requireMap(saved.mapId).physics.updateEntity(physical)
     }
 
@@ -440,7 +489,10 @@ export class SoloRuntime {
   private runFixedTick(): void {
     for (const map of this.maps.values()) map.physics.stepFrame()
     this.currentTick += 1
-    for (const entity of this.entities.values()) this.syncEntity(entity)
+    for (const entity of this.entities.values()) {
+      this.enforceMapBounds(entity)
+      this.syncEntity(entity)
+    }
     this.emit({ type: 'tick', view: this.getView() })
   }
 
@@ -460,8 +512,9 @@ export class SoloRuntime {
     const oldPhysical = this.requirePhysical(state.id)
     this.requireMap(fromMapId).physics.removeEntity(oldPhysical)
     state.mapId = mapId
-    state.position.x = position.x
-    state.position.y = position.y
+    const bounded = boundedPosition(destination.definition, state.hitbox, position)
+    state.position.x = bounded.x
+    state.position.y = bounded.y
     state.velocity.x = 0
     state.velocity.y = 0
     state.moving = false
@@ -475,8 +528,12 @@ export class SoloRuntime {
     const currentPhysical = this.requirePhysical(state.id)
     this.requireMap(state.mapId).physics.removeEntity(currentPhysical)
     state.mapId = saved.mapId
-    state.position.x = saved.x
-    state.position.y = saved.y
+    const bounded = boundedPosition(this.requireMap(saved.mapId).definition, saved.hitbox ?? DEFAULT_HITBOX, {
+      x: saved.x,
+      y: saved.y
+    })
+    state.position.x = bounded.x
+    state.position.y = bounded.y
     state.hitbox = saved.hitbox ?? DEFAULT_HITBOX
     state.speed = saved.speed ?? DEFAULT_SPEED
     state.immovable = saved.immovable ?? false
@@ -493,6 +550,20 @@ export class SoloRuntime {
       mass: state.immovable ? 0 : 1,
       linearDamping: 0,
       restitution: 0
+    })
+  }
+
+  private enforceMapBounds(state: SoloEntityState): void {
+    const map = this.requireMap(state.mapId)
+    const physical = this.requirePhysical(state.id)
+    const bounded = boundedPosition(map.definition, state.hitbox, physical.position)
+    const clampedX = bounded.x !== physical.position.x
+    const clampedY = bounded.y !== physical.position.y
+    if (!clampedX && !clampedY) return
+    map.physics.teleportEntity(physical, bounded)
+    physical.setVelocity({
+      x: clampedX ? 0 : physical.velocity.x,
+      y: clampedY ? 0 : physical.velocity.y
     })
   }
 
