@@ -53,12 +53,20 @@ const renderer = new SoloRenderer({
         : entity.moving ? 'walk' : 'stand'
     }
   },
+  camera: {
+    zoom: ({ width }) => width >= 1200 ? 2.5 : width >= 720 ? 2 : 1.5
+  },
   fog: { radius: 160 },
   audio: { autoMuteInTests: true }
 })
 
 await renderer.start()
 ```
+
+`camera.zoom` may be a fixed positive scale or a resolver over the live canvas
+size. Responsive resolvers run again after resizes and orientation changes; the
+renderer delegates to pixi-viewport's centered `setZoom` operation and keeps the
+keyed map viewport and player-follow lifecycle intact.
 
 `appearance.animation` may also be a fixed animation name. Resolver functions
 read the authoritative entity state on each runtime tick, so game packages can
