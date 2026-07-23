@@ -18,6 +18,9 @@ on:
 
 jobs:
   tests:
+    # The jbcom fork's full suite runs in Gitea, where its private Solo package
+    # registry is reachable. Keep this inherited job available to upstream.
+    if: github.server_url != 'https://github.com' || github.repository == 'RSamaium/RPG-JS'
     runs-on: ubuntu-22.04
     strategy:
       matrix:

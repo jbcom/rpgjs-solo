@@ -16,6 +16,14 @@ The native rendering and authoring layer for RPGJS Solo. It keeps the RPGJS
 Tiled workflow and composes CanvasEngine's scene graph, camera, spritesheets,
 and fog-of-war directly around `SoloRuntime` state.
 
+`loadSoloTiledMap` derives center-based Solo physics obstacles from collision
+tiles on every authored layer. It supports both the `collision: true` tile
+property and RPGJS/Tiled tileset object groups, preserving rectangular or
+rotated polygon bounds and thin polylines instead of silently treating the
+decorative ground layer as the only collision authority. Contiguous full-tile
+collision is coalesced into larger rectangles before physics registration,
+while partial and polygonal shapes remain independent.
+
 There is no socket, room, sync, prediction, reconciliation, or game-facing
 Pixi adapter. Pixi remains an implementation detail of CanvasEngine.
 
@@ -39,6 +47,7 @@ composed path is inside a button, form control, dialog, editable region, or
 import { SoloRuntime } from '@jbcom/rpgjs-solo'
 import {
   SoloRenderer,
+  createSoloTileObstacles,
   createRpgMakerSpritesheet,
   loadSoloTiledMap
 } from '@jbcom/rpgjs-solo-renderer'
@@ -69,6 +78,20 @@ const renderer = new SoloRenderer({
 })
 
 await renderer.start()
+```
+
+Games with gates, bridges, or other story-driven traversal changes can derive
+the replacement obstacle table from the same coalescing path as the TMX loader:
+
+```ts
+runtime.replaceMapObstacles('field', createSoloTileObstacles({
+  id: 'field',
+  width: authoredMap.width,
+  height: authoredMap.height,
+  tileWidth: authoredMap.tileSize,
+  tileHeight: authoredMap.tileSize,
+  cells: authoredMap.collision
+}))
 ```
 
 `camera.zoom` may be a fixed positive scale or a resolver over the live canvas

@@ -12,6 +12,7 @@ import type {
   SoloEntityState,
   SoloJsonValue,
   SoloMapDefinition,
+  SoloObstacleDefinition,
   SoloRuntimeEvent,
   SoloRuntimeListener,
   SoloRuntimeOptions,
@@ -30,6 +31,7 @@ const DEFAULT_SPEED = 96
 interface SoloMapRuntime {
   definition: SoloMapDefinition
   physics: PhysicsEngine
+  obstacleEntities: Map<string, Entity>
 }
 
 const cloneJson = <T extends SoloJsonValue | Record<string, SoloJsonValue>>(value: T): T =>
@@ -178,6 +180,30 @@ export class SoloRuntimeError extends Error {
   }
 }
 
+const validateObstacles = (
+  mapId: string,
+  obstacles: readonly SoloObstacleDefinition[] = []
+): SoloObstacleDefinition[] => {
+  const ids = new Set<string>()
+  return obstacles.map((obstacle) => {
+    if (!obstacle.id || ids.has(obstacle.id)) {
+      throw new SoloRuntimeError(`Obstacle ids must be non-empty and unique on map ${mapId}`)
+    }
+    if (
+      !Number.isFinite(obstacle.x)
+      || !Number.isFinite(obstacle.y)
+      || !Number.isFinite(obstacle.width)
+      || !Number.isFinite(obstacle.height)
+      || obstacle.width <= 0
+      || obstacle.height <= 0
+    ) {
+      throw new SoloRuntimeError(`Obstacle geometry must be finite and positive: ${mapId}:${obstacle.id}`)
+    }
+    ids.add(obstacle.id)
+    return { ...obstacle }
+  })
+}
+
 /**
  * A deterministic, transport-free RPG runtime.
  *
@@ -246,13 +272,14 @@ export class SoloRuntime {
       pendingIds.add(entity.id)
     }
 
+    const obstacles = validateObstacles(definition.id, definition.obstacles)
     const physics = new PhysicsEngine({
       timeStep: this.fixedStepMs / 1000,
       enableSleep: false
     })
     const storedDefinition: SoloMapDefinition = {
       ...definition,
-      obstacles: definition.obstacles?.map((obstacle) => ({ ...obstacle })),
+      obstacles,
       entities: definition.entities?.map((entity) => ({
         ...entity,
         stats: entity.stats ? resolveStats(entity.stats) : undefined,
@@ -260,10 +287,14 @@ export class SoloRuntime {
       })),
       data: definition.data ? cloneJson(definition.data) : undefined
     }
-    this.maps.set(definition.id, { definition: storedDefinition, physics })
+    const obstacleEntities = new Map<string, Entity>()
+    this.maps.set(definition.id, { definition: storedDefinition, physics, obstacleEntities })
 
-    for (const obstacle of definition.obstacles ?? []) {
-      physics.createStaticObstacle(`map:${definition.id}:obstacle:${obstacle.id}`, obstacle)
+    for (const obstacle of obstacles) {
+      obstacleEntities.set(
+        obstacle.id,
+        physics.createStaticObstacle(`map:${definition.id}:obstacle:${obstacle.id}`, obstacle)
+      )
     }
     for (const entity of definition.entities ?? []) {
       this.spawnEntity({ ...entity, mapId: definition.id })
@@ -273,6 +304,28 @@ export class SoloRuntime {
 
   getMap(mapId: string): SoloMapDefinition | undefined {
     return this.maps.get(mapId)?.definition
+  }
+
+  /**
+   * Atomically replaces a map's authored collision rectangles.
+   *
+   * Games use this when story state opens gates, repairs bridges, collapses
+   * passages, or otherwise changes traversal without rebuilding the runtime.
+   * Existing entity identity, position, and simulation state are preserved.
+   */
+  replaceMapObstacles(mapId: string, obstacles: readonly SoloObstacleDefinition[]): void {
+    const map = this.requireMap(mapId)
+    const next = validateObstacles(mapId, obstacles)
+
+    for (const entity of map.obstacleEntities.values()) map.physics.removeEntity(entity)
+    map.obstacleEntities.clear()
+    for (const obstacle of next) {
+      map.obstacleEntities.set(
+        obstacle.id,
+        map.physics.createStaticObstacle(`map:${mapId}:obstacle:${obstacle.id}`, obstacle)
+      )
+    }
+    map.definition = { ...map.definition, obstacles: next }
   }
 
   setActiveMap(mapId: string): void {

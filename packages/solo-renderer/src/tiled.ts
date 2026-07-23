@@ -59,21 +59,197 @@ const resolveTilesets = async (
   map.tilesets = resolved
 }
 
-const collisionObstacles = (map: MapClass): SoloObstacleDefinition[] => {
-  const obstacles: SoloObstacleDefinition[] = []
-  for (let y = 0; y < map.height; y += 1) {
-    for (let x = 0; x < map.width; x += 1) {
-      const tile = map.getTileByPosition(x * map.tilewidth, y * map.tileheight, [0, 0], { populateTiles: true })
-      if (!tile.hasCollision) continue
-      obstacles.push({
-        id: `tiled:${x},${y}`,
-        x: x * map.tilewidth,
-        y: y * map.tileheight,
-        width: map.tilewidth,
-        height: map.tileheight
-      })
+interface CollisionBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+const collisionObjectBounds = (object: TiledObject): CollisionBounds | null => {
+  const authoredPoints = object.polygon ?? object.polyline
+  const points = authoredPoints?.length
+    ? authoredPoints
+    : Number.isFinite(object.width) && Number.isFinite(object.height)
+      && object.width > 0 && object.height > 0
+      ? [
+          { x: 0, y: 0 },
+          { x: object.width, y: 0 },
+          { x: object.width, y: object.height },
+          { x: 0, y: object.height }
+        ]
+      : []
+  const finitePoints = points.filter(
+    (point) => Number.isFinite(point.x) && Number.isFinite(point.y)
+  )
+  if (finitePoints.length === 0) return null
+  const radians = (Number.isFinite(object.rotation) ? object.rotation : 0) * Math.PI / 180
+  const cosine = Math.cos(radians)
+  const sine = Math.sin(radians)
+  const stableCoordinate = (value: number): number =>
+    Math.abs(value) <= 1e-10 ? 0 : Number(value.toFixed(10))
+  const transformed = finitePoints.map((point) => ({
+    x: stableCoordinate(point.x * cosine - point.y * sine),
+    y: stableCoordinate(point.x * sine + point.y * cosine)
+  }))
+  const xs = transformed.map((point) => point.x)
+  const ys = transformed.map((point) => point.y)
+  let minimumX = Math.min(...xs)
+  let minimumY = Math.min(...ys)
+  let width = Math.max(...xs) - minimumX
+  let height = Math.max(...ys) - minimumY
+  if (object.polyline?.length) {
+    if (width <= Number.EPSILON) {
+      minimumX -= 0.5
+      width = 1
+    }
+    if (height <= Number.EPSILON) {
+      minimumY -= 0.5
+      height = 1
     }
   }
+  const bounds = {
+    x: minimumX,
+    y: minimumY,
+    width,
+    height
+  }
+  return bounds.width > 0 && bounds.height > 0 ? bounds : null
+}
+
+interface TileRectangle {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface SoloTileCollisionGrid {
+  id: string
+  width: number
+  height: number
+  tileWidth: number
+  tileHeight: number
+  cells: ArrayLike<number>
+}
+
+/** Coalesces a tile collision grid into stable rectangular Solo obstacles. */
+export const createSoloTileObstacles = (
+  grid: SoloTileCollisionGrid
+): SoloObstacleDefinition[] => {
+  if (
+    !grid.id
+    || !Number.isInteger(grid.width)
+    || !Number.isInteger(grid.height)
+    || grid.width <= 0
+    || grid.height <= 0
+    || !Number.isFinite(grid.tileWidth)
+    || !Number.isFinite(grid.tileHeight)
+    || grid.tileWidth <= 0
+    || grid.tileHeight <= 0
+    || grid.cells.length !== grid.width * grid.height
+  ) {
+    throw new TypeError(`Invalid Solo tile collision grid: ${grid.id || '<unnamed>'}`)
+  }
+  const rectangles: TileRectangle[] = []
+  let active = new Map<string, TileRectangle>()
+  for (let y = 0; y < grid.height; y += 1) {
+    const runs: Array<{ x: number; width: number }> = []
+    let start = -1
+    for (let x = 0; x <= grid.width; x += 1) {
+      const filled = x < grid.width && grid.cells[y * grid.width + x] === 1
+      if (filled && start < 0) start = x
+      if (!filled && start >= 0) {
+        runs.push({ x: start, width: x - start })
+        start = -1
+      }
+    }
+
+    const next = new Map<string, TileRectangle>()
+    for (const run of runs) {
+      const key = `${run.x}:${run.width}`
+      const previous = active.get(key)
+      const rectangle = previous
+        ? { ...previous, height: previous.height + 1 }
+        : { x: run.x, y, width: run.width, height: 1 }
+      next.set(key, rectangle)
+    }
+    for (const [key, rectangle] of active) {
+      if (!next.has(key)) rectangles.push(rectangle)
+    }
+    active = next
+  }
+  rectangles.push(...active.values())
+
+  return rectangles.map((rectangle) => ({
+    id: `tiled:${grid.id}:tiles:${rectangle.x},${rectangle.y}:${rectangle.width}x${rectangle.height}`,
+    x: (rectangle.x + rectangle.width / 2) * grid.tileWidth,
+    y: (rectangle.y + rectangle.height / 2) * grid.tileHeight,
+    width: rectangle.width * grid.tileWidth,
+    height: rectangle.height * grid.tileHeight
+  }))
+}
+
+const collisionObstacles = (map: MapClass, mapId: string): SoloObstacleDefinition[] => {
+  const obstacles: SoloObstacleDefinition[] = []
+  const fullTileCells = new Uint8Array(map.width * map.height)
+  const obstacleIds = new Set<string>()
+  const pushObstacle = (obstacle: SoloObstacleDefinition): void => {
+    if (obstacleIds.has(obstacle.id)) return
+    obstacleIds.add(obstacle.id)
+    obstacles.push(obstacle)
+  }
+  for (let y = 0; y < map.height; y += 1) {
+    for (let x = 0; x < map.width; x += 1) {
+      const tileInfo = map.getTileByPosition(x * map.tilewidth, y * map.tileheight, [0, 0], { populateTiles: true })
+      for (const [tileIndex, tile] of tileInfo.tiles.entries()) {
+        const collisionObjects = tile.objects ?? []
+        if (!tile.getProperty<boolean, boolean>('collision', false) && collisionObjects.length === 0) continue
+
+        const tileX = x * map.tilewidth
+        const tileY = y * map.tileheight
+        const objectObstacles = collisionObjects.flatMap((object, objectIndex) => {
+          const bounds = collisionObjectBounds(object)
+          if (!bounds) return []
+          const objectX = Number.isFinite(object.x) ? object.x : 0
+          const objectY = Number.isFinite(object.y) ? object.y : 0
+          const left = tileX + objectX + bounds.x
+          const top = tileY + objectY + bounds.y
+          return [{
+            id: `tiled:${x},${y}:${tile.layerIndex ?? tileIndex}:${object.id ?? objectIndex}`,
+            x: left + bounds.width / 2,
+            y: top + bounds.height / 2,
+            width: bounds.width,
+            height: bounds.height
+          }]
+        })
+        if (objectObstacles.length > 0) {
+          const fullTile = objectObstacles.some(
+            (obstacle) =>
+              obstacle.x === tileX + map.tilewidth / 2 &&
+              obstacle.y === tileY + map.tileheight / 2 &&
+              obstacle.width === map.tilewidth &&
+              obstacle.height === map.tileheight
+          )
+          if (fullTile) {
+            fullTileCells[y * map.width + x] = 1
+            continue
+          }
+          for (const obstacle of objectObstacles) pushObstacle(obstacle)
+          continue
+        }
+        fullTileCells[y * map.width + x] = 1
+      }
+    }
+  }
+  for (const obstacle of createSoloTileObstacles({
+    id: mapId,
+    width: map.width,
+    height: map.height,
+    tileWidth: map.tilewidth,
+    tileHeight: map.tileheight,
+    cells: fullTileCells
+  })) pushObstacle(obstacle)
   return obstacles
 }
 
@@ -120,7 +296,7 @@ export const loadSoloTiledMap = async (options: LoadSoloTiledMapOptions): Promis
       height: map.heightPx,
       tileWidth: map.tilewidth,
       tileHeight: map.tileheight,
-      obstacles: collisionObstacles(map),
+      obstacles: collisionObstacles(map, options.id),
       data: { startPositions: startPositions(parsedMap) }
     }
   }
