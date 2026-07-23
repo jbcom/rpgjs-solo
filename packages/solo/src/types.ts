@@ -37,6 +37,8 @@ export interface SoloEntityDefinition {
   y: number
   hitbox?: SoloHitbox
   speed?: number
+  /** Prevent physics collisions and movement commands from displacing the entity. */
+  immovable?: boolean
   direction?: SoloDirection
   stats?: Partial<SoloStats>
   data?: Record<string, SoloJsonValue>
@@ -56,6 +58,7 @@ export interface SoloEntityState {
   moving: boolean
   hitbox: SoloHitbox
   speed: number
+  immovable: boolean
   stats: SoloStats
   data: Record<string, SoloJsonValue>
 }

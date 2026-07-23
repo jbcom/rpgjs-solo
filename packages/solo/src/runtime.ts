@@ -202,6 +202,7 @@ export class SoloRuntime {
       moving: false,
       hitbox: definition.hitbox ?? DEFAULT_HITBOX,
       speed: definition.speed ?? DEFAULT_SPEED,
+      immovable: definition.immovable ?? false,
       stats: resolveStats(definition.stats),
       data: definition.data ? cloneJson(definition.data) : {}
     }
@@ -259,6 +260,13 @@ export class SoloRuntime {
 
     switch (command.type) {
       case 'move': {
+        if (entity.immovable) {
+          return {
+            accepted: false,
+            tick: this.currentTick,
+            reason: `Entity is immovable: ${entity.id}`
+          }
+        }
         const physical = this.requirePhysical(command.entityId)
         const accepted = this.requireMap(entity.mapId).physics.moveEntity(
           physical,
@@ -375,6 +383,7 @@ export class SoloRuntime {
         velocity: cloneVector(entity.velocity),
         hitbox: cloneJson(entity.hitbox as SoloJsonValue) as SoloEntitySnapshot['hitbox'],
         speed: entity.speed,
+        immovable: entity.immovable,
         direction: entity.direction,
         stats: resolveStats(entity.stats),
         data: cloneJson(entity.data)
@@ -411,6 +420,7 @@ export class SoloRuntime {
       state.moving = saved.velocity.x !== 0 || saved.velocity.y !== 0
       state.hitbox = cloneJson((saved.hitbox ?? DEFAULT_HITBOX) as SoloJsonValue) as SoloEntityState['hitbox']
       state.speed = saved.speed ?? DEFAULT_SPEED
+      state.immovable = saved.immovable ?? false
       assignStats(state.stats, saved.stats ?? {})
       assignData(state.data, saved.data)
 
@@ -469,6 +479,7 @@ export class SoloRuntime {
     state.position.y = saved.y
     state.hitbox = saved.hitbox ?? DEFAULT_HITBOX
     state.speed = saved.speed ?? DEFAULT_SPEED
+    state.immovable = saved.immovable ?? false
     const replacement = this.createPhysicalEntity(this.requireMap(saved.mapId), state)
     this.physicalEntities.set(state.id, replacement)
   }
@@ -479,7 +490,7 @@ export class SoloRuntime {
       y: state.position.y,
       hitbox: state.hitbox as RPGHitbox,
       speed: state.speed,
-      mass: 1,
+      mass: state.immovable ? 0 : 1,
       linearDamping: 0,
       restitution: 0
     })
