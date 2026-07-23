@@ -55,7 +55,10 @@ const resolveTilesets = async (
 
     const tilesetUrl = joinUrl(directoryOf(mapUrl), source)
     const xml = await fetchText(fetcher, tilesetUrl, 'Tiled tileset')
-    const parsed = new TiledParser(xml, tilesetUrl, directoryOf(tilesetUrl)).parseTileset()
+    // Parse the TSX path unchanged, then resolve it exactly once here. Passing
+    // the tileset path into TiledParser resolves the image internally; joining
+    // that result again below duplicates relative map directories.
+    const parsed = new TiledParser(xml).parseTileset()
     if (parsed.image?.source) {
       parsed.image.source = joinUrl(directoryOf(tilesetUrl), parsed.image.source)
     }

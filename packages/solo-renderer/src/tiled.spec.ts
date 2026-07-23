@@ -49,6 +49,23 @@ describe('loadSoloTiledMap', () => {
     expect(map.parsedMap.tilesets[0].image.source).toBe('https://game.test/images/terrain.png')
   })
 
+  it('resolves a relative TSX image once from the external tileset directory', async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request) => {
+      const value = String(url)
+      if (value === 'maps/field.tmx') return new Response(MAP)
+      if (value === 'maps/tiles/terrain.tsx') return new Response(TILESET)
+      return new Response('missing', { status: 404, statusText: 'Not Found' })
+    })
+
+    const map = await loadSoloTiledMap({ id: 'field', basePath: 'maps', fetch: fetcher })
+
+    expect(fetcher.mock.calls.map(([url]) => String(url))).toEqual([
+      'maps/field.tmx',
+      'maps/tiles/terrain.tsx'
+    ])
+    expect(map.parsedMap.tilesets[0].image.source).toBe('images/terrain.png')
+  })
+
   it('revises complete visual layers without mutating the mounted source map', async () => {
     const fetcher = vi.fn(async (url: string | URL | Request) => {
       const value = String(url)
