@@ -8,6 +8,9 @@ consumer. Each active map also owns an isolated, keyed viewport and `TiledMap`
 element so stale async tileset loads or retiring camera directives cannot
 overwrite a newer destination. The shared patch normalizes CanvasEngine's
 boolean clamp to pixi-viewport's supported all-direction contract.
+It also cancels late spritesheet play/update callbacks after Pixi has cleared a
+retiring sprite's transforms, preventing async animation mounts from writing
+into a destroyed map scene.
 
 The native rendering and authoring layer for RPGJS Solo. It keeps the RPGJS
 Tiled workflow and composes CanvasEngine's scene graph, camera, spritesheets,
