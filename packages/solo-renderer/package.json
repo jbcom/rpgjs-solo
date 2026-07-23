@@ -24,7 +24,8 @@
     "prepublishOnly": "node scripts/require-pnpm-publish.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "verify:boundary": "node scripts/verify-boundary.mjs"
+    "verify:boundary": "node scripts/verify-boundary.mjs",
+    "verify:package": "node scripts/verify-package.mjs"
   },
   "engines": {
     "node": ">=24 <25"

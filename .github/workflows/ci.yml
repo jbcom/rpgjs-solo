@@ -37,6 +37,8 @@ jobs:
         run: pnpm build
       - name: Solo production boundary
         run: pnpm verify:solo-boundary
+      - name: Solo packed package contracts
+        run: pnpm verify:solo-package-contracts
       - name: Unit tests
         run: pnpm test -- --run
       - name: Cloudflare MMORPG runtime tests
