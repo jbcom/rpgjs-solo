@@ -9,8 +9,8 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
-    "@jbcom/rpgjs-solo": "workspace:5.0.0-beta.26.solo.5",
-    "@jbcom/rpgjs-solo-renderer": "workspace:5.0.0-beta.26.solo.11",
+    "@jbcom/rpgjs-solo": "workspace:5.0.0-beta.26.solo.6",
+    "@jbcom/rpgjs-solo-renderer": "workspace:5.0.0-beta.26.solo.12",
     "@rpgjs/ui-css": "workspace:5.0.0-beta.23",
     "pixi.js": "8.19.0"
   },
