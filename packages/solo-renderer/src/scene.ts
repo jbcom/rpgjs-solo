@@ -5,15 +5,15 @@ import {
   Sprite,
   Viewport,
   computed,
-  cond,
   h,
   loop,
+  mount,
   type ComponentFunction
 } from 'canvasengine'
 import { FogOfWar, TiledMap, createFogOfWarController, type FogOfWarController } from '@canvasengine/presets'
 import { createAuthoredFogElement } from './authoredFog'
 import { createSoloFogController } from './fog'
-import type { SoloFogController, SoloFogOptions, SoloRendererOptions } from './types'
+import type { SoloFogController, SoloFogOptions, SoloRenderedMap, SoloRendererOptions } from './types'
 import type { SoloRenderEntity, SoloRendererModel } from './model'
 
 const entityElement = (
@@ -83,6 +83,20 @@ export interface SoloSceneComposition {
   fogController: SoloFogController | null
 }
 
+const contextScope = (child: ReturnType<typeof h>) => {
+  const Scope: ComponentFunction = () => {
+    mount((element) => {
+      // CanvasEngine normally shares one mutable context through the complete
+      // scene. Isolating each keyed viewport prevents a retiring map's
+      // directives from removing camera plugins from its successor.
+      element.props.context = { ...element.props.context }
+    })
+    return h(Container, {}, child)
+  }
+
+  return h(Scope)
+}
+
 export const createSoloScene = (
   model: SoloRendererModel,
   options: SoloRendererOptions
@@ -93,45 +107,52 @@ export const createSoloScene = (
     : fogOptions.visibility
       ? createSoloFogController(fogOptions.visibility)
       : createFogOfWarController()
+  const activeMaps = computed(() => {
+    const activeMap = model.activeMap()
+    return activeMap ? [activeMap] : []
+  })
   const component: ComponentFunction = () => h(Canvas, {
     width: options.width ?? '100%',
     height: options.height ?? '100%',
     backgroundColor: options.background ?? '#090d16'
-  } as never, h(Viewport, {
-    worldWidth: model.worldWidth,
-    worldHeight: model.worldHeight,
-    clamp: true,
-    sortableChildren: true
-  } as never, [
-    cond(
-      computed(() => model.activeMap() !== null),
-      () => h(TiledMap, {
-        map: computed(() => model.activeMap()?.parsedMap),
+  } as never, loop(activeMaps, (map: SoloRenderedMap) => contextScope(h(Viewport, {
+      worldWidth: map.runtime.width,
+      worldHeight: map.runtime.height,
+      clamp: true,
+      sortableChildren: true
+    } as never, [
+      // @canvasengine/presets loads tilesets in an uncancelled async effect,
+      // while pixi-viewport retains camera transforms across world-size
+      // changes. A keyed viewport gives each map isolated loader and camera
+      // lifecycles, so stale work cannot blank or displace the destination.
+      h(TiledMap, {
+        map: computed(() => map.parsedMap),
         // loadSoloTiledMap resolves every tileset image against its TSX file.
         // Passing that map directory again would double-prefix image URLs.
         basePath: '',
         createLayersPerTilesZ: true
-      })
-    ),
-    loop(model.entities, (entity: SoloRenderEntity) => entityElement(entity, options.playerId, fogController) as never, {
-      track: (entity: SoloRenderEntity) => entity.id
-    }),
-    ...(fogController
-      ? [fogOptions.visibility
-        ? createAuthoredFogElement(
-          fogOptions.visibility,
-          fogOptions,
-          model.worldWidth,
-          model.worldHeight
-        )
-        : createFogElement(
-          model,
-          options.playerId,
-          fogOptions,
-          fogController as FogOfWarController
-        )]
-      : [])
-  ]))
+      }),
+      loop(model.entities, (entity: SoloRenderEntity) => entityElement(entity, options.playerId, fogController) as never, {
+        track: (entity: SoloRenderEntity) => entity.id
+      }),
+      ...(fogController
+        ? [fogOptions.visibility
+          ? createAuthoredFogElement(
+            fogOptions.visibility,
+            fogOptions,
+            model.worldWidth,
+            model.worldHeight
+          )
+          : createFogElement(
+            model,
+            options.playerId,
+            fogOptions,
+            fogController as FogOfWarController
+          )]
+        : [])
+    ])) as never, {
+        track: (map: SoloRenderedMap) => map.id
+      }))
 
   return { component, fogController }
 }

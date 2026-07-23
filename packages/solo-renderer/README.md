@@ -4,7 +4,10 @@ The renderer installs the fleet's versioned
 `@arcade-cabinet/rpgjs-patches` compatibility layer before CanvasEngine scene
 creation. This keeps rapid standalone map replacement safe on CanvasEngine
 2.0.1 while centralizing the upstream lifecycle workarounds for every Solo
-consumer.
+consumer. Each active map also owns an isolated, keyed viewport and `TiledMap`
+element so stale async tileset loads or retiring camera directives cannot
+overwrite a newer destination. The shared patch normalizes CanvasEngine's
+boolean clamp to pixi-viewport's supported all-direction contract.
 
 The native rendering and authoring layer for RPGJS Solo. It keeps the RPGJS
 Tiled workflow and composes CanvasEngine's scene graph, camera, spritesheets,
