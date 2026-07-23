@@ -9,6 +9,11 @@ export interface LoadSoloTiledMapOptions {
   fetch?: typeof globalThis.fetch
 }
 
+export interface SoloTiledLayerUpdate {
+  name: string
+  data: ArrayLike<number>
+}
+
 const joinUrl = (base: string, path: string): string => {
   if (path.startsWith('/') || /^(?:[a-z]+:)?\/\//i.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path
   const normalizedBase = base.endsWith('/') ? base : `${base}/`
@@ -288,6 +293,7 @@ export const loadSoloTiledMap = async (options: LoadSoloTiledMapOptions): Promis
 
   return {
     id: options.id,
+    revision: 0,
     basePath: directoryOf(mapUrl),
     parsedMap,
     runtime: {
@@ -299,5 +305,60 @@ export const loadSoloTiledMap = async (options: LoadSoloTiledMapOptions): Promis
       obstacles: collisionObstacles(map, options.id),
       data: { startPositions: startPositions(parsedMap) }
     }
+  }
+}
+
+/**
+ * Returns a revisioned rendered map with one or more complete Tiled tile layers
+ * replaced. The source map is not mutated, so registering the result can safely
+ * retire an already-mounted CanvasEngine scene.
+ */
+export const replaceSoloTiledLayers = (
+  map: SoloRenderedMap,
+  updates: readonly SoloTiledLayerUpdate[]
+): SoloRenderedMap => {
+  if (updates.length === 0) return map
+  const updateByName = new Map<string, number[]>()
+  for (const update of updates) {
+    if (!update.name) throw new TypeError('A Solo Tiled layer update requires a name')
+    if (updateByName.has(update.name)) {
+      throw new TypeError(`Duplicate Solo Tiled layer update: ${update.name}`)
+    }
+    const data = Array.from(update.data)
+    if (data.some((gid) => !Number.isInteger(gid) || gid < 0 || gid > 0xffffffff)) {
+      throw new TypeError(`Solo Tiled layer '${update.name}' contains an invalid GID`)
+    }
+    updateByName.set(update.name, data)
+  }
+
+  const matches = new Map([...updateByName.keys()].map((name) => [name, 0]))
+  const reviseLayers = (layers: readonly TiledLayer[] = []): TiledLayer[] => layers.map((layer) => {
+    const nestedLayer = layer as TiledLayer & { layers?: TiledLayer[] }
+    const nested = nestedLayer.layers ? reviseLayers(nestedLayer.layers) : undefined
+    const replacement = updateByName.get(layer.name)
+    if (!replacement) return nested ? { ...layer, layers: nested } as TiledLayer : layer
+    if (layer.type !== 'tilelayer') {
+      throw new TypeError(`Solo Tiled layer '${layer.name}' is not a tile layer`)
+    }
+    const expected = layer.width * layer.height
+    if (replacement.length !== expected) {
+      throw new RangeError(
+        `Solo Tiled layer '${layer.name}' expected ${expected} GIDs, received ${replacement.length}`
+      )
+    }
+    matches.set(layer.name, (matches.get(layer.name) ?? 0) + 1)
+    return { ...layer, data: [...replacement], ...(nested ? { layers: nested } : {}) } as TiledLayer
+  })
+  const layers = reviseLayers(map.parsedMap.layers)
+  for (const [name, count] of matches) {
+    if (count === 0) throw new Error(`Solo Tiled map '${map.id}' has no tile layer named '${name}'`)
+    if (count > 1) {
+      throw new Error(`Solo Tiled map '${map.id}' has multiple tile layers named '${name}'`)
+    }
+  }
+  return {
+    ...map,
+    revision: (map.revision ?? 0) + 1,
+    parsedMap: { ...map.parsedMap, layers }
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createSoloTileObstacles, loadSoloTiledMap } from './tiled'
+import { createSoloTileObstacles, loadSoloTiledMap, replaceSoloTiledLayers } from './tiled'
 
 const MAP = `<?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="2" height="2" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="2">
@@ -47,6 +47,55 @@ describe('loadSoloTiledMap', () => {
       data: { startPositions: { start: { x: 24, y: 24 } } }
     })
     expect(map.parsedMap.tilesets[0].image.source).toBe('https://game.test/images/terrain.png')
+  })
+
+  it('revises complete visual layers without mutating the mounted source map', async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request) => {
+      const value = String(url)
+      if (value.endsWith('/maps/field.tmx')) return new Response(MAP)
+      if (value.endsWith('/maps/tiles/terrain.tsx')) return new Response(TILESET)
+      return new Response('missing', { status: 404, statusText: 'Not Found' })
+    })
+    const map = await loadSoloTiledMap({ id: 'field', basePath: 'https://game.test/maps', fetch: fetcher })
+    const originalGround = map.parsedMap.layers.find(({ name }) => name === 'Ground')!
+
+    const revised = replaceSoloTiledLayers(map, [
+      { name: 'Ground', data: new Uint32Array([4, 4, 3, 3]) },
+      { name: 'Collision', data: [0, 0, 0, 0] }
+    ])
+
+    expect(revised.revision).toBe(1)
+    expect(revised.runtime).toBe(map.runtime)
+    expect(revised.parsedMap).not.toBe(map.parsedMap)
+    expect(revised.parsedMap.layers.find(({ name }) => name === 'Ground')?.data)
+      .toEqual([4, 4, 3, 3])
+    expect(revised.parsedMap.layers.find(({ name }) => name === 'Collision')?.data)
+      .toEqual([0, 0, 0, 0])
+    expect(originalGround.data).toEqual([3, 3, 3, 3])
+  })
+
+  it('rejects ambiguous, missing, malformed, and incorrectly-sized visual layer updates', async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request) => {
+      const value = String(url)
+      if (value.endsWith('/maps/field.tmx')) return new Response(MAP)
+      if (value.endsWith('/maps/tiles/terrain.tsx')) return new Response(TILESET)
+      return new Response('missing', { status: 404, statusText: 'Not Found' })
+    })
+    const map = await loadSoloTiledMap({ id: 'field', basePath: 'https://game.test/maps', fetch: fetcher })
+
+    expect(() => replaceSoloTiledLayers(map, [
+      { name: 'Ground', data: [1, 1, 1, 1] },
+      { name: 'Ground', data: [2, 2, 2, 2] }
+    ])).toThrow('Duplicate Solo Tiled layer update: Ground')
+    expect(() => replaceSoloTiledLayers(map, [
+      { name: 'Missing', data: [1, 1, 1, 1] }
+    ])).toThrow("has no tile layer named 'Missing'")
+    expect(() => replaceSoloTiledLayers(map, [
+      { name: 'Ground', data: [1, 1] }
+    ])).toThrow("expected 4 GIDs, received 2")
+    expect(() => replaceSoloTiledLayers(map, [
+      { name: 'Ground', data: [1, 1, Number.NaN, 1] }
+    ])).toThrow("contains an invalid GID")
   })
 
   it('coalesces mutable authored tile collision into stable rectangles', () => {

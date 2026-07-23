@@ -84,6 +84,9 @@ export interface SoloSceneComposition {
   fogController: SoloFogController | null
 }
 
+export const soloRenderedMapSceneKey = (map: SoloRenderedMap): string =>
+  `${map.id}:${map.revision ?? 0}`
+
 const contextScope = (child: ReturnType<typeof h>) => {
   const Scope: ComponentFunction = () => {
     mount((element) => {
@@ -153,7 +156,7 @@ export const createSoloScene = (
           )]
         : [])
     ])) as never, {
-        track: (map: SoloRenderedMap) => map.id
+        track: soloRenderedMapSceneKey
       }))
 
   return { component, fogController }
