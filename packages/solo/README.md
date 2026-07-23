@@ -48,6 +48,11 @@ Map dimensions are authoritative physics bounds. Spawns, teleports, transfers,
 save restores, and fixed-step movement keep the full entity hitbox inside those
 bounds, so a dash or collision cannot strand gameplay outside the authored map.
 
+Teleports also sweep the entity hitbox against authored rectangular obstacles,
+so dashes and knockbacks stop at walls instead of tunneling through them.
+Scripted transitions that intentionally cross a dynamically opened barrier use
+`collision: 'ignore'`; map bounds remain authoritative in either mode.
+
 The package version records its exact RPGJS v5 baseline. This release is based
 on RPGJS `5.0.0-beta.26` and bundles the fork's audited `@rpgjs/physic@5.0.2`
 source. That source is newer than the public registry's `5.0.1`; consumers do

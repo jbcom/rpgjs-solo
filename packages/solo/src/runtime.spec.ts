@@ -263,4 +263,40 @@ describe('SoloRuntime', () => {
     runtime.restoreSnapshot(snapshot)
     expect(runtime.getEntity('hero')!.position).toEqual({ x: 6, y: 34 })
   })
+
+  it('sweeps teleports against authored obstacles unless a script explicitly bypasses collision', () => {
+    const runtime = new SoloRuntime()
+    runtime.registerMap({
+      id: 'fort',
+      width: 200,
+      height: 100,
+      obstacles: [{ id: 'gate', x: 100, y: 50, width: 20, height: 100 }]
+    })
+    runtime.spawnEntity({
+      id: 'hero',
+      kind: 'player',
+      mapId: 'fort',
+      x: 40,
+      y: 50,
+      hitbox: { radius: 6 }
+    })
+
+    runtime.dispatch({
+      type: 'teleport',
+      entityId: 'hero',
+      position: { x: 160, y: 50 },
+      source: 'system'
+    })
+    expect(runtime.getEntity('hero')!.position.x).toBeGreaterThan(40)
+    expect(runtime.getEntity('hero')!.position.x).toBeLessThan(84)
+
+    runtime.dispatch({
+      type: 'teleport',
+      entityId: 'hero',
+      position: { x: 160, y: 50 },
+      collision: 'ignore',
+      source: 'system'
+    })
+    expect(runtime.getEntity('hero')!.position).toEqual({ x: 160, y: 50 })
+  })
 })

@@ -65,6 +65,73 @@ const boundedPosition = (
   }
 }
 
+const pointInsideObstacle = (
+  point: SoloVector,
+  obstacle: { minX: number; maxX: number; minY: number; maxY: number }
+): boolean =>
+  point.x > obstacle.minX &&
+  point.x < obstacle.maxX &&
+  point.y > obstacle.minY &&
+  point.y < obstacle.maxY
+
+const segmentObstacleEntry = (
+  from: SoloVector,
+  delta: SoloVector,
+  obstacle: { minX: number; maxX: number; minY: number; maxY: number }
+): number | null => {
+  let entry = 0
+  let exit = 1
+  for (const [origin, change, minimum, maximum] of [
+    [from.x, delta.x, obstacle.minX, obstacle.maxX],
+    [from.y, delta.y, obstacle.minY, obstacle.maxY]
+  ] as const) {
+    if (Math.abs(change) < Number.EPSILON) {
+      if (origin < minimum || origin > maximum) return null
+      continue
+    }
+    const first = (minimum - origin) / change
+    const second = (maximum - origin) / change
+    entry = Math.max(entry, Math.min(first, second))
+    exit = Math.min(exit, Math.max(first, second))
+    if (entry > exit) return null
+  }
+  if (exit < 0 || entry > 1) return null
+  if (entry <= Number.EPSILON && exit <= Number.EPSILON && !pointInsideObstacle(from, obstacle)) {
+    return null
+  }
+  return Math.max(0, entry)
+}
+
+const collisionSafePosition = (
+  map: SoloMapDefinition,
+  hitbox: SoloEntityState['hitbox'],
+  from: SoloVector,
+  requested: SoloVector
+): SoloVector => {
+  const target = boundedPosition(map, hitbox, requested)
+  const delta = { x: target.x - from.x, y: target.y - from.y }
+  const distance = Math.hypot(delta.x, delta.y)
+  if (distance <= Number.EPSILON) return target
+  const extents = hitboxExtents(hitbox)
+  let earliest = 1
+  for (const obstacle of map.obstacles ?? []) {
+    const entry = segmentObstacleEntry(from, delta, {
+      minX: obstacle.x - obstacle.width / 2 - extents.x,
+      maxX: obstacle.x + obstacle.width / 2 + extents.x,
+      minY: obstacle.y - obstacle.height / 2 - extents.y,
+      maxY: obstacle.y + obstacle.height / 2 + extents.y
+    })
+    if (entry !== null) earliest = Math.min(earliest, entry)
+  }
+  if (earliest >= 1) return target
+  const clearance = Math.min(earliest, 0.25 / distance)
+  const safeTime = Math.max(0, earliest - clearance)
+  return {
+    x: from.x + delta.x * safeTime,
+    y: from.y + delta.y * safeTime
+  }
+}
+
 const resolveStats = (stats: Partial<SoloStats> = {}): SoloStats => ({
   hp: stats.hp ?? stats.maxHp ?? 100,
   maxHp: stats.maxHp ?? 100,
@@ -313,13 +380,13 @@ export class SoloRuntime {
       case 'teleport': {
         const map = this.requireMap(entity.mapId)
         const physical = this.requirePhysical(entity.id)
-        const bounded = boundedPosition(map.definition, entity.hitbox, command.position)
-        map.physics.teleportEntity(physical, bounded)
-        if (bounded.x !== command.position.x || bounded.y !== command.position.y) {
-          physical.setVelocity({
-            x: bounded.x !== command.position.x ? 0 : physical.velocity.x,
-            y: bounded.y !== command.position.y ? 0 : physical.velocity.y
-          })
+        const destination =
+          command.collision === 'ignore'
+            ? boundedPosition(map.definition, entity.hitbox, command.position)
+            : collisionSafePosition(map.definition, entity.hitbox, entity.position, command.position)
+        map.physics.teleportEntity(physical, destination)
+        if (destination.x !== command.position.x || destination.y !== command.position.y) {
+          physical.setVelocity({ x: 0, y: 0 })
         }
         this.syncEntity(entity)
         break

@@ -101,6 +101,8 @@ export type SoloCommand =
       type: 'teleport'
       entityId: string
       position: SoloVector
+      /** Respect authored map obstacles by default; scripted transitions may opt out explicitly. */
+      collision?: 'respect' | 'ignore'
     })
   | (SoloCommandBase & {
       type: 'transfer-map'
