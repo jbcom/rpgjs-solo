@@ -44,6 +44,10 @@ Human controls, Yuka governors, and replay runners use the same `dispatch()`
 contract. Renderers and UI subscribe to the same entity objects mutated by the
 runtime; there is no client copy, room, socket, or synchronization layer.
 
+Map dimensions are authoritative physics bounds. Spawns, teleports, transfers,
+save restores, and fixed-step movement keep the full entity hitbox inside those
+bounds, so a dash or collision cannot strand gameplay outside the authored map.
+
 The package version records its exact RPGJS v5 baseline. This release is based
 on RPGJS `5.0.0-beta.26` and bundles the fork's audited `@rpgjs/physic@5.0.2`
 source. That source is newer than the public registry's `5.0.1`; consumers do
