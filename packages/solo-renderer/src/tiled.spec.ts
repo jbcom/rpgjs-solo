@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { loadSoloTiledMap } from './tiled'
+import { createSoloTileObstacles, loadSoloTiledMap } from './tiled'
 
 const MAP = `<?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="2" height="2" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="2">
@@ -36,11 +36,31 @@ describe('loadSoloTiledMap', () => {
       tileHeight: 16,
       obstacles: [
         { id: 'tiled:0,0:1:7', x: 6, y: 8, width: 8, height: 10 },
-        { id: 'tiled:tiles:1,0:1x2', x: 24, y: 16, width: 16, height: 32 }
+        { id: 'tiled:field:tiles:1,0:1x2', x: 24, y: 16, width: 16, height: 32 }
       ],
       data: { startPositions: { start: { x: 24, y: 24 } } }
     })
     expect(map.parsedMap.tilesets[0].image.source).toBe('https://game.test/images/terrain.png')
+  })
+
+  it('coalesces mutable authored tile collision into stable rectangles', () => {
+    const cells = new Uint8Array([
+      1, 1, 0,
+      1, 1, 0,
+      0, 1, 1
+    ])
+
+    expect(createSoloTileObstacles({
+      id: 'field',
+      width: 3,
+      height: 3,
+      tileWidth: 16,
+      tileHeight: 16,
+      cells
+    })).toEqual([
+      { id: 'tiled:field:tiles:0,0:2x2', x: 16, y: 16, width: 32, height: 32 },
+      { id: 'tiled:field:tiles:1,2:2x1', x: 32, y: 40, width: 32, height: 16 }
+    ])
   })
 
   it('fails with the exact authoring asset that could not be loaded', async () => {

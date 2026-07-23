@@ -50,7 +50,15 @@ bounds, so a dash or collision cannot strand gameplay outside the authored map.
 
 Teleports also sweep the entity hitbox against authored rectangular obstacles,
 so dashes and knockbacks stop at walls instead of tunneling through them.
-Scripted transitions that intentionally cross a dynamically opened barrier use
+Story-driven gates, bridges, and collapses update the authoritative physics
+table without rebuilding the map or losing entity identity:
+
+```ts
+const opened = runtime.getMap('village')!.obstacles!.filter(({ id }) => id !== 'north-gate')
+runtime.replaceMapObstacles('village', opened)
+```
+
+Scripted transitions that truly intend to bypass collision can still use
 `collision: 'ignore'`; map bounds remain authoritative in either mode.
 
 The package version records its exact RPGJS v5 baseline. This release is based

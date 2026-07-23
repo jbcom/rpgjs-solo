@@ -299,4 +299,43 @@ describe('SoloRuntime', () => {
     })
     expect(runtime.getEntity('hero')!.position).toEqual({ x: 160, y: 50 })
   })
+
+  it('replaces authored obstacles without rebuilding the map or its entities', () => {
+    const runtime = new SoloRuntime()
+    runtime.registerMap({
+      id: 'fort',
+      width: 200,
+      height: 100,
+      obstacles: [{ id: 'gate', x: 100, y: 50, width: 20, height: 100 }]
+    })
+    const hero = runtime.spawnEntity({
+      id: 'hero',
+      kind: 'player',
+      mapId: 'fort',
+      x: 40,
+      y: 50,
+      hitbox: { radius: 6 }
+    })
+
+    runtime.replaceMapObstacles('fort', [])
+    runtime.dispatch({
+      type: 'teleport',
+      entityId: 'hero',
+      position: { x: 160, y: 50 },
+      source: 'system'
+    })
+
+    expect(runtime.getEntity('hero')).toBe(hero)
+    expect(hero.position).toEqual({ x: 160, y: 50 })
+    expect(runtime.getMap('fort')?.obstacles).toEqual([])
+  })
+
+  it('rejects invalid replacement obstacle tables before mutating physics', () => {
+    const runtime = new SoloRuntime()
+    const gate = { id: 'gate', x: 100, y: 50, width: 20, height: 100 }
+    runtime.registerMap({ id: 'fort', width: 200, height: 100, obstacles: [gate] })
+
+    expect(() => runtime.replaceMapObstacles('fort', [gate, gate])).toThrow(/unique/)
+    expect(runtime.getMap('fort')?.obstacles).toEqual([gate])
+  })
 })

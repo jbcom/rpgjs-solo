@@ -96,17 +96,40 @@ interface TileRectangle {
   height: number
 }
 
-const mergedTileObstacles = (
-  map: MapClass,
-  cells: Uint8Array
+export interface SoloTileCollisionGrid {
+  id: string
+  width: number
+  height: number
+  tileWidth: number
+  tileHeight: number
+  cells: ArrayLike<number>
+}
+
+/** Coalesces a tile collision grid into stable rectangular Solo obstacles. */
+export const createSoloTileObstacles = (
+  grid: SoloTileCollisionGrid
 ): SoloObstacleDefinition[] => {
+  if (
+    !grid.id
+    || !Number.isInteger(grid.width)
+    || !Number.isInteger(grid.height)
+    || grid.width <= 0
+    || grid.height <= 0
+    || !Number.isFinite(grid.tileWidth)
+    || !Number.isFinite(grid.tileHeight)
+    || grid.tileWidth <= 0
+    || grid.tileHeight <= 0
+    || grid.cells.length !== grid.width * grid.height
+  ) {
+    throw new TypeError(`Invalid Solo tile collision grid: ${grid.id || '<unnamed>'}`)
+  }
   const rectangles: TileRectangle[] = []
   let active = new Map<string, TileRectangle>()
-  for (let y = 0; y < map.height; y += 1) {
+  for (let y = 0; y < grid.height; y += 1) {
     const runs: Array<{ x: number; width: number }> = []
     let start = -1
-    for (let x = 0; x <= map.width; x += 1) {
-      const filled = x < map.width && cells[y * map.width + x] === 1
+    for (let x = 0; x <= grid.width; x += 1) {
+      const filled = x < grid.width && grid.cells[y * grid.width + x] === 1
       if (filled && start < 0) start = x
       if (!filled && start >= 0) {
         runs.push({ x: start, width: x - start })
@@ -131,15 +154,15 @@ const mergedTileObstacles = (
   rectangles.push(...active.values())
 
   return rectangles.map((rectangle) => ({
-    id: `tiled:tiles:${rectangle.x},${rectangle.y}:${rectangle.width}x${rectangle.height}`,
-    x: (rectangle.x + rectangle.width / 2) * map.tilewidth,
-    y: (rectangle.y + rectangle.height / 2) * map.tileheight,
-    width: rectangle.width * map.tilewidth,
-    height: rectangle.height * map.tileheight
+    id: `tiled:${grid.id}:tiles:${rectangle.x},${rectangle.y}:${rectangle.width}x${rectangle.height}`,
+    x: (rectangle.x + rectangle.width / 2) * grid.tileWidth,
+    y: (rectangle.y + rectangle.height / 2) * grid.tileHeight,
+    width: rectangle.width * grid.tileWidth,
+    height: rectangle.height * grid.tileHeight
   }))
 }
 
-const collisionObstacles = (map: MapClass): SoloObstacleDefinition[] => {
+const collisionObstacles = (map: MapClass, mapId: string): SoloObstacleDefinition[] => {
   const obstacles: SoloObstacleDefinition[] = []
   const fullTileCells = new Uint8Array(map.width * map.height)
   const obstacleIds = new Set<string>()
@@ -191,7 +214,14 @@ const collisionObstacles = (map: MapClass): SoloObstacleDefinition[] => {
       }
     }
   }
-  for (const obstacle of mergedTileObstacles(map, fullTileCells)) pushObstacle(obstacle)
+  for (const obstacle of createSoloTileObstacles({
+    id: mapId,
+    width: map.width,
+    height: map.height,
+    tileWidth: map.tilewidth,
+    tileHeight: map.tileheight,
+    cells: fullTileCells
+  })) pushObstacle(obstacle)
   return obstacles
 }
 
@@ -238,7 +268,7 @@ export const loadSoloTiledMap = async (options: LoadSoloTiledMapOptions): Promis
       height: map.heightPx,
       tileWidth: map.tilewidth,
       tileHeight: map.tileheight,
-      obstacles: collisionObstacles(map),
+      obstacles: collisionObstacles(map, options.id),
       data: { startPositions: startPositions(parsedMap) }
     }
   }
