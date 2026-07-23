@@ -95,6 +95,21 @@ export interface SoloAudioOptions {
   autoMuteInTests?: boolean
 }
 
+export interface SoloViewportSize {
+  width: number
+  height: number
+}
+
+export interface SoloCameraOptions {
+  /**
+   * World-to-screen scale for the active viewport. A resolver is re-evaluated
+   * when CanvasEngine reports a new canvas size, including orientation changes.
+   */
+  zoom: number | ((viewport: SoloViewportSize) => number)
+  /** Keep the current viewport center stable while applying zoom. Defaults to true. */
+  center?: boolean
+}
+
 export interface SoloRendererOptions {
   runtime: SoloRuntime
   target: HTMLElement
@@ -105,6 +120,7 @@ export interface SoloRendererOptions {
   width?: number | `${number}%`
   height?: number | `${number}%`
   background?: string
+  camera?: SoloCameraOptions
   fog?: false | SoloFogOptions
   input?: false | SoloInputOptions
   audio?: SoloAudioOptions

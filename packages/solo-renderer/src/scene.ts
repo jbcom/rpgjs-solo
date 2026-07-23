@@ -12,6 +12,7 @@ import {
 } from 'canvasengine'
 import { FogOfWar, TiledMap, createFogOfWarController, type FogOfWarController } from '@canvasengine/presets'
 import { createAuthoredFogElement } from './authoredFog'
+import { createSoloCameraElement } from './camera'
 import { createSoloFogController } from './fog'
 import type { SoloFogController, SoloFogOptions, SoloRenderedMap, SoloRendererOptions } from './types'
 import type { SoloRenderEntity, SoloRendererModel } from './model'
@@ -132,6 +133,7 @@ export const createSoloScene = (
         basePath: '',
         createLayersPerTilesZ: true
       }),
+      ...(options.camera ? [createSoloCameraElement(options.camera)] : []),
       loop(model.entities, (entity: SoloRenderEntity) => entityElement(entity, options.playerId, fogController) as never, {
         track: (entity: SoloRenderEntity) => entity.id
       }),
