@@ -274,13 +274,13 @@ describe('SoloActionBattle', () => {
     battle.registerCombatant('hero', { faction: 'crown', actions: ['arc-bolt'], power: 0 })
     battle.registerCombatant('enemy', { faction: 'hollow', actions: [] })
 
-    runtime.dispatch({
+    expect(runtime.dispatch({
       type: 'action',
       entityId: 'hero',
       action: 'combat:use',
       payload: { actionId: 'arc-bolt', targetId: 'enemy' },
       source: 'ai'
-    })
+    }).accepted).toBe(true)
     runtime.stepTicks(20)
 
     expect(runtime.getEntity('enemy')!.stats.hp).toBe(100)
