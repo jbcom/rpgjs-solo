@@ -17,6 +17,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
+    "prepublishOnly": "node ../../bin/require-pnpm-publish.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

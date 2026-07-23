@@ -1,6 +1,6 @@
 {
   "name": "@jbcom/rpgjs-solo",
-  "version": "5.0.0-beta.26.solo.3",
+  "version": "5.0.0-beta.26.solo.4",
   "description": "Transport-free, deterministic single-player RPG runtime built from RPGJS v5",
   "license": "MIT",
   "type": "module",
@@ -21,6 +21,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
+    "prepublishOnly": "node ../../bin/require-pnpm-publish.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "verify:boundary": "node scripts/verify-boundary.mjs"
