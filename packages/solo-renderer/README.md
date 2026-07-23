@@ -16,6 +16,12 @@ The native rendering and authoring layer for RPGJS Solo. It keeps the RPGJS
 Tiled workflow and composes CanvasEngine's scene graph, camera, spritesheets,
 and fog-of-war directly around `SoloRuntime` state.
 
+`loadSoloTiledMap` derives center-based Solo physics obstacles from collision
+tiles on every authored layer. It supports both the `collision: true` tile
+property and RPGJS/Tiled tileset object groups, preserving rectangular or
+polygon bounds instead of silently treating the decorative ground layer as the
+only collision authority.
+
 There is no socket, room, sync, prediction, reconciliation, or game-facing
 Pixi adapter. Pixi remains an implementation detail of CanvasEngine.
 

@@ -59,19 +59,74 @@ const resolveTilesets = async (
   map.tilesets = resolved
 }
 
+interface CollisionBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+const collisionObjectBounds = (object: TiledObject): CollisionBounds | null => {
+  const points = object.polygon ?? object.polyline
+  if (!points?.length) {
+    const bounds = { x: 0, y: 0, width: object.width ?? 0, height: object.height ?? 0 }
+    return bounds.width > 0 && bounds.height > 0 ? bounds : null
+  }
+  const xs = points.map((point) => point.x)
+  const ys = points.map((point) => point.y)
+  const minimumX = Math.min(...xs)
+  const minimumY = Math.min(...ys)
+  const bounds = {
+    x: minimumX,
+    y: minimumY,
+    width: Math.max(...xs) - minimumX,
+    height: Math.max(...ys) - minimumY
+  }
+  return bounds.width > 0 && bounds.height > 0 ? bounds : null
+}
+
 const collisionObstacles = (map: MapClass): SoloObstacleDefinition[] => {
   const obstacles: SoloObstacleDefinition[] = []
+  const obstacleIds = new Set<string>()
+  const pushObstacle = (obstacle: SoloObstacleDefinition): void => {
+    if (obstacleIds.has(obstacle.id)) return
+    obstacleIds.add(obstacle.id)
+    obstacles.push(obstacle)
+  }
   for (let y = 0; y < map.height; y += 1) {
     for (let x = 0; x < map.width; x += 1) {
-      const tile = map.getTileByPosition(x * map.tilewidth, y * map.tileheight, [0, 0], { populateTiles: true })
-      if (!tile.hasCollision) continue
-      obstacles.push({
-        id: `tiled:${x},${y}`,
-        x: x * map.tilewidth,
-        y: y * map.tileheight,
-        width: map.tilewidth,
-        height: map.tileheight
-      })
+      const tileInfo = map.getTileByPosition(x * map.tilewidth, y * map.tileheight, [0, 0], { populateTiles: true })
+      for (const [tileIndex, tile] of tileInfo.tiles.entries()) {
+        const collisionObjects = tile.objects ?? []
+        if (!tile.getProperty<boolean, boolean>('collision', false) && collisionObjects.length === 0) continue
+
+        const tileX = x * map.tilewidth
+        const tileY = y * map.tileheight
+        const objectObstacles = collisionObjects.flatMap((object, objectIndex) => {
+          const bounds = collisionObjectBounds(object)
+          if (!bounds) return []
+          const left = tileX + (object.x ?? 0) + bounds.x
+          const top = tileY + (object.y ?? 0) + bounds.y
+          return [{
+            id: `tiled:${x},${y}:${tile.layerIndex ?? tileIndex}:${object.id ?? objectIndex}`,
+            x: left + bounds.width / 2,
+            y: top + bounds.height / 2,
+            width: bounds.width,
+            height: bounds.height
+          }]
+        })
+        if (objectObstacles.length > 0) {
+          for (const obstacle of objectObstacles) pushObstacle(obstacle)
+          continue
+        }
+        pushObstacle({
+          id: `tiled:${x},${y}:${tile.layerIndex ?? tileIndex}`,
+          x: tileX + map.tilewidth / 2,
+          y: tileY + map.tileheight / 2,
+          width: map.tilewidth,
+          height: map.tileheight
+        })
+      }
     }
   }
   return obstacles
