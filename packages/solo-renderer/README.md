@@ -49,7 +49,8 @@ import {
   SoloRenderer,
   createSoloTileObstacles,
   createRpgMakerSpritesheet,
-  loadSoloTiledMap
+  loadSoloTiledMap,
+  replaceSoloTiledLayers
 } from '@jbcom/rpgjs-solo-renderer'
 
 const runtime = new SoloRuntime()
@@ -79,6 +80,24 @@ const renderer = new SoloRenderer({
 
 await renderer.start()
 ```
+
+Story-driven terrain remains a game-owned decision while the renderer owns its
+safe scene lifecycle. Replace complete GID layers immutably, then register the
+revision; the active viewport is rebuilt under a new revision key without
+changing the authoritative Solo map or its entities:
+
+```ts
+const openedField = replaceSoloTiledLayers(field, [
+  { name: 'ground', data: openedGroundGids },
+  { name: 'terrain', data: openedTerrainGids }
+])
+renderer.registerMap(openedField)
+```
+
+The helper validates unique layer names, dimensions, and unsigned Tiled GIDs.
+It never infers physics from visuals. If the story change also affects
+collision, update the runtime obstacle table from the same game-authored state
+as shown below.
 
 Games with gates, bridges, or other story-driven traversal changes can derive
 the replacement obstacle table from the same coalescing path as the TMX loader:

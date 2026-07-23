@@ -3,6 +3,12 @@ import type { SoloEntityState, SoloMapDefinition, SoloRuntime } from '@jbcom/rpg
 
 export interface SoloRenderedMap {
   id: string
+  /**
+   * Changes whenever the rendered Tiled layers change without changing maps.
+   * The renderer uses it to retire the old scene only after a replacement map
+   * has been registered.
+   */
+  revision?: number
   basePath: string
   parsedMap: TiledMap
   runtime: SoloMapDefinition

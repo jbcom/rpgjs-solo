@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SoloRuntime } from '@jbcom/rpgjs-solo'
 import { SoloRendererModel } from './model'
+import { soloRenderedMapSceneKey } from './scene'
 import type { SoloAppearanceResolver, SoloRenderedMap, SoloRendererOptions } from './types'
 
 const renderedMap = (id: string): SoloRenderedMap => ({
@@ -58,6 +59,20 @@ describe('SoloRendererModel', () => {
     expect(model.activeMap()?.id).toBe('town')
     expect(model.entities().map(({ id }) => id)).toEqual(['hero', 'guard'])
     expect(model.entities().find(({ id }) => id === 'hero')).toBe(hero)
+    model.dispose()
+  })
+
+  it('replaces the active rendered-map revision without changing runtime identity', () => {
+    const { runtime, model } = createModel()
+    const current = model.activeMap()!
+    const revised = { ...current, revision: (current.revision ?? 0) + 1 }
+
+    model.registerMap(revised)
+
+    expect(runtime.activeMapId).toBe('field')
+    expect(model.activeMap()).toBe(revised)
+    expect(soloRenderedMapSceneKey(current)).toBe('field:0')
+    expect(soloRenderedMapSceneKey(revised)).toBe('field:1')
     model.dispose()
   })
 
