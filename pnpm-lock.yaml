@@ -284,6 +284,9 @@ importers:
 
   packages/solo-renderer:
     dependencies:
+      '@arcade-cabinet/rpgjs-patches':
+        specifier: 0.1.2
+        version: 0.1.2(canvasengine@2.0.1(@types/react@19.2.17)(pixi.js@8.19.0)(react@19.2.7))
       '@canvasengine/presets':
         specifier: 2.0.0
         version: 2.0.0(canvasengine@2.0.1(@types/react@19.2.17)(pixi.js@8.19.0)(react@19.2.7))(pixi.js@8.19.0)
@@ -1102,6 +1105,11 @@ importers:
         version: 8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0)
 
 packages:
+
+  '@arcade-cabinet/rpgjs-patches@0.1.2':
+    resolution: {integrity: sha512-v+99kkawkxGtFAzxcJwl6LLaIVQuDWKxe1F12IZnZ2DcAoBYtcwWwXrHyDwj/G9h8/JSawEvmPRyI+8NQYM2MQ==, tarball: https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/%40arcade-cabinet%2Frpgjs-patches/-/0.1.2/rpgjs-patches-0.1.2.tgz}
+    peerDependencies:
+      canvasengine: 2.0.1
 
   '@asamuzakjp/css-color@5.1.11':
     resolution: {integrity: sha512-KVw6qIiCTUQhByfTd78h2yD1/00waTmm9uy/R7Ck/ctUyAPj+AEDLkQIdJW0T8+qGgj3j5bpNKK7Q3G+LedJWg==}
@@ -5305,6 +5313,10 @@ packages:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
+
+  '@arcade-cabinet/rpgjs-patches@0.1.2(canvasengine@2.0.1(@types/react@19.2.17)(pixi.js@8.19.0)(react@19.2.7))':
+    dependencies:
+      canvasengine: 2.0.1(@types/react@19.2.17)(pixi.js@8.19.0)(react@19.2.7)
 
   '@asamuzakjp/css-color@5.1.11':
     dependencies:
