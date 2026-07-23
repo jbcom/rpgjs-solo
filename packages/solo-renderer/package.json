@@ -1,6 +1,6 @@
 {
   "name": "@jbcom/rpgjs-solo-renderer",
-  "version": "5.0.0-beta.26.solo.15",
+  "version": "5.0.0-beta.26.solo.16",
   "description": "Native CanvasEngine renderer and Tiled authoring surface for RPGJS Solo",
   "license": "MIT",
   "type": "module",
