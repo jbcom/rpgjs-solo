@@ -5,7 +5,7 @@ const MAP = `<?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="2" height="2" tilewidth="16" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="2">
   <tileset firstgid="1" source="tiles/terrain.tsx"/>
   <layer id="1" name="Ground" width="2" height="2"><data encoding="csv">3,3,3,3</data></layer>
-  <layer id="2" name="Collision" width="2" height="2"><data encoding="csv">1,2,0,0</data></layer>
+  <layer id="2" name="Collision" width="2" height="2" visible="0"><data encoding="csv">1,2,0,2</data></layer>
   <objectgroup id="3" name="Positions"><object id="1" name="start" x="24" y="24"><point/></object></objectgroup>
 </map>`
 
@@ -36,7 +36,7 @@ describe('loadSoloTiledMap', () => {
       tileHeight: 16,
       obstacles: [
         { id: 'tiled:0,0:1:7', x: 6, y: 8, width: 8, height: 10 },
-        { id: 'tiled:1,0:1', x: 24, y: 8, width: 16, height: 16 }
+        { id: 'tiled:tiles:1,0:1x2', x: 24, y: 16, width: 16, height: 32 }
       ],
       data: { startPositions: { start: { x: 24, y: 24 } } }
     })

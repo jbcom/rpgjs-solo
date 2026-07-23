@@ -20,7 +20,9 @@ and fog-of-war directly around `SoloRuntime` state.
 tiles on every authored layer. It supports both the `collision: true` tile
 property and RPGJS/Tiled tileset object groups, preserving rectangular or
 polygon bounds instead of silently treating the decorative ground layer as the
-only collision authority.
+only collision authority. Contiguous full-tile collision is coalesced into
+larger rectangles before physics registration, while partial and polygonal
+shapes remain independent.
 
 There is no socket, room, sync, prediction, reconciliation, or game-facing
 Pixi adapter. Pixi remains an implementation detail of CanvasEngine.

@@ -89,8 +89,59 @@ const collisionObjectBounds = (object: TiledObject): CollisionBounds | null => {
   return bounds.width > 0 && bounds.height > 0 ? bounds : null
 }
 
+interface TileRectangle {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+const mergedTileObstacles = (
+  map: MapClass,
+  cells: Uint8Array
+): SoloObstacleDefinition[] => {
+  const rectangles: TileRectangle[] = []
+  let active = new Map<string, TileRectangle>()
+  for (let y = 0; y < map.height; y += 1) {
+    const runs: Array<{ x: number; width: number }> = []
+    let start = -1
+    for (let x = 0; x <= map.width; x += 1) {
+      const filled = x < map.width && cells[y * map.width + x] === 1
+      if (filled && start < 0) start = x
+      if (!filled && start >= 0) {
+        runs.push({ x: start, width: x - start })
+        start = -1
+      }
+    }
+
+    const next = new Map<string, TileRectangle>()
+    for (const run of runs) {
+      const key = `${run.x}:${run.width}`
+      const previous = active.get(key)
+      const rectangle = previous
+        ? { ...previous, height: previous.height + 1 }
+        : { x: run.x, y, width: run.width, height: 1 }
+      next.set(key, rectangle)
+    }
+    for (const [key, rectangle] of active) {
+      if (!next.has(key)) rectangles.push(rectangle)
+    }
+    active = next
+  }
+  rectangles.push(...active.values())
+
+  return rectangles.map((rectangle) => ({
+    id: `tiled:tiles:${rectangle.x},${rectangle.y}:${rectangle.width}x${rectangle.height}`,
+    x: (rectangle.x + rectangle.width / 2) * map.tilewidth,
+    y: (rectangle.y + rectangle.height / 2) * map.tileheight,
+    width: rectangle.width * map.tilewidth,
+    height: rectangle.height * map.tileheight
+  }))
+}
+
 const collisionObstacles = (map: MapClass): SoloObstacleDefinition[] => {
   const obstacles: SoloObstacleDefinition[] = []
+  const fullTileCells = new Uint8Array(map.width * map.height)
   const obstacleIds = new Set<string>()
   const pushObstacle = (obstacle: SoloObstacleDefinition): void => {
     if (obstacleIds.has(obstacle.id)) return
@@ -122,19 +173,25 @@ const collisionObstacles = (map: MapClass): SoloObstacleDefinition[] => {
           }]
         })
         if (objectObstacles.length > 0) {
+          const fullTile = objectObstacles.some(
+            (obstacle) =>
+              obstacle.x === tileX + map.tilewidth / 2 &&
+              obstacle.y === tileY + map.tileheight / 2 &&
+              obstacle.width === map.tilewidth &&
+              obstacle.height === map.tileheight
+          )
+          if (fullTile) {
+            fullTileCells[y * map.width + x] = 1
+            continue
+          }
           for (const obstacle of objectObstacles) pushObstacle(obstacle)
           continue
         }
-        pushObstacle({
-          id: `tiled:${x},${y}:${tile.layerIndex ?? tileIndex}`,
-          x: tileX + map.tilewidth / 2,
-          y: tileY + map.tileheight / 2,
-          width: map.tilewidth,
-          height: map.tileheight
-        })
+        fullTileCells[y * map.width + x] = 1
       }
     }
   }
+  for (const obstacle of mergedTileObstacles(map, fullTileCells)) pushObstacle(obstacle)
   return obstacles
 }
 
