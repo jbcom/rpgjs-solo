@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@jbcom/rpgjs-solo": "workspace:5.0.0-beta.26.solo.3",
-    "@jbcom/rpgjs-solo-renderer": "workspace:5.0.0-beta.26.solo.6",
+    "@jbcom/rpgjs-solo-renderer": "workspace:5.0.0-beta.26.solo.7",
     "@rpgjs/ui-css": "workspace:5.0.0-beta.23",
     "pixi.js": "8.19.0"
   },

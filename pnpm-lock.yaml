@@ -12,8 +12,8 @@ importers:
         specifier: ^9.6.1
         version: 9.6.1
       pnpm:
-        specifier: 11.15.1
-        version: 11.15.1
+        specifier: 11.16.0
+        version: 11.16.0
       tsx:
         specifier: 4.23.1
         version: 4.23.1
@@ -761,7 +761,7 @@ importers:
         specifier: workspace:5.0.0-beta.26.solo.3
         version: link:../../../packages/solo
       '@jbcom/rpgjs-solo-renderer':
-        specifier: workspace:5.0.0-beta.26.solo.6
+        specifier: workspace:5.0.0-beta.26.solo.7
         version: link:../../../packages/solo-renderer
       '@rpgjs/ui-css':
         specifier: workspace:5.0.0-beta.23
@@ -4288,8 +4288,8 @@ packages:
   pkg-types@2.3.1:
     resolution: {integrity: sha512-y+ichcgc2LrADuhLNAx8DFjVfgz91pRxfZdI3UDhxHvcVEZsenLO+7XaU5vOp0u/7V/wZ+plyuQxtrDlZJ+yeg==}
 
-  pnpm@11.15.1:
-    resolution: {integrity: sha512-gTULB+U8lTigLx8jA7QpD6LXvgTlbiqXDEzEtBfcdh3hlu2r1J1Vx9yVgNuBAHxEFD5OPX5GKzAA0jwlUSLQZQ==}
+  pnpm@11.16.0:
+    resolution: {integrity: sha512-t2fpqY/IeuwPQtrvzQ6ElBws20XXPE4eaIYPsr39vgMqtZIQVHnl4Fwjf3QMil/9u7UjhXl93CKWdFobu4g+jQ==}
     engines: {node: '>=22.13'}
     hasBin: true
 
@@ -8345,7 +8345,7 @@ snapshots:
       exsolve: 1.0.8
       pathe: 2.0.3
 
-  pnpm@11.15.1: {}
+  pnpm@11.16.0: {}
 
   popmotion@11.0.5:
     dependencies:
