@@ -142,4 +142,79 @@ describe('SoloRuntime', () => {
     expect(hero!.position.x).toBeCloseTo(savedX)
     expect(await store.list()).toEqual(['slot-1'])
   })
+
+  it('keeps immovable authored objects fixed through overlapping physics', () => {
+    const runtime = createRuntime()
+    runtime.spawnEntity({
+      id: 'ward-lens',
+      kind: 'event',
+      mapId: 'field',
+      x: 160,
+      y: 160,
+      hitbox: { radius: 5 },
+      immovable: true
+    })
+    runtime.spawnEntity({
+      id: 'lens-pedestal',
+      kind: 'event',
+      mapId: 'field',
+      x: 160,
+      y: 160,
+      hitbox: { radius: 5 },
+      immovable: true
+    })
+    runtime.spawnEntity({
+      id: 'scout',
+      kind: 'npc',
+      mapId: 'field',
+      x: 158,
+      y: 160,
+      hitbox: { radius: 5 },
+      speed: 48
+    })
+
+    expect(runtime.dispatch({
+      type: 'move',
+      entityId: 'ward-lens',
+      vector: { x: 1, y: 0 },
+      source: 'ai'
+    })).toMatchObject({ accepted: false, reason: 'Entity is immovable: ward-lens' })
+    runtime.dispatch({ type: 'move', entityId: 'scout', vector: { x: 1, y: 0 }, source: 'ai' })
+    runtime.stepTicks(600)
+
+    expect(runtime.getEntity('ward-lens')!.position).toEqual({ x: 160, y: 160 })
+    expect(runtime.getEntity('lens-pedestal')!.position).toEqual({ x: 160, y: 160 })
+  })
+
+  it('persists immovable entities while still allowing system teleports', () => {
+    const runtime = createRuntime()
+    runtime.spawnEntity({
+      id: 'waystone',
+      kind: 'event',
+      mapId: 'field',
+      x: 120,
+      y: 96,
+      immovable: true
+    })
+
+    runtime.dispatch({
+      type: 'teleport',
+      entityId: 'waystone',
+      position: { x: 128, y: 104 },
+      source: 'system'
+    })
+    const snapshot = runtime.createSnapshot()
+    runtime.dispatch({
+      type: 'teleport',
+      entityId: 'waystone',
+      position: { x: 300, y: 300 },
+      source: 'system'
+    })
+    runtime.restoreSnapshot(snapshot)
+
+    expect(runtime.getEntity('waystone')).toMatchObject({
+      immovable: true,
+      position: { x: 128, y: 104 }
+    })
+  })
 })

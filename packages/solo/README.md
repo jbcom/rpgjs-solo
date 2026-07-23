@@ -25,6 +25,21 @@ runtime.dispatch({
 runtime.stepTicks(1)
 ```
 
+Authored props, shrines, signs, and other fixed world objects opt into an
+immovable physics body. They still support system teleports and map transfers,
+but movement commands and collisions cannot silently push them out of place.
+
+```ts
+runtime.spawnEntity({
+  id: 'village-waystone',
+  kind: 'event',
+  mapId: 'village',
+  x: 320,
+  y: 224,
+  immovable: true
+})
+```
+
 Human controls, Yuka governors, and replay runners use the same `dispatch()`
 contract. Renderers and UI subscribe to the same entity objects mutated by the
 runtime; there is no client copy, room, socket, or synchronization layer.
