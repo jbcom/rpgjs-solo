@@ -10,3 +10,4 @@ allowBuilds:
   ws: true
 minimumReleaseAgeExclude:
   - vite@8.1.1
+  - pnpm@11.16.0
