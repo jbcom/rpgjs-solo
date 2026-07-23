@@ -44,6 +44,11 @@ Human controls, Yuka governors, and replay runners use the same `dispatch()`
 contract. Renderers and UI subscribe to the same entity objects mutated by the
 runtime; there is no client copy, room, socket, or synchronization layer.
 
+Projectile entities use a sensor-like collision layer: authored map obstacles
+still stop them, but players, NPCs, neutral actors, and defeated bodies do not
+apply a physics impulse. Combat packages remain responsible for deciding which
+overlapped entities are valid targets and for resolving their hits.
+
 Map dimensions are authoritative physics bounds. Spawns, teleports, transfers,
 save restores, and fixed-step movement keep the full entity hitbox inside those
 bounds, so a dash or collision cannot strand gameplay outside the authored map.

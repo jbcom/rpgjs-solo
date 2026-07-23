@@ -10,6 +10,9 @@ and Yuka governors all dispatch the same public `combat:use` and
 `combat:guard` actions. Startup, active, recovery, cooldown, resource,
 targeting, guard, projectile, status, damage, and defeat state lives on the
 authoritative Solo entities and therefore participates in normal snapshots.
+Projectiles travel as non-body-blocking sensors: map collision still stops a
+shot, while invalid targets such as neutral NPCs and defeated bodies cannot
+silently absorb it before the combat target filter runs.
 
 When a command includes `targetId` but omits `direction`, Solo aims from the
 attacker toward that authoritative target. An explicit direction still wins.
