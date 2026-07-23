@@ -220,6 +220,72 @@ describe('SoloActionBattle', () => {
     expect(runtime.getEntities().filter((entity) => entity.kind === 'projectile')).toHaveLength(0)
   })
 
+  it('lets projectile sensors pass defeated body blockers to reach a live target', () => {
+    const { runtime, battle } = createBattle()
+    runtime.dispatch({ type: 'teleport', entityId: 'enemy', position: { x: 140, y: 80 }, source: 'system' })
+    runtime.spawnEntity({
+      id: 'defeated-body',
+      kind: 'event',
+      mapId: 'field',
+      x: 80,
+      y: 80,
+      stats: { hp: 0, maxHp: 100 }
+    })
+    battle.registerAction({
+      id: 'arc-bolt',
+      name: 'Arc Bolt',
+      mode: 'projectile',
+      target: 'enemy',
+      damage: { flat: 24, powerScale: 0 },
+      projectile: { speed: 600, range: 160, radius: 8 },
+      profile: { startupTicks: 0, activeTicks: 1, recoveryTicks: 1 }
+    })
+    battle.registerCombatant('hero', { faction: 'crown', actions: ['arc-bolt'], power: 0 })
+    battle.registerCombatant('enemy', { faction: 'hollow', actions: [] })
+    battle.registerCombatant('defeated-body', { faction: 'hollow', actions: [] })
+
+    expect(runtime.dispatch({
+      type: 'action',
+      entityId: 'hero',
+      action: 'combat:use',
+      payload: { actionId: 'arc-bolt', targetId: 'enemy' },
+      source: 'ai'
+    }).accepted).toBe(true)
+    runtime.stepTicks(20)
+
+    expect(runtime.getEntity('enemy')!.stats.hp).toBe(76)
+  })
+
+  it('keeps projectile sensors blocked by authored map collision', () => {
+    const { runtime, battle } = createBattle()
+    runtime.dispatch({ type: 'teleport', entityId: 'enemy', position: { x: 140, y: 80 }, source: 'system' })
+    runtime.replaceMapObstacles('field', [
+      { id: 'stone-wall', x: 80, y: 80, width: 16, height: 80 }
+    ])
+    battle.registerAction({
+      id: 'arc-bolt',
+      name: 'Arc Bolt',
+      mode: 'projectile',
+      target: 'enemy',
+      damage: { flat: 24, powerScale: 0 },
+      projectile: { speed: 600, range: 160, radius: 8 },
+      profile: { startupTicks: 0, activeTicks: 1, recoveryTicks: 1 }
+    })
+    battle.registerCombatant('hero', { faction: 'crown', actions: ['arc-bolt'], power: 0 })
+    battle.registerCombatant('enemy', { faction: 'hollow', actions: [] })
+
+    runtime.dispatch({
+      type: 'action',
+      entityId: 'hero',
+      action: 'combat:use',
+      payload: { actionId: 'arc-bolt', targetId: 'enemy' },
+      source: 'ai'
+    })
+    runtime.stepTicks(20)
+
+    expect(runtime.getEntity('enemy')!.stats.hp).toBe(100)
+  })
+
   it('persists statuses and combat state in the authoritative Solo snapshot', () => {
     const { runtime, battle } = createBattle()
     battle.registerAction({ id: 'wait', name: 'Wait', mode: 'instant', target: 'self' })

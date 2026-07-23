@@ -27,6 +27,9 @@ const DEFAULT_MAX_FRAME_DELTA_MS = 250
 const DEFAULT_MAX_STEPS_PER_FRAME = 5
 const DEFAULT_HITBOX = 16
 const DEFAULT_SPEED = 96
+const MAP_OBSTACLE_COLLISION_CATEGORY = 0x00000001
+const ACTOR_COLLISION_CATEGORY = 0x00000002
+const PROJECTILE_COLLISION_CATEGORY = 0x00000004
 
 interface SoloMapRuntime {
   definition: SoloMapDefinition
@@ -293,7 +296,10 @@ export class SoloRuntime {
     for (const obstacle of obstacles) {
       obstacleEntities.set(
         obstacle.id,
-        physics.createStaticObstacle(`map:${definition.id}:obstacle:${obstacle.id}`, obstacle)
+        physics.createStaticObstacle(`map:${definition.id}:obstacle:${obstacle.id}`, {
+          ...obstacle,
+          collisionCategory: MAP_OBSTACLE_COLLISION_CATEGORY
+        })
       )
     }
     for (const entity of definition.entities ?? []) {
@@ -322,7 +328,10 @@ export class SoloRuntime {
     for (const obstacle of next) {
       map.obstacleEntities.set(
         obstacle.id,
-        map.physics.createStaticObstacle(`map:${mapId}:obstacle:${obstacle.id}`, obstacle)
+        map.physics.createStaticObstacle(`map:${mapId}:obstacle:${obstacle.id}`, {
+          ...obstacle,
+          collisionCategory: MAP_OBSTACLE_COLLISION_CATEGORY
+        })
       )
     }
     map.definition = { ...map.definition, obstacles: next }
@@ -662,12 +671,15 @@ export class SoloRuntime {
   }
 
   private createPhysicalEntity(map: SoloMapRuntime, state: SoloEntityState): Entity {
+    const projectile = state.kind === 'projectile'
     return map.physics.createCharacter(state.id, {
       x: state.position.x,
       y: state.position.y,
       hitbox: state.hitbox as RPGHitbox,
       speed: state.speed,
       mass: state.immovable ? 0 : 1,
+      collisionCategory: projectile ? PROJECTILE_COLLISION_CATEGORY : ACTOR_COLLISION_CATEGORY,
+      collisionMask: projectile ? MAP_OBSTACLE_COLLISION_CATEGORY : 0xffffffff,
       linearDamping: 0,
       restitution: 0
     })
