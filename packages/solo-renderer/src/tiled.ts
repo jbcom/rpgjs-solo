@@ -72,8 +72,12 @@ const collisionObjectBounds = (object: TiledObject): CollisionBounds | null => {
     const bounds = { x: 0, y: 0, width: object.width ?? 0, height: object.height ?? 0 }
     return bounds.width > 0 && bounds.height > 0 ? bounds : null
   }
-  const xs = points.map((point) => point.x)
-  const ys = points.map((point) => point.y)
+  const finitePoints = points.filter(
+    (point) => Number.isFinite(point.x) && Number.isFinite(point.y)
+  )
+  if (finitePoints.length === 0) return null
+  const xs = finitePoints.map((point) => point.x)
+  const ys = finitePoints.map((point) => point.y)
   const minimumX = Math.min(...xs)
   const minimumY = Math.min(...ys)
   const bounds = {
@@ -105,8 +109,10 @@ const collisionObstacles = (map: MapClass): SoloObstacleDefinition[] => {
         const objectObstacles = collisionObjects.flatMap((object, objectIndex) => {
           const bounds = collisionObjectBounds(object)
           if (!bounds) return []
-          const left = tileX + (object.x ?? 0) + bounds.x
-          const top = tileY + (object.y ?? 0) + bounds.y
+          const objectX = Number.isFinite(object.x) ? object.x : 0
+          const objectY = Number.isFinite(object.y) ? object.y : 0
+          const left = tileX + objectX + bounds.x
+          const top = tileY + objectY + bounds.y
           return [{
             id: `tiled:${x},${y}:${tile.layerIndex ?? tileIndex}:${object.id ?? objectIndex}`,
             x: left + bounds.width / 2,
