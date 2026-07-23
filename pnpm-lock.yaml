@@ -758,10 +758,10 @@ importers:
   playground/games/solo:
     dependencies:
       '@jbcom/rpgjs-solo':
-        specifier: workspace:5.0.0-beta.26.solo.6
+        specifier: workspace:5.0.0-beta.26.solo.7
         version: link:../../../packages/solo
       '@jbcom/rpgjs-solo-renderer':
-        specifier: workspace:5.0.0-beta.26.solo.12
+        specifier: workspace:5.0.0-beta.26.solo.13
         version: link:../../../packages/solo-renderer
       '@rpgjs/ui-css':
         specifier: workspace:5.0.0-beta.23

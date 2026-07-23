@@ -67,24 +67,52 @@ interface CollisionBounds {
 }
 
 const collisionObjectBounds = (object: TiledObject): CollisionBounds | null => {
-  const points = object.polygon ?? object.polyline
-  if (!points?.length) {
-    const bounds = { x: 0, y: 0, width: object.width ?? 0, height: object.height ?? 0 }
-    return bounds.width > 0 && bounds.height > 0 ? bounds : null
-  }
+  const authoredPoints = object.polygon ?? object.polyline
+  const points = authoredPoints?.length
+    ? authoredPoints
+    : Number.isFinite(object.width) && Number.isFinite(object.height)
+      && object.width > 0 && object.height > 0
+      ? [
+          { x: 0, y: 0 },
+          { x: object.width, y: 0 },
+          { x: object.width, y: object.height },
+          { x: 0, y: object.height }
+        ]
+      : []
   const finitePoints = points.filter(
     (point) => Number.isFinite(point.x) && Number.isFinite(point.y)
   )
   if (finitePoints.length === 0) return null
-  const xs = finitePoints.map((point) => point.x)
-  const ys = finitePoints.map((point) => point.y)
-  const minimumX = Math.min(...xs)
-  const minimumY = Math.min(...ys)
+  const radians = (Number.isFinite(object.rotation) ? object.rotation : 0) * Math.PI / 180
+  const cosine = Math.cos(radians)
+  const sine = Math.sin(radians)
+  const stableCoordinate = (value: number): number =>
+    Math.abs(value) <= 1e-10 ? 0 : Number(value.toFixed(10))
+  const transformed = finitePoints.map((point) => ({
+    x: stableCoordinate(point.x * cosine - point.y * sine),
+    y: stableCoordinate(point.x * sine + point.y * cosine)
+  }))
+  const xs = transformed.map((point) => point.x)
+  const ys = transformed.map((point) => point.y)
+  let minimumX = Math.min(...xs)
+  let minimumY = Math.min(...ys)
+  let width = Math.max(...xs) - minimumX
+  let height = Math.max(...ys) - minimumY
+  if (object.polyline?.length) {
+    if (width <= Number.EPSILON) {
+      minimumX -= 0.5
+      width = 1
+    }
+    if (height <= Number.EPSILON) {
+      minimumY -= 0.5
+      height = 1
+    }
+  }
   const bounds = {
     x: minimumX,
     y: minimumY,
-    width: Math.max(...xs) - minimumX,
-    height: Math.max(...ys) - minimumY
+    width,
+    height
   }
   return bounds.width > 0 && bounds.height > 0 ? bounds : null
 }
