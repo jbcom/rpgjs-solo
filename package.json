@@ -18,6 +18,7 @@
     "rpgjs:publish": "pnpm run publish-packages",
     "publish:solo": "pnpm --filter '@jbcom/rpgjs-solo*' -r publish --no-git-checks",
     "verify:solo-boundary": "pnpm --filter @jbcom/rpgjs-solo --filter @jbcom/rpgjs-solo-action-battle --filter @jbcom/rpgjs-solo-renderer -r verify:boundary",
+    "verify:solo-package-contracts": "pnpm --filter @jbcom/rpgjs-solo-renderer verify:package",
     "test": "vitest"
   },
   "author": "Samuel Ronce",
