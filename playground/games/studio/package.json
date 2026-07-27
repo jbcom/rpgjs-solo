@@ -20,16 +20,16 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "0.5.41",
-    "@vitest/runner": "2.1.9",
-    "@vitest/snapshot": "2.1.9",
+    "@cloudflare/vitest-pool-workers": "0.18.8",
+    "@vitest/runner": "4.1.10",
+    "@vitest/snapshot": "4.1.10",
     "@canvasengine/compiler": "2.0.0",
     "@rpgjs/testing": "workspace:*",
     "@rpgjs/vite": "workspace:*",
     "concurrently": "^9.2.1",
     "vite": "^8.1.1",
-    "vitest": "2.1.9",
-    "wrangler": "3.100.0"
+    "vitest": "4.1.10",
+    "wrangler": "4.114.0"
   },
   "private": true,
   "dependencies": {

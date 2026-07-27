@@ -11,3 +11,36 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - vite@8.1.1
   - pnpm@11.16.0
+overrides:
+  # partykit@0.0.115 (latest available) still pins miniflare 3.x, which
+  # drags in undici@5.29.0 with several known advisories. partykit is a
+  # devDependency of samples/sample-dev only, so this only affects the
+  # local dev server used by that sample.
+  undici: '>=7.16.0'
+  # Remaining Dependabot alerts: all in transitive dev-tooling deps
+  # (miniflare/wrangler/vite-dev-server/ajv chains), none reachable
+  # from published package runtime code. Pinned to the patched minimum
+  # rather than doing a full `pnpm update --latest`, which pulled in
+  # @babel 8.x and broke packages/vite's build (PluginConfig no longer
+  # accepts "classProperties" as a bare string).
+  fast-uri: '>=3.1.4'
+  brace-expansion: '>=5.0.8'
+  esbuild: '>=0.24.3'
+  hono: '>=4.12.27'
+  '@hono/node-server': '>=2.0.5'
+  devalue: '>=5.6.4'
+  wrangler: '>=3.114.17'
+  vite: '>=6.4.3'
+  vitest: '>=3.2.6'
+  # samples/cloudflare-mmorpg pins @vitest/runner and @vitest/snapshot
+  # to 2.1.9 directly, out of lockstep with the vitest override above;
+  # @cloudflare/vitest-pool-workers requires all three at matching
+  # majors (peerDependencies: vitest/@vitest/runner/@vitest/snapshot
+  # all ^4.1.0), so force these two to follow vitest's resolved major.
+  '@vitest/runner': '>=4.1.0'
+  '@vitest/snapshot': '>=4.1.0'
+  js-yaml: '>=4.3.0'
+  body-parser: '>=2.3.0'
+  linkify-it: '>=5.0.2'
+  sharp: '>=0.35.0'
+  postcss: '>=8.5.18'
