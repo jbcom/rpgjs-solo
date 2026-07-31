@@ -21,6 +21,7 @@ const packageDirectories = [
 const temporaryDirectory = mkdtempSync(join(tmpdir(), 'rpgjs-solo-packed-consumer-'))
 const packDirectory = join(temporaryDirectory, 'packs')
 const consumerDirectory = join(temporaryDirectory, 'consumer')
+const storeDirectory = join(temporaryDirectory, 'pnpm-store')
 
 const run = (command, arguments_, options = {}) =>
   execFileSync(command, arguments_, {
@@ -82,10 +83,6 @@ ${Object.entries(localPackageOverrides)
   .map(([name, archive]) => `  ${JSON.stringify(name)}: ${JSON.stringify(archive)}`)
   .join('\n')}
 `
-  )
-  writeFileSync(
-    join(consumerDirectory, '.npmrc'),
-    readFileSync(join(rootDirectory, '.npmrc'), 'utf8')
   )
   writeFileSync(
     join(consumerDirectory, 'tsconfig.json'),
@@ -171,7 +168,11 @@ console.log('RPGJS Solo packed runtime execution and browser build passed')
 `
   )
 
-  run('pnpm', ['install', '--offline'])
+  run('pnpm', [
+    'install',
+    `--store-dir=${storeDirectory}`,
+    '--registry=https://registry.npmjs.org/'
+  ])
   run('pnpm', ['run', 'check'])
   run('pnpm', ['run', 'build'])
   process.stdout.write(run('pnpm', ['run', 'start']))
