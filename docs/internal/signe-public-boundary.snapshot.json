@@ -85,6 +85,8 @@
       "SoloAppearanceResolver",
       "SoloAudioOptions",
       "SoloCameraOptions",
+      "SoloCanvasEnginePatchHost",
+      "SoloCanvasEnginePatchInstaller",
       "SoloEntityAnimationResolver",
       "SoloEntityAppearance",
       "SoloFogController",

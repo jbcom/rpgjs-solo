@@ -1,16 +1,12 @@
 # @jbcom/rpgjs-solo-renderer
 
-The renderer installs the fleet's versioned
-`@arcade-cabinet/rpgjs-patches` compatibility layer before CanvasEngine scene
-creation. This keeps rapid standalone map replacement safe on CanvasEngine
-2.0.1 while centralizing the upstream lifecycle workarounds for every Solo
-consumer. Each active map also owns an isolated, keyed viewport and `TiledMap`
-element so stale async tileset loads or retiring camera directives cannot
-overwrite a newer destination. The shared patch normalizes CanvasEngine's
-boolean clamp to pixi-viewport's supported all-direction contract.
-It also cancels late spritesheet play/update callbacks after Pixi has cleared a
-retiring sprite's transforms, preventing async animation mounts from writing
-into a destroyed map scene.
+The renderer accepts a game-owned CanvasEngine compatibility installer and runs
+it before scene creation. This keeps the canonical public package independent
+from private registries while allowing fleet games to centralize lifecycle
+workarounds in versioned `@arcade-cabinet/rpgjs-patches` releases. Each active
+map also owns an isolated, keyed viewport and `TiledMap` element so stale async
+tileset loads or retiring camera directives cannot overwrite a newer
+destination.
 
 The native rendering and authoring layer for RPGJS Solo. It keeps the RPGJS
 Tiled workflow and composes CanvasEngine's scene graph, camera, spritesheets,
@@ -45,6 +41,7 @@ composed path is inside a button, form control, dialog, editable region, or
 
 ```ts
 import { SoloRuntime } from '@jbcom/rpgjs-solo'
+import { installCanvasEnginePatches } from '@arcade-cabinet/rpgjs-patches'
 import {
   SoloRenderer,
   createSoloTileObstacles,
@@ -63,6 +60,7 @@ const renderer = new SoloRenderer({
   target: document.querySelector('#rpg')!,
   playerId: 'hero',
   maps: [field],
+  installCanvasEnginePatches,
   appearances: {
     hero: {
       spritesheet: createRpgMakerSpritesheet('/sprites/hero.png', 3, 4),
@@ -80,6 +78,11 @@ const renderer = new SoloRenderer({
 
 await renderer.start()
 ```
+
+The private installer is deliberately supplied by the game, not declared by
+this public package. Fleet production consumers must pin the current compatible
+release and inject it as above; public or upstream-oriented consumers may omit
+the hook when no compatibility layer is required.
 
 Story-driven terrain remains a game-owned decision while the renderer owns its
 safe scene lifecycle. Replace complete GID layers immutably, then register the

@@ -315,9 +315,6 @@ importers:
 
   packages/solo-renderer:
     dependencies:
-      '@arcade-cabinet/rpgjs-patches':
-        specifier: 0.1.4
-        version: 0.1.4(canvasengine@2.1.1(@types/react@19.2.17)(pixi.js@8.19.0)(react@19.2.8))
       '@canvasengine/presets':
         specifier: 2.1.0
         version: 2.1.0(canvasengine@2.1.1(@types/react@19.2.17)(pixi.js@8.19.0)(react@19.2.8))(pixi.js@8.19.0)
@@ -1179,11 +1176,6 @@ importers:
         version: 8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0)
 
 packages:
-
-  '@arcade-cabinet/rpgjs-patches@0.1.4':
-    resolution: {integrity: sha512-t4N2dAzZgzX6AtxNKpYwIwJxHfoVYblojsrdd+mr7v0KyLuq57abCoHh0zticxqDwGclEcu0FCYoj3KcjE5qew==, tarball: https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/%40arcade-cabinet%2Frpgjs-patches/-/0.1.4/rpgjs-patches-0.1.4.tgz}
-    peerDependencies:
-      canvasengine: 2.0.1
 
   '@asamuzakjp/css-color@5.1.11':
     resolution: {integrity: sha512-KVw6qIiCTUQhByfTd78h2yD1/00waTmm9uy/R7Ck/ctUyAPj+AEDLkQIdJW0T8+qGgj3j5bpNKK7Q3G+LedJWg==}
@@ -3046,8 +3038,8 @@ packages:
     resolution: {integrity: sha512-PpOwAdQ/YlXQ2vj8a3h8IipDuYRi3wceVQQGYWxNINccq40Anw7BlsEXCMbt1Zt+OLA6Fq9suIpIWD0OsnISlw==}
     engines: {node: '>=8'}
 
-  flatted@3.4.4:
-    resolution: {integrity: sha512-5+ybhBZANEJxaH3X5evAFatUxLfEHSr7n6kYJ+1Qd0mUqr4eu9gIf6GDbWHf8RJijHrjjO8G+la14SlL2SeS1Q==}
+  flatted@3.4.3:
+    resolution: {integrity: sha512-/zipXxyO6rGvuNGDiULY9MvEGSkb2gaG4GGH4ygMi0ZZzyMHdUZBmntJmx5x1G2VuPytCwGN4xsJP6cw+sK+vQ==}
 
   follow-redirects@1.16.0:
     resolution: {integrity: sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==}
@@ -4454,10 +4446,6 @@ packages:
 
 snapshots:
 
-  '@arcade-cabinet/rpgjs-patches@0.1.4(canvasengine@2.1.1(@types/react@19.2.17)(pixi.js@8.19.0)(react@19.2.8))':
-    dependencies:
-      canvasengine: 2.1.1(@types/react@19.2.17)(pixi.js@8.19.0)(react@19.2.8)
-
   '@asamuzakjp/css-color@5.1.11':
     dependencies:
       '@asamuzakjp/generational-cache': 1.0.1
@@ -5690,7 +5678,7 @@ snapshots:
     dependencies:
       '@vitest/utils': 4.1.10
       fflate: 0.8.3
-      flatted: 3.4.4
+      flatted: 3.4.3
       pathe: 2.0.3
       sirv: 3.0.2
       tinyglobby: 0.2.17
@@ -6257,7 +6245,7 @@ snapshots:
       locate-path: 5.0.0
       path-exists: 4.0.0
 
-  flatted@3.4.4: {}
+  flatted@3.4.3: {}
 
   follow-redirects@1.16.0(debug@4.4.3(supports-color@10.2.2)):
     optionalDependencies:

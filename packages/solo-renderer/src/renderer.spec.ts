@@ -6,10 +6,6 @@ const mocks = vi.hoisted(() => ({
   Viewport: vi.fn()
 }))
 
-vi.mock('@arcade-cabinet/rpgjs-patches', () => ({
-  installCanvasEnginePatches: mocks.installCanvasEnginePatches
-}))
-
 vi.mock('canvasengine', () => ({
   bootstrapCanvas: vi.fn(),
   Howler: { mute: vi.fn() },
@@ -50,7 +46,8 @@ describe('SoloRenderer CanvasEngine compatibility', () => {
       runtime: {},
       playerId: 'hero',
       maps: [],
-      input: false
+      input: false,
+      installCanvasEnginePatches: mocks.installCanvasEnginePatches
     } as unknown as SoloRendererOptions
 
     const renderer = new SoloRenderer(options)
@@ -59,6 +56,22 @@ describe('SoloRenderer CanvasEngine compatibility', () => {
       Sprite: mocks.Sprite,
       Viewport: mocks.Viewport
     })
+    renderer.destroy()
+  })
+
+  it('does not require a private fleet package in public consumers', () => {
+    const target = document.createElement('div')
+    const options = {
+      target,
+      runtime: {},
+      playerId: 'hero',
+      maps: [],
+      input: false
+    } as unknown as SoloRendererOptions
+
+    const renderer = new SoloRenderer(options)
+
+    expect(mocks.installCanvasEnginePatches).not.toHaveBeenCalled()
     renderer.destroy()
   })
 })

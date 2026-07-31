@@ -77,9 +77,10 @@ Any divergence alerts and stops for manual reconciliation.
 
 ### Downstream package stewardship blocker
 
-`@arcade-cabinet/rpgjs-patches@0.1.4` declares an exact `canvasengine@2.0.1`
-peer while the adopted renderer baseline requires `canvasengine@2.1.1`.
-Do not widen that peer or override the warning inside this fork. The package
-must be validated and released by its own steward, then adopted here before the
-Solo package line is release-complete. Until then, `pnpm peers check` is
-expected to report this exact mismatch.
+The public renderer exposes a typed `installCanvasEnginePatches` injection
+boundary instead of depending on the fleet's private registry. Fleet production
+consumers must inject a validated private release with an exact compatible
+CanvasEngine peer. `@arcade-cabinet/rpgjs-patches@0.2.0` is the candidate for
+the adopted `canvasengine@2.1.1` baseline; the Solo line is not
+fleet-release-complete until that package is merged, published, and proved in a
+real LAN game consumer.
