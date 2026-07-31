@@ -1,14 +1,40 @@
-import { Context, inject, RpgClient } from "@rpgjs/client"
+import {
+    inject,
+    RpgClient,
+    type GuiRegistration,
+} from "@rpgjs/client"
 import { VueGui, VueGuiToken } from "./VueGui"
-import { createModule } from "@rpgjs/common"
+import { createModule, type RpgContext, type RpgProvider } from "@rpgjs/common"
+import type { Component } from "vue"
 
-interface VueGuiProviderOptions {
+export interface VueGuiProviderOptions {
     /** The HTML element where Vue components will be mounted */
     mountElement?: HTMLElement | string
     /** Custom CSS selector for the mount element */
     selector?: string
     /** Whether to create a new div element if none is found */
     createIfNotFound?: boolean
+}
+
+export type VueGuiRegistration<TData = unknown> = GuiRegistration<TData, Component>
+
+/**
+ * Marks a GUI registration as an official Vue DOM overlay.
+ *
+ * @example
+ * ```ts
+ * gui: [
+ *   vueGui({ id: 'inventory', component: Inventory })
+ * ]
+ * ```
+ */
+export function vueGui<TData = unknown>(
+    registration: Omit<VueGuiRegistration<TData>, "renderer">,
+): VueGuiRegistration<TData> {
+    return {
+        ...registration,
+        renderer: "vue",
+    }
 }
 
 /**
@@ -73,7 +99,7 @@ interface VueGuiProviderOptions {
  * @see {@link VueGui} for the main service class
  */
 
-export function provideVueGui(options: VueGuiProviderOptions = {}) {
+export function provideVueGui(options: VueGuiProviderOptions = {}): RpgProvider[] {
     return createModule('VueGui',[
         {
             client: {
@@ -88,9 +114,9 @@ export function provideVueGui(options: VueGuiProviderOptions = {}) {
         },
         {
             provide: VueGuiToken,
-            useFactory: (context: Context) => {
+            useFactory: (context: RpgContext) => {
                 // Only create VueGui on client side
-                if (context['side'] === 'server') {
+                if (context.side === 'server') {
                     console.warn('VueGui is only available on client side')
                     return null
                 }

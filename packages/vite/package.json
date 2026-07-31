@@ -1,6 +1,6 @@
 {
   "name": "@rpgjs/vite",
-  "version": "5.0.0-beta.26",
+  "version": "5.0.0-beta.28",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -21,8 +21,8 @@
     "@babel/parser": "^7.29.7",
     "@babel/traverse": "^7.29.7",
     "@babel/types": "^7.29.7",
-    "@canvasengine/compiler": "2.0.0",
-    "@canvasengine/tiled": "2.0.0",
+    "@canvasengine/compiler": "2.1.0",
+    "@canvasengine/tiled": "2.1.0",
     "@hono/vite-dev-server": "^0.26.0",
     "@iarna/toml": "^2.2.5",
     "@rpgjs/server": "workspace:*",

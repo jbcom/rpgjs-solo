@@ -1,5 +1,41 @@
 # @rpgjs/tiledmap
 
+## 5.0.0-beta.28
+
+### Patch Changes
+
+- 995277f: Upgrade the RPGJS workspace and published package compatibility ranges to
+  CanvasEngine 2.1, including its compiler, presets, testing, and Tiled
+  integrations. Keep PixiJS on the CanvasEngine-supported 8.19 line and verify the
+  existing client, server, sample, and playground builds against the new runtime.
+- Updated dependencies [37a4fb0]
+- Updated dependencies [995277f]
+- Updated dependencies [995277f]
+- Updated dependencies [335b768]
+  - @rpgjs/server@5.0.0-beta.28
+  - @rpgjs/client@5.0.0-beta.28
+  - @rpgjs/vite@5.0.0-beta.28
+
+## 5.0.0-beta.27
+
+### Patch Changes
+
+- e5ad24a: Establish the stable RPGJS-owned boundary for reactive gameplay properties,
+  dependency-injection providers, Node room storage, and Cloudflare room hosting.
+  Remove accidental Signe re-exports from the client and server roots, keep
+  direct Signe imports as an explicitly advanced plugin path, and protect every
+  published TypeScript entry with declaration reachability snapshots in CI.
+  Keep provider creation strategies mutually exclusive, support asynchronous
+  provider factories, and preserve strict member checking on the server engine.
+  Enforce these public contracts in CI, test the RPGJS-owned Node storage
+  lifecycle, and document complete stable migration examples.
+- Updated dependencies [dc6aed5]
+- Updated dependencies [e5ad24a]
+  - @rpgjs/client@5.0.0-beta.27
+  - @rpgjs/server@5.0.0-beta.27
+  - @rpgjs/common@5.0.0-beta.26
+  - @rpgjs/vite@5.0.0-beta.27
+
 ## 5.0.0-beta.26
 
 ### Minor Changes

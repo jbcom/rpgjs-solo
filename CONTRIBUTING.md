@@ -7,12 +7,11 @@ games that will never be multiplayer.
 ## Branch model
 
 - `v5` tracks `RSamaium/RPG-JS:v5`. Do not merge Solo product work into it.
-- `main` on Gitea is the canonical RPGJS Solo product branch.
+- `main` on GitHub is the canonical RPGJS Solo product branch.
 - Start work from `main` on a focused feature branch and open a review back to
-  `main` on Gitea.
-- The public GitHub fork is a downstream mirror for discovery and source
-  availability. Do not treat GitHub branches or pull requests as the canonical
-  development record.
+  `main` on GitHub.
+- Gitea is a checked downstream backup and the private package registry. It is
+  not an independent development record.
 - Audit upstream changes on the tracking branch before porting them. A newer
   upstream release is not adopted by copying package versions alone; relevant
   behavior, tests, migrations, and bundle effects must be reconciled.
@@ -97,6 +96,27 @@ without removing the second state model is not progress.
 - Route player-visible framework text through the i18n service.
 - Prefer small modules, hooks, providers, and registries over game-specific
   behavior in core packages.
+- Follow the existing package structure and naming conventions.
+- Prefer existing dependency injection, module, hook, and service patterns before
+  introducing new architecture.
+- Design public APIs with a comfortable developer experience that follows the
+  existing RPGJS style.
+- Keep changes scoped. Avoid unrelated refactors in feature commits.
+- Add focused unit tests with Vitest when changing shared behavior,
+  synchronization, physics, gameplay state, or public APIs.
+- Ship documentation with every new feature, especially when it adds a new
+  module, client API, server API, synchronization behavior, or runtime adapter.
+- Update samples only when they clarify the new API or protect an important
+  integration path.
+- Before merging changes that can affect package consumers, validate them
+  against the matching branch of
+  [`rpgjs/starter`](https://github.com/rpgjs/starter) in a temporary directory.
+  Build and pack the affected local packages, install those artifacts in the
+  starter, run its production build, and start the game on a fixed local port.
+  Open it in a browser and check the rendered game, console errors, failed
+  network requests, and at least one basic interaction. Review a screenshot and
+  report any warning that also occurs with the currently published packages so
+  pre-existing starter issues are not mistaken for regressions.
 
 ## Rendering and UI
 
