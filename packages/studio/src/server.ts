@@ -756,7 +756,13 @@ export default (_config?: unknown) => {
         const mapExtended = map as RpgMapExtended;
         const isDirectLoad = isStudioDirectLoadPayload(mapData);
         const useLocalBundleEvents = shouldUseLocalBundleEvents(config);
-        const hydratedMapData = await normalizeStudioMapPayload(mapData?.id ?? mapData?.data?._id ?? mapData?.data?.id, mapData, config);
+        const provider = config.dataProvider ?? getGameDataProvider();
+        const hydratedMapData = await normalizeStudioMapPayload(
+          mapData?.id ?? mapData?.data?._id ?? mapData?.data?.id,
+          mapData,
+          config,
+          provider,
+        );
         Object.assign(mapData, hydratedMapData);
         if (streamingOptions && !isDirectLoad && !mapData?.data?.__studioPrepared) {
           const preparedMapData = prepareStudioMapPayload(mapData, {
@@ -773,7 +779,7 @@ export default (_config?: unknown) => {
         mapExtended.globalConfig = mapData.config ?? {};
 
         const resolvedEvents = await resolveMapEventReferences(mapData?.events ?? mapData?.data?.events, { useLocalBundleEvents });
-        const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents);
+        const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents, provider);
         const resolvedEventsById = new Map<string, any>();
         hydratedEvents.forEach((entry) => {
           const id = String(entry?.eventId ?? entry?.id ?? entry?._id ?? "");
@@ -781,7 +787,10 @@ export default (_config?: unknown) => {
         });
         (mapExtended as any).__resolvedEventsById = resolvedEventsById;
 
-        const hydratedCommonEvents = await hydrateEventMediaReferences(parseArrayValue(mapData?.commonEvents ?? mapData?.data?.commonEvents));
+        const hydratedCommonEvents = await hydrateEventMediaReferences(
+          parseArrayValue(mapData?.commonEvents ?? mapData?.data?.commonEvents),
+          provider,
+        );
         const commonEventsById = new Map<string, any>();
         hydratedCommonEvents.forEach((entry) => {
           const ids = [entry?.eventId, entry?.id, entry?._id].filter((value): value is string => typeof value === "string" && value.length > 0);

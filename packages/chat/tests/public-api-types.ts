@@ -5,6 +5,9 @@ import type {
 import type {
   ChatServerOptions,
 } from "@rpgjs/chat/server";
+import type {
+  ChatClientOptions as RootChatClientOptions,
+} from "@rpgjs/chat";
 
 const message: ChatMessage = {
   id: "message-1",
@@ -23,12 +26,20 @@ const serverOptions: ChatServerOptions = {
   maxLength: 320,
 };
 
+const rootClientOptions: RootChatClientOptions = {
+  maxLength: 320,
+};
+
 void message;
 void clientOptions;
 void serverOptions;
+void rootClientOptions;
 
 // @ts-expect-error Server-only options must not leak from the client entry.
 type ClientServerOptions = import("@rpgjs/chat/client").ChatServerOptions;
 
 // @ts-expect-error Client-only options must not leak from the server entry.
 type ServerClientOptions = import("@rpgjs/chat/server").ChatClientOptions;
+
+// @ts-expect-error The default root is client-facing, not server-facing.
+type RootServerOptions = import("@rpgjs/chat").ChatServerOptions;

@@ -6,25 +6,31 @@
   "types": "dist/client/client-index.d.ts",
   "exports": {
     ".": {
-      "browser": "./dist/client/index.js",
-      "node": "./dist/server/index.js",
-      "import": "./dist/client/index.js",
-      "types": "./dist/client/client-index.d.ts"
+      "browser": {
+        "types": "./dist/client/client-index.d.ts",
+        "import": "./dist/client/index.js"
+      },
+      "node": {
+        "types": "./dist/server/server-index.d.ts",
+        "import": "./dist/server/index.js"
+      },
+      "types": "./dist/client/client-index.d.ts",
+      "import": "./dist/client/index.js"
     },
     "./client": {
-      "import": "./dist/client/index.js",
-      "types": "./dist/client/client-index.d.ts"
+      "types": "./dist/client/client-index.d.ts",
+      "import": "./dist/client/index.js"
     },
     "./server": {
-      "import": "./dist/server/index.js",
-      "types": "./dist/server/server-index.d.ts"
+      "types": "./dist/server/server-index.d.ts",
+      "import": "./dist/server/index.js"
     }
   },
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build",
     "test": "vitest run",
-    "test:types": "tsc --noEmit --strict --skipLibCheck true --target ES2022 --module ESNext --moduleResolution Bundler tests/public-api-types.ts"
+    "test:types": "tsc --noEmit --strict --skipLibCheck true --target ES2022 --module ESNext --moduleResolution Bundler tests/public-api-types.ts && tsc --noEmit --strict --skipLibCheck true --target ES2022 --module NodeNext --moduleResolution NodeNext tests/public-api-node-types.ts && tsc --noEmit --strict --skipLibCheck true --target ES2022 --module ESNext --moduleResolution Bundler --customConditions browser tests/public-api-browser-types.ts"
   },
   "peerDependencies": {
     "@rpgjs/client": "workspace:*",
