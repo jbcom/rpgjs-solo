@@ -36,6 +36,13 @@ export interface SoloEntityAppearance {
    * interaction, or defeat state without teaching the renderer game rules.
    */
   animation?: string | SoloEntityAnimationResolver
+  /**
+   * Projects game-owned visibility from authoritative entity state. The
+   * renderer keeps the resolved appearance stable while re-evaluating this
+   * value on every state sync, so hidden entities never fall through to the
+   * fallback-circle appearance.
+   */
+  visible?: boolean | SoloEntityVisibilityResolver
   color?: string
   width?: number
   height?: number
@@ -45,6 +52,7 @@ export interface SoloEntityAppearance {
 }
 
 export type SoloEntityAnimationResolver = (entity: SoloEntityState) => string
+export type SoloEntityVisibilityResolver = (entity: SoloEntityState) => boolean
 export type SoloAppearanceResolver = (entity: SoloEntityState) => SoloEntityAppearance | undefined
 
 export type SoloFogVisibilityState = 'visible' | 'explored' | 'unknown'

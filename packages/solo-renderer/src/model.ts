@@ -103,7 +103,7 @@ export class SoloRendererModel {
       direction: signal(state.direction),
       moving: signal(state.moving),
       animation: signal(this.resolveAnimation(appearance, state)),
-      visible: signal(true),
+      visible: signal(this.resolveVisibility(appearance, state)),
       appearance
     }
   }
@@ -114,10 +114,16 @@ export class SoloRendererModel {
     entity.direction.set(entity.state.direction)
     entity.moving.set(entity.state.moving)
     entity.animation.set(this.resolveAnimation(entity.appearance, entity.state))
+    entity.visible.set(this.resolveVisibility(entity.appearance, entity.state))
   }
 
   private resolveAnimation(appearance: SoloEntityAppearance, state: SoloEntityState): string {
     if (typeof appearance.animation === 'function') return appearance.animation(state)
     return appearance.animation ?? (state.moving ? 'walk' : 'stand')
+  }
+
+  private resolveVisibility(appearance: SoloEntityAppearance, state: SoloEntityState): boolean {
+    if (typeof appearance.visible === 'function') return appearance.visible(state)
+    return appearance.visible ?? true
   }
 }
