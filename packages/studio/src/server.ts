@@ -9,7 +9,7 @@ import { applyTriggerSettings, getEventTypeRuntime, getGraphicKey, getGraphicSca
 import { normalizeEventType } from "@common/event-types";
 import { normalizeWeatherState } from "@common/weather";
 import { getGameDataProvider, getStudioGameRuntimeConfig, configureStudioGameRuntime, resetGameDataProvider } from "./data-provider";
-import type { GameRuntimeMode } from "./data-provider";
+import type { GameDataProvider, GameRuntimeMode } from "./data-provider";
 import { normalizeStudioDatabase, normalizeStudioDatabaseRecord } from "./database-normalizer";
 import { createStudioDefaultClass } from "./skills-to-learn";
 import { getStudioSkillChangeNotification } from "./skill-notification";
@@ -93,8 +93,32 @@ export const resolveRuntimeEventHitbox = (object: any, params: any): { width: nu
   return normalizeRuntimeHitbox(object?.hitbox) ?? normalizeRuntimeHitbox(triggerHitbox) ?? normalizeRuntimeHitbox(params?.hitbox);
 };
 
-const resolvePlayerConfig = async (player: RpgPlayer): Promise<ProjectBasic> => {
-  const gameConfig = readGameConfig();
+const normalizeProjectId = (value: unknown): string | null => {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+};
+
+const resolveStudioRuntimeContext = (map?: RpgMap): { gameConfig: any; projectId: string | null } => {
+  const legacyGameConfig = readGameConfig();
+  const mapConfig = map?.globalConfig;
+  if (mapConfig && typeof mapConfig === "object" && Object.keys(mapConfig).length > 0) {
+    return {
+      gameConfig: mapConfig,
+      projectId:
+        normalizeProjectId(mapConfig._id ?? mapConfig.projectId)
+        ?? normalizeProjectId(getStudioGameRuntimeConfig().projectId)
+        ?? normalizeProjectId(legacyGameConfig?._id ?? legacyGameConfig?.projectId),
+    };
+  }
+  return {
+    gameConfig: legacyGameConfig,
+    projectId:
+      normalizeProjectId(getStudioGameRuntimeConfig().projectId)
+      ?? normalizeProjectId(legacyGameConfig?._id ?? legacyGameConfig?.projectId),
+  };
+};
+
+const resolvePlayerConfig = async (player: RpgPlayer, map?: RpgMap): Promise<ProjectBasic> => {
+  const { gameConfig, projectId } = resolveStudioRuntimeContext(map);
   const baseHeroConfig = {
     ...(gameConfig.hero ?? {}),
     skillsToLearn: gameConfig.skillsToLearn ?? gameConfig.skills ?? gameConfig.hero?.skillsToLearn ?? gameConfig.hero?.skills,
@@ -108,12 +132,11 @@ const resolvePlayerConfig = async (player: RpgPlayer): Promise<ProjectBasic> => 
   }
 
   try {
-    const configuredProjectId = getStudioGameRuntimeConfig().projectId?.trim() || null;
     const overrideConfig = await providerStartConfig.call(provider, {
       player,
       heroConfig: baseHeroConfig,
       gameConfig,
-      projectId: configuredProjectId || gameConfig?._id || null,
+      projectId,
       mapId: gameConfig?.startMapId || null,
     });
 
@@ -125,7 +148,7 @@ const resolvePlayerConfig = async (player: RpgPlayer): Promise<ProjectBasic> => 
 };
 
 const startGame = async (player: RpgPlayer, map?: RpgMap) => {
-  const heroConfig = await resolvePlayerConfig(player);
+  const heroConfig = await resolvePlayerConfig(player, map);
   (player as any).studioCombatAnimations = heroConfig.animations ?? {};
   (player as any).combatAnimations = heroConfig.animations ?? {};
   const startingItems = await ensureStartingItemsInDatabase(player, heroConfig, map);
@@ -237,9 +260,7 @@ const ensureStartingItemsInDatabase = async (player: RpgPlayer, config: ProjectB
   }, {});
   if (missingIds.length === 0) return startingItems;
 
-  const gameConfig = readGameConfig();
-  const configuredProjectId = getStudioGameRuntimeConfig().projectId?.trim() || null;
-  const projectId = configuredProjectId || gameConfig?._id || null;
+  const { projectId } = resolveStudioRuntimeContext(map);
 
   try {
     const records = await getGameDataProvider().getDatabase(projectId ?? undefined);
@@ -269,6 +290,12 @@ export interface CreateStudioMapUpdatePayloadOptions {
   projectId?: string | null;
   /** Map used when the project does not define another starting map. */
   startMapId?: string;
+  /**
+   * Trusted server-owned Studio data source used for project, map, media, and
+   * database reads. Browser code must not receive providers that expose private
+   * storage or credentials.
+   */
+  dataProvider?: GameDataProvider;
   /** Studio data source. Trusted publishers normally use `online`. */
   runtimeMode?: GameRuntimeMode;
   /** Compatibility alias for `apiUrl`. */
@@ -353,7 +380,7 @@ const toIdentifierString = (value: unknown): string => {
   return toIdentifierString(record._id) || toIdentifierString(record.id) || toIdentifierString(record.mediaId) || toIdentifierString(record.referenceId);
 };
 
-const resolveMediaReference = async (value: unknown): Promise<unknown> => {
+const resolveMediaReference = async (value: unknown, provider: GameDataProvider): Promise<unknown> => {
   if (!value) return value;
   const referenceId = toIdentifierString(value);
   if (!referenceId) return value;
@@ -362,7 +389,7 @@ const resolveMediaReference = async (value: unknown): Promise<unknown> => {
 
   for (const candidateId of candidateIds) {
     try {
-      const media = await getGameDataProvider().getMedia(candidateId);
+      const media = await provider.getMedia(candidateId);
       if (media && !media.__placeholder) {
         return value && typeof value === "object" ? { ...(value as Record<string, unknown>), ...media } : media;
       }
@@ -374,7 +401,10 @@ const resolveMediaReference = async (value: unknown): Promise<unknown> => {
   return value;
 };
 
-const hydrateEventMediaReferences = async (events: any[]): Promise<any[]> => {
+const hydrateEventMediaReferences = async (
+  events: any[],
+  provider: GameDataProvider = getGameDataProvider(),
+): Promise<any[]> => {
   return Promise.all(
     events.map(async (event) => {
       if (!event || typeof event !== "object") return event;
@@ -382,7 +412,7 @@ const hydrateEventMediaReferences = async (events: any[]): Promise<any[]> => {
       if (nextEvent.params?.graphic) {
         nextEvent.params = {
           ...nextEvent.params,
-          graphic: await resolveMediaReference(nextEvent.params.graphic),
+          graphic: await resolveMediaReference(nextEvent.params.graphic, provider),
         };
       }
       if (Array.isArray(nextEvent.triggers)) {
@@ -392,7 +422,7 @@ const hydrateEventMediaReferences = async (events: any[]): Promise<any[]> => {
             if (!trigger.graphic) return trigger;
             return {
               ...trigger,
-              graphic: await resolveMediaReference(trigger.graphic),
+              graphic: await resolveMediaReference(trigger.graphic, provider),
             };
           }),
         );
@@ -476,15 +506,28 @@ const parseJsonValue = (value: unknown, fallback: any): any => {
   }
 };
 
-const resolveStudioProject = async (mapId?: string, config: StudioServerConfig = {}): Promise<any> => {
+const resolveStudioProject = async (
+  mapId?: string,
+  config: StudioServerConfig = {},
+  provider: GameDataProvider = config.dataProvider ?? getGameDataProvider(),
+): Promise<any> => {
   const runtimeConfig = getStudioGameRuntimeConfig();
   const gameConfig = readGameConfig();
   const projectId = config.projectId?.trim?.() || runtimeConfig.projectId?.trim?.() || gameConfig?._id || null;
+  const query = projectId ? { projectId } : { mapId };
+
+  if (config.dataProvider) {
+    return provider.getProject(query).catch((error) => {
+      console.warn("[StudioGame] project preload failed", error);
+      return {};
+    });
+  }
+
   const cacheKey = projectId ? `project:${projectId}` : `map:${mapId ?? ""}`;
 
   if (!projectCacheByKey.has(cacheKey)) {
-    const promise = getGameDataProvider()
-      .getProject(projectId ? { projectId } : { mapId })
+    const promise = provider
+      .getProject(query)
       .catch((error) => {
         projectCacheByKey.delete(cacheKey);
         console.warn("[StudioGame] project preload failed", error);
@@ -506,16 +549,28 @@ const resolveStartMapId = async (config: StudioServerConfig): Promise<string> =>
   return project?.startMapId || "simplemap";
 };
 
-const normalizeStudioMapPayload = async (mapId: string, initialMapData: any, config: StudioServerConfig): Promise<any> => {
+const normalizeStudioMapPayload = async (
+  mapId: string,
+  initialMapData: any,
+  config: StudioServerConfig,
+  provider?: GameDataProvider,
+): Promise<any> => {
   if (initialMapData?.data?.params) return initialMapData;
+  const resolvedProvider = provider ?? config.dataProvider ?? getGameDataProvider();
 
-  const [project, mapResponse] = await Promise.all([resolveStudioProject(mapId, config), getGameDataProvider().getMap(mapId)]);
+  const [project, mapResponse] = await Promise.all([
+    resolveStudioProject(mapId, config, resolvedProvider),
+    resolvedProvider.getMap(mapId),
+  ]);
   const useLocalBundleEvents = shouldUseLocalBundleEvents(config);
   const params = mapResponse.params ?? {};
   const isV2 = mapResponse.creationDetails?.version === "v2";
   const resolvedEvents = await resolveMapEventReferences(mapResponse.events ?? mapResponse.data?.events, { useLocalBundleEvents });
-  const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents);
-  const hydratedCommonEvents = await hydrateEventMediaReferences(parseArrayValue(mapResponse.commonEvents ?? mapResponse.data?.commonEvents));
+  const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents, resolvedProvider);
+  const hydratedCommonEvents = await hydrateEventMediaReferences(
+    parseArrayValue(mapResponse.commonEvents ?? mapResponse.data?.commonEvents),
+    resolvedProvider,
+  );
   const mapDataValue = Array.isArray(mapResponse.data) ? mapResponse.data : parseJsonValue(mapResponse.data, []);
   const mergedHitboxes = [...(mapResponse.hitboxes ?? [])];
 
@@ -581,6 +636,7 @@ export async function createStudioMapUpdatePayload(mapId: string, config: Create
     bundleBasePath: config.bundleBasePath,
   });
   resetGameDataProvider();
+  const provider = config.dataProvider ?? getGameDataProvider();
   const normalized = await normalizeStudioMapPayload(
     mapId,
     {
@@ -590,9 +646,10 @@ export async function createStudioMapUpdatePayload(mapId: string, config: Create
       events: [],
     },
     config,
+    provider,
   );
   const projectId = config.projectId?.trim() || normalized.config?._id || normalized.data?.projectId;
-  const database = projectId ? await getGameDataProvider().getDatabase(projectId) : [];
+  const database = projectId ? await provider.getDatabase(projectId) : [];
   const preparedMap = prepareStudioMapPayload(normalized, {
     id: mapId,
     config: normalized.config,
@@ -699,7 +756,13 @@ export default (_config?: unknown) => {
         const mapExtended = map as RpgMapExtended;
         const isDirectLoad = isStudioDirectLoadPayload(mapData);
         const useLocalBundleEvents = shouldUseLocalBundleEvents(config);
-        const hydratedMapData = await normalizeStudioMapPayload(mapData?.id ?? mapData?.data?._id ?? mapData?.data?.id, mapData, config);
+        const provider = config.dataProvider ?? getGameDataProvider();
+        const hydratedMapData = await normalizeStudioMapPayload(
+          mapData?.id ?? mapData?.data?._id ?? mapData?.data?.id,
+          mapData,
+          config,
+          provider,
+        );
         Object.assign(mapData, hydratedMapData);
         if (streamingOptions && !isDirectLoad && !mapData?.data?.__studioPrepared) {
           const preparedMapData = prepareStudioMapPayload(mapData, {
@@ -716,7 +779,7 @@ export default (_config?: unknown) => {
         mapExtended.globalConfig = mapData.config ?? {};
 
         const resolvedEvents = await resolveMapEventReferences(mapData?.events ?? mapData?.data?.events, { useLocalBundleEvents });
-        const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents);
+        const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents, provider);
         const resolvedEventsById = new Map<string, any>();
         hydratedEvents.forEach((entry) => {
           const id = String(entry?.eventId ?? entry?.id ?? entry?._id ?? "");
@@ -724,7 +787,10 @@ export default (_config?: unknown) => {
         });
         (mapExtended as any).__resolvedEventsById = resolvedEventsById;
 
-        const hydratedCommonEvents = await hydrateEventMediaReferences(parseArrayValue(mapData?.commonEvents ?? mapData?.data?.commonEvents));
+        const hydratedCommonEvents = await hydrateEventMediaReferences(
+          parseArrayValue(mapData?.commonEvents ?? mapData?.data?.commonEvents),
+          provider,
+        );
         const commonEventsById = new Map<string, any>();
         hydratedCommonEvents.forEach((entry) => {
           const ids = [entry?.eventId, entry?.id, entry?._id].filter((value): value is string => typeof value === "string" && value.length > 0);

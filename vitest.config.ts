@@ -30,6 +30,11 @@ export default defineConfig({
       "playground/games/studio/src/worker.spec.ts",
     ],
     environment: "jsdom",
+    environmentOptions: {
+      jsdom: {
+        url: "http://localhost/",
+      },
+    },
     globals: true,
     silent: true,
     setupFiles: ["./packages/testing/src/setup.ts"],

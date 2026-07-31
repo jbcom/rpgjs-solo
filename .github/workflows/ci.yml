@@ -7,7 +7,7 @@ permissions:
 on:
   push:
     branches:
-      - "*"
+      - "**"
     paths-ignore:
       - "docs/**"
   pull_request:
@@ -18,9 +18,6 @@ on:
 
 jobs:
   tests:
-    # The jbcom fork's full suite runs in Gitea, where its private Solo package
-    # registry is reachable. Keep this inherited job available to upstream.
-    if: github.server_url != 'https://github.com' || github.repository == 'RSamaium/RPG-JS'
     runs-on: ubuntu-22.04
     strategy:
       matrix:
@@ -38,16 +35,24 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build
         run: pnpm build
+      - name: Public API boundary
+        run: pnpm api:boundary
+      - name: Public API type contracts
+        run: pnpm test:types
       - name: Solo production boundary
         run: pnpm verify:solo-boundary
       - name: Solo packed package contracts
         run: pnpm verify:solo-package-contracts
+      - name: Solo packed consumer execution
+        run: pnpm verify:solo-consumer
       - name: Unit tests
-        run: pnpm test -- --run
+        run: pnpm test --run
       - name: Cloudflare MMORPG runtime tests
         run: pnpm --dir samples/cloudflare-mmorpg test
       - name: Cloudflare Studio runtime tests
         run: pnpm --dir playground/games/studio test
+      - name: Playground and sample builds
+        run: pnpm --filter '@rpgjs/playground-*' --filter sample run build
 
   build_and_publish:
       needs: tests

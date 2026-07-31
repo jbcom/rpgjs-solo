@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-07-22
 - Decision owners: jbcom RPGJS Solo maintainers
-- Upstream baseline: `RSamaium/RPG-JS:v5` at `e286ecf18ad85d5fab38b659ab95758a7f7a7c96`
+- Upstream baseline: `RSamaium/RPG-JS:v5` at `c858081051a18bc9410cb2f78deafcc31a40f07f`
 
 ## Context
 
@@ -101,8 +101,8 @@ CI must eventually enforce all of these mechanically:
 
 ## Upstream synchronization
 
-The `v5` branch tracks upstream. Gitea `main` is the product branch; GitHub is a
-public downstream mirror. Upstream
+The `v5` branch tracks upstream. GitHub `main` is the product branch; Gitea is a
+checked downstream backup and the private package registry. Upstream
 changes are classified as:
 
 - **portable:** RPG/content fixes independent of networking;

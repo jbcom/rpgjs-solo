@@ -101,6 +101,18 @@ export interface SoloAudioOptions {
   autoMuteInTests?: boolean
 }
 
+/**
+ * The minimal CanvasEngine surface accepted by a game-owned compatibility
+ * installer. Keeping this structural avoids making a public Solo package
+ * depend on the fleet's private patch registry.
+ */
+export interface SoloCanvasEnginePatchHost {
+  Sprite: (props: never) => unknown
+  Viewport: (props: never) => unknown
+}
+
+export type SoloCanvasEnginePatchInstaller = (host: SoloCanvasEnginePatchHost) => void
+
 export interface SoloViewportSize {
   width: number
   height: number
@@ -130,6 +142,12 @@ export interface SoloRendererOptions {
   fog?: false | SoloFogOptions
   input?: false | SoloInputOptions
   audio?: SoloAudioOptions
+  /**
+   * Installs consumer-owned CanvasEngine compatibility patches before any
+   * scene is created. Fleet production games supply the current
+   * `@arcade-cabinet/rpgjs-patches` installer here.
+   */
+  installCanvasEnginePatches?: SoloCanvasEnginePatchInstaller
   testMode?: boolean
   bootstrap?: Record<string, unknown>
 }

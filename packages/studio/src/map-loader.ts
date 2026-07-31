@@ -450,9 +450,17 @@ export const loadMap = async (mapId: string) => {
   };
 
   const isAudioAssetSource = (value: string): boolean => {
+    const queryStart = value.indexOf("?");
+    const path = (queryStart === -1 ? value : value.slice(0, queryStart)).toLowerCase();
     return (
-      /^(https?:\/\/|\/|data:|blob:)/.test(value) ||
-      /\.(aac|flac|m4a|mp3|oga|ogg|opus|wav|webm)(\?.*)?$/i.test(value)
+      value.startsWith("http://") ||
+      value.startsWith("https://") ||
+      value.startsWith("/") ||
+      value.startsWith("data:") ||
+      value.startsWith("blob:") ||
+      [".aac", ".flac", ".m4a", ".mp3", ".oga", ".ogg", ".opus", ".wav", ".webm"].some(
+        (extension) => path.endsWith(extension),
+      )
     );
   };
 

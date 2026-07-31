@@ -16,6 +16,7 @@
     "@rpgjs/playground-mouse-interactions",
     "@rpgjs/playground-pressure-plate",
     "@rpgjs/playground-projectiles",
+    "@rpgjs/playground-solo",
     "@rpgjs/playground-studio",
     "@rpgjs/playground-tiled",
     "@rpgjs/playground-v4-compat",

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import createStudioServer from "./server";
 
 function createLegacyMapPayload() {
@@ -17,6 +17,57 @@ function createLegacyMapPayload() {
 }
 
 describe("Studio server map streaming configuration", () => {
+  it("uses the injected provider for direct-load event media", async () => {
+    const getMedia = vi.fn(async (mediaId: string) => ({
+      _id: mediaId,
+      url: `https://private.example/${mediaId}.png`,
+    }));
+    const module = createStudioServer({
+      runtimeMode: "online",
+      streaming: false,
+      dataProvider: {
+        kind: "online",
+        getProject: vi.fn(),
+        getMap: vi.fn(),
+        getMedia,
+        getDatabase: vi.fn(),
+      },
+    });
+    const payload = {
+      id: "trusted-map",
+      config: {},
+      events: [{
+        id: "event-1",
+        params: { graphic: { _id: "#event-media" } },
+      }],
+      commonEvents: [{
+        id: "common-event-1",
+        triggers: [{ graphic: { mediaId: "common-media" } }],
+      }],
+      data: {
+        creationDetails: { version: "v2" },
+        params: { scale: 1 },
+        events: [],
+        commonEvents: [],
+      },
+    };
+
+    await module.map?.onBeforeUpdate?.(payload, {} as any);
+
+    expect(getMedia.mock.calls.map(([mediaId]) => mediaId)).toEqual([
+      "event-media",
+      "common-media",
+    ]);
+    expect(payload.events[0].params.graphic).toEqual(expect.objectContaining({
+      _id: "event-media",
+      url: "https://private.example/event-media.png",
+    }));
+    expect(payload.commonEvents[0].triggers[0].graphic).toEqual(expect.objectContaining({
+      _id: "common-media",
+      url: "https://private.example/common-media.png",
+    }));
+  });
+
   it("leaves custom map payloads untouched when built-in streaming is disabled", async () => {
     const module = createStudioServer({ streaming: false });
     const payload = createLegacyMapPayload();

@@ -1,20 +1,22 @@
-import { Context, FactoryProvider, findProvider, findProviders, inject, injector, Providers } from "@signe/di";
+import { Context, inject, injector, type Providers } from "@signe/di";
+import type { RpgContext, RpgProviders } from "@rpgjs/common";
 import { RpgClientEngine } from "../RpgClientEngine";
 import { setInject } from "./inject";
 
 interface SetupOptions {
-  providers: Providers;
+  providers: RpgProviders;
 }
 
 
-export async function startGame(options: SetupOptions) {
+export async function startGame(options: SetupOptions): Promise<RpgContext> {
   const context = new Context();
   context['side'] = 'client'
-  setInject(context);
+  setInject(context as unknown as RpgContext);
 
-  await injector(context, options.providers);
+  const providers = (options.providers as unknown[]).flat(Infinity) as Providers;
+  await injector(context, providers);
 
   const engine = inject<RpgClientEngine>(context, RpgClientEngine);
   await engine.start();
-  return context;
+  return context as unknown as RpgContext;
 }

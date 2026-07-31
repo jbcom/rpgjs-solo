@@ -106,9 +106,9 @@ The accepted architecture decision is recorded in
 ## Branches and upstream sync
 
 - `v5` mirrors the upstream default branch and is not the product branch.
-- Gitea `main` is the canonical RPGJS Solo product branch.
-- changes target Gitea `main` through reviewed feature branches.
-- GitHub is a public downstream mirror and is never the development record.
+- GitHub `main` is the canonical RPGJS Solo product branch.
+- changes target GitHub `main` through reviewed feature branches.
+- Gitea is a checked downstream backup and the private npm registry.
 - upstream changes are first audited on `v5`, then deliberately ported or
   merged into `main`; transport/MMORPG changes are not inherited by default.
 
@@ -136,7 +136,7 @@ from beta to production.
 ## Development
 
 ```bash
-git clone https://git.local.jonbogaty.com/jbcom/rpgjs-solo.git
+git clone https://github.com/jbcom/rpgjs-solo.git
 cd rpgjs-solo
 nvm use
 corepack enable
@@ -153,8 +153,8 @@ Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before changing engine architecture.
 
 RPGJS Solo is based on [RSamaium/RPG-JS](https://github.com/RSamaium/RPG-JS)
 and preserves its MIT license and attribution. The public
-[GitHub fork](https://github.com/jbcom/rpgjs-solo) mirrors the Gitea-canonical
-product for source availability. This project does not submit changes back to
-upstream.
+[GitHub fork](https://github.com/jbcom/rpgjs-solo) is the product home; Gitea
+keeps a checked downstream backup and serves the private package registry. This
+project does not submit changes back to upstream.
 
 MIT. Free for commercial use.

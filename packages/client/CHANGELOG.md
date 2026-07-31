@@ -1,5 +1,52 @@
 # @rpgjs/client
 
+## 5.0.0-beta.28
+
+### Minor Changes
+
+- 995277f: Add explicit renderer-neutral GUI registrations with an official Vue helper,
+  ship the authoritative and replaceable RPGJS chat module, provide default and
+  pixel chat themes over shared semantic CSS primitives, and enforce client/server
+  production bundle isolation with executable fixtures. Include a runnable pixel
+  chat playground and keep chat socket listeners active across standalone startup
+  and player map transfers. Document client/server setup, moderation hooks,
+  replacement components, themes, translations, and the public chat state API.
+  Emit complete side-specific chat declarations, synchronize the built-in input
+  length with client configuration, and reject explicitly unknown chat channels.
+
+### Patch Changes
+
+- 995277f: Upgrade the RPGJS workspace and published package compatibility ranges to
+  CanvasEngine 2.1, including its compiler, presets, testing, and Tiled
+  integrations. Keep PixiJS on the CanvasEngine-supported 8.19 line and verify the
+  existing client, server, sample, and playground builds against the new runtime.
+- Updated dependencies [37a4fb0]
+- Updated dependencies [995277f]
+- Updated dependencies [995277f]
+- Updated dependencies [335b768]
+  - @rpgjs/server@5.0.0-beta.28
+  - @rpgjs/ui-css@5.0.0-beta.24
+
+## 5.0.0-beta.27
+
+### Patch Changes
+
+- dc6aed5: Initialize recursively nested RPGJS provider lists in client and server setup so
+  sample and consumer configurations register every provider at runtime.
+- e5ad24a: Establish the stable RPGJS-owned boundary for reactive gameplay properties,
+  dependency-injection providers, Node room storage, and Cloudflare room hosting.
+  Remove accidental Signe re-exports from the client and server roots, keep
+  direct Signe imports as an explicitly advanced plugin path, and protect every
+  published TypeScript entry with declaration reachability snapshots in CI.
+  Keep provider creation strategies mutually exclusive, support asynchronous
+  provider factories, and preserve strict member checking on the server engine.
+  Enforce these public contracts in CI, test the RPGJS-owned Node storage
+  lifecycle, and document complete stable migration examples.
+- Updated dependencies [dc6aed5]
+- Updated dependencies [e5ad24a]
+  - @rpgjs/server@5.0.0-beta.27
+  - @rpgjs/common@5.0.0-beta.26
+
 ## 5.0.0-beta.26
 
 ### Minor Changes
