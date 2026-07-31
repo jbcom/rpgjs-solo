@@ -80,7 +80,7 @@ async function findPublicEntries(): Promise<Map<string, string>> {
         const paths = await expandTypesTarget(packageDirectory, target);
         for (const path of paths) {
           const resolvedSubpath = subpath.includes("*")
-            ? subpath.replace("*", basename(path, ".d.ts"))
+            ? subpath.replaceAll("*", basename(path, ".d.ts"))
             : subpath;
           publicEntries.set(
             `${packageJson.name}${resolvedSubpath === "." ? "" : resolvedSubpath.slice(1)}`,
