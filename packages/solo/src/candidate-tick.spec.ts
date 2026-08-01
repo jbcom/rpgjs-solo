@@ -118,6 +118,17 @@ describe('Solo candidate ticks', () => {
     expect(publication.state).toEqual({ records: ['hero:12'] })
     expect(Object.isFrozen(publication)).toBe(true)
     expect(Object.isFrozen(publication.state)).toBe(true)
+    expect(Object.isFrozen(publication.view)).toBe(true)
+    expect(Object.isFrozen(publication.view.entities)).toBe(true)
+    expect(Object.isFrozen(publication.view.entities[0])).toBe(true)
+    expect(Object.isFrozen(publication.view.entities[0]!.stats)).toBe(true)
+    expect(Object.isFrozen(publication.runtimeEvents)).toBe(true)
+    expect(Object.isFrozen(publication.runtimeEvents[0])).toBe(true)
+    expect(publication.runtimeEvents[0]!.type).toBe('tick')
+    if (publication.runtimeEvents[0]!.type === 'tick') {
+      expect(Object.isFrozen(publication.runtimeEvents[0]!.view)).toBe(true)
+      expect(Object.isFrozen(publication.runtimeEvents[0]!.view.entities[0])).toBe(true)
+    }
     expect(ordering).toEqual(['publication', 'runtime:tick', 'runtime:command'])
     expect(runtime.getCommandLog()).toHaveLength(1)
   })
@@ -381,5 +392,28 @@ describe('Solo candidate ticks', () => {
     expect(publicationTicks).toEqual([1])
     expect(legacyTicks).toEqual([1, 1])
     expect(runtime.tick).toBe(1)
+  })
+
+  it('deeply freezes every candidate inspection surface at runtime', () => {
+    const runtime = createRuntime()
+    const candidate = runtime.beginCandidateTick({ id: 'readonly-inspection', state: null })
+    candidate.dispatch({ type: 'stop', entityId: 'hero', source: 'ai' })
+
+    const view = candidate.getView()
+    const entity = candidate.getEntity('hero')!
+    const map = candidate.getMap('field')!
+    const commandLog = candidate.getCommandLog()
+
+    expect(Object.isFrozen(view)).toBe(true)
+    expect(Object.isFrozen(view.entities)).toBe(true)
+    expect(Object.isFrozen(view.entities[0])).toBe(true)
+    expect(Object.isFrozen(view.entities[0]!.position)).toBe(true)
+    expect(Object.isFrozen(entity)).toBe(true)
+    expect(Object.isFrozen(entity.data)).toBe(true)
+    expect(Object.isFrozen(map)).toBe(true)
+    expect(Object.isFrozen(commandLog)).toBe(true)
+    expect(Object.isFrozen(commandLog[commandLog.length - 1])).toBe(true)
+    expect(Object.isFrozen(commandLog[commandLog.length - 1]!.command)).toBe(true)
+    candidate.abort()
   })
 })

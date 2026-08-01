@@ -45,8 +45,10 @@ export interface SoloEntityDefinition {
 }
 
 /**
- * The one gameplay-authoritative entity object. The runtime mutates this object
- * in place so renderers, UI, combat, AI, and saves all observe the same identity.
+ * A gameplay-authoritative entity object for the current committed graph.
+ * Ordinary direct dispatch and stepping mutate that graph in place. An atomic
+ * candidate commit replaces the graph, so identity-caching consumers must
+ * reacquire entities by id or rebind from the candidate publication.
  */
 export interface SoloEntityState {
   id: string
@@ -228,13 +230,13 @@ export type SoloCandidateTickStatus = 'active' | 'failed' | 'aborted' | 'committ
 
 /** One immutable publication; no command, tick, or domain event escapes before it. */
 export interface SoloCandidateTickPublication<TState extends SoloJsonValue = SoloJsonValue> {
-  id: string
-  baseTick: number
-  tick: number
-  state: SoloDeepReadonly<TState>
-  view: SoloRuntimeView
-  runtimeEvents: readonly SoloRuntimeEvent[]
-  domainEvents: readonly SoloDeepReadonly<SoloDomainEvent>[]
+  readonly id: string
+  readonly baseTick: number
+  readonly tick: number
+  readonly state: SoloDeepReadonly<TState>
+  readonly view: SoloDeepReadonly<SoloRuntimeView>
+  readonly runtimeEvents: readonly SoloDeepReadonly<SoloRuntimeEvent>[]
+  readonly domainEvents: readonly SoloDeepReadonly<SoloDomainEvent>[]
 }
 
 export type SoloCandidateTickListener = (publication: SoloCandidateTickPublication) => void

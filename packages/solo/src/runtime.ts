@@ -1250,9 +1250,9 @@ export class SoloCandidateTick<TState extends SoloJsonValue> {
     return this.candidateState
   }
 
-  getView(mapId?: string | null): SoloRuntimeView {
+  getView(mapId?: string | null): SoloDeepReadonly<SoloRuntimeView> {
     this.requireActive()
-    return deepFreeze(cloneRuntimeView(this.candidate.getView(mapId))) as SoloRuntimeView
+    return deepFreeze(cloneRuntimeView(this.candidate.getView(mapId)))
   }
 
   getEntity(entityId: string): SoloDeepReadonly<SoloEntityState> | undefined {
@@ -1270,11 +1270,11 @@ export class SoloCandidateTick<TState extends SoloJsonValue> {
     )
   }
 
-  getCommandLog(): readonly SoloCommandRecord[] {
+  getCommandLog(): readonly SoloDeepReadonly<SoloCommandRecord>[] {
     this.requireActive()
     return Object.freeze(this.candidate.getCommandLog().map((record) => deepFreeze(
       cloneJson(record as unknown as Record<string, SoloJsonValue>) as unknown as SoloCommandRecord
-    ))) as unknown as readonly SoloCommandRecord[]
+    )))
   }
 
   dispatch(command: SoloCommand): SoloCommandResult {

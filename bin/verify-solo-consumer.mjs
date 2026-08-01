@@ -128,6 +128,37 @@ runtime.registerMap({
   entities: [{ id: 'hero', kind: 'player', x: 32, y: 32 }]
 })
 runtime.setActiveMap('packed-field')
+const candidate = runtime.beginCandidateTick({
+  id: 'packed-readonly-contract',
+  state: { journal: { count: 0 } }
+})
+candidate.dispatch({ type: 'stop', entityId: 'hero', source: 'ai' })
+const candidateView = candidate.getView()
+const candidateEntity = candidate.getEntity('hero')!
+const candidateMap = candidate.getMap('packed-field')!
+const candidateLog = candidate.getCommandLog()
+const publication = candidate.commit()
+
+if (false) {
+  // @ts-expect-error candidate views are deeply readonly
+  candidateView.entities[0]!.stats.hp = 0
+  // @ts-expect-error candidate entity inspection is deeply readonly
+  candidateEntity.position.x = 0
+  // @ts-expect-error candidate map inspection is deeply readonly
+  candidateMap.width = 0
+  // @ts-expect-error candidate command records and commands are deeply readonly
+  candidateLog[0]!.command.entityId = 'other'
+  // @ts-expect-error publication scalar fields are readonly
+  publication.tick = 2
+  // @ts-expect-error publication views are deeply readonly
+  publication.view.entities[0]!.data.changed = true
+  // @ts-expect-error publication event elements are deeply readonly
+  publication.runtimeEvents[0]!.type = 'pause'
+  // @ts-expect-error publication domain event elements are deeply readonly
+  publication.domainEvents[0]!.tick = 2
+  // @ts-expect-error publication game-owned state is deeply readonly
+  publication.state.journal.count = 1
+}
 const combat = new SoloActionBattle(runtime)
 
 if (runtime.getEntity('hero')?.mapId !== 'packed-field') throw new Error('Solo runtime map execution failed')
@@ -151,6 +182,29 @@ runtime.registerMap({
   entities: [{ id: 'hero', kind: 'player', x: 32, y: 32 }]
 })
 runtime.setActiveMap('packed-field')
+const candidate = runtime.beginCandidateTick({
+  id: 'packed-runtime-freeze',
+  state: { journal: { count: 0 } }
+})
+candidate.dispatch({ type: 'stop', entityId: 'hero', source: 'ai' })
+const candidateView = candidate.getView()
+const candidateLog = candidate.getCommandLog()
+if (!Object.isFrozen(candidateView)
+  || !Object.isFrozen(candidateView.entities)
+  || !Object.isFrozen(candidateView.entities[0])
+  || !Object.isFrozen(candidateLog)
+  || !Object.isFrozen(candidateLog[candidateLog.length - 1]?.command)) {
+  throw new Error('Solo candidate inspection surfaces are not deeply frozen')
+}
+const publication = candidate.commit()
+if (!Object.isFrozen(publication)
+  || !Object.isFrozen(publication.view)
+  || !Object.isFrozen(publication.view.entities[0])
+  || !Object.isFrozen(publication.runtimeEvents)
+  || !Object.isFrozen(publication.runtimeEvents[0])
+  || !Object.isFrozen(publication.state.journal)) {
+  throw new Error('Solo candidate publication is not deeply frozen')
+}
 const combat = new SoloActionBattle(runtime)
 const fakeBundle = {
   'entry.js': {
