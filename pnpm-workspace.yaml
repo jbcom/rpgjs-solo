@@ -23,3 +23,5 @@ minimumReleaseAgeExclude:
   - '@babel/parser@7.29.8'
   - '@babel/traverse@7.29.8'
   - '@babel/types@7.29.8'
+  - '@cloudflare/vitest-pool-workers@0.20.1'
+  - wrangler@4.118.0
