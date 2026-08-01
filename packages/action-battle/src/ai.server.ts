@@ -1,4 +1,11 @@
-import { MAXHP, RpgEvent, RpgPlayer } from "@rpgjs/server";
+import {
+  Components,
+  MAXHP,
+  RpgEvent,
+  RpgPlayer,
+  type BarComponentOptions,
+  type ComponentLayout,
+} from "@rpgjs/server";
 import {
   getActionBattleAnimationRemovalDelay,
   resolveActionBattleAnimation,
@@ -6,6 +13,7 @@ import {
 import { emitActionBattleClientVisual } from "./visual";
 import { getActionBattleOptions } from "./config";
 import { getActionBattleSystems } from "./core/context";
+import { applyActionBattleHit } from "./core/hit";
 import {
   isActionBattleEntityInvincible,
   setActionBattleInvincibility,
@@ -23,11 +31,24 @@ import {
 import { applyActionBattleAttackDirection } from "./attack-input";
 import {
   executeActionBattleUse,
-  getActionBattleActionRange,
+  getActionBattleActionConfig,
+  hasNativeActionBattleUseRestriction,
 } from "./core/action-use";
+import {
+  evaluateActionBattleAiSkill,
+  resolveActionBattleAiSkillId,
+  type ActionBattleAiSkillEvaluation,
+} from "./core/ai-action-planner";
 import { resolveActionBattleWeapon } from "./core/equipment";
 import { withActionBattleAnimationUnlocked } from "./locomotion";
-import { safeActionBattleDash } from "./movement";
+import {
+  isActionBattleMovementResolutionError,
+  safeActionBattleDash,
+} from "./movement";
+import {
+  acquireActionBattleAttackSlot,
+  releaseActionBattleAttackSlot,
+} from "./core/combat-director";
 import {
   defineAiBehavior,
   defineAiTree,
@@ -37,6 +58,16 @@ import {
   type ActionBattleAiTreeInput,
   type ActionBattleAiTreeNode,
 } from "./core/ai-behavior-tree";
+import {
+  cancelActionBattleAiIntentExecutions,
+  executeActionBattleAiIntentWithReceipt,
+} from "./core/ai-intent-execution";
+import {
+  captureActionBattleActorGeneration,
+  initializeActionBattleActorLife,
+  isActionBattleActorGenerationCurrent,
+  type ActionBattleActorGeneration,
+} from "./core/actor-life";
 import type {
   ActionBattleAiBehavior,
   ActionBattleAiDecision,
@@ -55,10 +86,25 @@ import type {
   NormalizedActionBattleHitReactionProfile,
 } from "./types";
 import type { ActionBattleAnimationOptions } from "./types";
+import { updateActionBattleThreat } from "./audio";
+import { ACTION_BATTLE_I18N_KEYS } from "./i18n";
 
 type RpgEventWithBattleAi = RpgEvent & {
   battleAi?: BattleAi;
 };
+
+interface ActionBattleAiAttackBoundary {
+  actorGeneration: ActionBattleActorGeneration;
+  state: AiState;
+  stateGeneration: number;
+  stateInterruptionGeneration: number;
+  preserveAcrossTargetLoss: boolean;
+  selectedTarget?: ActionBattleEntity;
+  targets: Array<{
+    entity: ActionBattleEntity;
+    generation: ActionBattleActorGeneration;
+  }>;
+}
 
 type ResolvedMoveTarget =
   | {
@@ -88,6 +134,8 @@ const createMoveSignature = (x: number, y: number): string =>
 export interface BattleAiRewardItem {
   item?: any;
   itemId?: string;
+  /** Client i18n key for the item name used in reward notifications. */
+  itemNameKey?: string;
   amount?: number;
   chance?: number;
 }
@@ -119,6 +167,46 @@ export type BattleAiLegacyDefeatedCallback = (
   event: RpgEvent,
   attacker?: ActionBattleEntity
 ) => void;
+
+export interface BattleAiHealthBarOptions {
+  /** Style forwarded to the standard RPGJS `Components.hpBar()` factory. */
+  style?: BarComponentOptions;
+  /** Optional label template. Use `null` to render only the bar. */
+  text?: string | null;
+  /** Layout forwarded to the entity's `componentsTop` block. */
+  layout?: ComponentLayout;
+}
+
+export interface BattleAiDeathPresentationOptions {
+  /** CanvasEngine FX preset emitted once when defeat starts. */
+  effect?: string;
+  /** Time the non-colliding sprite remains available to client visuals. */
+  durationMs?: number;
+  /** Particle scale forwarded to the visual preset. */
+  scale?: number;
+  /** Whether the impact preset should shake the local camera. */
+  shake?: boolean;
+}
+
+const hasTopComponent = (event: RpgEventWithBattleAi, id: string) => {
+  const raw = (event as any).componentsTop?.();
+  if (!raw) return false;
+  let data = raw;
+  if (typeof raw === "string") {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return false;
+    }
+  }
+  const contains = (value: any): boolean => {
+    if (Array.isArray(value)) return value.some(contains);
+    if (!value || typeof value !== "object") return false;
+    if (value.id === id) return true;
+    return Object.values(value).some(contains);
+  };
+  return contains(data?.components ?? data);
+};
 
 export interface BattleAiBaseOptions {
   preset?: string | ActionBattleAiPreset;
@@ -155,6 +243,25 @@ export interface BattleAiBaseOptions {
   animations?: ActionBattleAnimationOptions;
   rewards?: BattleAiRewards;
   autoAwardRewards?: boolean;
+  presentation?: {
+    role?: "enemy" | "boss" | "hidden";
+    name?: string;
+    /**
+     * Adds the standard RPGJS HP component above the rendered graphic.
+     * Enabled by default for visible battle AI entities.
+     */
+    healthBar?: boolean | BattleAiHealthBarOptions;
+    /**
+     * Client-only defeat presentation. Gameplay collision and AI are disabled
+     * immediately by the authoritative server.
+     */
+    death?: false | BattleAiDeathPresentationOptions;
+    /** Optional battle track used while this enemy threatens a player. */
+    music?: {
+      battle?: string;
+      priority?: number;
+    };
+  };
 }
 
 export interface BattleAiOptions extends BattleAiBaseOptions {
@@ -199,6 +306,10 @@ export interface HitResult {
   attacker: RpgEvent | RpgPlayer;
   /** The entity that was hit */
   target: RpgPlayer | RpgEvent;
+  defense?: {
+    kind: "guard" | "parry";
+    staggerMs: number;
+  };
 }
 
 const normalizeRewardItem = (
@@ -222,7 +333,7 @@ const getPlayerMap = (player: RpgPlayer) => {
     : undefined;
 };
 
-const getRewardItemName = (inventoryItem: any, itemRef: any): string => {
+const getRewardItemName = (inventoryItem: any, itemRef: any): string | undefined => {
   if (inventoryItem && typeof inventoryItem.name === "function") {
     return inventoryItem.name();
   }
@@ -230,7 +341,7 @@ const getRewardItemName = (inventoryItem: any, itemRef: any): string => {
   if (typeof itemRef === "string") return itemRef;
   if (itemRef?.name) return itemRef.name;
   if (itemRef?.id) return itemRef.id;
-  return "item";
+  return undefined;
 };
 
 const createDefeatReward = (
@@ -251,7 +362,10 @@ const createDefeatReward = (
       if (gold > 0) player.gold += gold;
 
       if (rewards.showNotification && (exp > 0 || gold > 0)) {
-        player.showNotification(`You won ${exp} experience and ${gold} gold`);
+        player.showNotification({
+          key: ACTION_BATTLE_I18N_KEYS.rewardCurrency,
+          params: { experience: exp, gold },
+        });
       }
 
       for (const rawItem of rewards.items ?? []) {
@@ -267,11 +381,26 @@ const createDefeatReward = (
             typeof itemRef === "string"
               ? getPlayerMap(player)?.database?.()?.[itemRef]
               : undefined;
+          const itemNameKey =
+            typeof item.itemNameKey === "string" && item.itemNameKey.length > 0
+              ? item.itemNameKey
+              : undefined;
+          const itemName = getRewardItemName(inventoryItem, itemRef);
+          const itemNameParam = itemNameKey ? { key: itemNameKey } : itemName;
           player.showNotification(
-            `You won ${amount} ${getRewardItemName(inventoryItem, itemRef)}`,
             {
-              icon: itemData?.icon,
-            }
+              key: itemNameParam
+                ? ACTION_BATTLE_I18N_KEYS.rewardNamedItem
+                : ACTION_BATTLE_I18N_KEYS.rewardItem,
+              count: amount,
+              params: {
+                count: amount,
+                ...(itemNameParam
+                  ? { item: itemNameParam }
+                  : {}),
+              },
+            },
+            { icon: itemData?.icon }
           );
         }
       }
@@ -359,10 +488,18 @@ export const AiDebug = {
    * @param data - Optional additional data
    */
   log(category: string, eventId: string | undefined, message: string, data?: any): void {
-    void category;
-    void eventId;
-    void message;
-    void data;
+    if (!this.enabled) return;
+    if (this.filterEventId && this.filterEventId !== eventId) return;
+    if (this.categories.length > 0 && !this.categories.includes(category)) {
+      return;
+    }
+    console.debug("[ActionBattle AI]", {
+      timestamp: Date.now(),
+      category,
+      eventId,
+      message,
+      data,
+    });
   }
 };
 
@@ -549,6 +686,13 @@ export class BattleAi {
 
   // State machine
   private state: AiState = AiState.Idle;
+  // Delayed attacks belong to one uninterrupted state epoch. Comparing only
+  // the current enum value would let Stunned -> Combat revive stale work.
+  private stateGeneration: number = 0;
+  // A self-targeted skill does not belong to the selected enemy, so ordinary
+  // target loss may move the actor to Idle without interrupting that skill.
+  // Every other state transition still advances this stricter epoch.
+  private stateInterruptionGeneration: number = 0;
   private stateStartTime: number = 0;
   private stunnedUntil: number = 0;
 
@@ -573,6 +717,12 @@ export class BattleAi {
   private attackPatterns: AttackPattern[];
   private attackProfiles: NormalizedActionBattleEnemyAttackProfileMap;
   private animations?: ActionBattleAnimationOptions;
+  private lastAttackPattern: AttackPattern | null = null;
+  private skillCooldowns = new Map<any, number>();
+  private lastCombatAction:
+    | { kind: "basic" }
+    | { kind: "skill"; id: string }
+    | null = null;
   private comboCount: number = 0;
   private comboMax: number = 3;
   private chargingAttack: boolean = false;
@@ -600,6 +750,20 @@ export class BattleAi {
     | BattleAiLegacyDefeatedCallback;
   private rewards?: BattleAiRewards;
   private autoAwardRewards: boolean = true;
+  private presentation: {
+    role: "enemy" | "boss" | "hidden";
+    name?: string;
+    death: false | Required<BattleAiDeathPresentationOptions>;
+    music?: { battle?: string; priority?: number };
+  } = {
+    role: "enemy",
+    death: {
+      effect: "explosionSmall",
+      durationMs: 450,
+      scale: 1.4,
+      shake: true,
+    },
+  };
   private defeated: boolean = false;
 
   // Direction hysteresis to prevent animation flickering
@@ -618,8 +782,13 @@ export class BattleAi {
   // Movement throttling
   private moveToCooldown: number = 400;
   private lastMoveToTime: number = 0;
+  private readonly patrolRetryDelayMs: number = 100;
+  private patrolResumeTimer?: ReturnType<typeof setTimeout>;
+  private patrolResumeGeneration?: number;
   private retreatCooldown: number = 600;
   private lastRetreatTime: number = 0;
+  private lastStrafeTime: number = 0;
+  private strafeSide: 1 | -1 = 1;
   private actionLockedUntil: number = 0;
   private lastActionLockTraceTime: number = 0;
   private lastMoveToCooldownTraceTime: number = 0;
@@ -671,6 +840,7 @@ export class BattleAi {
     options = mergeBattleAiPresetOptions(options);
     event.battleAi = this;
     this.event = event;
+    initializeActionBattleActorLife(event);
 
     // Set enemy type and apply behavior modifiers
     this.enemyType = options.enemyType || EnemyType.Aggressive;
@@ -707,6 +877,56 @@ export class BattleAi {
     this.onDefeatedCallback = options.onDefeated;
     this.rewards = options.rewards;
     this.autoAwardRewards = options.autoAwardRewards ?? true;
+    this.presentation = {
+      role: options.presentation?.role ?? "enemy",
+      name: options.presentation?.name,
+      death:
+        options.presentation?.death === false
+          ? false
+          : {
+              effect: options.presentation?.death?.effect ?? "explosionSmall",
+              durationMs: Math.max(
+                0,
+                options.presentation?.death?.durationMs ?? 450
+              ),
+              scale: Math.max(
+                0,
+                options.presentation?.death?.scale ?? 1.4
+              ),
+              shake: options.presentation?.death?.shake ?? true,
+            },
+      music: options.presentation?.music,
+    };
+    const healthBar = options.presentation?.healthBar;
+    if (
+      this.presentation.role !== "hidden" &&
+      healthBar !== false &&
+      !hasTopComponent(event, "rpg:hpBar")
+    ) {
+      const healthOptions =
+        healthBar && typeof healthBar === "object" ? healthBar : {};
+      const boss = this.presentation.role === "boss";
+      const style: BarComponentOptions = {
+        width: boss ? 104 : 68,
+        height: boss ? 9 : 7,
+        bgColor: "#17131b",
+        fillColor: boss ? "#ff355d" : "#ef476f",
+        borderColor: boss ? "#f8d57e" : "#ffffff",
+        borderWidth: 1,
+        borderRadius: 4,
+        ...healthOptions.style,
+      };
+      event.mergeComponents?.(
+        "top",
+        [Components.hpBar(style, healthOptions.text ?? null)],
+        {
+          width: style.width,
+          // Keep a small, scale-independent gap above the visible graphic.
+          marginBottom: 4,
+          ...healthOptions.layout,
+        }
+      );
+    }
 
     // Behavior gauge settings
     if (options.behavior) {
@@ -749,21 +969,18 @@ export class BattleAi {
       this.behaviorTree = defineAiBehavior(options.simpleBehavior);
     }
 
-    if (options.attackRange === undefined) {
-      const actionRange = this.getCurrentActionRange();
-      if (actionRange !== undefined) {
-        this.attackRange = actionRange;
-      }
-    }
-
     // Setup AI systems
     this.scheduleVisionSetup();
     this.startAiBehaviorLoop();
     if (this.patrolWaypoints.length > 0) {
-      this.startPatrol();
+      this.resumePatrolWhenActionUnlocked(this.stateGeneration);
     }
 
     this.debugLog('init', `AI created (type=${this.enemyType}, visionRange=${this.visionRange}, attackRange=${this.attackRange})`);
+  }
+
+  getPresentation() {
+    return { ...this.presentation };
   }
 
   /**
@@ -909,7 +1126,10 @@ export class BattleAi {
   /**
    * Change AI state with validated transitions
    */
-  private changeState(newState: AiState) {
+  private changeState(
+    newState: AiState,
+    options: { preserveSelfTargetedActions?: boolean } = {},
+  ) {
     if (newState === this.state) {
       return;
     }
@@ -937,12 +1157,17 @@ export class BattleAi {
       targetId: this.target?.id,
     });
     this.state = newState;
+    this.stateGeneration++;
+    if (!options.preserveSelfTargetedActions) {
+      this.stateInterruptionGeneration++;
+    }
     this.stateStartTime = Date.now();
+    this.syncThreat();
 
     switch (newState) {
       case AiState.Idle:
         if (this.patrolWaypoints.length > 0) {
-          this.startPatrol();
+          this.resumePatrolWhenActionUnlocked(this.stateGeneration);
         }
         break;
       case AiState.Alert:
@@ -971,7 +1196,7 @@ export class BattleAi {
     if (this.target && this.isTargetDefeated(this.target)) {
       this.debugLog('combat', `Target ${this.target.id} is defeated, returning to idle`);
       this.clearTarget();
-      this.changeState(AiState.Idle);
+      this.returnToIdleAfterTargetLoss();
       this.checkDamageTaken();
       return;
     }
@@ -1067,7 +1292,7 @@ export class BattleAi {
 
       if (distance < 10) {
         this.currentPatrolIndex = (this.currentPatrolIndex + 1) % this.patrolWaypoints.length;
-        this.startPatrol();
+        this.resumePatrolWhenActionUnlocked(this.stateGeneration);
       }
     }
   }
@@ -1101,10 +1326,10 @@ export class BattleAi {
       } else {
         this.debugLog('combat', `Alert target out of range (dist=${distance.toFixed(1)})`);
         this.clearTarget();
-        this.changeState(AiState.Idle);
+        this.returnToIdleAfterTargetLoss();
       }
     } else {
-      this.changeState(AiState.Idle);
+      this.returnToIdleAfterTargetLoss();
     }
   }
 
@@ -1114,7 +1339,7 @@ export class BattleAi {
   private updateCombatBehavior(currentTime: number) {
     if (!this.target) {
       this.debugLog('combat', 'No target, returning to idle');
-      this.changeState(AiState.Idle);
+      this.returnToIdleAfterTargetLoss();
       return;
     }
 
@@ -1133,7 +1358,7 @@ export class BattleAi {
     if (distance > this.visionRange * 1.5) {
       this.debugLog('combat', `Target out of range (dist=${distance.toFixed(1)}, maxRange=${(this.visionRange * 1.5).toFixed(1)})`);
       this.clearTarget();
-      this.changeState(AiState.Idle);
+      this.returnToIdleAfterTargetLoss();
       return;
     }
 
@@ -1157,63 +1382,80 @@ export class BattleAi {
       }
     }
 
-    if (this.behaviorEnabled) {
-      if (this.behaviorMode === 'tactical') {
-        this.handleTacticalMovement(distance);
-      } else if (this.behaviorMode === 'assault') {
-        this.handleAssaultMovement(distance);
-      } else if (this.behaviorMode === 'retreat') {
-        this.isMovingToTarget = false;
-        this.fleeFromTarget();
-        return;
+    if (this.behaviorEnabled && this.behaviorMode === "retreat") {
+      this.isMovingToTarget = false;
+      this.fleeFromTarget();
+      return;
+    }
+
+    const evaluations = this.evaluateSkillActions(currentTime);
+    const selection = this.isAttackReady(currentTime) && !this.chargingAttack
+      ? this.selectCombatAction(evaluations, distance)
+      : null;
+
+    if (selection) {
+      const director = getActionBattleOptions().ai?.director;
+      const needsAttackSlot =
+        selection.kind === "basic" ||
+        selection.evaluation.targetPolicy !== "self";
+      const acquiredAttackSlot =
+        !needsAttackSlot ||
+        director === false ||
+        acquireActionBattleAttackSlot(
+          this.event,
+          this.target,
+          director,
+          currentTime
+        );
+
+      if (acquiredAttackSlot) {
+        const started =
+          selection.kind === "skill"
+            ? this.performPlannedSkill(selection.evaluation)
+            : this.performPlannedBasicAttack();
+        if (started) {
+          this.lastAttackTime = currentTime;
+          this.lastCombatAction =
+            selection.kind === "skill"
+              ? { kind: "skill", id: selection.evaluation.id }
+              : { kind: "basic" };
+          this.debugDecision(
+            "selected",
+            evaluations,
+            selection.kind === "skill"
+              ? {
+                  kind: "skill",
+                  id: selection.evaluation.id,
+                  mode: selection.evaluation.mode,
+                }
+              : { kind: "basic" },
+            distance
+          );
+          if (needsAttackSlot) {
+            const releaseTarget = this.target;
+            this.schedule(
+              () => releaseActionBattleAttackSlot(this.event, releaseTarget),
+              typeof director === "object"
+                ? director.slotDurationMs ?? 1200
+                : 1200
+            );
+          }
+          return;
+        }
+        if (needsAttackSlot) {
+          releaseActionBattleAttackSlot(this.event, this.target);
+        }
+      } else {
+        this.debugDecision(
+          "waiting for combat director",
+          evaluations,
+          { kind: "reposition", reason: "director" },
+          distance
+        );
       }
     }
 
-    // Movement based on enemy type
-    if (this.behaviorEnabled && this.behaviorMode === 'assault') {
-      // Assault mode already handled movement
-    } else if (this.behaviorEnabled && this.behaviorMode === 'tactical') {
-      // Tactical mode already handled movement
-    } else if (this.enemyType === EnemyType.Ranged) {
-      if (distance < this.attackRange * 0.6) {
-        this.debugLog('movement', `Retreating (dist=${distance.toFixed(1)}, minRange=${(this.attackRange * 0.6).toFixed(1)})`);
-        this.isMovingToTarget = false;
-        this.retreatFromTarget();
-      } else if (distance > this.attackRange) {
-        if (!this.isMovingToTarget) {
-          this.debugLog('movement', `Moving to target (dist=${distance.toFixed(1)}, attackRange=${this.attackRange})`);
-          this.requestTargetMovement();
-        }
-      } else {
-        if (this.isMovingToTarget) {
-          this.debugLog('movement', `In range, stopping (dist=${distance.toFixed(1)})`);
-          this.isMovingToTarget = false;
-          this.event.stopMoveTo();
-        }
-      }
-    } else {
-      if (distance > this.attackRange) {
-        if (!this.isMovingToTarget) {
-          this.debugLog('movement', `Moving to target (dist=${distance.toFixed(1)}, attackRange=${this.attackRange})`);
-          this.requestTargetMovement();
-        }
-      } else {
-        if (this.isMovingToTarget) {
-          this.debugLog('movement', `In range, stopping (dist=${distance.toFixed(1)})`);
-          this.isMovingToTarget = false;
-          this.event.stopMoveTo();
-        }
-      }
-    }
-
-    // Attack if ready
-    if (distance <= this.attackRange && currentTime - this.lastAttackTime >= this.attackCooldown) {
-      if (!this.chargingAttack) {
-        this.debugLog('attack', `Attacking (dist=${distance.toFixed(1)}, cooldown=${this.attackCooldown}ms)`);
-        this.selectAndPerformAttack();
-        this.lastAttackTime = currentTime;
-      }
-    }
+    this.handleSmartCombatMovement(distance, evaluations, currentTime);
   }
 
   /**
@@ -1239,6 +1481,419 @@ export class BattleAi {
     this.fleeFromTarget();
   }
 
+  private getHpPercent(): number | null {
+    const maxHp = Number(this.event.param[MAXHP]);
+    return Number.isFinite(maxHp) && maxHp > 0
+      ? Number(this.event.hp) / maxHp
+      : null;
+  }
+
+  private getLearnedCombatSkills(): any[] {
+    const skills = [
+      ...(this.attackSkill ? [this.attackSkill] : []),
+      ...((this.event as any).skills?.() ?? []),
+    ];
+    const unique = new Map<string, any>();
+    for (const skill of skills) {
+      const resolved = this.resolveUsable(skill);
+      if (!resolved) continue;
+      const id = resolveActionBattleAiSkillId(resolved);
+      if (!unique.has(id)) unique.set(id, resolved);
+    }
+    return [...unique.values()];
+  }
+
+  private evaluateSkillActions(
+    currentTime: number
+  ): ActionBattleAiSkillEvaluation[] {
+    if (!this.target) return [];
+    const targetOptions = getActionBattleOptions().combat?.targets;
+    return this.getLearnedCombatSkills().map((skill) =>
+      evaluateActionBattleAiSkill({
+        attacker: this.event,
+        target: this.target!,
+        skill,
+        now: currentTime,
+        readyAt:
+          this.skillCooldowns.get(this.getSkillCooldownKey(skill)) ?? 0,
+        attackRange: this.attackRange,
+        hpPercent: this.getHpPercent(),
+        targetOptions,
+      })
+    );
+  }
+
+  private scoreSkillAction(
+    evaluation: ActionBattleAiSkillEvaluation,
+    distance: number
+  ): number {
+    if (evaluation.targetPolicy === "self") {
+      return 120 + (1 - (this.getHpPercent() ?? 1)) * 40;
+    }
+    const priorityId = this.attackSkill
+      ? resolveActionBattleAiSkillId(this.resolveUsable(this.attackSkill))
+      : undefined;
+    const rangeFit =
+      evaluation.range > 0
+        ? Math.min(10, (distance / evaluation.range) * 10)
+        : 0;
+    return (
+      60 +
+      (priorityId === evaluation.id ? 15 : 0) +
+      rangeFit -
+      (
+        this.lastCombatAction?.kind === "skill" &&
+        this.lastCombatAction.id === evaluation.id
+          ? 25
+          : 0
+      )
+    );
+  }
+
+  private selectCombatAction(
+    evaluations: ActionBattleAiSkillEvaluation[],
+    distance: number
+  ):
+    | { kind: "skill"; evaluation: ActionBattleAiSkillEvaluation }
+    | { kind: "basic" }
+    | null {
+    const candidates: Array<{
+      score: number;
+      action:
+        | { kind: "skill"; evaluation: ActionBattleAiSkillEvaluation }
+        | { kind: "basic" };
+    }> = evaluations
+      .filter((evaluation) => !evaluation.rejection)
+      .map((evaluation) => ({
+        score: this.scoreSkillAction(evaluation, distance),
+        action: { kind: "skill" as const, evaluation },
+      }));
+
+    if (distance <= this.attackRange) {
+      candidates.push({
+        score: 50 + (this.lastCombatAction?.kind === "skill" ? 25 : 0),
+        action: { kind: "basic" },
+      });
+    }
+
+    candidates.sort((left, right) => right.score - left.score);
+    return candidates[0]?.action ?? null;
+  }
+
+  private performPlannedBasicAttack(): boolean {
+    if (
+      this.isTargetDefeated(this.event) ||
+      !this.target ||
+      this.isTargetDefeated(this.target)
+    ) return false;
+    this.debugLog(
+      "attack",
+      `Using basic attack (cooldown=${this.attackCooldown}ms)`
+    );
+    this.selectAndPerformAttack();
+    return true;
+  }
+
+  private performPlannedSkill(
+    evaluation: ActionBattleAiSkillEvaluation
+  ): boolean {
+    if (
+      evaluation.rejection ||
+      this.isTargetDefeated(this.event) ||
+      !this.target ||
+      this.isTargetDefeated(this.target)
+    ) return false;
+    if (
+      hasNativeActionBattleUseRestriction(
+        this.event,
+        evaluation.skill,
+        evaluation.skill
+      )
+    ) {
+      this.debugLog("decision", "skill execution restricted", {
+        skillId: evaluation.id,
+        restriction: "CAN_NOT_SKILL",
+      });
+      return false;
+    }
+    const profile = this.getAttackProfile(AttackPattern.Melee);
+    const visualTarget = Array.isArray(evaluation.target)
+      ? evaluation.target[0]
+      : evaluation.target;
+    const plannedTargets = Array.isArray(evaluation.target)
+      ? evaluation.target
+      : [evaluation.target];
+    const attackBoundary = this.captureAttackBoundary({
+      targets: plannedTargets,
+      // Enemy and area plans include the selected target and must retain it.
+      // Self/support (and future ally plans) bind their evaluated recipients,
+      // not an unrelated combat-selection pointer.
+      bindSelectedTarget:
+        this.target !== null && plannedTargets.includes(this.target),
+      preserveAcrossTargetLoss: evaluation.targetPolicy === "self",
+    });
+    if (!attackBoundary) return false;
+
+    if (evaluation.targetPolicy !== "self") {
+      this.faceTarget({ force: true });
+    }
+    this.lockForAttack(profile, AttackPattern.Melee);
+    this.telegraphAttack(profile, AttackPattern.Melee);
+    this.playAttackVisual(
+      profile,
+      AttackPattern.Melee,
+      undefined,
+      evaluation.skill,
+      visualTarget,
+      evaluation.mode === "melee" ? undefined : "castSkill"
+    );
+    this.scheduleAttackStartup(profile, () => {
+      if (
+        hasNativeActionBattleUseRestriction(
+          this.event,
+          evaluation.skill,
+          evaluation.skill
+        )
+      ) {
+        this.debugLog("decision", "skill execution restricted", {
+          skillId: evaluation.id,
+          restriction: "CAN_NOT_SKILL",
+        });
+        return;
+      }
+      const currentEvaluation = this.revalidatePlannedSkill(evaluation);
+      if (!currentEvaluation) return;
+      const currentVisualTarget = Array.isArray(currentEvaluation.target)
+        ? currentEvaluation.target[0]
+        : currentEvaluation.target;
+
+      try {
+        const handled = executeActionBattleUse({
+          attacker: this.event,
+          target: currentEvaluation.target,
+          usable: currentEvaluation.skill,
+          skill: currentEvaluation.skill,
+          pattern: AttackPattern.Melee,
+          profile,
+          playVisual: false,
+        });
+        if (handled) {
+          this.markSkillUsed(evaluation.skill, Date.now());
+          return;
+        }
+      } catch (error) {
+        this.debugLog("decision", "skill execution failed", {
+          skillId: evaluation.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      if (
+        hasNativeActionBattleUseRestriction(
+          this.event,
+          evaluation.skill,
+          evaluation.skill
+        )
+      ) {
+        return;
+      }
+
+      if (
+        currentVisualTarget !== this.event &&
+        this.target &&
+        this.getDistance(this.event, this.target) <= this.attackRange
+      ) {
+        this.performBasicHitbox(profile, AttackPattern.Melee);
+      }
+    }, attackBoundary);
+    return true;
+  }
+
+  private revalidatePlannedSkill(
+    planned: ActionBattleAiSkillEvaluation,
+  ): ActionBattleAiSkillEvaluation | null {
+    const plannedPrimary = Array.isArray(planned.target)
+      ? planned.target[0]
+      : planned.target;
+    if (this.isTargetDefeated(this.event)) return null;
+
+    const evaluationTarget = planned.targetPolicy === "self"
+      ? plannedPrimary
+      : this.target;
+    if (!evaluationTarget || this.isTargetDefeated(evaluationTarget)) {
+      return null;
+    }
+    if (planned.targetPolicy === "self") {
+      if (plannedPrimary !== this.event) return null;
+    } else if (plannedPrimary !== this.target) {
+      return null;
+    }
+
+    const skill = this.resolveUsable(planned.skill);
+    const current = evaluateActionBattleAiSkill({
+      attacker: this.event,
+      target: evaluationTarget,
+      skill,
+      now: Date.now(),
+      readyAt:
+        this.skillCooldowns.get(this.getSkillCooldownKey(skill)) ?? 0,
+      attackRange: this.attackRange,
+      hpPercent: this.getHpPercent(),
+      targetOptions: getActionBattleOptions().combat?.targets,
+    });
+    if (
+      current.rejection
+      || current.id !== planned.id
+      || current.mode !== planned.mode
+      || current.targetPolicy !== planned.targetPolicy
+    ) return null;
+
+    const targets = (
+      target: ActionBattleEntity | ActionBattleEntity[]
+    ): ActionBattleEntity[] => Array.isArray(target) ? target : [target];
+    const plannedTargets = targets(planned.target);
+    const currentTargets = new Set(targets(current.target));
+    if (
+      plannedTargets.length !== currentTargets.size
+      || plannedTargets.some((target) => !currentTargets.has(target))
+    ) return null;
+
+    return current;
+  }
+
+  private debugDecision(
+    message: string,
+    evaluations: ActionBattleAiSkillEvaluation[],
+    selected: Record<string, unknown>,
+    distance: number
+  ): void {
+    this.debugLog("decision", message, {
+      targetId: this.target?.id,
+      distance,
+      attackRange: this.attackRange,
+      globalCooldownRemaining: Math.max(
+        0,
+        this.attackCooldown - (Date.now() - this.lastAttackTime)
+      ),
+      candidates: evaluations.map((evaluation) => ({
+        id: evaluation.id,
+        mode: evaluation.mode,
+        target: evaluation.targetPolicy,
+        range: evaluation.range,
+        preferredRange: evaluation.preferredRange,
+        readyIn: Math.max(0, evaluation.readyAt - Date.now()),
+        rejection: evaluation.rejection,
+      })),
+      selected,
+    });
+  }
+
+  private handleSmartCombatMovement(
+    distance: number,
+    evaluations: ActionBattleAiSkillEvaluation[],
+    currentTime: number
+  ): void {
+    if (!this.target) return;
+    const upcoming = evaluations
+      .filter(
+        (evaluation) =>
+          evaluation.targetPolicy !== "self" &&
+          evaluation.rejection !== "invalidTarget" &&
+          evaluation.rejection !== "insufficientSp" &&
+          evaluation.rejection !== "notUseful"
+      )
+      .sort((left, right) => {
+        if (left.readyAt !== right.readyAt) return left.readyAt - right.readyAt;
+        return right.preferredRange - left.preferredRange;
+      })[0];
+    const preferredRange = Math.max(
+      this.attackRange * 0.85,
+      upcoming?.preferredRange ?? 0
+    );
+    const rangedPositioning =
+      upcoming?.mode === "projectile" ||
+      upcoming?.mode === "instant" ||
+      this.enemyType === EnemyType.Ranged ||
+      (this.behaviorEnabled && this.behaviorMode === "tactical");
+    const minRange = rangedPositioning ? preferredRange * 0.65 : 0;
+    const maxRange = Math.max(this.attackRange, preferredRange * 1.15);
+
+    if (distance > maxRange) {
+      this.debugDecision(
+        "approaching action range",
+        evaluations,
+        {
+          kind: "reposition",
+          reason: "outOfRange",
+          direction: "approach",
+          preferredRange,
+        },
+        distance
+      );
+      this.requestTargetMovement();
+      return;
+    }
+
+    if (rangedPositioning && distance < minRange) {
+      this.debugDecision(
+        "retreating to action range",
+        evaluations,
+        {
+          kind: "reposition",
+          reason: "tooClose",
+          direction: "retreat",
+          preferredRange,
+        },
+        distance
+      );
+      this.isMovingToTarget = false;
+      this.retreatFromTarget();
+      return;
+    }
+
+    if (this.isMovingToTarget) {
+      this.isMovingToTarget = false;
+      this.event.stopMoveTo();
+    }
+    this.faceTarget();
+
+    const strafeCooldown = Math.max(700, this.moveToCooldown);
+    if (
+      distance <= 0 ||
+      currentTime - this.lastStrafeTime < strafeCooldown
+    ) {
+      return;
+    }
+    const dx = this.target.x() - this.event.x();
+    const dy = this.target.y() - this.event.y();
+    const strafeDistance = 32;
+    const started = this.requestMoveTo({
+      x: this.event.x() + (-dy / distance) * strafeDistance * this.strafeSide,
+      y: this.event.y() + (dx / distance) * strafeDistance * this.strafeSide,
+    });
+    if (started) {
+      this.lastStrafeTime = currentTime;
+      this.strafeSide = this.strafeSide === 1 ? -1 : 1;
+      const reason =
+        currentTime - this.lastAttackTime < this.attackCooldown
+          ? "globalCooldown"
+          : upcoming?.rejection === "cooldown"
+            ? "skillCooldown"
+            : "positioning";
+      this.debugDecision(
+        "strafing during recovery",
+        evaluations,
+        {
+          kind: "reposition",
+          reason,
+          direction: "strafe",
+          preferredRange,
+        },
+        distance
+      );
+    }
+  }
+
   /**
    * Select and perform an attack pattern
    */
@@ -1254,6 +1909,7 @@ export class BattleAi {
 
     // Select pattern based on weights
     const pattern = this.selectAttackPattern();
+    this.lastAttackPattern = pattern;
     this.debugLog('attack', `Selected pattern: ${pattern}`);
     this.performAttackPattern(pattern);
   }
@@ -1291,11 +1947,16 @@ export class BattleAi {
         break;
     }
 
+    const distance = this.target
+      ? this.getDistance(this.event, this.target)
+      : this.attackRange;
+    const candidates = this.selectAttackCandidates(distance);
+
     // Calculate selection
     let total = 0;
     const available: Array<{ pattern: AttackPattern; weight: number }> = [];
     
-    this.attackPatterns.forEach(p => {
+    candidates.forEach(p => {
       const weight = weights[p] || 10;
       total += weight;
       available.push({ pattern: p, weight });
@@ -1307,13 +1968,36 @@ export class BattleAi {
       if (random <= 0) return item.pattern;
     }
 
-    return this.attackPatterns[0] || AttackPattern.Melee;
+    return candidates[0] || AttackPattern.Melee;
+  }
+
+  /**
+   * Keep special attacks appropriate for the current distance and avoid
+   * immediately repeating one when another pattern is available.
+   */
+  private selectAttackCandidates(distance: number): AttackPattern[] {
+    const configured = Array.from(new Set(this.attackPatterns));
+    if (configured.length <= 1) return configured;
+
+    const closeRange = Math.min(this.attackRange * 0.8, 70);
+    const dashRange = this.attackRange * 0.45;
+    const distanceAware = configured.filter((pattern) => {
+      if (pattern === AttackPattern.Zone) return distance <= closeRange;
+      if (pattern === AttackPattern.DashAttack) return distance >= dashRange;
+      return true;
+    });
+    const suitable = distanceAware.length > 0 ? distanceAware : configured;
+    const varied = suitable.filter(
+      (pattern) => pattern !== this.lastAttackPattern
+    );
+    return varied.length > 0 ? varied : suitable;
   }
 
   /**
    * Perform attack pattern
    */
   private performAttackPattern(pattern: AttackPattern) {
+    if (this.isTargetDefeated(this.event)) return;
     switch (pattern) {
       case AttackPattern.Melee:
         this.performMeleeAttack();
@@ -1338,60 +2022,48 @@ export class BattleAi {
    * Uses skill if configured, otherwise creates hitbox
    */
   private performMeleeAttack() {
-    if (!this.target) return;
+    const boundary = this.captureAttackBoundary();
+    if (!boundary) return;
     const profile = this.getAttackProfile(AttackPattern.Melee);
 
     this.faceTarget({ force: true });
     this.lockForAttack(profile, AttackPattern.Melee);
-    this.telegraphAttack(profile);
+    this.telegraphAttack(profile, AttackPattern.Melee);
     this.playAttackVisual(profile, AttackPattern.Melee);
 
     this.scheduleAttackStartup(profile, () => {
-      this.executeMeleeAttack(profile, AttackPattern.Melee);
-    });
+      this.executeMeleeAttack(profile, AttackPattern.Melee, boundary);
+    }, boundary);
   }
 
   private executeMeleeAttack(
     profile: NormalizedActionBattleAttackProfile,
-    pattern: AttackPattern
+    pattern: AttackPattern,
+    boundary: ActionBattleAiAttackBoundary | null =
+      this.captureAttackBoundary(),
   ) {
-    if (!this.target || this.isTargetDefeated(this.target)) return;
+    if (!boundary || !this.isAttackBoundaryCurrent(boundary)) return;
+    const target = boundary.selectedTarget;
+    if (!target) return;
     this.debugLog('attack', `Applying ${pattern} hit`);
-
-    if (this.attackSkill) {
-      const resolvedSkill = this.resolveUsable(this.attackSkill);
-      try {
-        executeActionBattleUse({
-          attacker: this.event,
-          target: this.target,
-          usable: resolvedSkill,
-          skill: resolvedSkill,
-          pattern,
-          profile,
-        });
-      } catch (e) {
-        // Skill failed (no SP, etc.) - fall back to basic attack
-        this.performBasicHitbox(profile, pattern);
-      }
-      return;
-    }
 
     const weapon = resolveActionBattleWeapon(this.event);
     if (
       weapon &&
       executeActionBattleUse({
         attacker: this.event,
-        target: this.target,
+        target,
         usable: weapon,
         weapon,
         pattern,
         profile,
+        playVisual: false,
       })
     ) {
       return;
     }
 
-    this.performBasicHitbox(profile, pattern);
+    this.performBasicHitbox(profile, pattern, boundary);
   }
 
   /**
@@ -1401,28 +2073,36 @@ export class BattleAi {
     profile: NormalizedActionBattleAttackProfile = this.getAttackProfile(
       AttackPattern.Melee
     ),
-    pattern: AttackPattern = AttackPattern.Melee
+    pattern: AttackPattern = AttackPattern.Melee,
+    boundary: ActionBattleAiAttackBoundary | null =
+      this.captureAttackBoundary(),
   ) {
-    if (!this.target || this.isTargetDefeated(this.target)) return;
+    if (!boundary || !this.isAttackBoundaryCurrent(boundary)) return;
+    const target = boundary.selectedTarget;
+    if (!target) return;
 
     const hitTracker = new ActionBattleHitTracker(profile.hitPolicy);
     runActionBattleActiveHitbox(
       { ...profile, startupMs: 0 },
-      () => this.resolveBasicHitboxes(),
+      () => this.resolveBasicHitboxes(target),
       (hitboxes) => {
         this.processHitboxHits(hitboxes, hitTracker, profile, pattern);
       },
-      (scheduled, delay) => this.schedule(scheduled, delay)
+      (scheduled, delay) => this.scheduleAttackAction(
+        scheduled,
+        delay,
+        boundary,
+      )
     );
   }
 
-  private resolveBasicHitboxes(): ActionBattleHitbox[] {
-    if (!this.target || this.isTargetDefeated(this.target)) return [];
+  private resolveBasicHitboxes(target: ActionBattleEntity): ActionBattleHitbox[] {
+    if (this.isTargetDefeated(target)) return [];
 
     const eventX = this.event.x();
     const eventY = this.event.y();
-    const dx = this.target.x() - eventX;
-    const dy = this.target.y() - eventY;
+    const dx = target.x() - eventX;
+    const dy = target.y() - eventY;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist === 0) return [];
@@ -1460,6 +2140,7 @@ export class BattleAi {
     profile: NormalizedActionBattleAttackProfile,
     pattern: AttackPattern
   ) {
+    if (this.isTargetDefeated(this.event)) return;
     for (const hit of this.queryHitboxCandidates(hitboxes)) {
       if (
         hit !== this.event &&
@@ -1519,33 +2200,17 @@ export class BattleAi {
       };
     }
 
-    if (isActionBattleEntityInvincible(target)) {
-      return {
-        damage: 0,
-        knockbackForce: 0,
-        knockbackDuration: 0,
-        defeated: false,
-        attacker: this.event,
-        target
-      };
-    }
-
-    // Use RPGJS damage formula
-    const { damage } = target.applyDamage(this.event as any);
-
-    // Get knockback force from equipped weapon
-    const knockbackForce = this.getWeaponKnockbackForce();
-    const knockbackDuration = DEFAULT_KNOCKBACK.duration;
-
-    // Create hit result
-    let hitResult: HitResult = {
-      damage,
-      knockbackForce,
-      knockbackDuration,
-      defeated: target.hp <= 0,
+    const resolved = applyActionBattleHit(getActionBattleSystems().combat, {
       attacker: this.event,
-      target
-    };
+      target,
+      pattern,
+      reaction: profile.reaction,
+      metadata: {
+        damageMultiplier: profile.damageMultiplier,
+        knockbackMultiplier: profile.knockbackMultiplier,
+      },
+    });
+    let hitResult: HitResult = resolved;
 
     // Call onBeforeHit hook
     if (hooks?.onBeforeHit) {
@@ -1555,10 +2220,19 @@ export class BattleAi {
       }
     }
 
+    if (hitResult.defense?.kind === "parry") {
+      this.stagger(hitResult.defense.staggerMs, target);
+    }
+
     // Visual feedback
     withActionBattleAnimationUnlocked(target, () => {
       emitActionBattleClientVisual({
-        moment: "hurt",
+        moment:
+          hitResult.defense?.kind === "parry"
+            ? "parry"
+            : hitResult.defense?.kind === "guard"
+              ? "block"
+              : "hurt",
         entity: this.event,
         target,
         attacker: this.event,
@@ -1566,25 +2240,6 @@ export class BattleAi {
         result: hitResult,
       });
     });
-    setActionBattleInvincibility(
-      target,
-      profile.reaction.invincibilityMs
-    );
-
-    // Apply knockback
-    if (hitResult.knockbackForce > 0) {
-      const dx = target.x() - this.event.x();
-      const dy = target.y() - this.event.y();
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      
-      if (distance > 0) {
-        const knockbackDirection = {
-          x: dx / distance,
-          y: dy / distance
-        };
-        target.knockback(knockbackDirection, hitResult.knockbackForce, hitResult.knockbackDuration);
-      }
-    }
 
     // Call onAfterHit hook
     if (hooks?.onAfterHit) {
@@ -1592,7 +2247,7 @@ export class BattleAi {
     }
 
     const targetAi = (target as any).battleAi as BattleAi | undefined;
-    if (targetAi) {
+    if (targetAi && !resolved.cancelled) {
       targetAi.handleDamage(this.event, {
         damage: hitResult.damage,
         defeated: hitResult.defeated,
@@ -1623,13 +2278,8 @@ export class BattleAi {
    */
   private getWeaponKnockbackForce(): number {
     try {
-      const equipments = (this.event as any).equipments?.() || [];
-      for (const item of equipments) {
-        const itemData = (this.event as any).databaseById?.(item.id());
-        if (itemData?._type === 'weapon' && itemData.knockbackForce !== undefined) {
-          return itemData.knockbackForce;
-        }
-      }
+      return resolveActionBattleWeapon(this.event)?.knockbackForce
+        ?? DEFAULT_KNOCKBACK.force;
     } catch {
       // If error, return default
     }
@@ -1640,26 +2290,25 @@ export class BattleAi {
    * Perform combo attack
    */
   private performComboAttack() {
-    if (!this.target) return;
+    const boundary = this.captureAttackBoundary();
+    if (!boundary) return;
 
     this.comboCount++;
     const profile = this.getAttackProfile(AttackPattern.Combo);
     this.faceTarget({ force: true });
     this.lockForAttack(profile, AttackPattern.Combo);
-    this.telegraphAttack(profile);
+    this.telegraphAttack(profile, AttackPattern.Combo);
     this.playAttackVisual(profile, AttackPattern.Combo);
     this.scheduleAttackStartup(profile, () => {
-      this.executeMeleeAttack(profile, AttackPattern.Combo);
-    });
+      this.executeMeleeAttack(profile, AttackPattern.Combo, boundary);
+    }, boundary);
 
     if (this.comboCount < this.comboMax) {
-      this.schedule(() => {
-        if (this.target && this.state === AiState.Combat) {
-          this.performComboAttack();
-        } else {
-          this.comboCount = 0;
-        }
-      }, 300);
+      this.scheduleAttackAction(() => {
+        this.performComboAttack();
+      }, 300, boundary, () => {
+        this.comboCount = 0;
+      });
     } else {
       this.comboCount = 0;
     }
@@ -1669,58 +2318,47 @@ export class BattleAi {
    * Perform charged attack
    */
   private performChargedAttack() {
-    if (!this.target) return;
+    const boundary = this.captureAttackBoundary();
+    if (!boundary) return;
     const profile = this.getAttackProfile(AttackPattern.Charged);
 
     this.chargingAttack = true;
     this.faceTarget({ force: true });
     this.lockForAttack(profile, AttackPattern.Charged);
-    this.telegraphAttack(profile);
+    this.telegraphAttack(profile, AttackPattern.Charged);
     this.playAttackVisual(profile, AttackPattern.Charged, { repeat: 2 });
 
     this.scheduleAttackStartup(profile, () => {
-      if (!this.target || this.state !== AiState.Combat) {
-        this.chargingAttack = false;
-        return;
-      }
-      this.executeMeleeAttack(profile, AttackPattern.Charged);
-    });
-    this.schedule(() => {
+      this.executeMeleeAttack(profile, AttackPattern.Charged, boundary);
+    }, boundary, () => {
       this.chargingAttack = false;
-    }, profile.totalDurationMs);
+    });
+    this.scheduleAttackAction(() => {
+      this.chargingAttack = false;
+    }, profile.totalDurationMs, boundary, () => {
+      this.chargingAttack = false;
+    });
   }
 
   /**
    * Perform zone attack (360 degrees)
    */
   private performZoneAttack() {
+    const boundary = this.captureAttackBoundary({
+      targets: [],
+      bindSelectedTarget: false,
+    });
+    if (!boundary) return;
     const profile = this.getAttackProfile(AttackPattern.Zone);
     this.lockForAttack(profile, AttackPattern.Zone);
-    this.telegraphAttack(profile);
+    this.telegraphAttack(profile, AttackPattern.Zone);
     this.playAttackVisual(profile, AttackPattern.Zone);
-
-    const eventX = this.event.x();
-    const eventY = this.event.y();
-    const radius = 50;
-
-    const hitboxes: Array<{ x: number; y: number; width: number; height: number }> = [];
-    const angles = [0, 90, 180, 270];
-
-    angles.forEach(angle => {
-      const rad = (angle * Math.PI) / 180;
-      hitboxes.push({
-        x: eventX + Math.cos(rad) * radius,
-        y: eventY + Math.sin(rad) * radius,
-        width: 40,
-        height: 40,
-      });
-    });
 
     this.scheduleAttackStartup(profile, () => {
       const hitTracker = new ActionBattleHitTracker(profile.hitPolicy);
       runActionBattleActiveHitbox(
         { ...profile, startupMs: 0 },
-        () => hitboxes,
+        () => this.resolveZoneHitboxes(),
         (activeHitboxes) => {
           this.processHitboxHits(
             activeHitboxes,
@@ -1729,8 +2367,28 @@ export class BattleAi {
             AttackPattern.Zone
           );
         },
-        (scheduled, delay) => this.schedule(scheduled, delay)
+        (scheduled, delay) => this.scheduleAttackAction(
+          scheduled,
+          delay,
+          boundary,
+        )
       );
+    }, boundary);
+  }
+
+  private resolveZoneHitboxes(): ActionBattleHitbox[] {
+    const eventX = this.event.x();
+    const eventY = this.event.y();
+    const radius = 50;
+
+    return [0, 90, 180, 270].map((angle) => {
+      const radians = (angle * Math.PI) / 180;
+      return {
+        x: eventX + Math.cos(radians) * radius,
+        y: eventY + Math.sin(radians) * radius,
+        width: 40,
+        height: 40,
+      };
     });
   }
 
@@ -1738,11 +2396,14 @@ export class BattleAi {
    * Perform dash attack
    */
   private performDashAttack() {
-    if (!this.target || this.isTargetDefeated(this.target)) return;
+    const boundary = this.captureAttackBoundary();
+    if (!boundary) return;
     const profile = this.getAttackProfile(AttackPattern.DashAttack);
 
-    const dx = this.target.x() - this.event.x();
-    const dy = this.target.y() - this.event.y();
+    const target = boundary.selectedTarget;
+    if (!target) return;
+    const dx = target.x() - this.event.x();
+    const dy = target.y() - this.event.y();
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist === 0) return;
@@ -1752,17 +2413,15 @@ export class BattleAi {
 
     this.faceTarget({ force: true });
     this.lockForAttack(profile, AttackPattern.DashAttack);
-    this.telegraphAttack(profile);
+    this.telegraphAttack(profile, AttackPattern.DashAttack);
     this.playAttackVisual(profile, AttackPattern.DashAttack);
 
     this.scheduleAttackStartup(profile, () => {
-      if (!this.target || this.state !== AiState.Combat) return;
       safeActionBattleDash(this.event, { x: dirX, y: dirY }, 10, 200);
-      this.schedule(() => {
-        if (!this.target || this.state !== AiState.Combat) return;
-        this.executeMeleeAttack(profile, AttackPattern.DashAttack);
-      }, 200);
-    });
+      this.scheduleAttackAction(() => {
+        this.executeMeleeAttack(profile, AttackPattern.DashAttack, boundary);
+      }, 200, boundary);
+    }, boundary);
   }
 
   private getAttackProfile(
@@ -1776,27 +2435,63 @@ export class BattleAi {
   private playAttackVisual(
     profile: NormalizedActionBattleAttackProfile,
     pattern: AttackPattern,
-    animationDefaults?: { animationName?: string; repeat?: number }
+    animationDefaults?: { animationName?: string; repeat?: number },
+    skillOverride?: any,
+    targetOverride?: ActionBattleEntity,
+    momentOverride?: "attack" | "castSkill"
   ): void {
+    const resolvedSkill =
+      skillOverride ??
+      (
+        this.attackSkill
+          ? this.resolveUsable(this.attackSkill)
+          : undefined
+      );
+    const skillType = resolvedSkill?.skillType;
     const moment =
-      profile.animationKey === "castSkill" || profile.animationKey === "castSpell"
-        ? "castSkill"
-        : "attack";
+      momentOverride ??
+      (
+        profile.animationKey === "castSkill" ||
+        profile.animationKey === "castSpell" ||
+        skillType === "magical" ||
+        skillType === "support" ||
+        skillType === "healing"
+          ? "castSkill"
+          : "attack"
+      );
 
     withActionBattleAnimationUnlocked(this.event, () => {
       emitActionBattleClientVisual({
         moment,
         entity: this.event,
-        target: this.target ?? undefined,
+        target: targetOverride ?? this.target ?? undefined,
         pattern,
+        skill: resolvedSkill,
         animations: this.animations,
         animationDefaults,
       });
     });
   }
 
-  private telegraphAttack(profile: NormalizedActionBattleAttackProfile) {
+  private telegraphAttack(
+    profile: NormalizedActionBattleAttackProfile,
+    pattern?: AttackPattern
+  ) {
     if (profile.startupMs <= 0) return;
+    emitActionBattleClientVisual({
+      moment: "telegraph",
+      entity: this.event,
+      target: this.target ?? undefined,
+      result: {
+        durationMs: profile.startupMs,
+        telegraphScale: profile.id.includes("zone")
+          ? 1.6
+          : profile.id.includes("charged")
+            ? 1.3
+            : 1,
+        pattern,
+      },
+    });
     this.event.flash({
       type: 'tint',
       tint: 'white',
@@ -1807,9 +2502,18 @@ export class BattleAi {
 
   private scheduleAttackStartup(
     profile: NormalizedActionBattleAttackProfile,
-    callback: () => void
+    callback: () => void,
+    boundary: ActionBattleAiAttackBoundary | null =
+      this.captureAttackBoundary(),
+    onInvalidated?: () => void,
   ) {
-    return scheduleActionBattleStartup(profile, callback, (scheduled, delay) =>
+    return scheduleActionBattleStartup(profile, () => {
+      if (!boundary || !this.isAttackBoundaryCurrent(boundary)) {
+        onInvalidated?.();
+        return;
+      }
+      callback();
+    }, (scheduled, delay) =>
       this.schedule(scheduled, delay)
     );
   }
@@ -1911,11 +2615,12 @@ export class BattleAi {
     // Counter-attack for defensive types
     if (this.enemyType === EnemyType.Defensive && Math.random() < 0.5) {
       this.debugLog('dodge', 'Counter-attack after dodge');
-      this.schedule(() => {
-        if (this.target && this.state === AiState.Combat) {
+      const boundary = this.captureAttackBoundary();
+      if (boundary) {
+        this.scheduleAttackAction(() => {
           this.selectAndPerformAttack();
-        }
-      }, 400);
+        }, 400, boundary);
+      }
     }
     return true;
   }
@@ -1934,43 +2639,44 @@ export class BattleAi {
   /**
    * Flee from target
    */
-  private fleeFromTarget() {
-    if (!this.target) return;
+  private fleeFromTarget(): boolean {
+    if (!this.target) return false;
 
     const dx = this.event.x() - this.target.x();
     const dy = this.event.y() - this.target.y();
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist === 0) return;
+    if (dist === 0) return false;
 
     const fleeTarget = {
       x: this.event.x() + (dx / dist) * 200,
       y: this.event.y() + (dy / dist) * 200
     };
 
-    this.requestMoveTo(fleeTarget as any);
+    return this.requestMoveTo(fleeTarget as any);
   }
 
   /**
    * Retreat from target (temporary)
    */
-  private retreatFromTarget() {
-    if (!this.target) return;
+  private retreatFromTarget(): boolean {
+    if (!this.target) return false;
     const currentTime = Date.now();
     if (currentTime - this.lastRetreatTime < this.retreatCooldown) {
-      return;
+      return false;
     }
 
     const dx = this.event.x() - this.target.x();
     const dy = this.event.y() - this.target.y();
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist === 0) return;
+    if (dist === 0) return false;
 
     if (!safeActionBattleDash(this.event, { x: dx / dist, y: dy / dist }, 8, 200)) {
-      return;
+      return false;
     }
     this.lastRetreatTime = currentTime;
+    return true;
   }
 
   /**
@@ -1988,11 +2694,73 @@ export class BattleAi {
   /**
    * Start patrol
    */
-  private startPatrol() {
-    if (this.patrolWaypoints.length === 0) return;
+  private startPatrol(): boolean {
+    if (this.patrolWaypoints.length === 0) return false;
 
     const waypoint = this.patrolWaypoints[this.currentPatrolIndex];
-    this.requestMoveTo({ x: waypoint.x, y: waypoint.y } as any);
+    return this.requestMoveTo({ x: waypoint.x, y: waypoint.y } as any);
+  }
+
+  private schedulePatrolResume(
+    stateGeneration: number,
+    delayMs: number,
+  ): void {
+    if (this.patrolResumeTimer !== undefined) {
+      if (this.patrolResumeGeneration === stateGeneration) return;
+      this.clearPatrolResumeTimer();
+    }
+    let timer: ReturnType<typeof setTimeout>;
+    timer = this.schedule(() => {
+      if (this.patrolResumeTimer === timer) {
+        this.patrolResumeTimer = undefined;
+        this.patrolResumeGeneration = undefined;
+      }
+      this.resumePatrolWhenActionUnlocked(stateGeneration);
+    }, Math.max(1, delayMs));
+    this.patrolResumeTimer = timer;
+    this.patrolResumeGeneration = stateGeneration;
+  }
+
+  private clearPatrolResumeTimer(stateGeneration?: number): void {
+    if (this.patrolResumeTimer === undefined) return;
+    if (
+      stateGeneration !== undefined &&
+      this.patrolResumeGeneration !== stateGeneration
+    ) return;
+    clearTimeout(this.patrolResumeTimer);
+    this.timers = this.timers.filter(
+      (entry) => entry !== this.patrolResumeTimer
+    );
+    this.patrolResumeTimer = undefined;
+    this.patrolResumeGeneration = undefined;
+  }
+
+  private resumePatrolWhenActionUnlocked(stateGeneration: number): void {
+    if (
+      this.destroyed
+      || this.state !== AiState.Idle
+      || this.stateGeneration !== stateGeneration
+      || this.patrolWaypoints.length === 0
+    ) return;
+    const now = Date.now();
+    const remainingLockMs = this.actionLockedUntil - now;
+    const remainingMoveCooldownMs = this.moveToCooldown - (now - this.lastMoveToTime);
+    const retryAfterMs = Math.max(remainingLockMs, remainingMoveCooldownMs);
+    if (retryAfterMs > 0) {
+      this.schedulePatrolResume(stateGeneration, retryAfterMs);
+      return;
+    }
+    if (this.startPatrol()) {
+      this.clearPatrolResumeTimer(stateGeneration);
+    } else {
+      const remainingCooldownMs = this.moveToCooldown - (Date.now() - this.lastMoveToTime);
+      this.schedulePatrolResume(
+        stateGeneration,
+        remainingCooldownMs > 0
+          ? remainingCooldownMs
+          : this.patrolRetryDelayMs,
+      );
+    }
   }
 
   /**
@@ -2094,6 +2862,10 @@ export class BattleAi {
       state: this.state,
       distance: this.getDistance(this.event, target),
     });
+    const previousTarget = this.target;
+    if (previousTarget && previousTarget !== target) {
+      this.removeThreat(previousTarget);
+    }
     this.target = target;
 
     if (this.state === AiState.Idle) {
@@ -2101,6 +2873,7 @@ export class BattleAi {
     } else if (this.state === AiState.Alert) {
       this.changeState(AiState.Combat);
     }
+    this.syncThreat();
   }
 
   /**
@@ -2116,7 +2889,7 @@ export class BattleAi {
     });
     if (this.target === target) {
       this.clearTarget();
-      this.changeState(AiState.Idle);
+      this.returnToIdleAfterTargetLoss();
     }
   }
 
@@ -2137,10 +2910,41 @@ export class BattleAi {
     });
   }
 
+  /**
+   * Interrupt this enemy with an authoritative stagger.
+   *
+   * Used by parries and heavy reactions. The visual is emitted separately so
+   * games can replace the default presentation without changing AI ownership.
+   */
+  stagger(durationMs = 650, source?: ActionBattleEntity): void {
+    if (this.defeated || this.destroyed) return;
+    const duration = Math.max(0, durationMs);
+    this.isMovingToTarget = false;
+    this.event.stopMoveTo();
+    this.stunnedUntil = Date.now() + duration;
+    this.lockActionUntil(this.stunnedUntil, "stagger", {
+      sourceId: source?.id,
+      durationMs: duration,
+    });
+    this.changeState(AiState.Stunned);
+    withActionBattleAnimationUnlocked(this.event, () => {
+      emitActionBattleClientVisual({
+        moment: "stagger",
+        entity: this.event,
+        target: this.event,
+        attacker: source,
+        pattern: "stagger",
+        animations: this.animations,
+      });
+    });
+  }
+
   handleDamage(
     attacker: ActionBattleEntity,
     damageResult: ActionBattleDamageResult & {
       reaction?: NormalizedActionBattleHitReactionProfile;
+      skill?: any;
+      metadata?: Record<string, any>;
     }
   ): boolean {
     if (this.defeated) return true;
@@ -2170,6 +2974,7 @@ export class BattleAi {
         damage,
         defeated: damageResult.defeated,
         result: damageResult,
+        skill: damageResult.skill,
         animations: this.animations,
       });
     });
@@ -2239,6 +3044,8 @@ export class BattleAi {
   private kill(attacker?: ActionBattleEntity) {
     if (this.defeated) return;
     this.defeated = true;
+    this.removeThreat(this.target);
+    releaseActionBattleAttackSlot(this.event);
 
     const dieAnimation = resolveActionBattleAnimation(
       "die",
@@ -2248,7 +3055,12 @@ export class BattleAi {
         attacker,
       }
     );
-    const removeDelay = getActionBattleAnimationRemovalDelay(dieAnimation);
+    const deathPresentation = this.presentation.death;
+    const animationDelay = getActionBattleAnimationRemovalDelay(dieAnimation);
+    const removeDelay = Math.max(
+      animationDelay,
+      deathPresentation === false ? 0 : deathPresentation.durationMs
+    );
     const reward = createDefeatReward(this.rewards);
     let removed = false;
     const remove = () => {
@@ -2258,11 +3070,16 @@ export class BattleAi {
         reason: "defeated",
         data: {
           animation: dieAnimation,
+          deathPresentation,
         },
-        transition: dieAnimation
+        transition: dieAnimation || deathPresentation !== false
           ? {
-              animation: dieAnimation.animationName,
-              graphic: dieAnimation.graphic,
+              animation: dieAnimation?.animationName,
+              graphic: dieAnimation?.graphic,
+              effect:
+                deathPresentation === false
+                  ? undefined
+                  : deathPresentation.effect,
               duration: removeDelay,
             }
           : undefined,
@@ -2280,6 +3097,27 @@ export class BattleAi {
       reward,
       remove,
     };
+
+    if (deathPresentation !== false) {
+      const visualDelay = Math.max(0, animationDelay - 300);
+      setTimeout(() => {
+        emitActionBattleClientVisual({
+          moment: "defeat",
+          entity: this.event,
+          target: this.event,
+          attacker,
+          result: {
+            durationMs: deathPresentation.durationMs,
+            metadata: {
+              deathEffect: deathPresentation.effect,
+              deathScale: deathPresentation.scale,
+              deathShake: deathPresentation.shake,
+            },
+          },
+          animations: this.animations,
+        });
+      }, visualDelay);
+    }
 
     // Call onDefeated hook before cleanup. One-argument callbacks receive the
     // newer context object; two-argument callbacks keep the legacy signature.
@@ -2323,12 +3161,30 @@ export class BattleAi {
     }
   }
 
-  private getCurrentActionRange(): number | undefined {
-    const skillRange = this.attackSkill
-      ? getActionBattleActionRange(this.resolveUsable(this.attackSkill))
-      : undefined;
-    if (skillRange !== undefined) return skillRange;
-    return getActionBattleActionRange(resolveActionBattleWeapon(this.event));
+  private getSkillCooldownKey(skill: any): any {
+    const rawId =
+      typeof skill?.id === "function" ? skill.id.call(skill) : skill?.id;
+    return rawId ?? skill;
+  }
+
+  private getSkillCooldown(skill: any): number {
+    const cooldown = getActionBattleActionConfig(skill)?.cooldownMs;
+    return typeof cooldown === "number" && Number.isFinite(cooldown)
+      ? Math.max(0, cooldown)
+      : 0;
+  }
+
+  private markSkillUsed(skill: any, currentTime: number): void {
+    const cooldown = this.getSkillCooldown(skill);
+    if (cooldown <= 0) return;
+    this.skillCooldowns.set(
+      this.getSkillCooldownKey(skill),
+      currentTime + cooldown
+    );
+  }
+
+  private isAttackReady(currentTime: number): boolean {
+    return currentTime - this.lastAttackTime >= this.attackCooldown;
   }
 
   private canTarget(target: ActionBattleEntity): boolean {
@@ -2396,9 +3252,16 @@ export class BattleAi {
   }
 
   private clearTarget() {
+    this.removeThreat(this.target);
     this.target = null;
     this.isMovingToTarget = false;
     this.event.stopMoveTo();
+  }
+
+  private returnToIdleAfterTargetLoss(): void {
+    this.changeState(AiState.Idle, {
+      preserveSelfTargetedActions: true,
+    });
   }
 
   private updateBehavior(currentTime: number) {
@@ -2470,7 +3333,7 @@ export class BattleAi {
       if (result.intent) {
         handled = this.executeAiIntents(result.intent, currentTime) || handled;
       }
-      if (result.status === "running") {
+      if (result.status === "running" && result.consume !== false) {
         handled = true;
       }
     }
@@ -2565,76 +3428,158 @@ export class BattleAi {
     currentTime: number
   ): boolean {
     const consumes = intent.consume !== false;
+    const accepted = executeActionBattleAiIntentWithReceipt(
+      intent,
+      this,
+      () => this.executeAiIntentAuthoritatively(intent, currentTime)
+    );
+    return accepted && consumes;
+  }
 
+  private executeAiIntentAuthoritatively(
+    intent: ActionBattleAiIntent,
+    currentTime: number
+  ): boolean | Promise<boolean> {
     switch (intent.type) {
       case "setMode":
         this.behaviorMode = intent.mode;
         this.behaviorEnabled = true;
-        return consumes;
+        return true;
+      case "run": {
+        const result = intent.callback(this.createAiTreeContext(currentTime));
+        return result !== false;
+      }
+      case "visual":
+        emitActionBattleClientVisual({
+          moment: "ai",
+          entity: this.event,
+          target: this.target ?? undefined,
+          visual: intent.visual,
+        });
+        return true;
+      case "setSpeed":
+        if (!Number.isFinite(intent.value) || intent.value < 0) return false;
+        this.event.speed = intent.value;
+        return true;
+      case "moveToPoint":
+        return this.requestMoveTo(intent.position);
+      case "holdPosition":
+        this.isMovingToTarget = false;
+        this.event.stopMoveTo();
+        return true;
+      case "teleportTo":
+        return this.executeTeleport(intent.position);
+      case "teleportNearTarget": {
+        if (!this.target) return false;
+        const distance = intent.options.distance;
+        if (!Number.isFinite(distance) || distance < 0) return false;
+        const angleDegrees =
+          intent.options.angleDegrees ?? Math.random() * 360;
+        if (!Number.isFinite(angleDegrees)) return false;
+        const angle = (angleDegrees * Math.PI) / 180;
+        return this.executeTeleport(
+          {
+            x: this.target.x() + Math.cos(angle) * distance,
+            y: this.target.y() + Math.sin(angle) * distance,
+          }
+        );
+      }
+      case "callAction": {
+        const registeredAction =
+          getActionBattleSystems().ai.actions[intent.name];
+        if (!registeredAction) return false;
+        const result = registeredAction(
+          this.createAiTreeContext(currentTime),
+          intent.payload
+        );
+        return result !== false;
+      }
       case "idle":
         this.isMovingToTarget = false;
         this.event.stopMoveTo();
-        return consumes;
+        return true;
       case "patrol":
-        this.startPatrol();
-        return consumes;
+        return this.startPatrol();
       case "faceTarget":
+        if (!this.target) return false;
         this.faceTarget();
-        return consumes;
+        return true;
       case "moveToTarget":
         if (!this.target) return false;
-        this.requestTargetMovement();
-        return consumes;
+        return this.requestTargetMovement();
       case "fleeFromTarget":
         if (!this.target) return false;
         this.isMovingToTarget = false;
         if (this.state === AiState.Combat) {
           this.changeState(AiState.Flee);
-        } else {
-          this.fleeFromTarget();
+          return true;
         }
-        return consumes;
+        return this.fleeFromTarget();
       case "keepDistance":
-        return this.executeKeepDistance(intent, consumes);
+        return this.executeKeepDistance(intent);
       case "useAttack":
-        return this.executeRequestedAttack(intent.pattern, currentTime, consumes);
+        return this.executeRequestedAttack(intent.pattern, currentTime);
       case "useSkill":
-        return this.executeRequestedSkill(intent.skill, currentTime, consumes);
+        return this.executeRequestedSkill(intent.skill, currentTime);
+    }
+  }
+
+  private executeTeleport(
+    position: { x: number; y: number }
+  ): boolean | Promise<boolean> {
+    if (
+      !Number.isFinite(position.x) ||
+      !Number.isFinite(position.y) ||
+      typeof this.event.teleport !== "function" ||
+      !this.event.getCurrentMap?.()
+    ) {
+      return false;
+    }
+    this.isMovingToTarget = false;
+    this.event.stopMoveTo();
+    try {
+      return Promise.resolve(this.event.teleport(position)).then(
+        (result) => result !== false,
+        () => false
+      );
+    } catch {
+      return false;
     }
   }
 
   private executeKeepDistance(
-    intent: Extract<ActionBattleAiIntent, { type: "keepDistance" }>,
-    consumes: boolean
+    intent: Extract<ActionBattleAiIntent, { type: "keepDistance" }>
   ): boolean {
     if (!this.target) return false;
     const tolerance = intent.tolerance ?? Math.max(8, intent.distance * 0.15);
     const distance = this.getDistance(this.event, this.target);
     if (distance < intent.distance - tolerance) {
       this.isMovingToTarget = false;
-      this.retreatFromTarget();
-      return consumes;
+      return this.retreatFromTarget();
     }
     if (distance > intent.distance + tolerance) {
-      this.requestTargetMovement();
-      return consumes;
+      return this.requestTargetMovement();
     }
     if (this.isMovingToTarget) {
       this.isMovingToTarget = false;
       this.event.stopMoveTo();
     }
-    return consumes;
+    return true;
   }
 
   private executeRequestedAttack(
     pattern: AttackPattern | string | undefined,
-    currentTime: number,
-    consumes: boolean
+    currentTime: number
   ): boolean {
-    if (!this.target || this.isTargetDefeated(this.target) || this.chargingAttack) return false;
+    if (
+      this.isTargetDefeated(this.event) ||
+      !this.target ||
+      this.isTargetDefeated(this.target) ||
+      this.chargingAttack
+    ) return false;
     const distance = this.getDistance(this.event, this.target);
     if (distance > this.attackRange) return false;
-    if (currentTime - this.lastAttackTime < this.attackCooldown) return false;
+    if (!this.isAttackReady(currentTime)) return false;
 
     if (pattern) {
       this.performAttackPattern(pattern as AttackPattern);
@@ -2642,31 +3587,36 @@ export class BattleAi {
       this.selectAndPerformAttack();
     }
     this.lastAttackTime = currentTime;
-    return consumes;
+    return true;
   }
 
   private executeRequestedSkill(
     skill: any,
-    currentTime: number,
-    consumes: boolean
+    currentTime: number
   ): boolean {
-    if (!this.target || this.isTargetDefeated(this.target) || !skill) return false;
-    const distance = this.getDistance(this.event, this.target);
+    if (
+      this.isTargetDefeated(this.event) ||
+      !this.target ||
+      this.isTargetDefeated(this.target) ||
+      !skill
+    ) return false;
     const resolvedSkill = this.resolveUsable(skill);
-    const range = getActionBattleActionRange(resolvedSkill) ?? this.attackRange;
-    const cooldownRemaining = this.attackCooldown - (currentTime - this.lastAttackTime);
-    if (distance > range) return false;
-    if (cooldownRemaining > 0) return false;
-
-    executeActionBattleUse({
+    const evaluation = evaluateActionBattleAiSkill({
       attacker: this.event,
       target: this.target,
-      usable: resolvedSkill,
       skill: resolvedSkill,
-      profile: this.getAttackProfile(AttackPattern.Melee),
+      now: currentTime,
+      readyAt:
+        this.skillCooldowns.get(this.getSkillCooldownKey(resolvedSkill)) ?? 0,
+      attackRange: this.attackRange,
+      hpPercent: this.getHpPercent(),
+      targetOptions: getActionBattleOptions().combat?.targets,
     });
+    if (evaluation.rejection || !this.isAttackReady(currentTime)) return false;
+    if (!this.performPlannedSkill(evaluation)) return false;
     this.lastAttackTime = currentTime;
-    return consumes;
+    this.lastCombatAction = { kind: "skill", id: evaluation.id };
+    return true;
   }
 
   private handleTacticalMovement(distance: number) {
@@ -2777,9 +3727,7 @@ export class BattleAi {
       return false;
     }
     const map = this.event.getCurrentMap?.() as any;
-    const hasBody =
-      !!map?.physic?.getEntityByUUID?.(this.event.id) ||
-      !!map?.getBody?.(this.event.id);
+    const hasBody = this.hasMovementBody(map);
     this.traceLog("movement", "moveTo requested", {
       targetKind: resolvedTarget.kind,
       targetId:
@@ -2795,9 +3743,35 @@ export class BattleAi {
       hasMap: !!map,
       hasMovementBody: hasBody,
     });
-    this.event.moveTo(resolvedTarget.target as any);
+    if (!map || !hasBody) {
+      this.traceLog("movement", "moveTo skipped: missing movement body", {
+        hasMap: !!map,
+        hasMovementBody: hasBody,
+      });
+      return false;
+    }
+    try {
+      this.event.moveTo(resolvedTarget.target as any);
+    } catch (error) {
+      if (isActionBattleMovementResolutionError(error)) return false;
+      throw error;
+    }
+    const mapAfterDispatch = this.event.getCurrentMap?.() as any;
+    if (!this.hasMovementBody(mapAfterDispatch)) {
+      this.traceLog("movement", "moveTo rejected: movement body vanished", {
+        hasMap: !!mapAfterDispatch,
+      });
+      return false;
+    }
     this.lastMoveToTime = currentTime;
     return true;
+  }
+
+  private hasMovementBody(map: any): boolean {
+    return (
+      !!map?.physic?.getEntityByUUID?.(this.event.id) ||
+      !!map?.getBody?.(this.event.id)
+    );
   }
 
   private requestTargetMovement(target: ActionBattleEntity | null = this.target): boolean {
@@ -2831,6 +3805,83 @@ export class BattleAi {
     return timer;
   }
 
+  private captureAttackBoundary(
+    options: {
+      targets?: ActionBattleEntity[];
+      bindSelectedTarget?: boolean;
+      preserveAcrossTargetLoss?: boolean;
+    } = {},
+  ): ActionBattleAiAttackBoundary | null {
+    if (this.isTargetDefeated(this.event)) return null;
+    const bindSelectedTarget = options.bindSelectedTarget ?? true;
+    const selectedTarget = this.target;
+    if (
+      bindSelectedTarget
+      && (!selectedTarget || this.isTargetDefeated(selectedTarget))
+    ) return null;
+    const targets = Array.from(new Set(
+      options.targets
+        ?? (selectedTarget ? [selectedTarget] : []),
+    ));
+    if (targets.some((target) => this.isTargetDefeated(target))) return null;
+    return {
+      actorGeneration: captureActionBattleActorGeneration(this.event),
+      state: this.state,
+      stateGeneration: this.stateGeneration,
+      stateInterruptionGeneration: this.stateInterruptionGeneration,
+      preserveAcrossTargetLoss: options.preserveAcrossTargetLoss ?? false,
+      ...(bindSelectedTarget && selectedTarget ? { selectedTarget } : {}),
+      targets: targets.map((entity) => ({
+        entity,
+        generation: captureActionBattleActorGeneration(entity),
+      })),
+    };
+  }
+
+  private isAttackBoundaryCurrent(
+    boundary: ActionBattleAiAttackBoundary,
+  ): boolean {
+    const stateBoundaryCurrent = boundary.preserveAcrossTargetLoss
+      ? this.stateInterruptionGeneration === boundary.stateInterruptionGeneration
+      : (
+          this.state === boundary.state
+          && this.stateGeneration === boundary.stateGeneration
+        );
+    return (
+      boundary.selectedTarget === undefined
+      || (
+        this.target === boundary.selectedTarget
+        && this.canTarget(boundary.selectedTarget)
+      )
+    )
+      && stateBoundaryCurrent
+      && !this.isTargetDefeated(this.event)
+      && isActionBattleActorGenerationCurrent(
+        this.event,
+        boundary.actorGeneration,
+      )
+      && boundary.targets.every(({ entity, generation }) =>
+        !this.isTargetDefeated(entity)
+        && isActionBattleActorGenerationCurrent(entity, generation)
+      );
+  }
+
+  private scheduleAttackAction(
+    callback: () => void,
+    delay: number,
+    boundary: ActionBattleAiAttackBoundary | null =
+      this.captureAttackBoundary(),
+    onInvalidated?: () => void,
+  ) {
+    return this.schedule(() => {
+      if (!boundary || !this.isAttackBoundaryCurrent(boundary)) {
+        onInvalidated?.();
+        return;
+      }
+      callback();
+    }, delay);
+  }
+
   // Public getters
   getHealth(): number { return this.event.hp; }
   getMaxHealth(): number { return this.event.param[MAXHP]; }
@@ -2846,6 +3897,11 @@ export class BattleAi {
     return this.targets;
   }
   setTargets(targets: ActionBattleTargetSelector): void {
+    if (targets !== this.targets) {
+      // Target-policy reconfiguration is an interruption boundary even after
+      // an earlier production tick has already cleared the selected target.
+      this.stateInterruptionGeneration++;
+    }
     this.targets = targets;
     if (this.target && !this.canTarget(this.target)) {
       this.clearTarget();
@@ -2854,11 +3910,35 @@ export class BattleAi {
   }
   getEnemyType(): EnemyType { return this.enemyType; }
 
+  private syncThreat() {
+    if (!this.target) return;
+    const active =
+      !this.destroyed &&
+      !this.defeated &&
+      this.state !== AiState.Idle;
+    updateActionBattleThreat(this.event, this.target as any, active, {
+      enemyId: this.event.id,
+      music: this.presentation.music?.battle,
+      priority: this.presentation.music?.priority,
+      boss: this.presentation.role === "boss",
+    });
+  }
+
+  private removeThreat(target: ActionBattleEntity | null | undefined) {
+    updateActionBattleThreat(this.event, target as any, false, {
+      enemyId: this.event.id,
+    });
+  }
+
   /**
    * Clean up
    */
   destroy() {
+    cancelActionBattleAiIntentExecutions(this);
+    this.aiMemory = {};
+    this.removeThreat(this.target);
     this.destroyed = true;
+    releaseActionBattleAttackSlot(this.event, this.target);
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = undefined;
@@ -2867,5 +3947,7 @@ export class BattleAi {
     this.nearbyEnemies = [];
     this.timers.forEach((timer) => clearTimeout(timer));
     this.timers = [];
+    this.patrolResumeTimer = undefined;
+    this.patrolResumeGeneration = undefined;
   }
 }

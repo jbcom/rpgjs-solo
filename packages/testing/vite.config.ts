@@ -33,7 +33,7 @@ export default defineConfig({
       fileName: (format, entryName) => `${entryName}.js`
     },
     rollupOptions: {
-      external: [/@rpgjs/, 'esbuild', 'canvasengine', '@canvasengine/presets', 'rxjs', 'pixi.js', 'vitest-webgl-canvas-mock'],
+      external: [/@rpgjs/, /^@signe\//, 'esbuild', 'canvasengine', '@canvasengine/presets', 'rxjs', 'pixi.js', 'vitest-webgl-canvas-mock'],
       output: {
         preserveModules: true,
         preserveModulesRoot: 'src'

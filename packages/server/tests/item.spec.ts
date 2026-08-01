@@ -542,6 +542,71 @@ describe("Item Management - Parameters (ATK, PDEF, SDEF)", () => {
 });
 
 describe("Item Management - Hooks", () => {
+  test("hydrates database lifecycle hooks for add-by-ID exactly once", () => {
+    const onAdd = vi.fn();
+    const onRemove = vi.fn();
+    const onEquip = vi.fn();
+    const itemId = "database-hook-weapon";
+
+    player.getCurrentMap().addInDatabase(itemId, {
+      id: itemId,
+      name: "Database Hook Weapon",
+      _type: "weapon",
+      onAdd,
+      onRemove,
+      onEquip,
+    });
+
+    player.addItem(itemId, 1);
+    expect(onAdd).toHaveBeenCalledTimes(1);
+    expect(onAdd).toHaveBeenLastCalledWith(player);
+
+    player.equip(itemId, true);
+    player.equip(itemId, false);
+    expect(onEquip).toHaveBeenCalledTimes(2);
+    expect(onEquip).toHaveBeenNthCalledWith(1, player, true);
+    expect(onEquip).toHaveBeenNthCalledWith(2, player, false);
+
+    player.removeItem(itemId, 1);
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(onRemove).toHaveBeenLastCalledWith(player);
+  });
+
+  test("restores lifecycle hooks without replaying or duplicating them", async () => {
+    const onAdd = vi.fn();
+    const onRemove = vi.fn();
+    const onEquip = vi.fn();
+    const itemId = "restored-hook-weapon";
+
+    player.getCurrentMap().addInDatabase(itemId, {
+      id: itemId,
+      name: "Restored Hook Weapon",
+      _type: "weapon",
+      onAdd,
+      onRemove,
+      onEquip,
+    });
+
+    player.addItem(itemId, 1);
+    const snapshot = await player.save();
+    player.items.set([]);
+    player.equipments.set([]);
+
+    await player.applySnapshot(snapshot);
+
+    expect(player.getItem(itemId)?.quantity()).toBe(1);
+    expect(onAdd).toHaveBeenCalledTimes(1);
+
+    player.equip(itemId, true);
+    player.equip(itemId, false);
+    player.removeItem(itemId, 1);
+
+    expect(onEquip).toHaveBeenCalledTimes(2);
+    expect(onEquip).toHaveBeenNthCalledWith(1, player, true);
+    expect(onEquip).toHaveBeenNthCalledWith(2, player, false);
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
   test("should call onAdd hook when adding item", () => {
     const onAddSpy = vi.fn();
     const customItem: ItemObject = {
@@ -588,6 +653,53 @@ describe("Item Management - Hooks", () => {
     expect(onUseSpy).toHaveBeenCalledWith(player);
 
     Math.random = originalRandom;
+  });
+
+  test("uses the current database hook instead of a stale inventory hook", () => {
+    const staleOnUse = vi.fn();
+    const currentOnUse = vi.fn();
+    const itemId = "refreshed-hook-item";
+
+    player.addItem({
+      id: itemId,
+      name: "Refreshed Hook Item",
+      consumable: true,
+      onUse: staleOnUse,
+    }, 1);
+
+    player.getCurrentMap().addInDatabase(itemId, {
+      id: itemId,
+      name: "Refreshed Hook Item",
+      consumable: true,
+      onUse: currentOnUse,
+    }, { force: true });
+
+    player.useItem(itemId);
+
+    expect(staleOnUse).not.toHaveBeenCalled();
+    expect(currentOnUse).toHaveBeenCalledWith(player);
+  });
+
+  test("does not execute an inventory hook removed from the database", () => {
+    const staleOnUse = vi.fn();
+    const itemId = "cleared-hook-item";
+
+    player.addItem({
+      id: itemId,
+      name: "Cleared Hook Item",
+      consumable: true,
+      onUse: staleOnUse,
+    }, 1);
+
+    player.getCurrentMap().addInDatabase(itemId, {
+      id: itemId,
+      name: "Cleared Hook Item",
+      consumable: true,
+    }, { force: true });
+
+    player.useItem(itemId);
+
+    expect(staleOnUse).not.toHaveBeenCalled();
   });
 
   test("should call onUseFailed hook when item usage fails", () => {

@@ -1,6 +1,7 @@
 import type { ActionBattleAttackProfile } from "../types";
 
-const resolveItemId = (item: any) => item?.id?.() ?? item?.id;
+const resolveItemId = (item: any) =>
+  typeof item?.id === "function" ? item.id() : item?.id;
 
 export function resolveActionBattleWeapon(entity: any): any | null {
   const equipments = entity?.equipments?.() || [];

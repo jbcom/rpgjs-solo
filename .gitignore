@@ -3,6 +3,7 @@ dist
 lib
 lerna-debug.log
 coverage
+output/
 packages/common/types
 docs/api/*
 docs/others/*
@@ -25,6 +26,9 @@ docs/.vitepress/cache
 public
 !playground/games/pressure-plate/public/
 !playground/games/pressure-plate/public/hero.png
+!playground/games/hotbar/public/
+!playground/games/hotbar/public/icons/
+!playground/games/hotbar/public/icons/*.svg
 .partykit
 .wrangler
 .vite

@@ -15,6 +15,8 @@ export interface ProjectileSpawnConfig {
   ttl?: number;
   spawnTick?: number;
   collisionMask?: number;
+  /** Circular collision radius. Zero keeps point-ray projectile behavior. */
+  radius?: number;
   ignoreOwner?: boolean;
   filter?: (entity: Entity, projectile: ProjectileState) => boolean;
   metadata?: Record<string, unknown>;
@@ -33,6 +35,7 @@ export interface ProjectileState {
   age: number;
   distanceTraveled: number;
   collisionMask?: number;
+  radius: number;
   ignoreOwner: boolean;
   metadata?: Record<string, unknown>;
 }
@@ -107,6 +110,9 @@ export class ProjectileSystem {
     }
 
     const origin = this.toVector(config.origin);
+    const radius = Number.isFinite(config.radius)
+      ? Math.max(0, config.radius ?? 0)
+      : 0;
     const state: ProjectileState = {
       id: config.id,
       origin: origin.clone(),
@@ -119,6 +125,7 @@ export class ProjectileSystem {
       age: 0,
       distanceTraveled: 0,
       ignoreOwner: config.ignoreOwner ?? true,
+      radius,
     };
 
     if (config.ownerId !== undefined) state.ownerId = config.ownerId;
@@ -201,13 +208,22 @@ export class ProjectileSystem {
     }
 
     const start = projectile.position.clone();
-    const hit = this.engine.raycast(
-      start,
-      projectile.direction,
-      stepDistance,
-      projectile.collisionMask,
-      (entity) => this.shouldHit(entity, record),
-    );
+    const hit = projectile.radius > 0
+      ? this.engine.capsuleCast(
+          start,
+          projectile.direction,
+          stepDistance,
+          projectile.radius,
+          projectile.collisionMask,
+          (entity) => this.shouldHit(entity, record),
+        )
+      : this.engine.raycast(
+          start,
+          projectile.direction,
+          stepDistance,
+          projectile.collisionMask,
+          (entity) => this.shouldHit(entity, record),
+        );
 
     if (hit) {
       projectile.position = hit.point.clone();
@@ -268,6 +284,7 @@ export class ProjectileSystem {
       age: state.age,
       distanceTraveled: state.distanceTraveled,
       ignoreOwner: state.ignoreOwner,
+      radius: state.radius,
     };
     if (state.ownerId !== undefined) clone.ownerId = state.ownerId;
     if (state.collisionMask !== undefined) clone.collisionMask = state.collisionMask;

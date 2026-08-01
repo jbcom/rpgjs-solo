@@ -93,6 +93,62 @@ describe("Studio event runtime", () => {
     expect(options.attackPatterns).toEqual([AttackPattern.DashAttack]);
   });
 
+  test("maps Studio enemy combat music and priority", () => {
+    const options = resolveEnemyBattleAiOptions({
+      combatMusic: "boss-theme",
+      combatMusicPriority: 125,
+      presentation: { role: "boss" },
+    });
+
+    expect(options.presentation).toMatchObject({
+      role: "boss",
+      music: {
+        battle: "boss-theme",
+        priority: 125,
+      },
+    });
+  });
+
+  test("maps Studio enemy animation media to serializable battle animation options", () => {
+    const options = resolveEnemyBattleAiOptions({
+      animations: {
+        attack: { _id: "attack-media" },
+        hurt: "hurt-media",
+        die: { mediaId: "die-media" },
+        castSpell: { id: "spell-media" },
+      },
+    });
+
+    expect(options.animations).toEqual({
+      attack: {
+        animationName: "attack",
+        graphic: "attack-media",
+        repeat: 1,
+      },
+      hurt: {
+        animationName: "attack",
+        graphic: "hurt-media",
+        repeat: 1,
+      },
+      stagger: {
+        animationName: "attack",
+        graphic: "hurt-media",
+        repeat: 1,
+      },
+      die: {
+        animationName: "attack",
+        graphic: "die-media",
+        repeat: 1,
+        delayMs: 500,
+      },
+      castSkill: {
+        animationName: "attack",
+        graphic: "spell-media",
+        repeat: 1,
+      },
+    });
+  });
+
   test("initializes Studio enemy vitals from configured parameters", () => {
     const event: any = {
       hp: 0,

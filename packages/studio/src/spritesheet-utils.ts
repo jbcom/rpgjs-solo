@@ -6,6 +6,7 @@ import { CharacterSpritesheet } from "./spritesheets/character";
 import { getGameDataProvider } from "./data-provider";
 
 export const STUDIO_DEFAULT_CHARACTER_DISPLAY_SCALE = 0.7;
+export const STUDIO_DEFAULT_ATTACK_ANIMATION_DURATION_MS = 350;
 
 const resolveCharacterDisplayScale = (scale: unknown): number => {
   return typeof scale === "number"
@@ -105,6 +106,9 @@ export const createSpriteSheetObject = async (
         return {
           ...spritesheet,
           displayScale: resolveCharacterDisplayScale(scale),
+          ...(media.metadata?.fourDirections === true
+            ? { trimTransparentBounds: true }
+            : {}),
         };
       } else {
         const scale =
@@ -117,10 +121,17 @@ export const createSpriteSheetObject = async (
           imageSource: url,
           framesWidth: media.metadata?.frameWidth ?? 4,
           framesHeight: media.metadata?.frameHeight ?? 4,
+          attackDurationMs:
+            typeof media.metadata?.attackDurationMs === "number"
+              ? media.metadata.attackDurationMs
+              : STUDIO_DEFAULT_ATTACK_ANIMATION_DURATION_MS,
         });
         return {
           ...spritesheet,
           displayScale: resolveCharacterDisplayScale(scale),
+          ...(media.metadata?.fourDirections === true
+            ? { trimTransparentBounds: true }
+            : {}),
         };
 
       }
@@ -255,7 +266,7 @@ export const addSpriteSheetToClient = async (
   if (media.type === "bgs" || media.type === "bgm" || media.type === "sound") {
     client.addSound({
       id,
-      file: url,
+      src: url,
     });
     return;
   }
@@ -292,7 +303,7 @@ export const addSoundToClient = (
   if (media.type === "bgs" || media.type === "bgm" || media.type === "sound") {
     client.addSound({
       id,
-      file: url,
+      src: url,
     });
     console.log('Add Sound:', id, url);
   } else {

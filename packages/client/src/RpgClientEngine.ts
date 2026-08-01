@@ -6,7 +6,7 @@ import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { RpgSound } from "./Sound";
 import { RpgResource } from "./Resource";
-import { getOrCreateI18nService, Hooks, ModulesToken, Direction, normalizeLightingState, Vector2, type I18nParams, type I18nService } from "@rpgjs/common";
+import { getOrCreateI18nService, Hooks, ModulesToken, Direction, normalizeLightingState, type I18nMessageDescriptor, type I18nParams, type I18nService } from "@rpgjs/common";
 import type { EventComponentConfig } from "./RpgClient";
 import type { RpgClientEvent } from "./Game/Event";
 import { load } from "@signe/sync";
@@ -34,6 +34,7 @@ import { NotificationManager } from "./Gui/NotificationManager";
 import { SaveClientService } from "./services/save";
 import { getCanMoveValue } from "./utils/readPropValue";
 import { ProjectileManager, type ClientProjectileImpact, type ClientProjectileSpawn } from "./Game/ProjectileManager";
+import { predictClientProjectileImpact } from "./Game/ProjectilePrediction";
 import { ClientVisualRegistry, type ClientVisualHandler, type ClientVisualMap, type ClientVisualPacket } from "./Game/ClientVisuals";
 import { normalizeActionInput } from "./services/actionInput";
 import { createClientPointerContext, type ClientPointerContext } from "./services/pointerContext";
@@ -43,6 +44,11 @@ import { applySyncedHitboxPayload } from "./utils/syncHitbox";
 import { EventComponentResolverRegistry, type EventComponentResolver } from "./Game/EventComponentResolver";
 import { RpgClientBuiltinI18n } from "./i18n";
 import type { CameraFollowSmoothMove } from "./services/cameraFollow";
+import { RpgMusicManager } from "./Game/MusicManager";
+import {
+  ClientInputLockManager,
+  type ClientInputLockRelease,
+} from "./services/inputLock";
 export type {
   CameraFollowEase,
   CameraFollowSmoothMove,
@@ -152,6 +158,8 @@ type MapShakeOptions = {
 };
 
 export class RpgClientEngine<T = any> {
+  /** Runtime defaults used by modules that specialize the built-in dash. */
+  dashDefaults: Partial<RpgDashInput> = {};
   private guiService: RpgGui;
   private webSocket: AbstractWebsocket;
   private loadMapService: LoadMapService;
@@ -162,11 +170,18 @@ export class RpgClientEngine<T = any> {
   public sceneComponent: any;
   public sceneMapComponent: any = BuiltinSceneMap;
   stopProcessingInput = false;
+  private readonly inputLocks = new ClientInputLockManager();
   width = signal("100%");
   height = signal("100%");
   spritesheets: Map<string | number, any> = new Map();
   private spritesheetPromises: Map<string | number, Promise<any>> = new Map();
   sounds: Map<string, any> = new Map();
+  /** Client-only controller for temporary looping music and map BGM crossfades. */
+  music = new RpgMusicManager({
+    getSound: (id) => this.getSound(id),
+    createSound: (src, options) =>
+      new (Howl as any).Howl({ src: [src], ...options }),
+  });
   componentAnimations: any[] = [];
   clientVisuals = new ClientVisualRegistry();
   projectiles: ProjectileManager;
@@ -232,6 +247,11 @@ export class RpgClientEngine<T = any> {
 
   controlsReady = signal<boolean | undefined>(undefined); 
   gamePause = signal(false);
+  /**
+   * Freezes map rendering for short presentation-only beats such as combat
+   * hit-stop. It is deliberately separate from menu/gameplay pause ownership.
+   */
+  visualPause = signal(false);
 
   private predictionEnabled = false;
   private prediction?: PredictionController<RpgMovementInput, Direction>;
@@ -362,6 +382,10 @@ export class RpgClientEngine<T = any> {
 
   t(key: string, params?: I18nParams): string {
     return this.i18nService.t(key, params, this.getLocale());
+  }
+
+  translateI18nDescriptor(descriptor: I18nMessageDescriptor): string {
+    return this.i18nService.translateDescriptor(descriptor, this.getLocale());
   }
 
   i18n() {
@@ -812,7 +836,11 @@ export class RpgClientEngine<T = any> {
     });
 
     this.webSocket.on("notification", (data) => {
-      this.notificationManager.add(data);
+      this.notificationManager.add(data, {
+        t: (key, params) => this.t(key, params),
+        translateDescriptor: (descriptor) =>
+          this.translateI18nDescriptor(descriptor),
+      });
     });
 
     this.webSocket.on("setAnimation", (data) => {
@@ -1936,7 +1964,7 @@ export class RpgClientEngine<T = any> {
   }
 
   async processInput({ input }: { input: RpgMovementInput }) {
-    if (this.stopProcessingInput) return;
+    if (this.isInputProcessingStopped()) return;
 
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
     const canMove =
@@ -2017,7 +2045,10 @@ export class RpgClientEngine<T = any> {
       typeof currentPlayer?.direction === "function"
         ? currentPlayer.direction()
         : currentPlayer?.direction;
-    const dashInput = normalizeDashInput(input, fallbackDirection);
+    const dashInput = normalizeDashInput(
+      { ...this.dashDefaults, ...input },
+      fallbackDirection
+    );
     if (!dashInput) return;
     await this.processInput({ input: dashInput });
   }
@@ -2043,7 +2074,7 @@ export class RpgClientEngine<T = any> {
   processAction(action: RpgActionName, data?: any): void;
   processAction(action: RpgActionInput): void;
   processAction(action: RpgActionName | RpgActionInput, data?: any): void {
-    if (this.stopProcessingInput) return;
+    if (this.isInputProcessingStopped()) return;
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
     const canMove =
       !currentPlayer ||
@@ -2063,6 +2094,21 @@ export class RpgClientEngine<T = any> {
 
   get PIXI() {
     return PIXI
+  }
+
+  /**
+   * Prevent normal movement and action processing until this owner releases.
+   * Independent overlays can overlap without restoring input prematurely.
+   */
+  acquireInputLock(owner?: object): ClientInputLockRelease {
+    const release = this.inputLocks.acquire(owner);
+    this.interruptCurrentPlayerMovement?.();
+    return release;
+  }
+
+  /** Return whether legacy state or any scoped owner currently blocks input. */
+  isInputProcessingStopped(): boolean {
+    return this.stopProcessingInput || this.inputLocks.active;
   }
 
   get socket() {
@@ -2109,44 +2155,10 @@ export class RpgClientEngine<T = any> {
   }
 
   private predictProjectileImpact(projectile: ClientProjectileSpawn): ClientProjectileImpact | null {
-    if (projectile.predictImpact === false) {
-      return null;
-    }
-    const sceneMap = this.sceneMap as any;
-    if (!sceneMap?.physic || !Number.isFinite(projectile.range) || projectile.range <= 0) {
-      return null;
-    }
-    const origin = projectile.origin;
-    const direction = projectile.direction;
-    if (
-      !origin ||
-      !direction ||
-      !Number.isFinite(origin.x) ||
-      !Number.isFinite(origin.y) ||
-      !Number.isFinite(direction.x) ||
-      !Number.isFinite(direction.y) ||
-      (direction.x === 0 && direction.y === 0)
-    ) {
-      return null;
-    }
-
-    const hit = sceneMap.physic.raycast(
-      new Vector2(origin.x, origin.y),
-      new Vector2(direction.x, direction.y),
-      projectile.range,
-      projectile.collisionMask,
-      (entity) => projectile.ignoreOwner === false || !projectile.ownerId || entity.uuid !== projectile.ownerId,
+    return predictClientProjectileImpact(
+      (this.sceneMap as any)?.physic,
+      projectile,
     );
-    if (!hit) {
-      return null;
-    }
-    return {
-      id: projectile.id,
-      targetId: hit.entity.uuid,
-      x: hit.point.x,
-      y: hit.point.y,
-      distance: hit.distance,
-    };
   }
 
   private ensureCurrentPlayerBody(): boolean {
@@ -2797,6 +2809,7 @@ export class RpgClientEngine<T = any> {
 
       // Reset state
       this.stopProcessingInput = false;
+      this.inputLocks.reset();
       this.lastInputTime = 0;
       this.inputFrameCounter = 0;
       this.frameOffset = 0;

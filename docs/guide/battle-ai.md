@@ -11,6 +11,9 @@ The AI controller manages **behavior only**. All stats, HP, SP, skills, items, c
 
 ## Features
 
+- Adventure combat by default: three-hit player combo, charged attack, and dodge invulnerability
+- Reuses the standard RPGJS HUD and graphic-bound entity components
+- Impact visual preset with particles, animated combat typography, and camera shake
 - State machine AI with `Idle`, `Alert`, `Combat`, `Flee`, and `Stunned`
 - Multiple enemy types: `Aggressive`, `Defensive`, `Ranged`, `Tank`, `Berserker`
 - Attack patterns: `Melee`, `Combo`, `Charged`, `Zone`, `DashAttack`
@@ -134,11 +137,252 @@ export default createServer({
 });
 ```
 
+## Adventure player combat
+
+Action Battle now uses the `adventure` preset by default. Press the action
+control for a buffered three-hit combo, hold <kbd>E</kbd> and release it for a
+charged attack, and use the normal dash control (<kbd>Shift</kbd> by default)
+to dodge. Damage, charge duration, cooldowns, and invulnerability remain
+server-authoritative.
+
+Use `preset: "classic"` to retain the previous single-attack behavior and UI:
+
+```ts
+provideActionBattle({
+  preset: "classic"
+});
+```
+
+Every Adventure mechanic can be tuned independently:
+
+```ts
+provideActionBattle({
+  combat: {
+    player: {
+      combo: {
+        bufferMs: 140,
+        resetMs: 700
+      },
+      chargedAttack: {
+        control: "e",
+        minChargeMs: 300,
+        maxChargeMs: 900
+      },
+      dodge: {
+        durationMs: 180,
+        cooldownMs: 650,
+        invincibilityMs: 220
+      },
+      guard: {
+        control: "f",
+        parryWindowMs: 140,
+        guardDamageReduction: 0.65,
+        guardArcDegrees: 120
+      },
+      softTargeting: {
+        range: 112,
+        coneDegrees: 110
+      }
+    }
+  }
+});
+```
+
+Guard is frontal and server-authoritative. A hit received during the opening
+parry window is cancelled, staggers the attacker, and opens a short empowered
+counterattack window. Soft targeting only adjusts the attack facing inside the
+configured cone; it never moves the player or replaces manual direction.
+
+Action Battle does not register another player HUD. Keep using the standard
+RPGJS `hud.ce` component so HP, SP, face, and level remain consistent with the
+rest of the game.
+
+For enemies, `BattleAi` reuses the regular server `Components.hpBar()` and
+merges it into `componentsTop`. That native component is positioned from the
+rendered graphic bounds, not only from the entity hitbox, so it remains above
+tall or scaled sprites. Generated four-direction Studio spritesheets also
+exclude transparent frame padding from those bounds. Customize it through
+`presentation.healthBar`:
+
+```ts
+new BattleAi(this, {
+  presentation: {
+    role: "boss",
+    healthBar: {
+      style: {
+        width: 120,
+        height: 9,
+        fillColor: "#ff355d"
+      },
+      text: null,
+      layout: { marginTop: 4 }
+    }
+  }
+});
+```
+
+Set `presentation.healthBar: false` for entities that should not display it.
+No additional HUD or custom HP-bar component is registered by Action Battle.
+
+Mobile games can expose the charged attack through `withMobile({ buttons: {
+heavy: true } })`; the heavy button dispatches the same authoritative charge
+start/release controls as the keyboard.
+
+## Studio skills and keyboard shortcuts
+
+Skills loaded from RPGJS Studio can define their complete Action Battle
+presentation and gameplay contract. The client only requests a skill use; the
+server verifies that the skill is learned, that SP is available, that its
+cooldown has elapsed, and that the selected target is valid.
+
+```ts
+{
+  id: "fireball",
+  _type: "skill",
+  key: "1",
+  casterAnimation: "mage-cast",
+  animation: "fire-impact",
+  sound: "fire-cast",
+  impactSound: "fire-hit",
+  targeting: {
+    range: 6
+  },
+  action: {
+    mode: "projectile",
+    target: "enemy",
+    cooldownMs: 900,
+    visual: {
+      castFx: "magicBurst",
+      trailFx: "torchFire",
+      impactFx: "explosionSmall"
+    },
+    projectile: {
+      graphic: "fireball",
+      speed: 240,
+      scale: 1.2,
+      rotateToDirection: true
+    }
+  }
+}
+```
+
+`action.visual` controls client-only particle presentation and never changes
+server gameplay:
+
+- `castFx` is a short preset attached to the caster.
+- `trailFx` is a continuous preset attached to the moving projectile.
+- `impactFx` is a short preset attached to the target on impact.
+
+Each field accepts a CanvasEngine built-in or custom FX preset name. Use
+`"auto"` to retain Action Battle defaults and `"none"` to disable that phase.
+The legacy `visual.fx` field remains supported as an impact alias, but
+`impactFx` takes precedence.
+
+`key` accepts the same keyboard names as project input controls. If it is
+omitted, learned skills use the numeric slots `1` through `0`. The Adventure
+preset reserves its charged-attack and guard keys, so Studio reports `E` and
+`F` conflicts without blocking the save.
+
+`targeting.range` is expressed in map tiles. `projectile.trajectory.range`,
+`projectile.range`, and `action.range` override it in that order and are
+expressed in pixels. Otherwise Action Battle derives travel from the shared
+configured rectangular tile geometry and firing direction. Planning, player
+soft-target admission, and emission use the same resolved origin, normalized
+direction, travel range, and collision radius. When `action.mode` is
+`projectile` and no custom
+projectile `type` is supplied, the built-in `action-battle-skill` CanvasEngine
+renderer displays `projectile.graphic`, applies `scale`, and optionally rotates
+the graphic along its trajectory. Damage and the impact animation/sound occur
+only when the authoritative projectile collides.
+
+Collision size resolves in a stable order: positive `collision.radius`, then
+half of positive `collision.width`, then half of positive `collision.height`.
+For example, `{ width: 4, height: 100 }` resolves to radius `2`; height is only
+a fallback when width is absent or invalid. The resolved radius and collision
+mask are transmitted to the client, whose optional local impact prediction uses
+the same capsule cast as the server.
+
+An explicit `projectile.direction` defines a fixed firing ray, and
+`projectile.origin` defines its world-space start. Player soft targeting and
+enemy planning admit a target when that ray or swept `collision.radius`
+intersects the target's physical bounds within the effective range. Exact
+centerline alignment is not required. Without an explicit direction, both
+systems aim from the resolved origin at the selected target before deriving
+range. A defeated caster is rejected at every public cast and hotbar boundary,
+including the server-owned GUI callback.
+Target-inferred rays still obey the configured player-facing cone. Only an
+explicitly authored/input `projectile.direction` fixes the ray strongly enough
+to admit an aligned target outside that cone.
+
+Projectile admission and authoritative simulation share one blocker policy.
+The owner is transparent unless `ignoreOwner: false`, allies and other
+ineligible combatants are transparent, eligible targets collide, and
+physics-only world geometry blocks. A target behind a nearer wall is therefore
+not admitted by player soft targeting or enemy planning.
+
+A default projectile effect runs only when the authoritative impact names a
+currently eligible combat target. Hitting physics-only world geometry destroys
+the projectile without redirecting damage to the target that was selected at
+emission time. Supplying `onImpact` is the explicit custom-impact contract: the
+hook also runs for world geometry, where both `context.target` and
+`action.target` are empty. Inspect `context.hit` and pass an explicit eligible
+target to `action.defaultEffect(target)` when custom wall behavior needs one.
+
+RPGJS HP changes advance a monotonic `lifeGeneration` whenever an actor crosses
+the alive/defeated boundary. Player and AI startup, active hitbox frames, combo
+continuations, charge timers, dash impacts, and counterattack callbacks capture
+that generation. Even an HP `10 -> 0 -> 10` transition entirely between timer
+creation and execution invalidates the old work; newly scheduled work after
+revival captures the new generation and remains valid. Assign HP through the
+RPGJS `hp` property so the authoritative lifecycle transition is observable.
+
+Delayed AI attack patterns also capture the telegraphed target object and that
+target's life generation. Melee, combo, charged, dash, and defensive counter
+callbacks are cancelled if the target dies and revives or if AI target selection
+changes before execution. The next AI decision may replan against the revived or
+replacement target; an old telegraph is never redirected to it. Actor-centered
+zone attacks bind only the actor and remain independent of one selected target.
+Their four hitboxes are centered from the actor's current coordinates on every
+active frame, including movement during startup and between frames.
+
+Every delayed AI attack, active frame, counter, and planned skill also belongs to
+one continuous AI state generation. Leaving the originating state for stun,
+flee, or idle cancels its pending work, even if the AI returns to that state
+before the callback fires. This shared interruption boundary applies to melee,
+combo, charge, dash, actor-centered zone, and skill startup rather than relying
+on pattern-specific state checks. Charge and combo bookkeeping is cleared when
+their delayed work is invalidated.
+
+Self-targeted support binds and re-evaluates its captured self recipient rather
+than an unrelated selected enemy. Losing, defeating, or replacing that selected
+enemy alone does not cancel the support action; an actual actor life or AI state
+transition does.
+
+AI planned skills are proposals, not reservations. At the end of startup the AI
+requires the same target identity and reruns target policy, current defeat,
+range, area-mask, projectile blocker, cooldown, and SP eligibility before any
+resource spend, cooldown mutation, or `onUse` hook. An invalidated plan simply
+does nothing and the next AI decision can choose again.
+An already-emitted projectile is different: it is committed world state and
+continues after its caster is defeated until the projectile system resolves it.
+
+Area masks use `#` for affected tiles and `.` for empty tiles. Studio exposes
+this as a visual grid and canonicalizes legacy binary masks by treating `1` as
+affected and `0` as empty.
+
+Use `action.target` to select `enemy`, `ally`, `self`, or `any`. Ranged ally
+skills and area shapes enter the targeting overlay; a single-target enemy
+projectile can use the soft target in front of the player.
+
 `animations` is optional. If you omit it, attacks keep using the default
 `attack` animation and no extra hurt, death, or skill-cast animation is played.
 
-Player attacks lock movement for `350ms` by default. This gives an A-RPG feel
-where the hero performs the attack in place before moving again.
+Adventure attacks lock movement and facing through their active frames by
+default, then allow movement or dodge to cancel recovery. Control locks are
+leased independently, so a hurt, guard, dodge, or follow-up attack cannot let
+an older timer restore stale animation or direction flags.
+The authoritative input dispatcher ignores skill, hotbar, guard, dodge,
+charge, and attack commands while the player has zero HP.
 
 ```ts
 provideActionBattle({
@@ -157,6 +401,47 @@ Set `lockMovement` to `false` if you want players to keep moving while
 attacking. The client stops local predicted movement as soon as the action
 input is pressed and shows a short slash preview by default. Disable
 `showPreview` when you provide your own client-side attack effect.
+
+For precise attack-by-attack control, use the profile's `control` block:
+
+```ts
+provideActionBattle({
+  attack: {
+    profile: {
+      startupMs: 55,
+      activeMs: 100,
+      recoveryMs: 180,
+      control: {
+        movementLock: "active",
+        directionLock: "active",
+        moveCancelsRecovery: true,
+        dodgeCancelsRecovery: true,
+        inputBufferMs: 160
+      }
+    }
+  }
+});
+```
+
+The `impact` visual preset adds CanvasEngine particles, anchored floating
+damage typography, screen shake, and a short render-only hit-stop.
+Accessibility controls can disable these independently without changing server
+combat:
+
+```ts
+provideActionBattle({
+  visual: "impact",
+  feedback: {
+    hitStop: true,
+    hitStopMs: 32,
+    heavyHitStopMs: 52,
+    parryHitStopMs: 68,
+    flashes: true,
+    screenShake: true,
+    damageNumbers: true
+  }
+});
+```
 
 ## Recommended composable DX
 
@@ -230,7 +515,7 @@ import {
 export default provideActionBattle({
   visual: createActionBattleVisual("fx"),
   ui: createActionBattleUi({
-    actionBar: false,
+    hotbar: false,
     targeting: true,
     attackPreview: true
   })
@@ -275,12 +560,43 @@ Available presets:
 ```ts
 visual: createActionBattleVisual("classic") // sprite animation + flash + hit text
 visual: createActionBattleVisual("fx")      // classic + CanvasEngine Fx hit spark
+visual: createActionBattleVisual("impact")  // contextual typography, particles + camera shake
 visual: createActionBattleVisual("none")    // no built-in visual feedback
 ```
 
-The built-in CanvasEngine effect is registered as the component animation
-`action-battle-hit-fx`. You can also call any component animation registered by
-your own client modules with `fx.component(entity, id, params)`.
+The `impact` preset selects an official CanvasEngine preset from the combat
+context: `hitSpark` for normal hits, `slashSpark` for combo finishers,
+`impactBurst` for charged or critical attacks, `magicBurst` for skills, and
+`healPulse` for healing. Its world-space damage popup changes font size, color,
+outline, movement, and duration for the same contexts. The built-in component
+animations are registered as `action-battle-hit-fx` and
+`action-battle-damage`.
+
+A skill or weapon action can override its impact presentation with serializable
+metadata:
+
+```ts
+const Fire = {
+  id: "fire",
+  name: "Fire",
+  _type: "skill",
+  action: {
+    target: "enemy",
+    mode: "instant",
+    visual: {
+      fx: "magicBurst",
+      color: "#ffd166",
+      accentColor: "#a62c21",
+      scale: 1.2
+    }
+  }
+};
+```
+
+These hints only affect the client presentation. Damage, SP consumption,
+targeting, and hit resolution remain server-authoritative. You can also call
+any component animation registered by your own client modules with
+`fx.component(entity, id, params)`.
 
 Action-battle visual composition runs through the general
 [Client Visuals](/guide/client-visuals) mechanism for server-triggered combat
@@ -296,8 +612,26 @@ temporary graphics. New orchestration should go through `visual`, while
 
 ### Composable UI
 
-The UI is client-owned. Keep the defaults, disable them with booleans, or
-replace each component.
+Action Battle uses RPGJS's generic, server-authoritative hotbar. Enable it on
+the server with `ui.hotbar`; targeting and attack-preview components remain
+client-owned and replaceable.
+
+```ts
+import { provideActionBattle } from "@rpgjs/action-battle/server";
+
+export default provideActionBattle({
+  ui: {
+    hotbar: {
+      enabled: true,
+      autoOpen: true,
+      capacity: player => Math.min(10, 3 + player.level),
+      lockedSlotHint: (_player, slot) => `Unlocks at level ${slot - 2}`
+    }
+  }
+});
+```
+
+The client can still customize targeting and preview presentation:
 
 ```ts
 import {
@@ -308,12 +642,6 @@ import {
 
 export default provideActionBattle({
   ui: createActionBattleUi({
-    actionBar: {
-      enabled: true,
-      component: ActionBattleUi.ActionBar,
-      autoOpen: true,
-      mode: "both"
-    },
     targeting: {
       enabled: true,
       component: ActionBattleUi.TargetingOverlay,
@@ -334,10 +662,29 @@ export default provideActionBattle({
 });
 ```
 
+The generic hotbar uses LT/RT to cycle through visible slots and LB to open
+the radial selector. Projects with a custom gamepad layout can override the
+standard Gamepad API button indexes:
+
+```ts
+export default {
+  gamepadControls: {
+    hotbarPreviousButton: 6,
+    hotbarNextButton: 7,
+    hotbarUseButton: 2,
+    hotbarWheelButton: 4
+  }
+};
+```
+
+Number keys use their assigned slot immediately. On a standard gamepad, LT/RT
+change the active slot and X uses it. Instant skills soft-target in front of
+the player; melee area skills keep the manual targeting confirmation.
+
 Shortcuts are accepted:
 
 ```ts
-ui: createActionBattleUi({ actionBar: false })
+ui: { hotbar: false }
 ui: createActionBattleUi({ targeting: false, attackPreview: false })
 ```
 
@@ -424,9 +771,11 @@ const Dagger = {
 
 Skills and weapons can define an `action` block for action-battle selection,
 while their effect stays automatic by default.
-`BattleAi` uses this block when it casts `attackSkill` or attacks with an
-equipped weapon. Player action-bar skills and configured equipped weapons use
-the same executor, so `onUse` receives the same context in both cases.
+`BattleAi` evaluates every learned skill and uses `attackSkill` as a priority
+hint. A skill that is cooling down, too expensive, out of range, or unable to
+cover the target does not block a normal attack. Player hotbar skills, enemy
+skills, and configured equipped weapons use the same executor, so `onUse`
+receives the same context in every case.
 
 ```ts
 const Fireball = {
@@ -737,11 +1086,35 @@ than or equal to the enemy's `poise`.
 
 `rewards` are awarded once to the player who lands the killing blow. On defeat,
 Action Battle calls `event.remove({ reason: "defeated", transition })`. The
-server only sends that removal context; client modules decide how to render it
-with `sprite.onBeforeRemove`, for example by awaiting a death animation, playing
-a sound, or showing a particle effect before the sprite disappears. The legacy
-`onDefeated(event, attacker)` signature remains supported for two-argument
-callbacks.
+server removes collision immediately while clients keep the sprite long enough
+to play its Studio `die` animation and a configurable CanvasEngine death effect.
+When `showNotification` is enabled, reward messages are translated by the
+receiving client's active locale. Games can override the stable
+`rpg.action-battle.reward.currency`,
+`rpg.action-battle.reward.item.named.<plural-category>`, and
+`rpg.action-battle.reward.item.<plural-category>` keys through `provideI18n()`.
+Plural categories are selected on the receiving client with `Intl.PluralRules`,
+not guessed by the server. Set `itemNameKey` on a reward item and provide that
+translation key in the game catalog to localize the item name as well; rewards
+without an authored item-name key preserve the resolved database item name for
+backward compatibility. The localized generic item message is used only when
+neither a translation key nor a display name can be resolved. Adding
+`itemNameKey` upgrades that legacy literal name to receiving-locale translation.
+
+```ts
+rewards: {
+  items: [{
+    itemId: "potion",
+    itemNameKey: "game.item.potion",
+    amount: 2,
+  }],
+  showNotification: true,
+}
+```
+
+Use `presentation.death` to tune the effect, scale, shake, and duration, or set
+it to `false` for immediate removal. The legacy `onDefeated(event, attacker)`
+signature remains supported for two-argument callbacks.
 
 When combat spritesheets come from RPGJS Studio media fields, convert the media
 ids with `createStudioActionBattleAnimations()`. Studio-generated combat
@@ -762,10 +1135,98 @@ the player at runtime by `provideStudioGame()`. You can still pass a static
 object when you want to override the media ids manually. Animation values may be
 media ids or media objects returned by the Studio game API.
 
+Studio four-direction attack spritesheets play in `350ms` by default so their
+visual timing matches the default Adventure attack profile without changing the
+walk animation speed. A media record may override this client-side presentation
+with `metadata.attackDurationMs`; gameplay startup, active, and recovery windows
+remain server-authoritative and independent.
+
 For Studio enemies, the runtime reads `enemy.animations` automatically when an
 enemy is created from the Studio database. The supported Studio fields are
-`attack`, `hurt`, `die`, and `castSpell`. `castSkill` is also accepted when you
-configure action-battle directly.
+`attack`, `hurt`, `die`, `castSpell`, `guard`, `parry`, and `stagger`;
+`castSkill` is also accepted when you configure action-battle directly.
+`stagger` falls back to the Studio `hurt` animation. These values are resolved
+on the server and sent to the client as plain animation data, so media IDs
+remain usable without transferring resolver functions.
+
+## Combat sounds and dynamic music
+
+Action Battle can play local action cues and crossfade the current map BGM into
+a looping battle track:
+
+```ts
+provideActionBattle({
+  audio: {
+    attack: ["sword-swing-1", "sword-swing-2"],
+    skill: "magic-cast",
+    hit: "blade-hit",
+    hurt: "hero-hurt",
+    die: "enemy-die",
+    music: {
+      battle: "battle-theme",
+      volume: 0.8,
+      fadeInMs: 600,
+      fadeOutMs: 900,
+      exitDelayMs: 1500
+    }
+  }
+});
+```
+
+A cue accepts one sound id, several variants, or
+`{ id, volume, cooldownMs }`. Basic attacks are predicted locally and suppress
+the matching authoritative cue for 250ms. A skill's own `sound` field takes
+priority over the generic skill cue. Cue cooldowns prevent repeated area hits
+from producing an unusable wall of sound.
+
+Combat threat is authoritative on the server and isolated per player. Alert,
+combat, fleeing, and stunned enemies keep that player in combat. On equal
+priority the currently selected enemy stays stable; bosses default to priority
+`100` and ordinary enemies to `0`. Configure an enemy-specific track with:
+
+```ts
+new BattleAi(event, {
+  presentation: {
+    role: "boss",
+    music: {
+      battle: "boss-theme",
+      priority: 120
+    }
+  }
+});
+```
+
+Track precedence is enemy, map, project/default, then silence. The ambient sound
+layer is never stopped. With RPGJS Studio, use the combined preset on both
+client and server:
+
+```ts
+import { provideActionBattle } from "@rpgjs/action-battle";
+import { createStudioActionBattlePreset } from "@rpgjs/studio";
+
+provideActionBattle(createStudioActionBattlePreset());
+```
+
+Studio reads project `combatAudio`, map `combatMusic`, and enemy `combatMusic`
+plus `combatMusicPriority`. `createStudioActionBattleAudio(config)` can provide
+the same settings statically before these fields are available in a project.
+Studio media ids are resolved lazily; resolving a new effect does not stop
+music that is already playing.
+
+The Adventure AI director limits how many enemies attack one target
+simultaneously. Other enemies keep repositioning instead of stacking the same
+attack:
+
+```ts
+provideActionBattle({
+  ai: {
+    director: {
+      maxConcurrentAttackers: 1,
+      slotDurationMs: 1200
+    }
+  }
+});
+```
 
 ## Composable AI behaviors
 
@@ -848,6 +1309,7 @@ behavior tree. Each rule checks a condition and returns an intent:
 import {
   AttackPattern,
   BattleAi,
+  action,
   chase,
   flee,
   ifDistanceLessThan,
@@ -973,13 +1435,156 @@ The context includes:
 | `hpPercent` / `self.hpPercent` | Current HP ratio, or `null` if max HP is unavailable. |
 | `memory` | Mutable per-AI storage for custom behavior state. |
 
+### Boss phases and delayed sequences
+
+Phase helpers keep scripted behavior in the existing behavior-tree runtime.
+Their state is stored per AI instance in `memory`, so a preset can safely be
+shared by several enemies:
+
+```ts
+import {
+  AttackPattern,
+  BattleAi,
+  callAction,
+  chase,
+  phase,
+  selector,
+  sequenceWithDelay,
+  setSpeed,
+  teleportNearTarget,
+  useAttack,
+  visual,
+  wait
+} from "@rpgjs/action-battle/server";
+
+new BattleAi(event, {
+  behaviorTree: selector([
+    phase("rage", 0.6, sequenceWithDelay("rage-sequence", [
+      visual({ kind: "bubble", text: "!", durationMs: 700 }),
+      wait(700),
+      setSpeed(5),
+      teleportNearTarget({ distance: 160 }),
+      callAction("summon-wave", { count: 3 })
+    ])),
+    action(useAttack(AttackPattern.Melee)),
+    action(chase())
+  ])
+});
+```
+
+`phase(key, hpRatio, action)` completes once after HP falls below the ratio.
+`once(key, action)` provides the same one-time behavior without an HP
+condition. `cooldown(key, ms, action)` starts its cooldown only after the
+wrapped action succeeds. `sequenceWithDelay(key, steps)` advances across AI
+ticks, and `wait(ms)` uses the authoritative server clock without creating
+client-owned gameplay timers.
+
+Use `run(callback)` when project logic is local to the tree. For reusable or
+module-provided behavior, register a named action:
+
+```ts
+provideActionBattle({
+  ai: {
+    actions: {
+      "summon-wave": ({ event, target, memory }, payload) => {
+        const count = Number(payload?.count ?? 1);
+        // Use normal RPGJS server APIs here.
+      }
+    }
+  }
+});
+```
+
+`callAction()` returns failure when its name is not registered, allowing a
+selector to continue to a fallback branch.
+
+Every intent returned by `once()` is acknowledged only after the authoritative
+server operation accepts it. A rejected movement, skill, attack, action, or
+teleport remains pending, and an asynchronous teleport is not acknowledged
+until its promise settles successfully. Pending work also preserves
+`consume: false`, so it does not suppress the controller's ordinary behavior
+while an asynchronous operation is in flight. If a dynamic `once()` result can
+contain two otherwise identical sibling intents, give each one a unique,
+stable `receiptKey` so filtering or reordering cannot assign success to the
+wrong action:
+
+```ts
+once("two-waves", () => [
+  { ...callAction("summon-wave", { count: 1 }), receiptKey: "opening" },
+  { ...callAction("summon-wave", { count: 1 }), receiptKey: "reinforcement" }
+]);
+```
+
+The engine rejects ambiguous duplicate siblings instead of guessing. Keep a
+receipt key attached to the same logical action for the lifetime of that
+`once()` node; changing its payload does not create a second action while that
+key is unchanged. Also provide a receipt key when a dynamic action recreates
+opaque, accessor-backed, or exceptionally deep payload objects: the engine
+does not execute accessors or recurse without a bound merely to infer identity.
+
+### Server-driven AI visuals
+
+`visual()` sends a JSON-shaped cue through the existing Action Battle client
+visual packet. The server decides when it happens; the client handler only
+renders it:
+
+```ts
+// Server
+visual({
+  kind: "ground-marker",
+  durationMs: 900,
+  position: { x: 320, y: 240 }
+});
+
+// Client
+provideActionBattle({
+  ai: {
+    visuals: {
+      "ground-marker"({ visual }, fx) {
+        fx.component(
+          "boss-ground-marker",
+          visual.position as { x: number; y: number },
+          { durationMs: visual.durationMs }
+        );
+      }
+    }
+  }
+});
+```
+
+Unknown visual kinds are ignored. Keep cue payloads serializable and use
+`once()` or `cooldown()` around cues selected by a tree branch so they are not
+sent on every 100 ms AI tick. Visual handlers must never apply damage, change
+stats, select targets, or otherwise own gameplay state.
+
+### Movement and server actions
+
+The advanced intent helpers are thin wrappers over the controlled event:
+
+| Helper | Runtime behavior |
+|---|---|
+| `setSpeed(value)` | Set the event's synchronized speed; non-consuming by default. |
+| `moveToPoint({ x, y })` | Use RPGJS `moveTo()` with the AI movement throttle after the controlled event has a live map physics body. |
+| `holdPosition()` | Stop the current movement. |
+| `teleportTo({ x, y })` | Use RPGJS `teleport()` at a fixed position and observe its asynchronous result. |
+| `teleportNearTarget({ distance, angleDegrees? })` | Compute a position around the current target on the server, then teleport. |
+| `run(callback)` | Execute project logic directly with the current tree context. |
+| `callAction(name, payload?)` | Execute a reusable action from `ai.actions`. |
+
+Teleport helpers deliberately use the normal RPGJS teleport primitive and do
+not search for a collision-free position. Projects that need safe placement
+should resolve it in `run()` or a registered action before calling
+`teleportTo()`.
+
 ### Sample project
 
-`samples/sample-dev` contains three AI demo enemies on `center-map`:
+`samples/sample-dev` contains four AI demo enemies on `center-map`:
 
 - `Preset Rusher` uses a named preset.
 - `Simple Kiter` uses `simpleBehavior` and distance control.
 - `Tree Elite` uses a direct `behaviorTree`.
+- `Phase Boss` uses delayed phases, generic visuals, speed changes,
+  teleportation, and a registered action.
 
 ## Enemy types
 
@@ -1026,6 +1631,38 @@ onInit() {
   });
 }
 ```
+
+All skills learned by the enemy are candidates. `attackSkill` makes one skill
+the preferred opener without excluding the others. Melee skills require contact,
+projectiles use their configured travel range, and instant area skills use
+`targeting.range` plus `aoeMask`. While no action is ready, the enemy approaches,
+retreats, or strafes toward the useful range of its next action.
+
+Self-targeted healing and support skills are used automatically below 60% HP.
+Ally-targeted skills are outside the current automatic planner.
+
+## Debug enemy decisions
+
+Decision tracing is disabled by default. Enable it on the authoritative server
+and optionally filter one enemy or a set of categories:
+
+```ts
+import { AiDebug } from "@rpgjs/action-battle/server";
+
+AiDebug.enabled = true;
+AiDebug.filterEventId = "dark-mage-1";
+AiDebug.categories = ["decision", "movement"];
+```
+
+`decision` logs include the distance, global cooldown, evaluated skills,
+effective ranges, rejection reasons, and the selected attack or repositioning
+request. Common rejection reasons are `cooldown`, `insufficientSp`,
+`outOfRange`, `invalidTarget`, `maskMiss`, and `notUseful`.
+
+For increasing levels of control, start with learned skills only, add
+`attackSkill` for an explicit priority, use `defineActionBattleAiPreset()` for
+reusable typed defaults, then use `behaviorKey` or a behavior tree for fully
+custom decisions.
 
 ## Examples
 

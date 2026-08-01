@@ -5,6 +5,9 @@ import type { RpgWritableSignal } from "../foundation";
 
 const gameplaySignal = signal as <T>(value: T) => RpgWritableSignal<T>;
 
+type ItemPlayerHook = (player: RpgCommonPlayer) => void | Promise<void>;
+type ItemEquipHook = (player: RpgCommonPlayer, equip: boolean) => void | Promise<void>;
+
 interface ItemData {
     name: string;
     description: string;
@@ -14,7 +17,11 @@ interface ItemData {
     pdef: number;
     sdef: number;
     icon: string
-    onAdd: (player: RpgCommonPlayer) => void;
+    onAdd?: ItemPlayerHook;
+    onUse?: ItemPlayerHook;
+    onUseFailed?: ItemPlayerHook;
+    onRemove?: ItemPlayerHook;
+    onEquip?: ItemEquipHook;
 }
 
 export class Item {
@@ -28,7 +35,11 @@ export class Item {
     @sync() icon = gameplaySignal('')
     @sync() quantity = gameplaySignal(1);
 
-    onAdd: (player: RpgCommonPlayer) => void = () => {};
+    onAdd: ItemPlayerHook = () => {};
+    onUse?: ItemPlayerHook;
+    onUseFailed?: ItemPlayerHook;
+    onRemove?: ItemPlayerHook;
+    onEquip?: ItemEquipHook;
 
     constructor(data?: ItemData) {
         this.description.set(data?.description ?? '');
@@ -39,5 +50,9 @@ export class Item {
         this.sdef.set(data?.sdef ?? 0);
         this.icon.set(data?.icon ?? '')
         this.onAdd = data?.onAdd?.bind(this) ?? (() => {});
+        this.onUse = data?.onUse?.bind(this);
+        this.onUseFailed = data?.onUseFailed?.bind(this);
+        this.onRemove = data?.onRemove?.bind(this);
+        this.onEquip = data?.onEquip?.bind(this);
     }
 }

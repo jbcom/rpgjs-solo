@@ -1,71 +1,167 @@
-import { Plugin } from 'vite';
-import { readFileSync, existsSync, statSync, readdirSync, copyFileSync, mkdirSync } from 'fs';
-import { join, extname, relative, dirname } from 'path';
+import {
+    closeSync,
+    constants,
+    copyFileSync,
+    existsSync,
+    fstatSync,
+    mkdirSync,
+    openSync,
+    readFileSync,
+    readdirSync,
+    realpathSync,
+    statSync,
+} from 'node:fs';
+import {
+    dirname,
+    extname,
+    isAbsolute,
+    join,
+    relative,
+    resolve,
+    sep,
+} from 'node:path';
+import type { Plugin, ResolvedConfig } from 'vite';
 
 export interface DataFolderPluginOptions {
     /**
-     * Source folder containing the data files (TMX, TSX, images)
+     * Source folder containing the data files (TMX, TSX, images).
+     * Relative paths are resolved from Vite's configured root.
      */
     sourceFolder: string;
-    
+
     /**
-     * Public path prefix for accessing the data files
+     * Base-relative public URL prefix for accessing the data files.
+     * Vite's configured `base` is applied when serving in development.
      * @default '/data'
      */
     publicPath?: string;
-    
+
     /**
-     * Target folder in build output for the data files
-     * @default 'assets/data'
+     * Target folder in the build output for the data files. When omitted, this
+     * is derived from `publicPath` (`/data` becomes `data`) so development and
+     * static production URLs stay identical.
      */
     buildOutputPath?: string;
-    
+
     /**
-     * File extensions to include
+     * Allow `buildOutputPath` to differ from `publicPath` when an external
+     * server or CDN explicitly rewrites the public URL to the emitted folder.
+     * Static hosts such as GitHub Pages do not provide that rewrite.
+     * @default false
+     */
+    allowExternalPublicPathRewrite?: boolean;
+
+    /**
+     * File extensions to include.
      * @default ['.tmx', '.tsx', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']
      */
     allowedExtensions?: string[];
 }
 
+const DEFAULT_EXTENSIONS = ['.tmx', '.tsx', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
+
+function decodeConfiguredPath(value: string, option: string): string {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        throw new Error(`[tiled-map-folder] ${option} contains invalid percent encoding: ${JSON.stringify(value)}`);
+    }
+}
+
+function assertSafeSegments(value: string, option: string): void {
+    if (value.includes('\0')) {
+        throw new Error(`[tiled-map-folder] ${option} cannot contain a null byte.`);
+    }
+    if (value.split('/').some((segment) => segment === '..')) {
+        throw new Error(`[tiled-map-folder] ${option} cannot traverse outside its root: ${JSON.stringify(value)}`);
+    }
+}
+
+function normalizePublicPath(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        throw new Error('[tiled-map-folder] publicPath cannot be empty. Use "/" for the Vite base root.');
+    }
+    if (trimmed.includes('\\') || trimmed.includes('?') || trimmed.includes('#')) {
+        throw new Error(`[tiled-map-folder] publicPath must be a URL pathname without backslashes, a query, or a hash: ${JSON.stringify(value)}`);
+    }
+    if (/^[a-z][a-z\d+.-]*:/i.test(trimmed) || trimmed.startsWith('//')) {
+        throw new Error(`[tiled-map-folder] publicPath must be base-relative, not an absolute URL: ${JSON.stringify(value)}`);
+    }
+
+    const decoded = decodeConfiguredPath(trimmed, 'publicPath');
+    assertSafeSegments(decoded, 'publicPath');
+    const segments = decoded.split('/').filter((segment) => segment && segment !== '.');
+    return segments.length ? `/${segments.join('/')}` : '/';
+}
+
+function normalizeBuildOutputPath(value: string): string {
+    const trimmed = value.trim().replaceAll('\\', '/');
+    if (/^[a-z]:\//i.test(trimmed) || trimmed.startsWith('/')) {
+        throw new Error(`[tiled-map-folder] buildOutputPath must stay relative to Vite's output directory: ${JSON.stringify(value)}`);
+    }
+
+    assertSafeSegments(trimmed, 'buildOutputPath');
+    return trimmed.split('/').filter((segment) => segment && segment !== '.').join('/');
+}
+
+function normalizeViteBase(base: string): string {
+    if (!base || base === './') return '/';
+    if (/^[a-z][a-z\d+.-]*:/i.test(base)) {
+        return normalizePublicPath(new URL(base).pathname);
+    }
+    return normalizePublicPath(base);
+}
+
+function stripViteBase(publicPath: string, base: string): string {
+    if (base === '/') return publicPath;
+    if (publicPath === base) return '/';
+    if (publicPath.startsWith(`${base}/`)) {
+        return publicPath.slice(base.length) || '/';
+    }
+    return publicPath;
+}
+
+function joinPublicPaths(base: string, publicPath: string): string {
+    if (base === '/') return publicPath;
+    if (publicPath === '/') return base;
+    return `${base}${publicPath}`;
+}
+
+function publicPathToBuildOutput(publicPath: string): string {
+    return publicPath === '/' ? '' : publicPath.slice(1);
+}
+
+function pathIsWithin(root: string, candidate: string): boolean {
+    const relation = relative(root, candidate);
+    return relation === '' || (!relation.startsWith(`..${sep}`) && relation !== '..' && !isAbsolute(relation));
+}
+
+function matchesPublicPrefix(pathname: string, prefix: string): boolean {
+    if (prefix === '/') return pathname.startsWith('/');
+    return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
 /**
- * Vite plugin that serves a data folder in development mode and copies it to assets during build
- * 
- * This plugin allows serving game data files (TMX maps, TSX tilesets, images) during development
- * and automatically includes them in the build output for production deployment.
- * 
- * @param options - Configuration options for the plugin
- * 
- * @example
- * ```js
- * // In vite.config.ts
- * import { defineConfig } from 'vite';
- * import { dataFolderPlugin } from '@rpgjs/vite';
- * 
- * export default defineConfig({
- *   plugins: [
- *     dataFolderPlugin({
- *       sourceFolder: './game-data',
- *       publicPath: '/data',
- *       buildOutputPath: 'assets/data'
- *     })
- *   ]
- * });
- * ```
+ * Vite plugin that serves a Tiled data folder in development and copies the
+ * same route into a static production build.
  */
 export function tiledMapFolderPlugin(options: DataFolderPluginOptions): Plugin {
     const {
         sourceFolder,
         publicPath = '/data',
-        buildOutputPath = 'assets/data',
-        allowedExtensions = ['.tmx', '.tsx', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']
+        buildOutputPath,
+        allowExternalPublicPathRewrite = false,
+        allowedExtensions = DEFAULT_EXTENSIONS,
     } = options;
 
+    const normalizedExtensions = allowedExtensions.map((extension) => extension.toLowerCase());
     let isBuild = false;
-    let outputDir = 'dist';
+    let resolvedSourceFolder = '';
+    let resolvedOutputDir = '';
+    let resolvedBuildOutputPath = '';
+    let resolvedServePath = '';
 
-    /**
-     * Get MIME type based on file extension
-     */
     const getMimeType = (filePath: string): string => {
         const ext = extname(filePath).toLowerCase();
         const mimeTypes: Record<string, string> = {
@@ -76,62 +172,38 @@ export function tiledMapFolderPlugin(options: DataFolderPluginOptions): Plugin {
             '.jpeg': 'image/jpeg',
             '.gif': 'image/gif',
             '.webp': 'image/webp',
-            '.svg': 'image/svg+xml'
+            '.svg': 'image/svg+xml',
         };
         return mimeTypes[ext] || 'application/octet-stream';
     };
 
-    /**
-     * Check if file extension is allowed
-     */
-    const isAllowedFile = (filePath: string): boolean => {
-        const ext = extname(filePath).toLowerCase();
-        return allowedExtensions.includes(ext);
-    };
+    const isAllowedFile = (filePath: string): boolean => normalizedExtensions.includes(extname(filePath).toLowerCase());
 
-    /**
-     * Recursively get all files from a directory
-     */
-    const getAllFiles = (dirPath: string, basePath: string = dirPath): string[] => {
-        const files: string[] = [];
-        
-        if (!existsSync(dirPath)) {
-            return files;
-        }
+    const getAllFiles = (dirPath: string): string[] => {
+        if (!existsSync(dirPath)) return [];
 
-        const items = readdirSync(dirPath);
-        
-        for (const item of items) {
+        return readdirSync(dirPath).flatMap((item) => {
             const fullPath = join(dirPath, item);
             const stat = statSync(fullPath);
-            
-            if (stat.isDirectory()) {
-                files.push(...getAllFiles(fullPath, basePath));
-            } else if (isAllowedFile(fullPath)) {
-                files.push(fullPath);
-            }
-        }
-        
-        return files;
+            if (stat.isDirectory()) return getAllFiles(fullPath);
+            return isAllowedFile(fullPath) ? [fullPath] : [];
+        });
     };
 
-    /**
-     * Copy files to build output directory
-     */
-    const copyFilesToBuild = (outputPath: string) => {
-        const files = getAllFiles(sourceFolder);
-        
-        for (const filePath of files) {
-            const relativePath = relative(sourceFolder, filePath);
-            const targetPath = join(outputPath, buildOutputPath, relativePath);
-            const targetDir = dirname(targetPath);
-            
-            // Create target directory if it doesn't exist
-            mkdirSync(targetDir, { recursive: true });
-            
-            // Copy file
-            copyFileSync(filePath, targetPath);
-            console.log(`📁 Copied data file: ${relativePath}`);
+    const copyFilesToBuild = (): void => {
+        const canonicalSourceFolder = realpathSync(resolvedSourceFolder);
+        for (const filePath of getAllFiles(resolvedSourceFolder)) {
+            const canonicalFilePath = realpathSync(filePath);
+            if (!pathIsWithin(canonicalSourceFolder, canonicalFilePath)) {
+                throw new Error(`[tiled-map-folder] Refusing to copy a source outside the data folder: ${filePath}`);
+            }
+            const relativePath = relative(resolvedSourceFolder, filePath);
+            const targetPath = resolve(resolvedOutputDir, resolvedBuildOutputPath, relativePath);
+            if (!pathIsWithin(resolvedOutputDir, targetPath)) {
+                throw new Error(`[tiled-map-folder] Refusing to emit outside Vite's output directory: ${targetPath}`);
+            }
+            mkdirSync(dirname(targetPath), { recursive: true });
+            copyFileSync(canonicalFilePath, targetPath);
         }
     };
 
@@ -139,86 +211,122 @@ export function tiledMapFolderPlugin(options: DataFolderPluginOptions): Plugin {
         name: 'data-folder',
         enforce: 'pre',
 
-        configResolved(config) {
+        configResolved(config: ResolvedConfig) {
             isBuild = config.command === 'build';
-            outputDir = config.build.outDir || 'dist';
-        },
+            const normalizedBase = normalizeViteBase(config.base);
+            const normalizedPublicPath = stripViteBase(normalizePublicPath(publicPath), normalizedBase);
+            const derivedBuildOutputPath = publicPathToBuildOutput(normalizedPublicPath);
+            const configuredBuildOutputPath = buildOutputPath === undefined
+                ? derivedBuildOutputPath
+                : normalizeBuildOutputPath(buildOutputPath);
 
-        // Handle build mode - copy files to output directory
-        generateBundle() {
-            if (isBuild) {
-                console.log(`📦 Copying data files from ${sourceFolder} to ${buildOutputPath}...`);
-                copyFilesToBuild(outputDir);
-                console.log('✅ Data files copied successfully');
+            if (buildOutputPath !== undefined
+                && configuredBuildOutputPath !== derivedBuildOutputPath
+                && !allowExternalPublicPathRewrite) {
+                throw new Error(
+                    `[tiled-map-folder] publicPath ${JSON.stringify(normalizedPublicPath)} is emitted at `
+                    + `${JSON.stringify(derivedBuildOutputPath || '.')} on a static host, but buildOutputPath is `
+                    + `${JSON.stringify(configuredBuildOutputPath || '.')}. Set buildOutputPath to `
+                    + `${JSON.stringify(derivedBuildOutputPath)} (or omit it), or set `
+                    + 'allowExternalPublicPathRewrite: true only when an external server/CDN rewrites that URL.',
+                );
             }
+
+            const root = resolve(config.root);
+            resolvedSourceFolder = isAbsolute(sourceFolder) ? resolve(sourceFolder) : resolve(root, sourceFolder);
+            resolvedOutputDir = isAbsolute(config.build.outDir)
+                ? resolve(config.build.outDir)
+                : resolve(root, config.build.outDir);
+            resolvedBuildOutputPath = configuredBuildOutputPath;
+            resolvedServePath = joinPublicPaths(normalizedBase, normalizedPublicPath);
         },
 
-        // Handle development mode - serve files via middleware
+        generateBundle() {
+            if (isBuild) copyFilesToBuild();
+        },
+
         configureServer(server) {
-            if (!existsSync(sourceFolder)) {
-                console.warn(`⚠️  Data folder not found: ${sourceFolder}`);
+            if (!existsSync(resolvedSourceFolder)) {
+                server.config.logger.warn(`[tiled-map-folder] Data folder not found: ${resolvedSourceFolder}`);
                 return;
             }
 
-            console.log(`📁 Serving data folder: ${sourceFolder} at ${publicPath}`);
-
-            server.middlewares.use((req: any, res: any, next: any) => {
-                if (!req.url?.startsWith(publicPath)) {
-                    return next();
+            const canonicalSourceFolder = realpathSync(resolvedSourceFolder);
+            server.middlewares.use((req, res, next) => {
+                const rawPath = req.url?.split(/[?#]/, 1)[0] ?? '';
+                let pathname: string;
+                try {
+                    pathname = decodeURIComponent(rawPath);
+                } catch {
+                    res.statusCode = 400;
+                    res.end('Bad Request');
+                    return;
                 }
 
-                // Remove public path prefix to get relative file path
-                const relativePath = req.url.slice(publicPath.length);
-                
-                // Remove leading slash if present
-                const cleanPath = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
-                
-                // Construct full file path
-                const filePath = join(sourceFolder, cleanPath);
+                if (!matchesPublicPrefix(pathname, resolvedServePath)) return next();
 
-                // Security check - ensure file is within source folder
-                const cwd = typeof process !== 'undefined' ? process.cwd() : '';
-                const resolvedFilePath = join(cwd, filePath);
-                const resolvedSourceFolder = join(cwd, sourceFolder);
-                
-                if (!resolvedFilePath.startsWith(resolvedSourceFolder)) {
+                const relativePath = resolvedServePath === '/'
+                    ? pathname.slice(1)
+                    : pathname.slice(resolvedServePath.length).replace(/^\//, '');
+                if (relativePath.includes('\0') || relativePath.split('/').some((segment) => segment === '..')) {
                     res.statusCode = 403;
                     res.end('Forbidden');
                     return;
                 }
 
-                // Check if file exists and is allowed
-                if (!existsSync(filePath) || !isAllowedFile(filePath)) {
+                const filePath = resolve(canonicalSourceFolder, relativePath);
+                if (!pathIsWithin(canonicalSourceFolder, filePath)) {
+                    res.statusCode = 403;
+                    res.end('Forbidden');
+                    return;
+                }
+                if (!isAllowedFile(filePath)) {
                     res.statusCode = 404;
                     res.end('Not Found');
                     return;
                 }
 
-                // Check if it's a file (not directory)
-                const stat = statSync(filePath);
-                if (!stat.isFile()) {
-                    res.statusCode = 404;
-                    res.end('Not Found');
-                    return;
-                }
-
+                let fileDescriptor: number | undefined;
                 try {
-                    // Read and serve the file
-                    const fileContent = readFileSync(filePath);
-                    const mimeType = getMimeType(filePath);
-                    
-                    res.setHeader('Content-Type', mimeType);
+                    const canonicalFilePath = realpathSync(filePath);
+                    if (!pathIsWithin(canonicalSourceFolder, canonicalFilePath)) {
+                        res.statusCode = 403;
+                        res.end('Forbidden');
+                        return;
+                    }
+                    fileDescriptor = openSync(
+                        canonicalFilePath,
+                        constants.O_RDONLY | constants.O_NOFOLLOW,
+                    );
+                    if (!fstatSync(fileDescriptor).isFile()) {
+                        res.statusCode = 404;
+                        res.end('Not Found');
+                        return;
+                    }
+                    const contents = readFileSync(fileDescriptor);
+                    res.setHeader('Content-Type', getMimeType(filePath));
                     res.setHeader('Cache-Control', 'no-cache');
                     res.setHeader('Access-Control-Allow-Origin', '*');
-                    res.end(fileContent);
-                    
-                    console.log(`📄 Served data file: ${cleanPath}`);
+                    res.end(contents);
                 } catch (error) {
-                    console.error(`❌ Error serving file ${filePath}:`, error);
+                    const code = (error as NodeJS.ErrnoException).code;
+                    if (code === 'ENOENT' || code === 'ENOTDIR') {
+                        res.statusCode = 404;
+                        res.end('Not Found');
+                        return;
+                    }
+                    if (code === 'ELOOP') {
+                        res.statusCode = 403;
+                        res.end('Forbidden');
+                        return;
+                    }
+                    server.config.logger.error(`[tiled-map-folder] Unable to serve ${filePath}: ${String(error)}`);
                     res.statusCode = 500;
                     res.end('Internal Server Error');
+                } finally {
+                    if (fileDescriptor !== undefined) closeSync(fileDescriptor);
                 }
             });
-        }
+        },
     };
-} 
+}

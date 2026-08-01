@@ -1,0 +1,152 @@
+<Container controls={controls} />
+
+<script>
+  import { computed, effect, mount, signal } from "canvasengine";
+  import { inject, RpgClientEngine } from "@rpgjs/client";
+  import { getKeyboardControlBind } from "@rpgjs/client";
+  import {
+    actionBattleCombatOptions,
+    actionBattleTargetingState,
+    actionBattleUiOptions,
+    confirmActionBattleTarget,
+    moveTargetingOffset,
+    stopTargeting,
+  } from "../ui/state";
+  import { createActionBattleTargetingInputController } from "../ui/targeting-controls";
+
+  const { object } = defineProps();
+  const engine = inject(RpgClientEngine);
+  const sprite = object();
+
+  const isCurrentPlayer = computed(() => {
+    const id = typeof sprite?.id === "function" ? sprite.id() : sprite?.id;
+    return id === engine.playerId;
+  });
+
+  const chargedOptions = computed(() => {
+    const value = actionBattleCombatOptions().player?.chargedAttack;
+    return value && typeof value === "object" ? value : null;
+  });
+
+  const guardOptions = computed(() => {
+    const value = actionBattleCombatOptions().player?.guard;
+    return value && typeof value === "object" ? value : null;
+  });
+
+  const direction = () =>
+    typeof sprite?.getDirection === "function"
+      ? sprite.getDirection()
+      : typeof sprite?.direction === "function"
+        ? sprite.direction()
+        : sprite?.direction ?? "down";
+
+  const keyboardControls = engine.globalConfig.keyboardControls;
+  const targetingController = createActionBattleTargetingInputController({
+    engine,
+    isCurrentPlayer: () => isCurrentPlayer(),
+    getState: () => actionBattleTargetingState(),
+    getPlayer: () => engine.scene.getCurrentPlayer(),
+    getTileSizeOverride: () => actionBattleUiOptions().targeting?.tileSize,
+    move: moveTargetingOffset,
+    confirm: confirmActionBattleTarget,
+    cancel: stopTargeting,
+  });
+
+  const buildControls = () => {
+    const chargedBind = chargedOptions()?.control ?? "e";
+    const guardBind = guardOptions()?.control ?? "f";
+    return {
+      chargedAttack: {
+        bind: chargedBind,
+        keyDown() {
+          if (!isCurrentPlayer() || chargedOptions()?.enabled === false) return;
+          engine.processAction("action-battle:charge-start", {
+            direction: direction(),
+          });
+        },
+        keyUp() {
+          if (!isCurrentPlayer() || chargedOptions()?.enabled === false) return;
+          engine.processAction("action-battle:charge-release", {
+            direction: direction(),
+          });
+        },
+      },
+      guard: {
+        bind: guardBind,
+        keyDown() {
+          if (!isCurrentPlayer() || guardOptions()?.enabled === false) return;
+          engine.processAction("defense", {
+            direction: direction(),
+          });
+        },
+        keyUp() {
+          if (!isCurrentPlayer() || guardOptions()?.enabled === false) return;
+          engine.processAction("action-battle:guard-end", {
+            direction: direction(),
+          });
+        },
+      },
+      targetLeft: {
+        repeat: true,
+        throttle: 150,
+        bind: keyboardControls.left,
+        keyDown() {
+          targetingController.move(-1, 0);
+        },
+      },
+      targetRight: {
+        repeat: true,
+        throttle: 150,
+        bind: keyboardControls.right,
+        keyDown() {
+          targetingController.move(1, 0);
+        },
+      },
+      targetUp: {
+        repeat: true,
+        throttle: 150,
+        bind: keyboardControls.up,
+        keyDown() {
+          targetingController.move(0, -1);
+        },
+      },
+      targetDown: {
+        repeat: true,
+        throttle: 150,
+        bind: keyboardControls.down,
+        keyDown() {
+          targetingController.move(0, 1);
+        },
+      },
+      targetConfirm: {
+        bind: getKeyboardControlBind(keyboardControls.action),
+        keyDown() {
+          targetingController.confirm();
+        },
+      },
+      targetCancel: {
+        bind: keyboardControls.escape,
+        keyDown() {
+          targetingController.cancel();
+        },
+      },
+      gamepad: {
+        enabled: true,
+      },
+    };
+  };
+
+  const controls = signal(buildControls());
+
+  effect(() => {
+    controls.set(buildControls());
+  });
+
+  effect(() => {
+    actionBattleTargetingState();
+    isCurrentPlayer();
+    targetingController.sync();
+  });
+
+  mount(() => () => targetingController.destroy());
+</script>

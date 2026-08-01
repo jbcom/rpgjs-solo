@@ -640,6 +640,28 @@ export class PhysicsEngine {
   }
 
   /**
+   * Sweeps a circular projectile along a segment and returns its nearest hit.
+   * Radius zero is equivalent to `raycast`.
+   */
+  public capsuleCast(
+    origin: Vector2,
+    direction: Vector2,
+    maxDistance: number,
+    radius: number,
+    mask?: number,
+    filter?: (entity: Entity) => boolean,
+  ): RaycastHit | null {
+    return this.world.capsuleCast(
+      origin,
+      direction,
+      maxDistance,
+      radius,
+      mask,
+      filter,
+    );
+  }
+
+  /**
    * Computes continuous collision detection (sweep test) time-of-impact between two entities
    * over the next step of duration `dt`, using relative motion.
    *

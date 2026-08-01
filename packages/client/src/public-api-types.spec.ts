@@ -5,6 +5,9 @@ import {
   startGame,
   type GuiRegistration,
   type GuiRenderer,
+  type RpgClientEngine,
+  type RpgMusicManager,
+  type RpgMusicTransitionOptions,
 } from "./index";
 
 describe("client public API types", () => {
@@ -33,5 +36,26 @@ describe("client public API types", () => {
 
     expectTypeOf(registration.renderer).toEqualTypeOf<GuiRenderer | undefined>();
     expectTypeOf(registration.data).toEqualTypeOf<DialogData | undefined>();
+  });
+
+  test("temporary music exposes a typed transition controller", () => {
+    expectTypeOf<RpgMusicManager["enter"]>().toEqualTypeOf<(
+      id: string | undefined,
+      options?: RpgMusicTransitionOptions,
+      owner?: object,
+    ) => Promise<void>>();
+    expectTypeOf<RpgMusicManager["leave"]>().toEqualTypeOf<(
+      options?: RpgMusicTransitionOptions,
+      owner?: object,
+    ) => void>();
+  });
+
+  test("scoped input locks expose an idempotent release boundary", () => {
+    expectTypeOf<RpgClientEngine["acquireInputLock"]>().returns.toEqualTypeOf<
+      () => void
+    >();
+    expectTypeOf<
+      RpgClientEngine["isInputProcessingStopped"]
+    >().returns.toEqualTypeOf<boolean>();
   });
 });

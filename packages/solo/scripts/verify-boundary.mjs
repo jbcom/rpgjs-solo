@@ -32,7 +32,11 @@ if ('dependencies' in manifest && Object.keys(manifest.dependencies).length > 0)
   throw new Error('Solo production package must not ship runtime dependencies yet')
 }
 
-const maxBytes = 225_000
+// The beta.29 correction includes the authoritative ray/capsule intersection
+// primitives in Solo's dependency-free physics bundle. Keep a narrow ceiling
+// above the measured 236,082-byte production artifact so future transport or
+// accidental dependency growth still fails this gate.
+const maxBytes = 240_000
 const bundleBytes = statSync(bundlePath).size
 if (bundleBytes > maxBytes) {
   throw new Error(`Solo production bundle is ${bundleBytes} bytes; limit is ${maxBytes}`)

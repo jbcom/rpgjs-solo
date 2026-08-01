@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { Hooks, PhysicsEngine, Vector2 } from "@rpgjs/common";
+import { Hooks, PhysicsEngine } from "@rpgjs/common";
 import { RpgMapProjectiles } from "../src/projectiles";
 
 function createMapStub() {
@@ -11,7 +11,8 @@ function createMapStub() {
   const hooks = new Hooks([{ projectiles: { onImpact } }], "server");
 
   physic.createStaticObstacle("target", {
-    position: new Vector2(100, 0),
+    x: 100,
+    y: 0,
     width: 20,
     height: 20,
   });
@@ -173,6 +174,34 @@ describe("RpgMapProjectiles", () => {
       ignoreOwner: false,
       predictImpact: false,
     });
+  });
+
+  test("serializes and simulates authoritative projectile radius", async () => {
+    const { map, broadcasts, onImpact } = createMapStub();
+    map.physic.removeEntity(map.physic.getEntityByUUID("target")!);
+    map.physic.createStaticObstacle("target", {
+      x: 100,
+      y: 15,
+      width: 20,
+      height: 20,
+    });
+    const projectiles = new RpgMapProjectiles(map as any);
+
+    projectiles.emit({
+      type: "wide-arrow",
+      origin: { x: 0, y: 0 },
+      direction: { x: 1, y: 0 },
+      trajectory: { type: "linear", speed: 200, range: 300, ttl: 2 },
+      collision: { radius: 5 },
+    });
+    projectiles.step(1);
+    await Promise.resolve();
+
+    expect(broadcasts[0].value.projectiles[0]).toMatchObject({ radius: 5 });
+    expect(onImpact).toHaveBeenCalledWith(expect.objectContaining({
+      projectile: expect.objectContaining({ radius: 5 }),
+      target: expect.objectContaining({ id: "target" }),
+    }));
   });
 
   test("allows local prediction when a custom hit filter opts in", () => {

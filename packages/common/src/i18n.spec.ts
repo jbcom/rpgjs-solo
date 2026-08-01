@@ -3,10 +3,58 @@ import { Context, injector } from "@signe/di";
 import {
   createI18nProvider,
   getOrCreateI18nService,
+  I18nService,
+  isI18nMessageDescriptor,
   registerI18nMessages,
+  type I18nParams,
 } from "./i18n";
 
 describe("i18n service", () => {
+  test("recognizes deferred translation descriptors without mistaking literal text for one", () => {
+    expect(isI18nMessageDescriptor({ key: "reward.item", params: { count: 2 } })).toBe(true);
+    expect(isI18nMessageDescriptor("reward.item")).toBe(false);
+    expect(isI18nMessageDescriptor({ params: { count: 2 } })).toBe(false);
+    expect(
+      isI18nMessageDescriptor({ key: "reward.item", params: { count: 1n } })
+    ).toBe(false);
+    expect(
+      isI18nMessageDescriptor({ key: "reward.item", params: { format: () => "x" } })
+    ).toBe(false);
+    expect(isI18nMessageDescriptor({ key: "reward.item", count: NaN })).toBe(false);
+    const cyclic: Record<string, unknown> = { key: "reward.item" };
+    cyclic.params = { nested: cyclic };
+    expect(isI18nMessageDescriptor(cyclic)).toBe(false);
+  });
+
+  test("selects locale plural categories and resolves nested message params", () => {
+    const service = new I18nService({
+      defaultLocale: "ru",
+      fallbackLocale: "en",
+      messages: {
+        en: {
+          "reward.item.other": "Received {count} {item}",
+          "item.potion": "Potion",
+        },
+        ru: {
+          "reward.item.one": "Получен {count} {item}",
+          "reward.item.few": "Получено {count} предмета: {item}",
+          "reward.item.many": "Получено {count} предметов: {item}",
+          "item.potion": "Зелье",
+        },
+      },
+    });
+    const message = (count: number) =>
+      service.translateDescriptor({
+        key: "reward.item",
+        count,
+        params: { count, item: { key: "item.potion" } },
+      });
+
+    expect(message(1)).toBe("Получен 1 Зелье");
+    expect(message(2)).toBe("Получено 2 предмета: Зелье");
+    expect(message(5)).toBe("Получено 5 предметов: Зелье");
+  });
+
   test("translates with fallback locale and raw key fallback", () => {
     const service = getOrCreateI18nService(null, {
       defaultLocale: "fr",
@@ -25,6 +73,27 @@ describe("i18n service", () => {
     expect(service.t("npc.hello", { name: "Alex" }, "fr")).toBe("Bonjour Alex");
     expect(service.t("npc.only-en", undefined, "fr")).toBe("Only English");
     expect(service.t("npc.missing", undefined, "fr")).toBe("npc.missing");
+  });
+
+  test("preserves permissive parameters for local-only translations", () => {
+    const when = new Date("2026-08-01T12:00:00.000Z");
+    const params = {
+      when,
+      values: ["iron", "salt"],
+      metadata: { source: "game" },
+    } satisfies I18nParams;
+    const service = new I18nService({
+      messages: {
+        en: {
+          "local.values": "{when}|{values}|{metadata}",
+        },
+      },
+    });
+
+    expect(service.t("local.values", params)).toBe(
+      `${when}|iron,salt|[object Object]`
+    );
+    expect(isI18nMessageDescriptor({ key: "wire.values", params })).toBe(false);
   });
 
   test("lets game messages override module messages", async () => {

@@ -77,6 +77,13 @@ function normalizeParameterCurve(value: unknown): ParameterCurve {
  * experience and level progression, custom parameters, and parameter modifiers.
  */
 export interface IParameterManager {
+  /**
+   * Monotonic generation incremented whenever HP crosses the alive/defeated
+   * boundary. Delayed gameplay work can capture it to reject stale callbacks
+   * after defeat and revival.
+   */
+  readonly lifeGeneration: number;
+
   /** 
    * ```ts
    * player.initialLevel = 5
@@ -448,6 +455,13 @@ export interface IParameterManager {
  */
 export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
   return class extends Base {
+    private _lifeGeneration = 0
+
+    /** Monotonic alive/defeated transition generation. */
+    get lifeGeneration(): number {
+        return this._lifeGeneration
+    }
+
     /**
      * Signal for parameter modifiers - allows reactive updates when modifiers change
      * 
@@ -659,13 +673,16 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
      * @memberof ParameterManager
      * */
     set hp(val: number) {
+        const wasDefeated = this.hp <= 0
         if (val > this.param[MAXHP]) {
             val = this.param[MAXHP]
         }
         else if (val <= 0) {
+            if (!wasDefeated) this._lifeGeneration++
             this['execMethod']('onDead') 
             val = 0
         }
+        if (wasDefeated && val > 0) this._lifeGeneration++
         this.hpSignal.set(val)
     }
 
@@ -773,6 +790,7 @@ export function WithParameterManager<TBase extends PlayerCtor>(Base: TBase) {
             this['execMethod']('onLevelUp', <any>[hasNewLevel])   
         }
         this._level.set(val)
+        this['refreshHotbar']?.()
     }
 
     get level(): number {

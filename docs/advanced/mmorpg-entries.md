@@ -58,7 +58,7 @@ export default defineConfig({
     tiledMapFolderPlugin({
       sourceFolder: "./src/tiled",
       publicPath: "/map",
-      buildOutputPath: "assets/data",
+      buildOutputPath: "map",
       // Keep authoritative Tiled sources out of the browser build.
       allowedExtensions: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"],
     }),

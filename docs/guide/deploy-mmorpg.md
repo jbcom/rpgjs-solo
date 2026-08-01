@@ -76,7 +76,7 @@ export default defineConfig({
     tiledMapFolderPlugin({
       sourceFolder: "./src/tiled",
       publicPath: "/map",
-      buildOutputPath: "assets/data",
+      buildOutputPath: "map",
       allowedExtensions: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"],
     }),
     ...rpgjs({

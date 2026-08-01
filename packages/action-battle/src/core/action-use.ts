@@ -20,6 +20,10 @@ import type {
   ActionBattleUseContext,
 } from "./contracts";
 import type { NormalizedActionBattleAttackProfile } from "../types";
+import {
+  getActionBattleTargetingTileSize,
+  resolveActionBattleProjectileGeometry,
+} from "../targeting";
 
 const projectileHandlers = new Map<
   string,
@@ -28,27 +32,6 @@ const projectileHandlers = new Map<
     onImpact?: ActionBattleProjectileOptions["onImpact"];
   }
 >();
-
-const normalizeDirection = (direction: { x: number; y: number }) => {
-  const distance = Math.sqrt(direction.x * direction.x + direction.y * direction.y);
-  if (distance <= 0) return { x: 0, y: 1 };
-  return {
-    x: direction.x / distance,
-    y: direction.y / distance,
-  };
-};
-
-const directionToTarget = (
-  attacker: ActionBattleEntity,
-  target?: ActionBattleEntity | ActionBattleEntity[] | null
-) => {
-  const first = firstTarget(target);
-  if (!first) return undefined;
-  return normalizeDirection({
-    x: (first as any).x() - (attacker as any).x(),
-    y: (first as any).y() - (attacker as any).y(),
-  });
-};
 
 const asArray = <T>(value: T | T[] | null | undefined): T[] => {
   if (!value) return [];
@@ -77,14 +60,66 @@ const getUseHook = (usable: any) => {
     : undefined;
 };
 
+export const hasActionBattleUseHook = (usable: any): boolean =>
+  !!getUseHook(usable);
+
+const resolveUsableField = (usable: any, key: string) => {
+  for (const source of [
+    usable,
+    usable?._skillInstance,
+    usable?._skillData,
+  ]) {
+    if (!source) continue;
+    const candidate = source[key];
+    if (candidate === undefined) continue;
+    if (typeof candidate !== "function") return candidate;
+    try {
+      return candidate.call(source);
+    } catch {
+      // Continue with the compatible snapshots when one reactive source fails.
+    }
+  }
+  return undefined;
+};
+
 const isSkill = (usable: any, explicitSkill?: any) =>
-  !!explicitSkill || usable?._type === "skill" || usable?.spCost !== undefined;
+  !!explicitSkill ||
+  resolveUsableField(usable, "_type") === "skill" ||
+  resolveUsableField(usable, "spCost") !== undefined;
+
+/**
+ * Action Battle executes skill and item effects directly so it must preserve
+ * the native EffectManager restrictions without invoking the native use hook a
+ * second time.
+ */
+export const hasNativeActionBattleUseRestriction = (
+  attacker: ActionBattleEntity,
+  usable: any,
+  explicitSkill?: any,
+): boolean => {
+  const hasEffect = (attacker as any).hasEffect;
+  if (typeof hasEffect !== "function") return false;
+  if (isSkill(usable, explicitSkill)) {
+    return !!hasEffect.call(attacker, "CAN_NOT_SKILL");
+  }
+  if (resolveUsableField(usable, "_type") === "item") {
+    return !!hasEffect.call(attacker, "CAN_NOT_ITEM");
+  }
+  return false;
+};
 
 const consumeSkillUse = (attacker: ActionBattleEntity, skill: any) => {
-  const spCost = typeof skill?.spCost === "number" ? skill.spCost : 0;
+  const resolvedSpCost = resolveUsableField(skill, "spCost");
+  const spCost = typeof resolvedSpCost === "number" ? resolvedSpCost : 0;
   if (spCost > 0) {
     if (spCost > ((attacker as any).sp ?? 0)) {
-      throw new Error(`Not enough SP to use ${skill?.id ?? skill?.name ?? "skill"}`);
+      throw new Error(
+        `Not enough SP to use ${
+          resolveUsableField(skill, "id") ??
+          resolveUsableField(skill, "name") ??
+          "skill"
+        }`
+      );
     }
     const halfCost =
       (attacker as any).hasEffect?.("HALF_SP_COST") ||
@@ -92,10 +127,9 @@ const consumeSkillUse = (attacker: ActionBattleEntity, skill: any) => {
     (attacker as any).sp -= spCost / (halfCost ? 2 : 1);
   }
 
-  const hitRate = typeof skill?.hitRate === "number" ? skill.hitRate : 1;
-  if (Math.random() > hitRate) {
-    throw new Error(`Action battle skill failed: ${skill?.id ?? skill?.name ?? "skill"}`);
-  }
+  const resolvedHitRate = resolveUsableField(skill, "hitRate");
+  const hitRate = typeof resolvedHitRate === "number" ? resolvedHitRate : 1;
+  return Math.random() <= Math.max(0, Math.min(1, hitRate));
 };
 
 const applyDamageEffect = (
@@ -106,7 +140,6 @@ const applyDamageEffect = (
   metadata?: Record<string, any>
 ) => {
   const systems = getActionBattleSystems();
-  (attacker as any).applyStates?.(target, skill);
   const result = applyActionBattleHit(systems.combat, {
     attacker,
     target,
@@ -115,21 +148,53 @@ const applyDamageEffect = (
     metadata,
   });
 
-  if (!result.cancelled) {
+  if (result.defense?.kind === "parry") {
     emitActionBattleClientVisual({
-      moment: "hurt",
+      moment: "parry",
       entity: attacker,
       target,
       attacker,
-      damage: result.damage,
       result,
       skill,
     });
-    (target as any).battleAi?.handleDamage?.(attacker, {
+    (attacker as any).battleAi?.stagger?.(
+      result.defense.staggerMs,
+      target
+    );
+    return result;
+  }
+
+  if (!result.cancelled) {
+    (attacker as any).applyStates?.(target, skill);
+    const targetAi = (target as any).battleAi;
+    if (result.defense?.kind === "guard") {
+      emitActionBattleClientVisual({
+        moment: "block",
+        entity: attacker,
+        target,
+        attacker,
+        damage: result.damage,
+        result,
+        skill,
+      });
+    } else if (!targetAi?.handleDamage) {
+      emitActionBattleClientVisual({
+        moment: "hurt",
+        entity: attacker,
+        target,
+        attacker,
+        damage: result.damage,
+        result,
+        skill,
+      });
+    }
+    targetAi?.handleDamage?.(attacker, {
       damage: result.damage,
       defeated: result.defeated,
       raw: result.rawDamage,
       reaction: result.reaction,
+      skill,
+      metadata: result.metadata,
     });
   }
 
@@ -156,7 +221,7 @@ const buildActionContext = (input: {
     weapon: input.weapon,
     action: input.action,
     pattern: input.pattern,
-    defaultEffect(target = input.target) {
+    defaultEffect(target = action.target) {
       return asArray(target).map((entry) =>
         applyDamageEffect(
           input.attacker,
@@ -164,14 +229,17 @@ const buildActionContext = (input: {
           input.skill,
           input.profile?.reaction,
           {
-            actionId: input.usable?.id,
-            actionType: input.usable?._type,
+            actionId: resolveUsableField(input.usable, "id"),
+            actionType: resolveUsableField(input.usable, "_type"),
             pattern: input.pattern,
+            damageMultiplier: input.profile?.damageMultiplier,
+            knockbackMultiplier: input.profile?.knockbackMultiplier,
+            visual: input.action?.visual,
           }
         )
       );
     },
-    damage(target = input.target) {
+    damage(target = firstTarget(action.target)) {
       const entry = firstTarget(target);
       if (!entry) return undefined;
       return applyDamageEffect(
@@ -180,9 +248,12 @@ const buildActionContext = (input: {
         input.skill,
         input.profile?.reaction,
         {
-          actionId: input.usable?.id,
-          actionType: input.usable?._type,
+          actionId: resolveUsableField(input.usable, "id"),
+          actionType: resolveUsableField(input.usable, "_type"),
           pattern: input.pattern,
+          damageMultiplier: input.profile?.damageMultiplier,
+          knockbackMultiplier: input.profile?.knockbackMultiplier,
+          visual: input.action?.visual,
         }
       );
     },
@@ -201,16 +272,23 @@ const buildActionContext = (input: {
         const nextHp = Math.min(maxHp, currentHp + amount);
         (entry as any).hp = nextHp;
         emitActionBattleClientVisual({
-          moment: "hurt",
+          moment: "heal",
           entity: entry,
           target: entry,
           damage: Math.max(0, nextHp - currentHp),
           skill: input.skill,
+          result: {
+            damage: Math.max(0, nextHp - currentHp),
+            metadata: {
+              healing: true,
+              visual: input.action?.visual,
+            },
+          },
         });
         return total + nextHp - currentHp;
       }, 0);
     },
-    projectile(options: ActionBattleProjectileOptions = { type: "action" }) {
+    projectile(options: ActionBattleProjectileOptions = {}) {
       const map = (input.attacker as any).getCurrentMap?.();
       if (!map?.projectiles?.emit) return [];
 
@@ -219,40 +297,75 @@ const buildActionContext = (input: {
         ...configured,
         ...options,
       };
-      const range = projectile.range ?? input.action?.range ?? 160;
+      const tileSize = getActionBattleTargetingTileSize(
+        map,
+        getActionBattleOptions().ui?.targeting,
+      );
+      const geometry = resolveActionBattleProjectileGeometry({
+        source: input.attacker as any,
+        target: firstTarget(input.target) as any,
+        projectile,
+        actionRange: input.action?.range,
+        targetingRange:
+          getActionBattleSkillTargetingConfig(input.skill)?.range
+          ?? input.skill?.range,
+        tileSize,
+      });
       const speed = projectile.speed ?? 180;
       const emitted = map.projectiles.emit(
         {
-          type: projectile.type,
-          origin: projectile.origin,
-          direction:
-            projectile.direction ?? directionToTarget(input.attacker, input.target),
+          type: projectile.type ?? "action-battle-skill",
+          origin: geometry.origin,
+          direction: geometry.direction,
           spreadDegrees: projectile.spreadDegrees,
           accuracy: projectile.accuracy,
-          trajectory: projectile.trajectory ?? {
-            type: "linear",
-            speed,
-            range,
+          trajectory: projectile.trajectory
+            ? { ...projectile.trajectory, range: geometry.range }
+            : {
+                type: "linear",
+                speed,
+                range: geometry.range,
+              },
+          collision: {
+            ...projectile.collision,
+            radius: geometry.radius,
           },
-          collision: projectile.collision,
           repeat: projectile.repeat,
           pattern: projectile.pattern,
           payload: {
             ...projectile.payload,
             actionBattle: true,
             attackerId: input.attacker.id,
-            actionId: input.usable?.id,
+            actionId: resolveUsableField(input.usable, "id"),
           },
-          params: projectile.params,
-          canHit: ({ target }: { target?: ActionBattleEntity }) => {
-            if (!target) return false;
-            return canActionBattleUseTarget(
-              input.attacker,
-              target,
-              input.action?.target ?? "enemy",
-              getActionBattleOptions().combat?.targets
-            );
+          params: {
+            ...projectile.params,
+            ...(typeof input.action?.visual?.trailFx === "string"
+              ? { trailFx: input.action.visual.trailFx }
+              : {}),
+            ...(typeof projectile.graphic === "string"
+              ? { graphic: projectile.graphic }
+              : {}),
+            ...(typeof projectile.scale === "number"
+              ? { scale: projectile.scale }
+              : {}),
+            ...(typeof projectile.rotateToDirection === "boolean"
+              ? { rotateToDirection: projectile.rotateToDirection }
+              : {}),
           },
+          canHit: ({ entity, map, target }: {
+            entity: { uuid?: string };
+            map: any;
+            target?: ActionBattleEntity;
+          }) => canActionBattleProjectileCollide({
+            attacker: input.attacker,
+            entity,
+            map,
+            target,
+            ignoreOwner: geometry.ignoreOwner,
+            actionTarget: input.action?.target ?? "enemy",
+            targetOptions: getActionBattleOptions().combat?.targets,
+          }),
         },
         input.attacker as any
       );
@@ -272,6 +385,11 @@ const buildActionContext = (input: {
 
 export const getActionBattleActionConfig = (usable: any) =>
   resolveActionConfig(usable);
+
+export const getActionBattleSkillTargetingConfig = (usable: any) =>
+  usable?.targeting ??
+  usable?._skillInstance?.targeting ??
+  usable?._skillData?.targeting;
 
 export const getActionBattleActionRange = (usable: any): number | undefined =>
   resolveActionConfig(usable)?.range;
@@ -310,6 +428,36 @@ export const canActionBattleUseTarget = (
   );
 };
 
+/**
+ * One collision policy for both projectile admission casts and authoritative
+ * simulation. Owners and non-eligible combatants are transparent; eligible
+ * targets and physics-only world geometry are blockers.
+ */
+export const canActionBattleProjectileCollide = (input: {
+  attacker: ActionBattleEntity;
+  entity: { uuid?: string };
+  map?: any;
+  target?: ActionBattleEntity;
+  ignoreOwner?: boolean;
+  actionTarget?: ActionBattleActionTarget;
+  targetOptions?: ActionBattleTargetOptions;
+}): boolean => {
+  if (input.entity.uuid === input.attacker.id) {
+    return input.ignoreOwner === false;
+  }
+  const target = input.target
+    ?? input.map?.getObjectById?.(input.entity.uuid);
+  if (!target || !isActionBattleCombatEntity(target)) {
+    return true;
+  }
+  return canActionBattleUseTarget(
+    input.attacker,
+    target,
+    input.actionTarget ?? "enemy",
+    input.targetOptions,
+  );
+};
+
 export const shouldUseActionBattleUsable = (
   usable: any,
   explicitSkill?: any
@@ -332,11 +480,25 @@ export const executeActionBattleUse = (input: {
   profile?: NormalizedActionBattleAttackProfile;
   playVisual?: boolean;
 }): boolean => {
+  if (isActionBattleTargetDefeated(input.attacker)) return false;
   if (!shouldUseActionBattleUsable(input.usable, input.skill)) return false;
+  if (
+    hasNativeActionBattleUseRestriction(
+      input.attacker,
+      input.usable,
+      input.skill,
+    )
+  ) {
+    return false;
+  }
 
   const actionConfig = resolveActionConfig(input.usable);
+  let skillSucceeded = true;
   if (isSkill(input.usable, input.skill)) {
-    consumeSkillUse(input.attacker, input.skill ?? input.usable);
+    skillSucceeded = consumeSkillUse(
+      input.attacker,
+      input.skill ?? input.usable
+    );
   }
 
   const action = buildActionContext({
@@ -351,7 +513,29 @@ export const executeActionBattleUse = (input: {
       entity: input.attacker,
       skill: input.skill,
       target: firstTarget(input.target),
+      result: input.skill
+        ? {
+            metadata: {
+              visual: actionConfig?.visual,
+            },
+          }
+        : undefined,
     });
+  }
+
+  if (!skillSucceeded) {
+    emitActionBattleClientVisual({
+      moment: "miss",
+      entity: input.attacker,
+      target: firstTarget(input.target),
+      skill: input.skill,
+      result: {
+        damage: 0,
+        cancelled: true,
+        metadata: { miss: true },
+      },
+    });
+    return true;
   }
 
   if (hook) {
@@ -374,11 +558,11 @@ export const handleActionBattleProjectileImpact = (
   const handler = projectileHandlers.get(context.projectile.id);
   if (!handler) return;
   const target = context.target;
-  handler.action.target = target ?? handler.action.target;
+  handler.action.target = target ?? null;
   if (handler.onImpact) {
     handler.onImpact(context, handler.action);
-  } else {
-    handler.action.defaultEffect(target ?? undefined);
+  } else if (target && !isActionBattleTargetDefeated(target)) {
+    handler.action.defaultEffect(target);
   }
 };
 

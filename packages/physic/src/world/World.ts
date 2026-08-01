@@ -9,6 +9,7 @@ import { SpatialPartition } from './SpatialPartition';
 import { Vector2 } from '../core/math/Vector2';
 import { AABB } from '../core/math/AABB';
 import { Ray, RaycastHit } from '../collision/Ray';
+import { capsuleCast as castCapsule } from '../collision/raycast';
 import type { EntityConfig } from '../physics/Entity';
 import { sweepEntities } from '../collision/sweep';
 import { invalidateCollider } from '../collision/collider-cache';
@@ -236,6 +237,26 @@ export class World {
   public raycast(origin: Vector2, direction: Vector2, length: number = Infinity, mask?: number, filter?: (entity: Entity) => boolean): RaycastHit | null {
     const ray = new Ray(origin, direction, length);
     return this.spatialPartition.raycast(ray, mask, filter);
+  }
+
+  /** Sweep a circular projectile along a segment against world colliders. */
+  public capsuleCast(
+    origin: Vector2,
+    direction: Vector2,
+    length: number,
+    radius: number,
+    mask?: number,
+    filter?: (entity: Entity) => boolean,
+  ): RaycastHit | null {
+    return castCapsule(
+      this.spatialPartition,
+      origin,
+      direction,
+      length,
+      radius,
+      mask,
+      filter,
+    );
   }
 
   /**

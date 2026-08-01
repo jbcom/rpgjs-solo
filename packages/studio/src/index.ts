@@ -10,6 +10,31 @@ export { collectStudioMapPluginPixiChildren, composeStudioMapPluginOptions, crea
 export type { CreateStudioMapPluginsOptions, StudioDebugCollisionsOptions, StudioMapPlugin, StudioMapPluginContext, StudioMapPluginPixiChild, StudioTerrainRenderOptions } from "./studio-map-plugins";
 export { createStudioActionBattleAnimations } from "./action-battle-animations";
 export type { StudioCombatAnimationIds, StudioCombatAnimationOptions } from "./action-battle-animations";
+export {
+  createStudioActionBattleAudio,
+  createStudioActionBattlePreset,
+} from "./action-battle-audio";
+export type { StudioCombatAudioConfig } from "./action-battle-audio";
+export type {
+  StudioGuiBinding,
+  StudioHotbarContent,
+  StudioHotbarBinding,
+  StudioHotbarSettings,
+  StudioMenusSettings,
+} from "./action-battle-audio";
+export {
+  normalizeStudioHotbarSettings,
+  resolveStudioHotbarSettings,
+} from "./action-battle-audio";
+export {
+  createStudioItemWorkflowHooks,
+  normalizeStudioItemWorkflowTriggers,
+} from "./item-workflow";
+export type {
+  StudioItemWorkflowHooks,
+  StudioItemWorkflowPhase,
+  StudioItemWorkflowTrigger,
+} from "./item-workflow";
 
 export interface StudioGameModuleConfig {
   projectId?: string | null;
@@ -22,6 +47,15 @@ export interface StudioGameModuleConfig {
   assetsUrl?: string;
   apiUrl?: string;
   displayTitleScreen?: boolean;
+  /**
+   * Start the player as soon as the server connection is established.
+   *
+   * The server initializes the default player stats and transfers the player
+   * to `startMapId`, or to the starting map resolved from the Studio project.
+   * Defaults to `false`. Set `displayTitleScreen: false` separately when the
+   * client should also skip the Studio title screen.
+   */
+  autoStart?: boolean;
   startMapId?: string;
   debugCollisions?: boolean;
   studioPlugins?: StudioMapPlugin[];

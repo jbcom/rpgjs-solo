@@ -73,6 +73,19 @@ class AutoFallbackGameDataProvider implements GameDataProvider {
     }
     return this.http.getDatabase(projectId);
   }
+
+  async getBlockCollection(blockCollectionId: string): Promise<any | null> {
+    try {
+      const localValue = await this.local.getBlockCollection(blockCollectionId);
+      if (localValue) return localValue;
+    } catch (error) {
+      console.warn(
+        '[AutoFallbackGameDataProvider] local block collection failed, fallback to online',
+        error,
+      );
+    }
+    return this.http.getBlockCollection(blockCollectionId);
+  }
 }
 
 class CachedGameDataProvider implements GameDataProvider {
@@ -105,6 +118,10 @@ class CachedGameDataProvider implements GameDataProvider {
 
   getDatabase(projectId?: string): Promise<any[]> {
     return this.source.getDatabase(projectId);
+  }
+
+  getBlockCollection(blockCollectionId: string): Promise<any | null> {
+    return this.source.getBlockCollection?.(blockCollectionId) ?? Promise.resolve(null);
   }
 
   getPlayerStartConfig?(query: PlayerStartConfigQuery): Promise<any> {

@@ -68,3 +68,8 @@ export function setActionBattleInvincibility(
   const state = getRuntimeState(entity);
   state.invincibleUntil = Math.max(state.invincibleUntil, now + durationMs);
 }
+
+export function clearActionBattleHitReaction(entity: any): void {
+  if (!entity) return;
+  delete entity[STATE_KEY];
+}

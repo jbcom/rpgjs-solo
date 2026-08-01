@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+  clearActionBattleHitReaction,
   DEFAULT_ACTION_BATTLE_HIT_REACTION,
   isActionBattleEntityInvincible,
   normalizeActionBattleHitReaction,
@@ -39,5 +40,14 @@ describe("hit reaction helpers", () => {
 
     expect(isActionBattleEntityInvincible(entity, 1100)).toBe(true);
     expect(isActionBattleEntityInvincible(entity, 1300)).toBe(false);
+  });
+
+  test("clears transient hit reaction state", () => {
+    const entity = {};
+    setActionBattleInvincibility(entity, 250, 1000);
+
+    clearActionBattleHitReaction(entity);
+
+    expect(isActionBattleEntityInvincible(entity, 1001)).toBe(false);
   });
 });

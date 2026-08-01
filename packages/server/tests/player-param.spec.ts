@@ -16,6 +16,21 @@ test('Test HP', () => {
    expect(player.hp).toBe(MAXHP_CURVE.start)
 })
 
+test('native RpgPlayer advances life generation across a rapid 10 -> 0 -> 10 transition', () => {
+   player.hp = 10
+   const generation = player.lifeGeneration
+
+   player.hp = 0
+   expect(player.lifeGeneration).toBe(generation + 1)
+   player.hp = 0
+   expect(player.lifeGeneration).toBe(generation + 1)
+
+   player.hp = 10
+   expect(player.lifeGeneration).toBe(generation + 2)
+   player.hp = 5
+   expect(player.lifeGeneration).toBe(generation + 2)
+})
+
 test('Test SP', () => {
    expect(player.sp).toBe(MAXSP_CURVE.start)
 })

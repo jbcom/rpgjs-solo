@@ -32,7 +32,7 @@
         width={engine.width}
         height={engine.height}
       >
-        @if (gui.display) {
+        @if (gui.display()) {
           <gui.component data={gui.data} dependencies={gui.dependencies} guiOpenId={gui.openId} onFinish={(data, guiOpenId) => {
             onGuiFinish(gui, data, guiOpenId)
           }} onInteraction={(name, data) => {

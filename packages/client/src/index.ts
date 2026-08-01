@@ -7,6 +7,7 @@ export * from "./core/setup";
 export * from "./core/inject";
 export * from "./services/loadMap";
 export * from "./services/actionInput";
+export * from "./services/hotbar";
 export * from "./services/mapStreaming";
 export * from "./services/pointerContext";
 export * from "./services/interactions";
@@ -42,6 +43,7 @@ export { RpgClientPlayer } from "./Game/Player";
 export { RpgClientEvent } from "./Game/Event";
 export * from "./Game/ProjectileManager";
 export * from "./Game/ClientVisuals";
+export * from "./Game/MusicManager";
 export { withMobile } from "./components/gui/mobile";
 export type {
     MobileButtonComponentProps,

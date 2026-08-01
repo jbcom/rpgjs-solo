@@ -1,12 +1,20 @@
 import { RpgPlayer } from "./Player";
-import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui, GameoverGui, InputGui } from "../Gui";
+import { Gui, DialogGui, MenuGui, ShopGui, NotificationGui, SaveLoadGui, GameoverGui, InputGui, HotbarGui } from "../Gui";
+import type { HotbarGuiOptions } from "../Gui/HotbarGui";
 import type { ShopGuiOptions, ShopItemInput } from "../Gui/ShopGui";
 import { DialogOptions, DialogBaseOptions, Choice } from "../Gui/DialogGui";
 import { SaveLoadOptions, SaveSlot } from "../Gui/SaveLoadGui";
 import { MenuGuiOptions } from "../Gui/MenuGui";
 import { GameoverGuiOptions, GameoverGuiSelection } from "../Gui/GameoverGui";
 import { InputOptions, NumberInputOptions, TextInputOptions, TextareaInputOptions } from "../Gui/InputForm";
-import { Constructor, PlayerCtor } from "@rpgjs/common";
+import { assertI18nText, Constructor, PlayerCtor, PrebuiltGui, type I18nText } from "@rpgjs/common";
+
+export interface NotificationOptions {
+  time?: number;
+  icon?: string;
+  sound?: string;
+  type?: "info" | "warn" | "error";
+}
 
 /**
  * GUI Manager Mixin
@@ -64,9 +72,10 @@ export function WithGuiManager<TBase extends PlayerCtor>(
     }
 
     showNotification(
-      message: string,
-      options: { time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" } = {}
+      message: I18nText,
+      options: NotificationOptions = {}
     ): Promise<boolean> {
+      assertI18nText(message);
       ;(this as unknown as { emit(type: string, value?: unknown): void }).emit('notification', {
         message,
         ...options,
@@ -87,6 +96,60 @@ export function WithGuiManager<TBase extends PlayerCtor>(
       const gui = new MenuGui(<any>this);
       this._gui[gui.id] = gui;
       return gui.open(options);
+    }
+
+    /**
+     * Display the persistent player hotbar.
+     *
+     * The server owns slot content and validates every use. The default client
+     * GUI provides direct keyboard shortcuts and a gamepad radial selector.
+     * Calling it again refreshes the existing GUI without duplicating it.
+     *
+     * @title Show Hotbar
+     * @method player.showHotbar(options)
+     * @param options - Initialization, capacity, presentation, and optional authoritative use handler.
+     * @returns The GUI open result.
+     * @memberof RpgPlayer
+     *
+     * @example
+     * ```ts
+     * await player.showHotbar({
+     *   capacity: 8,
+     *   lockedSlotHint: (_current, slot) => `Unlock slot ${slot + 1}`,
+     * });
+     * ```
+     */
+    showHotbar(options: HotbarGuiOptions = {}) {
+      const existing = this._gui[PrebuiltGui.Hotbar] as HotbarGui | undefined;
+      if (existing) {
+        existing.configure(options);
+        existing.refresh();
+        return Promise.resolve(null);
+      }
+      const gui = new HotbarGui(this as unknown as RpgPlayer);
+      this._gui[gui.id] = gui;
+      return gui.open(options);
+    }
+
+    /**
+     * Hide the default hotbar GUI.
+     *
+     * Persistent slot assignments are unchanged. Call `showHotbar()` to create
+     * and display the GUI again.
+     *
+     * @title Hide Hotbar
+     * @method player.hideHotbar()
+     * @returns {void}
+     * @memberof RpgPlayer
+     *
+     * @example
+     * ```ts
+     * player.hideHotbar();
+     * await player.showHotbar();
+     * ```
+     */
+    hideHotbar(): void {
+      this._gui[PrebuiltGui.Hotbar]?.close();
     }
 
     callGameover(options: GameoverGuiOptions = {}): Promise<GameoverGuiSelection | null> {
@@ -425,7 +488,19 @@ export interface IGuiManager {
    *
    * @title Displays a notification
    * @method player.showNotification()
-   * @param {string} message - The message to display in the notification
+   * Pass a translation descriptor to resolve framework text with the receiving
+   * client's active locale. Literal strings remain supported for game-authored
+   * or already-localized messages.
+   *
+   * ```ts
+   * player.showNotification({
+   *   key: 'game.reward.item',
+   *   count: 2,
+   *   params: { count: 2, item: { key: 'game.item.potion' } }
+   * })
+   * ```
+   *
+   * @param {string | I18nMessageDescriptor} message - Literal text or a client-resolved translation descriptor
    * @param {object} options - An object containing options for the notification
    * @param {number} options.time - The time to display the notification for (in ms). Default: 2000ms
    * @param {string} options.icon - The icon to display in the notification. Put the identifier of the spritesheet (defined on the client side)
@@ -434,8 +509,8 @@ export interface IGuiManager {
    * @memberof GuiManager
    */
   showNotification(
-    message: string,
-    options?: { time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" }
+    message: I18nText,
+    options?: NotificationOptions
   ): Promise<boolean>;
 
   /**
@@ -495,6 +570,8 @@ export interface IGuiManager {
    * @memberof GuiManager
    */
   callMainMenu(options?: MenuGuiOptions): void;
+  showHotbar(options?: HotbarGuiOptions): Promise<unknown | null>;
+  hideHotbar(): void;
 
   /**
    * Calls game over menu. Opens the GUI named `rpg-gameover`

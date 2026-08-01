@@ -45,7 +45,13 @@ export { BVH } from './collision/bvh';
 export { CollisionResolver, type ResolverConfig } from './collision/resolver';
 export * from './collision/detector';
 export { PolygonCollider, assignPolygonCollider, type PolygonConfig } from './collision/PolygonCollider';
-export { raycast, type RaycastHit } from './collision/raycast';
+export {
+  capsuleCast,
+  capsuleCastCollider,
+  raycast,
+  raycastCollider,
+  type RaycastHit,
+} from './collision/raycast';
 export { Ray, type RaycastHit as ColliderRaycastHit } from './collision/Ray';
 export { sweepEntities, type SweepResult } from './collision/sweep';
 

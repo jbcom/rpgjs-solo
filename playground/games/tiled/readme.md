@@ -24,7 +24,7 @@ Direct URL: `http://localhost:5183`.
 
 This game uses Tiled `.tmx` and `.tsx` files from `src/tiled`. The Vite config
 uses `tiledMapFolderPlugin()` to serve those files at `/map` during development
-and copy them into the build output.
+and copy them to the matching `map` directory in the static build output.
 
 ## Credits
 

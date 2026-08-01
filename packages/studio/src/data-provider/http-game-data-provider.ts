@@ -5,8 +5,15 @@ import type {
   ProjectQuery,
 } from './types';
 
-const fetchJson = async (url: string, label: string): Promise<any> => {
-  const response = await fetch(url);
+const fetchJson = async (
+  url: string,
+  label: string,
+  init?: RequestInit,
+): Promise<any> => {
+  const response = await fetch(url, init);
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`[HttpGameDataProvider] ${label} authentication failed (${response.status})`);
+  }
   if (!response.ok) {
     throw new Error(`[HttpGameDataProvider] ${label} failed (${response.status}) for ${url}`);
   }
@@ -16,7 +23,7 @@ const fetchJson = async (url: string, label: string): Promise<any> => {
 const getStudioApiKey = (): string | null => {
   const apiKey = (globalThis as { process?: { env?: Record<string, string> } })
     .process?.env?.RPGSTUDIO_API_KEY;
-  return typeof apiKey === 'string' && apiKey.trim() ? apiKey : null;
+  return typeof apiKey === 'string' && apiKey.trim() ? apiKey.trim() : null;
 };
 
 const fetchStudioProject = async (
@@ -88,6 +95,21 @@ export class HttpGameDataProvider implements GameDataProvider {
     );
 
     return Array.isArray(value) ? value : [];
+  }
+
+  getBlockCollection(blockCollectionId: string): Promise<any> {
+    const apiKey = getStudioApiKey();
+    return fetchJson(
+      `${this.config.apiBaseUrl}/blocks/${encodeURIComponent(blockCollectionId)}`,
+      'block collection query',
+      apiKey
+        ? {
+            headers: {
+              'x-api-key': apiKey,
+            },
+          }
+        : undefined,
+    );
   }
 
   async getPlayerStartConfig(query: PlayerStartConfigQuery): Promise<any> {

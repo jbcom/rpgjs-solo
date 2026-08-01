@@ -11,9 +11,9 @@ position every frame.
 
 The server is authoritative. It emits compact projectile spawn, impact, and
 destroy batches. The client predicts the visual movement locally, including a
-single local raycast at spawn time to avoid drawing projectiles past obvious
-client-side hitboxes while it waits for the server impact, and renders each
-projectile with a registered CanvasEngine component.
+single local ray or radius-aware capsule cast at spawn time to avoid drawing
+projectiles past obvious client-side hitboxes while it waits for the server
+impact, and renders each projectile with a registered CanvasEngine component.
 
 When a projectile uses a custom server-side `canHit` filter, the client keeps
 predicting movement but skips local impact raycast clamping by default because
@@ -293,6 +293,37 @@ player.projectiles.emit({
   }
 })
 ```
+
+Set `collision.radius` when the projectile has physical width. The server then
+sweeps a circle along every simulated segment (and instant cast) instead of
+casting a point ray. The same radius is included in the client-safe spawn
+descriptor so prediction and rendering use the authoritative shape.
+Local prediction uses a capsule cast for a positive radius and a point ray for
+zero or no radius, with the same collision mask and owner exclusion.
+
+```ts
+player.projectiles.emit({
+  type: 'heavy-arrow',
+  direction: player.getDirection(),
+  trajectory: { type: 'linear', speed: 450, range: 700 },
+  collision: { radius: 3 }
+})
+```
+
+Emission commits a projectile to the authoritative world. If its owner is
+defeated afterward, the already-emitted projectile continues until impact,
+range, or TTL destroys it. Defeat prevents new casts and scheduled actor
+callbacks that have not emitted yet; it does not retroactively cancel an
+in-flight projectile because the projectile API has no owner-lifecycle
+cancellation contract. A game that wants cancellation must model it explicitly
+rather than assuming defeat destroys emitted state.
+
+For Action Battle's default projectile effect, a physics-only impact is a
+destroy/no-op: it never falls back to the enemy selected when the projectile was
+emitted. Adding a custom `onImpact` explicitly opts into all physical impacts,
+including walls. Wall contexts have no combat `target`, so custom handlers must
+inspect `hit` and pass an explicit eligible target to any damage/default-effect
+helper.
 
 ## Client Registration
 
