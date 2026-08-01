@@ -53,6 +53,14 @@ import { activateActionBattleSkill } from "./ui/skill-activation";
 
 export const ACTION_BATTLE_SKILL_PROJECTILE_TYPE = "action-battle-skill";
 
+const ACTION_BATTLE_CLIENT_I18N = {
+  en: {
+    "rpg.action-battle.feedback.block": "BLOCK",
+    "rpg.action-battle.feedback.parry": "PARRY!",
+    "rpg.action-battle.feedback.miss": "MISS",
+  },
+};
+
 const beginLocalPlayerAttackLock = (
   engine: RpgClientEngine,
   profile: NormalizedActionBattleAttackProfile
@@ -183,6 +191,7 @@ export const createActionBattleClient = (
   const hitComponent = PrebuiltComponentAnimations?.Hit;
   const fxComponent = PrebuiltComponentAnimations?.Fx;
   return defineModule<RpgClient>({
+    i18n: ACTION_BATTLE_CLIENT_I18N,
     componentAnimations: [
       ...(hitComponent
         ? [

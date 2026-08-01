@@ -54,4 +54,14 @@ describe("action battle client attack recovery", () => {
     expect(resetAnimationState).not.toHaveBeenCalled();
     expect(setAnimationName).not.toHaveBeenCalledWith("stand");
   });
+
+  test("registers overridable framework combat feedback translations", () => {
+    const client = createActionBattleClient();
+
+    expect(client.i18n?.en).toMatchObject({
+      "rpg.action-battle.feedback.block": "BLOCK",
+      "rpg.action-battle.feedback.parry": "PARRY!",
+      "rpg.action-battle.feedback.miss": "MISS",
+    });
+  });
 });

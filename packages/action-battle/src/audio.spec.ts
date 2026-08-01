@@ -84,7 +84,170 @@ describe("action battle audio", () => {
     expect(music.enter).toHaveBeenCalledWith(
       "wolf-theme",
       expect.objectContaining({ battle: "project-theme" }),
+      expect.any(Object),
     );
     expect(music.contextId).toBe("wolf");
+  });
+
+  it("preserves map music when combat has no resolvable battle track", () => {
+    const music = {
+      enter: vi.fn(),
+      leave: vi.fn(),
+      contextId: undefined as string | undefined,
+    };
+    const handler = createActionBattleCombatAudioVisual({
+      music: {
+        battle: () => undefined,
+      },
+    });
+
+    const engine = {
+      music,
+      sceneMap: {
+        data: () => ({ params: {} }),
+      },
+    };
+
+    handler({
+      engine,
+      data: {
+        threats: [
+          { enemyId: "wolf", priority: 0, order: 1 },
+        ],
+      },
+    });
+
+    expect(music.enter).not.toHaveBeenCalled();
+    expect(music.leave).not.toHaveBeenCalled();
+    expect(music.contextId).toBe("wolf");
+
+    handler({ engine, data: { threats: [] } });
+
+    expect(music.enter).not.toHaveBeenCalled();
+    expect(music.leave).not.toHaveBeenCalled();
+    expect(music.contextId).toBeUndefined();
+  });
+
+  it("restores map music when the remaining threat has no battle track", () => {
+    const music = {
+      enter: vi.fn(),
+      leave: vi.fn(),
+      contextId: undefined as string | undefined,
+    };
+    const handler = createActionBattleCombatAudioVisual({
+      music: {
+        battle: () => undefined,
+      },
+    });
+    const engine = {
+      music,
+      sceneMap: {
+        data: () => ({ params: {} }),
+      },
+    };
+
+    handler({
+      engine,
+      data: {
+        threats: [
+          {
+            enemyId: "warden",
+            music: "warden-theme",
+            priority: 100,
+            order: 1,
+          },
+        ],
+      },
+    });
+    handler({
+      engine,
+      data: {
+        threats: [
+          { enemyId: "wolf", priority: 0, order: 2 },
+        ],
+      },
+    });
+
+    expect(music.enter).toHaveBeenCalledOnce();
+    expect(music.enter).toHaveBeenCalledWith(
+      "warden-theme",
+      expect.objectContaining({ battle: expect.any(Function) }),
+      expect.any(Object),
+    );
+    expect(music.leave).toHaveBeenCalledOnce();
+    expect(music.leave).toHaveBeenCalledWith(
+      expect.objectContaining({ battle: expect.any(Function) }),
+      music.enter.mock.calls[0]?.[2],
+    );
+    expect(music.contextId).toBe("wolf");
+
+    handler({ engine, data: { threats: [] } });
+
+    expect(music.leave).toHaveBeenCalledOnce();
+    expect(music.contextId).toBeUndefined();
+  });
+
+  it("restores map music once when the final tracked threat exits", () => {
+    const music = {
+      enter: vi.fn(),
+      leave: vi.fn(),
+      contextId: undefined as string | undefined,
+    };
+    const handler = createActionBattleCombatAudioVisual({
+      music: { battle: "encounter-theme" },
+    });
+    const engine = {
+      music,
+      sceneMap: {
+        data: () => ({ params: {} }),
+      },
+    };
+
+    handler({
+      engine,
+      data: {
+        threats: [
+          { enemyId: "wolf", priority: 0, order: 1 },
+        ],
+      },
+    });
+    handler({ engine, data: { threats: [] } });
+    handler({ engine, data: { threats: [] } });
+
+    expect(music.enter).toHaveBeenCalledOnce();
+    expect(music.leave).toHaveBeenCalledOnce();
+    expect(music.leave).toHaveBeenCalledWith(
+      expect.objectContaining({ battle: "encounter-theme" }),
+      music.enter.mock.calls[0]?.[2],
+    );
+    expect(music.contextId).toBeUndefined();
+  });
+
+  it("returns a rejected music transition to the client visual registry", async () => {
+    const failure = new Error("battle music unavailable");
+    const music = {
+      enter: vi.fn(() => Promise.reject(failure)),
+      leave: vi.fn(),
+      contextId: undefined as string | undefined,
+    };
+    const handler = createActionBattleCombatAudioVisual({
+      music: { battle: "encounter-theme" },
+    });
+
+    const transition = handler({
+      engine: {
+        music,
+        sceneMap: {
+          data: () => ({ params: {} }),
+        },
+      },
+      data: {
+        threats: [
+          { enemyId: "wolf", priority: 0, order: 1 },
+        ],
+      },
+    });
+
+    await expect(transition).rejects.toBe(failure);
   });
 });

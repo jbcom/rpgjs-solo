@@ -272,6 +272,42 @@ describe("action battle visual composer", () => {
     );
   });
 
+  test("impact localizes block, parry, and miss feedback through the client i18n service", () => {
+    const target = createEntity();
+    const translate = vi.fn((key: string) => ({
+      "rpg.action-battle.feedback.block": "BLOQUÉ",
+      "rpg.action-battle.feedback.parry": "PARADE !",
+      "rpg.action-battle.feedback.miss": "RATÉ",
+    })[key] ?? key);
+    const visual = createActionBattleVisual("impact");
+
+    for (const moment of ["block", "parry", "miss"] as const) {
+      visual({
+        moment,
+        target,
+        engine: { t: translate },
+      });
+    }
+
+    expect(target.showComponentAnimation).toHaveBeenCalledWith(
+      ACTION_BATTLE_DAMAGE_COMPONENT_ID,
+      expect.objectContaining({ text: "BLOQUÉ", kind: "block" }),
+    );
+    expect(target.showComponentAnimation).toHaveBeenCalledWith(
+      ACTION_BATTLE_DAMAGE_COMPONENT_ID,
+      expect.objectContaining({ text: "PARADE !", kind: "parry" }),
+    );
+    expect(target.showComponentAnimation).toHaveBeenCalledWith(
+      ACTION_BATTLE_DAMAGE_COMPONENT_ID,
+      expect.objectContaining({ text: "RATÉ", kind: "miss" }),
+    );
+    expect(translate.mock.calls.map(([key]) => key)).toEqual([
+      "rpg.action-battle.feedback.block",
+      "rpg.action-battle.feedback.parry",
+      "rpg.action-battle.feedback.miss",
+    ]);
+  });
+
   test("custom composer parts receive helpers", () => {
     const target = createEntity();
     const visual = createActionBattleVisual({

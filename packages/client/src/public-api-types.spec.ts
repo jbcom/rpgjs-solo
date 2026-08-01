@@ -6,6 +6,7 @@ import {
   type GuiRegistration,
   type GuiRenderer,
   type RpgMusicManager,
+  type RpgMusicTransitionOptions,
 } from "./index";
 
 describe("client public API types", () => {
@@ -37,7 +38,14 @@ describe("client public API types", () => {
   });
 
   test("temporary music exposes a typed transition controller", () => {
-    expectTypeOf<RpgMusicManager["enter"]>().toBeFunction();
-    expectTypeOf<RpgMusicManager["leave"]>().toBeFunction();
+    expectTypeOf<RpgMusicManager["enter"]>().toEqualTypeOf<(
+      id: string | undefined,
+      options?: RpgMusicTransitionOptions,
+      owner?: object,
+    ) => Promise<void>>();
+    expectTypeOf<RpgMusicManager["leave"]>().toEqualTypeOf<(
+      options?: RpgMusicTransitionOptions,
+      owner?: object,
+    ) => void>();
   });
 });

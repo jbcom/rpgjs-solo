@@ -137,29 +137,45 @@ const chooseThreat = (
 
 export const createActionBattleCombatAudioVisual = (
   options: ActionBattleAudioOptions | false | undefined,
-) => (context: any) => {
-  if (!options) return;
-  const threats = Array.isArray(context.data?.threats)
-    ? context.data.threats as ActionBattleThreat[]
-    : [];
-  const engine = context.engine;
-  const music = options.music;
-  if (!engine?.music || music === false) return;
-  if (threats.length === 0) {
-    engine.music.contextId = undefined;
-    engine.music.leave(typeof music === "object" ? music : undefined);
-    return;
-  }
-  const selected = chooseThreat(threats, engine.music.contextId);
-  const mapMusic = engine.sceneMap?.data?.()?.params?.combatMusic;
-  const configured = typeof music === "object" ? music : {};
-  const projectMusic =
-    typeof configured.battle === "function"
-      ? configured.battle(context)
-      : configured.battle;
-  const battle = selected?.music ?? mapMusic ?? projectMusic;
-  engine.music.contextId = selected?.enemyId;
-  void engine.music.enter(battle, configured);
+) => {
+  const activeMusicManagers = new WeakSet<object>();
+  const musicOwner = {};
+  return (context: any) => {
+    if (!options) return;
+    const threats = Array.isArray(context.data?.threats)
+      ? context.data.threats as ActionBattleThreat[]
+      : [];
+    const engine = context.engine;
+    const music = options.music;
+    if (!engine?.music || music === false) return;
+    if (threats.length === 0) {
+      engine.music.contextId = undefined;
+      if (activeMusicManagers.delete(engine.music)) {
+        engine.music.leave(
+          typeof music === "object" ? music : undefined,
+          musicOwner,
+        );
+      }
+      return;
+    }
+    const selected = chooseThreat(threats, engine.music.contextId);
+    const mapMusic = engine.sceneMap?.data?.()?.params?.combatMusic;
+    const configured = typeof music === "object" ? music : {};
+    const projectMusic =
+      typeof configured.battle === "function"
+        ? configured.battle(context)
+        : configured.battle;
+    const battle = selected?.music ?? mapMusic ?? projectMusic;
+    engine.music.contextId = selected?.enemyId;
+    if (!battle) {
+      if (activeMusicManagers.delete(engine.music)) {
+        engine.music.leave(configured, musicOwner);
+      }
+      return;
+    }
+    activeMusicManagers.add(engine.music);
+    return engine.music.enter(battle, configured, musicOwner);
+  };
 };
 
 type ThreatTarget = {

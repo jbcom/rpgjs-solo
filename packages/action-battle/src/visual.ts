@@ -576,6 +576,19 @@ const showImpactFx = (
   });
 };
 
+const translateActionBattleFeedback = (
+  context: ActionBattleVisualContext,
+  key: string,
+  fallback: string,
+): string => {
+  const translate = context.engine?.t;
+  if (typeof translate !== "function") return fallback;
+  const translated = translate.call(context.engine, key);
+  return typeof translated === "string" && translated !== key
+    ? translated
+    : fallback;
+};
+
 const impactParts: Partial<Record<ActionBattleVisualContext["moment"], ActionBattleVisualPart>> = {
   ...fxParts,
   attack(context, fx) {
@@ -652,7 +665,11 @@ const impactParts: Partial<Record<ActionBattleVisualContext["moment"], ActionBat
   block(context, fx) {
     const target = context.target ?? context.entity;
     fx.component(target, ACTION_BATTLE_DAMAGE_COMPONENT_ID, {
-      text: "BLOCK",
+      text: translateActionBattleFeedback(
+        context,
+        "rpg.action-battle.feedback.block",
+        "BLOCK",
+      ),
       kind: "block",
       duration: 650,
       zIndex: 1200,
@@ -670,7 +687,11 @@ const impactParts: Partial<Record<ActionBattleVisualContext["moment"], ActionBat
     const target = context.target ?? context.entity;
     fx.graphic(target, "parry");
     fx.component(target, ACTION_BATTLE_DAMAGE_COMPONENT_ID, {
-      text: "PARRY!",
+      text: translateActionBattleFeedback(
+        context,
+        "rpg.action-battle.feedback.parry",
+        "PARRY!",
+      ),
       kind: "parry",
       duration: 850,
       zIndex: 1250,
@@ -703,7 +724,11 @@ const impactParts: Partial<Record<ActionBattleVisualContext["moment"], ActionBat
   },
   miss(context, fx) {
     fx.component(context.target ?? context.entity, ACTION_BATTLE_DAMAGE_COMPONENT_ID, {
-      text: "MISS",
+      text: translateActionBattleFeedback(
+        context,
+        "rpg.action-battle.feedback.miss",
+        "MISS",
+      ),
       kind: "miss",
       duration: 650,
       zIndex: 1200,

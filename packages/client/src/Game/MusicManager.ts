@@ -13,6 +13,19 @@ type MusicHost = {
   createSound(src: string, options: { loop: boolean; volume: number }): any;
 };
 
+type PendingMusicTransition = {
+  owner?: object;
+  previousMapVolume: number;
+  revision: number;
+};
+
+type MusicReleaseDebt = {
+  owner?: object;
+  restoreMap: boolean;
+  sound: any;
+  timers: Set<ReturnType<typeof setTimeout>>;
+};
+
 const clampVolume = (value: number) => Math.max(0, Math.min(1, value));
 const audioExtensions = new Set([
   "aac",
@@ -56,6 +69,9 @@ export class RpgMusicManager {
   contextId?: string;
   private currentId?: string;
   private currentSound?: any;
+  private currentOwner?: object;
+  private pendingTransition?: PendingMusicTransition;
+  private readonly releaseDebts = new Map<any, MusicReleaseDebt>();
   private readonly sounds = new Map<string, any>();
   private revision = 0;
   private timers = new Set<ReturnType<typeof setTimeout>>();
@@ -66,12 +82,43 @@ export class RpgMusicManager {
     return this.currentId;
   }
 
+  /**
+   * Starts a temporary music override. A stable owner token scopes later
+   * `leave()` calls so one subsystem cannot release another subsystem's music.
+   * Ownership transfers only after the requested source resolves; a failed
+   * resolution restores the previous map mix and owner.
+   *
+   * @param id Registered sound id or supported audio source.
+   * @param options Crossfade and volume settings.
+   * @param owner Optional stable object identifying the calling subsystem.
+   * @example
+   * ```ts
+   * const combatMusic = {};
+   * await engine.music.enter("battle", { fadeInMs: 250 }, combatMusic);
+   * engine.music.leave({ fadeOutMs: 250 }, combatMusic);
+   * ```
+   */
   async enter(
     id: string | undefined,
     options: RpgMusicTransitionOptions = {},
+    owner?: object,
   ): Promise<void> {
     const revision = ++this.revision;
     this.clearTimers();
+    const currentDebt = this.releaseDebts.get(this.currentSound);
+    if (currentDebt && (!owner || currentDebt.owner === owner)) {
+      this.cancelReleaseDebt(this.currentSound);
+      if (owner) this.currentOwner = owner;
+    }
+    const transition: PendingMusicTransition = {
+      owner,
+      previousMapVolume:
+        !this.currentOwner && this.releaseDebts.has(this.currentSound)
+          ? 1
+          : this.mapVolume(),
+      revision,
+    };
+    this.pendingTransition = transition;
     const fadeInMs = Math.max(0, options.fadeInMs ?? 600);
     const fadeOutMs = Math.max(0, options.fadeOutMs ?? fadeInMs);
     const volume = clampVolume(options.volume ?? 0.8);
@@ -79,47 +126,128 @@ export class RpgMusicManager {
 
     this.tweenMapVolume(mapVolume, fadeInMs, revision);
     if (!id) {
+      this.currentOwner = owner;
+      this.pendingTransition = undefined;
       await this.fadeOutCurrent(fadeOutMs, revision);
+      if (revision === this.revision) this.currentOwner = undefined;
       return;
     }
     if (id === this.currentId && this.currentSound) {
+      this.cancelReleaseDebt(this.currentSound);
+      this.currentOwner = owner;
+      this.pendingTransition = undefined;
       this.fade(this.currentSound, this.readVolume(this.currentSound), volume, fadeInMs);
       return;
     }
 
     const previous = this.currentSound;
-    const sound = await this.resolve(id);
-    if (revision !== this.revision || !sound) return;
+    let sound: any;
+    try {
+      sound = await this.resolve(id);
+    } catch (error) {
+      if (revision === this.revision) {
+        this.pendingTransition = undefined;
+        this.tweenMapVolume(transition.previousMapVolume, fadeOutMs, revision);
+      }
+      throw error;
+    }
+    if (revision !== this.revision) return;
+    this.pendingTransition = undefined;
+    if (!sound) {
+      this.tweenMapVolume(transition.previousMapVolume, fadeOutMs, revision);
+      return;
+    }
 
+    const reclaimedDebt = this.cancelReleaseDebt(sound);
+    if (this.currentSound === sound || reclaimedDebt) {
+      this.currentId = id;
+      this.currentSound = sound;
+      this.currentOwner = owner;
+      this.setLoop(sound, true);
+      this.fade(sound, this.readVolume(sound), volume, fadeInMs);
+      if (previous && previous !== sound) {
+        this.scheduleReleaseDebt(previous, {
+          exitDelayMs: 0,
+          fadeOutMs,
+        });
+      }
+      return;
+    }
     this.currentId = id;
     this.currentSound = sound;
+    this.currentOwner = owner;
     this.setLoop(sound, true);
     this.setVolume(sound, 0);
     sound.play?.();
     this.fade(sound, 0, volume, fadeInMs);
     if (previous && previous !== sound) {
-      this.fade(previous, this.readVolume(previous), 0, fadeOutMs);
-      this.schedule(() => previous.stop?.(), fadeOutMs, revision);
+      this.scheduleReleaseDebt(previous, {
+        exitDelayMs: 0,
+        fadeOutMs,
+      });
     }
   }
 
-  leave(options: RpgMusicTransitionOptions = {}): void {
+  /**
+   * Releases a temporary override or cancels its pending resolution.
+   * Passing the same token used by `enter()` makes the release owner-scoped.
+   * Omitting the token preserves the legacy wildcard behavior and releases the
+   * latest transition regardless of owner.
+   *
+   * @param options Exit delay, fade, and volume settings.
+   * @param owner Optional stable owner token previously passed to `enter()`.
+   * @example
+   * ```ts
+   * const cutsceneMusic = {};
+   * await engine.music.enter("cutscene", {}, cutsceneMusic);
+   * engine.music.leave({ exitDelayMs: 0 }, cutsceneMusic);
+   * ```
+   */
+  leave(options: RpgMusicTransitionOptions = {}, owner?: object): void {
+    const pending = this.pendingTransition;
+    if (
+      owner
+      && pending
+      && pending.owner !== owner
+      && this.currentOwner === owner
+    ) {
+      const releasingSound = this.currentSound;
+      this.currentOwner = undefined;
+      pending.previousMapVolume = 1;
+      this.scheduleReleaseDebt(releasingSound, options, owner, true);
+      return;
+    }
+    if (owner) {
+      const acceptedOwner = pending ? pending.owner : this.currentOwner;
+      if (acceptedOwner !== owner) return;
+    }
+    const releasesPendingOnly = !!owner && !!pending && this.currentOwner !== owner;
     const revision = ++this.revision;
+    this.pendingTransition = undefined;
     this.clearTimers();
-    const delay = Math.max(0, options.exitDelayMs ?? 1500);
-    this.schedule(() => {
+    if (releasesPendingOnly) {
       const fadeOutMs = Math.max(0, options.fadeOutMs ?? 900);
-      this.tweenMapVolume(1, fadeOutMs, revision);
-      void this.fadeOutCurrent(fadeOutMs, revision);
-    }, delay, revision);
+      this.tweenMapVolume(pending.previousMapVolume, fadeOutMs, revision);
+      return;
+    }
+    this.currentOwner = undefined;
+    if (owner) {
+      this.scheduleReleaseDebt(this.currentSound, options, owner, true);
+      return;
+    }
+    this.cancelReleaseDebt(this.currentSound);
+    this.scheduleLeave(options, revision);
   }
 
   reset(): void {
     this.revision += 1;
     this.clearTimers();
+    this.clearReleaseDebts();
     this.currentSound?.stop?.();
     this.currentSound = undefined;
     this.currentId = undefined;
+    this.currentOwner = undefined;
+    this.pendingTransition = undefined;
     this.contextId = undefined;
     this.mapVolume.set(1);
   }
@@ -140,8 +268,93 @@ export class RpgMusicManager {
     return sound;
   }
 
+  private scheduleLeave(
+    options: RpgMusicTransitionOptions,
+    revision: number,
+  ) {
+    const delay = Math.max(0, options.exitDelayMs ?? 1500);
+    this.schedule(() => {
+      const fadeOutMs = Math.max(0, options.fadeOutMs ?? 900);
+      this.tweenMapVolume(1, fadeOutMs, revision);
+      void this.fadeOutCurrent(fadeOutMs, revision);
+    }, delay, revision);
+  }
+
+  private scheduleReleaseDebt(
+    sound: any,
+    options: RpgMusicTransitionOptions,
+    owner?: object,
+    restoreMap = false,
+  ) {
+    if (!sound) return;
+    this.cancelReleaseDebt(sound);
+    const debt: MusicReleaseDebt = {
+      owner,
+      restoreMap,
+      sound,
+      timers: new Set(),
+    };
+    this.releaseDebts.set(sound, debt);
+    const delay = Math.max(0, options.exitDelayMs ?? 1500);
+    const startFade = () => {
+      const fadeOutMs = Math.max(0, options.fadeOutMs ?? 900);
+      if (
+        debt.restoreMap
+        && this.currentSound === sound
+        && !this.currentOwner
+        && !this.pendingTransition
+      ) {
+        this.tweenMapVolume(1, fadeOutMs, this.revision);
+      }
+      this.fade(sound, this.readVolume(sound), 0, fadeOutMs);
+      this.scheduleDebtTimer(debt, () => {
+        sound.stop?.();
+        if (this.currentSound === sound && !this.currentOwner) {
+          this.currentSound = undefined;
+          this.currentId = undefined;
+        }
+        if (this.releaseDebts.get(sound) === debt) {
+          this.releaseDebts.delete(sound);
+        }
+      }, fadeOutMs);
+    };
+    if (delay === 0) startFade();
+    else this.scheduleDebtTimer(debt, startFade, delay);
+  }
+
+  private scheduleDebtTimer(
+    debt: MusicReleaseDebt,
+    callback: () => void,
+    delay: number,
+  ) {
+    const timer = setTimeout(() => {
+      debt.timers.delete(timer);
+      callback();
+    }, delay);
+    debt.timers.add(timer);
+  }
+
+  private cancelReleaseDebt(sound: any) {
+    const debt = this.releaseDebts.get(sound);
+    if (!debt) return false;
+    for (const timer of debt.timers) clearTimeout(timer);
+    debt.timers.clear();
+    this.releaseDebts.delete(sound);
+    return true;
+  }
+
+  private clearReleaseDebts() {
+    for (const sound of this.releaseDebts.keys()) {
+      this.cancelReleaseDebt(sound);
+      if (sound !== this.currentSound) sound.stop?.();
+    }
+  }
+
   private async fadeOutCurrent(duration: number, revision: number) {
-    const sound = this.currentSound;
+    await this.fadeOutSound(this.currentSound, duration, revision);
+  }
+
+  private async fadeOutSound(sound: any, duration: number, revision: number) {
     if (!sound) return;
     this.fade(sound, this.readVolume(sound), 0, duration);
     this.schedule(() => {
@@ -149,6 +362,7 @@ export class RpgMusicManager {
       if (revision === this.revision && this.currentSound === sound) {
         this.currentSound = undefined;
         this.currentId = undefined;
+        this.currentOwner = undefined;
       }
     }, duration, revision);
   }
