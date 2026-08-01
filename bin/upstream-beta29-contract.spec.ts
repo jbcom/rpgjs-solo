@@ -70,6 +70,9 @@ describe("RPGJS beta.29 adoption contract", () => {
 				playground.dependencies[name] ?? playground.devDependencies[name],
 			).toBe(`workspace:${soloVersion}`);
 		}
+		expect(playground.dependencies["@rpgjs/ui-css"]).toBe(
+			"workspace:5.0.0-beta.25",
+		);
 
 		expect(readText("packages/solo/README.md")).toContain(
 			"RPGJS `5.0.0-beta.29`",

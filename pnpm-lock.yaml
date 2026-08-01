@@ -870,7 +870,7 @@ importers:
         specifier: workspace:5.0.0-beta.29.solo.0
         version: link:../../../packages/solo-renderer
       '@rpgjs/ui-css':
-        specifier: workspace:5.0.0-beta.24
+        specifier: workspace:5.0.0-beta.25
         version: link:../../../packages/ui-css
       pixi.js:
         specifier: 8.19.0
