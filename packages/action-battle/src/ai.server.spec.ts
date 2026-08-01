@@ -8,6 +8,7 @@ import {
   idle,
   ifTargetVisible,
   moveToPoint,
+  once,
   phase,
   run,
   setSpeed,
@@ -17,6 +18,9 @@ import {
   useSkill,
   visual,
 } from "./core/ai-behavior-tree";
+import {
+  getActionBattleAiPendingExecutionCountForTests,
+} from "./core/ai-intent-execution";
 import { setActionBattleSystems } from "./core/context";
 import { ACTION_BATTLE_CLIENT_VISUAL_ID } from "./visual";
 import { ACTION_BATTLE_I18N_KEYS } from "./i18n";
@@ -465,6 +469,7 @@ describe("BattleAi behavior tree", () => {
 
     expect((ai as any).applyCustomBehavior(1000)).toBe(false);
     expect(performAttack).not.toHaveBeenCalled();
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(0);
 
     player.x.mockReturnValue(20);
     expect((ai as any).applyCustomBehavior(1100)).toBe(false);
@@ -509,6 +514,7 @@ describe("BattleAi behavior tree", () => {
 
     expect((ai as any).applyCustomBehavior(900)).toBe(false);
     expect(performSkill).not.toHaveBeenCalled();
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(0);
 
     expect((ai as any).applyCustomBehavior(1000)).toBe(true);
     expect(performSkill).toHaveBeenCalledOnce();
@@ -516,6 +522,129 @@ describe("BattleAi behavior tree", () => {
     expect((ai as any).applyCustomBehavior(1100)).toBe(false);
     expect(performSkill).toHaveBeenCalledOnce();
     ai.destroy();
+  });
+
+  test("retries only the cooldown-rejected tail of a combat intent array", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const skill = {
+      id: "combo-finisher",
+      spCost: 0,
+      action: { mode: "melee", target: "enemy" },
+      onUse: vi.fn(),
+    };
+    const ai = new BattleAi(event as any, {
+      attackCooldown: 100,
+      attackRange: 50,
+      behaviorTree: once("combo", [
+        useAttack(AttackPattern.Melee),
+        useSkill(skill),
+      ]),
+    });
+    const performAttack = vi
+      .spyOn(ai as any, "performAttackPattern")
+      .mockImplementation(() => undefined);
+    const performSkill = vi
+      .spyOn(ai as any, "performPlannedSkill")
+      .mockReturnValue(true);
+    ai.onDetectInShape(player as any, {});
+
+    expect((ai as any).applyCustomBehavior(1000)).toBe(true);
+    expect(performAttack).toHaveBeenCalledOnce();
+    expect(performSkill).not.toHaveBeenCalled();
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(0);
+
+    expect((ai as any).applyCustomBehavior(1100)).toBe(true);
+    expect(performAttack).toHaveBeenCalledOnce();
+    expect(performSkill).toHaveBeenCalledOnce();
+
+    expect((ai as any).applyCustomBehavior(1200)).toBe(false);
+    expect(performAttack).toHaveBeenCalledOnce();
+    expect(performSkill).toHaveBeenCalledOnce();
+    ai.destroy();
+  });
+
+  test("destroy abandons an executor-scoped rejected receipt", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackCooldown: 0,
+      attackRange: 50,
+      behaviorTree: once("destroyed", useAttack(AttackPattern.Melee)),
+    });
+    vi.spyOn(ai as any, "executeRequestedAttack").mockImplementation(() => {
+      expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(1);
+      ai.destroy();
+      return false;
+    });
+    ai.onDetectInShape(player as any, {});
+
+    expect((ai as any).applyCustomBehavior(1000)).toBe(false);
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(0);
+    expect(getActionBattleAiPendingExecutionCountForTests()).toBe(0);
+  });
+
+  test("isolates one-shot receipts across BattleAi instances sharing an authored intent", () => {
+    vi.useFakeTimers();
+    const firstEvent = createEvent();
+    const secondEvent = createEvent();
+    secondEvent.id = "monster-2";
+    firstEvent.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    secondEvent.attachShape.mockReturnValue({ id: "vision_monster-2" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const sharedTree = once(
+      "shared-instance",
+      useAttack(AttackPattern.Melee)
+    );
+    const firstAi = new BattleAi(firstEvent as any, {
+      attackCooldown: 0,
+      attackRange: 50,
+      behaviorTree: sharedTree,
+    });
+    const secondAi = new BattleAi(secondEvent as any, {
+      attackCooldown: 0,
+      attackRange: 50,
+      behaviorTree: sharedTree,
+    });
+    const firstAttack = vi
+      .spyOn(firstAi as any, "performAttackPattern")
+      .mockImplementation(() => undefined);
+    const secondAttack = vi
+      .spyOn(secondAi as any, "performAttackPattern")
+      .mockImplementation(() => undefined);
+    firstAi.onDetectInShape(player as any, {});
+    secondAi.onDetectInShape(player as any, {});
+
+    expect((firstAi as any).applyCustomBehavior(1000)).toBe(true);
+    expect((secondAi as any).applyCustomBehavior(1000)).toBe(true);
+    expect(firstAttack).toHaveBeenCalledOnce();
+    expect(secondAttack).toHaveBeenCalledOnce();
+
+    expect((firstAi as any).applyCustomBehavior(1100)).toBe(false);
+    expect((secondAi as any).applyCustomBehavior(1100)).toBe(false);
+    expect(firstAttack).toHaveBeenCalledOnce();
+    expect(secondAttack).toHaveBeenCalledOnce();
+    firstAi.destroy();
+    secondAi.destroy();
   });
 
   test("composes named AI presets with local overrides", () => {

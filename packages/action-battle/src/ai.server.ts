@@ -55,7 +55,8 @@ import {
   type ActionBattleAiTreeNode,
 } from "./core/ai-behavior-tree";
 import {
-  acknowledgeActionBattleAiIntentExecution,
+  cancelActionBattleAiIntentExecutions,
+  executeActionBattleAiIntentWithReceipt,
 } from "./core/ai-intent-execution";
 import type {
   ActionBattleAiBehavior,
@@ -3249,16 +3250,19 @@ export class BattleAi {
       case "keepDistance":
         return this.executeKeepDistance(intent, consumes);
       case "useAttack": {
-        const executed = this.executeRequestedAttack(
-          intent.pattern,
-          currentTime
+        const executed = executeActionBattleAiIntentWithReceipt(
+          intent,
+          this,
+          () => this.executeRequestedAttack(intent.pattern, currentTime)
         );
-        if (executed) acknowledgeActionBattleAiIntentExecution(intent);
         return executed && consumes;
       }
       case "useSkill": {
-        const executed = this.executeRequestedSkill(intent.skill, currentTime);
-        if (executed) acknowledgeActionBattleAiIntentExecution(intent);
+        const executed = executeActionBattleAiIntentWithReceipt(
+          intent,
+          this,
+          () => this.executeRequestedSkill(intent.skill, currentTime)
+        );
         return executed && consumes;
       }
     }
@@ -3555,6 +3559,8 @@ export class BattleAi {
    * Clean up
    */
   destroy() {
+    cancelActionBattleAiIntentExecutions(this);
+    this.aiMemory = {};
     this.removeThreat(this.target);
     this.destroyed = true;
     releaseActionBattleAttackSlot(this.event, this.target);

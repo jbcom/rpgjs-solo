@@ -18,6 +18,7 @@ import {
   sequenceWithDelay,
   targetInRange,
   useAttack,
+  useSkill,
   visual,
   wait,
 } from "./ai-behavior-tree";
@@ -194,6 +195,90 @@ describe("action battle AI behavior tree", () => {
       result.intent as ReturnType<typeof useAttack>
     );
     expect(node.tick(context)).toEqual({ status: "failure" });
+  });
+
+  test("waits for every combat intent and does not replay acknowledged array entries", () => {
+    const skill = { id: "finisher" };
+    const node = once("combo", [useAttack("charged"), useSkill(skill)]);
+    const context = createContext();
+
+    const first = node.tick(context);
+    expect(first.status).toBe("success");
+    expect(first.intent).toEqual([useAttack("charged"), useSkill(skill)]);
+    acknowledgeActionBattleAiIntentExecution(
+      (first.intent as ReturnType<typeof useAttack>[])[0]
+    );
+
+    const retry = node.tick(context);
+    expect(retry.status).toBe("success");
+    expect(retry.intent).toEqual([useSkill(skill)]);
+    acknowledgeActionBattleAiIntentExecution(
+      (retry.intent as ReturnType<typeof useSkill>[])[0]
+    );
+
+    expect(node.tick(context)).toEqual({ status: "failure" });
+  });
+
+  test("preserves nested once ownership when the same authored intent is reused", () => {
+    const sharedAttack = useAttack("charged");
+    const inner = once("inner", sharedAttack);
+    const outer = once("outer", inner);
+    const context = createContext();
+
+    const result = outer.tick(context);
+    expect(result.intent).not.toBe(sharedAttack);
+    expect(JSON.stringify(result.intent)).toBe(JSON.stringify(sharedAttack));
+    acknowledgeActionBattleAiIntentExecution(
+      result.intent as ReturnType<typeof useAttack>
+    );
+
+    expect(inner.tick(context)).toEqual({ status: "failure" });
+    expect(outer.tick(context)).toEqual({ status: "failure" });
+  });
+
+  test("preserves nested array slot identity after an inner once filters progress", () => {
+    const skill = { id: "finisher" };
+    const inner = once("inner-array", [
+      useAttack("charged"),
+      useSkill(skill),
+    ]);
+    const outer = once("outer-array", inner);
+    const context = createContext();
+
+    const first = outer.tick(context);
+    acknowledgeActionBattleAiIntentExecution(
+      (first.intent as ReturnType<typeof useAttack>[])[0]
+    );
+
+    const retry = outer.tick(context);
+    expect(retry.intent).toEqual([useSkill(skill)]);
+    acknowledgeActionBattleAiIntentExecution(
+      (retry.intent as ReturnType<typeof useSkill>[])[0]
+    );
+
+    expect(inner.tick(context)).toEqual({ status: "failure" });
+    expect(outer.tick(context)).toEqual({ status: "failure" });
+  });
+
+  test("isolates acknowledgements for reused intents across AI memories", () => {
+    const sharedAttack = useAttack("charged");
+    const node = once("shared", sharedAttack);
+    const firstContext = createContext();
+    const secondContext = createContext();
+
+    const first = node.tick(firstContext);
+    const second = node.tick(secondContext);
+    acknowledgeActionBattleAiIntentExecution(
+      first.intent as ReturnType<typeof useAttack>
+    );
+
+    expect(node.tick(firstContext)).toEqual({ status: "failure" });
+    expect(node.tick(secondContext).status).toBe("success");
+
+    acknowledgeActionBattleAiIntentExecution(
+      second.intent as ReturnType<typeof useAttack>
+    );
+    expect(node.tick(secondContext)).toEqual({ status: "failure" });
   });
 
   test("keeps visual cue payloads JSON-shaped", () => {

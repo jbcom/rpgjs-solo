@@ -20,9 +20,14 @@ import {
 
 describe("action battle public API types", () => {
   test("keeps runtime intent acknowledgements internal", () => {
-    expect(actionBattleApi).not.toHaveProperty(
-      "acknowledgeActionBattleAiIntentExecution"
-    );
+    for (const internalName of [
+      "acknowledgeActionBattleAiIntentExecution",
+      "executeActionBattleAiIntentWithReceipt",
+      "cancelActionBattleAiIntentExecutions",
+      "getActionBattleAiPendingExecutionCountForTests",
+    ]) {
+      expect(actionBattleApi).not.toHaveProperty(internalName);
+    }
   });
 
   test("boss behavior helpers preserve intent and node contracts", () => {

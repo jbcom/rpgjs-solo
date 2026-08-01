@@ -4,7 +4,12 @@ import type {
   ActionBattleAiContext,
   ActionBattleAiDecision,
 } from "./contracts";
-import { deferActionBattleAiIntentCompletion } from "./ai-intent-execution";
+import {
+  createActionBattleAiIntentCompletion,
+  isActionBattleAiIntentCompletion,
+  isActionBattleAiIntentCompletionComplete,
+  prepareActionBattleAiIntentCompletion,
+} from "./ai-intent-execution";
 
 export type ActionBattleAiTreeStatus = "success" | "failure" | "running";
 
@@ -313,18 +318,30 @@ export const once = (
 ): ActionBattleAiTreeNode => ({
   tick(context) {
     const keyInMemory = memoryKey("once", key);
-    if (context.memory[keyInMemory]) return { status: "failure" };
+    const storedCompletion = context.memory[keyInMemory];
+    if (
+      storedCompletion === true ||
+      (isActionBattleAiIntentCompletion(storedCompletion) &&
+        isActionBattleAiIntentCompletionComplete(storedCompletion))
+    ) {
+      return { status: "failure" };
+    }
     const result = runIntentInput(input, context);
     if (result.status === "success") {
-      const complete = () => {
-        context.memory[keyInMemory] = true;
-      };
-      if (
-        !result.intent ||
-        !deferActionBattleAiIntentCompletion(result.intent, complete)
-      ) {
-        complete();
+      if (result.intent) {
+        const completion = isActionBattleAiIntentCompletion(storedCompletion)
+          ? storedCompletion
+          : createActionBattleAiIntentCompletion();
+        const prepared = prepareActionBattleAiIntentCompletion(
+          result.intent,
+          completion
+        );
+        if (prepared.deferred) {
+          context.memory[keyInMemory] = completion;
+          return { ...result, intent: prepared.intent };
+        }
       }
+      context.memory[keyInMemory] = true;
     }
     return result;
   },
