@@ -93,8 +93,9 @@ passed exact-main checks. Therefore `5.0.0-beta.28.solo.1` must not be published
 or promoted to the private registry's `latest` tag. The current-underlying rule
 requires beta.29 adoption first.
 
-The fixed audit range contains 18 feature/fix commits followed by the release
-and public-boundary commits. Its principal changes are generic hotbars; item and
+The fixed audit range contains 17 implementation commits followed by three
+release-bookkeeping commits (release metadata, public-API snapshot, and release
+trigger). Its principal changes are generic hotbars; item and
 skill Studio workflows; Action Battle defense, control, targeting, projectile,
 audio, AI-planning, boss-phase, and serializable-visual work; GUI visibility;
 sprite-alpha bounds; and associated documentation and tests.
@@ -104,18 +105,23 @@ sprite-alpha bounds; and associated documentation and tests.
   lifecycle tests, GUI visibility repair, spritesheet bounds, Studio data
   normalization and placement fixes, and all upstream tests that describe those
   behaviors.
-- **Adaptable into Solo after separate API design:** pure combat planning,
-  control-state, defense, hit, cooldown, targeting, boss-phase, audiovisual
-  description, and generic hotbar concepts. Their upstream room, player-sync,
-  and server-authority bindings are not accepted as Solo APIs merely because
-  the algorithms are useful.
+- **Adaptable into Solo after separate API design:** control-state, defense,
+  hit, cooldown, targeting, audiovisual description, and generic hotbar
+  concepts. Solo Action Battle owns command availability and execution, not AI
+  decision authority.
+- **Routed to the existing Yuka governor seam:** combat-planning and boss-phase
+  semantics are gap-audited into downstream
+  `@arcade-cabinet/ai-yuka@0.18.0`. The upstream behavior-tree and `RpgPlayer`
+  implementation is excluded from Solo execution. Solo does not depend on
+  Yuka; governors consume the same public command/proposal contract as human
+  controls.
 - **Excluded from Solo production bundles:** rooms, sockets, synchronized
   client replicas, server-driven transport, multiplayer chat, prediction,
   reconciliation, and any `@signe/room`, `@signe/sync`, WebSocket, Hono server,
   Node transport, or Cloudflare room dependency. They may remain in inherited
   upstream packages as audited compatibility source only.
 
-The merge is expected to conflict in five inherited manifests,
+The merge is expected to conflict in four inherited manifests,
 `packages/studio/src/server.ts`, and `pnpm-lock.yaml`. Resolutions must take the
 beta.29 inherited package identities and behavior while retaining the fork's
 newer exact Node 24/pnpm/Vite/declaration toolchain, direct-dependency currency,
