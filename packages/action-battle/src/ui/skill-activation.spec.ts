@@ -46,6 +46,27 @@ describe("action battle skill activation", () => {
     ).toBe("targeting");
   });
 
+  test("targets the documented ranged instant ally heal before using it", () => {
+    const use = vi.fn();
+    const target = vi.fn();
+    const heal = skill({
+      id: "heal",
+      range: 180,
+      action: { target: "ally", range: 180, mode: "instant" },
+    });
+
+    expect(resolveActionBattleSkillActivationMode(heal)).toBe("targeting");
+    expect(
+      activateActionBattleSkill(heal, {
+        use,
+        target,
+        direction: "right",
+      }),
+    ).toBe(true);
+    expect(target).toHaveBeenCalledWith({ x: 1, y: 0 });
+    expect(use).not.toHaveBeenCalled();
+  });
+
   test("starts manual targeting one tile in front of the hero", () => {
     const use = vi.fn();
     const target = vi.fn();

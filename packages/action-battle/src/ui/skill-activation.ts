@@ -11,13 +11,13 @@ export const resolveActionBattleSkillActivationMode = (
   skill: ActionBattleHotbarSkill,
 ): ActionBattleSkillActivationMode => {
   if (skill.action?.target === "self") return "immediate";
+  if (skill.action?.target === "ally") return "targeting";
   if (
     skill.action?.mode === "instant"
     || skill.action?.mode === "projectile"
   ) {
     return "immediate";
   }
-  if (skill.action?.target === "ally") return "targeting";
   if (hasAreaMask(skill)) return "targeting";
   if ((skill.range ?? 0) > 0) {
     return "targeting";

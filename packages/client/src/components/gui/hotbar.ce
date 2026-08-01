@@ -461,6 +461,10 @@
     createHotbarInteractionContext,
     shouldClearHotbarOptimisticSlot
   } from "../../services/hotbar";
+  import {
+    createHotbarGamepadInputController,
+    createHotbarKeyboardShortcutHandler
+  } from "../../services/hotbar-input";
   import { inject } from "../../core/inject";
   import { RpgClientEngine } from "../../RpgClientEngine";
 
@@ -569,6 +573,8 @@
       onInteraction
     }));
   };
+  // Pointer clicks remain governed by GUI layering; only global keyboard and
+  // gamepad shortcuts participate in the engine input-ownership gate below.
   const selectSlot = (index) => () => activateSlot(index);
   const selectAdjacentSlot = (direction) => {
     const count = visibleSlots().length;
@@ -606,18 +612,18 @@
   slotControlNames.forEach((name, index) => {
     controlsConfig[`hotbar-slot-${index}`] = {
       bind: normalizeBind(keyboardControls[name] || `n${slotLabels[index]}`),
-      keyDown() {
+      keyDown: createHotbarKeyboardShortcutHandler(engine, () => {
         if (!wheelOpen() && index < capacity()) activateSlot(index);
-      }
+      })
     };
   });
   if (keyboardControls.hotbarUse) {
     controlsConfig["hotbar-use-active"] = {
       bind: normalizeBind(keyboardControls.hotbarUse),
-      keyDown() {
+      keyDown: createHotbarKeyboardShortcutHandler(engine, () => {
         const slot = activeSlot();
         if (slot >= 0) activateSlot(slot);
-      }
+      })
     };
   }
   controlsConfig.gamepad = { enabled: false };
@@ -636,70 +642,31 @@
     const useButton = Number(gamepadConfig.hotbarUseButton ?? 2);
     const deadzone = Number(gamepadConfig.hotbarWheelDeadzone ?? 0.35);
     let animationFrame = 0;
-    let wasPressed = false;
-    let wasPreviousPressed = false;
-    let wasNextPressed = false;
-    let wasUsePressed = false;
-    let cancelled = false;
-    let previousStopProcessingInput = false;
-
-    const closeWheel = (activate) => {
-      const slot = wheelSlot();
-      wheelOpen.set(false);
-      wheelSlot.set(-1);
-      engine.stopProcessingInput = previousStopProcessingInput;
-      if (activate && !cancelled && slot >= 0) activateSlot(slot);
-      cancelled = false;
-    };
+    const gamepadInput = createHotbarGamepadInputController({
+      engine,
+      deadzone,
+      callbacks: {
+        getActiveSlot: () => activeSlot(),
+        getVisibleSlotIndexes: () => visibleSlots().map((slot) => slot.index),
+        activateSlot,
+        selectAdjacentSlot,
+        setWheelOpen: (open) => wheelOpen.set(open),
+        setWheelSlot: (slot) => wheelSlot.set(slot)
+      }
+    });
 
     const poll = () => {
       const gamepad = Array.from(navigator.getGamepads?.() || [])
         .find((entry) => entry?.connected);
-      const pressed = Boolean(gamepad?.buttons?.[wheelButton]?.pressed);
-      const previousPressed = Boolean(gamepad?.buttons?.[previousButton]?.pressed);
-      const nextPressed = Boolean(gamepad?.buttons?.[nextButton]?.pressed);
-      const usePressed = Boolean(gamepad?.buttons?.[useButton]?.pressed);
-      if (!wheelOpen() && previousPressed && !wasPreviousPressed) {
-        selectAdjacentSlot(-1);
-      }
-      if (!wheelOpen() && nextPressed && !wasNextPressed) {
-        selectAdjacentSlot(1);
-      }
-      if (!wheelOpen() && usePressed && !wasUsePressed) {
-        const slot = activeSlot();
-        if (slot >= 0) activateSlot(slot);
-      }
-      if (pressed && !wasPressed) {
-        previousStopProcessingInput = engine.stopProcessingInput;
-        engine.stopProcessingInput = true;
-        engine.interruptCurrentPlayerMovement?.();
-        wheelOpen.set(true);
-        wheelSlot.set(-1);
-        cancelled = false;
-      }
-      if (pressed && gamepad) {
-        if (gamepad.buttons?.[cancelButton]?.pressed) {
-          cancelled = true;
-          wheelSlot.set(-1);
-        } else {
-          const x = Number(gamepad.axes?.[0] || 0);
-          const y = Number(gamepad.axes?.[1] || 0);
-          const magnitude = Math.sqrt(x * x + y * y);
-          if (magnitude < deadzone) {
-            wheelSlot.set(-1);
-          } else {
-            const angle = (Math.atan2(y, x) + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
-            const sector = (Math.PI * 2) / Math.max(1, visibleSlots().length);
-            const visibleIndex = Math.floor((angle + sector / 2) / sector) % visibleSlots().length;
-            wheelSlot.set(visibleSlots()[visibleIndex]?.index ?? -1);
-          }
-        }
-      }
-      if (!pressed && wasPressed && wheelOpen()) closeWheel(true);
-      wasPressed = pressed;
-      wasPreviousPressed = previousPressed;
-      wasNextPressed = nextPressed;
-      wasUsePressed = usePressed;
+      gamepadInput.poll({
+        wheelPressed: Boolean(gamepad?.buttons?.[wheelButton]?.pressed),
+        cancelPressed: Boolean(gamepad?.buttons?.[cancelButton]?.pressed),
+        previousPressed: Boolean(gamepad?.buttons?.[previousButton]?.pressed),
+        nextPressed: Boolean(gamepad?.buttons?.[nextButton]?.pressed),
+        usePressed: Boolean(gamepad?.buttons?.[useButton]?.pressed),
+        x: Number(gamepad?.axes?.[0] || 0),
+        y: Number(gamepad?.axes?.[1] || 0)
+      });
       animationFrame = requestAnimationFrame(poll);
     };
 
@@ -708,7 +675,7 @@
       window.removeEventListener("resize", updateViewport);
       clearInterval(clockTimer);
       cancelAnimationFrame(animationFrame);
-      if (wheelOpen()) closeWheel(false);
+      gamepadInput.destroy();
     };
   });
 </script>
