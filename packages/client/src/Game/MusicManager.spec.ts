@@ -491,6 +491,151 @@ describe("RpgMusicManager", () => {
     expect(manager.mapVolume()).toBe(1);
   });
 
+  it.each([
+    { fadeOutMs: 0, label: "immediate" },
+    { fadeOutMs: 32, label: "shorter" },
+  ])(
+    "cancels the failed entry fade before a $label map restoration",
+    async ({ fadeOutMs }) => {
+      vi.useFakeTimers();
+      const failure = new Error("resolver offline");
+      let rejectSound: ((error: Error) => void) | undefined;
+      const pendingSound = new Promise<never>((_resolve, reject) => {
+        rejectSound = reject;
+      });
+      const manager = new RpgMusicManager({
+        getSound: vi.fn(() => pendingSound),
+        createSound: vi.fn(),
+      });
+
+      const entering = manager.enter(
+        "missing",
+        { fadeInMs: 160, fadeOutMs },
+        {},
+      );
+      vi.advanceTimersByTime(32);
+      expect(manager.mapVolume()).toBeLessThan(1);
+
+      rejectSound?.(failure);
+      await expect(entering).rejects.toBe(failure);
+      vi.advanceTimersByTime(200);
+
+      expect(manager.overrideId).toBeUndefined();
+      expect(manager.mapVolume()).toBe(1);
+    },
+  );
+
+  it("cancels the entry fade when resolution returns no sound", async () => {
+    vi.useFakeTimers();
+    let resolveSound: ((sound: undefined) => void) | undefined;
+    const pendingSound = new Promise<undefined>((resolve) => {
+      resolveSound = resolve;
+    });
+    const manager = new RpgMusicManager({
+      getSound: vi.fn(() => pendingSound),
+      createSound: vi.fn(),
+    });
+
+    const entering = manager.enter(
+      "missing",
+      { fadeInMs: 160, fadeOutMs: 32 },
+      {},
+    );
+    vi.advanceTimersByTime(32);
+    expect(manager.mapVolume()).toBeLessThan(1);
+
+    resolveSound?.(undefined);
+    await entering;
+    vi.advanceTimersByTime(200);
+
+    expect(manager.overrideId).toBeUndefined();
+    expect(manager.mapVolume()).toBe(1);
+  });
+
+  it("preserves an earlier owner's release when a faded takeover rejects", async () => {
+    vi.useFakeTimers();
+    const battle = createSound();
+    const failure = new Error("cutscene unavailable");
+    let rejectTakeover: ((error: Error) => void) | undefined;
+    const pendingTakeover = new Promise<never>((_resolve, reject) => {
+      rejectTakeover = reject;
+    });
+    const manager = new RpgMusicManager({
+      getSound: vi.fn((id: string) =>
+        id === "battle" ? battle : pendingTakeover
+      ),
+      createSound: vi.fn(),
+    });
+    const battleOwner = {};
+    const cutsceneOwner = {};
+
+    await manager.enter(
+      "battle",
+      { fadeInMs: 0, mapVolume: 0.5 },
+      battleOwner,
+    );
+    const takingOver = manager.enter(
+      "cutscene",
+      { fadeInMs: 160, fadeOutMs: 0 },
+      cutsceneOwner,
+    );
+    vi.advanceTimersByTime(32);
+    manager.leave({ exitDelayMs: 0, fadeOutMs: 0 }, battleOwner);
+
+    rejectTakeover?.(failure);
+    await expect(takingOver).rejects.toBe(failure);
+    vi.runAllTimers();
+
+    expect(battle.stop).toHaveBeenCalledOnce();
+    expect(manager.overrideId).toBeUndefined();
+    expect(manager.mapVolume()).toBe(1);
+  });
+
+  it("does not cancel a newer owner's map fade when a stale resolver rejects", async () => {
+    vi.useFakeTimers();
+    const replacement = createSound();
+    const staleFailure = new Error("stale resolver offline");
+    let rejectStale: ((error: Error) => void) | undefined;
+    let resolveReplacement:
+      | ((sound: ReturnType<typeof createSound>) => void)
+      | undefined;
+    const staleSound = new Promise<never>((_resolve, reject) => {
+      rejectStale = reject;
+    });
+    const replacementSound = new Promise<ReturnType<typeof createSound>>(
+      (resolve) => {
+        resolveReplacement = resolve;
+      },
+    );
+    const manager = new RpgMusicManager({
+      getSound: vi.fn((id: string) =>
+        id === "stale" ? staleSound : replacementSound
+      ),
+      createSound: vi.fn(),
+    });
+
+    const staleEntering = manager.enter(
+      "stale",
+      { fadeInMs: 160, mapVolume: 0 },
+      {},
+    );
+    vi.advanceTimersByTime(16);
+    const replacementEntering = manager.enter(
+      "replacement",
+      { fadeInMs: 64, mapVolume: 0.25 },
+      {},
+    );
+
+    rejectStale?.(staleFailure);
+    await expect(staleEntering).rejects.toBe(staleFailure);
+    resolveReplacement?.(replacement);
+    await replacementEntering;
+    vi.advanceTimersByTime(80);
+
+    expect(manager.overrideId).toBe("replacement");
+    expect(manager.mapVolume()).toBe(0.25);
+  });
+
   it("finishes the previous release when a takeover resolver rejects", async () => {
     vi.useFakeTimers();
     const battle = createSound();

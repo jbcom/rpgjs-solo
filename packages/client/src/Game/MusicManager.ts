@@ -145,18 +145,15 @@ export class RpgMusicManager {
     try {
       sound = await this.resolve(id);
     } catch (error) {
-      if (revision === this.revision) {
-        this.pendingTransition = undefined;
-        this.tweenMapVolume(transition.previousMapVolume, fadeOutMs, revision);
-      }
+      this.restoreMapVolumeAfterFailedTransition(transition, fadeOutMs);
       throw error;
     }
     if (revision !== this.revision) return;
-    this.pendingTransition = undefined;
     if (!sound) {
-      this.tweenMapVolume(transition.previousMapVolume, fadeOutMs, revision);
+      this.restoreMapVolumeAfterFailedTransition(transition, fadeOutMs);
       return;
     }
+    this.pendingTransition = undefined;
 
     const reclaimedDebt = this.cancelReleaseDebt(sound);
     if (this.currentSound === sound || reclaimedDebt) {
@@ -386,6 +383,22 @@ export class RpgMusicManager {
 
   private setLoop(sound: any, loop: boolean) {
     sound?.loop?.(loop);
+  }
+
+  private restoreMapVolumeAfterFailedTransition(
+    transition: PendingMusicTransition,
+    duration: number,
+  ) {
+    if (transition.revision !== this.revision) return;
+    this.clearTimers();
+    if (this.pendingTransition === transition) {
+      this.pendingTransition = undefined;
+    }
+    this.tweenMapVolume(
+      transition.previousMapVolume,
+      duration,
+      transition.revision,
+    );
   }
 
   private tweenMapVolume(target: number, duration: number, revision: number) {
