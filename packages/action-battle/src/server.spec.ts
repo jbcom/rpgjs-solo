@@ -238,6 +238,54 @@ describe("action battle player visuals", () => {
     expect(onUse).toHaveBeenCalledTimes(2);
   });
 
+  test("rejects CAN_NOT_SKILL before Action Battle execution and cooldown", () => {
+    vi.useFakeTimers();
+    let restricted = true;
+    const onUse = vi.fn();
+    const skill = {
+      id: "sealed-focus",
+      _type: "skill",
+      spCost: 4,
+      hitRate: 1,
+      action: {
+        mode: "instant",
+        target: "self",
+        cooldownMs: 350,
+      },
+      onUse,
+    };
+    const player = {
+      id: "hero",
+      sp: 10,
+      skills: () => [{ id: skill.id }],
+      getSkill: (id: string) => id === skill.id ? skill : null,
+      databaseById: (id: string) => id === skill.id ? skill : null,
+      hasEffect: (effect: string) =>
+        restricted && effect === "CAN_NOT_SKILL",
+      clientVisual: vi.fn(),
+      getGui: () => null,
+      getCurrentMap: () => null,
+    };
+    const server = createActionBattleServer();
+    const useSkill = () =>
+      (server.player?.onInput as any)(player, {
+        action: ACTION_BATTLE_SKILL_USE,
+        data: { id: skill.id },
+      });
+
+    useSkill();
+    useSkill();
+    expect(onUse).not.toHaveBeenCalled();
+    expect(player.sp).toBe(10);
+    expect(vi.getTimerCount()).toBe(0);
+
+    restricted = false;
+    useSkill();
+    expect(onUse).toHaveBeenCalledOnce();
+    expect(player.sp).toBe(6);
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
   test("preserves skill cooldowns across death and map lifecycle resets", () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
@@ -399,6 +447,69 @@ describe("action battle player visuals", () => {
       player,
       [enemy],
       expect.objectContaining({ target: [enemy] }),
+    );
+  });
+
+  test("soft-targets vertically through configured rectangular tile reach", () => {
+    const onUse = vi.fn();
+    const skill = {
+      id: "downrange-bolt",
+      _type: "skill",
+      spCost: 0,
+      hitRate: 1,
+      targeting: { range: 3 },
+      action: { mode: "projectile", target: "enemy" },
+      onUse,
+    };
+    const enemy = {
+      id: "enemy",
+      hp: 10,
+      x: () => 0,
+      y: () => 50,
+      hitbox: () => ({ w: 8, h: 8 }),
+      battleAi: {
+        getFaction: () => "enemies",
+      },
+    };
+    const map = {
+      tileWidth: 32,
+      tileHeight: 32,
+      getEvents: () => [enemy],
+      getPlayers: () => [],
+    };
+    const player = {
+      id: "hero",
+      hp: 10,
+      sp: 10,
+      x: () => 0,
+      y: () => 0,
+      hitbox: () => ({ w: 8, h: 8 }),
+      getDirection: () => "down",
+      skills: () => [{ id: skill.id }],
+      getSkill: (id: string) => id === skill.id ? skill : null,
+      databaseById: (id: string) => id === skill.id ? skill : null,
+      hasEffect: () => false,
+      clientVisual: vi.fn(),
+      getGui: () => null,
+      getCurrentMap: () => map,
+    };
+    const server = createActionBattleServer({
+      ui: {
+        targeting: {
+          tileSize: { width: 10, height: 24 },
+        },
+      },
+    });
+
+    (server.player?.onInput as any)(player, {
+      action: ACTION_BATTLE_SKILL_USE,
+      data: { id: skill.id },
+    });
+
+    expect(onUse).toHaveBeenCalledWith(
+      player,
+      enemy,
+      expect.objectContaining({ target: enemy }),
     );
   });
 

@@ -14,6 +14,7 @@ import {
 import { normalizeActionBattleOptions, setActionBattleOptions } from "./config";
 import {
   getActionBattleEntityTile,
+  getActionBattleDirectionalTileRange,
   getActionBattleTileSize,
   manhattanDistance,
   resolveActionBattleAoeCells,
@@ -50,6 +51,7 @@ import {
   canActionBattleUseTarget,
   executeActionBattleUse,
   getActionBattleActionConfig,
+  hasNativeActionBattleUseRestriction,
   handleActionBattleProjectileDestroy,
   handleActionBattleProjectileImpact,
 } from "./core/action-use";
@@ -1087,6 +1089,9 @@ const handleActionBattleSkillUse = (
   if (!isPlayerSkillLearned(player, skillId)) return false;
   const skillData = resolvePlayerSkillUsable(player, skillId);
   if (!skillData) return false;
+  if (hasNativeActionBattleUseRestriction(player, skillData, skillData)) {
+    return false;
+  }
   const actionConfig = getActionBattleActionConfig(skillData);
   const cooldowns = getPlayerSkillCooldowns(player);
   const now = Date.now();
@@ -1185,7 +1190,16 @@ const handleActionBattleSkillUse = (
         {
           ...softTargeting,
           ...(targeting
-            ? { range: Math.max(1, targeting.range * tileSize.width) }
+            ? {
+                range: Math.max(
+                  1,
+                  getActionBattleDirectionalTileRange(
+                    targeting.range,
+                    tileSize,
+                    direction,
+                  ),
+                ),
+              }
             : {}),
         }
       );

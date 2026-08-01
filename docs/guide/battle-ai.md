@@ -285,7 +285,8 @@ preset reserves its charged-attack and guard keys, so Studio reports `E` and
 
 `targeting.range` is expressed in map tiles. A projectile can override its
 travel range in pixels; otherwise Action Battle derives it from the targeting
-range and tile width. When `action.mode` is `projectile` and no custom
+range, the shared configured rectangular tile geometry, and its firing
+direction. When `action.mode` is `projectile` and no custom
 projectile `type` is supplied, the built-in `action-battle-skill` CanvasEngine
 renderer displays `projectile.graphic`, applies `scale`, and optionally rotates
 the graphic along its trajectory. Damage and the impact animation/sound occur

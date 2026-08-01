@@ -22,6 +22,48 @@ export interface ActionBattleTileSize {
   height: number;
 }
 
+export type ActionBattleWorldDirection =
+  | ActionBattleResolvedDirection
+  | { x: number; y: number };
+
+export const getActionBattleDirectionVector = (
+  direction: ActionBattleWorldDirection,
+): { x: number; y: number } => {
+  if (typeof direction === "string") {
+    if (direction === "up") return { x: 0, y: -1 };
+    if (direction === "left") return { x: -1, y: 0 };
+    if (direction === "right") return { x: 1, y: 0 };
+    return { x: 0, y: 1 };
+  }
+
+  const distance = Math.hypot(direction.x, direction.y);
+  if (!Number.isFinite(distance) || distance <= 0) {
+    return { x: 0, y: 1 };
+  }
+  return {
+    x: direction.x / distance,
+    y: direction.y / distance,
+  };
+};
+
+/**
+ * Convert a Manhattan range expressed in map tiles into world-pixel travel
+ * along the supplied direction. Rectangular tiles therefore preserve the same
+ * targeting boundary for horizontal, vertical, and diagonal projectiles.
+ */
+export const getActionBattleDirectionalTileRange = (
+  range: number,
+  tileSize: ActionBattleTileSize,
+  direction: ActionBattleWorldDirection,
+): number => {
+  if (!Number.isFinite(range) || range <= 0) return 0;
+  const vector = getActionBattleDirectionVector(direction);
+  const tilesPerPixel =
+    Math.abs(vector.x) / tileSize.width
+    + Math.abs(vector.y) / tileSize.height;
+  return tilesPerPixel > 0 ? range / tilesPerPixel : 0;
+};
+
 const normalizeMaskRows = (mask: ActionBattleAoeMask | undefined): string[] => {
   if (!mask) return ["#"];
   if (Array.isArray(mask)) return mask;
@@ -148,13 +190,6 @@ type SoftTargetEntity = {
   };
 };
 
-const directionVector = (direction: ActionBattleResolvedDirection) => {
-  if (direction === "up") return { x: 0, y: -1 };
-  if (direction === "left") return { x: -1, y: 0 };
-  if (direction === "right") return { x: 1, y: 0 };
-  return { x: 0, y: 1 };
-};
-
 const center = (entity: SoftTargetEntity) => {
   const hitbox = entity.hitbox?.() ?? {};
   return {
@@ -204,7 +239,7 @@ export const resolveActionBattleSoftTarget = <T extends SoftTargetEntity>(
   const directionWeight = Math.max(0, options.directionWeight ?? 0.48);
   const distanceWeight = Math.max(0, options.distanceWeight ?? 0.32);
   const threatWeight = Math.max(0, options.threatWeight ?? 0.2);
-  const facing = directionVector(direction);
+  const facing = getActionBattleDirectionVector(direction);
   const origin = center(source);
   let best: ActionBattleSoftTargetResult<T> | null = null;
 

@@ -20,6 +20,11 @@ import type {
   ActionBattleUseContext,
 } from "./contracts";
 import type { NormalizedActionBattleAttackProfile } from "../types";
+import {
+  getActionBattleDirectionVector,
+  getActionBattleDirectionalTileRange,
+  getActionBattleTileSize,
+} from "../targeting";
 
 const projectileHandlers = new Map<
   string,
@@ -103,6 +108,27 @@ const isSkill = (usable: any, explicitSkill?: any) =>
   !!explicitSkill ||
   resolveUsableField(usable, "_type") === "skill" ||
   resolveUsableField(usable, "spCost") !== undefined;
+
+/**
+ * Action Battle executes skill and item effects directly so it must preserve
+ * the native EffectManager restrictions without invoking the native use hook a
+ * second time.
+ */
+export const hasNativeActionBattleUseRestriction = (
+  attacker: ActionBattleEntity,
+  usable: any,
+  explicitSkill?: any,
+): boolean => {
+  const hasEffect = (attacker as any).hasEffect;
+  if (typeof hasEffect !== "function") return false;
+  if (isSkill(usable, explicitSkill)) {
+    return !!hasEffect.call(attacker, "CAN_NOT_SKILL");
+  }
+  if (resolveUsableField(usable, "_type") === "item") {
+    return !!hasEffect.call(attacker, "CAN_NOT_ITEM");
+  }
+  return false;
+};
 
 const consumeSkillUse = (attacker: ActionBattleEntity, skill: any) => {
   const resolvedSpCost = resolveUsableField(skill, "spCost");
@@ -293,14 +319,33 @@ const buildActionContext = (input: {
         ...configured,
         ...options,
       };
-      const tileWidth = Number(map?.tileWidth ?? 32);
       const targetingRange = Number(
         getActionBattleSkillTargetingConfig(input.skill)?.range ??
         input.skill?.range
       );
+      const configuredDirection = projectile.direction;
+      const targetDirection = directionToTarget(input.attacker, input.target);
+      const attackerDirection =
+        typeof (input.attacker as any).getDirection === "function"
+          ? (input.attacker as any).getDirection()
+          : "down";
+      const direction = getActionBattleDirectionVector(
+        configuredDirection ?? targetDirection ?? attackerDirection,
+      );
+      const uiTargeting = getActionBattleOptions().ui?.targeting;
+      const tileSize = getActionBattleTileSize(
+        map,
+        uiTargeting && typeof uiTargeting === "object"
+          ? uiTargeting.tileSize
+          : undefined,
+      );
       const derivedRange =
         Number.isFinite(targetingRange) && targetingRange > 0
-          ? targetingRange * tileWidth
+          ? getActionBattleDirectionalTileRange(
+              targetingRange,
+              tileSize,
+              direction,
+            )
           : undefined;
       const range =
         projectile.range ?? input.action?.range ?? derivedRange ?? 160;
@@ -309,8 +354,7 @@ const buildActionContext = (input: {
         {
           type: projectile.type ?? "action-battle-skill",
           origin: projectile.origin,
-          direction:
-            projectile.direction ?? directionToTarget(input.attacker, input.target),
+          direction,
           spreadDegrees: projectile.spreadDegrees,
           accuracy: projectile.accuracy,
           trajectory: projectile.trajectory ?? {
@@ -436,6 +480,15 @@ export const executeActionBattleUse = (input: {
   playVisual?: boolean;
 }): boolean => {
   if (!shouldUseActionBattleUsable(input.usable, input.skill)) return false;
+  if (
+    hasNativeActionBattleUseRestriction(
+      input.attacker,
+      input.usable,
+      input.skill,
+    )
+  ) {
+    return false;
+  }
 
   const actionConfig = resolveActionConfig(input.usable);
   let skillSucceeded = true;

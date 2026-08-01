@@ -8,6 +8,7 @@ import {
   beginActionBattleGuard,
   clearActionBattleDefense,
 } from "./defense";
+import { setActionBattleOptions } from "../config";
 
 const createEntity = (id: string, hp = 100) => ({
   id,
@@ -28,6 +29,66 @@ describe("executeActionBattleUse", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     setActionBattleSystems({});
+    setActionBattleOptions({});
+  });
+
+  test("preserves native skill and item restrictions before executing effects", () => {
+    const restrictions = new Set(["CAN_NOT_SKILL", "CAN_NOT_ITEM"]);
+    const attacker = {
+      ...createEntity("caster"),
+      hasEffect: vi.fn((effect: string) => restrictions.has(effect)),
+    };
+    const skillHook = vi.fn();
+    const skill = {
+      id: "sealed-art",
+      _type: "skill",
+      spCost: 10,
+      hitRate: 1,
+      onUse: skillHook,
+    };
+    const itemHook = vi.fn();
+    const item = {
+      id: "sealed-tonic",
+      _type: "item",
+      onUse: itemHook,
+    };
+
+    expect(
+      executeActionBattleUse({
+        attacker: attacker as any,
+        usable: skill,
+        skill,
+      }),
+    ).toBe(false);
+    expect(attacker.sp).toBe(100);
+    expect(skillHook).not.toHaveBeenCalled();
+
+    expect(
+      executeActionBattleUse({
+        attacker: attacker as any,
+        usable: item,
+      }),
+    ).toBe(false);
+    expect(itemHook).not.toHaveBeenCalled();
+
+    restrictions.clear();
+    expect(
+      executeActionBattleUse({
+        attacker: attacker as any,
+        usable: skill,
+        skill,
+      }),
+    ).toBe(true);
+    expect(attacker.sp).toBe(90);
+    expect(skillHook).toHaveBeenCalledOnce();
+
+    expect(
+      executeActionBattleUse({
+        attacker: attacker as any,
+        usable: item,
+      }),
+    ).toBe(true);
+    expect(itemHook).toHaveBeenCalledOnce();
   });
 
   test("applies the standard skill effect when no onUse hook is defined", () => {
@@ -493,6 +554,7 @@ describe("executeActionBattleUse", () => {
       ...createEntity("caster"),
       getCurrentMap: () => ({
         tileWidth: 48,
+        tileHeight: 48,
         projectiles: { emit },
       }),
     };
@@ -539,5 +601,60 @@ describe("executeActionBattleUse", () => {
       }),
       attacker,
     );
+  });
+
+  test("derives projectile travel from configured rectangular targeting geometry", () => {
+    setActionBattleOptions({
+      ui: {
+        targeting: {
+          tileSize: { width: 10, height: 24 },
+        },
+      },
+    });
+    const emit = vi.fn(() => [{ id: "rectangular-bolt" }]);
+    const attacker = {
+      ...createEntity("caster"),
+      getCurrentMap: () => ({
+        tileWidth: 32,
+        tileHeight: 32,
+        projectiles: { emit },
+      }),
+    };
+    const action = {
+      mode: "projectile" as const,
+      projectile: { direction: { x: 1, y: 0 } },
+    };
+    const skill = {
+      id: "rectangular-bolt",
+      _type: "skill",
+      spCost: 0,
+      targeting: { range: 3 },
+      action,
+    };
+
+    expect(
+      executeActionBattleUse({
+        attacker: attacker as any,
+        usable: skill,
+        skill,
+      }),
+    ).toBe(true);
+    expect(emit.mock.calls[0][0]).toMatchObject({
+      direction: { x: 1, y: 0 },
+      trajectory: { range: 30 },
+    });
+
+    action.projectile.direction = { x: 0, y: -1 };
+    expect(
+      executeActionBattleUse({
+        attacker: attacker as any,
+        usable: skill,
+        skill,
+      }),
+    ).toBe(true);
+    expect(emit.mock.calls[1][0]).toMatchObject({
+      direction: { x: 0, y: -1 },
+      trajectory: { range: 72 },
+    });
   });
 });

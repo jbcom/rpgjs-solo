@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   directionToActionBattleTarget,
+  getActionBattleDirectionalTileRange,
   getActionBattleEntityTile,
   getActionBattleTileSize,
   parseAoeMask,
@@ -103,5 +104,15 @@ describe("action battle soft targeting", () => {
         { width: 10, height: 14 },
       ),
     ).toEqual({ width: 10, height: 14 });
+  });
+
+  test("converts tile range through rectangular geometry in the firing direction", () => {
+    const tileSize = { width: 10, height: 24 };
+
+    expect(getActionBattleDirectionalTileRange(3, tileSize, "right")).toBe(30);
+    expect(getActionBattleDirectionalTileRange(3, tileSize, "up")).toBe(72);
+    expect(
+      getActionBattleDirectionalTileRange(3, tileSize, { x: 1, y: 1 }),
+    ).toBeCloseTo((3 * Math.SQRT2) / (1 / 10 + 1 / 24), 8);
   });
 });
