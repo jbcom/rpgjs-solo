@@ -102,6 +102,7 @@
       "SoloCanvasEnginePatchInstaller",
       "SoloEntityAnimationResolver",
       "SoloEntityAppearance",
+      "SoloEntityVisibilityResolver",
       "SoloFogController",
       "SoloFogOptions",
       "SoloFogVisibilityProvider",
