@@ -1,6 +1,7 @@
 import {
   ActionBattleAoeMask,
   ActionBattleSoftTargetingOptions,
+  ActionBattleUiTargetingOptions,
 } from "./types";
 import type { ActionBattleResolvedDirection } from "./attack-input";
 
@@ -125,6 +126,17 @@ export const getActionBattleTileSize = (
   };
 };
 
+export const getActionBattleTargetingTileSize = (
+  map: any,
+  targeting: boolean | ActionBattleUiTargetingOptions | undefined,
+): ActionBattleTileSize =>
+  getActionBattleTileSize(
+    map,
+    targeting && typeof targeting === "object"
+      ? targeting.tileSize
+      : undefined,
+  );
+
 export const getActionBattleEntityTile = (
   entity: any,
   tileSize: ActionBattleTileSize
@@ -185,16 +197,69 @@ type SoftTargetEntity = {
   x: () => number;
   y: () => number;
   hitbox?: () => { w?: number; h?: number };
+  getDirection?: () => ActionBattleResolvedDirection;
   battleAi?: {
     getTarget?: () => SoftTargetEntity | null;
   };
 };
 
-const center = (entity: SoftTargetEntity) => {
+export const getActionBattleEntityCenter = (entity: SoftTargetEntity) => {
   const hitbox = entity.hitbox?.() ?? {};
   return {
     x: entity.x() + (hitbox.w ?? 0) / 2,
     y: entity.y() + (hitbox.h ?? 0) / 2,
+  };
+};
+
+export const getActionBattleTargetVector = (
+  source: SoftTargetEntity,
+  target: SoftTargetEntity,
+) => {
+  const from = getActionBattleEntityCenter(source);
+  const to = getActionBattleEntityCenter(target);
+  const x = to.x - from.x;
+  const y = to.y - from.y;
+  const distance = Math.hypot(x, y);
+  return {
+    x,
+    y,
+    distance,
+    direction: getActionBattleDirectionVector({ x, y }),
+  };
+};
+
+export const resolveActionBattleProjectileDirection = (
+  source: SoftTargetEntity,
+  target?: SoftTargetEntity | null,
+  configuredDirection?: ActionBattleWorldDirection,
+) =>
+  getActionBattleDirectionVector(
+    configuredDirection ??
+      (target ? getActionBattleTargetVector(source, target).direction : undefined) ??
+      source.getDirection?.() ??
+      "down",
+  );
+
+export interface ActionBattleDirectionalTargetBoundary {
+  tileRange: number;
+  tileSize: ActionBattleTileSize;
+}
+
+export const getActionBattleDirectionalTargetBoundary = (
+  source: SoftTargetEntity,
+  target: SoftTargetEntity,
+  boundary: ActionBattleDirectionalTargetBoundary,
+) => {
+  const vector = getActionBattleTargetVector(source, target);
+  const range = getActionBattleDirectionalTileRange(
+    boundary.tileRange,
+    boundary.tileSize,
+    vector.direction,
+  );
+  return {
+    ...vector,
+    range,
+    eligible: vector.distance > 0 && vector.distance <= range,
   };
 };
 
@@ -209,10 +274,7 @@ export const directionToActionBattleTarget = (
   source: SoftTargetEntity,
   target: SoftTargetEntity
 ): ActionBattleResolvedDirection => {
-  const from = center(source);
-  const to = center(target);
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
+  const { x: dx, y: dy } = getActionBattleTargetVector(source, target);
   return Math.abs(dx) >= Math.abs(dy)
     ? dx >= 0
       ? "right"
@@ -232,24 +294,30 @@ export const resolveActionBattleSoftTarget = <T extends SoftTargetEntity>(
   source: SoftTargetEntity,
   candidates: T[],
   direction: ActionBattleResolvedDirection,
-  options: ActionBattleSoftTargetingOptions = {}
+  options: ActionBattleSoftTargetingOptions = {},
+  directionalBoundary?: ActionBattleDirectionalTargetBoundary,
 ): ActionBattleSoftTargetResult<T> | null => {
-  const range = Math.max(1, options.range ?? 112);
+  const configuredRange = Math.max(1, options.range ?? 112);
   const coneDegrees = Math.max(0, Math.min(360, options.coneDegrees ?? 110));
   const directionWeight = Math.max(0, options.directionWeight ?? 0.48);
   const distanceWeight = Math.max(0, options.distanceWeight ?? 0.32);
   const threatWeight = Math.max(0, options.threatWeight ?? 0.2);
   const facing = getActionBattleDirectionVector(direction);
-  const origin = center(source);
   let best: ActionBattleSoftTargetResult<T> | null = null;
 
   for (const target of candidates) {
     if (target === source) continue;
-    const point = center(target);
-    const dx = point.x - origin.x;
-    const dy = point.y - origin.y;
-    const distance = Math.hypot(dx, dy);
-    if (distance <= 0 || distance > range) continue;
+    const targetBoundary = directionalBoundary
+      ? getActionBattleDirectionalTargetBoundary(
+          source,
+          target,
+          directionalBoundary,
+        )
+      : undefined;
+    const vector = targetBoundary ?? getActionBattleTargetVector(source, target);
+    const { x: dx, y: dy, distance } = vector;
+    const candidateRange = targetBoundary?.range ?? configuredRange;
+    if (distance <= 0 || distance > candidateRange) continue;
     const dot = Math.max(
       -1,
       Math.min(1, (facing.x * dx + facing.y * dy) / distance)
@@ -257,7 +325,7 @@ export const resolveActionBattleSoftTarget = <T extends SoftTargetEntity>(
     const angle = Math.acos(dot) * (180 / Math.PI);
     if (angle > coneDegrees / 2) continue;
     const directionScore = (dot + 1) / 2;
-    const distanceScore = 1 - distance / range;
+    const distanceScore = 1 - distance / candidateRange;
     const threatScore =
       target.battleAi?.getTarget?.()?.id === source.id ? 1 : 0;
     const score =

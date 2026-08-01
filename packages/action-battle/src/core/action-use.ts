@@ -21,9 +21,9 @@ import type {
 } from "./contracts";
 import type { NormalizedActionBattleAttackProfile } from "../types";
 import {
-  getActionBattleDirectionVector,
   getActionBattleDirectionalTileRange,
-  getActionBattleTileSize,
+  getActionBattleTargetingTileSize,
+  resolveActionBattleProjectileDirection,
 } from "../targeting";
 
 const projectileHandlers = new Map<
@@ -33,27 +33,6 @@ const projectileHandlers = new Map<
     onImpact?: ActionBattleProjectileOptions["onImpact"];
   }
 >();
-
-const normalizeDirection = (direction: { x: number; y: number }) => {
-  const distance = Math.sqrt(direction.x * direction.x + direction.y * direction.y);
-  if (distance <= 0) return { x: 0, y: 1 };
-  return {
-    x: direction.x / distance,
-    y: direction.y / distance,
-  };
-};
-
-const directionToTarget = (
-  attacker: ActionBattleEntity,
-  target?: ActionBattleEntity | ActionBattleEntity[] | null
-) => {
-  const first = firstTarget(target);
-  if (!first) return undefined;
-  return normalizeDirection({
-    x: (first as any).x() - (attacker as any).x(),
-    y: (first as any).y() - (attacker as any).y(),
-  });
-};
 
 const asArray = <T>(value: T | T[] | null | undefined): T[] => {
   if (!value) return [];
@@ -324,20 +303,14 @@ const buildActionContext = (input: {
         input.skill?.range
       );
       const configuredDirection = projectile.direction;
-      const targetDirection = directionToTarget(input.attacker, input.target);
-      const attackerDirection =
-        typeof (input.attacker as any).getDirection === "function"
-          ? (input.attacker as any).getDirection()
-          : "down";
-      const direction = getActionBattleDirectionVector(
-        configuredDirection ?? targetDirection ?? attackerDirection,
+      const direction = resolveActionBattleProjectileDirection(
+        input.attacker as any,
+        firstTarget(input.target) as any,
+        configuredDirection,
       );
-      const uiTargeting = getActionBattleOptions().ui?.targeting;
-      const tileSize = getActionBattleTileSize(
+      const tileSize = getActionBattleTargetingTileSize(
         map,
-        uiTargeting && typeof uiTargeting === "object"
-          ? uiTargeting.tileSize
-          : undefined,
+        getActionBattleOptions().ui?.targeting,
       );
       const derivedRange =
         Number.isFinite(targetingRange) && targetingRange > 0

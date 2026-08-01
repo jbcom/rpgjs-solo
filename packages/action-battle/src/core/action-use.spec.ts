@@ -657,4 +657,50 @@ describe("executeActionBattleUse", () => {
       trajectory: { range: 72 },
     });
   });
+
+  test("uses the exact target direction for candidate-specific projectile travel", () => {
+    setActionBattleOptions({
+      ui: {
+        targeting: {
+          tileSize: { width: 10, height: 24 },
+        },
+      },
+    });
+    const emit = vi.fn(() => [{ id: "angled-bolt" }]);
+    const attacker = {
+      ...createEntity("caster"),
+      getCurrentMap: () => ({ projectiles: { emit } }),
+    };
+    const target = {
+      ...createEntity("target"),
+      x: () => 26,
+      y: () => 12,
+    };
+    const skill = {
+      id: "angled-bolt",
+      _type: "skill",
+      spCost: 0,
+      targeting: { range: 3 },
+      action: { mode: "projectile" as const },
+    };
+
+    expect(
+      executeActionBattleUse({
+        attacker: attacker as any,
+        target: target as any,
+        usable: skill,
+        skill,
+      }),
+    ).toBe(true);
+
+    const distance = Math.hypot(26, 12);
+    const direction = { x: 26 / distance, y: 12 / distance };
+    const range = 3 / (Math.abs(direction.x) / 10 + Math.abs(direction.y) / 24);
+    expect(emit.mock.calls[0][0].direction).toMatchObject({
+      x: expect.closeTo(direction.x),
+      y: expect.closeTo(direction.y),
+    });
+    expect(emit.mock.calls[0][0].trajectory.range).toBeCloseTo(range);
+    expect(emit.mock.calls[0][0].trajectory.range).toBeLessThan(distance);
+  });
 });

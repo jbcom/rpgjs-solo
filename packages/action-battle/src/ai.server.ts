@@ -32,6 +32,7 @@ import { applyActionBattleAttackDirection } from "./attack-input";
 import {
   executeActionBattleUse,
   getActionBattleActionConfig,
+  hasNativeActionBattleUseRestriction,
 } from "./core/action-use";
 import {
   evaluateActionBattleAiSkill,
@@ -1553,6 +1554,19 @@ export class BattleAi {
     evaluation: ActionBattleAiSkillEvaluation
   ): boolean {
     if (!this.target || this.isTargetDefeated(this.target)) return false;
+    if (
+      hasNativeActionBattleUseRestriction(
+        this.event,
+        evaluation.skill,
+        evaluation.skill
+      )
+    ) {
+      this.debugLog("decision", "skill execution restricted", {
+        skillId: evaluation.id,
+        restriction: "CAN_NOT_SKILL",
+      });
+      return false;
+    }
     const profile = this.getAttackProfile(AttackPattern.Melee);
     const visualTarget = Array.isArray(evaluation.target)
       ? evaluation.target[0]
@@ -1572,6 +1586,20 @@ export class BattleAi {
       evaluation.mode === "melee" ? undefined : "castSkill"
     );
     this.scheduleAttackStartup(profile, () => {
+      if (
+        hasNativeActionBattleUseRestriction(
+          this.event,
+          evaluation.skill,
+          evaluation.skill
+        )
+      ) {
+        this.debugLog("decision", "skill execution restricted", {
+          skillId: evaluation.id,
+          restriction: "CAN_NOT_SKILL",
+        });
+        return;
+      }
+
       try {
         const handled = executeActionBattleUse({
           attacker: this.event,
@@ -1591,6 +1619,16 @@ export class BattleAi {
           skillId: evaluation.id,
           error: error instanceof Error ? error.message : String(error),
         });
+      }
+
+      if (
+        hasNativeActionBattleUseRestriction(
+          this.event,
+          evaluation.skill,
+          evaluation.skill
+        )
+      ) {
+        return;
       }
 
       if (

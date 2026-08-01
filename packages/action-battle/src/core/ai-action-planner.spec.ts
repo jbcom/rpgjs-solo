@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
+import { setActionBattleOptions } from "../config";
 import { evaluateActionBattleAiSkill } from "./ai-action-planner";
 
 const player = (id: string, x: number, y: number) => ({
@@ -24,6 +25,10 @@ const enemy = (map: any, hp = 10) => ({
 });
 
 describe("Action Battle AI skill planner", () => {
+  afterEach(() => {
+    setActionBattleOptions({});
+  });
+
   test("uses Studio targeting range for a projectile without requiring contact", () => {
     const target = player("hero", 150, 0);
     const map = {
@@ -79,6 +84,84 @@ describe("Action Battle AI skill planner", () => {
 
     expect(evaluation.range).toBe(80);
     expect(evaluation.rejection).toBe("outOfRange");
+  });
+
+  test("plans vertical projectiles with the configured rectangular tile reach", () => {
+    setActionBattleOptions({
+      ui: {
+        targeting: {
+          tileSize: { width: 10, height: 24 },
+        },
+      },
+    });
+    const target = player("hero", 0, 50);
+    const map = {
+      tileWidth: 32,
+      tileHeight: 32,
+      getPlayers: () => [target],
+      getEvents: () => [],
+    };
+    const evaluation = evaluateActionBattleAiSkill({
+      attacker: enemy(map) as any,
+      target: target as any,
+      skill: {
+        id: "vertical-bolt",
+        targeting: { range: 3 },
+        action: { mode: "projectile", target: "enemy" },
+      },
+      now: 1000,
+      readyAt: 0,
+      attackRange: 50,
+      hpPercent: 1,
+    });
+
+    expect(evaluation).toMatchObject({
+      id: "vertical-bolt",
+      range: 72,
+      preferredRange: 54,
+    });
+    expect(evaluation.rejection).toBeUndefined();
+  });
+
+  test("plans from the explicit projectile direction used for emission", () => {
+    setActionBattleOptions({
+      ui: {
+        targeting: {
+          tileSize: { width: 10, height: 24 },
+        },
+      },
+    });
+    const target = player("hero", 0, 50);
+    const map = {
+      tileWidth: 32,
+      tileHeight: 32,
+      getPlayers: () => [target],
+      getEvents: () => [],
+    };
+    const evaluation = evaluateActionBattleAiSkill({
+      attacker: enemy(map) as any,
+      target: target as any,
+      skill: {
+        id: "sideways-bolt",
+        targeting: { range: 3 },
+        action: {
+          mode: "projectile",
+          target: "enemy",
+          projectile: { direction: { x: 1, y: 0 } },
+        },
+      },
+      now: 1000,
+      readyAt: 0,
+      attackRange: 50,
+      hpPercent: 1,
+    });
+
+    expect(evaluation).toMatchObject({
+      id: "sideways-bolt",
+      range: 30,
+      preferredRange: 22.5,
+      rejection: "outOfRange",
+    });
   });
 
   test("places an instant area skill so a hollow mask covers the player", () => {

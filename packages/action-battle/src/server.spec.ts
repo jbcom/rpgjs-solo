@@ -513,6 +513,77 @@ describe("action battle player visuals", () => {
     );
   });
 
+  test("rejects soft targets outside their own directional tile boundary", () => {
+    const onUse = vi.fn();
+    const skill = {
+      id: "angled-bolt",
+      _type: "skill",
+      spCost: 0,
+      hitRate: 1,
+      targeting: { range: 3 },
+      action: { mode: "projectile", target: "enemy" },
+      onUse,
+    };
+    let enemyX = 26;
+    const enemy = {
+      id: "enemy",
+      hp: 10,
+      x: () => enemyX,
+      y: () => 12,
+      hitbox: () => ({ w: 8, h: 8 }),
+      battleAi: {
+        getFaction: () => "enemies",
+      },
+    };
+    const map = {
+      tileWidth: 32,
+      tileHeight: 32,
+      getEvents: () => [enemy],
+      getPlayers: () => [],
+    };
+    const player = {
+      id: "hero",
+      hp: 10,
+      sp: 10,
+      x: () => 0,
+      y: () => 0,
+      hitbox: () => ({ w: 8, h: 8 }),
+      getDirection: () => "right",
+      skills: () => [{ id: skill.id }],
+      getSkill: (id: string) => id === skill.id ? skill : null,
+      databaseById: (id: string) => id === skill.id ? skill : null,
+      hasEffect: () => false,
+      clientVisual: vi.fn(),
+      getGui: () => null,
+      getCurrentMap: () => map,
+    };
+    const server = createActionBattleServer({
+      targeting: { allowEmptyTarget: false },
+      ui: {
+        targeting: {
+          tileSize: { width: 10, height: 24 },
+        },
+      },
+    });
+
+    (server.player?.onInput as any)(player, {
+      action: ACTION_BATTLE_SKILL_USE,
+      data: { id: skill.id },
+    });
+    expect(onUse).not.toHaveBeenCalled();
+
+    enemyX = 24;
+    (server.player?.onInput as any)(player, {
+      action: ACTION_BATTLE_SKILL_USE,
+      data: { id: skill.id },
+    });
+    expect(onUse).toHaveBeenCalledWith(
+      player,
+      enemy,
+      expect.objectContaining({ target: enemy }),
+    );
+  });
+
   test("opens or hides the hotbar from the per-player resolver on map changes", () => {
     const player = {
       initializeHotbar: vi.fn(),

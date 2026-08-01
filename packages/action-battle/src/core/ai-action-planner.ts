@@ -1,8 +1,12 @@
+import { getActionBattleOptions } from "../config";
 import {
+  getActionBattleDirectionalTileRange,
   getActionBattleEntityTile,
-  getActionBattleTileSize,
+  getActionBattleTargetingTileSize,
+  getActionBattleTargetVector,
   resolveActionBattleAoeCells,
   resolveActionBattleAoeTarget,
+  resolveActionBattleProjectileDirection,
 } from "../targeting";
 import {
   canActionBattleUseTarget,
@@ -79,7 +83,10 @@ const collectAreaTargets = (
   targetPolicy: ActionBattleActionTarget,
   targetOptions: ActionBattleTargetOptions
 ): ActionBattleEntity[] => {
-  const tileSize = getActionBattleTileSize(map);
+  const tileSize = getActionBattleTargetingTileSize(
+    map,
+    getActionBattleOptions().ui?.targeting,
+  );
   const affected = new Set(
     resolveActionBattleAoeCells(targetTile, mask).map(
       (cell) => `${cell.x},${cell.y}`
@@ -124,10 +131,11 @@ export const evaluateActionBattleAiSkill = (input: {
   const mode = resolveMode(action, targeting);
   const targetPolicy = action?.target ?? "enemy";
   const id = resolveActionBattleAiSkillId(skill);
-  const distance = Math.hypot(
-    (target as any).x() - (attacker as any).x(),
-    (target as any).y() - (attacker as any).y()
+  const targetVector = getActionBattleTargetVector(
+    attacker as any,
+    target as any,
   );
+  const distance = targetVector.distance;
   const base = {
     kind: "skill" as const,
     skill,
@@ -208,12 +216,25 @@ export const evaluateActionBattleAiSkill = (input: {
   }
 
   if (mode === "projectile") {
-    const tileSize = getActionBattleTileSize(map);
+    const tileSize = getActionBattleTargetingTileSize(
+      map,
+      getActionBattleOptions().ui?.targeting,
+    );
+    const emittedDirection = resolveActionBattleProjectileDirection(
+      attacker as any,
+      target as any,
+      action?.projectile?.direction,
+    );
+    const targetingRange = normalizeRange(targeting?.range);
     const range =
       normalizeRange(action?.projectile?.range) ??
       normalizeRange(action?.range) ??
-      (normalizeRange(targeting?.range) !== undefined
-        ? normalizeRange(targeting?.range)! * tileSize.width
+      (targetingRange !== undefined
+        ? getActionBattleDirectionalTileRange(
+            targetingRange,
+            tileSize,
+            emittedDirection,
+          )
         : 160);
     return applyCooldown({
       ...base,
@@ -226,7 +247,10 @@ export const evaluateActionBattleAiSkill = (input: {
 
   const targetingRange = normalizeRange(targeting?.range);
   if (mode === "instant" && targetingRange !== undefined && map) {
-    const tileSize = getActionBattleTileSize(map);
+    const tileSize = getActionBattleTargetingTileSize(
+      map,
+      getActionBattleOptions().ui?.targeting,
+    );
     const origin = getActionBattleEntityTile(attacker, tileSize);
     const desiredTarget = getActionBattleEntityTile(target, tileSize);
     const targetTile = resolveActionBattleAoeTarget(

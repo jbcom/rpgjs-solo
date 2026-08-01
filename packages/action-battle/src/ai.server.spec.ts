@@ -1117,6 +1117,125 @@ describe("BattleAi behavior tree", () => {
     ai.destroy();
   });
 
+  test("rejects AI skills before facing, locks, visuals, costs, hooks, or fallback", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const clientVisual = vi.fn();
+    const event = {
+      ...createEvent(),
+      hp: 10,
+      sp: 12,
+      hasEffect: vi.fn((effect: string) => effect === "CAN_NOT_SKILL"),
+      getCurrentMap: vi.fn(() => ({
+        tileWidth: 32,
+        tileHeight: 32,
+        getPlayers: () => [],
+        getEvents: () => [],
+        clientVisual,
+      })),
+    };
+    const onUse = vi.fn();
+    const skill = {
+      id: "sealed-bolt",
+      spCost: 4,
+      targeting: { range: 3 },
+      action: { mode: "projectile", target: "enemy" },
+      onUse,
+    };
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+    });
+    ai.onDetectInShape(player as any, {});
+    const evaluation = (ai as any).evaluateSkillActions(1000)[0];
+    const faceTarget = vi.spyOn(ai as any, "faceTarget");
+    const lockForAttack = vi.spyOn(ai as any, "lockForAttack");
+    const telegraphAttack = vi.spyOn(ai as any, "telegraphAttack");
+    const playAttackVisual = vi.spyOn(ai as any, "playAttackVisual");
+    const scheduleAttackStartup = vi.spyOn(ai as any, "scheduleAttackStartup");
+    const performBasicHitbox = vi.spyOn(ai as any, "performBasicHitbox");
+    event.changeDirection.mockClear();
+    event.stopMoveTo.mockClear();
+    event.flash.mockClear();
+    clientVisual.mockClear();
+    const timerCount = vi.getTimerCount();
+
+    expect((ai as any).performPlannedSkill(evaluation)).toBe(false);
+    expect(faceTarget).not.toHaveBeenCalled();
+    expect(lockForAttack).not.toHaveBeenCalled();
+    expect(telegraphAttack).not.toHaveBeenCalled();
+    expect(playAttackVisual).not.toHaveBeenCalled();
+    expect(scheduleAttackStartup).not.toHaveBeenCalled();
+    expect(performBasicHitbox).not.toHaveBeenCalled();
+    expect(event.changeDirection).not.toHaveBeenCalled();
+    expect(event.stopMoveTo).not.toHaveBeenCalled();
+    expect(event.flash).not.toHaveBeenCalled();
+    expect(clientVisual).not.toHaveBeenCalled();
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+    expect(vi.getTimerCount()).toBe(timerCount);
+    ai.destroy();
+  });
+
+  test("rechecks AI skill restrictions at startup without a basic-hit fallback", () => {
+    const event = {
+      ...createEvent(),
+      hp: 10,
+      sp: 12,
+    };
+    let restricted = false;
+    (event as any).hasEffect = vi.fn(
+      (effect: string) => effect === "CAN_NOT_SKILL" && restricted,
+    );
+    const onUse = vi.fn();
+    const skill = {
+      id: "interruptible-bolt",
+      spCost: 4,
+      targeting: { range: 3 },
+      action: { mode: "projectile", target: "enemy" },
+      onUse,
+    };
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+    });
+    ai.onDetectInShape(player as any, {});
+    const evaluation = (ai as any).evaluateSkillActions(1000)[0];
+    let startup: (() => void) | undefined;
+    vi.spyOn(ai as any, "scheduleAttackStartup").mockImplementation(
+      (_profile: unknown, callback: () => void) => {
+        startup = callback;
+      },
+    );
+    const performBasicHitbox = vi.spyOn(ai as any, "performBasicHitbox");
+
+    expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
+    restricted = true;
+    startup?.();
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+    expect(performBasicHitbox).not.toHaveBeenCalled();
+
+    restricted = false;
+    startup?.();
+    expect(onUse).toHaveBeenCalledOnce();
+    expect(event.sp).toBe(8);
+    expect(performBasicHitbox).not.toHaveBeenCalled();
+    ai.destroy();
+  });
+
   test("selects a learned ranged skill while keeping other learned skills", () => {
     const event = createEvent();
     const clientVisual = vi.fn();

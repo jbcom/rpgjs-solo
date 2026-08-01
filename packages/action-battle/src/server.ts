@@ -9,13 +9,11 @@ import { BattleAi, HitResult, ApplyHitHooks, DEFAULT_KNOCKBACK } from "./ai.serv
 import {
   ActionBattleHotbarSkill,
   ActionBattleOptions,
-  ActionBattleUiTargetingOptions,
 } from "./types";
 import { normalizeActionBattleOptions, setActionBattleOptions } from "./config";
 import {
   getActionBattleEntityTile,
-  getActionBattleDirectionalTileRange,
-  getActionBattleTileSize,
+  getActionBattleTargetingTileSize,
   manhattanDistance,
   resolveActionBattleAoeCells,
   resolveActionBattleSoftTarget,
@@ -759,9 +757,9 @@ const objectOption = <T extends object>(value: boolean | T | undefined): T | und
 const getPlayerTargetingTileSize = (
   map: any,
   options: ActionBattleOptions,
-) => getActionBattleTileSize(
+) => getActionBattleTargetingTileSize(
   map,
-  objectOption<ActionBattleUiTargetingOptions>(options.ui?.targeting)?.tileSize,
+  options.ui?.targeting,
 );
 
 const resolvePlayerComboProfile = (
@@ -1187,21 +1185,13 @@ const handleActionBattleSkillUse = (
         player,
         candidates,
         direction,
-        {
-          ...softTargeting,
-          ...(targeting
-            ? {
-                range: Math.max(
-                  1,
-                  getActionBattleDirectionalTileRange(
-                    targeting.range,
-                    tileSize,
-                    direction,
-                  ),
-                ),
-              }
-            : {}),
-        }
+        softTargeting,
+        targeting
+          ? {
+              tileRange: targeting.range,
+              tileSize,
+            }
+          : undefined,
       );
       if (
         targeting

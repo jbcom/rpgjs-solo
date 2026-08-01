@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   directionToActionBattleTarget,
+  getActionBattleDirectionalTargetBoundary,
   getActionBattleDirectionalTileRange,
   getActionBattleEntityTile,
   getActionBattleTileSize,
@@ -114,5 +115,42 @@ describe("action battle soft targeting", () => {
     expect(
       getActionBattleDirectionalTileRange(3, tileSize, { x: 1, y: 1 }),
     ).toBeCloseTo((3 * Math.SQRT2) / (1 / 10 + 1 / 24), 8);
+  });
+
+  test("uses the candidate direction for rectangular soft-target eligibility", () => {
+    const source = entity("hero", 0, 0);
+    const outside = entity("outside", 26, 12);
+    const boundary = {
+      tileRange: 3,
+      tileSize: { width: 10, height: 24 },
+    };
+    const measured = getActionBattleDirectionalTargetBoundary(
+      source,
+      outside,
+      boundary,
+    );
+
+    expect(measured.distance).toBeCloseTo(Math.hypot(26, 12));
+    expect(measured.eligible).toBe(false);
+    expect(
+      resolveActionBattleSoftTarget(
+        source,
+        [outside],
+        "right",
+        { coneDegrees: 180 },
+        boundary,
+      ),
+    ).toBeNull();
+
+    const legal = entity("legal", 24, 12);
+    expect(
+      resolveActionBattleSoftTarget(
+        source,
+        [legal, outside],
+        "right",
+        { coneDegrees: 180 },
+        boundary,
+      )?.target,
+    ).toBe(legal);
   });
 });
