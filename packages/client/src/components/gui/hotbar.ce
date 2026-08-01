@@ -456,7 +456,11 @@
 
 <script>
   import { computed, effect, mount, signal } from "canvasengine";
-  import { activateHotbarSlot } from "../../services/hotbar";
+  import {
+    activateHotbarSlot,
+    createHotbarInteractionContext,
+    shouldClearHotbarOptimisticSlot
+  } from "../../services/hotbar";
   import { inject } from "../../core/inject";
   import { RpgClientEngine } from "../../RpgClientEngine";
 
@@ -507,19 +511,11 @@
     const serverActive = hotbarData().activeSlot ?? hotbarData().hotbar?.activeSlot;
     const next = hotbarData().feedback;
     const optimistic = optimisticActiveSlot();
-    if (
-      optimistic !== null
-      && serverActive !== null
-      && serverActive !== undefined
-      && Number(serverActive) === optimistic
-    ) {
-      optimisticActiveSlot.set(null);
-    }
-    if (
-      optimistic !== null
-      && next?.slot === optimistic
-      && next?.status === "rejected"
-    ) {
+    if (shouldClearHotbarOptimisticSlot({
+      optimisticSlot: optimistic,
+      serverActiveSlot: serverActive,
+      feedback: next
+    })) {
       optimisticActiveSlot.set(null);
     }
     if (!next || next.revision === feedback().revision) return;
@@ -567,18 +563,11 @@
       feedback.set({ revision: feedback().revision + 1, slot: index, status: "rejected" });
       return;
     }
-    await activateHotbarSlot({
+    await activateHotbarSlot(createHotbarInteractionContext({
       slot,
-      select() {
-        optimisticActiveSlot.set(index);
-        if (slot.activation?.mode === "select") {
-          onInteraction?.("selectSlot", { slot: index });
-        }
-      },
-      use(target) {
-        onInteraction?.("useSlot", { slot: index, target });
-      }
-    });
+      setOptimisticSlot: (slotIndex) => optimisticActiveSlot.set(slotIndex),
+      onInteraction
+    }));
   };
   const selectSlot = (index) => () => activateSlot(index);
   const selectAdjacentSlot = (direction) => {

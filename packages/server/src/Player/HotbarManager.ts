@@ -667,6 +667,27 @@ export function WithHotbarManager<TBase extends PlayerCtor>(
     }
 
     /**
+     * Validate and return the entry currently stored in an accessible slot.
+     *
+     * Custom GUI handlers and gameplay modules must use this boundary before
+     * executing an entry themselves. It applies slot-capacity, configured type,
+     * registration, and per-entry availability checks without invoking `use`.
+     *
+     * @title Validate Hotbar Slot
+     * @method player.validateHotbarSlot(slot)
+     * @param slot - Zero-based accessible slot index.
+     * @returns A detached entry reference, or `null` for an empty slot.
+     * @memberof RpgPlayer
+     */
+    validateHotbarSlot(slot: number): HotbarEntry | null {
+      this.assertAccessibleSlot(slot);
+      const entry = this.normalizeHotbar().slots[slot];
+      if (!entry) return null;
+      this.assertEntryAvailable(entry);
+      return cloneEntry(entry) as HotbarEntry;
+    }
+
+    /**
      * Use an entry through its registered authoritative type handler.
      *
      * @title Use Hotbar Slot
@@ -677,11 +698,9 @@ export function WithHotbarManager<TBase extends PlayerCtor>(
      * @memberof RpgPlayer
      */
     useHotbarSlot(slot: number, target?: unknown): unknown {
-      this.assertAccessibleSlot(slot);
-      const current = this.normalizeHotbar();
-      const entry = current.slots[slot];
+      const entry = this.validateHotbarSlot(slot);
       if (!entry) return null;
-      this.assertEntryAvailable(entry);
+      const current = this.normalizeHotbar();
       const definition = getHotbarEntryType(entry.type)!;
       this.commitHotbar(
         { ...current, activeSlot: slot },
@@ -720,6 +739,7 @@ export interface IHotbarManager {
   assignHotbarSlot(slot: number, entry: HotbarEntry): HotbarState;
   clearHotbarSlot(slot: number): HotbarState;
   selectHotbarSlot(slot: number): HotbarState;
+  validateHotbarSlot(slot: number): HotbarEntry | null;
   useHotbarSlot(slot: number, target?: unknown): unknown;
   useActiveHotbarSlot(target?: unknown): unknown;
 }

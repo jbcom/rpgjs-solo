@@ -195,13 +195,9 @@ export class HotbarGui extends Gui {
         target?: unknown;
         clientActionId?: string;
       }) => {
-        const entry = this.player.getHotbar().slots[slot];
-        if (!entry || !this.player.isHotbarEntryTypeAllowed(entry.type)) {
-          this.setFeedback(slot, "rejected");
-          this.refresh(clientActionId);
-          return;
-        }
         try {
+          const entry = this.player.validateHotbarSlot(slot);
+          if (!entry) throw new Error("Hotbar slot is empty");
           this.player.selectHotbarSlot(slot);
           const result = this.options.onUse
             ? await this.options.onUse(this.player, { slot, entry, target })
@@ -225,9 +221,9 @@ export class HotbarGui extends Gui {
       }) => {
         const slot = this.player.getHotbar().activeSlot;
         if (slot === null) return;
-        const entry = this.player.getHotbar().slots[slot];
-        if (!entry || !this.player.isHotbarEntryTypeAllowed(entry.type)) return;
         try {
+          const entry = this.player.validateHotbarSlot(slot);
+          if (!entry) throw new Error("Hotbar slot is empty");
           const result = this.options.onUse
             ? await this.options.onUse(this.player, { slot, entry, target })
             : await this.player.useActiveHotbarSlot(target);

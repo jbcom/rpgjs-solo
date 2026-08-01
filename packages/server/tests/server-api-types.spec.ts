@@ -1,5 +1,10 @@
 import { describe, expectTypeOf, test } from "vitest";
-import type { HotbarState, MapStreamDefinition, RpgActionInput } from "@rpgjs/common";
+import type {
+  HotbarEntry,
+  HotbarState,
+  MapStreamDefinition,
+  RpgActionInput,
+} from "@rpgjs/common";
 import type { FactoryProvider as SigneFactoryProvider } from "@signe/di";
 import type { NodeConnection, NodeRoom } from "@signe/room/node";
 import { provideServerMapStreaming } from "@rpgjs/server";
@@ -76,6 +81,8 @@ describe("server public API types", () => {
       expectTypeOf(player.assignHotbarSlot(0, { type: "skill", id: "fire" }))
         .toEqualTypeOf<HotbarState>();
       expectTypeOf(player.clearHotbarSlot(0)).toEqualTypeOf<HotbarState>();
+      expectTypeOf(player.validateHotbarSlot(0))
+        .toEqualTypeOf<HotbarEntry | null>();
     };
 
     expectTypeOf(assertions).toBeFunction();

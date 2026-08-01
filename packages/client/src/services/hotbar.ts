@@ -32,6 +32,66 @@ export type HotbarActivationHandler = (
   context: HotbarActivationContext,
 ) => boolean | void | Promise<boolean | void>;
 
+/** Server interaction names emitted by the built-in hotbar component. */
+export type HotbarInteractionName = "selectSlot" | "useSlot";
+
+/** Payload sent through the built-in hotbar GUI interaction channel. */
+export interface HotbarInteractionPayload {
+  slot: number;
+  target?: unknown;
+}
+
+/** Build one ingress context for optimistic UI and authoritative server state. */
+export function createHotbarInteractionContext({
+  slot,
+  setOptimisticSlot,
+  onInteraction,
+}: {
+  slot: HotbarClientSlot;
+  setOptimisticSlot: (slot: number) => void;
+  onInteraction?: (
+    name: HotbarInteractionName,
+    payload: HotbarInteractionPayload,
+  ) => void;
+}): HotbarActivationContext {
+  return {
+    slot,
+    select() {
+      setOptimisticSlot(slot.index);
+      if (
+        slot.activation?.mode === "select"
+        || slot.activation?.mode === "target"
+      ) {
+        onInteraction?.("selectSlot", { slot: slot.index });
+      }
+    },
+    use(target) {
+      onInteraction?.("useSlot", { slot: slot.index, target });
+    },
+  };
+}
+
+/** Decide whether authoritative feedback has settled an optimistic selection. */
+export function shouldClearHotbarOptimisticSlot({
+  optimisticSlot,
+  serverActiveSlot,
+  feedback,
+}: {
+  optimisticSlot: number | null;
+  serverActiveSlot?: number | null;
+  feedback?: { slot?: number; status?: string };
+}): boolean {
+  if (optimisticSlot === null) return false;
+  return (
+    serverActiveSlot !== null
+    && serverActiveSlot !== undefined
+    && Number(serverActiveSlot) === optimisticSlot
+  ) || (
+    feedback?.slot === optimisticSlot
+    && feedback.status === "rejected"
+  );
+}
+
 const activationHandlers = new Map<string, HotbarActivationHandler>();
 
 /**

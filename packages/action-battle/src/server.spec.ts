@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { ACTION_BATTLE_CLIENT_VISUAL_ID } from "./visual";
 import {
+  ACTION_BATTLE_HOTBAR_USE,
   ACTION_BATTLE_SKILL_USE,
   createActionBattleServer,
 } from "./server";
@@ -140,6 +141,63 @@ describe("action battle player visuals", () => {
       data: { id: "unknown" },
     });
     expect(onUse).toHaveBeenCalledTimes(2);
+  });
+
+  test("rejects locked and disallowed hotbar skills before execution", () => {
+    const onUse = vi.fn();
+    const skill = {
+      id: "locked-focus",
+      _type: "skill",
+      name: "Locked Focus",
+      spCost: 4,
+      hitRate: 1,
+      action: { mode: "instant", target: "self", cooldownMs: 350 },
+      onUse,
+    };
+    const player = {
+      id: "hero",
+      sp: 10,
+      skills: () => [{ id: skill.id }],
+      getSkill: (id: string) => id === skill.id ? skill : null,
+      databaseById: (id: string) => id === skill.id ? skill : null,
+      hasEffect: () => false,
+      clientVisual: vi.fn(),
+      getGui: () => null,
+      getCurrentMap: () => null,
+      getHotbar: () => ({
+        capacity: 1,
+        activeSlot: null,
+        slots: [null, { type: "skill", id: skill.id }],
+      }),
+      validateHotbarSlot: vi.fn()
+        .mockImplementationOnce(() => {
+          throw new RangeError("Hotbar slot 1 is locked");
+        })
+        .mockImplementationOnce(() => {
+          throw new Error('Hotbar entry type "skill" is not allowed');
+        })
+        .mockReturnValue({ type: "skill", id: skill.id }),
+      useHotbarSlot: vi.fn(),
+    };
+    const server = createActionBattleServer();
+
+    const useSlot = () => (server.player?.onInput as any)(player, {
+        action: ACTION_BATTLE_HOTBAR_USE,
+        data: { slot: 1 },
+      });
+
+    useSlot();
+    useSlot();
+    expect(onUse).not.toHaveBeenCalled();
+    expect(player.sp).toBe(10);
+
+    useSlot();
+
+    expect(player.validateHotbarSlot).toHaveBeenCalledTimes(3);
+    expect(player.validateHotbarSlot).toHaveBeenCalledWith(1);
+    expect(onUse).toHaveBeenCalledTimes(1);
+    expect(player.sp).toBe(6);
+    expect(player.useHotbarSlot).not.toHaveBeenCalled();
   });
 
   test("opens or hides the hotbar from the per-player resolver on map changes", () => {

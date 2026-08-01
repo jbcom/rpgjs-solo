@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { createModule, defineModule } from "@rpgjs/common";
+import { createModule, defineModule, PrebuiltGui } from "@rpgjs/common";
 import { testing, type TestingFixture } from "@rpgjs/testing";
 import { registerHotbarEntryType, RpgPlayer } from "../src";
 import { buildPlayerHotbarData } from "../src/Gui/HotbarGui";
@@ -233,6 +233,9 @@ describe("player hotbar", () => {
     player.assignHotbarSlot(8, { type: "skill", id: "fire" });
     player.configureHotbar({ capacity: 3 });
     expect(player.getHotbar().slots[8]).toEqual({ type: "skill", id: "fire" });
+    expect(() => player.validateHotbarSlot(8)).toThrow(
+      "Hotbar slot 8 is locked",
+    );
     player.configureHotbar({ capacity: 10 });
     expect(player.getHotbar().slots[8]).toEqual({ type: "skill", id: "fire" });
   });
@@ -267,6 +270,67 @@ describe("player hotbar", () => {
     }
   });
 
+  test("revalidates custom entries before custom GUI handlers", async () => {
+    let available = true;
+    const onUse = vi.fn();
+    const unregister = registerHotbarEntryType({
+      type: "revocable",
+      validate(_player, id) {
+        if (id !== "permit" || !available) throw new Error("Permit revoked");
+      },
+      resolve(_player, id) {
+        return {
+          id,
+          type: "revocable",
+          name: "Permit",
+          usable: available,
+          activation: { mode: "instant" },
+        };
+      },
+      use: vi.fn(),
+    });
+
+    try {
+      player.assignHotbarSlot(4, { type: "revocable", id: "permit" });
+      player.selectHotbarSlot(4);
+      await player.showHotbar({ autoInitialize: false, onUse });
+      const gui = player.getGui(PrebuiltGui.Hotbar);
+      expect(gui).toBeDefined();
+      if (!gui) throw new Error("Hotbar GUI was not created");
+      const emit = vi.spyOn(player, "emit");
+      available = false;
+      expect(() => player.validateHotbarSlot(4)).toThrow("Permit revoked");
+
+      await gui.emit("useSlot", { slot: 4, clientActionId: "revoked-slot" });
+      await gui.emit("useActiveSlot", { clientActionId: "revoked-active" });
+
+      expect(onUse).not.toHaveBeenCalled();
+      const rejectedUpdates = emit.mock.calls
+        .filter(([event]) => event === "gui.update")
+        .map(([, payload]) => payload as {
+          clientActionId?: string;
+          data?: { feedback?: { slot: number; status: string } };
+        })
+        .filter(({ data }) => data?.feedback?.status === "rejected");
+      expect(rejectedUpdates).toEqual([
+        expect.objectContaining({
+          clientActionId: "revoked-slot",
+          data: expect.objectContaining({
+            feedback: expect.objectContaining({ slot: 4, status: "rejected" }),
+          }),
+        }),
+        expect.objectContaining({
+          clientActionId: "revoked-active",
+          data: expect.objectContaining({
+            feedback: expect.objectContaining({ slot: 4, status: "rejected" }),
+          }),
+        }),
+      ]);
+    } finally {
+      unregister();
+    }
+  });
+
   test("filters entry types without deleting persisted assignments", () => {
     player.initializeHotbar();
     player.configureHotbar({ allowedEntryTypes: ["item"] });
@@ -281,6 +345,9 @@ describe("player hotbar", () => {
       player.assignHotbarSlot(4, { type: "skill", id: "fire" }),
     ).toThrow('Hotbar entry type "skill" is not allowed');
     expect(() => player.useHotbarSlot(0)).toThrow(
+      'Hotbar entry type "skill" is not allowed',
+    );
+    expect(() => player.validateHotbarSlot(0)).toThrow(
       'Hotbar entry type "skill" is not allowed',
     );
 

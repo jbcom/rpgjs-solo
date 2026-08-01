@@ -1135,7 +1135,12 @@ const handleActionBattleHotbarUse = (
   options: ActionBattleOptions,
 ) => {
   if (!Number.isInteger(slot) || slot < 0 || slot >= 10) return false;
-  const entry = player.getHotbar?.().slots[slot];
+  let entry: ReturnType<RpgPlayer["validateHotbarSlot"]>;
+  try {
+    entry = player.validateHotbarSlot(slot);
+  } catch {
+    return false;
+  }
   if (!entry) return false;
   if (entry.type === "skill") {
     return handleActionBattleSkillUse(player, entry.id, target, options);
