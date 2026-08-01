@@ -1,6 +1,7 @@
-import { describe, expectTypeOf, test } from "vitest";
+import { describe, expect, expectTypeOf, test } from "vitest";
 import type { RpgEvent } from "@rpgjs/server";
 import type { ClientVisualHelpers } from "@rpgjs/client";
+import * as actionBattleApi from "./index";
 import {
   callAction,
   phase,
@@ -18,6 +19,12 @@ import {
 } from "./index";
 
 describe("action battle public API types", () => {
+  test("keeps runtime intent acknowledgements internal", () => {
+    expect(actionBattleApi).not.toHaveProperty(
+      "acknowledgeActionBattleAiIntentExecution"
+    );
+  });
+
   test("boss behavior helpers preserve intent and node contracts", () => {
     const cue = {
       kind: "ground-marker",

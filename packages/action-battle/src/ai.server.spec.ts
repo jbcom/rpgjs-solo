@@ -8,10 +8,13 @@ import {
   idle,
   ifTargetVisible,
   moveToPoint,
+  phase,
   run,
   setSpeed,
   teleportNearTarget,
   teleportTo,
+  useAttack,
+  useSkill,
   visual,
 } from "./core/ai-behavior-tree";
 import { setActionBattleSystems } from "./core/context";
@@ -365,6 +368,85 @@ describe("BattleAi behavior tree", () => {
     vi.advanceTimersByTime(100);
 
     expect(event.moveTo).toHaveBeenCalledWith(player);
+    ai.destroy();
+  });
+
+  test("retries a phase attack after range rejection and executes it once", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.hp = 4;
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 100),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackCooldown: 0,
+      attackRange: 50,
+      behaviorTree: phase("range", 0.5, {
+        ...useAttack(AttackPattern.Melee),
+        consume: false,
+      }),
+    });
+    const performAttack = vi
+      .spyOn(ai as any, "performAttackPattern")
+      .mockImplementation(() => undefined);
+    ai.onDetectInShape(player as any, {});
+
+    expect((ai as any).applyCustomBehavior(1000)).toBe(false);
+    expect(performAttack).not.toHaveBeenCalled();
+
+    player.x.mockReturnValue(20);
+    expect((ai as any).applyCustomBehavior(1100)).toBe(false);
+    expect(performAttack).toHaveBeenCalledOnce();
+
+    expect((ai as any).applyCustomBehavior(1200)).toBe(false);
+    expect(performAttack).toHaveBeenCalledOnce();
+    ai.destroy();
+  });
+
+  test("retries a phase skill after cooldown rejection and executes it once", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.hp = 4;
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const skill = {
+      id: "phase-skill",
+      spCost: 0,
+      action: {
+        mode: "melee",
+        target: "enemy",
+        cooldownMs: 500,
+      },
+      onUse: vi.fn(),
+    };
+    const ai = new BattleAi(event as any, {
+      attackCooldown: 0,
+      attackRange: 50,
+      behaviorTree: phase("skill", 0.5, useSkill(skill)),
+    });
+    const performSkill = vi
+      .spyOn(ai as any, "performPlannedSkill")
+      .mockReturnValue(true);
+    (ai as any).skillCooldowns.set(skill.id, 1000);
+    ai.onDetectInShape(player as any, {});
+
+    expect((ai as any).applyCustomBehavior(900)).toBe(false);
+    expect(performSkill).not.toHaveBeenCalled();
+
+    expect((ai as any).applyCustomBehavior(1000)).toBe(true);
+    expect(performSkill).toHaveBeenCalledOnce();
+
+    expect((ai as any).applyCustomBehavior(1100)).toBe(false);
+    expect(performSkill).toHaveBeenCalledOnce();
     ai.destroy();
   });
 

@@ -4,6 +4,7 @@ import type {
   ActionBattleAiContext,
   ActionBattleAiDecision,
 } from "./contracts";
+import { deferActionBattleAiIntentCompletion } from "./ai-intent-execution";
 
 export type ActionBattleAiTreeStatus = "success" | "failure" | "running";
 
@@ -298,7 +299,9 @@ export const decision = (
  * Execute an action only once for one AI instance.
  *
  * The key is marked only after the wrapped action succeeds. Running actions
- * can therefore finish normally across several AI ticks.
+ * can therefore finish normally across several AI ticks. Attack and skill
+ * intents complete only after the authoritative BattleAi executor accepts
+ * them.
  *
  * @param key Stable memory key unique within one behavior tree.
  * @param input Intent or node to execute once.
@@ -313,7 +316,15 @@ export const once = (
     if (context.memory[keyInMemory]) return { status: "failure" };
     const result = runIntentInput(input, context);
     if (result.status === "success") {
-      context.memory[keyInMemory] = true;
+      const complete = () => {
+        context.memory[keyInMemory] = true;
+      };
+      if (
+        !result.intent ||
+        !deferActionBattleAiIntentCompletion(result.intent, complete)
+      ) {
+        complete();
+      }
     }
     return result;
   },

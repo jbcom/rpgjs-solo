@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { AiState, AttackPattern, EnemyType } from "../ai.server";
+import { acknowledgeActionBattleAiIntentExecution } from "./ai-intent-execution";
 import {
   action,
   chase,
@@ -120,17 +121,21 @@ describe("action battle AI behavior tree", () => {
     expect(later).not.toHaveBeenCalled();
   });
 
-  test("runs named actions once per AI memory", () => {
-    const node = once("rage", useAttack("charged"));
+  test("runs named synchronous nodes once per AI memory", () => {
+    const execute = vi.fn();
+    const node = once("rage", {
+      tick() {
+        execute();
+        return { status: "success" };
+      },
+    });
     const firstContext = createContext();
     const secondContext = createContext();
 
-    expect(node.tick(firstContext)).toEqual({
-      status: "success",
-      intent: useAttack("charged"),
-    });
+    expect(node.tick(firstContext)).toEqual({ status: "success" });
     expect(node.tick(firstContext)).toEqual({ status: "failure" });
     expect(node.tick(secondContext).status).toBe("success");
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
   test("starts a named cooldown only after action success", () => {
@@ -183,7 +188,11 @@ describe("action battle AI behavior tree", () => {
     context.now = 1;
     expect(node.tick(context).status).toBe("running");
     context.now = 11;
-    expect(node.tick(context).status).toBe("success");
+    const result = node.tick(context);
+    expect(result.status).toBe("success");
+    acknowledgeActionBattleAiIntentExecution(
+      result.intent as ReturnType<typeof useAttack>
+    );
     expect(node.tick(context)).toEqual({ status: "failure" });
   });
 

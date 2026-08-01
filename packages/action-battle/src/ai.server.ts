@@ -54,6 +54,9 @@ import {
   type ActionBattleAiTreeInput,
   type ActionBattleAiTreeNode,
 } from "./core/ai-behavior-tree";
+import {
+  acknowledgeActionBattleAiIntentExecution,
+} from "./core/ai-intent-execution";
 import type {
   ActionBattleAiBehavior,
   ActionBattleAiDecision,
@@ -3229,10 +3232,19 @@ export class BattleAi {
         return consumes;
       case "keepDistance":
         return this.executeKeepDistance(intent, consumes);
-      case "useAttack":
-        return this.executeRequestedAttack(intent.pattern, currentTime, consumes);
-      case "useSkill":
-        return this.executeRequestedSkill(intent.skill, currentTime, consumes);
+      case "useAttack": {
+        const executed = this.executeRequestedAttack(
+          intent.pattern,
+          currentTime
+        );
+        if (executed) acknowledgeActionBattleAiIntentExecution(intent);
+        return executed && consumes;
+      }
+      case "useSkill": {
+        const executed = this.executeRequestedSkill(intent.skill, currentTime);
+        if (executed) acknowledgeActionBattleAiIntentExecution(intent);
+        return executed && consumes;
+      }
     }
   }
 
@@ -3278,8 +3290,7 @@ export class BattleAi {
 
   private executeRequestedAttack(
     pattern: AttackPattern | string | undefined,
-    currentTime: number,
-    consumes: boolean
+    currentTime: number
   ): boolean {
     if (!this.target || this.isTargetDefeated(this.target) || this.chargingAttack) return false;
     const distance = this.getDistance(this.event, this.target);
@@ -3292,13 +3303,12 @@ export class BattleAi {
       this.selectAndPerformAttack();
     }
     this.lastAttackTime = currentTime;
-    return consumes;
+    return true;
   }
 
   private executeRequestedSkill(
     skill: any,
-    currentTime: number,
-    consumes: boolean
+    currentTime: number
   ): boolean {
     if (!this.target || this.isTargetDefeated(this.target) || !skill) return false;
     const resolvedSkill = this.resolveUsable(skill);
@@ -3317,7 +3327,7 @@ export class BattleAi {
     if (!this.performPlannedSkill(evaluation)) return false;
     this.lastAttackTime = currentTime;
     this.lastCombatAction = { kind: "skill", id: evaluation.id };
-    return consumes;
+    return true;
   }
 
   private handleTacticalMovement(distance: number) {
