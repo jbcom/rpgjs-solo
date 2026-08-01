@@ -8,6 +8,7 @@ import {
 import {
 	chmodSync,
 	existsSync,
+	linkSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -23,6 +24,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	applySoloReleaseTransaction,
 	assertCanonicalMain,
+	assertFinalReleaseBindings,
 	assertLivePromotedCohort,
 	assertMonotonicLatestPromotion,
 	assertReleaseToolchain,
@@ -36,12 +38,13 @@ import {
 	pnpmView,
 	prepareReleaseEvidence,
 	publishCandidateCohort,
+	readTransactionJournal,
 	reconcileReleaseRemotes,
 	reconcileReleaseWithAdapter,
-	reviewAssignmentSha512,
 	secureAtomicWriteJson,
 	sha512File,
 	validateSoloReleaseState,
+	verifyExternalOrchestratorAssignment,
 	verifyIndependentReviewReceipt,
 	withEphemeralNpmAuth,
 } from "./solo-release.mjs";
@@ -95,6 +98,21 @@ const testReviewKeyId = createHash("sha256")
 	.digest("hex");
 const testReviewSigner = (value: Buffer) =>
 	signBytes(null, value, testReviewKeys.privateKey);
+const testOrchestratorKeys = generateKeyPairSync("ed25519");
+const testOrchestratorPublicKeyPem = testOrchestratorKeys.publicKey
+	.export({ type: "spki", format: "pem" })
+	.toString();
+const testOrchestratorKeyId = createHash("sha256")
+	.update(
+		testOrchestratorKeys.publicKey.export({ type: "spki", format: "der" }),
+	)
+	.digest("hex");
+const testOrchestratorRawPublicKey = Buffer.from(
+	testOrchestratorKeys.publicKey.export({ type: "spki", format: "der" }),
+).subarray(-32);
+const testOrchestratorRawKeyId = createHash("sha256")
+	.update(testOrchestratorRawPublicKey)
+	.digest("hex");
 const testProvenanceKeys = generateKeyPairSync("ed25519");
 const testProvenancePublicKeyPem = testProvenanceKeys.publicKey
 	.export({
@@ -113,6 +131,10 @@ const writeJson = (path: string, value: unknown) =>
 afterEach(() => {
 	for (const directory of temporaryDirectories.splice(0))
 		rmSync(directory, { recursive: true, force: true });
+	delete process.env.RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_PATH;
+	delete process.env.RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_KEY_ID;
+	delete process.env.RPGJS_SOLO_ORCHESTRATOR_ASSIGNMENT_PATH;
+	delete process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH;
 });
 
 const changeset = (releases: string[], summary: string) =>
@@ -220,20 +242,6 @@ function createFixture() {
 			...(id === "studio" ? { introducedBy: "4".repeat(40) } : {}),
 		}),
 	);
-	const orchestratorAssignment = {
-		schemaVersion: 1,
-		status: "final",
-		producerTaskId: "/root/solo_release_transaction_audit",
-		producerPrincipalId: "producer-fixture",
-		reviewerTaskId: "/root/solo_fix_release_review",
-		reviewerPrincipalId: "reviewer-fixture",
-		reviewerRole: "independent-release-auditor",
-		reviewerForkId: "fork-solo-fix-release-review",
-		assignmentSha512: "",
-	};
-	orchestratorAssignment.assignmentSha512 = reviewAssignmentSha512(
-		orchestratorAssignment,
-	);
 	const plan = {
 		schemaVersion: 2,
 		releaseId: "fixture",
@@ -259,9 +267,15 @@ function createFixture() {
 			independentReceipt: {
 				status: "final",
 				algorithm: "ed25519",
-				keyId: testReviewKeyId,
-				publicKeyPem: testReviewPublicKeyPem,
-				orchestratorAssignment,
+				orchestratorAssignment: {
+					schemaVersion: 1,
+					status: "final",
+					trustRootPathEnvironment: "RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_PATH",
+					trustRootKeyIdEnvironment:
+						"RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_KEY_ID",
+					assignmentPathEnvironment: "RPGJS_SOLO_ORCHESTRATOR_ASSIGNMENT_PATH",
+					requiredReviewerRole: "independent-release-auditor",
+				},
 			},
 		},
 		provenanceAttestation: {
@@ -296,7 +310,53 @@ function createFixture() {
 	};
 	const planPath = join(root, "plan.json");
 	writeJson(planPath, plan);
-	return { root, planPath, carriedSources };
+	const trustDirectory = mkdtempSync(
+		join(tmpdir(), "solo-orchestrator-trust-"),
+	);
+	temporaryDirectories.push(trustDirectory);
+	const trustRootPath = join(trustDirectory, "trust-root.json");
+	writeJson(trustRootPath, {
+		schemaVersion: 1,
+		trustDomain: "jbcom/rpgjs-solo-release-orchestrator",
+		algorithm: "ed25519",
+		keyId: testOrchestratorKeyId,
+		publicKeyPem: testOrchestratorPublicKeyPem,
+	});
+	chmodSync(trustRootPath, 0o600);
+	const assignment = {
+		schemaVersion: 1,
+		algorithm: "ed25519",
+		trustRootKeyId: testOrchestratorKeyId,
+		releaseId: plan.releaseId,
+		version: plan.version,
+		producerTaskId: "/root/solo_release_transaction_audit",
+		producerPrincipalId: "producer-fixture",
+		reviewerTaskId: "/root/solo_fix_release_review",
+		reviewerPrincipalId: "reviewer-fixture",
+		reviewerRole: "independent-release-auditor",
+		reviewerForkId: "fork-solo-fix-release-review",
+		reviewerKeyId: testReviewKeyId,
+		reviewerPublicKeyPem: testReviewPublicKeyPem,
+	};
+	const assignmentPath = join(trustDirectory, "assignment.json");
+	writeJson(assignmentPath, assignment);
+	chmodSync(assignmentPath, 0o600);
+	writeFileSync(
+		`${assignmentPath}.sig`,
+		`${signBytes(null, readFileSync(assignmentPath), testOrchestratorKeys.privateKey).toString("base64")}\n`,
+	);
+	chmodSync(`${assignmentPath}.sig`, 0o600);
+	process.env.RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_PATH = trustRootPath;
+	process.env.RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_KEY_ID = testOrchestratorKeyId;
+	process.env.RPGJS_SOLO_ORCHESTRATOR_ASSIGNMENT_PATH = assignmentPath;
+	return {
+		root,
+		planPath,
+		carriedSources,
+		trustRootPath,
+		assignmentPath,
+		assignment,
+	};
 }
 
 function initializeFixtureGit(
@@ -353,6 +413,29 @@ function createExpectedRelease() {
 			sha512: sha512File(path),
 		})),
 	};
+}
+
+function createCandidateFixture() {
+	const directory = mkdtempSync(join(tmpdir(), "solo-candidate-fixture-"));
+	temporaryDirectories.push(directory);
+	const releaseId = "candidate-fixture";
+	const manifest = {
+		releaseId,
+		packages: packages.map(({ name }, index) => {
+			const archive = `${index}.tgz`;
+			const bytes = Buffer.from(`candidate archive ${index}\n`);
+			writeFileSync(join(directory, archive), bytes);
+			return {
+				name,
+				archive,
+				sha512: createHash("sha512").update(bytes).digest("hex"),
+				integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`,
+			};
+		}),
+	};
+	const manifestPath = join(directory, "provenance.json");
+	writeJson(manifestPath, manifest);
+	return { directory, releaseId, manifest, manifestPath };
 }
 
 function createReleaseAdapter(
@@ -486,30 +569,65 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.sourceBinding.status).toBe("provisional");
 		expect(plan.reviewEvidence.status).toBe("provisional");
 		expect(plan.provenanceAttestation.status).toBe("provisional");
+		expect(() => assertFinalReleaseBindings(plan)).toThrow(
+			/sourceBinding, reviewEvidence, independentReceipt, orchestratorAssignment, provenanceAttestation/i,
+		);
 	});
 
-	it("requires distinct review/provenance keys and an exact producer-disjoint orchestrator assignment", () => {
+	it("keeps reviewer trust outside the plan and authenticates a producer-disjoint detached assignment", () => {
 		const fixture = createFixture();
 		const source = JSON.parse(readFileSync(fixture.planPath, "utf8"));
-		const sameKey = structuredClone(source);
-		sameKey.provenanceAttestation.keyId =
-			sameKey.reviewEvidence.independentReceipt.keyId;
-		sameKey.provenanceAttestation.publicKeyPem =
-			sameKey.reviewEvidence.independentReceipt.publicKeyPem;
-		writeJson(fixture.planPath, sameKey);
+		expect(
+			verifyExternalOrchestratorAssignment(
+				loadSoloReleasePlan(fixture.planPath),
+				{
+					repositoryRoot: fixture.root,
+				},
+			),
+		).toMatchObject({
+			trustRootKeyId: testOrchestratorKeyId,
+			reviewerKeyId: testReviewKeyId,
+			assignment: { reviewerPrincipalId: "reviewer-fixture" },
+		});
+
+		const smuggledKey = structuredClone(source);
+		smuggledKey.reviewEvidence.independentReceipt.keyId = testReviewKeyId;
+		smuggledKey.reviewEvidence.independentReceipt.publicKeyPem =
+			testReviewPublicKeyPem;
+		writeJson(fixture.planPath, smuggledKey);
 		expect(() => loadSoloReleasePlan(fixture.planPath)).toThrow(
-			/distinct Ed25519 keys/i,
+			/must not select orchestrator trust input keyId/i,
 		);
 
-		const sameTask = structuredClone(source);
-		const assignment =
-			sameTask.reviewEvidence.independentReceipt.orchestratorAssignment;
-		assignment.reviewerTaskId = assignment.producerTaskId;
-		assignment.assignmentSha512 = reviewAssignmentSha512(assignment);
-		writeJson(fixture.planPath, sameTask);
-		expect(() => loadSoloReleasePlan(fixture.planPath)).toThrow(
-			/exact predeclared producer-disjoint orchestrator assignment/i,
+		writeJson(fixture.planPath, source);
+		process.env.RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_KEY_ID = "f".repeat(64);
+		expect(() =>
+			verifyExternalOrchestratorAssignment(
+				loadSoloReleasePlan(fixture.planPath),
+				{
+					repositoryRoot: fixture.root,
+				},
+			),
+		).toThrow(/runtime fingerprint pin/i);
+		process.env.RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_KEY_ID =
+			testOrchestratorKeyId;
+		const sameTask = { ...fixture.assignment };
+		sameTask.reviewerTaskId = sameTask.producerTaskId;
+		writeJson(fixture.assignmentPath, sameTask);
+		chmodSync(fixture.assignmentPath, 0o600);
+		writeFileSync(
+			`${fixture.assignmentPath}.sig`,
+			`${signBytes(null, readFileSync(fixture.assignmentPath), testOrchestratorKeys.privateKey).toString("base64")}\n`,
 		);
+		chmodSync(`${fixture.assignmentPath}.sig`, 0o600);
+		expect(() =>
+			verifyExternalOrchestratorAssignment(
+				loadSoloReleasePlan(fixture.planPath),
+				{
+					repositoryRoot: fixture.root,
+				},
+			),
+		).toThrow(/producer-disjoint release/i);
 
 		const missingAssignment = structuredClone(source);
 		delete missingAssignment.reviewEvidence.independentReceipt
@@ -518,6 +636,106 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(() => loadSoloReleasePlan(fixture.planPath)).toThrow(
 			/configuration is incomplete/i,
 		);
+	});
+
+	it("rejects forged detached assignments, substituted reviewer keys, and in-repository trust inputs", () => {
+		for (const attack of [
+			"signature",
+			"reviewer-key",
+			"inside-repository",
+			"inside-via-parent-symlink",
+		]) {
+			const fixture = createFixture();
+			const plan = loadSoloReleasePlan(fixture.planPath);
+			if (attack === "signature") {
+				writeFileSync(
+					`${fixture.assignmentPath}.sig`,
+					`${Buffer.alloc(64).toString("base64")}\n`,
+				);
+				chmodSync(`${fixture.assignmentPath}.sig`, 0o600);
+			} else if (attack === "reviewer-key") {
+				const assignment = {
+					...fixture.assignment,
+					reviewerKeyId: testProvenanceKeyId,
+					reviewerPublicKeyPem: testProvenancePublicKeyPem,
+				};
+				writeJson(fixture.assignmentPath, assignment);
+				chmodSync(fixture.assignmentPath, 0o600);
+				writeFileSync(
+					`${fixture.assignmentPath}.sig`,
+					`${signBytes(null, readFileSync(fixture.assignmentPath), testOrchestratorKeys.privateKey).toString("base64")}\n`,
+				);
+				chmodSync(`${fixture.assignmentPath}.sig`, 0o600);
+			} else {
+				const inside = join(fixture.root, "trust-root.json");
+				writeFileSync(inside, readFileSync(fixture.trustRootPath));
+				chmodSync(inside, 0o600);
+				if (attack === "inside-via-parent-symlink") {
+					const aliasDirectory = mkdtempSync(
+						join(tmpdir(), "solo-repo-alias-"),
+					);
+					temporaryDirectories.push(aliasDirectory);
+					const alias = join(aliasDirectory, "repo");
+					symlinkSync(fixture.root, alias);
+					process.env.RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_PATH = join(
+						alias,
+						"trust-root.json",
+					);
+				} else process.env.RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_PATH = inside;
+			}
+			expect(() =>
+				verifyExternalOrchestratorAssignment(plan, {
+					repositoryRoot: fixture.root,
+				}),
+			).toThrow(
+				attack === "signature"
+					? /signature is invalid/i
+					: attack === "reviewer-key"
+						? /reviewer key is invalid|not distinct/i
+						: /outside the producer repository/i,
+			);
+		}
+	});
+
+	it("accepts the fleet's normative raw Ed25519 trust-root representation and fingerprint", () => {
+		const fixture = createFixture();
+		writeJson(fixture.trustRootPath, {
+			schemaVersion: "arcade-cabinet.orchestrator-trust-root/v1",
+			trustRootId: "arcade-cabinet-orchestrator-assignment-ed25519-v1",
+			status: "ACTIVE",
+			normativeArtifact: true,
+			scope: ["jbcom-rpgjs-solo-release-review-assignment"],
+			publicKey: {
+				algorithm: "Ed25519",
+				encoding: "raw-base64-rfc4648-canonical-with-padding",
+				rawBytes: 32,
+				value: testOrchestratorRawPublicKey.toString("base64"),
+				sha256: testOrchestratorRawKeyId,
+			},
+		});
+		chmodSync(fixture.trustRootPath, 0o600);
+		const assignment = {
+			...fixture.assignment,
+			trustRootKeyId: testOrchestratorRawKeyId,
+		};
+		writeJson(fixture.assignmentPath, assignment);
+		chmodSync(fixture.assignmentPath, 0o600);
+		writeFileSync(
+			`${fixture.assignmentPath}.sig`,
+			`${signBytes(null, readFileSync(fixture.assignmentPath), testOrchestratorKeys.privateKey).toString("base64")}\n`,
+		);
+		chmodSync(`${fixture.assignmentPath}.sig`, 0o600);
+		process.env.RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_KEY_ID =
+			testOrchestratorRawKeyId;
+		expect(
+			verifyExternalOrchestratorAssignment(
+				loadSoloReleasePlan(fixture.planPath),
+				{ repositoryRoot: fixture.root },
+			),
+		).toMatchObject({
+			trustRootKeyId: testOrchestratorRawKeyId,
+			trustRootRepresentation: "raw",
+		});
 	});
 
 	it("applies only the cohort once, preserves inherited changesets, and never creates beta.30", () => {
@@ -632,7 +850,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				existsSync(join(fixture.root, ".rpgjs-solo-release-apply.json")),
 			).toBe(false);
 		}
-	});
+	}, 30_000);
 
 	it("recovers secure transaction-owned writes interrupted before journal or output rename", () => {
 		for (const failureKind of ["journal", "manifest"]) {
@@ -709,6 +927,140 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(value);
 		expect(statSync(path).mode & 0o777).toBe(0o600);
 		expect(readdirSync(directory).sort()).toEqual(["promotion.json"]);
+	});
+
+	it("preserves every unmarked, mismatched, or hard-linked transaction lookalike", () => {
+		const directory = mkdtempSync(join(tmpdir(), "solo-unproven-txn-"));
+		temporaryDirectories.push(directory);
+		const unmarkedTarget = join(directory, "unmarked.json");
+		const unmarked = join(directory, ".unmarked.json.solo-txn-forged");
+		mkdirSync(unmarked, { mode: 0o700 });
+		writeFileSync(join(unmarked, "payload"), "unproven bytes\n");
+		const before = readFileSync(join(unmarked, "payload"));
+		expect(() =>
+			secureAtomicWriteJson(
+				unmarkedTarget,
+				{ releaseId: "fixture" },
+				{ purpose: "promotion:fixture" },
+			),
+		).toThrow(/unmarked transaction temporary state was preserved/i);
+		expect(readFileSync(join(unmarked, "payload"))).toEqual(before);
+
+		const mismatchTarget = join(directory, "mismatch.json");
+		expect(() =>
+			secureAtomicWriteJson(
+				mismatchTarget,
+				{ releaseId: "first" },
+				{
+					purpose: "promotion:fixture",
+					beforeRename: () => {
+						throw new Error("interrupted mismatch");
+					},
+				},
+			),
+		).toThrow(/interrupted mismatch/i);
+		const mismatchTemp = readdirSync(directory).find((name) =>
+			name.startsWith(".mismatch.json.solo-txn-"),
+		);
+		expect(mismatchTemp).toBeDefined();
+		expect(() =>
+			secureAtomicWriteJson(
+				mismatchTarget,
+				{ releaseId: "second" },
+				{ purpose: "promotion:fixture" },
+			),
+		).toThrow(/different desired bytes/i);
+		expect(existsSync(join(directory, mismatchTemp ?? ""))).toBe(true);
+
+		const markerTarget = join(directory, "marker.json");
+		let markerPath = "";
+		expect(() =>
+			secureAtomicWriteJson(
+				markerTarget,
+				{ releaseId: "fixture" },
+				{
+					purpose: "promotion:fixture",
+					beforeRename: ({ markerPath: path }) => {
+						markerPath = path;
+						linkSync(path, join(directory, "marker-hardlink.json"));
+						throw new Error("interrupted marker");
+					},
+				},
+			),
+		).toThrow(/interrupted marker/i);
+		expect(() =>
+			secureAtomicWriteJson(
+				markerTarget,
+				{ releaseId: "fixture" },
+				{ purpose: "promotion:fixture" },
+			),
+		).toThrow(/forged or unsafe|exactly one hard link/i);
+		expect(existsSync(markerPath)).toBe(true);
+		expect(existsSync(join(directory, "marker-hardlink.json"))).toBe(true);
+	});
+
+	it("rejects hard-linked journals and apply outputs without mutating their external peer", () => {
+		const directory = mkdtempSync(join(tmpdir(), "solo-hardlink-journal-"));
+		temporaryDirectories.push(directory);
+		const journal = join(directory, "journal.json");
+		secureAtomicWriteJson(
+			journal,
+			{ schemaVersion: 1, releaseId: "fixture" },
+			{ purpose: "promotion:fixture" },
+		);
+		const journalPeer = join(directory, "journal-peer.json");
+		linkSync(journal, journalPeer);
+		expect(() => readTransactionJournal(journal, "promotion:fixture")).toThrow(
+			/exactly one hard link/i,
+		);
+
+		const fixture = createFixture();
+		const plan = loadSoloReleasePlan(fixture.planPath);
+		initializeFixtureGit(fixture, plan);
+		let firstPath = "";
+		expect(() =>
+			applySoloReleaseTransaction(fixture.root, plan, undefined, {
+				targetLockfileFactory: () => "deterministic-lock\n",
+				afterBoundary: ({ path }) => {
+					firstPath = path;
+					throw new Error("pause for hardlink attack");
+				},
+			}),
+		).toThrow(/pause for hardlink attack/i);
+		const applyJournal = JSON.parse(
+			readFileSync(
+				join(fixture.root, ".rpgjs-solo-release-apply.json"),
+				"utf8",
+			),
+		);
+		const victim = applyJournal.outputs.find(
+			(output: {
+				path: string;
+				source: { exists: boolean };
+				target: { exists: boolean };
+			}) =>
+				output.path !== firstPath &&
+				output.source.exists &&
+				output.target.exists,
+		);
+		expect(victim).toBeDefined();
+		const victimPath = join(fixture.root, victim.path);
+		const external = join(directory, "apply-peer.json");
+		writeFileSync(
+			external,
+			execFileSync("git", ["show", `HEAD:${victim.path}`], {
+				cwd: fixture.root,
+			}),
+		);
+		const externalBefore = readFileSync(external);
+		rmSync(victimPath);
+		linkSync(external, victimPath);
+		expect(() =>
+			applySoloReleaseTransaction(fixture.root, plan, undefined, {
+				targetLockfileFactory: () => "deterministic-lock\n",
+			}),
+		).toThrow(/outside the exact source\/target transaction/i);
+		expect(readFileSync(external)).toEqual(externalBefore);
 	});
 
 	it("rejects foreign bytes inside an interrupted apply transaction", () => {
@@ -931,8 +1283,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		temporaryDirectories.push(directory);
 		const receiptPath = join(directory, "receipt.json");
 		const previous = process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH;
-		const assignment =
-			plan.reviewEvidence.independentReceipt.orchestratorAssignment;
+		const assignment = fixture.assignment;
+		const assignmentSha512 = sha512File(fixture.assignmentPath);
 		const writeReceipt = (
 			overrides: Record<string, unknown> = {},
 			signer = testReviewSigner,
@@ -955,7 +1307,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				reviewerPrincipalId: assignment.reviewerPrincipalId,
 				reviewerRole: assignment.reviewerRole,
 				reviewerForkId: assignment.reviewerForkId,
-				assignmentSha512: assignment.assignmentSha512,
+				assignmentSha512,
+				trustRootKeyId: testOrchestratorKeyId,
 				...overrides,
 			};
 			writeJson(receiptPath, receipt);
@@ -963,6 +1316,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				`${receiptPath}.sig`,
 				`${signer(readFileSync(receiptPath)).toString("base64")}\n`,
 			);
+			chmodSync(receiptPath, 0o600);
+			chmodSync(`${receiptPath}.sig`, 0o600);
 		};
 		try {
 			process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH = receiptPath;
@@ -1123,14 +1478,10 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	});
 
 	it("executes only the immutable candidate actions selected by preflight", () => {
-		const manifest = {
-			packages: packages.map(({ name }, index) => ({
-				name,
-				archive: `${index}.tgz`,
-				integrity: `sha512-${index}`,
-			})),
-		};
+		const candidate = createCandidateFixture();
+		const { manifest } = candidate;
 		const plan = {
+			releaseId: candidate.releaseId,
 			version,
 			registry,
 			candidateDistTag: "candidate",
@@ -1168,7 +1519,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		const mutations: string[] = [];
 		publishCandidateCohort({
 			manifest,
-			manifestPath: "/tmp/fixture/provenance.json",
+			manifestPath: candidate.manifestPath,
 			plan,
 			env: {},
 			view,
@@ -1194,6 +1545,192 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			},
 		});
 		expect(mutations).toEqual(["publish", "dist-tag", "publish"]);
+	});
+
+	it("publishes only descriptor-verified private snapshots and ignores later source swaps", () => {
+		const candidate = createCandidateFixture();
+		const plan = {
+			releaseId: candidate.releaseId,
+			version,
+			registry,
+			candidateDistTag: "candidate",
+			promotionDistTag: "latest",
+		};
+		const live = new Map(
+			candidate.manifest.packages.map((item) => [
+				item.name,
+				{
+					integrity: undefined as string | undefined,
+					tags: {} as Record<string, string>,
+				},
+			]),
+		);
+		const view = (spec: string, field: string) => {
+			const item = candidate.manifest.packages.find(
+				(entry) => spec === entry.name || spec === `${entry.name}@${version}`,
+			);
+			if (!item) throw new Error(`unknown package ${spec}`);
+			const state = live.get(item.name);
+			return field === "dist-tags" ? state?.tags : state?.integrity;
+		};
+		let sourceSwapped = false;
+		const publishedPaths: string[] = [];
+		publishCandidateCohort({
+			manifest: candidate.manifest,
+			manifestPath: candidate.manifestPath,
+			plan,
+			env: {},
+			view,
+			beforePublish: ({ sourcePath }: { sourcePath: string }) => {
+				if (!sourceSwapped) {
+					sourceSwapped = true;
+					writeFileSync(sourcePath, "swapped only after sealed snapshot\n");
+				}
+			},
+			command: (_program: string, args: string[]) => {
+				const snapshotPath = args[1];
+				publishedPaths.push(snapshotPath);
+				expect(snapshotPath).toContain(".candidate-snapshot-");
+				const index = Number(
+					snapshotPath.split("/").at(-1)?.replace(".tgz", ""),
+				);
+				const item = candidate.manifest.packages[index];
+				expect(sha512File(snapshotPath)).toBe(item.sha512);
+				const state = live.get(item.name);
+				if (!state) throw new Error("missing live state");
+				state.integrity = item.integrity;
+				state.tags.candidate = version;
+				return "";
+			},
+		});
+		expect(sourceSwapped).toBe(true);
+		expect(publishedPaths).toHaveLength(packages.length);
+	});
+
+	it("rejects source substitution before snapshot and hard-link mutation immediately before publish", () => {
+		for (const attack of ["source", "snapshot-hardlink"]) {
+			const candidate = createCandidateFixture();
+			const plan = {
+				releaseId: candidate.releaseId,
+				version,
+				registry,
+				candidateDistTag: "candidate",
+				promotionDistTag: "latest",
+			};
+			const mutations: string[] = [];
+			expect(() =>
+				publishCandidateCohort({
+					manifest: candidate.manifest,
+					manifestPath: candidate.manifestPath,
+					plan,
+					env: {},
+					view: (_spec: string, field: string) =>
+						field === "dist-tags" ? {} : undefined,
+					beforeSnapshot: () => {
+						if (attack === "source")
+							writeFileSync(join(candidate.directory, "0.tgz"), "foreign\n");
+					},
+					beforePublish: ({ snapshotPath }: { snapshotPath: string }) => {
+						if (attack === "snapshot-hardlink")
+							linkSync(
+								snapshotPath,
+								join(candidate.directory, "snapshot-peer.tgz"),
+							);
+					},
+					command: () => {
+						mutations.push("publish");
+						return "";
+					},
+				}),
+			).toThrow(
+				attack === "source"
+					? /changed before private snapshot/i
+					: /exactly one hard link/i,
+			);
+			expect(mutations).toEqual([]);
+		}
+	});
+
+	it("recovers interrupted snapshot preparation and rejects a replayed journal", () => {
+		const candidate = createCandidateFixture();
+		const plan = {
+			releaseId: candidate.releaseId,
+			version,
+			registry,
+			candidateDistTag: "candidate",
+			promotionDistTag: "latest",
+		};
+		expect(() =>
+			publishCandidateCohort({
+				manifest: candidate.manifest,
+				manifestPath: candidate.manifestPath,
+				plan,
+				env: {},
+				view: (_spec: string, field: string) =>
+					field === "dist-tags" ? {} : undefined,
+				afterSnapshotBoundary: ({ kind }: { kind: string }) => {
+					if (kind === "archive") throw new Error("snapshot interruption");
+				},
+			}),
+		).toThrow(/snapshot interruption/i);
+		const live = new Map(
+			candidate.manifest.packages.map((item) => [
+				item.name,
+				{
+					integrity: undefined as string | undefined,
+					tags: {} as Record<string, string>,
+				},
+			]),
+		);
+		const view = (spec: string, field: string) => {
+			const item = candidate.manifest.packages.find(
+				(entry) => spec === entry.name || spec === `${entry.name}@${version}`,
+			);
+			const state = item ? live.get(item.name) : undefined;
+			return field === "dist-tags" ? state?.tags : state?.integrity;
+		};
+		publishCandidateCohort({
+			manifest: candidate.manifest,
+			manifestPath: candidate.manifestPath,
+			plan,
+			env: {},
+			view,
+			command: (_program: string, args: string[]) => {
+				const index = Number(args[1].split("/").at(-1)?.replace(".tgz", ""));
+				const item = candidate.manifest.packages[index];
+				const state = live.get(item.name);
+				if (!state) throw new Error("missing live state");
+				state.integrity = item.integrity;
+				state.tags.candidate = version;
+				return "";
+			},
+		});
+
+		const replay = createCandidateFixture();
+		replay.manifest.releaseId = "different-release";
+		writeJson(replay.manifestPath, replay.manifest);
+		writeFileSync(
+			`${replay.manifestPath}.candidate-publish.json`,
+			readFileSync(`${candidate.manifestPath}.candidate-publish.json`),
+		);
+		chmodSync(`${replay.manifestPath}.candidate-publish.json`, 0o600);
+		expect(() =>
+			publishCandidateCohort({
+				manifest: replay.manifest,
+				manifestPath: replay.manifestPath,
+				plan: { ...plan, releaseId: "different-release" },
+				env: {},
+				view: (spec: string, field: string) => {
+					const item = replay.manifest.packages.find(
+						(entry) =>
+							spec === entry.name || spec === `${entry.name}@${version}`,
+					);
+					return field === "dist-tags"
+						? { candidate: version }
+						: item?.integrity;
+				},
+			}),
+		).toThrow(/journal belongs to different release bytes/i);
 	});
 
 	it("treats only explicit registry absence codes as missing", () => {
