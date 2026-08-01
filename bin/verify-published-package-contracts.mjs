@@ -2,7 +2,6 @@ import { execFileSync, spawnSync } from "node:child_process";
 import {
 	mkdirSync,
 	mkdtempSync,
-	readdirSync,
 	readFileSync,
 	rmSync,
 	writeFileSync,
@@ -11,6 +10,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseNpmAuditReport } from "./command-report-contracts.mjs";
+import {
+	inspectPortablePackageArchive,
+	packPackageArchive,
+} from "./package-archive-contracts.mjs";
 
 const rootDirectory = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageDirectory = join(rootDirectory, "packages", "vite");
@@ -33,37 +36,20 @@ const run = (command, arguments_, options = {}) =>
 	});
 
 try {
-	mkdirSync(packDirectory);
 	mkdirSync(consumerDirectory);
 
-	execFileSync("pnpm", ["pack", "--pack-destination", packDirectory], {
-		cwd: packageDirectory,
-		stdio: "pipe",
-		timeout: commandTimeoutMs,
-		maxBuffer: commandMaxBuffer,
+	const { archivePath } = packPackageArchive({
+		packageDirectory,
+		destinationDirectory: packDirectory,
 	});
-	const archive = readdirSync(packDirectory).find((name) =>
-		name.endsWith(".tgz"),
-	);
-	if (!archive)
-		throw new Error("pnpm pack did not create an @rpgjs/vite archive");
-
-	const archivePath = join(packDirectory, archive);
-	const packedManifest = JSON.parse(
-		execFileSync("tar", ["-xOf", archivePath, "package/package.json"], {
-			encoding: "utf8",
-			timeout: commandTimeoutMs,
-			maxBuffer: commandMaxBuffer,
-		}),
-	);
+	const { packedManifest } = inspectPortablePackageArchive({
+		archivePath,
+		extractDirectory: join(packDirectory, "extract"),
+		packageName: "@rpgjs/vite",
+	});
 	if (packedManifest.name !== "@rpgjs/vite") {
 		throw new Error(
 			`Expected packed @rpgjs/vite, received ${String(packedManifest.name)}`,
-		);
-	}
-	if (JSON.stringify(packedManifest).includes("workspace:")) {
-		throw new Error(
-			"Packed @rpgjs/vite manifest still contains a workspace protocol",
 		);
 	}
 

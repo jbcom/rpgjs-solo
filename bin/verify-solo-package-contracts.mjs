@@ -1,8 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  inspectPortablePackageArchive,
+  packPackageArchive
+} from './package-archive-contracts.mjs'
 
 const rootDirectory = dirname(dirname(fileURLToPath(import.meta.url)))
 const publishGuard = join(rootDirectory, 'bin', 'require-pnpm-publish.mjs')
@@ -51,23 +55,17 @@ const packDirectory = mkdtempSync(join(tmpdir(), 'rpgjs-solo-package-contracts-'
 try {
   for (const { directory, manifest } of sourceManifests.values()) {
     const packageDirectory = join(packDirectory, manifest.name.replaceAll('/', '-'))
-    mkdirSync(packageDirectory)
-    execFileSync('pnpm', ['pack', '--pack-destination', packageDirectory], {
-      cwd: directory,
-      stdio: 'pipe'
+    const { archivePath } = packPackageArchive({
+      packageDirectory: directory,
+      destinationDirectory: packageDirectory
     })
-    const archive = readdirSync(packageDirectory).find((name) => name.endsWith('.tgz'))
-    if (!archive) throw new Error(`pnpm pack did not create an archive for ${manifest.name}`)
-    const packedManifest = JSON.parse(
-      execFileSync('tar', ['-xOf', join(packageDirectory, archive), 'package/package.json'], {
-        encoding: 'utf8'
-      })
-    )
+    const { packedManifest } = inspectPortablePackageArchive({
+      archivePath,
+      extractDirectory: join(packageDirectory, 'extract'),
+      packageName: manifest.name
+    })
     if (packedManifest.version !== manifest.version) {
       throw new Error(`Packed ${manifest.name} version does not match its source manifest`)
-    }
-    if (JSON.stringify(packedManifest).includes('workspace:')) {
-      throw new Error(`Packed ${manifest.name} manifest still contains a workspace protocol`)
     }
     for (const [dependencyName, dependencyVersion] of Object.entries(
       packedManifest.dependencies ?? {}

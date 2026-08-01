@@ -3,6 +3,7 @@ dist
 lib
 lerna-debug.log
 coverage
+output/
 packages/common/types
 docs/api/*
 docs/others/*

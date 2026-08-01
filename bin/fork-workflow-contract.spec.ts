@@ -39,6 +39,7 @@ describe("fork-owned CI boundary", () => {
 			"Dependency currency",
 			"Workspace dependency audit",
 			"Build",
+			"Package archive boundaries",
 			"Public API boundary",
 			"Public API type contracts",
 			"Solo production boundary",

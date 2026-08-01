@@ -73,6 +73,10 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Package archive boundaries
+        if: github.event_name != 'workflow_dispatch'
+        run: pnpm verify:package-archive-boundaries
+
       - name: Public API boundary
         run: pnpm api:boundary
 
