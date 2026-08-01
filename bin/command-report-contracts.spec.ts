@@ -157,6 +157,14 @@ describe("external command report contracts", () => {
 		expect(parsePnpmOutdatedReport(commandResult({}, { status: 0 }))).toEqual(
 			{},
 		);
+		expect(
+			parsePnpmOutdatedReport(
+				commandResult(
+					`[WARN] Request took 12001ms: https://registry.npmjs.org/vite\n${JSON.stringify(report)}`,
+					{ status: 1 },
+				),
+			),
+		).toEqual(report);
 
 		expect(() =>
 			parsePnpmOutdatedReport(
@@ -177,5 +185,21 @@ describe("external command report contracts", () => {
 				),
 			),
 		).toThrow(/incomplete entry for vite/i);
+		expect(() =>
+			parsePnpmOutdatedReport(
+				commandResult(
+					`[WARN] Registry returned a partial response\n${JSON.stringify(report)}`,
+					{ status: 1 },
+				),
+			),
+		).toThrow(/unexpected stdout before.*partial response/i);
+		expect(() =>
+			parsePnpmOutdatedReport(
+				commandResult(
+					`[WARN] Request took 12001ms: https://example.test/vite\n${JSON.stringify(report)}`,
+					{ status: 1 },
+				),
+			),
+		).toThrow(/unexpected stdout before.*example\.test/i);
 	});
 });

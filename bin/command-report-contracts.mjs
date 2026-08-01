@@ -25,6 +25,25 @@ const parseJsonReport = (commandName, stdout) => {
 	}
 };
 
+const parsePnpmOutdatedJson = (stdout) => {
+	const output = reportText(stdout);
+	const jsonStart = output.indexOf("{");
+	if (jsonStart < 0) return parseJsonReport("pnpm outdated", output);
+	const prefix = output.slice(0, jsonStart).trim();
+	if (prefix) {
+		const allowedSlowRequest =
+			/^\[WARN\] Request took [1-9][0-9]*ms: https:\/\/registry\.npmjs\.org\/\S+$/;
+		for (const line of prefix.split(/\r?\n/)) {
+			if (!allowedSlowRequest.test(line)) {
+				throw new Error(
+					`pnpm outdated returned unexpected stdout before its JSON report: ${line}`,
+				);
+			}
+		}
+	}
+	return parseJsonReport("pnpm outdated", output.slice(jsonStart));
+};
+
 export const parseNpmAuditReport = (result) => {
 	const audit = parseJsonReport("npm audit", result.stdout);
 	if (!audit || typeof audit !== "object" || Array.isArray(audit)) {
@@ -148,7 +167,7 @@ export const parsePnpmOutdatedReport = (result) => {
 			`pnpm outdated failed operationally: ${describeFailure(result)}`,
 		);
 	}
-	const outdated = parseJsonReport("pnpm outdated", result.stdout);
+	const outdated = parsePnpmOutdatedJson(result.stdout);
 	if (!outdated || typeof outdated !== "object" || Array.isArray(outdated)) {
 		throw new Error("pnpm outdated returned a non-object JSON report");
 	}

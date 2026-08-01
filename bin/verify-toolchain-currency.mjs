@@ -70,7 +70,7 @@ const latestStableVersionInMajor = async (packageName, expectedMajor) => {
 
 const outdatedResult = spawnSync(
 	"pnpm",
-	["--silent", "-r", "outdated", "--format", "json"],
+	["-r", "outdated", "--format", "json"],
 	{
 		encoding: "utf8",
 		stdio: "pipe",
