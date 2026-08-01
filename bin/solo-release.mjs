@@ -434,6 +434,11 @@ export const readTransactionJournal = (path, purpose) => {
 	return JSON.parse(state.bytes.toString("utf8"));
 };
 
+export const normalizeCommandOutput = (output, trim = true) => {
+	const text = output ?? "";
+	return trim ? text.trim() : text;
+};
+
 const run = (command, args, options = {}) => {
 	const output = execFileSync(command, args, {
 		cwd: options.cwd ?? rootDirectory,
@@ -443,7 +448,7 @@ const run = (command, args, options = {}) => {
 		timeout: options.timeout ?? 300_000,
 		maxBuffer: 32 * 1024 * 1024,
 	});
-	return options.trim === false ? output : output.trim();
+	return normalizeCommandOutput(output, options.trim !== false);
 };
 
 export const assertReleaseToolchain = (
