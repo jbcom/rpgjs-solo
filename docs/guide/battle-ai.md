@@ -1011,6 +1011,12 @@ than or equal to the enemy's `poise`.
 Action Battle calls `event.remove({ reason: "defeated", transition })`. The
 server removes collision immediately while clients keep the sprite long enough
 to play its Studio `die` animation and a configurable CanvasEngine death effect.
+When `showNotification` is enabled, reward messages are translated by the
+receiving client's active locale. Games can override the stable
+`rpg.action-battle.reward.currency`, `rpg.action-battle.reward.item.named.one`,
+`rpg.action-battle.reward.item.named.other`, `rpg.action-battle.reward.item.one`,
+and `rpg.action-battle.reward.item.other` keys through `provideI18n()`; reward
+counts and item names are supplied as interpolation parameters.
 Use `presentation.death` to tune the effect, scale, shake, and duration, or set
 it to `false` for immediate removal. The legacy `onDefeated(event, attacker)`
 signature remains supported for two-argument callbacks.

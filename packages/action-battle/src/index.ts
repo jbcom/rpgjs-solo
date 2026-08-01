@@ -75,6 +75,7 @@ export type {
   ActionBattleVisualPart,
   ActionBattleVisualPreset,
 } from "./types";
+export { ACTION_BATTLE_I18N_KEYS } from "./i18n";
 export {
   ACTION_BATTLE_COMBAT_AUDIO_ID,
   createActionBattleCombatAudioVisual,

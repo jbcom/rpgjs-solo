@@ -177,8 +177,19 @@ player.showNotification()
 
 ### Parameters
 
-- `message`: `string`
-- `options?`: `{ time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" }`
+- `message`: `string | I18nMessageDescriptor`
+- `options?`: `NotificationOptions`
+
+Literal strings remain supported. Framework and reusable module messages should
+send a translation descriptor so the receiving client resolves the text with
+its active locale and game overrides:
+
+```ts
+player.showNotification({
+  key: "game.reward.item",
+  params: { count: 2, item: "Potion" },
+});
+```
 
 ## Hide Hotbar
 

@@ -5,6 +5,19 @@ export type I18nLocaleMessages = Record<string, string>;
 export type I18nMessages = Record<string, I18nLocaleMessages>;
 export type I18nParams = Record<string, unknown>;
 
+/** A translation key and serializable interpolation values resolved by the consumer locale. */
+export interface I18nMessageDescriptor {
+  key: string;
+  params?: I18nParams;
+}
+
+/** Player-visible text may be literal or deferred to the receiving i18n service. */
+export type I18nText = string | I18nMessageDescriptor;
+
+export function isI18nMessageDescriptor(value: unknown): value is I18nMessageDescriptor {
+  return !!value && typeof value === "object" && typeof (value as I18nMessageDescriptor).key === "string";
+}
+
 export interface I18nConfig {
   defaultLocale?: string;
   fallbackLocale?: string;

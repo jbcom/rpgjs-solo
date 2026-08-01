@@ -3,10 +3,17 @@ import { Context, injector } from "@signe/di";
 import {
   createI18nProvider,
   getOrCreateI18nService,
+  isI18nMessageDescriptor,
   registerI18nMessages,
 } from "./i18n";
 
 describe("i18n service", () => {
+  test("recognizes deferred translation descriptors without mistaking literal text for one", () => {
+    expect(isI18nMessageDescriptor({ key: "reward.item", params: { count: 2 } })).toBe(true);
+    expect(isI18nMessageDescriptor("reward.item")).toBe(false);
+    expect(isI18nMessageDescriptor({ params: { count: 2 } })).toBe(false);
+  });
+
   test("translates with fallback locale and raw key fallback", () => {
     const service = getOrCreateI18nService(null, {
       defaultLocale: "fr",

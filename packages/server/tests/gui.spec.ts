@@ -14,6 +14,7 @@ import {
 } from "../src";
 import { signal } from "@signe/reactive";
 import { createHotbarState } from "@rpgjs/common";
+import { WithGuiManager } from "../src/Player/GuiManager";
 
 const emptyHotbarPlayer = {
   getHotbar: () => createHotbarState(),
@@ -21,6 +22,25 @@ const emptyHotbarPlayer = {
 };
 
 describe("GUI", () => {
+  test("forwards deferred notification descriptors without resolving them on the server", async () => {
+    class PlayerBase {
+      emit = vi.fn();
+    }
+    const LocalizedPlayer = WithGuiManager(PlayerBase as any);
+    const player: any = new LocalizedPlayer();
+    const message = {
+      key: "game.reward.item",
+      params: { count: 2, item: "Potion" },
+    };
+
+    await player.showNotification(message, { icon: "potion" });
+
+    expect(player.emit).toHaveBeenCalledWith("notification", {
+      message,
+      icon: "potion",
+    });
+  });
+
   test("input gui returns typed text and number values", async () => {
     const player: any = { canMove: true, emit: vi.fn() };
 

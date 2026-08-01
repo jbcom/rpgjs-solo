@@ -76,6 +76,7 @@ import type {
 } from "./types";
 import type { ActionBattleAnimationOptions } from "./types";
 import { updateActionBattleThreat } from "./audio";
+import { ACTION_BATTLE_I18N_KEYS } from "./i18n";
 
 type RpgEventWithBattleAi = RpgEvent & {
   battleAi?: BattleAi;
@@ -306,7 +307,7 @@ const getPlayerMap = (player: RpgPlayer) => {
     : undefined;
 };
 
-const getRewardItemName = (inventoryItem: any, itemRef: any): string => {
+const getRewardItemName = (inventoryItem: any, itemRef: any): string | undefined => {
   if (inventoryItem && typeof inventoryItem.name === "function") {
     return inventoryItem.name();
   }
@@ -314,7 +315,7 @@ const getRewardItemName = (inventoryItem: any, itemRef: any): string => {
   if (typeof itemRef === "string") return itemRef;
   if (itemRef?.name) return itemRef.name;
   if (itemRef?.id) return itemRef.id;
-  return "item";
+  return undefined;
 };
 
 const createDefeatReward = (
@@ -335,7 +336,10 @@ const createDefeatReward = (
       if (gold > 0) player.gold += gold;
 
       if (rewards.showNotification && (exp > 0 || gold > 0)) {
-        player.showNotification(`You won ${exp} experience and ${gold} gold`);
+        player.showNotification({
+          key: ACTION_BATTLE_I18N_KEYS.rewardCurrency,
+          params: { experience: exp, gold },
+        });
       }
 
       for (const rawItem of rewards.items ?? []) {
@@ -351,11 +355,23 @@ const createDefeatReward = (
             typeof itemRef === "string"
               ? getPlayerMap(player)?.database?.()?.[itemRef]
               : undefined;
+          const itemName = getRewardItemName(inventoryItem, itemRef);
+          const key = itemName
+            ? amount === 1
+              ? ACTION_BATTLE_I18N_KEYS.rewardNamedItemOne
+              : ACTION_BATTLE_I18N_KEYS.rewardNamedItemOther
+            : amount === 1
+              ? ACTION_BATTLE_I18N_KEYS.rewardItemOne
+              : ACTION_BATTLE_I18N_KEYS.rewardItemOther;
           player.showNotification(
-            `You won ${amount} ${getRewardItemName(inventoryItem, itemRef)}`,
             {
-              icon: itemData?.icon,
-            }
+              key,
+              params: {
+                count: amount,
+                ...(itemName ? { item: itemName } : {}),
+              },
+            },
+            { icon: itemData?.icon }
           );
         }
       }

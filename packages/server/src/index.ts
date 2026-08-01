@@ -5,6 +5,7 @@ export * from "./core/setup";
 export * from "./core/inject";
 export * from "./Player/Player";
 export * from "./Player/types";
+export type { NotificationOptions } from "./Player/GuiManager";
 export type { DamageFormulas, DamageResult, BattleParameterSet } from "./Player/BattleManager";
 export type { SkillClass, SkillData, SkillObject, SkillHooks, SkillChangePayload, SkillChangeOptions } from "./Player/SkillManager";
 export * from "./Player/HotbarManager";

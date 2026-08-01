@@ -1,21 +1,41 @@
 import { signal, animatedSignal } from "canvasengine";
+import {
+  isI18nMessageDescriptor,
+  type I18nParams,
+  type I18nText,
+} from "@rpgjs/common";
 
 export type NotificationType = "info" | "warn" | "error";
 
 export interface NotificationPayload {
-  message: string;
+  message: I18nText;
   type?: NotificationType;
   icon?: string;
   time?: number;
   sound?: string;
 }
 
-export interface NotificationItem extends NotificationPayload {
+export interface NotificationItem extends Omit<NotificationPayload, "message"> {
   id: number;
+  message: string;
   opacity: any;
   offset: any;
   layoutY: any;
   removing: boolean;
+}
+
+export interface NotificationTranslationEngine {
+  t?: (key: string, params?: I18nParams) => string;
+  playSound?: (id: string) => void;
+}
+
+export function resolveNotificationMessage(
+  message: I18nText,
+  engine?: NotificationTranslationEngine
+): string {
+  if (typeof message === "string") return message;
+  if (!isI18nMessageDescriptor(message)) return "";
+  return engine?.t?.(message.key, message.params) ?? message.key;
 }
 
 const DEFAULT_DURATION = 220;
@@ -24,14 +44,14 @@ export class NotificationManager {
   stack = signal<NotificationItem[]>([]);
   private _counter = 0;
 
-  add(payload: NotificationPayload, engine?: { playSound?: (id: string) => void }) {
+  add(payload: NotificationPayload, engine?: NotificationTranslationEngine) {
     const id = ++this._counter;
     const opacity = animatedSignal(0, { duration: DEFAULT_DURATION });
     const offset = animatedSignal(12, { duration: DEFAULT_DURATION });
     const layoutY = animatedSignal(0, { duration: DEFAULT_DURATION });
     const item: NotificationItem = {
       id,
-      message: payload.message,
+      message: resolveNotificationMessage(payload.message, engine),
       type: payload.type || "info",
       icon: payload.icon,
       time: payload.time,

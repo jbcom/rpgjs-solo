@@ -50,16 +50,9 @@ import SoftTargetComponent from "./components/soft-target.ce";
 // @ts-ignore CanvasEngine components are compiled by @canvasengine/compiler.
 import SkillProjectileComponent from "./components/skill-projectile.ce";
 import { activateActionBattleSkill } from "./ui/skill-activation";
+import { ACTION_BATTLE_CLIENT_I18N } from "./i18n";
 
 export const ACTION_BATTLE_SKILL_PROJECTILE_TYPE = "action-battle-skill";
-
-const ACTION_BATTLE_CLIENT_I18N = {
-  en: {
-    "rpg.action-battle.feedback.block": "BLOCK",
-    "rpg.action-battle.feedback.parry": "PARRY!",
-    "rpg.action-battle.feedback.miss": "MISS",
-  },
-};
 
 const beginLocalPlayerAttackLock = (
   engine: RpgClientEngine,

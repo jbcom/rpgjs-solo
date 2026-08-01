@@ -4,6 +4,7 @@ import type {
   HotbarState,
   MapStreamDefinition,
   RpgActionInput,
+  I18nMessageDescriptor,
 } from "@rpgjs/common";
 import type { FactoryProvider as SigneFactoryProvider } from "@signe/di";
 import type { NodeConnection, NodeRoom } from "@signe/room/node";
@@ -83,6 +84,12 @@ describe("server public API types", () => {
       expectTypeOf(player.clearHotbarSlot(0)).toEqualTypeOf<HotbarState>();
       expectTypeOf(player.validateHotbarSlot(0))
         .toEqualTypeOf<HotbarEntry | null>();
+      const localizedReward = {
+        key: "game.reward.item",
+        params: { count: 2, item: "Potion" },
+      } satisfies I18nMessageDescriptor;
+      expectTypeOf(player.showNotification(localizedReward, { type: "info" }))
+        .toEqualTypeOf<Promise<boolean>>();
     };
 
     expectTypeOf(assertions).toBeFunction();

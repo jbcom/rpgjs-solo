@@ -7,7 +7,14 @@ import { SaveLoadOptions, SaveSlot } from "../Gui/SaveLoadGui";
 import { MenuGuiOptions } from "../Gui/MenuGui";
 import { GameoverGuiOptions, GameoverGuiSelection } from "../Gui/GameoverGui";
 import { InputOptions, NumberInputOptions, TextInputOptions, TextareaInputOptions } from "../Gui/InputForm";
-import { Constructor, PlayerCtor, PrebuiltGui } from "@rpgjs/common";
+import { Constructor, PlayerCtor, PrebuiltGui, type I18nText } from "@rpgjs/common";
+
+export interface NotificationOptions {
+  time?: number;
+  icon?: string;
+  sound?: string;
+  type?: "info" | "warn" | "error";
+}
 
 /**
  * GUI Manager Mixin
@@ -65,8 +72,8 @@ export function WithGuiManager<TBase extends PlayerCtor>(
     }
 
     showNotification(
-      message: string,
-      options: { time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" } = {}
+      message: I18nText,
+      options: NotificationOptions = {}
     ): Promise<boolean> {
       ;(this as unknown as { emit(type: string, value?: unknown): void }).emit('notification', {
         message,
@@ -480,7 +487,18 @@ export interface IGuiManager {
    *
    * @title Displays a notification
    * @method player.showNotification()
-   * @param {string} message - The message to display in the notification
+   * Pass a translation descriptor to resolve framework text with the receiving
+   * client's active locale. Literal strings remain supported for game-authored
+   * or already-localized messages.
+   *
+   * ```ts
+   * player.showNotification({
+   *   key: 'game.reward.item',
+   *   params: { count: 2, item: 'Potion' }
+   * })
+   * ```
+   *
+   * @param {string | I18nMessageDescriptor} message - Literal text or a client-resolved translation descriptor
    * @param {object} options - An object containing options for the notification
    * @param {number} options.time - The time to display the notification for (in ms). Default: 2000ms
    * @param {string} options.icon - The icon to display in the notification. Put the identifier of the spritesheet (defined on the client side)
@@ -489,8 +507,8 @@ export interface IGuiManager {
    * @memberof GuiManager
    */
   showNotification(
-    message: string,
-    options?: { time?: number; icon?: string; sound?: string; type?: "info" | "warn" | "error" }
+    message: I18nText,
+    options?: NotificationOptions
   ): Promise<boolean>;
 
   /**

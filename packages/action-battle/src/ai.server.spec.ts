@@ -19,6 +19,7 @@ import {
 } from "./core/ai-behavior-tree";
 import { setActionBattleSystems } from "./core/context";
 import { ACTION_BATTLE_CLIENT_VISUAL_ID } from "./visual";
+import { ACTION_BATTLE_I18N_KEYS } from "./i18n";
 
 const createEvent = () => ({
   id: "monster-1",
@@ -218,6 +219,18 @@ describe("BattleAi defeat flow", () => {
     expect(attacker.exp).toBe(25);
     expect(attacker.gold).toBe(7);
     expect(attacker.addItem).toHaveBeenCalledWith("potion", 2);
+    expect(attacker.showNotification).toHaveBeenNthCalledWith(1, {
+      key: ACTION_BATTLE_I18N_KEYS.rewardCurrency,
+      params: { experience: 25, gold: 7 },
+    });
+    expect(attacker.showNotification).toHaveBeenNthCalledWith(
+      2,
+      {
+        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItemOther,
+        params: { count: 2, item: "Potion" },
+      },
+      { icon: "potion-icon" }
+    );
     expect(event.setGraphicAnimation).not.toHaveBeenCalledWith("die", 1);
     expect(event.remove).toHaveBeenCalledWith({
       reason: "defeated",
@@ -241,6 +254,61 @@ describe("BattleAi defeat flow", () => {
       },
       timeoutMs: 700,
     });
+  });
+
+  test("selects stable singular and plural reward keys from the item count", () => {
+    const event = createEvent();
+    const attacker = createPlayer();
+    const ai = new BattleAi(event as any, {
+      rewards: {
+        items: [
+          { itemId: "potion", amount: 1, chance: 100 },
+          { itemId: "potion", amount: 3, chance: 100 },
+        ],
+        showNotification: true,
+      },
+    });
+
+    ai.handleDamage(attacker as any, { damage: 10, defeated: true });
+
+    expect(attacker.showNotification).toHaveBeenNthCalledWith(
+      1,
+      {
+        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItemOne,
+        params: { count: 1, item: "Potion" },
+      },
+      { icon: "potion-icon" }
+    );
+    expect(attacker.showNotification).toHaveBeenNthCalledWith(
+      2,
+      {
+        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItemOther,
+        params: { count: 3, item: "Potion" },
+      },
+      { icon: "potion-icon" }
+    );
+  });
+
+  test("uses a localized generic item key when no reward display name exists", () => {
+    const event = createEvent();
+    const attacker = createPlayer();
+    attacker.addItem.mockReturnValue(undefined);
+    const ai = new BattleAi(event as any, {
+      rewards: {
+        items: [{ item: {}, amount: 2, chance: 100 }],
+        showNotification: true,
+      },
+    });
+
+    ai.handleDamage(attacker as any, { damage: 10, defeated: true });
+
+    expect(attacker.showNotification).toHaveBeenCalledWith(
+      {
+        key: ACTION_BATTLE_I18N_KEYS.rewardItemOther,
+        params: { count: 2 },
+      },
+      { icon: undefined }
+    );
   });
 
   test("supports the context onDefeated callback and manual reward control", () => {
