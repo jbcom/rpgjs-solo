@@ -19,21 +19,25 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	applySoloReleaseTransaction,
 	assertCanonicalMain,
+	assertExactSourceWorktree,
 	assertFinalReleaseBindings,
 	assertLivePromotedCohort,
 	assertMonotonicLatestPromotion,
 	assertReleaseToolchain,
+	assertReviewedPlanSource,
 	assertReviewedCanonicalMain,
 	createGiteaReleaseAdapter,
 	createGitHubReleaseAdapter,
 	createProvenanceManifest,
+	defaultPlanPath,
 	loadProvenance,
 	loadSoloReleasePlan,
+	main,
 	nextPromotionAction,
 	pnpmView,
 	prepareReleaseEvidence,
@@ -57,22 +61,22 @@ const packages = [
 	{
 		name: "@jbcom/rpgjs-solo",
 		directory: "packages/solo",
-		tag: `solo-v${version}`,
+		tag: `rpgjs-solo-v${version}`,
 	},
 	{
 		name: "@jbcom/rpgjs-solo-action-battle",
 		directory: "packages/solo-action-battle",
-		tag: `action-v${version}`,
+		tag: `rpgjs-solo-action-battle-v${version}`,
 	},
 	{
 		name: "@jbcom/rpgjs-solo-renderer",
 		directory: "packages/solo-renderer",
-		tag: `renderer-v${version}`,
+		tag: `rpgjs-solo-renderer-v${version}`,
 	},
 	{
 		name: "@jbcom/rpgjs-solo-vite",
 		directory: "packages/solo-vite",
-		tag: `vite-v${version}`,
+		tag: `rpgjs-solo-vite-v${version}`,
 	},
 ];
 const inheritedReleaseDirectories = [
@@ -395,6 +399,23 @@ function applyFixtureRelease(
 	});
 }
 
+function commitAppliedFixture(fixture: ReturnType<typeof createFixture>) {
+	execFileSync("git", ["add", "-A"], { cwd: fixture.root });
+	execFileSync("git", ["commit", "-qm", "apply Solo release"], {
+		cwd: fixture.root,
+	});
+	return {
+		head: execFileSync("git", ["rev-parse", "HEAD"], {
+			cwd: fixture.root,
+			encoding: "utf8",
+		}).trim(),
+		tree: execFileSync("git", ["rev-parse", "HEAD^{tree}"], {
+			cwd: fixture.root,
+			encoding: "utf8",
+		}).trim(),
+	};
+}
+
 function createExpectedRelease() {
 	const directory = mkdtempSync(join(tmpdir(), "solo-release-evidence-"));
 	temporaryDirectories.push(directory);
@@ -541,15 +562,100 @@ function createReleaseAdapter(
 
 describe("Solo beta.29 coordinated release transaction", () => {
 	it("fails closed unless the executing toolchain is exact Node 24 and pnpm 11.18.0", () => {
-		expect(assertReleaseToolchain(() => "11.18.0", "24.18.1")).toEqual({
+		const exactToolchain = (_program: string, args: string[]) =>
+			args[0] === "--version"
+				? "11.18.0"
+				: JSON.stringify({ version: "24.18.1", execPath: process.execPath });
+		expect(
+			assertReleaseToolchain(exactToolchain, "24.18.1", process.execPath),
+		).toEqual({
 			nodeVersion: "24.18.1",
+			nodeExecPath: process.execPath,
 			pnpmVersion: "11.18.0",
+			childNodeVersion: "24.18.1",
+			childNodeExecPath: process.execPath,
 		});
-		expect(() => assertReleaseToolchain(() => "11.18.0", "26.5.0")).toThrow(
+		expect(() =>
+			assertReleaseToolchain(exactToolchain, "26.5.0", process.execPath),
+		).toThrow(
 			/requires Node 24/i,
 		);
-		expect(() => assertReleaseToolchain(() => "11.17.0", "24.18.1")).toThrow(
+		expect(() =>
+			assertReleaseToolchain(
+				() => "11.17.0",
+				"24.18.1",
+				process.execPath,
+			),
+		).toThrow(
 			/requires pnpm 11\.18\.0/i,
+		);
+		expect(() =>
+			assertReleaseToolchain(
+				(_program, args) =>
+					args[0] === "--version"
+						? "11.18.0"
+						: JSON.stringify({ version: "26.5.0", execPath: "/usr/bin/false" }),
+				"24.18.1",
+				process.execPath,
+			),
+		).toThrow(/pnpm child runtime must be the exact Node 24/i);
+	});
+
+	it("admits only the canonical plan path and exact reviewed HEAD bytes", async () => {
+		const externalDirectory = mkdtempSync(
+			join(tmpdir(), "solo-external-plan-"),
+		);
+		temporaryDirectories.push(externalDirectory);
+		const externalPlan = join(externalDirectory, "substituted-plan.json");
+		writeFileSync(externalPlan, readFileSync(defaultPlanPath));
+		await expect(
+			main(["validate", "--plan", externalPlan], {
+				toolchainCommand: (_program, args) =>
+					args[0] === "--version"
+						? "11.18.0"
+						: JSON.stringify({
+								version: process.versions.node,
+								execPath: process.execPath,
+							}),
+				nodeVersion: "24.18.1",
+			}),
+		).rejects.toThrow(/canonical reviewed plan path/i);
+
+		const root = mkdtempSync(join(tmpdir(), "solo-reviewed-plan-"));
+		temporaryDirectories.push(root);
+		const planPath = join(root, "docs/internal/releases", basename(defaultPlanPath));
+		mkdirSync(dirname(planPath), { recursive: true });
+		writeFileSync(planPath, readFileSync(defaultPlanPath));
+		execFileSync("git", ["init", "-q"], { cwd: root });
+		execFileSync("git", ["config", "user.email", "release@example.test"], {
+			cwd: root,
+		});
+		execFileSync("git", ["config", "user.name", "Release Fixture"], {
+			cwd: root,
+		});
+		execFileSync("git", ["add", "."], { cwd: root });
+		execFileSync("git", ["commit", "-qm", "reviewed plan"], { cwd: root });
+		const reviewed = loadSoloReleasePlan(planPath);
+		expect(assertReviewedPlanSource(reviewed, planPath, root)).toMatchObject({
+			path: planPath,
+			sha512: reviewed.planSha512,
+		});
+		writeFileSync(planPath, Buffer.concat([readFileSync(planPath), Buffer.from("\n")]));
+		const substituted = loadSoloReleasePlan(planPath);
+		expect(() =>
+			assertReviewedPlanSource(substituted, planPath, root),
+		).toThrow(/exact reviewed HEAD blob/i);
+	});
+
+	it("rejects traversal or aliasing in the fixed Solo package cohort", () => {
+		const directory = mkdtempSync(join(tmpdir(), "solo-plan-traversal-"));
+		temporaryDirectories.push(directory);
+		const path = join(directory, "plan.json");
+		const plan = JSON.parse(readFileSync(defaultPlanPath, "utf8"));
+		plan.packages[0].directory = "packages/../../outside";
+		writeJson(path, plan);
+		expect(() => loadSoloReleasePlan(path)).toThrow(
+			/package order, directory, or immutable tag drifted/i,
 		);
 	});
 
@@ -1883,6 +1989,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
 		applyFixtureRelease(fixture, plan);
+		const source = commitAppliedFixture(fixture);
 		for (const record of packages) {
 			mkdirSync(join(fixture.root, record.directory, "dist"));
 			writeFileSync(
@@ -1913,15 +2020,15 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			root: fixture.root,
 			plan,
 			artifactsDirectory: artifacts,
-			source: { head: "a".repeat(40), tree: "b".repeat(40) },
+			source,
 			command: build,
 			signer: testProvenanceSigner,
 		});
 		expect(result.manifest.schemaVersion).toBe(3);
 		expect(built).toEqual(packages.map(({ name }) => name));
 		expect(result.manifest.source).toMatchObject({
-			commit: "a".repeat(40),
-			tree: "b".repeat(40),
+			commit: source.head,
+			tree: source.tree,
 			upstreamCommit: plan.upstreamCommit,
 		});
 		expect(result.manifest.lockfile.sha512).toBe(
@@ -2044,7 +2151,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
 		applyFixtureRelease(fixture, plan);
-		const head = "a".repeat(40);
+		const source = commitAppliedFixture(fixture);
+		const head = source.head;
 		const receiptDirectory = mkdtempSync(
 			join(tmpdir(), "solo-review-provenance-"),
 		);
@@ -2090,8 +2198,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			plan,
 			artifactsDirectory: artifacts,
 			source: {
-				head,
-				tree: "b".repeat(40),
+				...source,
 				reviewEvidence: { independentReceipt },
 			},
 			command: (_command: string, args: string[]) => {
@@ -2122,10 +2229,46 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		).not.toThrow();
 	});
 
+	it("refuses provenance when a build mutates reviewed tracked source", () => {
+		const fixture = createFixture();
+		const plan = loadSoloReleasePlan(fixture.planPath);
+		applyFixtureRelease(fixture, plan);
+		const source = commitAppliedFixture(fixture);
+		expect(assertExactSourceWorktree(fixture.root, source)).toEqual(source);
+		const artifacts = join(
+			tmpdir(),
+			`solo-release-mutating-build-${randomUUID()}`,
+		);
+		temporaryDirectories.push(artifacts);
+		expect(() =>
+			createProvenanceManifest({
+				root: fixture.root,
+				plan,
+				artifactsDirectory: artifacts,
+				source,
+				command: (_command: string, args: string[]) => {
+					const record = packages.find(({ name }) => name === args[1]);
+					const dist = join(fixture.root, record?.directory ?? "", "dist");
+					mkdirSync(dist, { recursive: true });
+					writeFileSync(join(dist, "index.js"), "export {};\n");
+					writeFileSync(join(dist, "index.d.ts"), "export {};\n");
+					writeFileSync(
+						join(fixture.root, record?.directory ?? "", "package.json"),
+						"{}\n",
+					);
+					return "";
+				},
+				signer: testProvenanceSigner,
+			}),
+		).toThrow(/reviewed source worktree changed/i);
+		expect(existsSync(artifacts)).toBe(false);
+	});
+
 	it("rejects an archive missing any conditional export target", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
 		applyFixtureRelease(fixture, plan);
+		const source = commitAppliedFixture(fixture);
 		const artifacts = join(tmpdir(), `solo-release-artifacts-${randomUUID()}`);
 		temporaryDirectories.push(artifacts);
 		expect(() =>
@@ -2133,7 +2276,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				root: fixture.root,
 				plan,
 				artifactsDirectory: artifacts,
-				source: { head: "a".repeat(40), tree: "b".repeat(40) },
+				source,
 				command: (_command: string, args: string[]) => {
 					const record = packages.find(({ name }) => name === args[1]);
 					const dist = join(fixture.root, record?.directory ?? "", "dist");

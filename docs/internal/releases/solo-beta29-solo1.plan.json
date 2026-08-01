@@ -122,30 +122,63 @@
 		},
 		{
 			"id": "solo-beta29-release-transaction",
-			"sha256": "3fdec2f05a358bc80dd72c0560ffe3764cbfd2c0d4c6b78e8a081a74087d99a0"
+			"sha256": "14342352b9aa4ed38231df1a0c11902fd1066d3a127592ef8cbcc3d532955c9c"
+		},
+		{
+			"id": "wise-solo-action-battle-guards",
+			"sha256": "268d4e0df780df3b630dab2d12f93f339bbf27d8a54e525336bb54cb11da8d3d"
 		}
 	],
 	"carriedChangesets": [
 		{
 			"id": "calm-music-package-boundaries",
-			"sha256": "e4799b002a1b521b431e03d18862fddd8c8dbc68768954e55d4b20f4fa62cd3a"
+			"sha256": "e4799b002a1b521b431e03d18862fddd8c8dbc68768954e55d4b20f4fa62cd3a",
+			"introducedBy": "2a52b8ccbae6aae847f5ae3d45aa0a3cbe6e7905"
 		},
 		{
 			"id": "current-fork-toolchain",
-			"sha256": "f54c5ef17ee37fe4439eb94da95859105417ac6e0327f9f2e407d36e441d667c"
-		},
-		{
-			"id": "firm-hotbar-authority",
-			"sha256": "18aa6bd8264df2a73b0a06aee16899c8da03a5e241617f5cadf2b329547d0b86"
-		},
-		{
-			"id": "warm-combat-feedback",
-			"sha256": "9a31fcd4af11525beb1b83f09003a31a273f0d29908ae1dd0c8edbc8c21390d8"
+			"sha256": "f54c5ef17ee37fe4439eb94da95859105417ac6e0327f9f2e407d36e441d667c",
+			"introducedBy": "7d2c4a5c7d1112910149153f9f8fc584ae414c18"
 		},
 		{
 			"id": "fair-studio-success-rates",
 			"sha256": "7707eae5cafe061c115e0ac8c0498fdb65de0afe4eda74ff3adec5e7269338b6",
 			"introducedBy": "f0144127fe43c264638ca2699b8bfcd3cd55fea6"
+		},
+		{
+			"id": "firm-hotbar-authority",
+			"sha256": "18aa6bd8264df2a73b0a06aee16899c8da03a5e241617f5cadf2b329547d0b86",
+			"introducedBy": "4cdd009cd240691e1c8dd5225bf11ebb25381434"
+		},
+		{
+			"id": "gentle-items-remember",
+			"sha256": "d274be0d27ced99ee3b6f343807f9783581b8a8fdffe4fb7e3344bf54ec72381",
+			"introducedBy": "9fc0dcfaf44043ea6c6c5e62974fe982aa463c81"
+		},
+		{
+			"id": "quiet-ais-confirm",
+			"sha256": "318f31b9355d342c1d66d7d026e49d45f50ed767d5decbc41e7e44215e7f3fb0",
+			"introducedBy": "20204938941fef75e31f3e6bb41b125ca22d3e2c"
+		},
+		{
+			"id": "steady-targeting-controls",
+			"sha256": "dceb28ff764ea7d2de3deef6115515917833f0fe4925293aaa77a358e8096ff5",
+			"introducedBy": "880816aebde4941b75d978684f0f7ec72f95b1c8"
+		},
+		{
+			"id": "strict-tiled-static-paths",
+			"sha256": "4a7c9c0d61e588ce8bd2c1a4e2795c9a9877f200fff812d26b21b567f8cea57a",
+			"introducedBy": "c6ba03e211f70ed5e2c1a3699b76a1160bfc65aa"
+		},
+		{
+			"id": "warm-combat-feedback",
+			"sha256": "9ee13550118496f689d713727d5fdacfc043e1322a4ab250c00df2ce0fe72cc2",
+			"introducedBy": "98bdb58b4afafdea0685d69ae046f5eb7239def2"
+		},
+		{
+			"id": "wise-action-battle-guards",
+			"sha256": "0e3041a807b735c0adca81223de2e0c5323e466a7ef58a85aa60bfb7a0ad9cb9",
+			"introducedBy": "81f8ad075a404548f9ff3ed388d1ef0eda0f89bd"
 		}
 	],
 	"requiredConsumer": {

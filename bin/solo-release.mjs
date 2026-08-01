@@ -52,6 +52,8 @@ export const defaultPlanPath = join(
 	rootDirectory,
 	"docs/internal/releases/solo-beta29-solo1.plan.json",
 );
+const canonicalPlanRelativePath =
+	"docs/internal/releases/solo-beta29-solo1.plan.json";
 const dependencyFields = [
 	"dependencies",
 	"devDependencies",
@@ -395,6 +397,7 @@ const run = (command, args, options = {}) => {
 export const assertReleaseToolchain = (
 	command = run,
 	nodeVersion = process.versions.node,
+	nodeExecPath = process.execPath,
 ) => {
 	const major = Number.parseInt(String(nodeVersion).split(".")[0] ?? "", 10);
 	assert(
@@ -406,7 +409,30 @@ export const assertReleaseToolchain = (
 		pnpmVersion === releasePnpmVersion,
 		`Solo release requires pnpm ${releasePnpmVersion}; received ${pnpmVersion}`,
 	);
-	return { nodeVersion, pnpmVersion };
+	const childNode = JSON.parse(
+		command("pnpm", [
+			"exec",
+			"node",
+			"-p",
+			"JSON.stringify({version:process.versions.node,execPath:process.execPath})",
+		]),
+	);
+	const childMajor = Number.parseInt(
+		String(childNode.version).split(".")[0] ?? "",
+		10,
+	);
+	assert(
+		childMajor === releaseNodeMajor &&
+			realpathSync(childNode.execPath) === realpathSync(nodeExecPath),
+		`Solo release pnpm child runtime must be the exact Node ${releaseNodeMajor} CLI runtime; received ${childNode.version} at ${childNode.execPath}`,
+	);
+	return {
+		nodeVersion,
+		nodeExecPath: realpathSync(nodeExecPath),
+		pnpmVersion,
+		childNodeVersion: childNode.version,
+		childNodeExecPath: realpathSync(childNode.execPath),
+	};
 };
 
 const parseVersion = (version) => {
@@ -511,17 +537,33 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 		"Train tag does not encode the exact version",
 	);
 	const expectedPackages = [
-		"@jbcom/rpgjs-solo",
-		"@jbcom/rpgjs-solo-action-battle",
-		"@jbcom/rpgjs-solo-renderer",
-		"@jbcom/rpgjs-solo-vite",
+		{
+			name: "@jbcom/rpgjs-solo",
+			directory: "packages/solo",
+			tag: `rpgjs-solo-v${plan.version}`,
+		},
+		{
+			name: "@jbcom/rpgjs-solo-action-battle",
+			directory: "packages/solo-action-battle",
+			tag: `rpgjs-solo-action-battle-v${plan.version}`,
+		},
+		{
+			name: "@jbcom/rpgjs-solo-renderer",
+			directory: "packages/solo-renderer",
+			tag: `rpgjs-solo-renderer-v${plan.version}`,
+		},
+		{
+			name: "@jbcom/rpgjs-solo-vite",
+			directory: "packages/solo-vite",
+			tag: `rpgjs-solo-vite-v${plan.version}`,
+		},
 	];
 	assert(
 		plan.packages.every(
 			(record, index) =>
-				record.name === expectedPackages[index] &&
-				record.directory.startsWith("packages/") &&
-				record.tag.endsWith(`-v${plan.version}`),
+				record.name === expectedPackages[index].name &&
+				record.directory === expectedPackages[index].directory &&
+				record.tag === expectedPackages[index].tag,
 		),
 		"Solo package order, directory, or immutable tag drifted",
 	);
@@ -655,6 +697,36 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 		);
 	}
 	return { ...plan, planPath, planSha512: planState.sha512 };
+};
+
+export const assertReviewedPlanSource = (
+	plan,
+	planPath = defaultPlanPath,
+	root = rootDirectory,
+	command = run,
+) => {
+	const canonicalPath = join(root, canonicalPlanRelativePath);
+	assert(
+		resolve(planPath) === canonicalPath && resolve(plan.planPath) === canonicalPath,
+		"Production release commands require the canonical reviewed plan path",
+	);
+	const planState = regularFileState(canonicalPath, "Canonical Solo release plan");
+	assert(planState, "Canonical Solo release plan is missing");
+	const headBytes = Buffer.from(
+		command("git", ["show", `HEAD:${canonicalPlanRelativePath}`], {
+			cwd: root,
+			trim: false,
+		}),
+	);
+	assert(
+		planState.bytes.equals(headBytes) &&
+			plan.planSha512 === digest("sha512", headBytes),
+		"Solo release plan bytes do not match the exact reviewed HEAD blob",
+	);
+	return {
+		path: canonicalPath,
+		sha512: planState.sha512,
+	};
 };
 
 export const assertFinalReleaseBindings = (plan) => {
@@ -1814,12 +1886,53 @@ const assertPackedExports = (packedDirectory, manifest, packageName) => {
 	}
 };
 
-const cleanBuildSoloCohort = (root, plan, command = run) => {
+export const assertExactSourceWorktree = (
+	root,
+	source,
+	command = run,
+) => {
+	const head = command("git", ["rev-parse", "HEAD"], { cwd: root });
+	const tree = command("git", ["rev-parse", "HEAD^{tree}"], { cwd: root });
+	const status = command(
+		"git",
+		["status", "--porcelain=v1", "--untracked-files=all"],
+		{ cwd: root },
+	);
+	const generatedDistPrefixes = [
+		"packages/solo/dist/",
+		"packages/solo-action-battle/dist/",
+		"packages/solo-renderer/dist/",
+		"packages/solo-vite/dist/",
+	];
+	const foreignStatus = status
+		.split("\n")
+		.filter(Boolean)
+		.filter(
+			(line) =>
+				!generatedDistPrefixes.some(
+					(prefix) => line.startsWith("?? ") && line.slice(3).startsWith(prefix),
+				),
+		);
+	assert(
+		head === source.head && tree === source.tree && foreignStatus.length === 0,
+		"Reviewed source worktree changed during provenance packing",
+	);
+	return { head, tree };
+};
+
+const cleanBuildSoloCohort = (
+	root,
+	plan,
+	source,
+	command = run,
+	sourceCommand = run,
+) => {
 	for (const record of plan.packages)
 		rmSync(join(root, record.directory, "dist"), {
 			recursive: true,
 			force: true,
 		});
+	assertExactSourceWorktree(root, source, sourceCommand);
 	for (const record of plan.packages) {
 		command("pnpm", ["--filter", record.name, "run", "build"], {
 			cwd: root,
@@ -1830,6 +1943,7 @@ const cleanBuildSoloCohort = (root, plan, command = run) => {
 			existsSync(join(root, record.directory, "dist")),
 			`${record.name} clean build did not create dist`,
 		);
+		assertExactSourceWorktree(root, source, sourceCommand);
 	}
 };
 
@@ -1963,6 +2077,7 @@ export const createProvenanceManifest = ({
 	artifactsDirectory,
 	source,
 	command = run,
+	sourceCommand = run,
 	signer,
 }) => {
 	assert(
@@ -1970,7 +2085,8 @@ export const createProvenanceManifest = ({
 		"Provenance requires the applied version phase",
 	);
 	preflightArtifactDirectory(root, artifactsDirectory);
-	cleanBuildSoloCohort(root, plan, command);
+	assertExactSourceWorktree(root, source, sourceCommand);
+	cleanBuildSoloCohort(root, plan, source, command, sourceCommand);
 	if (!existsSync(artifactsDirectory))
 		mkdirSync(artifactsDirectory, { recursive: false });
 	let reviewReceipt;
@@ -2022,6 +2138,7 @@ export const createProvenanceManifest = ({
 	}
 	const packages = [];
 	for (const record of plan.packages) {
+		assertExactSourceWorktree(root, source, sourceCommand);
 		const packageArtifacts = join(
 			artifactsDirectory,
 			record.name.replaceAll("/", "-"),
@@ -2031,6 +2148,7 @@ export const createProvenanceManifest = ({
 			packageDirectory: join(root, record.directory),
 			destinationDirectory: packageArtifacts,
 		});
+		assertExactSourceWorktree(root, source, sourceCommand);
 		const inspectionDirectory = join(packageArtifacts, "inspection");
 		const { packedDirectory, packedManifest } = inspectPortablePackageArchive({
 			archivePath,
@@ -3401,7 +3519,12 @@ export const main = async (
 ) => {
 	assertReleaseToolchain(toolchainCommand, nodeVersion);
 	const args = parseArguments(rawArguments);
+	assert(
+		resolve(args.plan) === defaultPlanPath,
+		"Production release commands require the canonical reviewed plan path",
+	);
 	const plan = loadSoloReleasePlan(args.plan);
+	assertReviewedPlanSource(plan, args.plan);
 	if (args.command === "validate") {
 		assertFinalReleaseBindings(plan);
 		process.stdout.write(

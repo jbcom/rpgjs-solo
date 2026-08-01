@@ -18,9 +18,11 @@ Changesets version command or move inherited `@rpgjs/*` packages to beta.30.
 The machine-readable authority is
 [`solo-beta29-solo1.plan.json`](solo-beta29-solo1.plan.json).
 
-The planner consumes five Solo-owned changesets: the beta.29 baseline, atomic
-Solo runtime, reactive renderer props, current Solo toolchain, and this release
-transaction. It hash-binds but retains the inherited changesets. Release
+The planner consumes six Solo-owned changesets: the beta.29 baseline, atomic
+Solo runtime, reactive renderer props, current Solo toolchain, the Solo half of
+the action-battle guard changeset, and this release transaction. It hash-binds
+but retains the inherited changesets, including the upstream half of the split
+action-battle guard record. Release
 relevance is derived from the four cohort records plus the package manifests in
 `inheritedReleaseDirectories`: common, server, client, action battle, Studio,
 Tiled, and Vite. Any new pending changeset that names that complete surface is a
