@@ -30,6 +30,11 @@ describe("fork-owned CI boundary", () => {
 		const job = workflow.jobs.tests;
 		expect(job["timeout-minutes"]).toBe(30);
 		expect(job.strategy.matrix["node-version"]).toEqual([24]);
+		for (const step of job.steps) {
+			if (step.uses) {
+				expect(step.uses).toMatch(/^[^@]+@[0-9a-f]{40}$/);
+			}
+		}
 		for (const requiredStep of [
 			"Dependency currency",
 			"Workspace dependency audit",
@@ -64,11 +69,21 @@ describe("fork-owned CI boundary", () => {
 		expect(input.description).toMatch(/40-character/i);
 
 		const checkout = workflow.jobs.tests.steps.find(
-			(step: { uses?: string }) => step.uses === "actions/checkout@v4",
+			(step: { uses?: string }) => step.uses?.startsWith("actions/checkout@"),
 		);
 		expect(checkout.with.ref).toContain("inputs.commit");
+		expect(checkout.with["persist-credentials"]).toBe(false);
+		const stepNames = workflow.jobs.tests.steps.map(
+			(step: { name?: string }) => step.name,
+		);
+		expect(stepNames.indexOf("Prove requested tracking commit")).toBeLessThan(
+			stepNames.indexOf("Install dependencies"),
+		);
 		expect(source).toContain("git rev-parse HEAD");
 		expect(source).toContain("REQUESTED_COMMIT");
 		expect(source).toContain("^[0-9a-f]{40}$");
+		expect(source).toContain("refs/remotes/origin/v5");
+		expect(source).toContain("refs/remotes/upstream/v5");
+		expect(source).toContain("https://github.com/RSamaium/RPG-JS.git");
 	});
 });
