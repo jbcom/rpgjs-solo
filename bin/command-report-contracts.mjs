@@ -203,3 +203,122 @@ export const parsePnpmOutdatedReport = (result) => {
 	}
 	return outdated;
 };
+
+export const parsePnpmWorkspaceProjects = (result) => {
+	if (
+		result.status !== 0 ||
+		result.signal ||
+		result.error ||
+		reportText(result.stderr).trim()
+	) {
+		throw new Error(
+			`pnpm recursive list failed operationally: ${describeFailure(result)}`,
+		);
+	}
+	const projects = parseJsonReport("pnpm recursive list", result.stdout);
+	if (!Array.isArray(projects) || projects.length === 0) {
+		throw new Error("pnpm recursive list returned no workspace projects");
+	}
+	const paths = new Set();
+	for (const [index, project] of projects.entries()) {
+		if (
+			!project ||
+			typeof project !== "object" ||
+			Array.isArray(project) ||
+			typeof project.name !== "string" ||
+			project.name.length === 0 ||
+			typeof project.path !== "string" ||
+			project.path.length === 0
+		) {
+			throw new Error(
+				`pnpm recursive list returned an incomplete project at index ${index}`,
+			);
+		}
+		if (paths.has(project.path)) {
+			throw new Error(
+				`pnpm recursive list returned duplicate project path ${project.path}`,
+			);
+		}
+		paths.add(project.path);
+	}
+	return projects;
+};
+
+export const parsePnpmLockImporterIds = (lockfile) => {
+	const importerIds = [];
+	let inImporters = false;
+	for (const line of reportText(lockfile).split(/\r?\n/)) {
+		if (line === "importers:") {
+			inImporters = true;
+			continue;
+		}
+		if (!inImporters) continue;
+		if (/^[^\s]/.test(line)) break;
+		const match = /^ {2}([^\s].*):$/.exec(line);
+		if (!match) continue;
+		const importerId = match[1].replace(/^(['"])(.*)\1$/, "$2");
+		if (importerIds.includes(importerId)) {
+			throw new Error(
+				`pnpm lockfile contains duplicate importer ${importerId}`,
+			);
+		}
+		importerIds.push(importerId);
+	}
+	if (importerIds.length === 0) {
+		throw new Error("pnpm lockfile contains no importers");
+	}
+	return importerIds;
+};
+
+export const collectPnpmOutdatedRows = (projectReports) =>
+	projectReports.flatMap(({ importerId, report }) =>
+		Object.entries(report).map(([packageName, detail]) => ({
+			importerId,
+			packageName,
+			detail,
+		})),
+	);
+
+const semanticMajor = (version) => {
+	const match = /^(\d+)\./.exec(version);
+	if (!match) throw new Error(`Cannot read semantic major from ${version}`);
+	return Number(match[1]);
+};
+
+export const classifyPnpmOutdatedRows = (rows, intentionalMajorBoundaries) => {
+	const unresolved = [];
+	const accepted = [];
+	for (const { importerId, packageName, detail } of rows) {
+		const coordinate = `${importerId} -> ${packageName}`;
+		const boundary = intentionalMajorBoundaries.get(packageName);
+		if (!boundary) {
+			unresolved.push(`${coordinate}: ${detail.current} -> ${detail.latest}`);
+			continue;
+		}
+		const [expectedCurrentMajor, expectedLatestMajor, reason] = boundary;
+		if (
+			semanticMajor(detail.current) !== expectedCurrentMajor ||
+			semanticMajor(detail.latest) !== expectedLatestMajor
+		) {
+			unresolved.push(
+				`${coordinate}: expected ${expectedCurrentMajor}.x -> ${expectedLatestMajor}.x boundary, received ${detail.current} -> ${detail.latest}`,
+			);
+			continue;
+		}
+		if (detail.current !== detail.wanted) {
+			unresolved.push(
+				`${coordinate}: compatible update remains (${detail.current} installed, ${detail.wanted} wanted)`,
+			);
+			continue;
+		}
+		accepted.push({
+			importerId,
+			packageName,
+			current: detail.current,
+			latest: detail.latest,
+			expectedCurrentMajor,
+			reason,
+		});
+	}
+	return { unresolved, accepted };
+};

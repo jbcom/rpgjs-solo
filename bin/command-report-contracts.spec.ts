@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+	classifyPnpmOutdatedRows,
+	collectPnpmOutdatedRows,
 	parseNpmAuditReport,
+	parsePnpmLockImporterIds,
 	parsePnpmOutdatedReport,
+	parsePnpmWorkspaceProjects,
 } from "./command-report-contracts.mjs";
 
 const commandResult = (
@@ -201,5 +205,70 @@ describe("external command report contracts", () => {
 				),
 			),
 		).toThrow(/unexpected stdout before.*example\.test/i);
+	});
+
+	it("preserves every importer when one dependency has multiple current versions", () => {
+		const reports = [
+			{
+				importerId: ".",
+				report: {
+					typescript: { current: "6.0.3", wanted: "6.0.3", latest: "7.0.3" },
+				},
+			},
+			{
+				importerId: "packages/solo",
+				report: {
+					typescript: { current: "7.0.2", wanted: "7.0.2", latest: "7.0.3" },
+				},
+			},
+		];
+		const rows = collectPnpmOutdatedRows(reports);
+		expect(
+			rows.map(({ importerId, detail }) => [importerId, detail.current]),
+		).toEqual([
+			[".", "6.0.3"],
+			["packages/solo", "7.0.2"],
+		]);
+		const classified = classifyPnpmOutdatedRows(
+			rows,
+			new Map([
+				[
+					"typescript",
+					[
+						6,
+						7,
+						"TypeScript 6 source compiler and TypeScript 7 consumer split",
+					],
+				],
+			]),
+		);
+		expect(classified.accepted).toHaveLength(1);
+		expect(classified.unresolved).toEqual([
+			"packages/solo -> typescript: expected 6.x -> 7.x boundary, received 7.0.2 -> 7.0.3",
+		]);
+	});
+
+	it("binds the workspace project report to every lockfile importer", () => {
+		const projects = parsePnpmWorkspaceProjects(
+			commandResult([
+				{ name: "root", path: "/repo" },
+				{ name: "solo", path: "/repo/packages/solo" },
+			]),
+		);
+		expect(projects).toHaveLength(2);
+		expect(
+			parsePnpmLockImporterIds(
+				`lockfileVersion: '9.0'\n\nimporters:\n\n  .:\n    dependencies: {}\n\n  packages/solo:\n    devDependencies: {}\n\npackages:\n`,
+			),
+		).toEqual([".", "packages/solo"]);
+
+		expect(() =>
+			parsePnpmWorkspaceProjects(
+				commandResult([{ name: "root", path: "/repo" }], {
+					status: 1,
+					stderr: "project enumeration failed",
+				}),
+			),
+		).toThrow(/recursive list failed operationally/i);
 	});
 });

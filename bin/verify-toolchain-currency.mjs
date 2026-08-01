@@ -1,5 +1,16 @@
 import { spawnSync } from "node:child_process";
-import { parsePnpmOutdatedReport } from "./command-report-contracts.mjs";
+import { readFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+	classifyPnpmOutdatedRows,
+	collectPnpmOutdatedRows,
+	parsePnpmLockImporterIds,
+	parsePnpmOutdatedReport,
+	parsePnpmWorkspaceProjects,
+} from "./command-report-contracts.mjs";
+
+const rootDirectory = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const intentionalMajorBoundaries = new Map([
 	["@babel/generator", [7, 8, "Babel 8 migration boundary"]],
@@ -16,12 +27,6 @@ const intentionalMajorBoundaries = new Map([
 		[6, 7, "TypeScript 6 source compiler and TypeScript 7 consumer-test split"],
 	],
 ]);
-
-const major = (version) => {
-	const match = /^(\d+)\./.exec(version);
-	if (!match) throw new Error(`Cannot read semantic major from ${version}`);
-	return Number(match[1]);
-};
 
 const stableVersionParts = (version) => {
 	const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
@@ -68,52 +73,76 @@ const latestStableVersionInMajor = async (packageName, expectedMajor) => {
 	return latestVersion;
 };
 
-const outdatedResult = spawnSync(
+const projectListResult = spawnSync(
 	"pnpm",
-	["-r", "outdated", "--format", "json"],
+	["-r", "list", "--depth=-1", "--json"],
 	{
+		cwd: rootDirectory,
 		encoding: "utf8",
 		stdio: "pipe",
 	},
 );
 
-const outdated = parsePnpmOutdatedReport(outdatedResult);
-const unresolved = [];
-const accepted = [];
-
-for (const [packageName, detail] of Object.entries(outdated)) {
-	const boundary = intentionalMajorBoundaries.get(packageName);
-	if (!boundary) {
-		unresolved.push(`${packageName}: ${detail.current} -> ${detail.latest}`);
-		continue;
-	}
-	const [expectedCurrentMajor, expectedLatestMajor, reason] = boundary;
-	if (
-		major(detail.current) !== expectedCurrentMajor ||
-		major(detail.latest) !== expectedLatestMajor
-	) {
-		unresolved.push(
-			`${packageName}: expected ${expectedCurrentMajor}.x -> ${expectedLatestMajor}.x boundary, received ${detail.current} -> ${detail.latest}`,
+const projects = parsePnpmWorkspaceProjects(projectListResult);
+const lockImporterIds = parsePnpmLockImporterIds(
+	readFileSync(resolve(rootDirectory, "pnpm-lock.yaml"), "utf8"),
+);
+const projectImporterIds = projects.map((project) => {
+	const importerId = relative(rootDirectory, resolve(project.path)) || ".";
+	if (importerId === ".." || importerId.startsWith("../")) {
+		throw new Error(
+			`Workspace project escapes the repository: ${project.path}`,
 		);
-		continue;
 	}
-	if (detail.current !== detail.wanted) {
-		unresolved.push(
-			`${packageName}: compatible update remains (${detail.current} installed, ${detail.wanted} wanted)`,
-		);
-		continue;
-	}
-	accepted.push({
-		packageName,
-		current: detail.current,
-		latest: detail.latest,
-		expectedCurrentMajor,
-		reason,
-	});
+	return importerId;
+});
+if (
+	JSON.stringify([...projectImporterIds].sort()) !==
+	JSON.stringify([...lockImporterIds].sort())
+) {
+	throw new Error(
+		`Workspace project/lock importer mismatch:\nprojects=${projectImporterIds.sort().join(",")}\nlock=${lockImporterIds.sort().join(",")}`,
+	);
 }
 
+const projectReports = projects.map((project, index) => {
+	const importerId = projectImporterIds[index];
+	const outdatedResult = spawnSync(
+		"pnpm",
+		["--dir", project.path, "outdated", "--format", "json"],
+		{
+			cwd: rootDirectory,
+			encoding: "utf8",
+			stdio: "pipe",
+		},
+	);
+	return {
+		importerId,
+		report: parsePnpmOutdatedReport(outdatedResult),
+	};
+});
+
+const { unresolved, accepted } = classifyPnpmOutdatedRows(
+	collectPnpmOutdatedRows(projectReports),
+	intentionalMajorBoundaries,
+);
+
+const uniqueAcceptedBoundaries = [
+	...new Map(
+		accepted.map((boundary) => [
+			[
+				boundary.packageName,
+				boundary.current,
+				boundary.latest,
+				boundary.expectedCurrentMajor,
+			].join("\0"),
+			boundary,
+		]),
+	).values(),
+];
+
 await Promise.all(
-	accepted.map(async (boundary) => {
+	uniqueAcceptedBoundaries.map(async (boundary) => {
 		const latestCurrentMajor = await latestStableVersionInMajor(
 			boundary.packageName,
 			boundary.expectedCurrentMajor,
@@ -133,7 +162,7 @@ if (unresolved.length > 0) {
 }
 
 console.log(
-	`Workspace dependency currency passed; ${accepted.length} explicit major boundaries remain:\n${accepted
+	`Workspace dependency currency passed across ${projects.length} exact importers; ${accepted.length} declared dependency lines cross ${uniqueAcceptedBoundaries.length} explicit major boundaries:\n${uniqueAcceptedBoundaries
 		.map(
 			(boundary) =>
 				`${boundary.packageName} ${boundary.current} (latest ${boundary.expectedCurrentMajor}.x) -> ${boundary.latest}: ${boundary.reason}`,
