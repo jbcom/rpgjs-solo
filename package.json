@@ -22,6 +22,8 @@
     "verify:solo-boundary": "pnpm --filter @jbcom/rpgjs-solo --filter @jbcom/rpgjs-solo-action-battle --filter @jbcom/rpgjs-solo-renderer -r verify:boundary",
     "verify:solo-package-contracts": "node bin/verify-solo-package-contracts.mjs",
     "verify:solo-consumer": "node bin/verify-solo-consumer.mjs",
+    "verify:published-package-contracts": "node bin/verify-published-package-contracts.mjs",
+    "verify:toolchain-currency": "node bin/verify-toolchain-currency.mjs",
     "test": "vitest",
     "test:types": "vitest --typecheck run packages/client/src/public-api-types.spec.ts packages/common/src/foundation.spec.ts packages/server/tests/server-api-types.spec.ts"
   },
@@ -30,7 +32,7 @@
   "description": "RPGJS is a framework for creating RPG/MMORPG games",
   "dependencies": {
     "execa": "^9.6.1",
-    "pnpm": "11.16.0",
+    "pnpm": "11.18.0",
     "tsx": "4.23.1",
     "wait-on": "^9.0.10"
   },
@@ -41,7 +43,7 @@
     "javascript",
     "typescript"
   ],
-  "packageManager": "pnpm@11.16.0",
+  "packageManager": "pnpm@11.18.0",
   "engines": {
     "node": ">=24 <25"
   },
@@ -58,7 +60,8 @@
     "pixi.js": "^8.19.0",
     "ts-morph": "^28.0.0",
     "typescript": "^6.0.3",
-    "vite": "8.1.5",
-    "vitest": "4.1.10"
+    "vite": "8.2.0",
+    "vitest": "4.1.10",
+    "yaml": "2.9.0"
   }
 }

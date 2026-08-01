@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "mint dev",
-    "build": "mint build",
+    "build": "mint validate",
     "preview": "mint dev",
     "broken-links": "mint broken-links",
     "validate": "mint validate"
@@ -12,9 +12,5 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
-  "description": "",
-  "dependencies": {
-    "vite": "^8.0.16",
-    "vitepress": "^1.6.4"
-  }
+  "description": ""
 }

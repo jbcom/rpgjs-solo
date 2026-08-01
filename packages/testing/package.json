@@ -13,7 +13,7 @@
   "license": "MIT",
   "description": "",
   "devDependencies": {
-    "vite": "^8.0.16",
+    "vite": "^8.2.0",
     "vite-plugin-dts": "^5.0.2"
   },
   "dependencies": {
@@ -21,7 +21,7 @@
     "@rpgjs/client": "workspace:*",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/server": "workspace:*",
-    "@signe/di": "3.1.0",
+    "@signe/di": "3.1.1",
     "canvasengine": "2.1.1",
     "rxjs": "^7.8.2",
     "vitest-webgl-canvas-mock": "^1.1.0"

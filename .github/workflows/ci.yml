@@ -1,13 +1,17 @@
 name: CI
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 on:
   push:
     branches:
-      - "**"
+      - main
+      - v5
     paths-ignore:
       - "docs/**"
   pull_request:
@@ -19,6 +23,7 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     strategy:
       matrix:
         node-version: [24]
@@ -32,7 +37,11 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: "pnpm"
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --strict-peer-dependencies
+      - name: Dependency currency
+        run: pnpm verify:toolchain-currency
+      - name: Workspace dependency audit
+        run: pnpm audit --audit-level=low
       - name: Build
         run: pnpm build
       - name: Public API boundary
@@ -45,6 +54,8 @@ jobs:
         run: pnpm verify:solo-package-contracts
       - name: Solo packed consumer execution
         run: pnpm verify:solo-consumer
+      - name: Published package dependency contracts
+        run: pnpm verify:published-package-contracts
       - name: Unit tests
         run: pnpm test --run
       - name: Cloudflare MMORPG runtime tests
@@ -58,6 +69,9 @@ jobs:
       needs: tests
       if: github.repository == 'RSamaium/RPG-JS' && github.ref == 'refs/heads/v5'
       runs-on: ubuntu-latest
+      permissions:
+        contents: write
+        pull-requests: write
       outputs:
         published: ${{ steps.changesets.outputs.published }}
       steps:
@@ -71,7 +85,7 @@ jobs:
           id: setup-node
           uses: actions/setup-node@v4
           with:
-            node-version: lts/*
+            node-version: 24
             registry-url: https://registry.npmjs.org
 
         - name: 🥡 Setup pnpm

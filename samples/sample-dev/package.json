@@ -19,7 +19,7 @@
     "@vitejs/plugin-vue": "^6.0.7",
     "partykit": "^0.0.115",
     "path-browserify": "^1.0.1",
-    "vite": "^8.0.16"
+    "vite": "^8.2.0"
   },
   "private": true,
   "dependencies": {
@@ -33,7 +33,7 @@
     "@rpgjs/ui-css": "workspace:*",
     "@rpgjs/vite": "workspace:*",
     "@rpgjs/vue": "workspace:*",
-    "@signe/di": "3.1.0",
+    "@signe/di": "3.1.1",
     "canvasengine": "2.1.1",
     "express": "^5.2.1",
     "pixi.js": "^8.19.0",

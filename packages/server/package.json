@@ -35,15 +35,15 @@
     "@rpgjs/database": "^4.3.0",
     "@rpgjs/physic": "5.0.1",
     "@rpgjs/testing": "workspace:*",
-    "@signe/di": "3.1.0",
-    "@signe/reactive": "3.1.0",
-    "@signe/room": "3.1.0",
-    "@signe/sync": "3.1.0",
+    "@signe/di": "3.1.1",
+    "@signe/reactive": "3.1.1",
+    "@signe/room": "3.1.1",
+    "@signe/sync": "3.1.1",
     "rxjs": "^7.8.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "vite": "^8.0.16",
+    "vite": "^8.2.0",
     "vite-plugin-dts": "^5.0.2"
   },
   "type": "module"
