@@ -4,19 +4,21 @@ Status: tooling is based on the exact canonical, two-parent PR #20 merge
 `82a9e56d106e87c37df4602055a6a22ec22218dc`. Release PR #22 merged the
 deterministic apply transition as `39ee42bd...`; its first pack attempt halted
 before creating an archive when inherited build stdio returned a successful
-null buffer. Corrective release PR #23 fixes that runner boundary and is now
-the release PR bound by the plan. Publication remains blocked until that exact
-PR head passes every required check, is independently accepted, and is merged
-without changing the reviewed source. A new detached producer-disjoint review
-receipt is created only after that exact corrective head becomes a canonical
-two-parent merge, because the receipt binds the final merge SHA as well as the
-updated immutable plan and assignment.
+null buffer. Corrective release PR #23 merged as `e0ba2b8f...`, fixed that
+runner boundary, and produced the signed candidate cohort. Release PR #24 now
+owns the pnpm consumer-isolation correction and is the release PR bound by the
+plan. Promotion remains blocked until that exact PR head passes every required
+check, is independently accepted, and is merged without changing the reviewed
+source. A new detached producer-disjoint review receipt is created only after
+that exact corrective head becomes a canonical two-parent merge, because the
+receipt binds the final merge SHA as well as the updated immutable plan and
+assignment.
 The four exact candidate versions were then published without moving `latest`,
 but the clean-consumer verifier exposed a second environmental boundary: pnpm
 walked upward from its `/private/tmp` consumer into an unrelated parent
 workspace and therefore left the intended consumer empty. Promotion remains
-blocked while the follow-up release-tool correction forces pnpm's documented
-`--ignore-workspace` isolation and proves the hostile-parent case directly.
+blocked while PR #24 forces pnpm's documented `--ignore-workspace` isolation
+and proves the hostile-parent case directly.
 `fair-studio-success-rates.introducedBy` remains its own immutable `f014412...`
 commit and is verified as an ancestor of the required source instead of being
 made equal to it.
