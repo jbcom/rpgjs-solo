@@ -11,6 +11,8 @@ import {
 } from "./command-report-contracts.mjs";
 
 const rootDirectory = dirname(dirname(fileURLToPath(import.meta.url)));
+const commandTimeoutMs = 60_000;
+const commandMaxBuffer = 32 * 1024 * 1024;
 
 const intentionalMajorBoundaries = new Map([
 	["@babel/generator", [7, 8, "Babel 8 migration boundary"]],
@@ -52,7 +54,10 @@ const compareStableVersions = (left, right) => {
 const latestStableVersionInMajor = async (packageName, expectedMajor) => {
 	const response = await fetch(
 		`https://registry.npmjs.org/${encodeURIComponent(packageName)}`,
-		{ headers: { accept: "application/vnd.npm.install-v1+json" } },
+		{
+			headers: { accept: "application/vnd.npm.install-v1+json" },
+			signal: AbortSignal.timeout(15_000),
+		},
 	);
 	if (!response.ok) {
 		throw new Error(
@@ -80,6 +85,8 @@ const projectListResult = spawnSync(
 		cwd: rootDirectory,
 		encoding: "utf8",
 		stdio: "pipe",
+		timeout: commandTimeoutMs,
+		maxBuffer: commandMaxBuffer,
 	},
 );
 
@@ -109,11 +116,13 @@ const projectReports = projects.map((project, index) => {
 	const importerId = projectImporterIds[index];
 	const outdatedResult = spawnSync(
 		"pnpm",
-		["--dir", project.path, "outdated", "--format", "json"],
+		["outdated", "--format", "json"],
 		{
-			cwd: rootDirectory,
+			cwd: project.path,
 			encoding: "utf8",
 			stdio: "pipe",
+			timeout: commandTimeoutMs,
+			maxBuffer: commandMaxBuffer,
 		},
 	);
 	return {

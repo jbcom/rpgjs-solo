@@ -19,12 +19,16 @@ const temporaryDirectory = mkdtempSync(
 );
 const packDirectory = join(temporaryDirectory, "pack");
 const consumerDirectory = join(temporaryDirectory, "consumer");
+const commandTimeoutMs = 300_000;
+const commandMaxBuffer = 32 * 1024 * 1024;
 
 const run = (command, arguments_, options = {}) =>
 	execFileSync(command, arguments_, {
 		cwd: consumerDirectory,
 		encoding: "utf8",
 		stdio: "pipe",
+		timeout: commandTimeoutMs,
+		maxBuffer: commandMaxBuffer,
 		...options,
 	});
 
@@ -35,6 +39,8 @@ try {
 	execFileSync("pnpm", ["pack", "--pack-destination", packDirectory], {
 		cwd: packageDirectory,
 		stdio: "pipe",
+		timeout: commandTimeoutMs,
+		maxBuffer: commandMaxBuffer,
 	});
 	const archive = readdirSync(packDirectory).find((name) =>
 		name.endsWith(".tgz"),
@@ -46,6 +52,8 @@ try {
 	const packedManifest = JSON.parse(
 		execFileSync("tar", ["-xOf", archivePath, "package/package.json"], {
 			encoding: "utf8",
+			timeout: commandTimeoutMs,
+			maxBuffer: commandMaxBuffer,
 		}),
 	);
 	if (packedManifest.name !== "@rpgjs/vite") {
@@ -60,11 +68,18 @@ try {
 	}
 
 	const forbiddenDependencies = ["@hono/vite-dev-server", "@hono/node-server"];
+	const manifestDependencyFields = [
+		"dependencies",
+		"optionalDependencies",
+		"peerDependencies",
+	];
 	for (const dependencyName of forbiddenDependencies) {
-		if (packedManifest.dependencies?.[dependencyName]) {
-			throw new Error(
-				`Packed @rpgjs/vite still publishes unused ${dependencyName}`,
-			);
+		for (const field of manifestDependencyFields) {
+			if (packedManifest[field]?.[dependencyName]) {
+				throw new Error(
+					`Packed @rpgjs/vite still publishes unused ${dependencyName} in ${field}`,
+				);
+			}
 		}
 	}
 
@@ -111,9 +126,11 @@ try {
 			cwd: consumerDirectory,
 			encoding: "utf8",
 			stdio: "pipe",
+			timeout: commandTimeoutMs,
+			maxBuffer: commandMaxBuffer,
 		},
 	);
-	parseNpmAuditReport(auditResult);
+	parseNpmAuditReport(auditResult, "External @rpgjs/vite consumer audit");
 
 	console.log(
 		"@rpgjs/vite external packed dependency and audit contract passed",

@@ -1,4 +1,7 @@
 ---
+"@jbcom/rpgjs-solo": patch
+"@jbcom/rpgjs-solo-action-battle": patch
+"@jbcom/rpgjs-solo-renderer": patch
 "@jbcom/rpgjs-solo-vite": patch
 ---
 

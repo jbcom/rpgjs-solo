@@ -5,8 +5,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 on:
   push:
@@ -24,6 +23,7 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     strategy:
       matrix:
         node-version: [24]
@@ -69,6 +69,9 @@ jobs:
       needs: tests
       if: github.repository == 'RSamaium/RPG-JS' && github.ref == 'refs/heads/v5'
       runs-on: ubuntu-latest
+      permissions:
+        contents: write
+        pull-requests: write
       outputs:
         published: ${{ steps.changesets.outputs.published }}
       steps:
@@ -82,7 +85,7 @@ jobs:
           id: setup-node
           uses: actions/setup-node@v4
           with:
-            node-version: lts/*
+            node-version: 24
             registry-url: https://registry.npmjs.org
 
         - name: 🥡 Setup pnpm

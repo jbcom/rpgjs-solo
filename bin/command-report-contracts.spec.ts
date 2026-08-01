@@ -258,9 +258,20 @@ describe("external command report contracts", () => {
 		expect(projects).toHaveLength(2);
 		expect(
 			parsePnpmLockImporterIds(
-				`lockfileVersion: '9.0'\n\nimporters:\n\n  .:\n    dependencies: {}\n\n  packages/solo:\n    devDependencies: {}\n\npackages:\n`,
+				`lockfileVersion: '9.0'\n\nimporters:\n\n  '.':\n    dependencies: {}\n\n  packages/solo:\n    devDependencies: {}\n\npackages:\n`,
 			),
 		).toEqual([".", "packages/solo"]);
+		expect(() =>
+			parsePnpmLockImporterIds(
+				`lockfileVersion: '9.0'\n\nimporters:\n  .:\n    dependencies: {}\n  .:\n    dependencies: {}\n`,
+			),
+		).toThrow(/duplicate YAML key/i);
+		expect(() =>
+			parsePnpmLockImporterIds("lockfileVersion: '9.0'\npackages: {}\n"),
+		).toThrow(/no importers/i);
+		expect(() =>
+			parsePnpmLockImporterIds("lockfileVersion: '9.0'\nimporters: [\n"),
+		).toThrow(/invalid YAML/i);
 
 		expect(() =>
 			parsePnpmWorkspaceProjects(

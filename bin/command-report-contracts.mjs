@@ -1,3 +1,5 @@
+import { parseDocument } from "yaml";
+
 const reportText = (value) =>
 	typeof value === "string" ? value : (value?.toString() ?? "");
 
@@ -34,9 +36,10 @@ const parsePnpmOutdatedJson = (stdout) => {
 		const allowedSlowRequest =
 			/^\[WARN\] Request took [1-9][0-9]*ms: https:\/\/registry\.npmjs\.org\/\S+$/;
 		for (const line of prefix.split(/\r?\n/)) {
-			if (!allowedSlowRequest.test(line)) {
+			const trimmedLine = line.trim();
+			if (trimmedLine && !allowedSlowRequest.test(trimmedLine)) {
 				throw new Error(
-					`pnpm outdated returned unexpected stdout before its JSON report: ${line}`,
+					`pnpm outdated returned unexpected stdout before its JSON report: ${trimmedLine}`,
 				);
 			}
 		}
@@ -44,7 +47,7 @@ const parsePnpmOutdatedJson = (stdout) => {
 	return parseJsonReport("pnpm outdated", output.slice(jsonStart));
 };
 
-export const parseNpmAuditReport = (result) => {
+export const parseNpmAuditReport = (result, context = "npm audit") => {
 	const audit = parseJsonReport("npm audit", result.stdout);
 	if (!audit || typeof audit !== "object" || Array.isArray(audit)) {
 		throw new Error("npm audit returned a non-object JSON report");
@@ -139,9 +142,7 @@ export const parseNpmAuditReport = (result) => {
 	}
 	const total = severityCounts.total;
 	if (total !== 0) {
-		throw new Error(
-			`External @rpgjs/vite consumer audit found ${String(total)} vulnerabilities`,
-		);
+		throw new Error(`${context} found ${String(total)} vulnerabilities`);
 	}
 	if (
 		result.status !== 0 ||
@@ -245,25 +246,28 @@ export const parsePnpmWorkspaceProjects = (result) => {
 };
 
 export const parsePnpmLockImporterIds = (lockfile) => {
-	const importerIds = [];
-	let inImporters = false;
-	for (const line of reportText(lockfile).split(/\r?\n/)) {
-		if (line === "importers:") {
-			inImporters = true;
-			continue;
-		}
-		if (!inImporters) continue;
-		if (/^[^\s]/.test(line)) break;
-		const match = /^ {2}([^\s].*):$/.exec(line);
-		if (!match) continue;
-		const importerId = match[1].replace(/^(['"])(.*)\1$/, "$2");
-		if (importerIds.includes(importerId)) {
-			throw new Error(
-				`pnpm lockfile contains duplicate importer ${importerId}`,
-			);
-		}
-		importerIds.push(importerId);
+	const document = parseDocument(reportText(lockfile), { uniqueKeys: true });
+	if (document.errors.length > 0) {
+		const duplicate = document.errors.find(
+			(error) => error.code === "DUPLICATE_KEY",
+		);
+		throw new Error(
+			duplicate
+				? `pnpm lockfile contains a duplicate YAML key: ${duplicate.message}`
+				: `pnpm lockfile contains invalid YAML: ${document.errors[0].message}`,
+		);
 	}
+	if (document.warnings.length > 0) {
+		throw new Error(
+			`pnpm lockfile contains ambiguous YAML: ${document.warnings[0].message}`,
+		);
+	}
+	const parsed = document.toJS({ mapAsMap: false });
+	const importers = parsed?.importers;
+	const importerIds =
+		importers && typeof importers === "object" && !Array.isArray(importers)
+			? Object.keys(importers)
+			: [];
 	if (importerIds.length === 0) {
 		throw new Error("pnpm lockfile contains no importers");
 	}

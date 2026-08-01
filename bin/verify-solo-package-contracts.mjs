@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const rootDirectory = dirname(dirname(fileURLToPath(import.meta.url)))
 const publishGuard = join(rootDirectory, 'bin', 'require-pnpm-publish.mjs')
+const rootManifest = JSON.parse(readFileSync(join(rootDirectory, 'package.json'), 'utf8'))
 const packageDirectories = [
   'packages/solo',
   'packages/solo-action-battle',
@@ -24,7 +25,7 @@ for (const { manifest } of sourceManifests.values()) {
   execFileSync(process.execPath, [publishGuard], {
     env: {
       ...process.env,
-      npm_config_user_agent: 'pnpm/11.18.0',
+      npm_config_user_agent: rootManifest.packageManager.replace('@', '/'),
       npm_package_name: manifest.name
     },
     stdio: 'pipe'
