@@ -56,8 +56,10 @@ runtime.spawnEntity({
 ```
 
 Human controls, Yuka governors, and replay runners use the same `dispatch()`
-contract. Renderers and UI subscribe to the same entity objects mutated by the
-runtime; there is no client copy, room, socket, or synchronization layer.
+contract. Ordinary dispatch and stepping mutate the same entity objects
+observed by renderers and UI; candidate commits use the explicit rebind seam
+described below. There is no client copy, room, socket, or synchronization
+layer.
 
 ## Atomic candidate ticks
 
@@ -65,8 +67,9 @@ Systems that must validate a complete fixed tick before publishing it can use
 `beginCandidateTick()`. The runtime forks one isolated next tick, buffers its
 command and tick events, and reduces game-owned JSON state beside Rules. An
 abort discards that candidate without touching live state or emitting events;
-commit preserves existing entity object identity and publishes the Rules view,
-reduced state, runtime events, and domain events as one immutable receipt.
+commit atomically replaces the authoritative Rules object graph and publishes
+the Rules view, reduced state, runtime events, and domain events as one
+immutable receipt.
 
 ```ts
 const candidate = runtime.beginCandidateTick({
@@ -112,6 +115,20 @@ must not run from an action handler while a candidate is being evaluated.
 legacy runtime-event listeners. Notification failures are post-commit
 diagnostics: every peer listener still runs, `commit()` still returns its
 receipt, and the candidate remains `committed`.
+
+Candidate commits intentionally replace entity object identity so a frozen or
+otherwise hostile old entity reference cannot make a transaction half-apply.
+Renderers and other identity-caching consumers must use
+`subscribeCandidateTicks()` as their post-commit rebind seam, reading the
+immutable `publication.view` or reacquiring live entities by id. Ordinary
+non-candidate `dispatch()` and `step()` retain their existing in-place identity
+behavior.
+
+Commands are strictly cloned and deeply frozen before candidate-safe actions or
+interceptors receive them. Executable authority registrations carry a revision,
+so changing a handler while a candidate is open makes that candidate stale.
+Beginning or committing another candidate during publication is rejected; all
+events from the committed tick are materialized before any observer runs.
 
 Only one fixed tick is admitted per candidate. A stale candidate cannot commit
 after live state changes, and a new candidate after abort targets the same next

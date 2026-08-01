@@ -82,7 +82,7 @@ describe('Solo candidate ticks', () => {
     runtime.subscribeCandidateTicks((publication) => {
       ordering.push('publication')
       expect(runtime.tick).toBe(1)
-      expect(runtime.getEntity('hero')).toBe(hero)
+      expect(runtime.getEntity('hero')).not.toBe(hero)
       expect(runtime.getEntity('hero')!.stats.hp).toBe(88)
       expect(publication.state).toEqual({ records: ['hero:12'] })
       expect(publication.runtimeEvents.map(({ type }) => type)).toEqual(['tick', 'command'])
@@ -112,8 +112,9 @@ describe('Solo candidate ticks', () => {
 
     expect(candidate.status).toBe('committed')
     expect(runtime.tick).toBe(1)
-    expect(runtime.getEntity('hero')).toBe(hero)
-    expect(hero.stats.hp).toBe(88)
+    expect(runtime.getEntity('hero')).not.toBe(hero)
+    expect(runtime.getEntity('hero')!.stats.hp).toBe(88)
+    expect(hero.stats.hp).toBe(100)
     expect(publication.state).toEqual({ records: ['hero:12'] })
     expect(Object.isFrozen(publication)).toBe(true)
     expect(Object.isFrozen(publication.state)).toBe(true)
@@ -276,5 +277,109 @@ describe('Solo candidate ticks', () => {
       'Candidate closed-before-publication is committed',
       'Candidate closed-before-publication is committed'
     ])
+  })
+
+  it('atomically replaces the authority graph without mutating frozen or earlier live entities', () => {
+    const runtime = createRuntime()
+    const oldHero = runtime.getEntity('hero')!
+    const oldGuard = runtime.spawnEntity({
+      id: 'guard', kind: 'npc', mapId: 'field', x: 64, y: 32
+    })
+    Object.freeze(oldGuard)
+
+    const candidate = runtime.beginCandidateTick({ id: 'frozen-live-graph', state: null })
+    candidate.dispatch({
+      type: 'action', entityId: 'hero', action: 'take-hit', payload: { amount: 12 }, source: 'ai'
+    })
+
+    expect(() => candidate.commit()).not.toThrow()
+    expect(candidate.status).toBe('committed')
+    expect(runtime.tick).toBe(1)
+    expect(runtime.getEntity('hero')).not.toBe(oldHero)
+    expect(runtime.getEntity('guard')).not.toBe(oldGuard)
+    expect(runtime.getEntity('hero')!.stats.hp).toBe(88)
+    expect(oldHero.stats.hp).toBe(100)
+  })
+
+  it('commits large live and candidate command logs without variadic argument overflow', () => {
+    const runtime = createRuntime()
+    const command = { type: 'stop', entityId: 'hero', source: 'ai' } as const
+    for (let index = 0; index < 80_000; index += 1) runtime.dispatch(command)
+    const candidate = runtime.beginCandidateTick({ id: 'large-command-log', state: null })
+    for (let index = 0; index < 80_000; index += 1) candidate.dispatch(command)
+
+    expect(() => candidate.commit()).not.toThrow()
+    expect(candidate.status).toBe('committed')
+    expect(runtime.tick).toBe(1)
+    expect(runtime.getCommandLog()).toHaveLength(160_000)
+  })
+
+  it('strictly clones and freezes candidate commands before executable authority receives them', () => {
+    const runtime = new SoloRuntime()
+    runtime.registerMap({ id: 'field', width: 640, height: 480 })
+    runtime.spawnEntity({ id: 'hero', kind: 'player', mapId: 'field', x: 32, y: 32 })
+    runtime.registerAction('mutate-payload', ({ payload }) => {
+      ;(payload as { value: number }).value = 99
+    }, { candidateSafe: true })
+    const callerPayload = { value: 1 }
+    const candidate = runtime.beginCandidateTick({ id: 'frozen-input', state: null })
+
+    expect(() => candidate.dispatch({
+      type: 'action', entityId: 'hero', action: 'mutate-payload', payload: callerPayload, source: 'ai'
+    })).toThrow(TypeError)
+    expect(callerPayload).toEqual({ value: 1 })
+    expect(candidate.status).toBe('failed')
+    expect(runtime.tick).toBe(0)
+    expect(runtime.getCommandLog()).toHaveLength(0)
+    candidate.abort()
+  })
+
+  it('invalidates a candidate when executable authority is unregistered and replaced under the same name', () => {
+    const runtime = new SoloRuntime()
+    runtime.registerMap({ id: 'field', width: 640, height: 480 })
+    runtime.spawnEntity({ id: 'hero', kind: 'player', mapId: 'field', x: 32, y: 32 })
+    const unregister = runtime.registerAction('authority', ({ entity }) => {
+      entity.stats.hp -= 10
+    }, { candidateSafe: true })
+    const stale = runtime.beginCandidateTick({ id: 'old-authority', state: null })
+    stale.dispatch({ type: 'action', entityId: 'hero', action: 'authority', source: 'ai' })
+
+    unregister()
+    runtime.registerAction('authority', ({ entity }) => {
+      entity.stats.hp -= 20
+    }, { candidateSafe: true })
+
+    expect(() => stale.commit()).toThrow(SoloCandidateTickConflictError)
+    expect(stale.status).toBe('aborted')
+    expect(runtime.tick).toBe(0)
+    expect(runtime.getEntity('hero')!.stats.hp).toBe(100)
+  })
+
+  it('rejects nested candidate publication and preserves all outer event tick identities', () => {
+    const runtime = createRuntime()
+    const publicationTicks: number[] = []
+    const legacyTicks: number[] = []
+    let nestedError: unknown
+    runtime.subscribeCandidateTicks((publication) => {
+      publicationTicks.push(publication.tick)
+      try {
+        runtime.beginCandidateTick({ id: 'nested', state: null }).commit()
+      } catch (error) {
+        nestedError = error
+      }
+    })
+    runtime.subscribe((event) => {
+      if (event.type === 'tick') legacyTicks.push(event.view.tick)
+      if (event.type === 'command') legacyTicks.push(event.record.tick)
+    })
+
+    const outer = runtime.beginCandidateTick({ id: 'outer', state: null })
+    outer.dispatch({ type: 'stop', entityId: 'hero', source: 'ai' })
+    outer.commit()
+
+    expect(nestedError).toBeInstanceOf(SoloCandidateTickConflictError)
+    expect(publicationTicks).toEqual([1])
+    expect(legacyTicks).toEqual([1, 1])
+    expect(runtime.tick).toBe(1)
   })
 })
