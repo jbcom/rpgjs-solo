@@ -16,10 +16,14 @@ import {
 	applySoloReleaseTransaction,
 	assertCanonicalMain,
 	assertLivePromotedCohort,
+	createGiteaReleaseAdapter,
+	createGitHubReleaseAdapter,
 	createProvenanceManifest,
 	loadSoloReleasePlan,
 	nextPromotionAction,
+	pnpmView,
 	prepareReleaseEvidence,
+	publishCandidateCohort,
 	reconcileReleaseRemotes,
 	reconcileReleaseWithAdapter,
 	sha512File,
@@ -166,11 +170,13 @@ function createFixture() {
 	const consumedChangesets = Object.entries(consumedSources).map(
 		([id, source]) => ({ id, sha256: sha256(source) }),
 	);
-	const carriedChangesets = Object.entries(carriedSources).map(([id, source]) => ({
-		id,
-		sha256: sha256(source),
-		...(id === "studio" ? { introducedBy: "4".repeat(40) } : {}),
-	}));
+	const carriedChangesets = Object.entries(carriedSources).map(
+		([id, source]) => ({
+			id,
+			sha256: sha256(source),
+			...(id === "studio" ? { introducedBy: "4".repeat(40) } : {}),
+		}),
+	);
 	const plan = {
 		schemaVersion: 1,
 		releaseId: "fixture",
@@ -230,7 +236,12 @@ function createExpectedRelease() {
 function createReleaseAdapter(
 	name: string,
 	expected: ReturnType<typeof createExpectedRelease>,
-	options: { existing?: boolean; failCreateOnce?: boolean } = {},
+	options: {
+		existing?: boolean;
+		failCreateOnce?: boolean;
+		failUploadAt?: number;
+		failPublishAfterOnce?: boolean;
+	} = {},
 ) {
 	let release = options.existing
 		? {
@@ -247,7 +258,14 @@ function createReleaseAdapter(
 		for (const asset of expected.assets)
 			bytes.set(asset.name, readFileSync(asset.path));
 	let failCreate = options.failCreateOnce === true;
-	const calls = { create: 0, upload: 0, download: 0 };
+	let failPublishAfter = options.failPublishAfterOnce === true;
+	const calls = {
+		create: 0,
+		upload: 0,
+		download: 0,
+		publish: 0,
+		order: [] as string[],
+	};
 	return {
 		name,
 		calls,
@@ -262,8 +280,9 @@ function createReleaseAdapter(
 					}
 				: undefined;
 		},
-		createRelease() {
+		createDraftRelease() {
 			calls.create += 1;
+			calls.order.push("create-draft");
 			if (failCreate) {
 				failCreate = false;
 				throw new Error(`${name} temporarily unavailable`);
@@ -273,12 +292,17 @@ function createReleaseAdapter(
 				target: expected.target,
 				title: expected.title,
 				body: expected.body,
-				draft: false,
+				draft: true,
 				prerelease: true,
 			};
 		},
 		uploadAsset(_release: unknown, asset: { name: string; path: string }) {
+			if (release?.draft !== true)
+				throw new Error(`${name} immutable published release rejected upload`);
 			calls.upload += 1;
+			calls.order.push(`upload:${asset.name}`);
+			if (calls.upload === options.failUploadAt)
+				throw new Error(`${name} upload interrupted`);
 			bytes.set(asset.name, readFileSync(asset.path));
 		},
 		downloadAsset(
@@ -287,7 +311,23 @@ function createReleaseAdapter(
 			destination: string,
 		) {
 			calls.download += 1;
+			calls.order.push(
+				`download:${release?.draft === true ? "draft" : "published"}:${asset.name}`,
+			);
 			writeFileSync(destination, bytes.get(asset.name) ?? Buffer.alloc(0));
+		},
+		publishRelease() {
+			calls.publish += 1;
+			calls.order.push("publish");
+			if (!release || release.draft !== true)
+				throw new Error(`${name} release is not a draft`);
+			if (bytes.size !== expected.assets.length)
+				throw new Error(`${name} release assets are incomplete`);
+			release.draft = false;
+			if (failPublishAfter) {
+				failPublishAfter = false;
+				throw new Error(`${name} publish response was interrupted`);
+			}
 		},
 	};
 }
@@ -348,7 +388,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	it("preflights every changelog before mutating a manifest", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
-		const manifestPath = join(fixture.root, packages[0].directory, "package.json");
+		const manifestPath = join(
+			fixture.root,
+			packages[0].directory,
+			"package.json",
+		);
 		const before = readFileSync(manifestPath, "utf8");
 		writeFileSync(
 			join(fixture.root, packages.at(-1)?.directory ?? "", "CHANGELOG.md"),
@@ -358,15 +402,18 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			/already has a changelog/i,
 		);
 		expect(readFileSync(manifestPath, "utf8")).toBe(before);
-		expect(
-			existsSync(join(fixture.root, ".changeset/solo.md")),
-		).toBe(true);
+		expect(existsSync(join(fixture.root, ".changeset/solo.md"))).toBe(true);
 	});
 
 	it("always refreshes the lockfile when retrying an applied transition", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
 		const headFiles = new Map<string, string>();
+		const sourceLockfile = readFileSync(
+			join(fixture.root, "pnpm-lock.yaml"),
+			"utf8",
+		);
+		headFiles.set("pnpm-lock.yaml", sourceLockfile);
 		for (const entry of plan.consumedChangesets) {
 			const path = `.changeset/${entry.id}.md`;
 			headFiles.set(path, readFileSync(join(fixture.root, path), "utf8"));
@@ -379,11 +426,22 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		const fake = (command: string, args: string[]) => {
 			if (command === "pnpm") {
 				installs += 1;
-				if (installs === 1) throw new Error("interrupted lockfile refresh");
+				if (installs === 1) {
+					writeFileSync(join(fixture.root, "pnpm-lock.yaml"), "partial\n");
+					throw new Error("interrupted lockfile refresh");
+				}
+				expect(readFileSync(join(fixture.root, "pnpm-lock.yaml"), "utf8")).toBe(
+					sourceLockfile,
+				);
+				writeFileSync(
+					join(fixture.root, "pnpm-lock.yaml"),
+					"deterministic-lock\n",
+				);
 				return "";
 			}
 			if (args[0] === "status") return "";
-			if (args[0] === "diff") return "packages/solo/package.json";
+			if (args[0] === "diff")
+				return "packages/solo/package.json\npnpm-lock.yaml";
 			if (args[0] === "ls-files") return "packages/solo/CHANGELOG.md";
 			if (args[0] === "show")
 				return headFiles.get(args[1].replace(/^HEAD:/, "")) ?? "";
@@ -391,9 +449,9 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			if (args[0] === "merge-base") return "";
 			return "";
 		};
-		expect(() =>
-			applySoloReleaseTransaction(fixture.root, plan, fake),
-		).toThrow(/interrupted lockfile refresh/);
+		expect(() => applySoloReleaseTransaction(fixture.root, plan, fake)).toThrow(
+			/interrupted lockfile refresh/,
+		);
 		expect(validateSoloReleaseState(fixture.root, plan).phase).toBe("applied");
 		expect(applySoloReleaseTransaction(fixture.root, plan, fake)).toEqual({
 			changed: false,
@@ -401,6 +459,9 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			lockfileRefreshed: true,
 		});
 		expect(installs).toBe(2);
+		expect(readFileSync(join(fixture.root, "pnpm-lock.yaml"), "utf8")).toBe(
+			"deterministic-lock\n",
+		);
 	});
 
 	it("rejects tampering inside an otherwise allowed apply-retry path", () => {
@@ -429,9 +490,9 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			if (args[0] === "merge-base") return "";
 			return "";
 		};
-		expect(() =>
-			applySoloReleaseTransaction(fixture.root, plan, fake),
-		).toThrow(/changelog differs/i);
+		expect(() => applySoloReleaseTransaction(fixture.root, plan, fake)).toThrow(
+			/changelog differs/i,
+		);
 		expect(installed).toBe(false);
 	});
 
@@ -524,6 +585,161 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				version,
 			}),
 		).toThrow(/changed unexpectedly/);
+		expect(() =>
+			nextPromotionAction({
+				currentLatest: "old",
+				priorLatest: "old",
+				version,
+				complete: true,
+			}),
+		).toThrow(/completed latest promotion changed unexpectedly/i);
+	});
+
+	it("preflights the complete candidate cohort before any registry mutation", () => {
+		const manifest = {
+			packages: packages.map(({ name }, index) => ({
+				name,
+				archive: `${index}.tgz`,
+				integrity: `sha512-${index}`,
+			})),
+		};
+		const plan = {
+			version,
+			registry,
+			candidateDistTag: "candidate",
+			promotionDistTag: "latest",
+		};
+		const mutations: string[] = [];
+		const view = (spec: string, field: string) => {
+			if (field === "dist-tags") return {};
+			if (spec.startsWith(`${packages[2].name}@`)) return "sha512-foreign";
+			return undefined;
+		};
+		expect(() =>
+			publishCandidateCohort({
+				manifest,
+				manifestPath: "/tmp/fixture/provenance.json",
+				plan,
+				env: {},
+				view,
+				command: (command: string, args: string[]) => {
+					mutations.push(`${command} ${args.join(" ")}`);
+					return "";
+				},
+			}),
+		).toThrow(/foreign bytes/i);
+		expect(mutations).toEqual([]);
+	});
+
+	it("executes only the immutable candidate actions selected by preflight", () => {
+		const manifest = {
+			packages: packages.map(({ name }, index) => ({
+				name,
+				archive: `${index}.tgz`,
+				integrity: `sha512-${index}`,
+			})),
+		};
+		const plan = {
+			version,
+			registry,
+			candidateDistTag: "candidate",
+			promotionDistTag: "latest",
+		};
+		const live = new Map<
+			string,
+			{ integrity: string | undefined; tags: Record<string, string> }
+		>(
+			manifest.packages.map(
+				(
+					item,
+					index,
+				): [
+					string,
+					{ integrity: string | undefined; tags: Record<string, string> },
+				] => [
+					item.name,
+					{
+						integrity: [1, 2].includes(index) ? item.integrity : undefined,
+						tags: index === 2 ? { candidate: version } : {},
+					},
+				],
+			),
+		);
+		const view = (spec: string, field: string) => {
+			const item = manifest.packages.find(
+				(candidate) =>
+					spec === candidate.name || spec === `${candidate.name}@${version}`,
+			);
+			if (!item) throw new Error(`unknown package ${spec}`);
+			const state = live.get(item.name);
+			return field === "dist-tags" ? state?.tags : state?.integrity;
+		};
+		const mutations: string[] = [];
+		publishCandidateCohort({
+			manifest,
+			manifestPath: "/tmp/fixture/provenance.json",
+			plan,
+			env: {},
+			view,
+			command: (_command: string, args: string[]) => {
+				mutations.push(args[0]);
+				if (args[0] === "publish") {
+					const index = Number(args[1].split("/").at(-1)?.replace(".tgz", ""));
+					const item = manifest.packages[index];
+					const state = live.get(item.name);
+					if (!state) throw new Error("missing live state");
+					state.integrity = item.integrity;
+					state.tags.candidate = version;
+				} else {
+					const item = manifest.packages.find(
+						(candidate) => args[2] === `${candidate.name}@${version}`,
+					);
+					if (!item) throw new Error("missing dist-tag target");
+					const state = live.get(item.name);
+					if (!state) throw new Error("missing live state");
+					state.tags.candidate = version;
+				}
+				return "";
+			},
+		});
+		expect(mutations).toEqual(["publish", "dist-tag", "publish"]);
+	});
+
+	it("treats only explicit registry absence codes as missing", () => {
+		const plan = { registry };
+		const missing = Object.assign(new Error("pnpm view failed"), {
+			stderr:
+				"ERR_PNPM_FETCH_404 GET https://registry.invalid/pkg: Not Found - 404",
+		});
+		expect(
+			pnpmView("@jbcom/missing", "dist.integrity", plan, {}, () => {
+				throw missing;
+			}),
+		).toBeUndefined();
+		const missingVersion = Object.assign(new Error("pnpm view failed"), {
+			stdout: JSON.stringify({
+				error: {
+					code: "ERR_PNPM_PACKAGE_NOT_FOUND",
+					message: "No matching version found for @jbcom/example@fixture",
+				},
+			}),
+		});
+		expect(
+			pnpmView("@jbcom/example@fixture", "dist.integrity", plan, {}, () => {
+				throw missingVersion;
+			}),
+		).toBeUndefined();
+		const unavailable = Object.assign(new Error("pnpm view failed"), {
+			stderr: "ETIMEDOUT registry unavailable",
+		});
+		expect(() =>
+			pnpmView("@jbcom/missing", "dist.integrity", plan, {}, () => {
+				throw unavailable;
+			}),
+		).toThrow(/registry read failed/i);
+		expect(() =>
+			pnpmView("@jbcom/missing", "dist.integrity", plan, {}, () => ""),
+		).toThrow(/registry read failed/i);
 	});
 
 	it("packs one immutable external cohort manifest with source, tree, lock, and tarball SHA-512", () => {
@@ -547,7 +763,10 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			expect(existsSync(join(dist, "stale.js"))).toBe(false);
 			mkdirSync(dist, { recursive: true });
 			writeFileSync(join(dist, "index.js"), "export const built = true;\n");
-			writeFileSync(join(dist, "index.d.ts"), "export declare const built: true;\n");
+			writeFileSync(
+				join(dist, "index.d.ts"),
+				"export declare const built: true;\n",
+			);
 			built.push(name);
 			return "";
 		};
@@ -661,27 +880,188 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			assertLivePromotedCohort(manifest, plan, {}, view),
 		).not.toThrow();
 		stale = true;
-		expect(() =>
-			assertLivePromotedCohort(manifest, plan, {}, view),
-		).toThrow(/live latest/i);
+		expect(() => assertLivePromotedCohort(manifest, plan, {}, view)).toThrow(
+			/live latest/i,
+		);
 	});
 
-	it("creates, resumes, and fetch-verifies every source release asset", async () => {
+	it("stages, verifies, publishes, and reuses an immutable source release", async () => {
 		const expected = createExpectedRelease();
 		const adapter = createReleaseAdapter("fixture", expected);
-		await expect(reconcileReleaseWithAdapter(expected, adapter)).resolves.toEqual({
+		await expect(
+			reconcileReleaseWithAdapter(expected, adapter),
+		).resolves.toEqual({
 			tag: expected.tag,
 			assets: expected.assets.map(({ name }) => name),
 		});
 		expect(adapter.calls).toMatchObject({
 			create: 1,
 			upload: expected.assets.length,
-			download: expected.assets.length,
+			download: expected.assets.length * 2,
+			publish: 1,
 		});
+		expect(adapter.calls.order.at(0)).toBe("create-draft");
+		expect(adapter.calls.order.indexOf("publish")).toBeGreaterThan(
+			adapter.calls.order.lastIndexOf(
+				`download:draft:${expected.assets.at(-1)?.name}`,
+			),
+		);
 		await reconcileReleaseWithAdapter(expected, adapter);
 		expect(adapter.calls.create).toBe(1);
 		expect(adapter.calls.upload).toBe(expected.assets.length);
+		expect(adapter.calls.publish).toBe(1);
 		expect(adapter.calls.download).toBe(expected.assets.length * 3);
+	});
+
+	it("resumes a partially uploaded draft without replacing verified assets", async () => {
+		const expected = createExpectedRelease();
+		const adapter = createReleaseAdapter("fixture", expected, {
+			failUploadAt: 2,
+		});
+		await expect(
+			reconcileReleaseWithAdapter(expected, adapter),
+		).rejects.toThrow(/upload interrupted/i);
+		await expect(
+			reconcileReleaseWithAdapter(expected, adapter),
+		).resolves.toMatchObject({ tag: expected.tag });
+		expect(adapter.calls.create).toBe(1);
+		expect(
+			adapter.calls.order.filter(
+				(entry) => entry === `upload:${expected.assets[0].name}`,
+			),
+		).toHaveLength(1);
+		expect(adapter.calls.publish).toBe(1);
+	});
+
+	it("accepts a publish response crash only after verifying the immutable release", async () => {
+		const expected = createExpectedRelease();
+		const adapter = createReleaseAdapter("fixture", expected, {
+			failPublishAfterOnce: true,
+		});
+		await expect(
+			reconcileReleaseWithAdapter(expected, adapter),
+		).rejects.toThrow(/publish response was interrupted/i);
+		await expect(
+			reconcileReleaseWithAdapter(expected, adapter),
+		).resolves.toMatchObject({ tag: expected.tag });
+		expect(adapter.calls.create).toBe(1);
+		expect(adapter.calls.publish).toBe(1);
+		expect(adapter.calls.upload).toBe(expected.assets.length);
+	});
+
+	it("drives GitHub through draft, asset verification, and final publication", async () => {
+		const expected = createExpectedRelease();
+		const bytes = new Map<string, Buffer>();
+		let release:
+			| {
+					tagName: string;
+					targetCommitish: string;
+					name: string;
+					body: string;
+					isDraft: boolean;
+					isPrerelease: boolean;
+			  }
+			| undefined;
+		const mutations: string[][] = [];
+		const command = (program: string, args: string[]) => {
+			expect(program).toBe("gh");
+			if (args[1] === "view") {
+				if (!release) throw new Error("release not found");
+				return JSON.stringify({
+					...release,
+					assets: [...bytes.keys()].map((name) => ({ name })),
+				});
+			}
+			if (args[1] === "create") {
+				mutations.push(args);
+				expect(args).toContain("--draft");
+				release = {
+					tagName: expected.tag,
+					targetCommitish: expected.target,
+					name: expected.title,
+					body: expected.body,
+					isDraft: true,
+					isPrerelease: true,
+				};
+				return "";
+			}
+			if (args[1] === "upload") {
+				mutations.push(args);
+				expect(release?.isDraft).toBe(true);
+				const path = args[3];
+				const name = path.split("/").at(-1) ?? "";
+				bytes.set(name, readFileSync(path));
+				return "";
+			}
+			if (args[1] === "download") {
+				const name = args[args.indexOf("--pattern") + 1];
+				const destination = args[args.indexOf("--output") + 1];
+				writeFileSync(destination, bytes.get(name) ?? Buffer.alloc(0));
+				return "";
+			}
+			if (args[1] === "edit") {
+				mutations.push(args);
+				expect(args).toContain("--draft=false");
+				expect(bytes.size).toBe(expected.assets.length);
+				if (!release) throw new Error("release missing");
+				release.isDraft = false;
+				return "";
+			}
+			throw new Error(`unexpected gh call ${args.join(" ")}`);
+		};
+		const adapter = createGitHubReleaseAdapter(
+			{
+				canonical: { repository: "https://github.com/jbcom/rpgjs-solo.git" },
+				trainTag: expected.tag,
+			},
+			command,
+		);
+		await expect(
+			reconcileReleaseWithAdapter(expected, adapter),
+		).resolves.toMatchObject({ tag: expected.tag });
+		expect(mutations.map((args) => args[1])).toEqual([
+			"create",
+			"upload",
+			"upload",
+			"edit",
+		]);
+	});
+
+	it("restates immutable Gitea metadata when publishing a draft", () => {
+		const expected = createExpectedRelease();
+		let invocation: string[] = [];
+		const adapter = createGiteaReleaseAdapter(
+			{
+				backup: {
+					apiRepository: "jbcom/rpgjs-solo",
+					repository: "https://git.example.test/jbcom/rpgjs-solo.git",
+				},
+				trainTag: expected.tag,
+			},
+			(program: string, args: string[]) => {
+				expect(program).toBe("tea");
+				invocation = args;
+				return "";
+			},
+		);
+		adapter.publishRelease({}, expected);
+		expect(invocation).toEqual([
+			"releases",
+			"edit",
+			expected.tag,
+			"--tag",
+			expected.tag,
+			"--target",
+			expected.target,
+			"--title",
+			expected.title,
+			"--note",
+			expected.body,
+			"--draft=false",
+			"--prerelease=true",
+			"--repo",
+			"jbcom/rpgjs-solo",
+		]);
 	});
 
 	it("resumes Gitea after GitHub succeeds without recreating either release", async () => {

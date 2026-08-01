@@ -242,7 +242,10 @@ const deriveReleaseRelevantPackages = (root, plan) => {
 	const names = new Set(plan.packages.map(({ name }) => name));
 	for (const directory of plan.inheritedReleaseDirectories) {
 		const path = join(root, directory, "package.json");
-		assert(existsSync(path), `Release surface package is missing: ${directory}`);
+		assert(
+			existsSync(path),
+			`Release surface package is missing: ${directory}`,
+		);
 		const manifest = readJson(path);
 		assert(
 			typeof manifest.name === "string" && manifest.name.startsWith("@rpgjs/"),
@@ -586,7 +589,10 @@ const assertAppliedRetryFiles = (root, plan, paths, command = run) => {
 			);
 			continue;
 		}
-		assert(path.endsWith("/package.json") || path === "package.json", `${path} is not a planned apply output`);
+		assert(
+			path.endsWith("/package.json") || path === "package.json",
+			`${path} is not a planned apply output`,
+		);
 		const headSource = command("git", ["show", `HEAD:${path}`], {
 			cwd: root,
 			trim: false,
@@ -608,9 +614,7 @@ const assertReleaseBase = (root, plan, phase, command = run) => {
 	} else {
 		const allowed = plannedApplyPaths(root, plan);
 		const changed = changedWorktreePaths(root, command);
-		const unexpected = changed.filter(
-			(path) => !allowed.has(path),
-		);
+		const unexpected = changed.filter((path) => !allowed.has(path));
 		assert(
 			unexpected.length === 0,
 			`Applied release retry contains unrelated changes: ${unexpected.join(", ")}`,
@@ -626,13 +630,16 @@ const assertReleaseBase = (root, plan, phase, command = run) => {
 	return head;
 };
 
-export const applySoloReleaseTransaction = (
-	root,
-	plan,
-	command = run,
-) => {
+export const applySoloReleaseTransaction = (root, plan, command = run) => {
 	const before = validateSoloReleaseState(root, plan);
 	assertReleaseBase(root, plan, before.phase, command);
+	if (before.phase === "applied") {
+		const sourceLockfile = command("git", ["show", "HEAD:pnpm-lock.yaml"], {
+			cwd: root,
+			trim: false,
+		});
+		writeFileSync(join(root, "pnpm-lock.yaml"), sourceLockfile);
+	}
 	const result = applySoloReleasePlan(root, plan);
 	command("pnpm", ["install", "--lockfile-only"], {
 		cwd: root,
@@ -709,7 +716,8 @@ const collectExportTargets = (value, targets = []) => {
 	else if (Array.isArray(value))
 		for (const item of value) collectExportTargets(item, targets);
 	else if (value && typeof value === "object")
-		for (const item of Object.values(value)) collectExportTargets(item, targets);
+		for (const item of Object.values(value))
+			collectExportTargets(item, targets);
 	return targets;
 };
 
@@ -967,25 +975,34 @@ const loadProvenance = (manifestPath, plan) => {
 	return manifest;
 };
 
-const pnpmView = (spec, field, plan, env) => {
+const registryViewErrorLooksMissing = (error) => {
+	const details = `${error?.message ?? ""}\n${error?.stdout ?? ""}\n${error?.stderr ?? ""}`;
+	return /\b(?:ERR_PNPM_(?:FETCH_404|PACKAGE_NOT_FOUND|NO_MATCHING_VERSION)|E404)\b/i.test(
+		details,
+	);
+};
+
+export const pnpmView = (spec, field, plan, env, command = run) => {
 	try {
-		const output = run(
+		const output = command(
 			"pnpm",
 			["view", spec, field, "--json", "--registry", plan.registry],
 			{ env },
 		);
-		return output ? JSON.parse(output) : undefined;
-	} catch {
-		return undefined;
+		assert(
+			output !== "",
+			`Registry returned an empty response for ${spec} ${field}`,
+		);
+		return JSON.parse(output);
+	} catch (error) {
+		if (registryViewErrorLooksMissing(error)) return undefined;
+		throw new Error(`Registry read failed for ${spec} ${field}`, {
+			cause: error,
+		});
 	}
 };
 
-export const assertCandidateCohort = (
-	manifest,
-	plan,
-	env,
-	view = pnpmView,
-) => {
+export const assertCandidateCohort = (manifest, plan, env, view = pnpmView) => {
 	for (const item of manifest.packages) {
 		const tags = view(item.name, "dist-tags", plan, env);
 		assert(
@@ -1025,7 +1042,15 @@ export const nextPromotionAction = ({
 	currentLatest,
 	priorLatest,
 	version,
+	complete = false,
 }) => {
+	if (complete) {
+		assert(
+			currentLatest === version,
+			`completed latest promotion changed unexpectedly from ${version} to ${String(currentLatest)}`,
+		);
+		return "complete";
+	}
 	if (currentLatest === version) return "complete";
 	if (currentLatest === priorLatest) return "promote";
 	throw new Error(
@@ -1082,69 +1107,99 @@ const requireExecution = (args, plan) => {
 	);
 };
 
+export const preflightCandidatePublication = (
+	manifest,
+	plan,
+	env,
+	view = pnpmView,
+) =>
+	manifest.packages.map((item) => {
+		const tags = view(item.name, "dist-tags", plan, env) ?? {};
+		assert(
+			tags[plan.candidateDistTag] === undefined ||
+				tags[plan.candidateDistTag] === plan.version,
+			`${item.name} candidate tag already points at a different version`,
+		);
+		const existing = view(
+			`${item.name}@${plan.version}`,
+			"dist.integrity",
+			plan,
+			env,
+		);
+		if (tags[plan.candidateDistTag] === plan.version)
+			assert(
+				existing !== undefined,
+				`${item.name} candidate tag points at a missing release version`,
+			);
+		if (existing !== undefined)
+			assert(
+				existing === item.integrity,
+				`${item.name}@${plan.version} already exists with foreign bytes`,
+			);
+		return {
+			item,
+			action:
+				existing === undefined
+					? "publish"
+					: tags[plan.candidateDistTag] === plan.version
+						? "complete"
+						: "tag",
+		};
+	});
+
+export const publishCandidateCohort = ({
+	manifest,
+	manifestPath,
+	plan,
+	env,
+	view = pnpmView,
+	command = run,
+}) => {
+	const actions = preflightCandidatePublication(manifest, plan, env, view);
+	for (const { item, action } of actions) {
+		if (action === "publish")
+			command(
+				"pnpm",
+				[
+					"publish",
+					resolve(dirname(manifestPath), item.archive),
+					"--tag",
+					plan.candidateDistTag,
+					"--registry",
+					plan.registry,
+					"--no-git-checks",
+				],
+				{ env, timeout: 600_000 },
+			);
+		else if (action === "tag")
+			command(
+				"pnpm",
+				[
+					"dist-tag",
+					"add",
+					`${item.name}@${plan.version}`,
+					plan.candidateDistTag,
+					"--registry",
+					plan.registry,
+				],
+				{ env },
+			);
+		assert(
+			view(`${item.name}@${plan.version}`, "dist.integrity", plan, env) ===
+				item.integrity,
+			`${item.name} fetch-back integrity failed`,
+		);
+	}
+	assertCandidateCohort(manifest, plan, env, view);
+};
+
 const publishCandidate = async (manifest, manifestPath, plan, args) => {
 	requireExecution(args, plan);
 	await withEphemeralNpmAuth(
 		process.env.RPGJS_SOLO_NPM_TOKEN,
 		plan.registry,
-		async (env) => {
-			for (const item of manifest.packages) {
-				const tags = pnpmView(item.name, "dist-tags", plan, env) ?? {};
-				assert(
-					tags[plan.candidateDistTag] === undefined ||
-						tags[plan.candidateDistTag] === plan.version,
-					`${item.name} candidate tag already points at a different version`,
-				);
-				const existing = pnpmView(
-					`${item.name}@${plan.version}`,
-					"dist.integrity",
-					plan,
-					env,
-				);
-				if (existing) {
-					assert(
-						existing === item.integrity,
-						`${item.name}@${plan.version} already exists with foreign bytes`,
-					);
-					run(
-						"pnpm",
-						[
-							"dist-tag",
-							"add",
-							`${item.name}@${plan.version}`,
-							plan.candidateDistTag,
-							"--registry",
-							plan.registry,
-						],
-						{ env },
-					);
-					continue;
-				}
-				run(
-					"pnpm",
-					[
-						"publish",
-						resolve(dirname(manifestPath), item.archive),
-						"--tag",
-						plan.candidateDistTag,
-						"--registry",
-						plan.registry,
-						"--no-git-checks",
-					],
-					{ env, timeout: 600_000 },
-				);
-				assert(
-					pnpmView(
-						`${item.name}@${plan.version}`,
-						"dist.integrity",
-						plan,
-						env,
-					) === item.integrity,
-					`${item.name} fetch-back integrity failed`,
-				);
-			}
-			assertCandidateCohort(manifest, plan, env);
-		},
+		async (env) =>
+			publishCandidateCohort({ manifest, manifestPath, plan, env }),
 	);
 };
 
@@ -1166,12 +1221,11 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 				);
 				assert(
 					JSON.stringify(Object.keys(journal.packages ?? {}).sort()) ===
-						JSON.stringify(
-							manifest.packages.map(({ name }) => name).sort(),
-						) &&
+						JSON.stringify(manifest.packages.map(({ name }) => name).sort()) &&
 						Object.values(journal.packages).every(
 							(state) =>
 								state &&
+								typeof state.complete === "boolean" &&
 								(state.priorLatest === null ||
 									typeof state.priorLatest === "string"),
 						),
@@ -1204,6 +1258,7 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 					currentLatest: tags[plan.promotionDistTag] ?? null,
 					priorLatest: state.priorLatest,
 					version: plan.version,
+					complete: state.complete,
 				});
 				if (action === "promote")
 					run(
@@ -1249,7 +1304,9 @@ const errorLooksMissing = (error) =>
 	);
 
 const repositorySlug = (repository) => {
-	const path = new URL(repository).pathname.replace(/^\//, "").replace(/\.git$/, "");
+	const path = new URL(repository).pathname
+		.replace(/^\//, "")
+		.replace(/\.git$/, "");
 	assert(/^[^/]+\/[^/]+$/.test(path), `Invalid repository URL ${repository}`);
 	return path;
 };
@@ -1277,12 +1334,7 @@ const remoteTagTarget = (repository, tag, command = run) => {
 	);
 };
 
-const reconcileRemoteTags = (
-	repository,
-	tags,
-	commit,
-	command = run,
-) => {
+const reconcileRemoteTags = (repository, tags, commit, command = run) => {
 	for (const tag of tags) {
 		const current = remoteTagTarget(repository, tag, command);
 		assert(
@@ -1292,11 +1344,7 @@ const reconcileRemoteTags = (
 		if (current === undefined)
 			command(
 				"git",
-				[
-					"push",
-					repository,
-					`refs/tags/${tag}:refs/tags/${tag}`,
-				],
+				["push", repository, `refs/tags/${tag}:refs/tags/${tag}`],
 				{ cwd: rootDirectory },
 			);
 		assert(
@@ -1356,7 +1404,10 @@ export const prepareReleaseEvidence = (
 			readFileSync(notesPath, "utf8") === notes,
 			"Existing release-note output has foreign bytes",
 		);
-	const names = [...sourcePaths.map((path) => basename(path)), basename(notesPath)];
+	const names = [
+		...sourcePaths.map((path) => basename(path)),
+		basename(notesPath),
+	];
 	assert(new Set(names).size === names.length, "Release asset names collide");
 	if (writeNotes && !existsSync(notesPath)) writeFileSync(notesPath, notes);
 	const assets = sourcePaths.map((path) => ({
@@ -1380,7 +1431,7 @@ export const prepareReleaseEvidence = (
 	};
 };
 
-const assertReleaseMetadata = (release, expected, provider) => {
+const assertReleaseMetadata = (release, expected, provider, draft) => {
 	assert(release, `${provider} release is missing after creation`);
 	assert(release.tag === expected.tag, `${provider} release tag drifted`);
 	assert(
@@ -1390,7 +1441,7 @@ const assertReleaseMetadata = (release, expected, provider) => {
 	assert(release.title === expected.title, `${provider} release title drifted`);
 	assert(release.body === expected.body, `${provider} release notes drifted`);
 	assert(
-		release.prerelease === expected.prerelease && release.draft !== true,
+		release.prerelease === expected.prerelease && release.draft === draft,
 		`${provider} release state drifted`,
 	);
 };
@@ -1406,15 +1457,26 @@ const indexReleaseAssets = (release, expected, provider, allowMissing) => {
 	}
 	const expectedNames = new Set(expected.assets.map(({ name }) => name));
 	const extra = [...byName.keys()].filter((name) => !expectedNames.has(name));
-	assert(extra.length === 0, `${provider} release has foreign assets: ${extra}`);
+	assert(
+		extra.length === 0,
+		`${provider} release has foreign assets: ${extra}`,
+	);
 	if (!allowMissing) {
 		const missing = [...expectedNames].filter((name) => !byName.has(name));
-		assert(missing.length === 0, `${provider} release is missing assets: ${missing}`);
+		assert(
+			missing.length === 0,
+			`${provider} release is missing assets: ${missing}`,
+		);
 	}
 	return byName;
 };
 
-const verifyRemoteAsset = async (adapter, release, remoteAsset, expectedAsset) => {
+const verifyRemoteAsset = async (
+	adapter,
+	release,
+	remoteAsset,
+	expectedAsset,
+) => {
 	const directory = mkdtempSync(join(tmpdir(), "rpgjs-solo-release-fetch-"));
 	try {
 		const destination = join(directory, expectedAsset.name);
@@ -1431,20 +1493,53 @@ const verifyRemoteAsset = async (adapter, release, remoteAsset, expectedAsset) =
 
 export const reconcileReleaseWithAdapter = async (expected, adapter) => {
 	let release = await adapter.getRelease(expected.tag);
+	if (release && release.draft === false) {
+		assertReleaseMetadata(release, expected, adapter.name, false);
+		const publishedAssets = indexReleaseAssets(
+			release,
+			expected,
+			adapter.name,
+			false,
+		);
+		for (const expectedAsset of expected.assets)
+			await verifyRemoteAsset(
+				adapter,
+				release,
+				publishedAssets.get(expectedAsset.name),
+				expectedAsset,
+			);
+		return {
+			tag: expected.tag,
+			assets: expected.assets.map(({ name }) => name),
+		};
+	}
 	if (!release) {
-		await adapter.createRelease(expected);
+		await adapter.createDraftRelease(expected);
 		release = await adapter.getRelease(expected.tag);
 	}
-	assertReleaseMetadata(release, expected, adapter.name);
+	assertReleaseMetadata(release, expected, adapter.name, true);
 	let assets = indexReleaseAssets(release, expected, adapter.name, true);
 	for (const expectedAsset of expected.assets) {
 		const existing = assets.get(expectedAsset.name);
 		if (existing)
 			await verifyRemoteAsset(adapter, release, existing, expectedAsset);
-		else await adapter.uploadAsset(release, expectedAsset);
 	}
+	for (const expectedAsset of expected.assets)
+		if (!assets.has(expectedAsset.name))
+			await adapter.uploadAsset(release, expectedAsset);
 	release = await adapter.getRelease(expected.tag);
-	assertReleaseMetadata(release, expected, adapter.name);
+	assertReleaseMetadata(release, expected, adapter.name, true);
+	assets = indexReleaseAssets(release, expected, adapter.name, false);
+	for (const expectedAsset of expected.assets)
+		await verifyRemoteAsset(
+			adapter,
+			release,
+			assets.get(expectedAsset.name),
+			expectedAsset,
+		);
+	await adapter.publishRelease(release, expected);
+	release = await adapter.getRelease(expected.tag);
+	assertReleaseMetadata(release, expected, adapter.name, false);
 	assets = indexReleaseAssets(release, expected, adapter.name, false);
 	for (const expectedAsset of expected.assets)
 		await verifyRemoteAsset(
@@ -1469,7 +1564,7 @@ export const reconcileReleaseRemotes = async ({
 	return result;
 };
 
-const createGitHubReleaseAdapter = (plan, command = run) => {
+export const createGitHubReleaseAdapter = (plan, command = run) => {
 	const repo = repositorySlug(plan.canonical.repository);
 	return {
 		name: "github",
@@ -1504,13 +1599,14 @@ const createGitHubReleaseAdapter = (plan, command = run) => {
 				throw error;
 			}
 		},
-		createRelease(expected) {
+		createDraftRelease(expected) {
 			command(
 				"gh",
 				[
 					"release",
 					"create",
 					expected.tag,
+					"--draft",
 					"--prerelease",
 					"--verify-tag",
 					"--latest=false",
@@ -1523,6 +1619,13 @@ const createGitHubReleaseAdapter = (plan, command = run) => {
 					"-R",
 					repo,
 				],
+				{ timeout: 600_000 },
+			);
+		},
+		publishRelease(_release, expected) {
+			command(
+				"gh",
+				["release", "edit", expected.tag, "--draft=false", "-R", repo],
 				{ timeout: 600_000 },
 			);
 		},
@@ -1553,7 +1656,7 @@ const createGitHubReleaseAdapter = (plan, command = run) => {
 	};
 };
 
-const createGiteaReleaseAdapter = (plan, command = run) => {
+export const createGiteaReleaseAdapter = (plan, command = run) => {
 	const repo = plan.backup.apiRepository;
 	assert(/^[^/]+\/[^/]+$/.test(repo), "Invalid Gitea API repository");
 	const endpoint = `repos/${repo}/releases`;
@@ -1588,7 +1691,7 @@ const createGiteaReleaseAdapter = (plan, command = run) => {
 				throw error;
 			}
 		},
-		createRelease(expected) {
+		createDraftRelease(expected) {
 			command(
 				"tea",
 				[
@@ -1602,7 +1705,31 @@ const createGiteaReleaseAdapter = (plan, command = run) => {
 					expected.title,
 					"--note-file",
 					expected.notesPath,
+					"--draft",
 					"--prerelease",
+					"--repo",
+					repo,
+				],
+				{ timeout: 600_000 },
+			);
+		},
+		publishRelease(_release, expected) {
+			command(
+				"tea",
+				[
+					"releases",
+					"edit",
+					expected.tag,
+					"--tag",
+					expected.tag,
+					"--target",
+					expected.target,
+					"--title",
+					expected.title,
+					"--note",
+					expected.body,
+					"--draft=false",
+					"--prerelease=true",
 					"--repo",
 					repo,
 				],
@@ -1687,11 +1814,7 @@ const publishReleases = async (manifest, manifestPath, plan, args) => {
 		writeFileSync(expected.notesPath, expected.body);
 	const tags = [...plan.packages.map(({ tag }) => tag), plan.trainTag];
 	reconcileLocalTags(tags, manifest.source.commit);
-	reconcileRemoteTags(
-		plan.canonical.repository,
-		tags,
-		manifest.source.commit,
-	);
+	reconcileRemoteTags(plan.canonical.repository, tags, manifest.source.commit);
 	const github = createGitHubReleaseAdapter(plan);
 	const gitea = createGiteaReleaseAdapter(plan);
 	await reconcileReleaseRemotes({
@@ -1702,11 +1825,7 @@ const publishReleases = async (manifest, manifestPath, plan, args) => {
 			atomicWriteJson(journalPath, journal);
 		},
 	});
-	reconcileRemoteTags(
-		plan.backup.repository,
-		tags,
-		manifest.source.commit,
-	);
+	reconcileRemoteTags(plan.backup.repository, tags, manifest.source.commit);
 	await reconcileReleaseRemotes({
 		expected,
 		remotes: [gitea],
