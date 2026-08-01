@@ -6,6 +6,7 @@ import client from "./client";
 import Tiled from "./tiled.ce";
 import { prepareTiledPhysicsData } from "./physics";
 import type { TiledMapOptions } from "./index";
+import { readTiledXmlResponse } from "./xml-response";
 import {
   applyTiledMapStreamChunk,
   createTiledMapStreamState,
@@ -16,19 +17,21 @@ import {
 } from "./streaming";
 
 async function loadDirectTiledMap(map: string, options: TiledMapOptions) {
-  const response = await fetch(`${options.basePath}/${map}.tmx`);
-  if (!response.ok) throw new Error(`Unable to load Tiled map '${map}': ${response.status} ${response.statusText}`);
-  const mapData = await response.text();
+  const mapUrl = `${options.basePath}/${map}.tmx`;
+  const response = await fetch(mapUrl);
+  const mapData = await readTiledXmlResponse(response, { kind: "map", id: map, url: mapUrl });
   const parser = new TiledParser(mapData);
   const parsedMap = parser.parseMap();
   const tilesets: any[] = [];
 
   for (const tileset of parsedMap.tilesets) {
-    const tilesetResponse = await fetch(`${options.basePath}/${tileset.source}`);
-    if (!tilesetResponse.ok) {
-      throw new Error(`Unable to load Tiled tileset '${tileset.source}': ${tilesetResponse.status} ${tilesetResponse.statusText}`);
-    }
-    const tilesetData = await tilesetResponse.text();
+    const tilesetUrl = `${options.basePath}/${tileset.source}`;
+    const tilesetResponse = await fetch(tilesetUrl);
+    const tilesetData = await readTiledXmlResponse(tilesetResponse, {
+      kind: "tileset",
+      id: tileset.source,
+      url: tilesetUrl,
+    });
     const tilesetParser = new TiledParser(tilesetData);
     const parsedTileset = tilesetParser.parseTileset();
     parsedTileset.image.source = `${options.basePath}/${parsedTileset.image.source}`;

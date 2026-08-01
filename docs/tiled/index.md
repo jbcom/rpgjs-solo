@@ -46,7 +46,7 @@ export default defineConfig({
     tiledMapFolderPlugin({
       sourceFolder: './src/tiled',      // Folder containing your TMX files
       publicPath: '/map',               // Public URL path for maps
-      buildOutputPath: 'assets/data',   // Build output directory
+      buildOutputPath: 'map',           // Optional; must match publicPath on static hosts
       // MMORPG: publish images only. The server/editor reads TMX and TSX privately.
       allowedExtensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']
     })
@@ -58,12 +58,54 @@ export default defineConfig({
 
 - **`sourceFolder`**: Directory containing your TMX files, TSX tilesets, and images
 - **`publicPath`**: URL path prefix for accessing map files (default: `/data`)
-- **`buildOutputPath`**: Target folder in build output (default: `assets/data`)
+- **`buildOutputPath`**: Target folder in build output. When omitted, it is
+  derived from `publicPath` (`/map` becomes `map`). An explicit value must match
+  that route on a static host.
+- **`allowExternalPublicPathRewrite`**: Allows an explicit mismatch only when a
+  server or CDN rewrites `publicPath` to `buildOutputPath`. Do not enable it for
+  static hosts such as GitHub Pages.
 - **`allowedExtensions`**: File extensions to include (default: `['.tmx', '.tsx', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']`)
 
 Keep the default extensions for a standalone browser build. For an MMORPG, use
 the image-only list above so neither development middleware nor `dist/client`
 exposes TMX/TSX files.
+
+The plugin rejects `publicPath: '/map'` with `buildOutputPath: 'assets/data'`
+unless `allowExternalPublicPathRewrite` is enabled. That mismatch serves
+`/map` in development but leaves the files at `/assets/data` in a static build,
+where a history fallback can return `index.html` for the TMX request and leave
+the map blank.
+
+### Vite base and GitHub Pages
+
+`publicPath` is relative to Vite's configured `base`. For a repository Pages
+site, keep the emitted directory base-relative and include Vite's base in the
+runtime fetch path:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  base: '/my-rpg/',
+  plugins: [
+    tiledMapFolderPlugin({
+      sourceFolder: './src/tiled',
+      publicPath: '/map',
+      buildOutputPath: 'map',
+    }),
+  ],
+})
+```
+
+```ts
+provideTiledMap({
+  basePath: `${import.meta.env.BASE_URL}map`,
+})
+```
+
+Vite rewrites imported asset URLs for `base`, but it does not rewrite arbitrary
+strings passed to `fetch()`. A relative `basePath: 'map'` works when the game is
+always served from its base root; `import.meta.env.BASE_URL` also remains correct
+when the document URL changes.
 
 ## Client-Side Setup
 
@@ -77,7 +119,7 @@ import startServer from "./server";
 startGame({
   providers: [
     provideTiledMap({
-      basePath: "map"  // Must match publicPath in vite.config.ts
+      basePath: `${import.meta.env.BASE_URL}map` // Must resolve to publicPath
     }),
     provideClientGlobalConfig(),
     provideRpg(startServer),
