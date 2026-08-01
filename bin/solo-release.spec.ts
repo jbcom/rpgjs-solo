@@ -47,6 +47,7 @@ import {
 	loadSoloReleasePlan,
 	main,
 	nextPromotionAction,
+	normalizeCommandOutput,
 	pnpmView,
 	prepareReleaseEvidence,
 	publishCandidateCohort,
@@ -610,6 +611,13 @@ function createReleaseAdapter(
 }
 
 describe("Solo beta.29 coordinated release transaction", () => {
+	it("normalizes inherited-stdio command results without trimming null", () => {
+		expect(normalizeCommandOutput(null)).toBe("");
+		expect(normalizeCommandOutput(undefined, false)).toBe("");
+		expect(normalizeCommandOutput("  output  ")).toBe("output");
+		expect(normalizeCommandOutput("  output  ", false)).toBe("  output  ");
+	});
+
 	it("fails closed unless the executing toolchain is exact Node 24 and pnpm 11.18.0", () => {
 		const exactToolchain = (_program: string, args: string[]) =>
 			args[0] === "--version"
@@ -719,7 +727,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.reviewEvidence.enginePullRequest.mergeCommit).toBe(
 			plan.requiredSourceCommit,
 		);
-		expect(plan.reviewEvidence.releasePullRequest.number).toBe(22);
+		expect(plan.reviewEvidence.releasePullRequest.number).toBe(23);
 		expect(
 			plan.carriedChangesets.find(
 				({ id }: { id: string }) => id === "fair-studio-success-rates",

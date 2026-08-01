@@ -9,7 +9,7 @@
 	},
 	"reviewEvidence": {
 		"status": "final",
-		"requiredUpdate": "Satisfied for source policy by the exact engine merge, release PR number, final external-assignment policy, and committed provenance key. The detached assignment and its trust-root fingerprint remain runtime inputs outside producer-controlled source; the assigned reviewer creates the exact-merge ACCEPT receipt only after PR #22 merges.",
+		"requiredUpdate": "Satisfied for source policy by the exact engine merge, corrective release PR number, final external-assignment policy, and committed provenance key. The detached assignment and its trust-root fingerprint remain runtime inputs outside producer-controlled source; the assigned reviewer creates the exact-merge ACCEPT receipt only after corrective PR #23 merges.",
 		"enginePullRequest": {
 			"repository": "jbcom/rpgjs-solo",
 			"number": 20,
@@ -25,7 +25,7 @@
 		},
 		"releasePullRequest": {
 			"repository": "jbcom/rpgjs-solo",
-			"number": 22,
+			"number": 23,
 			"mergeCommitBinding": "canonical-head",
 			"minimumApprovals": 1,
 			"requiredChecks": [
