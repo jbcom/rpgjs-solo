@@ -42,6 +42,7 @@ import {
 	createGiteaReleaseAdapter,
 	createGitHubReleaseAdapter,
 	createProvenanceManifest,
+	createPublishedConsumerContract,
 	defaultPlanPath,
 	loadProvenance,
 	loadSoloReleasePlan,
@@ -660,6 +661,27 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		).toBe(true);
 	});
 
+	it("keeps browser-only renderer and CanvasEngine checks out of the Node runtime probe", () => {
+		const fixture = createFixture();
+		const contract = createPublishedConsumerContract(
+			{ packages },
+			loadSoloReleasePlan(fixture.planPath),
+		);
+
+		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo");
+		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-action-battle");
+		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-vite");
+		expect(contract.runtimeCheck).not.toContain("rpgjs-solo-renderer");
+		expect(contract.runtimeCheck).not.toContain("canvasengine");
+		expect(contract.runtimeCheck).not.toContain("rpgjs-patches");
+		expect(contract.browserEntry).toContain("@jbcom/rpgjs-solo-renderer");
+		expect(contract.browserEntry).toContain("@arcade-cabinet/rpgjs-patches");
+		expect(contract.browserEntry).toContain("from 'canvasengine'");
+		expect(contract.browserEntry).toContain("installCanvasEnginePatches");
+		expect(contract.viteConfig).toContain("rpgjsSoloBoundary");
+		expect(contract.tsconfig.compilerOptions.lib).toContain("DOM");
+	});
+
 	it("fails closed unless the executing toolchain is exact Node 24 and pnpm 11.18.0", () => {
 		const exactToolchain = (_program: string, args: string[]) =>
 			args[0] === "--version"
@@ -768,7 +790,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.reviewEvidence.enginePullRequest.mergeCommit).toBe(
 			plan.requiredSourceCommit,
 		);
-		expect(plan.reviewEvidence.releasePullRequest.number).toBe(24);
+		expect(plan.reviewEvidence.releasePullRequest.number).toBe(25);
 		expect(
 			plan.carriedChangesets.find(
 				({ id }: { id: string }) => id === "fair-studio-success-rates",
