@@ -230,6 +230,7 @@ const databaseBackedStudioProvider: GameDataProvider = {
   getMap: async (mapId) => loadMap(mapId),
   getMedia: async (mediaId) => loadMedia(mediaId),
   getDatabase: async (projectId) => loadDatabase(projectId),
+  getBlockCollection: async (collectionId) => loadBlockCollection(collectionId),
 };
 
 await createStudioMapUpdatePayload("your-map-id", {
@@ -259,6 +260,8 @@ public/
     project.json
     database.json
     events.json
+    blocks/
+      <block-collection-id>.json
     maps/
       <map-id>.json
     media/
@@ -317,7 +320,11 @@ collections:
 This is a Studio orchestration feature built on RPGJS's native skill `onUse`
 hook. It does not add a second engine hook. Studio preserves the default skill
 effect, waits for projectile impact when applicable, then executes the blocks
-from the referenced collection. The block context exposes the caster as the
+from the referenced collection. The authoritative server resolves and validates
+the current collection immediately before each execution, so a saved workflow
+update applies to the next cast without restarting the game. Exported offline
+bundles store each collection at `game-data/blocks/<block-collection-id>.json`.
+The block context exposes the caster as the
 player and the affected map event as the current event when one exists. A skill
 workflow can call or spawn Common Events through the corresponding blocks.
 
@@ -349,8 +356,9 @@ unequipping.
 ```
 
 The runtime maps these workflows to the native item hooks. Workflow blocks run
-in order for each player, can call Common Events, and keep the normal RPGJS item
-or equipment behavior.
+in order for each player, resolve the current referenced collection immediately
+before execution, can call Common Events, and keep the normal RPGJS item or
+equipment behavior.
 
 The same Studio enemy definition can be placed on a map more than once. The
 runtime keeps the first placement's legacy id and assigns deterministic ids

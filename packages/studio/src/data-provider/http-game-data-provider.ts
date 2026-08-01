@@ -90,6 +90,13 @@ export class HttpGameDataProvider implements GameDataProvider {
     return Array.isArray(value) ? value : [];
   }
 
+  getBlockCollection(blockCollectionId: string): Promise<any> {
+    return fetchJson(
+      `${this.config.apiBaseUrl}/blocks/${encodeURIComponent(blockCollectionId)}`,
+      'block collection query',
+    );
+  }
+
   async getPlayerStartConfig(query: PlayerStartConfigQuery): Promise<any> {
     if (!query.projectId) return null;
     return fetchStudioProject(this.config.apiBaseUrl, query.projectId);

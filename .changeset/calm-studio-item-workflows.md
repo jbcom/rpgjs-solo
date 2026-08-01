@@ -41,3 +41,10 @@ so the updated targeting area is saved and restored after reloading the editor.
 Translated Skill and Item media fields now render the same native media preview
 as icon fields, including image, spritesheet, and audio previews.
 The Studio sidebar now uses a supported panel icon for the GUI editor entry.
+
+Skill and item workflow declarations that contain only a phase and block
+collection ID now resolve and validate the current collection through the
+configured Studio data provider immediately before execution. Online and
+offline providers support collection reads without caching workflow content,
+so the next invocation observes saved updates while direct hydrated blocks and
+legacy Common Event references retain their existing behavior.

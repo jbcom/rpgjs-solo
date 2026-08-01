@@ -292,6 +292,11 @@ renderer displays `projectile.graphic`, applies `scale`, and optionally rotates
 the graphic along its trajectory. Damage and the impact animation/sound occur
 only when the authoritative projectile collides.
 
+An explicit `projectile.direction` defines a fixed firing ray. Player soft
+targeting and enemy planning admit only targets aligned with that ray and use
+the same direction to derive rectangular-tile travel range; without an explicit
+direction, both systems aim at the selected target before deriving range.
+
 Area masks use `#` for affected tiles and `.` for empty tiles. Studio exposes
 this as a visual grid and canonicalizes legacy binary masks by treating `1` as
 affected and `0` as empty.
@@ -307,6 +312,8 @@ Adventure attacks lock movement and facing through their active frames by
 default, then allow movement or dodge to cancel recovery. Control locks are
 leased independently, so a hurt, guard, dodge, or follow-up attack cannot let
 an older timer restore stale animation or direction flags.
+The authoritative input dispatcher ignores skill, hotbar, guard, dodge,
+charge, and attack commands while the player has zero HP.
 
 ```ts
 provideActionBattle({

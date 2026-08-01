@@ -131,7 +131,7 @@ describe("Action Battle AI skill planner", () => {
         },
       },
     });
-    const target = player("hero", 0, 50);
+    const target = player("hero", 0, 20);
     const map = {
       tileWidth: 32,
       tileHeight: 32,
@@ -160,8 +160,21 @@ describe("Action Battle AI skill planner", () => {
       id: "sideways-bolt",
       range: 30,
       preferredRange: 22.5,
-      rejection: "outOfRange",
+      rejection: "invalidTarget",
     });
+
+    const alignedTarget = player("aligned-hero", 20, 0);
+    const aligned = evaluateActionBattleAiSkill({
+      attacker: enemy(map) as any,
+      target: alignedTarget as any,
+      skill: evaluation.skill,
+      now: 1000,
+      readyAt: 0,
+      attackRange: 50,
+      hpPercent: 1,
+    });
+    expect(aligned.range).toBe(30);
+    expect(aligned.rejection).toBeUndefined();
   });
 
   test("places an instant area skill so a hollow mask covers the player", () => {

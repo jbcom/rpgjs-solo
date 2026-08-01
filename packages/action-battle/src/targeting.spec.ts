@@ -153,4 +153,32 @@ describe("action battle soft targeting", () => {
       )?.target,
     ).toBe(legal);
   });
+
+  test("requires explicit projectile directions to align with the candidate", () => {
+    const source = entity("hero", 0, 0);
+    const offAxis = entity("off-axis", 0, 20);
+    const aligned = entity("aligned", 20, 0);
+    const boundary = {
+      tileRange: 3,
+      tileSize: { width: 10, height: 24 },
+      direction: { x: 1, y: 0 },
+    };
+
+    expect(
+      getActionBattleDirectionalTargetBoundary(source, offAxis, boundary),
+    ).toMatchObject({
+      range: 30,
+      aligned: false,
+      eligible: false,
+    });
+    expect(
+      resolveActionBattleSoftTarget(
+        source,
+        [offAxis, aligned],
+        boundary.direction,
+        { coneDegrees: 180 },
+        boundary,
+      )?.target,
+    ).toBe(aligned);
+  });
 });

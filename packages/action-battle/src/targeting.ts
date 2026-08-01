@@ -240,9 +240,38 @@ export const resolveActionBattleProjectileDirection = (
       "down",
   );
 
+export const getActionBattleTargetTrajectory = (
+  source: SoftTargetEntity,
+  target: SoftTargetEntity,
+  configuredDirection?: ActionBattleWorldDirection,
+) => {
+  const vector = getActionBattleTargetVector(source, target);
+  const direction = resolveActionBattleProjectileDirection(
+    source,
+    target,
+    configuredDirection,
+  );
+  const forwardDistance =
+    vector.x * direction.x + vector.y * direction.y;
+  const lateralDistance = Math.abs(
+    vector.x * direction.y - vector.y * direction.x,
+  );
+  const alignmentTolerance =
+    Number.EPSILON * Math.max(1, vector.distance) * 8;
+  return {
+    ...vector,
+    direction,
+    forwardDistance,
+    lateralDistance,
+    aligned:
+      forwardDistance > 0 && lateralDistance <= alignmentTolerance,
+  };
+};
+
 export interface ActionBattleDirectionalTargetBoundary {
   tileRange: number;
   tileSize: ActionBattleTileSize;
+  direction?: ActionBattleWorldDirection;
 }
 
 export const getActionBattleDirectionalTargetBoundary = (
@@ -250,7 +279,11 @@ export const getActionBattleDirectionalTargetBoundary = (
   target: SoftTargetEntity,
   boundary: ActionBattleDirectionalTargetBoundary,
 ) => {
-  const vector = getActionBattleTargetVector(source, target);
+  const vector = getActionBattleTargetTrajectory(
+    source,
+    target,
+    boundary.direction,
+  );
   const range = getActionBattleDirectionalTileRange(
     boundary.tileRange,
     boundary.tileSize,
@@ -259,7 +292,7 @@ export const getActionBattleDirectionalTargetBoundary = (
   return {
     ...vector,
     range,
-    eligible: vector.distance > 0 && vector.distance <= range,
+    eligible: vector.aligned && vector.distance <= range,
   };
 };
 
@@ -293,7 +326,7 @@ export const directionToActionBattleTarget = (
 export const resolveActionBattleSoftTarget = <T extends SoftTargetEntity>(
   source: SoftTargetEntity,
   candidates: T[],
-  direction: ActionBattleResolvedDirection,
+  direction: ActionBattleWorldDirection,
   options: ActionBattleSoftTargetingOptions = {},
   directionalBoundary?: ActionBattleDirectionalTargetBoundary,
 ): ActionBattleSoftTargetResult<T> | null => {
@@ -317,7 +350,13 @@ export const resolveActionBattleSoftTarget = <T extends SoftTargetEntity>(
     const vector = targetBoundary ?? getActionBattleTargetVector(source, target);
     const { x: dx, y: dy, distance } = vector;
     const candidateRange = targetBoundary?.range ?? configuredRange;
-    if (distance <= 0 || distance > candidateRange) continue;
+    if (
+      targetBoundary
+        ? !targetBoundary.eligible
+        : distance <= 0 || distance > candidateRange
+    ) {
+      continue;
+    }
     const dot = Math.max(
       -1,
       Math.min(1, (facing.x * dx + facing.y * dy) / distance)

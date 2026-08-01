@@ -1,5 +1,6 @@
 import type { RpgEvent, RpgMap, RpgPlayer } from "@rpgjs/server";
 import type { AnyBlockInstance } from "@common/blocks";
+import { resolveStudioBlockCollection } from "./block-collection";
 import { BlockExecutionService } from "./block-executor";
 
 export type StudioSkillWorkflowPhase = "cast" | "impact" | "defeat";
@@ -76,6 +77,11 @@ const runWorkflow = async (
   const executor = new BlockExecutionService(player, asEvent(target), map);
   if (Array.isArray(trigger.blocks)) {
     await executor.executeBlockSequence(trigger.blocks);
+    return;
+  }
+  if (trigger.blockCollectionId) {
+    const blocks = await resolveStudioBlockCollection(trigger.blockCollectionId);
+    await executor.executeBlockSequence(blocks);
     return;
   }
   if (!trigger.commonEventId) return;

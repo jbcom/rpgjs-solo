@@ -1,9 +1,13 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   createStudioItemWorkflowHooks,
   normalizeStudioItemWorkflowTriggers,
   type StudioItemWorkflowPhase,
 } from "../src/item-workflow";
+import {
+  configureGameDataProvider,
+  resetGameDataProvider,
+} from "../src/data-provider";
 
 const workflow = (
   phase: StudioItemWorkflowPhase,
@@ -28,11 +32,11 @@ const setVariable = (
   },
 });
 
-const createPlayer = () => {
+const createPlayer = (map: Record<string, unknown> = {}) => {
   const variables = new Map<string, unknown>();
   const player = {
     id: "hero",
-    getCurrentMap: () => ({}),
+    getCurrentMap: () => map,
     getVariable: (id: string) => variables.get(id),
     setVariable: (id: string, value: unknown) => variables.set(id, value),
     syncChanges: vi.fn(),
@@ -40,7 +44,25 @@ const createPlayer = () => {
   return { player, variables };
 };
 
+const configureBlockCollections = (
+  getBlockCollection: (id: string) => Promise<unknown>,
+) => {
+  configureGameDataProvider({
+    kind: "online",
+    getProject: async () => ({}),
+    getMap: async () => ({}),
+    getMedia: async () => ({}),
+    getDatabase: async () => [],
+    getBlockCollection,
+  });
+};
+
 describe("Studio item workflows", () => {
+  afterEach(() => {
+    resetGameDataProvider();
+    vi.restoreAllMocks();
+  });
+
   test("normalizes only supported lifecycle hooks with valid references", () => {
     expect(normalizeStudioItemWorkflowTriggers([
       { phase: "onUse", blockCollectionId: " use-workflow " },
@@ -88,5 +110,108 @@ describe("Studio item workflows", () => {
     variables.set("equipped-workflow", 0);
     await hooks.onEquip?.(player as any, false);
     expect(variables.get("equipped-workflow")).toBe(0);
+  });
+
+  test("keeps compatibility with Common Event workflow references", async () => {
+    const map = {
+      __studioCommonEventsById: new Map([
+        ["legacy-item-event", {
+          triggers: [{
+            type: "onAction",
+            enabled: true,
+            blocks: [setVariable("legacy-item", 1)],
+          }],
+        }],
+      ]),
+    };
+    const { player, variables } = createPlayer(map);
+    const hooks = createStudioItemWorkflowHooks("legacy-item", [{
+      phase: "onUse",
+      commonEventId: "legacy-item-event",
+    }]);
+
+    await hooks.onUse?.(player as any);
+
+    expect(variables.get("legacy-item")).toBe(1);
+  });
+
+  test("resolves a referenced current block collection before execution", async () => {
+    const getBlockCollection = vi.fn(async (id: string) => ({
+      _id: id,
+      blocks: [setVariable("resolved-item", 1)],
+    }));
+    configureBlockCollections(getBlockCollection);
+    const { player, variables } = createPlayer();
+    const hooks = createStudioItemWorkflowHooks("resolved-item", [{
+      phase: "onUse",
+      blockCollectionId: "current-item-use",
+    }]);
+
+    await hooks.onUse?.(player as any);
+
+    expect(getBlockCollection).toHaveBeenCalledWith("current-item-use");
+    expect(variables.get("resolved-item")).toBe(1);
+  });
+
+  test("logs a missing referenced block collection without executing twice", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const getBlockCollection = vi.fn(async () => null);
+    configureBlockCollections(getBlockCollection);
+    const { player, variables } = createPlayer();
+    const hooks = createStudioItemWorkflowHooks("missing-item", [{
+      phase: "onUse",
+      blockCollectionId: "missing-item-use",
+    }]);
+
+    await hooks.onUse?.(player as any);
+
+    expect(variables.size).toBe(0);
+    expect(getBlockCollection).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledWith(
+      '[studio] Item workflow "missing-item-use" failed during onUse',
+      expect.objectContaining({
+        message: 'Studio block collection "missing-item-use" was not found',
+      }),
+    );
+  });
+
+  test("logs a malformed referenced block collection without partial execution", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const getBlockCollection = vi.fn(async () => ({ blocks: "invalid" }));
+    configureBlockCollections(getBlockCollection);
+    const { player, variables } = createPlayer();
+    const hooks = createStudioItemWorkflowHooks("malformed-item", [{
+      phase: "onUse",
+      blockCollectionId: "malformed-item-use",
+    }]);
+
+    await hooks.onUse?.(player as any);
+
+    expect(variables.size).toBe(0);
+    expect(error).toHaveBeenCalledWith(
+      '[studio] Item workflow "malformed-item-use" failed during onUse',
+      expect.objectContaining({
+        message: 'Studio block collection "malformed-item-use" is malformed',
+      }),
+    );
+  });
+
+  test("reads an updated block collection on each queued invocation", async () => {
+    let revision = 1;
+    const getBlockCollection = vi.fn(async () => ({
+      blocks: [setVariable("item-revisions", revision++, "add")],
+    }));
+    configureBlockCollections(getBlockCollection);
+    const { player, variables } = createPlayer();
+    const hooks = createStudioItemWorkflowHooks("updated-item", [{
+      phase: "onUse",
+      blockCollectionId: "updated-item-use",
+    }]);
+
+    await hooks.onUse?.(player as any);
+    await hooks.onUse?.(player as any);
+
+    expect(getBlockCollection).toHaveBeenCalledTimes(2);
+    expect(variables.get("item-revisions")).toBe(3);
   });
 });

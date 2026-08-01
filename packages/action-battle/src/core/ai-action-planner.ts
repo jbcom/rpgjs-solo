@@ -3,10 +3,10 @@ import {
   getActionBattleDirectionalTileRange,
   getActionBattleEntityTile,
   getActionBattleTargetingTileSize,
+  getActionBattleTargetTrajectory,
   getActionBattleTargetVector,
   resolveActionBattleAoeCells,
   resolveActionBattleAoeTarget,
-  resolveActionBattleProjectileDirection,
 } from "../targeting";
 import {
   canActionBattleUseTarget,
@@ -220,7 +220,7 @@ export const evaluateActionBattleAiSkill = (input: {
       map,
       getActionBattleOptions().ui?.targeting,
     );
-    const emittedDirection = resolveActionBattleProjectileDirection(
+    const trajectory = getActionBattleTargetTrajectory(
       attacker as any,
       target as any,
       action?.projectile?.direction,
@@ -233,7 +233,7 @@ export const evaluateActionBattleAiSkill = (input: {
         ? getActionBattleDirectionalTileRange(
             targetingRange,
             tileSize,
-            emittedDirection,
+            trajectory.direction,
           )
         : 160);
     return applyCooldown({
@@ -241,7 +241,11 @@ export const evaluateActionBattleAiSkill = (input: {
       range,
       preferredRange: range * 0.75,
       target,
-      ...(distance <= range ? {} : { rejection: "outOfRange" as const }),
+      ...(!trajectory.aligned
+        ? { rejection: "invalidTarget" as const }
+        : distance <= range
+          ? {}
+          : { rejection: "outOfRange" as const }),
     });
   }
 

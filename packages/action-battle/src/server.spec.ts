@@ -286,6 +286,117 @@ describe("action battle player visuals", () => {
     expect(vi.getTimerCount()).toBe(1);
   });
 
+  test("rejects every combat command from defeated players before side effects", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const onUse = vi.fn();
+    const skill = {
+      id: "revival-check",
+      _type: "skill",
+      spCost: 4,
+      hitRate: 1,
+      action: { mode: "instant", target: "self" },
+      onUse,
+    };
+    const clientVisual = vi.fn();
+    const map = {
+      clientVisual,
+      getEvents: () => [],
+      getPlayers: () => [],
+      queryHitbox: vi.fn(() => []),
+      stopMovement: vi.fn(),
+    };
+    const player = {
+      id: "hero",
+      hp: 10,
+      sp: 10,
+      canMove: true,
+      directionFixed: false,
+      animationFixed: false,
+      pendingInputs: [],
+      lastProcessedInputTs: 0,
+      x: () => 0,
+      y: () => 0,
+      hitbox: () => ({ w: 8, h: 8 }),
+      getDirection: () => "down",
+      changeDirection: vi.fn(),
+      getCurrentMap: () => map,
+      equipments: () => [],
+      skills: () => [{ id: skill.id }],
+      getSkill: (id: string) => id === skill.id ? skill : null,
+      databaseById: (id: string) => id === skill.id ? skill : null,
+      hasEffect: () => false,
+      clientVisual: vi.fn(),
+      getGui: () => null,
+      validateHotbarSlot: vi.fn(() => ({ type: "skill", id: skill.id })),
+      useHotbarSlot: vi.fn(),
+      initializeHotbar: vi.fn(),
+    };
+    const server = createActionBattleServer({
+      attack: {
+        profile: { startupMs: 0, activeMs: 1, recoveryMs: 0 },
+      },
+      combat: {
+        player: {
+          chargedAttack: { enabled: true, maxChargeMs: 900 },
+          dodge: { enabled: true, cooldownMs: 650, invincibilityMs: 220 },
+          guard: { enabled: true },
+        },
+      },
+    });
+    const input = (action: string, data?: Record<string, unknown>) =>
+      (server.player?.onInput as any)(player, { action, data });
+
+    input(ACTION_BATTLE_GUARD_START as string);
+    input("action-battle:charge-start");
+    expect(isActionBattleGuarding(player as any)).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+
+    player.hp = 0;
+    clientVisual.mockClear();
+    input("action-battle:guard-end");
+    input("action-battle:charge-release");
+    expect(isActionBattleGuarding(player as any)).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+    expect(clientVisual).not.toHaveBeenCalled();
+
+    (server.player?.onConnected as any)(player);
+    player.initializeHotbar.mockClear();
+    player.validateHotbarSlot.mockClear();
+    player.useHotbarSlot.mockClear();
+    clientVisual.mockClear();
+    map.queryHitbox.mockClear();
+    map.stopMovement.mockClear();
+    player.changeDirection.mockClear();
+
+    input(ACTION_BATTLE_SKILL_USE, { id: skill.id });
+    input(ACTION_BATTLE_HOTBAR_USE, { slot: 0 });
+    input(ACTION_BATTLE_DODGE);
+    input(ACTION_BATTLE_GUARD_START as string);
+    input("action-battle:guard-end");
+    input("action-battle:charge-start");
+    input("action-battle:charge-release");
+    input("action", { direction: "down" });
+
+    expect(onUse).not.toHaveBeenCalled();
+    expect(player.sp).toBe(10);
+    expect(player.validateHotbarSlot).not.toHaveBeenCalled();
+    expect(player.useHotbarSlot).not.toHaveBeenCalled();
+    expect(clientVisual).not.toHaveBeenCalled();
+    expect(map.queryHitbox).not.toHaveBeenCalled();
+    expect(map.stopMovement).not.toHaveBeenCalled();
+    expect(player.changeDirection).not.toHaveBeenCalled();
+    expect(isActionBattleGuarding(player as any)).toBe(false);
+    expect(isActionBattleEntityInvincible(player as any)).toBe(false);
+    expect((player as any).__actionBattleDodgeLockedUntil).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+
+    player.hp = 10;
+    input(ACTION_BATTLE_SKILL_USE, { id: skill.id });
+    expect(onUse).toHaveBeenCalledOnce();
+    expect(player.sp).toBe(6);
+  });
+
   test("preserves skill cooldowns across death and map lifecycle resets", () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
@@ -582,6 +693,89 @@ describe("action battle player visuals", () => {
       enemy,
       expect.objectContaining({ target: enemy }),
     );
+  });
+
+  test("rejects off-axis soft targets for an explicit projectile direction", () => {
+    const onUse = vi.fn();
+    const skill = {
+      id: "fixed-bolt",
+      _type: "skill",
+      spCost: 0,
+      hitRate: 1,
+      targeting: { range: 3 },
+      action: {
+        mode: "projectile",
+        target: "enemy",
+        projectile: { direction: { x: 1, y: 0 } },
+      },
+      onUse,
+    };
+    let enemyX = 0;
+    let enemyY = 20;
+    const enemy = {
+      id: "enemy",
+      hp: 10,
+      x: () => enemyX,
+      y: () => enemyY,
+      hitbox: () => ({ w: 8, h: 8 }),
+      battleAi: { getFaction: () => "enemies" },
+    };
+    const map = {
+      tileWidth: 32,
+      tileHeight: 32,
+      getEvents: () => [enemy],
+      getPlayers: () => [],
+    };
+    const player = {
+      id: "hero",
+      hp: 10,
+      sp: 10,
+      x: () => 0,
+      y: () => 0,
+      hitbox: () => ({ w: 8, h: 8 }),
+      getDirection: () => "down",
+      skills: () => [{ id: skill.id }],
+      getSkill: (id: string) => id === skill.id ? skill : null,
+      databaseById: (id: string) => id === skill.id ? skill : null,
+      hasEffect: () => false,
+      clientVisual: vi.fn(),
+      getGui: () => null,
+      getCurrentMap: () => map,
+    };
+    const server = createActionBattleServer({
+      targeting: { allowEmptyTarget: false },
+      ui: {
+        targeting: { tileSize: { width: 10, height: 24 } },
+      },
+    });
+    const useSkill = () => (server.player?.onInput as any)(player, {
+      action: ACTION_BATTLE_SKILL_USE,
+      data: { id: skill.id },
+    });
+
+    useSkill();
+    expect(onUse).not.toHaveBeenCalled();
+
+    enemyX = 20;
+    enemyY = 0;
+    useSkill();
+    expect(onUse).toHaveBeenCalledWith(
+      player,
+      enemy,
+      expect.objectContaining({ target: enemy }),
+    );
+
+    onUse.mockClear();
+    (skill as { targeting?: { range: number } }).targeting = undefined;
+    enemyX = 0;
+    enemyY = 20;
+    useSkill();
+    expect(onUse).not.toHaveBeenCalled();
+
+    enemyX = 20;
+    enemyY = 0;
+    useSkill();
+    expect(onUse).toHaveBeenCalledOnce();
   });
 
   test("opens or hides the hotbar from the per-player resolver on map changes", () => {

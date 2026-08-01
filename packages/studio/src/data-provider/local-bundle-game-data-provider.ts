@@ -179,6 +179,17 @@ export class LocalBundleGameDataProvider implements GameDataProvider {
     }
   }
 
+  getBlockCollection(blockCollectionId: string): Promise<any> {
+    const normalizedId = String(blockCollectionId ?? '').trim();
+    if (!normalizedId) {
+      throw new Error('[LocalBundleGameDataProvider] block collection id is required');
+    }
+    return fetchJson(
+      `${this.basePath}/blocks/${encodeURIComponent(normalizedId)}.json`,
+      'block collection read',
+    );
+  }
+
   private async getMediaIndex(): Promise<MediaIndex> {
     if (!this.mediaIndexPromise) {
       this.mediaIndexPromise = fetchJson(`${this.basePath}/media/media-index.json`, 'media index read');

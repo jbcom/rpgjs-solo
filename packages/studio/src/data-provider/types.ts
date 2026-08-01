@@ -20,6 +20,8 @@ export interface GameDataProvider {
   getMap(mapId: string): Promise<any>;
   getMedia(mediaId: string): Promise<any>;
   getDatabase(projectId?: string): Promise<any[]>;
+  /** Resolve the current Studio block collection at workflow execution time. */
+  getBlockCollection?(blockCollectionId: string): Promise<any | null>;
   getPlayerStartConfig?(query: PlayerStartConfigQuery): Promise<Partial<ProjectBasic> | null | undefined>;
 }
 

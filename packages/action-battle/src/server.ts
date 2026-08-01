@@ -13,6 +13,7 @@ import {
 import { normalizeActionBattleOptions, setActionBattleOptions } from "./config";
 import {
   getActionBattleEntityTile,
+  getActionBattleTargetTrajectory,
   getActionBattleTargetingTileSize,
   manhattanDistance,
   resolveActionBattleAoeCells,
@@ -73,6 +74,7 @@ import type { ActionBattleHitbox } from "./core/contracts";
 import {
   canActionBattleTarget,
   getActionBattleTargets,
+  isActionBattleTargetDefeated,
 } from "./core/targets";
 import type {
   ActionBattleAttackProfile,
@@ -1177,19 +1179,33 @@ const handleActionBattleSkillUse = (
         typeof player.getDirection === "function"
           ? player.getDirection()
           : "down";
+      const projectileDirection =
+        actionConfig.mode === "projectile"
+          ? actionConfig.projectile?.direction
+          : undefined;
       const softTargeting = objectOption(
         options.combat?.player?.softTargeting
       );
       const tileSize = getPlayerTargetingTileSize(map, options);
+      const admittedCandidates = projectileDirection
+        ? candidates.filter((candidate) =>
+            getActionBattleTargetTrajectory(
+              player,
+              candidate,
+              projectileDirection,
+            ).aligned
+          )
+        : candidates;
       const softTarget = resolveActionBattleSoftTarget(
         player,
-        candidates,
-        direction,
+        admittedCandidates,
+        projectileDirection ?? direction,
         softTargeting,
         targeting
           ? {
               tileRange: targeting.range,
               tileSize,
+              direction: projectileDirection,
             }
           : undefined,
       );
@@ -1319,6 +1335,7 @@ export const createActionBattleServer = (
        * @param input - Input data containing pressed keys
        */
       onInput(player: RpgPlayer, input: any) {
+        if (isActionBattleTargetDefeated(player)) return;
         const state = getPlayerCombatState(player);
         const charged = objectOption(options.combat?.player?.chargedAttack);
         const dodge = objectOption(options.combat?.player?.dodge);
