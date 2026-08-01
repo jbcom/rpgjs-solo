@@ -336,6 +336,15 @@ creation and execution invalidates the old work; newly scheduled work after
 revival captures the new generation and remains valid. Assign HP through the
 RPGJS `hp` property so the authoritative lifecycle transition is observable.
 
+Delayed AI attack patterns also capture the telegraphed target object and that
+target's life generation. Melee, combo, charged, dash, and defensive counter
+callbacks are cancelled if the target dies and revives or if AI target selection
+changes before execution. The next AI decision may replan against the revived or
+replacement target; an old telegraph is never redirected to it. Actor-centered
+zone attacks bind only the actor generation and remain independent of one
+selected target. Self-targeted support binds its actual self target rather than
+an unrelated selected enemy.
+
 AI planned skills are proposals, not reservations. At the end of startup the AI
 requires the same target identity and reruns target policy, current defeat,
 range, area-mask, projectile blocker, cooldown, and SP eligibility before any

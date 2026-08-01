@@ -21,6 +21,11 @@ execution time while preserving already-emitted projectiles after caster defeat.
 Advance an authoritative monotonic life generation at each HP defeat and revival
 transition, and capture it across player and AI startup, active frames, combos,
 charges, dashes, and counters so transient defeat cannot revive stale work.
+Bind every delayed AI attack pattern to the telegraphed target object and its
+life generation so target revival or replacement cancels rather than redirects
+pending melee, combo, charge, dash, or counter work. Keep actor-centered zone
+attacks independent of one selected target and bind planned support to its actual
+evaluation targets.
 Replan delayed AI skills against the same target identity and current defeat,
 policy, range, mask, blocker, cooldown, and resource state before hooks or spend.
 Use one blocker-aware collision policy for projectile admission and simulation,

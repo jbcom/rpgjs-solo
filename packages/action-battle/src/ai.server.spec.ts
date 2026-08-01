@@ -797,6 +797,136 @@ describe("BattleAi behavior tree", () => {
     ai.destroy();
   });
 
+  test("binds every delayed attack pattern to the original target life", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const event = {
+      ...createEvent(),
+      dash: vi.fn(),
+    };
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      enemyType: EnemyType.Defensive,
+      dodgeChance: 1,
+      attackRange: 50,
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    ai.onDetectInShape(player as any, {});
+    ai.onDetectInShape(player as any, {});
+    (ai as any).state = AiState.Combat;
+
+    const processHitboxHits = vi.spyOn(ai as any, "processHitboxHits");
+    const executeMeleeAttack = vi.spyOn(ai as any, "executeMeleeAttack");
+    const selectAndPerformAttack = vi.spyOn(ai as any, "selectAndPerformAttack");
+
+    // Let the first zone frame commit, then leave later active frames pending.
+    (ai as any).performZoneAttack();
+    vi.advanceTimersByTime(450);
+    expect(processHitboxHits).toHaveBeenCalledOnce();
+    processHitboxHits.mockClear();
+
+    (ai as any).performMeleeAttack();
+    (ai as any).performComboAttack();
+    (ai as any).performChargedAttack();
+    (ai as any).performDashAttack();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    expect((ai as any).tryDodge()).toBe(true);
+    const committedDodgeDashes = event.dash.mock.calls.length;
+
+    player.hp = 0;
+    player.hp = 10;
+    vi.advanceTimersByTime(2_000);
+
+    // Zone does not bind one selected target and may resolve around the actor.
+    expect(processHitboxHits).toHaveBeenCalled();
+    expect(executeMeleeAttack).not.toHaveBeenCalled();
+    expect(event.dash).toHaveBeenCalledTimes(committedDodgeDashes);
+    expect(selectAndPerformAttack).not.toHaveBeenCalled();
+    expect((ai as any).comboCount).toBe(0);
+    expect((ai as any).chargingAttack).toBe(false);
+
+    // Replanning after revival captures the new life and executes normally.
+    (ai as any).performMeleeAttack();
+    (ai as any).performDashAttack();
+    vi.advanceTimersByTime(2_000);
+
+    expect(executeMeleeAttack).toHaveBeenCalled();
+    expect(event.dash.mock.calls.length).toBeGreaterThan(committedDodgeDashes);
+    ai.destroy();
+  });
+
+  test("does not redirect pending delayed patterns when the target is replaced", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(20_000);
+    const event = {
+      ...createEvent(),
+      dash: vi.fn(),
+    };
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const original = {
+      ...createPlayer(),
+      id: "original-target",
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const replacement = {
+      ...createPlayer(),
+      id: "replacement-target",
+      hp: 10,
+      x: vi.fn(() => -20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      enemyType: EnemyType.Defensive,
+      dodgeChance: 1,
+      attackRange: 50,
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    ai.onDetectInShape(original as any, {});
+    ai.onDetectInShape(original as any, {});
+    (ai as any).state = AiState.Combat;
+
+    const processHitboxHits = vi.spyOn(ai as any, "processHitboxHits");
+    const executeMeleeAttack = vi.spyOn(ai as any, "executeMeleeAttack");
+    const selectAndPerformAttack = vi.spyOn(ai as any, "selectAndPerformAttack");
+
+    (ai as any).performMeleeAttack();
+    (ai as any).performComboAttack();
+    (ai as any).performChargedAttack();
+    (ai as any).performZoneAttack();
+    (ai as any).performDashAttack();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    expect((ai as any).tryDodge()).toBe(true);
+    const committedDodgeDashes = event.dash.mock.calls.length;
+
+    (ai as any).target = replacement;
+    vi.advanceTimersByTime(2_000);
+
+    // Zone does not bind one selected target and may resolve around the actor.
+    expect(processHitboxHits).toHaveBeenCalled();
+    expect(executeMeleeAttack).not.toHaveBeenCalled();
+    expect(event.dash).toHaveBeenCalledTimes(committedDodgeDashes);
+    expect(selectAndPerformAttack).not.toHaveBeenCalled();
+    expect((ai as any).comboCount).toBe(0);
+    expect((ai as any).chargingAttack).toBe(false);
+
+    // A fresh attack telegraphed against the replacement remains valid.
+    (ai as any).performChargedAttack();
+    vi.advanceTimersByTime(2_000);
+
+    expect(executeMeleeAttack).toHaveBeenCalledOnce();
+    ai.destroy();
+  });
+
   test("destroy abandons an executor-scoped rejected receipt", () => {
     vi.useFakeTimers();
     const event = createEvent();
@@ -1600,6 +1730,55 @@ describe("BattleAi behavior tree", () => {
     expect(onUse).not.toHaveBeenCalled();
     expect(event.sp).toBe(12);
     expect((ai as any).skillCooldowns.size).toBe(0);
+    ai.destroy();
+  });
+
+  test("does not bind delayed self support to an unrelated selected target", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = {
+      ...createEvent(),
+      hp: 5,
+      sp: 12,
+    };
+    const onUse = vi.fn();
+    const skill = {
+      id: "steady-self",
+      skillType: "support",
+      spCost: 4,
+      action: { mode: "instant" as const, target: "self" as const },
+      onUse,
+    };
+    const original = {
+      ...createPlayer(),
+      id: "original",
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const replacement = {
+      ...createPlayer(),
+      id: "replacement",
+      hp: 10,
+      x: vi.fn(() => -20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    ai.onDetectInShape(original as any, {});
+
+    const evaluation = (ai as any).evaluateSkillActions(1_000)[0];
+    expect(evaluation.target).toBe(event);
+    expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
+    (ai as any).target = replacement;
+    vi.advanceTimersByTime(500);
+
+    expect(onUse).toHaveBeenCalledOnce();
+    expect(event.sp).toBe(8);
     ai.destroy();
   });
 
