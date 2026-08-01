@@ -41,6 +41,7 @@ import {
 	sep,
 } from "node:path";
 import { fileURLToPath } from "node:url";
+import { publish as publishNpmPackage } from "libnpmpublish";
 import {
 	inspectPortablePackageArchive,
 	packPackageArchive,
@@ -2063,11 +2064,12 @@ export const createProvenanceManifest = ({
 				dependencyFields.map((field) => [field, packedManifest[field] ?? {}]),
 			),
 			exports: packedManifest.exports,
+			publishManifest: packedManifest,
 		});
 	}
 	const changesetRecord = (entry) => ({ ...entry });
 	const manifest = {
-		schemaVersion: 2,
+		schemaVersion: 3,
 		releaseId: plan.releaseId,
 		version: plan.version,
 		source: {
@@ -2137,7 +2139,7 @@ export const withEphemeralNpmAuth = async (token, registry, callback) => {
 			npm_config_userconfig: npmrc,
 		};
 		delete childEnvironment.RPGJS_SOLO_NPM_TOKEN;
-		return await callback(childEnvironment);
+		return await callback(childEnvironment, token);
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
 	}
@@ -2162,7 +2164,7 @@ export const loadProvenance = (
 		"Provenance attestation source binding drifted",
 	);
 	assert(
-		manifest.schemaVersion === 2 &&
+		manifest.schemaVersion === 3 &&
 			manifest.releaseId === plan.releaseId &&
 			manifest.version === plan.version,
 		"Provenance identity drifted",
@@ -2304,7 +2306,9 @@ export const loadProvenance = (
 							JSON.stringify(item[field] ?? {}),
 					) &&
 					JSON.stringify(packedManifest.exports) ===
-						JSON.stringify(item.exports),
+						JSON.stringify(item.exports) &&
+					JSON.stringify(packedManifest) ===
+						JSON.stringify(item.publishManifest),
 				`${item.name} archive metadata differs from signed provenance`,
 			);
 			assertPackedExports(packedDirectory, packedManifest, item.name);
@@ -2495,42 +2499,37 @@ export const preflightCandidatePublication = (
 const snapshotIntegrity = (bytes) =>
 	`sha512-${createHash("sha512").update(bytes).digest("base64")}`;
 
-export const prepareCandidateArchiveSnapshots = ({
+export const prepareCandidatePublicationJournal = ({
 	manifest,
 	manifestPath,
 	plan,
-	afterSnapshotBoundary = () => {},
 }) => {
 	assert(
 		isAbsolute(manifestPath) && plan.releaseId === manifest.releaseId,
-		"Candidate snapshots require the exact absolute release manifest",
+		"Candidate publication requires the exact absolute release manifest",
 	);
 	const manifestState = regularFileState(
 		manifestPath,
 		"Candidate publication manifest",
 	);
 	assert(manifestState, "Candidate publication manifest is missing");
-	const manifestSha512 = manifestState.sha512;
 	const journalPath = `${manifestPath}.candidate-publish.json`;
 	const purpose = `solo-candidate-publish:${plan.releaseId}`;
 	let journal;
-	if (lstatOrNull(journalPath)) {
+	if (lstatOrNull(journalPath))
 		journal = readTransactionJournal(journalPath, purpose);
-	} else {
+	else {
 		journal = {
-			schemaVersion: 1,
+			schemaVersion: 2,
 			releaseId: plan.releaseId,
-			manifestSha512,
-			snapshotDirectory: `.${plan.releaseId}.candidate-snapshot-${randomBytes(24).toString("hex")}`,
+			manifestSha512: manifestState.sha512,
 			packages: Object.fromEntries(
-				manifest.packages.map((item, index) => [
+				manifest.packages.map((item) => [
 					item.name,
 					{
 						sourceArchive: item.archive,
-						snapshotFile: `${index}.tgz`,
 						sha512: item.sha512,
 						integrity: item.integrity,
-						ready: false,
 						complete: false,
 					},
 				]),
@@ -2539,96 +2538,92 @@ export const prepareCandidateArchiveSnapshots = ({
 		secureAtomicWriteJson(journalPath, journal, { purpose });
 	}
 	assert(
-		journal.schemaVersion === 1 &&
+		journal.schemaVersion === 2 &&
 			journal.releaseId === plan.releaseId &&
-			journal.manifestSha512 === manifestSha512 &&
-			typeof journal.snapshotDirectory === "string" &&
-			journal.snapshotDirectory.startsWith(
-				`.${plan.releaseId}.candidate-snapshot-`,
-			) &&
-			!journal.snapshotDirectory.includes(sep) &&
+			journal.manifestSha512 === manifestState.sha512 &&
 			JSON.stringify(Object.keys(journal.packages ?? {})) ===
 				JSON.stringify(manifest.packages.map(({ name }) => name)),
-		"Candidate snapshot journal belongs to different release bytes",
+		"Candidate publication journal belongs to different release bytes",
 	);
 	for (const item of manifest.packages) {
 		const entry = journal.packages[item.name];
 		assert(
 			entry.sourceArchive === item.archive &&
-				typeof entry.snapshotFile === "string" &&
-				/^[0-9]+\.tgz$/.test(entry.snapshotFile) &&
 				entry.sha512 === item.sha512 &&
 				entry.integrity === item.integrity &&
-				typeof entry.ready === "boolean" &&
 				typeof entry.complete === "boolean",
-			`Candidate snapshot journal drifted for ${item.name}`,
+			`Candidate publication journal drifted for ${item.name}`,
 		);
 	}
-	const snapshotDirectory = join(
-		dirname(manifestPath),
-		journal.snapshotDirectory,
-	);
-	const directoryState = lstatOrNull(snapshotDirectory);
-	if (!directoryState) {
-		mkdirSync(snapshotDirectory, { mode: 0o700 });
-		chmodSync(snapshotDirectory, 0o700);
-	} else
-		assert(
-			directoryState.isDirectory() &&
-				!directoryState.isSymbolicLink() &&
-				directoryState.uid === currentUid() &&
-				permissionMode(directoryState) === 0o700,
-			"Candidate snapshot directory is forged or unsafe",
-		);
-	const ownerPath = join(snapshotDirectory, "owner.json");
-	const owner = {
-		schemaVersion: 1,
-		purpose,
-		releaseId: plan.releaseId,
-		manifestSha512,
-		journal: basename(journalPath),
-		snapshotDirectory: journal.snapshotDirectory,
-	};
-	const ownerState = regularFileState(
-		ownerPath,
-		"Candidate snapshot owner marker",
-		{
-			owner: currentUid(),
-			mode: 0o600,
+	return {
+		journalPath,
+		isComplete(name) {
+			assert(journal.packages[name], `Unknown candidate package ${name}`);
+			return journal.packages[name].complete;
 		},
-	);
-	if (ownerState) {
-		assert(
-			JSON.stringify(JSON.parse(ownerState.bytes.toString("utf8"))) ===
-				JSON.stringify(owner),
-			"Candidate snapshot ownership marker drifted",
-		);
-	} else {
-		assert(
-			readdirSync(snapshotDirectory).length === 0,
-			"Unmarked candidate snapshot state was preserved",
-		);
-		writeExclusiveFile(ownerPath, `${JSON.stringify(owner, null, 2)}\n`, 0o600);
-		afterSnapshotBoundary({ kind: "owner", snapshotDirectory, journalPath });
-	}
-	const allowed = new Set([
-		"owner.json",
-		...Object.values(journal.packages).map(({ snapshotFile }) => snapshotFile),
-	]);
+		markComplete(name) {
+			assert(journal.packages[name], `Unknown candidate package ${name}`);
+			journal.packages[name].complete = true;
+			secureAtomicWriteJson(journalPath, journal, { purpose });
+		},
+	};
+};
+
+export const publishVerifiedPackageBytes = async ({
+	item,
+	tarballData,
+	plan,
+	token,
+	publish = publishNpmPackage,
+}) => {
 	assert(
-		readdirSync(snapshotDirectory).every((name) => allowed.has(name)),
-		"Candidate snapshot directory contains unproven state",
+		Buffer.isBuffer(tarballData),
+		"Verified package tarball bytes are required",
 	);
-	const packagesByName = {};
-	for (const item of manifest.packages) {
-		const entry = journal.packages[item.name];
-		const snapshotPath = join(snapshotDirectory, entry.snapshotFile);
-		let snapshotState = regularFileState(
-			snapshotPath,
-			`${item.name} candidate snapshot`,
-			{ owner: currentUid(), mode: 0o400 },
+	assert(
+		item.publishManifest?.name === item.name &&
+			item.publishManifest?.version === plan.version &&
+			digest("sha512", tarballData) === item.sha512 &&
+			snapshotIntegrity(tarballData) === item.integrity,
+		`${item.name} in-memory publication bytes or manifest drifted`,
+	);
+	assert(token, "RPGJS_SOLO_NPM_TOKEN is required for publication");
+	return publish(structuredClone(item.publishManifest), tarballData, {
+		registry: plan.registry,
+		token,
+		forceAuth: { token },
+		defaultTag: plan.candidateDistTag,
+		access: null,
+		npmVersion: `rpgjs-solo-release/${plan.version}`,
+		algorithms: ["sha512"],
+	});
+};
+
+export const publishCandidateCohort = async ({
+	manifest,
+	manifestPath,
+	plan,
+	env,
+	authToken,
+	view = pnpmView,
+	command = run,
+	beforeSnapshot = () => {},
+	beforePublish = () => {},
+	publisher = publishVerifiedPackageBytes,
+}) => {
+	const actions = preflightCandidatePublication(manifest, plan, env, view);
+	beforeSnapshot({ manifest, manifestPath });
+	const publication = prepareCandidatePublicationJournal({
+		manifest,
+		manifestPath,
+		plan,
+	});
+	for (const { item, action } of actions) {
+		assert(
+			!publication.isComplete(item.name) || action === "complete",
+			`${item.name} completed candidate publication has drifted in the live registry`,
 		);
-		if (!snapshotState) {
+		if (action === "publish") {
 			const sourcePath = resolve(dirname(manifestPath), item.archive);
 			const artifactRoot = realpathSync(dirname(manifestPath));
 			const sourceRealPath = realpathSync(sourcePath);
@@ -2636,108 +2631,27 @@ export const prepareCandidateArchiveSnapshots = ({
 				sourceRealPath.startsWith(`${artifactRoot}${sep}`),
 				`${item.name} archive escaped the provenance directory`,
 			);
-			const sourceState = regularFileState(
-				sourceRealPath,
-				`${item.name} source archive`,
-			);
-			assert(
-				sourceState?.sha512 === item.sha512 &&
-					snapshotIntegrity(sourceState.bytes) === item.integrity,
-				`${item.name} source archive changed before private snapshot`,
-			);
-			writeExclusiveFile(snapshotPath, sourceState.bytes, 0o400);
-			snapshotState = regularFileState(
-				snapshotPath,
-				`${item.name} candidate snapshot`,
-				{ owner: currentUid(), mode: 0o400 },
-			);
-			afterSnapshotBoundary({
-				kind: "archive",
-				name: item.name,
-				sourcePath: sourceRealPath,
-				snapshotPath,
-			});
-		}
-		assert(
-			snapshotState?.sha512 === item.sha512 &&
-				snapshotIntegrity(snapshotState.bytes) === item.integrity,
-			`${item.name} candidate snapshot drifted`,
-		);
-		if (!entry.ready) {
-			entry.ready = true;
-			secureAtomicWriteJson(journalPath, journal, { purpose });
-		}
-		packagesByName[item.name] = {
-			path: snapshotPath,
-			sourcePath: resolve(dirname(manifestPath), item.archive),
-		};
-	}
-	return {
-		journalPath,
-		snapshotDirectory,
-		packages: packagesByName,
-		markComplete(name) {
-			assert(
-				journal.packages[name],
-				`Unknown candidate snapshot package ${name}`,
-			);
-			journal.packages[name].complete = true;
-			secureAtomicWriteJson(journalPath, journal, { purpose });
-		},
-	};
-};
-
-export const publishCandidateCohort = ({
-	manifest,
-	manifestPath,
-	plan,
-	env,
-	view = pnpmView,
-	command = run,
-	beforeSnapshot = () => {},
-	afterSnapshotBoundary = () => {},
-	beforePublish = () => {},
-}) => {
-	const actions = preflightCandidatePublication(manifest, plan, env, view);
-	beforeSnapshot({ manifest, manifestPath });
-	const snapshots = prepareCandidateArchiveSnapshots({
-		manifest,
-		manifestPath,
-		plan,
-		afterSnapshotBoundary,
-	});
-	for (const { item, action } of actions) {
-		if (action === "publish") {
-			const snapshot = snapshots.packages[item.name];
-			beforePublish({
-				item,
-				sourcePath: snapshot.sourcePath,
-				snapshotPath: snapshot.path,
-			});
 			const publishState = regularFileState(
-				snapshot.path,
-				`${item.name} private publish snapshot`,
-				{ owner: currentUid(), mode: 0o400 },
+				sourceRealPath,
+				`${item.name} publication archive`,
 			);
 			assert(
 				publishState?.sha512 === item.sha512 &&
-					`sha512-${createHash("sha512").update(publishState.bytes).digest("base64")}` ===
-						item.integrity,
-				`${item.name} private publish snapshot changed immediately before publication`,
+					snapshotIntegrity(publishState.bytes) === item.integrity,
+				`${item.name} archive changed before in-memory publication capture`,
 			);
-			command(
-				"pnpm",
-				[
-					"publish",
-					snapshot.path,
-					"--tag",
-					plan.candidateDistTag,
-					"--registry",
-					plan.registry,
-					"--no-git-checks",
-				],
-				{ env, timeout: 600_000 },
-			);
+			beforePublish({
+				item,
+				sourcePath: sourceRealPath,
+				tarballData: publishState.bytes,
+			});
+			await publisher({
+				item,
+				tarballData: publishState.bytes,
+				plan,
+				token: authToken,
+				env,
+			});
 		} else if (action === "tag")
 			command(
 				"pnpm",
@@ -2756,7 +2670,7 @@ export const publishCandidateCohort = ({
 				item.integrity,
 			`${item.name} fetch-back integrity failed`,
 		);
-		snapshots.markComplete(item.name);
+		publication.markComplete(item.name);
 	}
 	assertCandidateCohort(manifest, plan, env, view);
 };
@@ -2766,8 +2680,14 @@ const publishCandidate = async (manifest, manifestPath, plan, args) => {
 	await withEphemeralNpmAuth(
 		process.env.RPGJS_SOLO_NPM_TOKEN,
 		plan.registry,
-		async (env) =>
-			publishCandidateCohort({ manifest, manifestPath, plan, env }),
+		async (env, token) =>
+			publishCandidateCohort({
+				manifest,
+				manifestPath,
+				plan,
+				env,
+				authToken: token,
+			}),
 	);
 };
 

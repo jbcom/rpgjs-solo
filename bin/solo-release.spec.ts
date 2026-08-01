@@ -38,6 +38,7 @@ import {
 	pnpmView,
 	prepareReleaseEvidence,
 	publishCandidateCohort,
+	publishVerifiedPackageBytes,
 	readTransactionJournal,
 	reconcileReleaseRemotes,
 	reconcileReleaseWithAdapter,
@@ -430,6 +431,7 @@ function createCandidateFixture() {
 				archive,
 				sha512: createHash("sha512").update(bytes).digest("hex"),
 				integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`,
+				publishManifest: { name, version },
 			};
 		}),
 	};
@@ -1441,7 +1443,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		).toThrow(/completed latest promotion changed unexpectedly/i);
 	});
 
-	it("preflights the complete candidate cohort before any registry mutation", () => {
+	it("preflights the complete candidate cohort before any registry mutation", async () => {
 		const manifest = {
 			packages: packages.map(({ name }, index) => ({
 				name,
@@ -1461,7 +1463,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			if (spec.startsWith(`${packages[2].name}@`)) return "sha512-foreign";
 			return undefined;
 		};
-		expect(() =>
+		await expect(
 			publishCandidateCohort({
 				manifest,
 				manifestPath: "/tmp/fixture/provenance.json",
@@ -1473,11 +1475,76 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					return "";
 				},
 			}),
-		).toThrow(/foreign bytes/i);
+		).rejects.toThrow(/foreign bytes/i);
 		expect(mutations).toEqual([]);
 	});
 
-	it("executes only the immutable candidate actions selected by preflight", () => {
+	it("hands the exact descriptor-captured Buffer and full bound manifest to libnpmpublish", async () => {
+		const candidate = createCandidateFixture();
+		const item = candidate.manifest.packages[0];
+		const tarballData = readFileSync(join(candidate.directory, item.archive));
+		const calls: Array<{
+			manifest: Record<string, unknown>;
+			tarballData: Buffer;
+			options: Record<string, unknown>;
+		}> = [];
+		await publishVerifiedPackageBytes({
+			item,
+			tarballData,
+			plan: { version, registry, candidateDistTag: "candidate" },
+			token: "fixture-token",
+			publish: async (manifest, bytes, options) => {
+				calls.push({ manifest, tarballData: bytes, options });
+				manifest.name = "mutated only inside publisher";
+			},
+		});
+		expect(calls).toHaveLength(1);
+		expect(calls[0].tarballData).toBe(tarballData);
+		expect(calls[0].options).toMatchObject({
+			registry,
+			token: "fixture-token",
+			forceAuth: { token: "fixture-token" },
+			defaultTag: "candidate",
+			algorithms: ["sha512"],
+		});
+		expect(item.publishManifest).toEqual({ name: item.name, version });
+	});
+
+	it("refuses manifest identity, byte, and token drift before invoking libnpmpublish", async () => {
+		const candidate = createCandidateFixture();
+		const item = candidate.manifest.packages[0];
+		const tarballData = readFileSync(join(candidate.directory, item.archive));
+		let calls = 0;
+		const publish = async () => {
+			calls += 1;
+		};
+		for (const attack of [
+			{
+				item: {
+					...item,
+					publishManifest: { ...item.publishManifest, version: "0.0.0" },
+				},
+				tarballData,
+				token: "fixture-token",
+			},
+			{
+				item,
+				tarballData: Buffer.from("foreign archive bytes\n"),
+				token: "fixture-token",
+			},
+			{ item, tarballData, token: "" },
+		])
+			await expect(
+				publishVerifiedPackageBytes({
+					...attack,
+					plan: { version, registry, candidateDistTag: "candidate" },
+					publish,
+				}),
+			).rejects.toThrow(/drifted|required for publication/i);
+		expect(calls).toBe(0);
+	});
+
+	it("executes only the immutable candidate actions selected by preflight", async () => {
 		const candidate = createCandidateFixture();
 		const { manifest } = candidate;
 		const plan = {
@@ -1517,37 +1584,44 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			return field === "dist-tags" ? state?.tags : state?.integrity;
 		};
 		const mutations: string[] = [];
-		publishCandidateCohort({
+		await publishCandidateCohort({
 			manifest,
 			manifestPath: candidate.manifestPath,
 			plan,
 			env: {},
 			view,
+			publisher: ({
+				item,
+				tarballData,
+			}: {
+				item: (typeof manifest.packages)[number];
+				tarballData: Buffer;
+			}) => {
+				mutations.push("publish");
+				expect(createHash("sha512").update(tarballData).digest("hex")).toBe(
+					item.sha512,
+				);
+				const state = live.get(item.name);
+				if (!state) throw new Error("missing live state");
+				state.integrity = item.integrity;
+				state.tags.candidate = version;
+			},
 			command: (_command: string, args: string[]) => {
 				mutations.push(args[0]);
-				if (args[0] === "publish") {
-					const index = Number(args[1].split("/").at(-1)?.replace(".tgz", ""));
-					const item = manifest.packages[index];
-					const state = live.get(item.name);
-					if (!state) throw new Error("missing live state");
-					state.integrity = item.integrity;
-					state.tags.candidate = version;
-				} else {
-					const item = manifest.packages.find(
-						(candidate) => args[2] === `${candidate.name}@${version}`,
-					);
-					if (!item) throw new Error("missing dist-tag target");
-					const state = live.get(item.name);
-					if (!state) throw new Error("missing live state");
-					state.tags.candidate = version;
-				}
+				const item = manifest.packages.find(
+					(candidate) => args[2] === `${candidate.name}@${version}`,
+				);
+				if (!item) throw new Error("missing dist-tag target");
+				const state = live.get(item.name);
+				if (!state) throw new Error("missing live state");
+				state.tags.candidate = version;
 				return "";
 			},
 		});
 		expect(mutations).toEqual(["publish", "dist-tag", "publish"]);
 	});
 
-	it("publishes only descriptor-verified private snapshots and ignores later source swaps", () => {
+	it("publishes descriptor-captured bytes without reopening a same-UID-replaced pathname", async () => {
 		const candidate = createCandidateFixture();
 		const plan = {
 			releaseId: candidate.releaseId,
@@ -1574,8 +1648,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			return field === "dist-tags" ? state?.tags : state?.integrity;
 		};
 		let sourceSwapped = false;
-		const publishedPaths: string[] = [];
-		publishCandidateCohort({
+		const publishedHashes: string[] = [];
+		await publishCandidateCohort({
 			manifest: candidate.manifest,
 			manifestPath: candidate.manifestPath,
 			plan,
@@ -1584,31 +1658,33 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			beforePublish: ({ sourcePath }: { sourcePath: string }) => {
 				if (!sourceSwapped) {
 					sourceSwapped = true;
-					writeFileSync(sourcePath, "swapped only after sealed snapshot\n");
+					writeFileSync(sourcePath, "same-UID replacement after capture\n");
 				}
 			},
-			command: (_program: string, args: string[]) => {
-				const snapshotPath = args[1];
-				publishedPaths.push(snapshotPath);
-				expect(snapshotPath).toContain(".candidate-snapshot-");
-				const index = Number(
-					snapshotPath.split("/").at(-1)?.replace(".tgz", ""),
-				);
-				const item = candidate.manifest.packages[index];
-				expect(sha512File(snapshotPath)).toBe(item.sha512);
+			publisher: ({
+				item,
+				tarballData,
+			}: {
+				item: (typeof candidate.manifest.packages)[number];
+				tarballData: Buffer;
+			}) => {
+				const capturedHash = createHash("sha512")
+					.update(tarballData)
+					.digest("hex");
+				publishedHashes.push(capturedHash);
+				expect(capturedHash).toBe(item.sha512);
 				const state = live.get(item.name);
 				if (!state) throw new Error("missing live state");
 				state.integrity = item.integrity;
 				state.tags.candidate = version;
-				return "";
 			},
 		});
 		expect(sourceSwapped).toBe(true);
-		expect(publishedPaths).toHaveLength(packages.length);
+		expect(publishedHashes).toHaveLength(packages.length);
 	});
 
-	it("rejects source substitution before snapshot and hard-link mutation immediately before publish", () => {
-		for (const attack of ["source", "snapshot-hardlink"]) {
+	it("rejects source substitution and hard links before descriptor capture", async () => {
+		for (const attack of ["source", "source-hardlink"]) {
 			const candidate = createCandidateFixture();
 			const plan = {
 				releaseId: candidate.releaseId,
@@ -1618,7 +1694,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				promotionDistTag: "latest",
 			};
 			const mutations: string[] = [];
-			expect(() =>
+			await expect(
 				publishCandidateCohort({
 					manifest: candidate.manifest,
 					manifestPath: candidate.manifestPath,
@@ -1629,29 +1705,26 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					beforeSnapshot: () => {
 						if (attack === "source")
 							writeFileSync(join(candidate.directory, "0.tgz"), "foreign\n");
-					},
-					beforePublish: ({ snapshotPath }: { snapshotPath: string }) => {
-						if (attack === "snapshot-hardlink")
+						else
 							linkSync(
-								snapshotPath,
+								join(candidate.directory, "0.tgz"),
 								join(candidate.directory, "snapshot-peer.tgz"),
 							);
 					},
-					command: () => {
+					publisher: () => {
 						mutations.push("publish");
-						return "";
 					},
 				}),
-			).toThrow(
+			).rejects.toThrow(
 				attack === "source"
-					? /changed before private snapshot/i
+					? /changed before in-memory publication capture/i
 					: /exactly one hard link/i,
 			);
 			expect(mutations).toEqual([]);
 		}
 	});
 
-	it("recovers interrupted snapshot preparation and rejects a replayed journal", () => {
+	it("resumes an interrupted in-memory publish and rejects a replayed journal", async () => {
 		const candidate = createCandidateFixture();
 		const plan = {
 			releaseId: candidate.releaseId,
@@ -1660,7 +1733,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			candidateDistTag: "candidate",
 			promotionDistTag: "latest",
 		};
-		expect(() =>
+		let interrupted = false;
+		await expect(
 			publishCandidateCohort({
 				manifest: candidate.manifest,
 				manifestPath: candidate.manifestPath,
@@ -1668,11 +1742,14 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				env: {},
 				view: (_spec: string, field: string) =>
 					field === "dist-tags" ? {} : undefined,
-				afterSnapshotBoundary: ({ kind }: { kind: string }) => {
-					if (kind === "archive") throw new Error("snapshot interruption");
+				publisher: () => {
+					if (!interrupted) {
+						interrupted = true;
+						throw new Error("publish interruption");
+					}
 				},
 			}),
-		).toThrow(/snapshot interruption/i);
+		).rejects.toThrow(/publish interruption/i);
 		const live = new Map(
 			candidate.manifest.packages.map((item) => [
 				item.name,
@@ -1689,22 +1766,41 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			const state = item ? live.get(item.name) : undefined;
 			return field === "dist-tags" ? state?.tags : state?.integrity;
 		};
-		publishCandidateCohort({
+		await publishCandidateCohort({
 			manifest: candidate.manifest,
 			manifestPath: candidate.manifestPath,
 			plan,
 			env: {},
 			view,
-			command: (_program: string, args: string[]) => {
-				const index = Number(args[1].split("/").at(-1)?.replace(".tgz", ""));
-				const item = candidate.manifest.packages[index];
+			publisher: ({
+				item,
+			}: {
+				item: (typeof candidate.manifest.packages)[number];
+			}) => {
 				const state = live.get(item.name);
 				if (!state) throw new Error("missing live state");
 				state.integrity = item.integrity;
 				state.tags.candidate = version;
-				return "";
 			},
 		});
+		const completedPackage = live.get(candidate.manifest.packages[0].name);
+		if (!completedPackage) throw new Error("missing completed package state");
+		completedPackage.tags = {};
+		const replayMutations: string[] = [];
+		await expect(
+			publishCandidateCohort({
+				manifest: candidate.manifest,
+				manifestPath: candidate.manifestPath,
+				plan,
+				env: {},
+				view,
+				command: () => {
+					replayMutations.push("tag");
+					return "";
+				},
+			}),
+		).rejects.toThrow(/completed candidate publication has drifted/i);
+		expect(replayMutations).toEqual([]);
 
 		const replay = createCandidateFixture();
 		replay.manifest.releaseId = "different-release";
@@ -1714,7 +1810,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			readFileSync(`${candidate.manifestPath}.candidate-publish.json`),
 		);
 		chmodSync(`${replay.manifestPath}.candidate-publish.json`, 0o600);
-		expect(() =>
+		await expect(
 			publishCandidateCohort({
 				manifest: replay.manifest,
 				manifestPath: replay.manifestPath,
@@ -1730,7 +1826,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 						: item?.integrity;
 				},
 			}),
-		).toThrow(/journal belongs to different release bytes/i);
+		).rejects.toThrow(/journal belongs to different release bytes/i);
 	});
 
 	it("treats only explicit registry absence codes as missing", () => {
@@ -1808,6 +1904,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			command: build,
 			signer: testProvenanceSigner,
 		});
+		expect(result.manifest.schemaVersion).toBe(3);
 		expect(built).toEqual(packages.map(({ name }) => name));
 		expect(result.manifest.source).toMatchObject({
 			commit: "a".repeat(40),
@@ -1828,6 +1925,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					import: "./dist/index.js",
 				},
 			});
+			expect(item.publishManifest).toMatchObject({
+				name: item.name,
+				version,
+				exports: item.exports,
+			});
 		}
 		expect(existsSync(result.sidecarPath)).toBe(true);
 		expect(existsSync(result.statement)).toBe(true);
@@ -1835,6 +1937,28 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(() =>
 			loadProvenance(result.manifestPath, plan, fixture.root),
 		).not.toThrow();
+		const writeSignedManifest = (manifest: typeof result.manifest) => {
+			writeJson(result.manifestPath, manifest);
+			writeFileSync(
+				result.sidecarPath,
+				`${sha512File(result.manifestPath)}  ${result.manifestPath.split("/").at(-1)}\n`,
+			);
+			const statement = JSON.parse(readFileSync(result.statement, "utf8"));
+			statement.subject.manifestSha512 = sha512File(result.manifestPath);
+			writeJson(result.statement, statement);
+			writeFileSync(
+				result.signature,
+				`${testProvenanceSigner(readFileSync(result.statement)).toString("base64")}\n`,
+			);
+		};
+		const manifestMetadataForgery = structuredClone(result.manifest);
+		manifestMetadataForgery.packages[0].publishManifest.description =
+			"forged after archive capture";
+		writeSignedManifest(manifestMetadataForgery);
+		expect(() =>
+			loadProvenance(result.manifestPath, plan, fixture.root),
+		).toThrow(/archive metadata differs from signed provenance/i);
+		writeSignedManifest(result.manifest);
 		const externalDirectory = mkdtempSync(
 			join(tmpdir(), "solo-foreign-archive-"),
 		);
