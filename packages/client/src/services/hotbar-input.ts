@@ -1,7 +1,6 @@
 interface HotbarInputEngine {
-  stopProcessingInput: boolean;
+  acquireInputLock(owner?: object): () => void;
   isInputProcessingStopped(): boolean;
-  interruptCurrentPlayerMovement?(): void;
 }
 
 export interface HotbarGamepadSnapshot {
@@ -34,9 +33,9 @@ export const createHotbarKeyboardShortcutHandler = (
 };
 
 /**
- * Coordinate gamepad shortcut edges and the radial wheel's temporary legacy
- * input lock. Once opened, the wheel remains responsible for releasing its own
- * lock even though that lock makes `isInputProcessingStopped()` return true.
+ * Coordinate gamepad shortcut edges and the radial wheel's scoped input lock.
+ * Once opened, the wheel remains responsible for releasing only its own lock
+ * even though that lock makes `isInputProcessingStopped()` return true.
  */
 export const createHotbarGamepadInputController = ({
   engine,
@@ -47,13 +46,14 @@ export const createHotbarGamepadInputController = ({
   callbacks: HotbarGamepadInputCallbacks;
   deadzone: number;
 }) => {
+  const wheelInputOwner = {};
   let wheelOpen = false;
   let wasWheelPressed = false;
   let wasPreviousPressed = false;
   let wasNextPressed = false;
   let wasUsePressed = false;
   let cancelled = false;
-  let previousStopProcessingInput = false;
+  let releaseWheelInput: (() => void) | undefined;
   let wheelSlot = -1;
 
   const setWheelSlot = (slot: number) => {
@@ -65,9 +65,11 @@ export const createHotbarGamepadInputController = ({
     if (!wheelOpen) return;
     const slot = wheelSlot;
     wheelOpen = false;
+    const releaseInput = releaseWheelInput;
+    releaseWheelInput = undefined;
+    releaseInput?.();
     callbacks.setWheelOpen(false);
     setWheelSlot(-1);
-    engine.stopProcessingInput = previousStopProcessingInput;
     if (
       activate
       && !cancelled
@@ -96,9 +98,7 @@ export const createHotbarGamepadInputController = ({
         if (slot >= 0) callbacks.activateSlot(slot);
       }
       if (gamepad.wheelPressed && !wasWheelPressed) {
-        previousStopProcessingInput = engine.stopProcessingInput;
-        engine.stopProcessingInput = true;
-        engine.interruptCurrentPlayerMovement?.();
+        releaseWheelInput = engine.acquireInputLock(wheelInputOwner);
         wheelOpen = true;
         callbacks.setWheelOpen(true);
         setWheelSlot(-1);

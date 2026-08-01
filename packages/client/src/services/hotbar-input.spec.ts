@@ -4,6 +4,7 @@ import {
   createHotbarKeyboardShortcutHandler,
   type HotbarGamepadSnapshot,
 } from "./hotbar-input";
+import { ClientInputLockManager } from "./inputLock";
 
 const releasedGamepad = (): HotbarGamepadSnapshot => ({
   wheelPressed: false,
@@ -16,13 +17,18 @@ const releasedGamepad = (): HotbarGamepadSnapshot => ({
 });
 
 const createGamepadHarness = () => {
-  let externalLock = false;
+  const inputLocks = new ClientInputLockManager();
+  const interruptCurrentPlayerMovement = vi.fn();
   const engine = {
     stopProcessingInput: false,
+    acquireInputLock: vi.fn((owner?: object) => {
+      const release = inputLocks.acquire(owner);
+      interruptCurrentPlayerMovement();
+      return release;
+    }),
     isInputProcessingStopped() {
-      return externalLock || this.stopProcessingInput;
+      return this.stopProcessingInput || inputLocks.active;
     },
-    interruptCurrentPlayerMovement: vi.fn(),
   };
   const callbacks = {
     getActiveSlot: vi.fn(() => 2),
@@ -41,25 +47,30 @@ const createGamepadHarness = () => {
     engine,
     callbacks,
     controller,
-    setExternalLock: (locked: boolean) => {
-      externalLock = locked;
-    },
+    interruptCurrentPlayerMovement,
+    acquireExternalScopedLock: () => engine.acquireInputLock({}),
   };
 };
 
 describe("hotbar input ownership", () => {
-  test("blocks a keyboard number shortcut while input processing is stopped", () => {
-    let locked = true;
+  test("blocks keyboard shortcuts for scoped and legacy input owners", () => {
+    const harness = createGamepadHarness();
     const activateNumberSlot = vi.fn();
     const keyDown = createHotbarKeyboardShortcutHandler(
-      { isInputProcessingStopped: () => locked },
+      harness.engine,
       activateNumberSlot,
     );
+    const releaseScopedLock = harness.acquireExternalScopedLock();
 
     expect(keyDown()).toBe(false);
     expect(activateNumberSlot).not.toHaveBeenCalled();
 
-    locked = false;
+    releaseScopedLock();
+    harness.engine.stopProcessingInput = true;
+    expect(keyDown()).toBe(false);
+    expect(activateNumberSlot).not.toHaveBeenCalled();
+
+    harness.engine.stopProcessingInput = false;
     expect(keyDown()).toBe(true);
     expect(activateNumberSlot).toHaveBeenCalledOnce();
   });
@@ -72,7 +83,7 @@ describe("hotbar input ownership", () => {
       previousPressed: true,
       usePressed: true,
     };
-    harness.setExternalLock(true);
+    const releaseExternalLock = harness.acquireExternalScopedLock();
 
     harness.controller.poll(held);
     expect(harness.callbacks.activateSlot).not.toHaveBeenCalled();
@@ -80,7 +91,7 @@ describe("hotbar input ownership", () => {
     expect(harness.callbacks.setWheelOpen).not.toHaveBeenCalled();
     expect(harness.engine.stopProcessingInput).toBe(false);
 
-    harness.setExternalLock(false);
+    releaseExternalLock();
     harness.controller.poll(held);
     expect(harness.callbacks.activateSlot).not.toHaveBeenCalled();
     expect(harness.callbacks.selectAdjacentSlot).not.toHaveBeenCalled();
@@ -105,8 +116,9 @@ describe("hotbar input ownership", () => {
 
     harness.controller.poll({ ...releasedGamepad(), wheelPressed: true });
     expect(harness.callbacks.setWheelOpen).toHaveBeenCalledWith(true);
-    expect(harness.engine.stopProcessingInput).toBe(true);
-    expect(harness.engine.interruptCurrentPlayerMovement).toHaveBeenCalledOnce();
+    expect(harness.engine.stopProcessingInput).toBe(false);
+    expect(harness.engine.isInputProcessingStopped()).toBe(true);
+    expect(harness.interruptCurrentPlayerMovement).toHaveBeenCalledOnce();
 
     harness.controller.poll({
       ...releasedGamepad(),
@@ -121,11 +133,11 @@ describe("hotbar input ownership", () => {
     expect(harness.engine.stopProcessingInput).toBe(false);
   });
 
-  test("closes an opened wheel without activating when another owner takes input", () => {
+  test("preserves a scoped owner that takes input while the wheel is open", () => {
     const harness = createGamepadHarness();
 
     harness.controller.poll({ ...releasedGamepad(), wheelPressed: true });
-    harness.setExternalLock(true);
+    const releaseExternalLock = harness.acquireExternalScopedLock();
     harness.controller.poll({
       ...releasedGamepad(),
       wheelPressed: true,
@@ -136,7 +148,29 @@ describe("hotbar input ownership", () => {
     harness.controller.poll(releasedGamepad());
     expect(harness.callbacks.activateSlot).not.toHaveBeenCalled();
     expect(harness.callbacks.setWheelOpen).toHaveBeenLastCalledWith(false);
+    expect(harness.engine.isInputProcessingStopped()).toBe(true);
     expect(harness.engine.stopProcessingInput).toBe(false);
+
+    releaseExternalLock();
+    expect(harness.engine.isInputProcessingStopped()).toBe(false);
+  });
+
+  test("preserves a legacy owner that takes input while the wheel is open", () => {
+    const harness = createGamepadHarness();
+
+    harness.controller.poll({ ...releasedGamepad(), wheelPressed: true });
+    harness.controller.poll({
+      ...releasedGamepad(),
+      wheelPressed: true,
+      x: 1,
+    });
+    harness.engine.stopProcessingInput = true;
+
+    harness.controller.poll(releasedGamepad());
+    expect(harness.callbacks.activateSlot).not.toHaveBeenCalled();
+    expect(harness.callbacks.setWheelOpen).toHaveBeenLastCalledWith(false);
+    expect(harness.engine.stopProcessingInput).toBe(true);
+    expect(harness.engine.isInputProcessingStopped()).toBe(true);
   });
 
   test("cancels and closes an opened wheel while its own input lock is active", () => {
@@ -155,5 +189,21 @@ describe("hotbar input ownership", () => {
     expect(harness.callbacks.activateSlot).not.toHaveBeenCalled();
     expect(harness.callbacks.setWheelOpen).toHaveBeenLastCalledWith(false);
     expect(harness.engine.stopProcessingInput).toBe(false);
+    expect(harness.engine.isInputProcessingStopped()).toBe(false);
+  });
+
+  test("destroy releases only the wheel lock without activating", () => {
+    const harness = createGamepadHarness();
+
+    harness.controller.poll({ ...releasedGamepad(), wheelPressed: true });
+    const releaseExternalLock = harness.acquireExternalScopedLock();
+    harness.controller.destroy();
+
+    expect(harness.callbacks.activateSlot).not.toHaveBeenCalled();
+    expect(harness.callbacks.setWheelOpen).toHaveBeenLastCalledWith(false);
+    expect(harness.engine.isInputProcessingStopped()).toBe(true);
+
+    releaseExternalLock();
+    expect(harness.engine.isInputProcessingStopped()).toBe(false);
   });
 });
