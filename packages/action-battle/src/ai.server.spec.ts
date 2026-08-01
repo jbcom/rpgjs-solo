@@ -1,7 +1,13 @@
 import { MAXHP } from "@rpgjs/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { I18nService } from "@rpgjs/common";
-import { AiDebug, AiState, AttackPattern, BattleAi } from "./ai.server";
+import { I18nService, PhysicsEngine } from "@rpgjs/common";
+import {
+  AiDebug,
+  AiState,
+  AttackPattern,
+  BattleAi,
+  EnemyType,
+} from "./ai.server";
 import {
   callAction,
   chase,
@@ -684,7 +690,7 @@ describe("BattleAi behavior tree", () => {
     ai.destroy();
   });
 
-  test("cancels startup, combo, and dash callbacks at direct hp zero and permits revival", () => {
+  test("invalidates startup, combo, and dash across transient defeat and permits new revival work", () => {
     vi.useFakeTimers();
     const event = {
       ...createEvent(),
@@ -715,6 +721,7 @@ describe("BattleAi behavior tree", () => {
     (ai as any).performComboAttack();
     (ai as any).performDashAttack();
     event.hp = 0;
+    event.hp = 10;
     vi.advanceTimersByTime(2_000);
 
     expect(genericStartup).not.toHaveBeenCalled();
@@ -722,7 +729,6 @@ describe("BattleAi behavior tree", () => {
     expect(event.dash).not.toHaveBeenCalled();
     expect((ai as any).comboCount).toBe(0);
 
-    event.hp = 10;
     ai.onDetectInShape(player as any, {});
     ai.onDetectInShape(player as any, {});
     (ai as any).state = AiState.Combat;
@@ -736,6 +742,58 @@ describe("BattleAi behavior tree", () => {
     expect(genericStartup).toHaveBeenCalledOnce();
     expect(event.dash).toHaveBeenCalledOnce();
     expect(executeMeleeAttack).toHaveBeenCalled();
+    ai.destroy();
+  });
+
+  test("invalidates active frames, charge completion, and defensive counters across lives", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const event = {
+      ...createEvent(),
+      dash: vi.fn(),
+    };
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      enemyType: EnemyType.Defensive,
+      dodgeChance: 1,
+      attackRange: 50,
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    ai.onDetectInShape(player as any, {});
+    (ai as any).state = AiState.Combat;
+
+    const processHitboxHits = vi.spyOn(ai as any, "processHitboxHits");
+    (ai as any).performZoneAttack();
+    vi.advanceTimersByTime(450);
+    expect(processHitboxHits).toHaveBeenCalledOnce();
+    processHitboxHits.mockClear();
+    event.hp = 0;
+    event.hp = 10;
+    vi.advanceTimersByTime(500);
+    expect(processHitboxHits).not.toHaveBeenCalled();
+
+    const executeMeleeAttack = vi.spyOn(ai as any, "executeMeleeAttack");
+    (ai as any).performChargedAttack();
+    event.hp = 0;
+    event.hp = 10;
+    vi.advanceTimersByTime(2_000);
+    expect(executeMeleeAttack).not.toHaveBeenCalled();
+    expect((ai as any).chargingAttack).toBe(false);
+
+    const selectAndPerformAttack = vi.spyOn(ai as any, "selectAndPerformAttack");
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    expect((ai as any).tryDodge()).toBe(true);
+    event.hp = 0;
+    event.hp = 10;
+    vi.advanceTimersByTime(500);
+    expect(selectAndPerformAttack).not.toHaveBeenCalled();
     ai.destroy();
   });
 
@@ -1318,6 +1376,309 @@ describe("BattleAi behavior tree", () => {
     expect(onUse).toHaveBeenCalledOnce();
     expect(event.sp).toBe(8);
     expect(performBasicHitbox).not.toHaveBeenCalled();
+    ai.destroy();
+  });
+
+  test("cancels a planned skill when its captured target is defeated during startup", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = {
+      ...createEvent(),
+      sp: 12,
+    };
+    const onUse = vi.fn();
+    const skill = {
+      id: "delayed-strike",
+      spCost: 4,
+      action: {
+        mode: "instant" as const,
+        target: "enemy" as const,
+        range: 50,
+        cooldownMs: 800,
+      },
+      onUse,
+    };
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    ai.onDetectInShape(player as any, {});
+    const evaluation = (ai as any).evaluateSkillActions(1_000)[0];
+
+    expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
+    player.hp = 0;
+    vi.advanceTimersByTime(500);
+
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+    expect((ai as any).skillCooldowns.size).toBe(0);
+
+    player.hp = 10;
+    vi.setSystemTime(2_000);
+    const revivedEvaluation = (ai as any).evaluateSkillActions(2_000)[0];
+    expect((ai as any).performPlannedSkill(revivedEvaluation)).toBe(true);
+    vi.advanceTimersByTime(500);
+    expect(onUse).toHaveBeenCalledOnce();
+    expect(event.sp).toBe(8);
+    expect((ai as any).skillCooldowns.size).toBe(1);
+    ai.destroy();
+  });
+
+  test("cancels a planned skill when its captured target dies and revives during startup", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = { ...createEvent(), sp: 12 };
+    const onUse = vi.fn();
+    const skill = {
+      id: "life-bound-strike",
+      spCost: 4,
+      action: {
+        mode: "instant" as const,
+        target: "enemy" as const,
+        range: 50,
+        cooldownMs: 800,
+      },
+      onUse,
+    };
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    ai.onDetectInShape(player as any, {});
+
+    const staleEvaluation = (ai as any).evaluateSkillActions(1_000)[0];
+    expect((ai as any).performPlannedSkill(staleEvaluation)).toBe(true);
+    player.hp = 0;
+    player.hp = 10;
+    vi.advanceTimersByTime(500);
+
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+    expect((ai as any).skillCooldowns.size).toBe(0);
+
+    vi.setSystemTime(2_000);
+    const revivedEvaluation = (ai as any).evaluateSkillActions(2_000)[0];
+    expect((ai as any).performPlannedSkill(revivedEvaluation)).toBe(true);
+    vi.advanceTimersByTime(500);
+
+    expect(onUse).toHaveBeenCalledOnce();
+    expect(event.sp).toBe(8);
+    expect((ai as any).skillCooldowns.size).toBe(1);
+    ai.destroy();
+  });
+
+  test("revalidates planned target identity and range before skill hooks or spend", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = { ...createEvent(), sp: 12 };
+    const onUse = vi.fn();
+    const skill = {
+      id: "measured-strike",
+      spCost: 4,
+      action: {
+        mode: "instant" as const,
+        target: "enemy" as const,
+        range: 50,
+      },
+      onUse,
+    };
+    const first = {
+      ...createPlayer(),
+      id: "first-target",
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const second = {
+      ...createPlayer(),
+      id: "second-target",
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    ai.onDetectInShape(first as any, {});
+
+    const identityPlan = (ai as any).evaluateSkillActions(1_000)[0];
+    expect((ai as any).performPlannedSkill(identityPlan)).toBe(true);
+    (ai as any).target = second;
+    vi.advanceTimersByTime(500);
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+
+    (ai as any).target = first;
+    vi.setSystemTime(2_000);
+    const rangePlan = (ai as any).evaluateSkillActions(2_000)[0];
+    expect((ai as any).performPlannedSkill(rangePlan)).toBe(true);
+    first.x.mockReturnValue(200);
+    vi.advanceTimersByTime(500);
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+    ai.destroy();
+  });
+
+  test("rejects a same-id replacement of a captured secondary area target", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = { ...createEvent(), sp: 12 };
+    const onUse = vi.fn();
+    const skill = {
+      id: "measured-sweep",
+      spCost: 4,
+      targeting: {
+        range: 2,
+        aoeMask: ["111", "111", "111"],
+      },
+      action: { mode: "instant" as const, target: "enemy" as const },
+      onUse,
+    };
+    const primary = {
+      ...createPlayer(),
+      id: "primary",
+      hp: 10,
+      x: vi.fn(() => 32),
+      y: vi.fn(() => 0),
+    };
+    const firstSecondary = {
+      ...createPlayer(),
+      id: "secondary",
+      hp: 10,
+      x: vi.fn(() => 32),
+      y: vi.fn(() => 0),
+    };
+    const replacementSecondary = {
+      ...createPlayer(),
+      id: "secondary",
+      hp: 10,
+      x: vi.fn(() => 32),
+      y: vi.fn(() => 0),
+    };
+    let secondary = firstSecondary;
+    const map = {
+      tileWidth: 32,
+      tileHeight: 32,
+      getPlayers: () => [primary, secondary],
+      getEvents: () => [event],
+      clientVisual: vi.fn(),
+    };
+    event.getCurrentMap.mockReturnValue(map);
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 80,
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    ai.onDetectInShape(primary as any, {});
+
+    const evaluation = (ai as any).evaluateSkillActions(1_000)[0];
+    expect(evaluation.target).toEqual([primary, firstSecondary]);
+    expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
+    secondary = replacementSecondary;
+    vi.advanceTimersByTime(500);
+
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+    expect((ai as any).skillCooldowns.size).toBe(0);
+    ai.destroy();
+  });
+
+  test("revalidates a newly introduced projectile blocker before skill hooks or spend", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const physics = new PhysicsEngine({ spatialCellSize: 8 });
+    const onUse = vi.fn();
+    const skill = {
+      id: "planned-bolt",
+      spCost: 4,
+      action: {
+        mode: "projectile" as const,
+        target: "enemy" as const,
+        projectile: {
+          direction: { x: 1, y: 0 },
+          range: 80,
+        },
+      },
+      onUse,
+    };
+    const event = {
+      ...createEvent(),
+      sp: 12,
+      hitbox: () => ({ w: 8, h: 8 }),
+    };
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 40),
+      y: vi.fn(() => 0),
+      hitbox: () => ({ w: 8, h: 8 }),
+    };
+    const objects = new Map<string, any>([
+      [event.id, event],
+      [player.id, player],
+    ]);
+    const map = {
+      tileWidth: 10,
+      tileHeight: 10,
+      physic: physics,
+      getObjectById: (id: string) => objects.get(id),
+      getPlayers: () => [player],
+      getEvents: () => [event],
+      clientVisual: vi.fn(),
+    };
+    event.getCurrentMap.mockReturnValue(map);
+    for (const entry of [event, player]) {
+      physics.createEntity({
+        uuid: entry.id,
+        position: { x: entry.x() + 4, y: entry.y() + 4 },
+        width: 8,
+        height: 8,
+      });
+    }
+    const ai = new BattleAi(event as any, {
+      faction: "enemies",
+      targets: "players",
+      attackSkill: skill,
+      attackRange: 50,
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    ai.onDetectInShape(player as any, {});
+    const evaluation = (ai as any).evaluateSkillActions(1_000)[0];
+    expect(evaluation.rejection).toBeUndefined();
+    expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
+
+    physics.createStaticObstacle("startup-wall", {
+      x: 28,
+      y: 4,
+      width: 8,
+      height: 8,
+    });
+    vi.advanceTimersByTime(500);
+
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+    expect((ai as any).skillCooldowns.size).toBe(0);
     ai.destroy();
   });
 

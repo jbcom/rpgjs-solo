@@ -318,6 +318,13 @@ in-flight projectile because the projectile API has no owner-lifecycle
 cancellation contract. A game that wants cancellation must model it explicitly
 rather than assuming defeat destroys emitted state.
 
+For Action Battle's default projectile effect, a physics-only impact is a
+destroy/no-op: it never falls back to the enemy selected when the projectile was
+emitted. Adding a custom `onImpact` explicitly opts into all physical impacts,
+including walls. Wall contexts have no combat `target`, so custom handlers must
+inspect `hit` and pass an explicit eligible target to any damage/default-effect
+helper.
+
 ## Client Registration
 
 Register a CanvasEngine component for each projectile type:

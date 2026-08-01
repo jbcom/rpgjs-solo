@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   canActionBattleProjectileCollide,
   executeActionBattleUse,
+  handleActionBattleProjectileDestroy,
   handleActionBattleProjectileImpact,
 } from "./action-use";
 import { setActionBattleSystems } from "./context";
@@ -512,6 +513,85 @@ describe("executeActionBattleUse", () => {
       skill: bolt,
     })).toBe(false);
     expect(emit).toHaveBeenCalledOnce();
+  });
+
+  test("does not redirect a physics-only impact to the selected enemy", () => {
+    const target = createEntity("enemy-behind-wall");
+    target.applyDamage.mockReturnValue({ damage: 30 });
+    const emit = vi.fn(() => [{ id: "wall-bolt-1" }]);
+    const attacker = {
+      ...createEntity("wall-caster"),
+      getCurrentMap: () => ({ projectiles: { emit } }),
+    };
+    const bolt = {
+      id: "wall-bolt",
+      _type: "skill",
+      spCost: 0,
+      hitRate: 1,
+      action: {
+        target: "enemy" as const,
+        mode: "projectile" as const,
+        projectile: { speed: 200, range: 200 },
+      },
+    };
+
+    expect(executeActionBattleUse({
+      attacker: attacker as any,
+      target: target as any,
+      usable: bolt,
+      skill: bolt,
+    })).toBe(true);
+    handleActionBattleProjectileImpact({
+      attacker: attacker as any,
+      projectile: { id: "wall-bolt-1" },
+      hit: { entity: { uuid: "stone-wall" } },
+      map: {},
+    });
+
+    expect(target.applyDamage).toHaveBeenCalledTimes(0);
+    handleActionBattleProjectileDestroy("wall-bolt-1");
+  });
+
+  test("runs an explicitly authored impact hook with targetless wall context", () => {
+    const target = createEntity("custom-enemy-behind-wall");
+    const emit = vi.fn(() => [{ id: "custom-wall-bolt-1" }]);
+    const attacker = {
+      ...createEntity("custom-wall-caster"),
+      getCurrentMap: () => ({ projectiles: { emit } }),
+    };
+    const impact = vi.fn((context: any, action: any) => {
+      expect(context.target).toBeUndefined();
+      expect(action.target).toBeNull();
+      action.defaultEffect();
+      action.damage();
+    });
+    const bolt = {
+      id: "custom-wall-bolt",
+      _type: "skill",
+      spCost: 0,
+      hitRate: 1,
+      action: { target: "enemy" as const, mode: "projectile" as const },
+      onUse(_user: any, _target: any, action: any) {
+        action.projectile({ speed: 200, range: 200, onImpact: impact });
+      },
+    };
+
+    executeActionBattleUse({
+      attacker: attacker as any,
+      target: target as any,
+      usable: bolt,
+      skill: bolt,
+    });
+    handleActionBattleProjectileImpact({
+      attacker: attacker as any,
+      projectile: { id: "custom-wall-bolt-1" },
+      hit: { entity: { uuid: "stone-wall" } },
+      map: {},
+    });
+
+    expect(impact).toHaveBeenCalledOnce();
+    expect(target.applyDamage).not.toHaveBeenCalled();
+    handleActionBattleProjectileDestroy("custom-wall-bolt-1");
   });
 
   test("uses the action target policy for projectile collisions", () => {

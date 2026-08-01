@@ -78,6 +78,11 @@ export interface ActionBattleProjectileOptions {
   pattern?: any;
   payload?: Record<string, unknown>;
   params?: Record<string, unknown>;
+  /**
+   * Explicitly opts this projectile into custom handling for every physical
+   * impact. World-geometry impacts have no combat `target`; inspect `hit` and
+   * call `defaultEffect()` only after deliberately selecting a valid target.
+   */
   onImpact?: (
     context: ActionBattleProjectileImpactContext,
     action: ActionBattleUseContext

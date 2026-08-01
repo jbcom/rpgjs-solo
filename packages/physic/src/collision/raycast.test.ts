@@ -223,6 +223,44 @@ describe('raycast', () => {
     expect(hit!.entity).toBe(polyE);
   });
 
+  it('treats a repeated closing vertex as only that vertex', () => {
+    const triangle = new Entity({
+      uuid: 'closed-triangle',
+      position: { x: 20, y: 20 },
+    });
+    assignPolygonCollider(triangle, {
+      vertices: [
+        new Vector2(0, 0),
+        new Vector2(8, 0),
+        new Vector2(0, 8),
+        new Vector2(0, 0),
+      ],
+      isConvex: true,
+    });
+    const collider = createCollider(triangle)!;
+    const engine = new PhysicsEngine({ spatialCellSize: 8 });
+    engine.addEntity(triangle);
+    // This diagonal's broad-phase path shares the triangle's spatial cells,
+    // while the line itself stays below the triangle (y = x - 9 through its
+    // x-range). The repeated vertex used to turn the remote origin into a
+    // false overlap at distance zero after the engine admitted the collider.
+    const outside = new Vector2(0, -9);
+    const miss = new Vector2(1, 1);
+
+    expect(raycastCollider(collider, outside, miss, 50)).toBeNull();
+    expect(engine.raycast(outside, miss, 50)).toBeNull();
+
+    const repeatedVertex = new Vector2(20, 20);
+    const away = new Vector2(-1, 0);
+    expect(raycastCollider(
+      collider,
+      repeatedVertex,
+      away,
+      10,
+    )?.distance).toBe(0);
+    expect(engine.raycast(repeatedVertex, away, 10)?.distance).toBe(0);
+  });
+
   it.each([
     { name: 'top edge', origin: [20, -4], directions: [[1, 0], [-1, 0]] },
     { name: 'bottom edge', origin: [20, 4], directions: [[1, 0], [-1, 0]] },

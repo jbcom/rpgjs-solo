@@ -18,8 +18,16 @@ server projectiles. Reject defeated actors at every combat entry, including
 direct use, queued melee, AI, hotbar dispatch, and the server-owned GUI callback.
 Recursively recheck delayed AI startup, combo, dash, and counterattack work at
 execution time while preserving already-emitted projectiles after caster defeat.
+Advance an authoritative monotonic life generation at each HP defeat and revival
+transition, and capture it across player and AI startup, active frames, combos,
+charges, dashes, and counters so transient defeat cannot revive stale work.
+Replan delayed AI skills against the same target identity and current defeat,
+policy, range, mask, blocker, cooldown, and resource state before hooks or spend.
 Use one blocker-aware collision policy for projectile admission and simulation,
 preserving owner and ally pass-through while world geometry occludes farther
 targets. Resolve projectile collision size as radius, then width, then height,
 and transmit the radius so client prediction uses the matching capsule cast.
-Treat polygon edges and corners as distance-zero overlaps for parallel rays.
+Make physics-only projectile impacts a no-op for default combat effects while
+retaining explicit custom wall-impact hooks. Treat polygon edges and corners as
+distance-zero overlaps for parallel rays without letting a repeated closing
+vertex contain arbitrary points.

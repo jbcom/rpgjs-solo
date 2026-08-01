@@ -426,6 +426,12 @@ const pointOnSegment = (
   const segmentY = end.y - start.y;
   const pointX = point.x - start.x;
   const pointY = point.y - start.y;
+  const lengthSquared = segmentX * segmentX + segmentY * segmentY;
+  // A repeated closing vertex is a point, not a segment spanning the plane.
+  // Keep its boundary semantics exact: only that same vertex is contained.
+  if (lengthSquared === 0) {
+    return point.x === start.x && point.y === start.y;
+  }
   const cross = segmentX * pointY - segmentY * pointX;
   const scale = Math.max(
     1,
@@ -435,7 +441,6 @@ const pointOnSegment = (
   if (Math.abs(cross) > Number.EPSILON * scale * 16) return false;
 
   const dot = pointX * segmentX + pointY * segmentY;
-  const lengthSquared = segmentX * segmentX + segmentY * segmentY;
   const tolerance = Number.EPSILON * Math.max(1, lengthSquared) * 16;
   return dot >= -tolerance && dot <= lengthSquared + tolerance;
 };

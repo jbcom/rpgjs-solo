@@ -76,6 +76,11 @@ import {
   getActionBattleTargets,
   isActionBattleTargetDefeated,
 } from "./core/targets";
+import {
+  captureActionBattleActorGeneration,
+  isActionBattleActorGenerationCurrent,
+  type ActionBattleActorGeneration,
+} from "./core/actor-life";
 import type {
   ActionBattleAttackProfile,
   NormalizedActionBattleAttackProfile,
@@ -490,6 +495,7 @@ const performPlayerAttack = (
   metadata: Record<string, any> = {}
 ): boolean => {
   if (isActionBattleTargetDefeated(player)) return false;
+  const generation = captureActionBattleActorGeneration(player);
   const map = player.getCurrentMap();
   const inputDirection = resolveActionBattleAttackDirection(player, input);
   const softTargeting = options.combat?.player?.softTargeting;
@@ -580,7 +586,7 @@ const performPlayerAttack = (
   if (weapon && !weaponUsesMeleeContact) {
     scheduleActionBattleStartup(attackProfile, () => {
       if (
-        isActionBattleTargetDefeated(player) ||
+        !isActionBattleActorGenerationCurrent(player, generation) ||
         player.getCurrentMap() !== map ||
         (actionLocked &&
           (player as any).__actionBattleAttackLockId !== attackLockId)
@@ -595,11 +601,14 @@ const performPlayerAttack = (
         profile: attackProfile,
         playVisual: false,
       });
-    });
+    }, (callback, delay) => setTimeout(() => {
+      if (!isActionBattleActorGenerationCurrent(player, generation)) return;
+      callback();
+    }, delay));
   }
 
   const processHits = (hits: any[]) => {
-    if (isActionBattleTargetDefeated(player)) return;
+    if (!isActionBattleActorGenerationCurrent(player, generation)) return;
     if (weapon && !weaponUsesMeleeContact) return;
     hits.forEach((hit: any) => {
       if (
@@ -633,13 +642,17 @@ const performPlayerAttack = (
     attackProfile,
     resolveActiveHitboxes,
     (activeHitboxes) => {
-      if (isActionBattleTargetDefeated(player)) return;
+      if (!isActionBattleActorGenerationCurrent(player, generation)) return;
       const candidates = getActionBattleHitboxCandidates(map, activeHitboxes, {
         excludeIds: [player.id],
         kinds: ["players", "events"],
       });
       processHits(candidates);
-    }
+    },
+    (callback, delay) => setTimeout(() => {
+      if (!isActionBattleActorGenerationCurrent(player, generation)) return;
+      callback();
+    }, delay),
   );
   return true;
 };
@@ -695,6 +708,7 @@ interface PlayerCombatRuntimeState {
   pendingComboTimer: ReturnType<typeof setTimeout> | null;
   chargeStartedAt: number | null;
   chargeToken: number;
+  chargeGeneration: ActionBattleActorGeneration | null;
   chargeTimer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -712,6 +726,7 @@ const getPlayerCombatState = (player: RpgPlayer): PlayerCombatRuntimeState => {
       pendingComboTimer: null,
       chargeStartedAt: null,
       chargeToken: 0,
+      chargeGeneration: null,
       chargeTimer: null,
     };
     playerCombatStates.set(player, state);
@@ -737,6 +752,7 @@ const invalidatePlayerCharge = (
   if (!state) return;
   state.chargeToken++;
   state.chargeStartedAt = null;
+  state.chargeGeneration = null;
   if (state.chargeTimer !== null) {
     clearTimeout(state.chargeTimer);
     state.chargeTimer = null;
@@ -820,6 +836,7 @@ const queuePendingPlayerCombo = (
   if (!originMap) return false;
 
   const token = state.pendingComboToken;
+  const generation = captureActionBattleActorGeneration(player);
   state.queuedCombo = true;
   const timer = setTimeout(() => {
     if (
@@ -831,7 +848,10 @@ const queuePendingPlayerCombo = (
     state.pendingComboToken++;
     state.pendingComboTimer = null;
     state.queuedCombo = false;
-    if (!isBufferedPlayerComboContextCurrent(player, originMap)) return;
+    if (
+      !isActionBattleActorGenerationCurrent(player, generation)
+      || !isBufferedPlayerComboContextCurrent(player, originMap)
+    ) return;
 
     const next = resolvePlayerComboProfile(player, options);
     if (
@@ -1479,6 +1499,8 @@ export const createActionBattleServer = (
           if (lockedUntil > Date.now()) return;
           state.chargeStartedAt = Date.now();
           const chargeToken = ++state.chargeToken;
+          const generation = captureActionBattleActorGeneration(player);
+          state.chargeGeneration = generation;
           const chargeTimer = setTimeout(() => {
             if (
               state.chargeToken !== chargeToken
@@ -1488,6 +1510,10 @@ export const createActionBattleServer = (
             }
             state.chargeTimer = null;
             state.chargeStartedAt = null;
+            state.chargeGeneration = null;
+            if (!isActionBattleActorGenerationCurrent(player, generation)) {
+              state.chargeToken++;
+            }
           }, (charged.maxChargeMs ?? 900) + 1000);
           state.chargeTimer = chargeTimer;
           emitActionBattleClientVisual({
@@ -1499,8 +1525,13 @@ export const createActionBattleServer = (
 
         if (input.action === ACTION_BATTLE_CHARGE_RELEASE && charged?.enabled) {
           if (state.chargeStartedAt === null) return;
+          const generation = state.chargeGeneration;
           const elapsed = Math.max(0, Date.now() - state.chargeStartedAt);
           invalidatePlayerCharge(state);
+          if (
+            !generation
+            || !isActionBattleActorGenerationCurrent(player, generation)
+          ) return;
           const charge = resolveActionBattleCharge(elapsed, charged);
           const base = resolvePlayerAttackProfile(player, options);
           const profile = normalizeActionBattleAttackProfile(

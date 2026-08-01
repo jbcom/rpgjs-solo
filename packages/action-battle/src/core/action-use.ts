@@ -221,7 +221,7 @@ const buildActionContext = (input: {
     weapon: input.weapon,
     action: input.action,
     pattern: input.pattern,
-    defaultEffect(target = input.target) {
+    defaultEffect(target = action.target) {
       return asArray(target).map((entry) =>
         applyDamageEffect(
           input.attacker,
@@ -239,7 +239,7 @@ const buildActionContext = (input: {
         )
       );
     },
-    damage(target = input.target) {
+    damage(target = firstTarget(action.target)) {
       const entry = firstTarget(target);
       if (!entry) return undefined;
       return applyDamageEffect(
@@ -558,11 +558,11 @@ export const handleActionBattleProjectileImpact = (
   const handler = projectileHandlers.get(context.projectile.id);
   if (!handler) return;
   const target = context.target;
-  handler.action.target = target ?? handler.action.target;
+  handler.action.target = target ?? null;
   if (handler.onImpact) {
     handler.onImpact(context, handler.action);
-  } else {
-    handler.action.defaultEffect(target ?? undefined);
+  } else if (target && !isActionBattleTargetDefeated(target)) {
+    handler.action.defaultEffect(target);
   }
 };
 

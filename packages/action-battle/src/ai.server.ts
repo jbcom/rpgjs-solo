@@ -59,6 +59,12 @@ import {
   cancelActionBattleAiIntentExecutions,
   executeActionBattleAiIntentWithReceipt,
 } from "./core/ai-intent-execution";
+import {
+  captureActionBattleActorGeneration,
+  initializeActionBattleActorLife,
+  isActionBattleActorGenerationCurrent,
+  type ActionBattleActorGeneration,
+} from "./core/actor-life";
 import type {
   ActionBattleAiBehavior,
   ActionBattleAiDecision,
@@ -808,6 +814,7 @@ export class BattleAi {
     options = mergeBattleAiPresetOptions(options);
     event.battleAi = this;
     this.event = event;
+    initializeActionBattleActorLife(event);
 
     // Set enemy type and apply behavior modifiers
     this.enemyType = options.enemyType || EnemyType.Aggressive;
@@ -1558,6 +1565,7 @@ export class BattleAi {
     evaluation: ActionBattleAiSkillEvaluation
   ): boolean {
     if (
+      evaluation.rejection ||
       this.isTargetDefeated(this.event) ||
       !this.target ||
       this.isTargetDefeated(this.target)
@@ -1579,6 +1587,12 @@ export class BattleAi {
     const visualTarget = Array.isArray(evaluation.target)
       ? evaluation.target[0]
       : evaluation.target;
+    const targetGenerations = (
+      Array.isArray(evaluation.target) ? evaluation.target : [evaluation.target]
+    ).map((target) => ({
+      target,
+      generation: captureActionBattleActorGeneration(target),
+    }));
 
     if (evaluation.targetPolicy !== "self") {
       this.faceTarget({ force: true });
@@ -1594,7 +1608,6 @@ export class BattleAi {
       evaluation.mode === "melee" ? undefined : "castSkill"
     );
     this.scheduleAttackStartup(profile, () => {
-      if (this.isTargetDefeated(this.event)) return;
       if (
         hasNativeActionBattleUseRestriction(
           this.event,
@@ -1608,13 +1621,21 @@ export class BattleAi {
         });
         return;
       }
+      const currentEvaluation = this.revalidatePlannedSkill(
+        evaluation,
+        targetGenerations,
+      );
+      if (!currentEvaluation) return;
+      const currentVisualTarget = Array.isArray(currentEvaluation.target)
+        ? currentEvaluation.target[0]
+        : currentEvaluation.target;
 
       try {
         const handled = executeActionBattleUse({
           attacker: this.event,
-          target: evaluation.target,
-          usable: evaluation.skill,
-          skill: evaluation.skill,
+          target: currentEvaluation.target,
+          usable: currentEvaluation.skill,
+          skill: currentEvaluation.skill,
           pattern: AttackPattern.Melee,
           profile,
           playVisual: false,
@@ -1641,7 +1662,7 @@ export class BattleAi {
       }
 
       if (
-        visualTarget !== this.event &&
+        currentVisualTarget !== this.event &&
         this.target &&
         this.getDistance(this.event, this.target) <= this.attackRange
       ) {
@@ -1649,6 +1670,62 @@ export class BattleAi {
       }
     });
     return true;
+  }
+
+  private revalidatePlannedSkill(
+    planned: ActionBattleAiSkillEvaluation,
+    targetGenerations: Array<{
+      target: ActionBattleEntity;
+      generation: ActionBattleActorGeneration;
+    }>,
+  ): ActionBattleAiSkillEvaluation | null {
+    if (targetGenerations.some(({ target, generation }) =>
+      !isActionBattleActorGenerationCurrent(target, generation)
+    )) return null;
+    if (
+      this.isTargetDefeated(this.event)
+      || !this.target
+      || this.isTargetDefeated(this.target)
+    ) return null;
+
+    const plannedPrimary = Array.isArray(planned.target)
+      ? planned.target[0]
+      : planned.target;
+    if (
+      planned.targetPolicy !== "self"
+      && plannedPrimary !== this.target
+    ) return null;
+
+    const skill = this.resolveUsable(planned.skill);
+    const current = evaluateActionBattleAiSkill({
+      attacker: this.event,
+      target: this.target,
+      skill,
+      now: Date.now(),
+      readyAt:
+        this.skillCooldowns.get(this.getSkillCooldownKey(skill)) ?? 0,
+      attackRange: this.attackRange,
+      hpPercent: this.getHpPercent(),
+      targetOptions: getActionBattleOptions().combat?.targets,
+    });
+    if (
+      current.rejection
+      || current.id !== planned.id
+      || current.mode !== planned.mode
+      || current.targetPolicy !== planned.targetPolicy
+    ) return null;
+
+    const targets = (
+      target: ActionBattleEntity | ActionBattleEntity[]
+    ): ActionBattleEntity[] => Array.isArray(target) ? target : [target];
+    const plannedTargets = targets(planned.target);
+    const currentTargets = new Set(targets(current.target));
+    if (
+      plannedTargets.length !== currentTargets.size
+      || plannedTargets.some((target) => !currentTargets.has(target))
+    ) return null;
+
+    return current;
   }
 
   private debugDecision(
@@ -1970,6 +2047,7 @@ export class BattleAi {
       this.isTargetDefeated(this.target)
     ) return;
 
+    const generation = captureActionBattleActorGeneration(this.event);
     const hitTracker = new ActionBattleHitTracker(profile.hitPolicy);
     runActionBattleActiveHitbox(
       { ...profile, startupMs: 0 },
@@ -1977,7 +2055,11 @@ export class BattleAi {
       (hitboxes) => {
         this.processHitboxHits(hitboxes, hitTracker, profile, pattern);
       },
-      (scheduled, delay) => this.schedule(scheduled, delay)
+      (scheduled, delay) => this.scheduleActorAction(
+        scheduled,
+        delay,
+        generation,
+      )
     );
   }
 
@@ -2177,6 +2259,7 @@ export class BattleAi {
   private performComboAttack() {
     if (this.isTargetDefeated(this.event) || !this.target) return;
 
+    const generation = captureActionBattleActorGeneration(this.event);
     this.comboCount++;
     const profile = this.getAttackProfile(AttackPattern.Combo);
     this.faceTarget({ force: true });
@@ -2185,10 +2268,10 @@ export class BattleAi {
     this.playAttackVisual(profile, AttackPattern.Combo);
     this.scheduleAttackStartup(profile, () => {
       this.executeMeleeAttack(profile, AttackPattern.Combo);
-    });
+    }, generation);
 
     if (this.comboCount < this.comboMax) {
-      this.schedule(() => {
+      this.scheduleActorAction(() => {
         if (
           !this.isTargetDefeated(this.event)
           && this.target
@@ -2198,7 +2281,9 @@ export class BattleAi {
         } else {
           this.comboCount = 0;
         }
-      }, 300);
+      }, 300, generation, () => {
+        this.comboCount = 0;
+      });
     } else {
       this.comboCount = 0;
     }
@@ -2209,6 +2294,7 @@ export class BattleAi {
    */
   private performChargedAttack() {
     if (this.isTargetDefeated(this.event) || !this.target) return;
+    const generation = captureActionBattleActorGeneration(this.event);
     const profile = this.getAttackProfile(AttackPattern.Charged);
 
     this.chargingAttack = true;
@@ -2223,10 +2309,12 @@ export class BattleAi {
         return;
       }
       this.executeMeleeAttack(profile, AttackPattern.Charged);
-    });
-    this.schedule(() => {
+    }, generation);
+    this.scheduleActorAction(() => {
       this.chargingAttack = false;
-    }, profile.totalDurationMs);
+    }, profile.totalDurationMs, generation, () => {
+      this.chargingAttack = false;
+    });
   }
 
   /**
@@ -2234,6 +2322,7 @@ export class BattleAi {
    */
   private performZoneAttack() {
     if (this.isTargetDefeated(this.event)) return;
+    const generation = captureActionBattleActorGeneration(this.event);
     const profile = this.getAttackProfile(AttackPattern.Zone);
     this.lockForAttack(profile, AttackPattern.Zone);
     this.telegraphAttack(profile, AttackPattern.Zone);
@@ -2269,9 +2358,13 @@ export class BattleAi {
             AttackPattern.Zone
           );
         },
-        (scheduled, delay) => this.schedule(scheduled, delay)
+        (scheduled, delay) => this.scheduleActorAction(
+          scheduled,
+          delay,
+          generation,
+        )
       );
-    });
+    }, generation);
   }
 
   /**
@@ -2283,6 +2376,7 @@ export class BattleAi {
       || !this.target
       || this.isTargetDefeated(this.target)
     ) return;
+    const generation = captureActionBattleActorGeneration(this.event);
     const profile = this.getAttackProfile(AttackPattern.DashAttack);
 
     const dx = this.target.x() - this.event.x();
@@ -2306,15 +2400,15 @@ export class BattleAi {
         || this.state !== AiState.Combat
       ) return;
       safeActionBattleDash(this.event, { x: dirX, y: dirY }, 10, 200);
-      this.schedule(() => {
+      this.scheduleActorAction(() => {
         if (
           this.isTargetDefeated(this.event)
           || !this.target
           || this.state !== AiState.Combat
         ) return;
         this.executeMeleeAttack(profile, AttackPattern.DashAttack);
-      }, 200);
-    });
+      }, 200, generation);
+    }, generation);
   }
 
   private getAttackProfile(
@@ -2395,10 +2489,11 @@ export class BattleAi {
 
   private scheduleAttackStartup(
     profile: NormalizedActionBattleAttackProfile,
-    callback: () => void
+    callback: () => void,
+    generation = captureActionBattleActorGeneration(this.event),
   ) {
     return scheduleActionBattleStartup(profile, () => {
-      if (this.isTargetDefeated(this.event)) return;
+      if (!isActionBattleActorGenerationCurrent(this.event, generation)) return;
       callback();
     }, (scheduled, delay) =>
       this.schedule(scheduled, delay)
@@ -2502,7 +2597,8 @@ export class BattleAi {
     // Counter-attack for defensive types
     if (this.enemyType === EnemyType.Defensive && Math.random() < 0.5) {
       this.debugLog('dodge', 'Counter-attack after dodge');
-      this.schedule(() => {
+      const generation = captureActionBattleActorGeneration(this.event);
+      this.scheduleActorAction(() => {
         if (
           !this.isTargetDefeated(this.event)
           && this.target
@@ -2510,7 +2606,7 @@ export class BattleAi {
         ) {
           this.selectAndPerformAttack();
         }
-      }, 400);
+      }, 400, generation);
     }
     return true;
   }
@@ -3601,6 +3697,22 @@ export class BattleAi {
     }, delay);
     this.timers.push(timer);
     return timer;
+  }
+
+  private scheduleActorAction(
+    callback: () => void,
+    delay: number,
+    generation: ActionBattleActorGeneration =
+      captureActionBattleActorGeneration(this.event),
+    onInvalidated?: () => void,
+  ) {
+    return this.schedule(() => {
+      if (!isActionBattleActorGenerationCurrent(this.event, generation)) {
+        onInvalidated?.();
+        return;
+      }
+      callback();
+    }, delay);
   }
 
   // Public getters

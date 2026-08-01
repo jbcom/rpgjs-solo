@@ -320,9 +320,27 @@ ineligible combatants are transparent, eligible targets collide, and
 physics-only world geometry blocks. A target behind a nearer wall is therefore
 not admitted by player soft targeting or enemy planning.
 
-AI attack startup, combo continuation, dash impact, and counterattack callbacks
-recheck the actor's current HP when their timer fires. Directly setting HP to
-zero cancels those not-yet-emitted side effects; revival permits future attacks.
+A default projectile effect runs only when the authoritative impact names a
+currently eligible combat target. Hitting physics-only world geometry destroys
+the projectile without redirecting damage to the target that was selected at
+emission time. Supplying `onImpact` is the explicit custom-impact contract: the
+hook also runs for world geometry, where both `context.target` and
+`action.target` are empty. Inspect `context.hit` and pass an explicit eligible
+target to `action.defaultEffect(target)` when custom wall behavior needs one.
+
+RPGJS HP changes advance a monotonic `lifeGeneration` whenever an actor crosses
+the alive/defeated boundary. Player and AI startup, active hitbox frames, combo
+continuations, charge timers, dash impacts, and counterattack callbacks capture
+that generation. Even an HP `10 -> 0 -> 10` transition entirely between timer
+creation and execution invalidates the old work; newly scheduled work after
+revival captures the new generation and remains valid. Assign HP through the
+RPGJS `hp` property so the authoritative lifecycle transition is observable.
+
+AI planned skills are proposals, not reservations. At the end of startup the AI
+requires the same target identity and reruns target policy, current defeat,
+range, area-mask, projectile blocker, cooldown, and SP eligibility before any
+resource spend, cooldown mutation, or `onUse` hook. An invalidated plan simply
+does nothing and the next AI decision can choose again.
 An already-emitted projectile is different: it is committed world state and
 continues after its caster is defeated until the projectile system resolves it.
 

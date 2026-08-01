@@ -1074,6 +1074,20 @@ describe("action battle buffered combo lifecycle", () => {
     expect(harness.attackCount()).toBe(0);
   });
 
+  test("does not revive buffered combo work after a transient raw HP defeat", () => {
+    const harness = createBufferedComboHarness();
+    harness.queueCombo();
+    harness.player.hp = 0;
+    harness.player.hp = 10;
+
+    vi.advanceTimersByTime(200);
+    expect(harness.attackCount()).toBe(0);
+
+    harness.queueCombo();
+    vi.advanceTimersByTime(200);
+    expect(harness.attackPatterns()).toEqual(["combo-1"]);
+  });
+
   test("invalidates a buffered combo when the player disconnects", () => {
     const harness = createBufferedComboHarness();
     harness.queueCombo();
@@ -1197,6 +1211,26 @@ describe("action battle buffered combo lifecycle", () => {
     expect(harness.visualCount("chargeRelease")).toBe(0);
     input("action-battle:charge-start");
     expect(harness.visualCount("chargeStart")).toBe(2);
+  });
+
+  test("a defeat and revival invalidates a charge before its release", () => {
+    const harness = createBufferedComboHarness();
+    const input = (action: string) =>
+      (harness.server.player?.onInput as any)(harness.player, { action });
+
+    input("action-battle:charge-start");
+    harness.player.hp = 0;
+    harness.player.hp = 10;
+    input("action-battle:charge-release");
+
+    expect(harness.visualCount("chargeRelease")).toBe(0);
+    expect(harness.attackCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+
+    input("action-battle:charge-start");
+    input("action-battle:charge-release");
+
+    expect(harness.visualCount("chargeRelease")).toBe(1);
   });
 
   test("disconnect and reconnect leave no stale runtime on the player", () => {
