@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import {
+	createHash,
+	createPrivateKey,
+	createPublicKey,
+	sign as signBytes,
+	verify as verifyBytes,
+} from "node:crypto";
 import {
 	chmodSync,
 	existsSync,
@@ -47,10 +53,19 @@ const canonicalMetadata = {
 	homepageRoot: "https://github.com/jbcom/rpgjs-solo/tree/main/",
 	bugsUrl: "https://github.com/jbcom/rpgjs-solo/issues",
 };
+const releaseNodeMajor = 24;
+const releasePnpmVersion = "11.18.0";
+const standardChangesetDocuments = new Set(["README.md"]);
+const applyJournalName = ".rpgjs-solo-release-apply.json";
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const writeJson = (path, value) =>
 	writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+const atomicWriteFile = (path, value) => {
+	const temporary = `${path}.tmp-${process.pid}`;
+	writeFileSync(temporary, value);
+	renameSync(temporary, path);
+};
 const digest = (algorithm, value) =>
 	createHash(algorithm).update(value).digest("hex");
 export const sha256File = (path) => digest("sha256", readFileSync(path));
@@ -74,10 +89,53 @@ const run = (command, args, options = {}) => {
 	return options.trim === false ? output : output.trim();
 };
 
+export const assertReleaseToolchain = (
+	command = run,
+	nodeVersion = process.versions.node,
+) => {
+	const major = Number.parseInt(String(nodeVersion).split(".")[0] ?? "", 10);
+	assert(
+		major === releaseNodeMajor,
+		`Solo release requires Node ${releaseNodeMajor}; received ${nodeVersion}`,
+	);
+	const pnpmVersion = command("pnpm", ["--version"]);
+	assert(
+		pnpmVersion === releasePnpmVersion,
+		`Solo release requires pnpm ${releasePnpmVersion}; received ${pnpmVersion}`,
+	);
+	return { nodeVersion, pnpmVersion };
+};
+
 const parseVersion = (version) => {
 	const match = /^(\d+\.\d+\.\d+-beta\.\d+)\.solo\.(\d+)$/.exec(version);
 	assert(match, `Invalid Solo version ${version}`);
 	return { upstream: match[1], counter: Number(match[2]) };
+};
+
+const soloVersionTuple = (version) => {
+	const match = /^(\d+)\.(\d+)\.(\d+)-beta\.(\d+)\.solo\.(\d+)$/.exec(
+		String(version),
+	);
+	assert(match, `Invalid live Solo version ${version}`);
+	return match.slice(1).map(Number);
+};
+
+const compareSoloVersions = (left, right) => {
+	const leftParts = soloVersionTuple(left);
+	const rightParts = soloVersionTuple(right);
+	for (let index = 0; index < leftParts.length; index += 1) {
+		if (leftParts[index] !== rightParts[index])
+			return leftParts[index] - rightParts[index];
+	}
+	return 0;
+};
+
+export const assertMonotonicLatestPromotion = (currentLatest, target) => {
+	if (currentLatest === null || currentLatest === undefined) return;
+	assert(
+		currentLatest === target || compareSoloVersions(target, currentLatest) > 0,
+		`Refusing to move latest backward from ${currentLatest} to ${target}`,
+	);
 };
 
 export const parseChangeset = (source, id = "<changeset>") => {
@@ -95,7 +153,7 @@ export const parseChangeset = (source, id = "<changeset>") => {
 
 export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 	const plan = readJson(planPath);
-	assert(plan.schemaVersion === 1, "Unsupported Solo release plan schema");
+	assert(plan.schemaVersion === 2, "Unsupported Solo release plan schema");
 	const previous = parseVersion(plan.previousVersion);
 	const target = parseVersion(plan.version);
 	assert(
@@ -200,6 +258,78 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 			plan.requiredConsumer.version === "0.2.0",
 		"The exact fleet compatibility consumer is required",
 	);
+	assert(
+		["provisional", "final"].includes(plan.reviewEvidence?.status),
+		"Review evidence status must be provisional or final",
+	);
+	const engineReview = plan.reviewEvidence?.enginePullRequest;
+	const releaseReview = plan.reviewEvidence?.releasePullRequest;
+	const independentReceipt = plan.reviewEvidence?.independentReceipt;
+	assert(
+		engineReview?.repository === "jbcom/rpgjs-solo" &&
+			engineReview.number === 20 &&
+			Array.isArray(engineReview.requiredChecks) &&
+			Number.isInteger(engineReview.minimumApprovals) &&
+			engineReview.minimumApprovals >= 1,
+		"Engine pull-request review evidence is incomplete",
+	);
+	assert(
+		releaseReview?.repository === "jbcom/rpgjs-solo" &&
+			(releaseReview.number === null || Number.isInteger(releaseReview.number)) &&
+			Array.isArray(releaseReview.requiredChecks) &&
+			Number.isInteger(releaseReview.minimumApprovals) &&
+			releaseReview.minimumApprovals >= 1 &&
+			releaseReview.mergeCommitBinding === "canonical-head",
+		"Release pull-request review evidence is incomplete",
+	);
+	assert(
+		["provisional", "final"].includes(independentReceipt?.status) &&
+			independentReceipt?.algorithm === "ed25519",
+		"Independent review receipt configuration is incomplete",
+	);
+	if (plan.reviewEvidence.status === "final") {
+		assert(
+			plan.sourceBinding.status === "final" &&
+				engineReview.mergeCommit === plan.requiredSourceCommit &&
+				Number.isInteger(releaseReview.number) &&
+				independentReceipt.status === "final" &&
+				typeof independentReceipt.producerPrincipalId === "string" &&
+				typeof independentReceipt.keyId === "string" &&
+				/^[0-9a-f]{64}$/.test(independentReceipt.keyId) &&
+				typeof independentReceipt.publicKeyPem === "string",
+			"Final review evidence must bind the engine merge and release pull request",
+		);
+		const receiptKey = createPublicKey(independentReceipt.publicKeyPem);
+		assert(
+			digest(
+				"sha256",
+				receiptKey.export({ type: "spki", format: "der" }),
+			) === independentReceipt.keyId,
+			"Independent review receipt key id does not match its public key",
+		);
+	}
+	assert(
+		["provisional", "final"].includes(plan.provenanceAttestation?.status) &&
+			plan.provenanceAttestation?.algorithm === "ed25519",
+		"Provenance attestation configuration is incomplete",
+	);
+	if (plan.provenanceAttestation.status === "final") {
+		assert(
+			typeof plan.provenanceAttestation.keyId === "string" &&
+				/^[0-9a-f]{64}$/.test(plan.provenanceAttestation.keyId) &&
+				typeof plan.provenanceAttestation.publicKeyPem === "string",
+			"Final provenance attestation requires an Ed25519 public key",
+		);
+		const publicKey = createPublicKey(plan.provenanceAttestation.publicKeyPem);
+		const keyId = digest(
+			"sha256",
+			publicKey.export({ type: "spki", format: "der" }),
+		);
+		assert(
+			keyId === plan.provenanceAttestation.keyId,
+			"Provenance attestation key id does not match its public key",
+		);
+	}
 	return { ...plan, planPath };
 };
 
@@ -223,7 +353,10 @@ const pendingChangesetIds = (root) => {
 		: new Set();
 	return readdirSync(join(root, ".changeset"))
 		.filter(
-			(name) => name.endsWith(".md") && !preConsumed.has(name.slice(0, -3)),
+			(name) =>
+				name.endsWith(".md") &&
+				!standardChangesetDocuments.has(name) &&
+				!preConsumed.has(name.slice(0, -3)),
 		)
 		.map((name) => name.slice(0, -3));
 };
@@ -394,74 +527,14 @@ const changelogEntry = (record, plan, changesets) => {
 	return `# ${record.name}\n\n## ${plan.version}\n\n${notes}\n`;
 };
 
-const collectManifestTransitions = (root, plan) => {
-	const cohort = new Set(plan.packages.map(({ name }) => name));
-	const transitions = [];
-	for (const path of walkPackageJson(root)) {
-		const manifest = readJson(path);
-		let changed = false;
-		if (cohort.has(manifest.name)) {
-			assert(
-				manifest.version === plan.previousVersion,
-				`${manifest.name} has an unsafe source version`,
-			);
-			manifest.version = plan.version;
-			changed = true;
-		}
-		for (const field of dependencyFields) {
-			for (const [name, version] of Object.entries(manifest[field] ?? {})) {
-				if (!cohort.has(name)) continue;
-				assert(
-					version === `workspace:${plan.previousVersion}`,
-					`${relative(root, path)} has an unsafe Solo dependency transition`,
-				);
-				manifest[field][name] = `workspace:${plan.version}`;
-				changed = true;
-			}
-		}
-		if (changed) transitions.push({ path, manifest });
-	}
-	return transitions;
-};
-
-const preflightApplyOutputs = (root, plan) => {
-	for (const record of plan.packages) {
-		const path = join(root, record.directory, "CHANGELOG.md");
-		assert(
-			!existsSync(path),
-			`${record.name} already has a changelog; planner refuses to guess insertion semantics`,
-		);
-		assert(
-			existsSync(dirname(path)),
-			`${record.name} changelog parent directory is missing`,
-		);
-	}
-};
-
-export const applySoloReleasePlan = (root, plan) => {
-	const state = validateSoloReleaseState(root, plan);
-	if (state.phase === "applied") return { changed: false, phase: "applied" };
-	const changesets = plan.consumedChangesets.map((entry) => [
-		entry.id,
-		checkChangeset(root, entry),
-	]);
-	preflightApplyOutputs(root, plan);
-	const transitions = collectManifestTransitions(root, plan);
-	for (const { path, manifest } of transitions) writeJson(path, manifest);
-	for (const record of plan.packages) {
-		const path = join(root, record.directory, "CHANGELOG.md");
-		writeFileSync(path, changelogEntry(record, plan, changesets));
-	}
-	for (const entry of plan.consumedChangesets)
-		rmSync(join(root, ".changeset", `${entry.id}.md`));
-	const result = validateSoloReleaseState(root, plan);
-	return { changed: true, phase: result.phase };
-};
-
 const assertReleaseCommitAncestry = (root, plan, head, command = run) => {
 	assert(
 		plan.sourceBinding.status === "final",
 		"Replace both provisional source bindings with the exact PR merge commit before release execution",
+	);
+	assert(
+		plan.reviewEvidence.status === "final",
+		"Replace provisional review evidence with the exact engine and release pull-request bindings",
 	);
 	command(
 		"git",
@@ -496,22 +569,195 @@ const assertReleaseCommitAncestry = (root, plan, head, command = run) => {
 	});
 };
 
-const plannedApplyPaths = (root, plan) => {
-	const cohort = new Set(plan.packages.map(({ name }) => name));
-	const paths = new Set([
-		"pnpm-lock.yaml",
-		...plan.consumedChangesets.map(({ id }) => `.changeset/${id}.md`),
-		...plan.packages.map(({ directory }) => `${directory}/CHANGELOG.md`),
-	]);
-	for (const path of walkPackageJson(root)) {
-		const manifest = readJson(path);
-		const names = dependencyFields.flatMap((field) =>
-			Object.keys(manifest[field] ?? {}),
+const successfulCheckNames = (checks) =>
+	new Set(
+		(checks ?? [])
+			.filter(
+				(check) =>
+					check?.conclusion === "SUCCESS" || check?.state === "SUCCESS",
+			)
+			.map((check) => check.name ?? check.context)
+			.filter((name) => typeof name === "string"),
+	);
+
+export const assertPullRequestReviewEvidence = ({
+	record,
+	expectedMergeCommit,
+	command = run,
+}) => {
+	const pullRequest = JSON.parse(
+		command(
+			"gh",
+			[
+				"pr",
+				"view",
+				String(record.number),
+				"-R",
+				record.repository,
+				"--json",
+				"state,isDraft,baseRefName,baseRefOid,headRefOid,mergeCommit,reviewDecision,reviews,statusCheckRollup",
+			],
+			{ timeout: 600_000 },
+		),
+	);
+	assert(
+		pullRequest.state === "MERGED" && pullRequest.isDraft === false,
+		`Pull request #${record.number} is not a merged ready review`,
+	);
+	assert(
+		pullRequest.baseRefName === "main" &&
+			pullRequest.mergeCommit?.oid === expectedMergeCommit,
+		`Pull request #${record.number} does not bind the expected main merge`,
+	);
+	const approvalCount = (pullRequest.reviews ?? []).filter(
+		({ state }) => state === "APPROVED",
+	).length;
+	const githubApproved =
+		pullRequest.reviewDecision === "APPROVED" &&
+		approvalCount >= record.minimumApprovals;
+	const passed = successfulCheckNames(pullRequest.statusCheckRollup);
+	const missingChecks = record.requiredChecks.filter((name) => !passed.has(name));
+	assert(
+		missingChecks.length === 0,
+		`Pull request #${record.number} is missing successful checks: ${missingChecks.join(", ")}`,
+	);
+	const [owner, repository] = record.repository.split("/");
+	const threadResult = JSON.parse(
+		command(
+			"gh",
+			[
+				"api",
+				"graphql",
+				"-F",
+				`owner=${owner}`,
+				"-F",
+				`repository=${repository}`,
+				"-F",
+				`number=${record.number}`,
+				"-f",
+				"query=query($owner:String!,$repository:String!,$number:Int!){repository(owner:$owner,name:$repository){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}",
+			],
+			{ timeout: 600_000 },
+		),
+	);
+	const threads = threadResult.data?.repository?.pullRequest?.reviewThreads;
+	assert(threads, `Pull request #${record.number} review threads are unavailable`);
+	assert(
+		threads.pageInfo?.hasNextPage === false,
+		`Pull request #${record.number} has more review threads than the verifier can attest`,
+	);
+	assert(
+		threads.nodes.every(({ isResolved }) => isResolved === true),
+		`Pull request #${record.number} has unresolved review threads`,
+	);
+	return {
+		number: record.number,
+		baseCommit: pullRequest.baseRefOid,
+		headCommit: pullRequest.headRefOid,
+		mergeCommit: expectedMergeCommit,
+		checks: [...passed].sort(),
+		approvals: approvalCount,
+		githubApproved,
+		resolvedThreads: threads.nodes.length,
+	};
+};
+
+export const verifyIndependentReviewReceipt = (
+	plan,
+	head,
+	receiptPath = process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH,
+) => {
+	const config = plan.reviewEvidence.independentReceipt;
+	assert(
+		config.status === "final",
+		"A producer-disjoint signed review receipt is required",
+	);
+	assert(
+		receiptPath && isAbsolute(receiptPath) && existsSync(receiptPath),
+		"RPGJS_SOLO_REVIEW_RECEIPT_PATH must name the signed review statement",
+	);
+	const signaturePath = `${receiptPath}.sig`;
+	assert(existsSync(signaturePath), "Independent review receipt signature is missing");
+	const receiptBytes = readFileSync(receiptPath);
+	const receipt = JSON.parse(receiptBytes);
+	assert(
+		receipt.schemaVersion === 1 &&
+			receipt.algorithm === "ed25519" &&
+			receipt.keyId === config.keyId &&
+			receipt.verdict === "ACCEPT" &&
+			receipt.releaseId === plan.releaseId &&
+			receipt.version === plan.version &&
+			receipt.enginePullRequest ===
+				plan.reviewEvidence.enginePullRequest.number &&
+			receipt.engineMergeCommit === plan.requiredSourceCommit &&
+			receipt.releasePullRequest ===
+				plan.reviewEvidence.releasePullRequest.number &&
+			receipt.releaseMergeCommit === head &&
+			receipt.planSha512 === sha512File(plan.planPath) &&
+			receipt.producerPrincipalId === config.producerPrincipalId &&
+			typeof receipt.reviewerPrincipalId === "string" &&
+			receipt.reviewerPrincipalId.length > 0 &&
+			receipt.reviewerPrincipalId !== receipt.producerPrincipalId,
+		"Independent review receipt does not bind the exact producer-disjoint release",
+	);
+	const signature = Buffer.from(
+		readFileSync(signaturePath, "utf8").trim(),
+		"base64",
+	);
+	assert(
+		verifyBytes(
+			null,
+			receiptBytes,
+			createPublicKey(config.publicKeyPem),
+			signature,
+		),
+		"Independent review receipt signature is invalid",
+	);
+	return {
+		sha512: sha512File(receiptPath),
+		signatureSha512: sha512File(signaturePath),
+		reviewerPrincipalId: receipt.reviewerPrincipalId,
+	};
+};
+
+export const assertReviewedCanonicalMain = (
+	plan,
+	head,
+	command = run,
+	root = rootDirectory,
+) => {
+	assert(
+		plan.reviewEvidence.status === "final",
+		"Canonical publication requires final reviewed-merge evidence",
+	);
+	const engine = assertPullRequestReviewEvidence({
+		record: plan.reviewEvidence.enginePullRequest,
+		expectedMergeCommit: plan.requiredSourceCommit,
+		command,
+	});
+	const release = assertPullRequestReviewEvidence({
+		record: plan.reviewEvidence.releasePullRequest,
+		expectedMergeCommit: head,
+		command,
+	});
+	for (const evidence of [engine, release]) {
+		const parents = command(
+			"git",
+			["show", "-s", "--format=%P", evidence.mergeCommit],
+			{ cwd: root },
+		).split(/\s+/);
+		assert(
+			parents.length === 2 &&
+				parents[0] === evidence.baseCommit &&
+				parents[1] === evidence.headCommit,
+			`Pull request #${evidence.number} merge parents do not bind its exact base and head`,
 		);
-		if (cohort.has(manifest.name) || names.some((name) => cohort.has(name)))
-			paths.add(relative(root, path));
 	}
-	return paths;
+	const independentReceipt =
+		engine.githubApproved && release.githubApproved
+			? null
+			: verifyIndependentReviewReceipt(plan, head);
+	return { engine, release, independentReceipt };
 };
 
 const changedWorktreePaths = (root, command = run) => {
@@ -553,102 +799,245 @@ const expectedAppliedManifest = (source, path, plan) => {
 	return `${JSON.stringify(manifest, null, 2)}\n`;
 };
 
-const assertAppliedRetryFiles = (root, plan, paths, command = run) => {
+const readHeadFile = (root, path, command = run) =>
+	command("git", ["show", `HEAD:${path}`], {
+		cwd: root,
+		trim: false,
+	});
+
+const createApplyContentTransitions = (root, plan, command = run) => {
+	const cohort = new Set(plan.packages.map(({ name }) => name));
+	const descriptors = [];
+	for (const absolutePath of walkPackageJson(root)) {
+		const path = relative(root, absolutePath);
+		const source = readHeadFile(root, path, command);
+		const manifest = JSON.parse(source);
+		const dependencyNames = dependencyFields.flatMap((field) =>
+			Object.keys(manifest[field] ?? {}),
+		);
+		if (
+			!cohort.has(manifest.name) &&
+			!dependencyNames.some((name) => cohort.has(name))
+		)
+			continue;
+		descriptors.push({
+			path,
+			kind: "manifest",
+			source,
+			target: expectedAppliedManifest(source, path, plan),
+		});
+	}
 	const changesets = plan.consumedChangesets.map((entry) => {
 		const path = `.changeset/${entry.id}.md`;
-		const source = command("git", ["show", `HEAD:${path}`], {
-			cwd: root,
-			trim: false,
-		});
+		const source = readHeadFile(root, path, command);
 		assert(
 			digest("sha256", source) === entry.sha256,
 			`${entry.id} HEAD bytes differ from the release plan`,
 		);
 		return [entry.id, parseChangeset(source, entry.id)];
 	});
-	for (const path of paths) {
-		if (path === "pnpm-lock.yaml") continue;
-		const consumed = plan.consumedChangesets.find(
-			({ id }) => path === `.changeset/${id}.md`,
-		);
-		if (consumed) {
-			assert(
-				!existsSync(join(root, path)),
-				`${consumed.id} must remain consumed during apply retry`,
-			);
-			continue;
+	for (const record of plan.packages) {
+		const path = `${record.directory}/CHANGELOG.md`;
+		let headEntry = "";
+		try {
+			headEntry = command("git", ["ls-tree", "--name-only", "HEAD", "--", path], {
+				cwd: root,
+			});
+		} catch {
+			headEntry = "";
 		}
-		const changelog = plan.packages.find(
-			({ directory }) => path === `${directory}/CHANGELOG.md`,
-		);
-		if (changelog) {
-			assert(
-				readFileSync(join(root, path), "utf8") ===
-					changelogEntry(changelog, plan, changesets),
-				`${changelog.name} changelog differs from deterministic release output`,
-			);
-			continue;
-		}
-		assert(
-			path.endsWith("/package.json") || path === "package.json",
-			`${path} is not a planned apply output`,
-		);
-		const headSource = command("git", ["show", `HEAD:${path}`], {
-			cwd: root,
-			trim: false,
+		assert(!headEntry, `${record.name} changelog already exists in HEAD`);
+		descriptors.push({
+			path,
+			kind: "changelog",
+			source: null,
+			target: changelogEntry(record, plan, changesets),
 		});
+	}
+	for (const entry of plan.consumedChangesets) {
+		const path = `.changeset/${entry.id}.md`;
+		descriptors.push({
+			path,
+			kind: "changeset-delete",
+			source: readHeadFile(root, path, command),
+			target: null,
+		});
+	}
+	return descriptors;
+};
+
+const computeTargetLockfile = (
+	root,
+	manifestTransitions,
+	command = run,
+) => {
+	const directory = mkdtempSync(join(tmpdir(), "rpgjs-solo-lock-stage-"));
+	const archive = join(directory, "source.tar");
+	try {
+		command(
+			"git",
+			["archive", "--format=tar", "--output", archive, "HEAD"],
+			{ cwd: root, timeout: 600_000 },
+		);
+		command("tar", ["-xf", archive, "-C", directory], {
+			cwd: root,
+			timeout: 600_000,
+		});
+		for (const descriptor of manifestTransitions)
+			writeFileSync(join(directory, descriptor.path), descriptor.target);
+		command("pnpm", ["install", "--lockfile-only", "--ignore-scripts"], {
+			cwd: directory,
+			timeout: 600_000,
+		});
+		return readFileSync(join(directory, "pnpm-lock.yaml"), "utf8");
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+};
+
+const applyDescriptorRecord = ({ path, kind, source, target }) => ({
+	path,
+	kind,
+	source:
+		source === null
+			? { exists: false }
+			: { exists: true, sha256: digest("sha256", source) },
+	target:
+		target === null
+			? { exists: false }
+			: { exists: true, sha256: digest("sha256", target) },
+});
+
+const createApplyTransaction = (
+	root,
+	plan,
+	command,
+	targetLockfileFactory,
+) => {
+	const head = command("git", ["rev-parse", "HEAD"], { cwd: root });
+	assertReleaseCommitAncestry(root, plan, head, command);
+	const content = createApplyContentTransitions(root, plan, command);
+	const targetLockfile = targetLockfileFactory(
+		root,
+		content.filter(({ kind }) => kind === "manifest"),
+		command,
+	);
+	const lockfile = {
+		path: "pnpm-lock.yaml",
+		kind: "lockfile",
+		source: readHeadFile(root, "pnpm-lock.yaml", command),
+		target: targetLockfile,
+	};
+	const descriptors = [...content, lockfile];
+	return {
+		head,
+		descriptors,
+		journal: {
+			schemaVersion: 1,
+			releaseId: plan.releaseId,
+			sourceHead: head,
+			planSha512: sha512File(plan.planPath),
+			outputs: descriptors.map(applyDescriptorRecord),
+		},
+	};
+};
+
+const fileMatchesRecord = (root, path, record) => {
+	const absolutePath = join(root, path);
+	if (!record.exists) return !existsSync(absolutePath);
+	return (
+		existsSync(absolutePath) && sha256File(absolutePath) === record.sha256
+	);
+};
+
+const assertApplyTransactionState = (root, transaction, journalPath, command) => {
+	assert(
+		JSON.stringify(readJson(journalPath)) ===
+			JSON.stringify(transaction.journal),
+		"Apply journal differs from the exact planned transaction",
+	);
+	const allowed = new Set([
+		relative(root, journalPath),
+		...transaction.descriptors.map(({ path }) => path),
+	]);
+	const unexpected = changedWorktreePaths(root, command).filter(
+		(path) => !allowed.has(path),
+	);
+	assert(
+		unexpected.length === 0,
+		`Apply transaction contains unrelated changes: ${unexpected.join(", ")}`,
+	);
+	for (const [index, descriptor] of transaction.descriptors.entries()) {
+		const record = transaction.journal.outputs[index];
 		assert(
-			readFileSync(join(root, path), "utf8") ===
-				expectedAppliedManifest(headSource, path, plan),
-			`${path} differs from deterministic release output`,
+			fileMatchesRecord(root, descriptor.path, record.source) ||
+				fileMatchesRecord(root, descriptor.path, record.target),
+			`${descriptor.path} contains bytes outside the exact source/target transaction`,
 		);
 	}
 };
 
-const assertReleaseBase = (root, plan, phase, command = run) => {
-	if (phase === "source") {
+const applyTransactionDescriptor = (root, descriptor) => {
+	const path = join(root, descriptor.path);
+	if (descriptor.target === null) rmSync(path);
+	else atomicWriteFile(path, descriptor.target);
+};
+
+export const applySoloReleaseTransaction = (
+	root,
+	plan,
+	command = run,
+	{
+		afterBoundary = () => {},
+		targetLockfileFactory = computeTargetLockfile,
+	} = {},
+) => {
+	const journalPath = join(root, applyJournalName);
+	if (!existsSync(journalPath)) {
+		const before = validateSoloReleaseState(root, plan);
+		if (before.phase === "applied")
+			return {
+				changed: false,
+				phase: "applied",
+				lockfileRefreshed: false,
+				appliedBoundaries: 0,
+			};
+		assert(before.phase === "source", "A new apply transaction requires source state");
 		assert(
 			command("git", ["status", "--porcelain"], { cwd: root }) === "",
 			"The version transition requires a clean worktree",
 		);
-	} else {
-		const allowed = plannedApplyPaths(root, plan);
-		const changed = changedWorktreePaths(root, command);
-		const unexpected = changed.filter((path) => !allowed.has(path));
-		assert(
-			unexpected.length === 0,
-			`Applied release retry contains unrelated changes: ${unexpected.join(", ")}`,
-		);
-		assertAppliedRetryFiles(root, plan, changed, command);
 	}
-	assert(
-		["source", "applied"].includes(phase),
-		"Unknown release application phase",
+	const transaction = createApplyTransaction(
+		root,
+		plan,
+		command,
+		targetLockfileFactory,
 	);
-	const head = command("git", ["rev-parse", "HEAD"], { cwd: root });
-	assertReleaseCommitAncestry(root, plan, head, command);
-	return head;
-};
-
-export const applySoloReleaseTransaction = (root, plan, command = run) => {
-	const before = validateSoloReleaseState(root, plan);
-	assertReleaseBase(root, plan, before.phase, command);
-	if (before.phase === "applied") {
-		const sourceLockfile = command("git", ["show", "HEAD:pnpm-lock.yaml"], {
-			cwd: root,
-			trim: false,
-		});
-		writeFileSync(join(root, "pnpm-lock.yaml"), sourceLockfile);
+	if (!existsSync(journalPath)) atomicWriteJson(journalPath, transaction.journal);
+	assertApplyTransactionState(root, transaction, journalPath, command);
+	let appliedBoundaries = 0;
+	for (const [index, descriptor] of transaction.descriptors.entries()) {
+		const target = transaction.journal.outputs[index].target;
+		if (!fileMatchesRecord(root, descriptor.path, target)) {
+			applyTransactionDescriptor(root, descriptor);
+			appliedBoundaries += 1;
+			afterBoundary({
+				index,
+				kind: descriptor.kind,
+				path: descriptor.path,
+			});
+		}
 	}
-	const result = applySoloReleasePlan(root, plan);
-	command("pnpm", ["install", "--lockfile-only"], {
-		cwd: root,
-		stdio: "inherit",
-		timeout: 600_000,
-	});
 	const after = validateSoloReleaseState(root, plan);
 	assert(after.phase === "applied", "Solo release application did not persist");
-	return { ...result, lockfileRefreshed: true };
+	rmSync(journalPath);
+	return {
+		changed: appliedBoundaries > 0,
+		phase: "applied",
+		lockfileRefreshed: true,
+		appliedBoundaries,
+	};
 };
 
 export const assertCanonicalMain = (root, plan, command = run) => {
@@ -684,8 +1073,9 @@ export const assertCanonicalMain = (root, plan, command = run) => {
 		"Gitea backup main is not exact canonical GitHub main",
 	);
 	assertReleaseCommitAncestry(root, plan, head, command);
+	const reviewEvidence = assertReviewedCanonicalMain(plan, head, command, root);
 	const tree = command("git", ["rev-parse", "HEAD^{tree}"], { cwd: root });
-	return { head, tree };
+	return { head, tree, reviewEvidence };
 };
 
 const preflightArtifactDirectory = (root, path) => {
@@ -766,12 +1156,113 @@ const cleanBuildSoloCohort = (root, plan, command = run) => {
 	}
 };
 
+const assertFinalAttestationConfiguration = (plan) => {
+	assert(
+		plan.provenanceAttestation.status === "final",
+		"Pack requires a final trusted provenance attestation key",
+	);
+};
+
+const defaultProvenanceSigner = (plan) => {
+	assertFinalAttestationConfiguration(plan);
+	const keyPath = process.env.RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE;
+	assert(
+		keyPath && isAbsolute(keyPath) && existsSync(keyPath),
+		"RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE must name the trusted private key",
+	);
+	assert(
+		(statSync(keyPath).mode & 0o077) === 0,
+		"Provenance signing key file must not be group/world accessible",
+	);
+	const privateKey = createPrivateKey(readFileSync(keyPath));
+	const publicKey = createPublicKey(privateKey);
+	const keyId = digest(
+		"sha256",
+		publicKey.export({ type: "spki", format: "der" }),
+	);
+	assert(
+		keyId === plan.provenanceAttestation.keyId,
+		"Provenance private key does not match the reviewed public key",
+	);
+	return (value) => signBytes(null, value, privateKey);
+};
+
+const attestationPaths = (manifestPath) => ({
+	statement: `${manifestPath}.attestation.json`,
+	signature: `${manifestPath}.attestation.sig`,
+});
+
+const writeProvenanceAttestation = (
+	manifestPath,
+	manifest,
+	plan,
+	signer = defaultProvenanceSigner(plan),
+) => {
+	assertFinalAttestationConfiguration(plan);
+	const paths = attestationPaths(manifestPath);
+	const statement = {
+		schemaVersion: 1,
+		algorithm: "ed25519",
+		keyId: plan.provenanceAttestation.keyId,
+		subject: {
+			releaseId: manifest.releaseId,
+			version: manifest.version,
+			manifestSha512: sha512File(manifestPath),
+			sourceCommit: manifest.source.commit,
+			sourceTree: manifest.source.tree,
+			planSha512: manifest.plan.sha512,
+		},
+	};
+	writeJson(paths.statement, statement);
+	const signature = signer(readFileSync(paths.statement));
+	writeFileSync(paths.signature, `${Buffer.from(signature).toString("base64")}\n`);
+	return paths;
+};
+
+const verifyProvenanceAttestation = (manifestPath, manifest, plan) => {
+	assertFinalAttestationConfiguration(plan);
+	const paths = attestationPaths(manifestPath);
+	assert(
+		existsSync(paths.statement) && existsSync(paths.signature),
+		"Signed provenance attestation is missing",
+	);
+	const statementBytes = readFileSync(paths.statement);
+	const statement = JSON.parse(statementBytes);
+	assert(
+		statement.schemaVersion === 1 &&
+			statement.algorithm === "ed25519" &&
+			statement.keyId === plan.provenanceAttestation.keyId &&
+			statement.subject?.releaseId === manifest.releaseId &&
+			statement.subject?.version === manifest.version &&
+			statement.subject?.manifestSha512 === sha512File(manifestPath) &&
+			statement.subject?.sourceCommit === manifest.source.commit &&
+			statement.subject?.sourceTree === manifest.source.tree &&
+			statement.subject?.planSha512 === manifest.plan.sha512,
+		"Provenance attestation statement drifted",
+	);
+	const signature = Buffer.from(
+		readFileSync(paths.signature, "utf8").trim(),
+		"base64",
+	);
+	assert(
+		verifyBytes(
+			null,
+			statementBytes,
+			createPublicKey(plan.provenanceAttestation.publicKeyPem),
+			signature,
+		),
+		"Provenance attestation signature is invalid",
+	);
+	return paths;
+};
+
 export const createProvenanceManifest = ({
 	root,
 	plan,
 	artifactsDirectory,
 	source,
 	command = run,
+	signer,
 }) => {
 	assert(
 		validateSoloReleaseState(root, plan).phase === "applied",
@@ -781,6 +1272,39 @@ export const createProvenanceManifest = ({
 	cleanBuildSoloCohort(root, plan, command);
 	if (!existsSync(artifactsDirectory))
 		mkdirSync(artifactsDirectory, { recursive: false });
+	let reviewReceipt;
+	if (source.reviewEvidence?.independentReceipt) {
+		const sourceStatement = process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH;
+		const sourceSignature = `${sourceStatement}.sig`;
+		assert(
+			sourceStatement &&
+				existsSync(sourceStatement) &&
+				existsSync(sourceSignature) &&
+				sha512File(sourceStatement) ===
+					source.reviewEvidence.independentReceipt.sha512 &&
+				sha512File(sourceSignature) ===
+					source.reviewEvidence.independentReceipt.signatureSha512,
+			"Independent review receipt bytes changed before provenance packing",
+		);
+		const statementName = `${plan.releaseId}.review-receipt.json`;
+		const signatureName = `${statementName}.sig`;
+		writeFileSync(
+			join(artifactsDirectory, statementName),
+			readFileSync(sourceStatement),
+		);
+		writeFileSync(
+			join(artifactsDirectory, signatureName),
+			readFileSync(sourceSignature),
+		);
+		reviewReceipt = {
+			statement: statementName,
+			signature: signatureName,
+			sha512: sha512File(join(artifactsDirectory, statementName)),
+			signatureSha512: sha512File(
+				join(artifactsDirectory, signatureName),
+			),
+		};
+	}
 	const packages = [];
 	for (const record of plan.packages) {
 		const packageArtifacts = join(
@@ -805,14 +1329,16 @@ export const createProvenanceManifest = ({
 		);
 		assertPackedExports(packedDirectory, packedManifest, record.name);
 		const cohort = new Set(plan.packages.map(({ name }) => name));
-		for (const [name, dependencyVersion] of Object.entries(
-			packedManifest.dependencies ?? {},
-		)) {
-			if (cohort.has(name)) {
-				assert(
-					dependencyVersion === plan.version,
-					`${record.name} archive has non-exact cohort dependency ${name}@${dependencyVersion}`,
-				);
+		for (const field of dependencyFields) {
+			for (const [name, dependencyVersion] of Object.entries(
+				packedManifest[field] ?? {},
+			)) {
+				if (cohort.has(name)) {
+					assert(
+						dependencyVersion === plan.version,
+						`${record.name} archive has non-exact cohort ${field} ${name}@${dependencyVersion}`,
+					);
+				}
 			}
 		}
 		rmSync(inspectionDirectory, { recursive: true, force: true });
@@ -825,13 +1351,15 @@ export const createProvenanceManifest = ({
 			integrity: sri512File(archivePath),
 			repository: packedManifest.repository,
 			engines: packedManifest.engines,
-			dependencies: packedManifest.dependencies ?? {},
+			...Object.fromEntries(
+				dependencyFields.map((field) => [field, packedManifest[field] ?? {}]),
+			),
 			exports: packedManifest.exports,
 		});
 	}
 	const changesetRecord = (entry) => ({ ...entry });
 	const manifest = {
-		schemaVersion: 1,
+		schemaVersion: 2,
 		releaseId: plan.releaseId,
 		version: plan.version,
 		source: {
@@ -841,6 +1369,7 @@ export const createProvenanceManifest = ({
 			tree: source.tree,
 			requiredSourceCommit: plan.requiredSourceCommit,
 			upstreamCommit: plan.upstreamCommit,
+			reviewEvidence: source.reviewEvidence,
 		},
 		lockfile: {
 			path: "pnpm-lock.yaml",
@@ -858,6 +1387,7 @@ export const createProvenanceManifest = ({
 		consumedChangesets: plan.consumedChangesets.map(changesetRecord),
 		carriedChangesets: plan.carriedChangesets.map(changesetRecord),
 		requiredConsumer: plan.requiredConsumer,
+		reviewReceipt,
 	};
 	const manifestPath = join(
 		artifactsDirectory,
@@ -869,7 +1399,13 @@ export const createProvenanceManifest = ({
 		sidecarPath,
 		`${sha512File(manifestPath)}  ${manifestPath.split(sep).at(-1)}\n`,
 	);
-	return { manifestPath, sidecarPath, manifest };
+	const signed = writeProvenanceAttestation(
+		manifestPath,
+		manifest,
+		plan,
+		signer,
+	);
+	return { manifestPath, sidecarPath, ...signed, manifest };
 };
 
 export const withEphemeralNpmAuth = async (token, registry, callback) => {
@@ -899,11 +1435,17 @@ export const withEphemeralNpmAuth = async (token, registry, callback) => {
 	}
 };
 
-const loadProvenance = (manifestPath, plan) => {
+export const loadProvenance = (
+	manifestPath,
+	plan,
+	root = rootDirectory,
+) => {
 	assert(isAbsolute(manifestPath), "--manifest must be an absolute path");
 	const manifest = readJson(manifestPath);
 	assert(
-		manifest.releaseId === plan.releaseId && manifest.version === plan.version,
+		manifest.schemaVersion === 2 &&
+			manifest.releaseId === plan.releaseId &&
+			manifest.version === plan.version,
 		"Provenance identity drifted",
 	);
 	assert(
@@ -940,7 +1482,7 @@ const loadProvenance = (manifestPath, plan) => {
 	);
 	assert(
 		manifest.lockfile.sha512 ===
-			sha512File(join(rootDirectory, manifest.lockfile.path)),
+			sha512File(join(root, manifest.lockfile.path)),
 		"Provenance lockfile hash drifted",
 	);
 	assert(
@@ -953,10 +1495,55 @@ const loadProvenance = (manifestPath, plan) => {
 			),
 		"Provenance package cohort drifted",
 	);
+	if (manifest.source.reviewEvidence?.independentReceipt) {
+		assert(manifest.reviewReceipt, "Signed review receipt evidence is missing");
+		assert(
+			manifest.reviewReceipt.signature ===
+				`${manifest.reviewReceipt.statement}.sig`,
+			"Signed review receipt signature path is not paired with its statement",
+		);
+		const artifactRoot = realpathSync(dirname(manifestPath));
+		let receiptPath;
+		for (const [field, hashField] of [
+			["statement", "sha512"],
+			["signature", "signatureSha512"],
+		]) {
+			const path = resolve(dirname(manifestPath), manifest.reviewReceipt[field]);
+			const realPath = existsSync(path) ? realpathSync(path) : path;
+			assert(
+				path.startsWith(`${dirname(manifestPath)}${sep}`) &&
+					existsSync(path) &&
+					realPath.startsWith(`${artifactRoot}${sep}`) &&
+					sha512File(realPath) === manifest.reviewReceipt[hashField],
+				"Signed review receipt artifact drifted",
+			);
+			if (field === "statement") receiptPath = realPath;
+		}
+		const verifiedReceipt = verifyIndependentReviewReceipt(
+			plan,
+			manifest.source.commit,
+			receiptPath,
+		);
+		assert(
+			verifiedReceipt.sha512 === manifest.reviewReceipt.sha512 &&
+				verifiedReceipt.signatureSha512 ===
+					manifest.reviewReceipt.signatureSha512 &&
+				JSON.stringify(verifiedReceipt) ===
+					JSON.stringify(manifest.source.reviewEvidence.independentReceipt),
+			"Signed review receipt differs from canonical review evidence",
+		);
+	} else {
+		assert(
+			manifest.reviewReceipt === undefined,
+			"Provenance has an unexpected independent review receipt",
+		);
+	}
 	for (const item of manifest.packages) {
 		const archivePath = resolve(dirname(manifestPath), item.archive);
+		const artifactRoot = realpathSync(dirname(manifestPath));
+		const archiveRealPath = realpathSync(archivePath);
 		assert(
-			archivePath.startsWith(`${dirname(manifestPath)}${sep}`),
+			archiveRealPath.startsWith(`${artifactRoot}${sep}`),
 			"Archive escaped provenance directory",
 		);
 		assert(
@@ -964,6 +1551,36 @@ const loadProvenance = (manifestPath, plan) => {
 				sri512File(archivePath) === item.integrity,
 			`${item.name} archive bytes drifted`,
 		);
+		const inspectionDirectory = mkdtempSync(
+			join(tmpdir(), "rpgjs-solo-provenance-inspection-"),
+		);
+		try {
+			const { packedDirectory, packedManifest } =
+				inspectPortablePackageArchive({
+					archivePath: archiveRealPath,
+					extractDirectory: join(inspectionDirectory, "extract"),
+					packageName: item.name,
+				});
+			assert(
+				packedManifest.name === item.name &&
+					packedManifest.version === plan.version &&
+					JSON.stringify(packedManifest.repository) ===
+						JSON.stringify(item.repository) &&
+					JSON.stringify(packedManifest.engines) ===
+						JSON.stringify(item.engines) &&
+					dependencyFields.every(
+						(field) =>
+							JSON.stringify(packedManifest[field] ?? {}) ===
+							JSON.stringify(item[field] ?? {}),
+					) &&
+					JSON.stringify(packedManifest.exports) ===
+						JSON.stringify(item.exports),
+				`${item.name} archive metadata differs from signed provenance`,
+			);
+			assertPackedExports(packedDirectory, packedManifest, item.name);
+		} finally {
+			rmSync(inspectionDirectory, { recursive: true, force: true });
+		}
 	}
 	const sidecarPath = `${manifestPath}.sha512`;
 	assert(existsSync(sidecarPath), "Provenance SHA-512 sidecar is missing");
@@ -972,6 +1589,7 @@ const loadProvenance = (manifestPath, plan) => {
 			`${sha512File(manifestPath)}  ${manifestPath.split(sep).at(-1)}\n`,
 		"Provenance SHA-512 sidecar drifted",
 	);
+	verifyProvenanceAttestation(manifestPath, manifest, plan);
 	return manifest;
 };
 
@@ -1231,19 +1849,26 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 						),
 					"Promotion journal package state drifted",
 				);
+				for (const state of Object.values(journal.packages))
+					assertMonotonicLatestPromotion(state.priorLatest, plan.version);
 			} else {
+				const snapshots = manifest.packages.map(({ name }) => {
+					const tags = pnpmView(name, "dist-tags", plan, env) ?? {};
+					const latest = tags[plan.promotionDistTag] ?? null;
+					assertMonotonicLatestPromotion(latest, plan.version);
+					return [name, latest];
+				});
 				journal = {
 					schemaVersion: 1,
 					releaseId: plan.releaseId,
 					manifestSha512: sha512File(manifestPath),
 					packages: Object.fromEntries(
-						manifest.packages.map(({ name }) => {
-							const tags = pnpmView(name, "dist-tags", plan, env) ?? {};
+						snapshots.map(([name, latest]) => {
 							return [
 								name,
 								{
-									priorLatest: tags[plan.promotionDistTag] ?? null,
-									complete: tags[plan.promotionDistTag] === plan.version,
+									priorLatest: latest,
+									complete: latest === plan.version,
 								},
 							];
 						}),
@@ -1251,15 +1876,37 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 				};
 				atomicWriteJson(journalPath, journal);
 			}
-			for (const item of manifest.packages) {
+			const preflightActions = manifest.packages.map((item) => {
 				const state = journal.packages[item.name];
 				const tags = pnpmView(item.name, "dist-tags", plan, env) ?? {};
+				const currentLatest = tags[plan.promotionDistTag] ?? null;
+				assertMonotonicLatestPromotion(currentLatest, plan.version);
+				return {
+					item,
+					action: nextPromotionAction({
+						currentLatest,
+						priorLatest: state.priorLatest,
+						version: plan.version,
+						complete: state.complete,
+					}),
+				};
+			});
+			for (const { item, action: preflightAction } of preflightActions) {
+				const state = journal.packages[item.name];
+				const liveBeforeMutation =
+					pnpmView(item.name, "dist-tags", plan, env) ?? {};
 				const action = nextPromotionAction({
-					currentLatest: tags[plan.promotionDistTag] ?? null,
+					currentLatest:
+						liveBeforeMutation[plan.promotionDistTag] ?? null,
 					priorLatest: state.priorLatest,
 					version: plan.version,
 					complete: state.complete,
 				});
+				assert(
+					action === preflightAction ||
+						(preflightAction === "promote" && action === "complete"),
+					`${item.name} latest changed after cohort preflight`,
+				);
 				if (action === "promote")
 					run(
 						"pnpm",
@@ -1393,6 +2040,14 @@ export const prepareReleaseEvidence = (
 	const sourcePaths = [
 		manifestPath,
 		`${manifestPath}.sha512`,
+		attestationPaths(manifestPath).statement,
+		attestationPaths(manifestPath).signature,
+		...(manifest.reviewReceipt
+			? [
+					resolve(dirname(manifestPath), manifest.reviewReceipt.statement),
+					resolve(dirname(manifestPath), manifest.reviewReceipt.signature),
+				]
+			: []),
 		...manifest.packages.map(({ archive }) =>
 			resolve(dirname(manifestPath), archive),
 		),
@@ -1856,7 +2511,11 @@ const parseArguments = (raw) => {
 	return args;
 };
 
-export const main = async (rawArguments = process.argv.slice(2)) => {
+export const main = async (
+	rawArguments = process.argv.slice(2),
+	{ toolchainCommand = run, nodeVersion = process.versions.node } = {},
+) => {
+	assertReleaseToolchain(toolchainCommand, nodeVersion);
 	const args = parseArguments(rawArguments);
 	const plan = loadSoloReleasePlan(args.plan);
 	if (args.command === "validate") {
@@ -1891,7 +2550,9 @@ export const main = async (rawArguments = process.argv.slice(2)) => {
 	const source = assertCanonicalMain(rootDirectory, plan);
 	assert(
 		source.head === manifest.source.commit &&
-			source.tree === manifest.source.tree,
+			source.tree === manifest.source.tree &&
+			JSON.stringify(source.reviewEvidence) ===
+				JSON.stringify(manifest.source.reviewEvidence),
 		"Canonical source differs from provenance",
 	);
 	if (!args.execute) {

@@ -1,4 +1,10 @@
-import { createHash, randomUUID } from "node:crypto";
+import {
+	createHash,
+	generateKeyPairSync,
+	randomUUID,
+	sign as signBytes,
+} from "node:crypto";
+import { execFileSync } from "node:child_process";
 import {
 	existsSync,
 	mkdirSync,
@@ -12,13 +18,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-	applySoloReleasePlan,
 	applySoloReleaseTransaction,
 	assertCanonicalMain,
 	assertLivePromotedCohort,
+	assertMonotonicLatestPromotion,
+	assertPullRequestReviewEvidence,
+	assertReleaseToolchain,
+	assertReviewedCanonicalMain,
 	createGiteaReleaseAdapter,
 	createGitHubReleaseAdapter,
 	createProvenanceManifest,
+	loadProvenance,
 	loadSoloReleasePlan,
 	nextPromotionAction,
 	pnpmView,
@@ -28,6 +38,7 @@ import {
 	reconcileReleaseWithAdapter,
 	sha512File,
 	validateSoloReleaseState,
+	verifyIndependentReviewReceipt,
 	withEphemeralNpmAuth,
 } from "./solo-release.mjs";
 
@@ -68,6 +79,18 @@ const inheritedReleaseDirectories = [
 const temporaryDirectories: string[] = [];
 const sha256 = (value: string) =>
 	createHash("sha256").update(value).digest("hex");
+const testAttestationKeys = generateKeyPairSync("ed25519");
+const testPublicKeyPem = testAttestationKeys.publicKey.export({
+	type: "spki",
+	format: "pem",
+}).toString();
+const testAttestationKeyId = createHash("sha256")
+	.update(
+		testAttestationKeys.publicKey.export({ type: "spki", format: "der" }),
+	)
+	.digest("hex");
+const testProvenanceSigner = (value: Buffer) =>
+	signBytes(null, value, testAttestationKeys.privateKey);
 const writeJson = (path: string, value: unknown) =>
 	writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 
@@ -83,6 +106,10 @@ function createFixture() {
 	const root = mkdtempSync(join(tmpdir(), "solo-release-fixture-"));
 	temporaryDirectories.push(root);
 	mkdirSync(join(root, ".changeset"));
+	writeFileSync(
+		join(root, ".changeset/README.md"),
+		"# Changesets\n\nRun `pnpm changeset` for user-facing changes.\n",
+	);
 	writeJson(join(root, ".changeset/pre.json"), { changesets: [] });
 	writeFileSync(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
 	writeFileSync(
@@ -178,11 +205,41 @@ function createFixture() {
 		}),
 	);
 	const plan = {
-		schemaVersion: 1,
+		schemaVersion: 2,
 		releaseId: "fixture",
 		sourceBaseCommit: "2".repeat(40),
 		requiredSourceCommit: "2".repeat(40),
 		sourceBinding: { status: "final" },
+		reviewEvidence: {
+			status: "final",
+			enginePullRequest: {
+				repository: "jbcom/rpgjs-solo",
+				number: 20,
+				mergeCommit: "2".repeat(40),
+				minimumApprovals: 1,
+				requiredChecks: ["tests (24)"],
+			},
+			releasePullRequest: {
+				repository: "jbcom/rpgjs-solo",
+				number: 21,
+				mergeCommitBinding: "canonical-head",
+				minimumApprovals: 1,
+				requiredChecks: ["tests (24)"],
+			},
+			independentReceipt: {
+				status: "final",
+				algorithm: "ed25519",
+				keyId: testAttestationKeyId,
+				publicKeyPem: testPublicKeyPem,
+				producerPrincipalId: "producer-fixture",
+			},
+		},
+		provenanceAttestation: {
+			status: "final",
+			algorithm: "ed25519",
+			keyId: testAttestationKeyId,
+			publicKeyPem: testPublicKeyPem,
+		},
 		upstreamCommit: "3".repeat(40),
 		previousVersion,
 		version,
@@ -210,6 +267,41 @@ function createFixture() {
 	const planPath = join(root, "plan.json");
 	writeJson(planPath, plan);
 	return { root, planPath, carriedSources };
+}
+
+function initializeFixtureGit(
+	fixture: ReturnType<typeof createFixture>,
+	plan: ReturnType<typeof loadSoloReleasePlan>,
+) {
+	execFileSync("git", ["init", "-q"], { cwd: fixture.root });
+	execFileSync("git", ["config", "user.email", "release@example.test"], {
+		cwd: fixture.root,
+	});
+	execFileSync("git", ["config", "user.name", "Release Fixture"], {
+		cwd: fixture.root,
+	});
+	execFileSync("git", ["add", "."], { cwd: fixture.root });
+	execFileSync("git", ["commit", "-qm", "fixture"], { cwd: fixture.root });
+	const head = execFileSync("git", ["rev-parse", "HEAD"], {
+		cwd: fixture.root,
+		encoding: "utf8",
+	}).trim();
+	plan.sourceBaseCommit = head;
+	plan.requiredSourceCommit = head;
+	plan.upstreamCommit = head;
+	plan.reviewEvidence.enginePullRequest.mergeCommit = head;
+	for (const entry of plan.carriedChangesets) entry.introducedBy = head;
+	return head;
+}
+
+function applyFixtureRelease(
+	fixture: ReturnType<typeof createFixture>,
+	plan: ReturnType<typeof loadSoloReleasePlan>,
+) {
+	initializeFixtureGit(fixture, plan);
+	return applySoloReleaseTransaction(fixture.root, plan, undefined, {
+		targetLockfileFactory: () => "deterministic-lock\n",
+	});
 }
 
 function createExpectedRelease() {
@@ -333,6 +425,18 @@ function createReleaseAdapter(
 }
 
 describe("Solo beta.29 coordinated release transaction", () => {
+	it("fails closed unless the executing toolchain is exact Node 24 and pnpm 11.18.0", () => {
+		expect(
+			assertReleaseToolchain(() => "11.18.0", "24.18.1"),
+		).toEqual({ nodeVersion: "24.18.1", pnpmVersion: "11.18.0" });
+		expect(() => assertReleaseToolchain(() => "11.18.0", "26.5.0")).toThrow(
+			/requires Node 24/i,
+		);
+		expect(() => assertReleaseToolchain(() => "11.17.0", "24.18.1")).toThrow(
+			/requires pnpm 11\.18\.0/i,
+		);
+	});
+
 	it("pins one beta.29 Solo increment and the post-review source requirement", () => {
 		const plan = loadSoloReleasePlan();
 		expect(plan.previousVersion).toBe(previousVersion);
@@ -349,19 +453,27 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			inheritedReleaseDirectories,
 		);
 		expect(plan.sourceBinding.status).toBe("provisional");
+		expect(plan.reviewEvidence.status).toBe("provisional");
+		expect(plan.provenanceAttestation.status).toBe("provisional");
 	});
 
 	it("applies only the cohort once, preserves inherited changesets, and never creates beta.30", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
 		expect(validateSoloReleaseState(fixture.root, plan).phase).toBe("source");
-		expect(applySoloReleasePlan(fixture.root, plan)).toEqual({
+		expect(applyFixtureRelease(fixture, plan)).toMatchObject({
 			changed: true,
 			phase: "applied",
 		});
-		expect(applySoloReleasePlan(fixture.root, plan)).toEqual({
+		expect(
+			applySoloReleaseTransaction(fixture.root, plan, undefined, {
+				targetLockfileFactory: () => "deterministic-lock\n",
+			}),
+		).toEqual({
 			changed: false,
 			phase: "applied",
+			lockfileRefreshed: false,
+			appliedBoundaries: 0,
 		});
 		for (const record of packages) {
 			const manifest = JSON.parse(
@@ -398,102 +510,80 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			join(fixture.root, packages.at(-1)?.directory ?? "", "CHANGELOG.md"),
 			"foreign\n",
 		);
-		expect(() => applySoloReleasePlan(fixture.root, plan)).toThrow(
-			/already has a changelog/i,
-		);
+		initializeFixtureGit(fixture, plan);
+		expect(() =>
+			applySoloReleaseTransaction(fixture.root, plan, undefined, {
+				targetLockfileFactory: () => "deterministic-lock\n",
+			}),
+		).toThrow(/changelog already exists in HEAD/i);
 		expect(readFileSync(manifestPath, "utf8")).toBe(before);
 		expect(existsSync(join(fixture.root, ".changeset/solo.md"))).toBe(true);
 	});
 
-	it("always refreshes the lockfile when retrying an applied transition", () => {
-		const fixture = createFixture();
-		const plan = loadSoloReleasePlan(fixture.planPath);
-		const headFiles = new Map<string, string>();
-		const sourceLockfile = readFileSync(
-			join(fixture.root, "pnpm-lock.yaml"),
-			"utf8",
+	it("resumes after every manifest, changelog, deletion, and lockfile boundary", () => {
+		const baseline = createFixture();
+		const baselinePlan = loadSoloReleasePlan(baseline.planPath);
+		initializeFixtureGit(baseline, baselinePlan);
+		const boundaries: Array<{ kind: string; path: string }> = [];
+		const completed = applySoloReleaseTransaction(
+			baseline.root,
+			baselinePlan,
+			undefined,
+			{
+				targetLockfileFactory: () => "deterministic-lock\n",
+				afterBoundary: ({ kind, path }) => boundaries.push({ kind, path }),
+			},
 		);
-		headFiles.set("pnpm-lock.yaml", sourceLockfile);
-		for (const entry of plan.consumedChangesets) {
-			const path = `.changeset/${entry.id}.md`;
-			headFiles.set(path, readFileSync(join(fixture.root, path), "utf8"));
+		expect(completed.appliedBoundaries).toBe(boundaries.length);
+		expect(new Set(boundaries.map(({ kind }) => kind))).toEqual(
+			new Set(["manifest", "changelog", "changeset-delete", "lockfile"]),
+		);
+
+		for (let failureIndex = 0; failureIndex < boundaries.length; failureIndex++) {
+			const fixture = createFixture();
+			const plan = loadSoloReleasePlan(fixture.planPath);
+			initializeFixtureGit(fixture, plan);
+			let seen = 0;
+			expect(() =>
+				applySoloReleaseTransaction(fixture.root, plan, undefined, {
+					targetLockfileFactory: () => "deterministic-lock\n",
+					afterBoundary: () => {
+						if (seen++ === failureIndex) throw new Error("injected interruption");
+					},
+				}),
+			).toThrow(/injected interruption/);
+			expect(
+				applySoloReleaseTransaction(fixture.root, plan, undefined, {
+					targetLockfileFactory: () => "deterministic-lock\n",
+				}),
+			).toMatchObject({ phase: "applied", lockfileRefreshed: true });
+			expect(validateSoloReleaseState(fixture.root, plan).phase).toBe("applied");
+			expect(existsSync(join(fixture.root, ".rpgjs-solo-release-apply.json"))).toBe(
+				false,
+			);
 		}
-		headFiles.set(
-			"packages/solo/package.json",
-			readFileSync(join(fixture.root, "packages/solo/package.json"), "utf8"),
-		);
-		let installs = 0;
-		const fake = (command: string, args: string[]) => {
-			if (command === "pnpm") {
-				installs += 1;
-				if (installs === 1) {
-					writeFileSync(join(fixture.root, "pnpm-lock.yaml"), "partial\n");
-					throw new Error("interrupted lockfile refresh");
-				}
-				expect(readFileSync(join(fixture.root, "pnpm-lock.yaml"), "utf8")).toBe(
-					sourceLockfile,
-				);
-				writeFileSync(
-					join(fixture.root, "pnpm-lock.yaml"),
-					"deterministic-lock\n",
-				);
-				return "";
-			}
-			if (args[0] === "status") return "";
-			if (args[0] === "diff")
-				return "packages/solo/package.json\npnpm-lock.yaml";
-			if (args[0] === "ls-files") return "packages/solo/CHANGELOG.md";
-			if (args[0] === "show")
-				return headFiles.get(args[1].replace(/^HEAD:/, "")) ?? "";
-			if (args[0] === "rev-parse") return "a".repeat(40);
-			if (args[0] === "merge-base") return "";
-			return "";
-		};
-		expect(() => applySoloReleaseTransaction(fixture.root, plan, fake)).toThrow(
-			/interrupted lockfile refresh/,
-		);
-		expect(validateSoloReleaseState(fixture.root, plan).phase).toBe("applied");
-		expect(applySoloReleaseTransaction(fixture.root, plan, fake)).toEqual({
-			changed: false,
-			phase: "applied",
-			lockfileRefreshed: true,
-		});
-		expect(installs).toBe(2);
-		expect(readFileSync(join(fixture.root, "pnpm-lock.yaml"), "utf8")).toBe(
-			"deterministic-lock\n",
-		);
 	});
 
-	it("rejects tampering inside an otherwise allowed apply-retry path", () => {
+	it("rejects foreign bytes inside an interrupted apply transaction", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
-		const headChangesets = new Map(
-			plan.consumedChangesets.map((entry: { id: string }) => {
-				const path = `.changeset/${entry.id}.md`;
-				return [path, readFileSync(join(fixture.root, path), "utf8")];
+		initializeFixtureGit(fixture, plan);
+		let firstPath = "";
+		expect(() =>
+			applySoloReleaseTransaction(fixture.root, plan, undefined, {
+				targetLockfileFactory: () => "deterministic-lock\n",
+				afterBoundary: ({ path }) => {
+					firstPath = path;
+					throw new Error("stop after one boundary");
+				},
 			}),
-		);
-		applySoloReleasePlan(fixture.root, plan);
-		const changelogPath = "packages/solo/CHANGELOG.md";
-		writeFileSync(join(fixture.root, changelogPath), "tampered\n");
-		let installed = false;
-		const fake = (command: string, args: string[]) => {
-			if (command === "pnpm") {
-				installed = true;
-				return "";
-			}
-			if (args[0] === "diff") return "";
-			if (args[0] === "ls-files") return changelogPath;
-			if (args[0] === "show")
-				return headChangesets.get(args[1].replace(/^HEAD:/, "")) ?? "";
-			if (args[0] === "rev-parse") return "a".repeat(40);
-			if (args[0] === "merge-base") return "";
-			return "";
-		};
-		expect(() => applySoloReleaseTransaction(fixture.root, plan, fake)).toThrow(
-			/changelog differs/i,
-		);
-		expect(installed).toBe(false);
+		).toThrow(/stop after one boundary/);
+		writeFileSync(join(fixture.root, firstPath), "foreign bytes\n");
+		expect(() =>
+			applySoloReleaseTransaction(fixture.root, plan, undefined, {
+				targetLockfileFactory: () => "deterministic-lock\n",
+			}),
+		).toThrow(/outside the exact source\/target transaction/i);
 	});
 
 	it("derives the full inherited release surface and rejects undeclared work", () => {
@@ -519,32 +609,90 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		}
 	});
 
+	it("ignores only the standard Changesets README and rejects another malformed markdown input", () => {
+		const fixture = createFixture();
+		const plan = loadSoloReleasePlan(fixture.planPath);
+		expect(() => validateSoloReleaseState(fixture.root, plan)).not.toThrow();
+		writeFileSync(
+			join(fixture.root, ".changeset/not-a-changeset.md"),
+			"# This is not a changeset\n",
+		);
+		expect(() => validateSoloReleaseState(fixture.root, plan)).toThrow(
+			/not-a-changeset has an invalid changeset document/i,
+		);
+	});
+
 	it("rejects hash drift before writing", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
+		initializeFixtureGit(fixture, plan);
 		writeFileSync(
 			join(fixture.root, ".changeset/runtime.md"),
 			`${readFileSync(join(fixture.root, ".changeset/runtime.md"))}tamper`,
 		);
-		expect(() => applySoloReleasePlan(fixture.root, plan)).toThrow(/SHA-256/i);
+		expect(() =>
+			applySoloReleaseTransaction(fixture.root, plan, undefined, {
+				targetLockfileFactory: () => "deterministic-lock\n",
+			}),
+		).toThrow(/SHA-256/i);
 	});
 
 	it("asserts exact clean GitHub and Gitea main plus reviewed ancestry", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
 		const calls: string[] = [];
-		const fake = (_command: string, args: string[]) => {
+		const fake = (program: string, args: string[]) => {
 			calls.push(args.join(" "));
+			if (program === "gh" && args[0] === "pr") {
+				const number = Number(args[2]);
+				const baseRefOid = number === 20 ? "e".repeat(40) : "f".repeat(40);
+				const headRefOid = number === 20 ? "c".repeat(40) : "d".repeat(40);
+				return JSON.stringify({
+					state: "MERGED",
+					isDraft: false,
+					baseRefName: "main",
+					baseRefOid,
+					headRefOid,
+					mergeCommit: {
+						oid: number === 20 ? plan.requiredSourceCommit : "a".repeat(40),
+					},
+					reviewDecision: "APPROVED",
+					reviews: [{ state: "APPROVED" }],
+					statusCheckRollup: [{ name: "tests (24)", conclusion: "SUCCESS" }],
+				});
+			}
+			if (program === "gh" && args[0] === "api")
+				return JSON.stringify({
+					data: {
+						repository: {
+							pullRequest: {
+								reviewThreads: {
+									nodes: [{ isResolved: true }],
+									pageInfo: { hasNextPage: false },
+								},
+							},
+						},
+					},
+				});
 			if (args[0] === "status") return "";
 			if (args[0] === "branch") return "main";
 			if (args[0] === "ls-remote") return `${"a".repeat(40)}\trefs/heads/main`;
+			if (args[0] === "show" && args[2] === "--format=%P")
+				return args[3] === plan.requiredSourceCommit
+					? `${"e".repeat(40)} ${"c".repeat(40)}`
+					: `${"f".repeat(40)} ${"d".repeat(40)}`;
 			if (args[1] === "HEAD^{tree}") return "b".repeat(40);
 			if (args[0] === "merge-base") return "";
 			return "a".repeat(40);
 		};
-		expect(assertCanonicalMain(fixture.root, plan, fake)).toEqual({
+		expect(assertCanonicalMain(fixture.root, plan, fake)).toMatchObject({
 			head: "a".repeat(40),
 			tree: "b".repeat(40),
+			reviewEvidence: {
+				engine: { githubApproved: true },
+				release: { githubApproved: true },
+				independentReceipt: null,
+			},
 		});
 		expect(calls.filter((call) => call.startsWith("ls-remote"))).toHaveLength(
 			2,
@@ -563,7 +711,116 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		);
 	});
 
+	it("accepts a signed producer-disjoint review receipt when lawful GitHub approval is unavailable", () => {
+		const fixture = createFixture();
+		const plan = loadSoloReleasePlan(fixture.planPath);
+		const head = "a".repeat(40);
+		const directory = mkdtempSync(join(tmpdir(), "solo-review-receipt-"));
+		temporaryDirectories.push(directory);
+		const receiptPath = join(directory, "receipt.json");
+		const previous = process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH;
+		const writeReceipt = (reviewerPrincipalId: string) => {
+			writeJson(receiptPath, {
+				schemaVersion: 1,
+				algorithm: "ed25519",
+				keyId: testAttestationKeyId,
+				verdict: "ACCEPT",
+				releaseId: plan.releaseId,
+				version: plan.version,
+				enginePullRequest: plan.reviewEvidence.enginePullRequest.number,
+				engineMergeCommit: plan.requiredSourceCommit,
+				releasePullRequest: plan.reviewEvidence.releasePullRequest.number,
+				releaseMergeCommit: head,
+				planSha512: sha512File(plan.planPath),
+				producerPrincipalId:
+					plan.reviewEvidence.independentReceipt.producerPrincipalId,
+				reviewerPrincipalId,
+			});
+			writeFileSync(
+				`${receiptPath}.sig`,
+				`${testProvenanceSigner(readFileSync(receiptPath)).toString("base64")}\n`,
+			);
+		};
+		try {
+			process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH = receiptPath;
+			writeReceipt("reviewer-fixture");
+			expect(verifyIndependentReviewReceipt(plan, head)).toMatchObject({
+				reviewerPrincipalId: "reviewer-fixture",
+			});
+			const noSelfApproval = (program: string, args: string[]) => {
+				if (program === "gh" && args[0] === "pr") {
+					const number = Number(args[2]);
+					return JSON.stringify({
+						state: "MERGED",
+						isDraft: false,
+						baseRefName: "main",
+						baseRefOid: number === 20 ? "e".repeat(40) : "f".repeat(40),
+						headRefOid: number === 20 ? "c".repeat(40) : "d".repeat(40),
+						mergeCommit: {
+							oid: number === 20 ? plan.requiredSourceCommit : head,
+						},
+						reviewDecision: "",
+						reviews: [],
+						statusCheckRollup: [
+							{ name: "tests (24)", conclusion: "SUCCESS" },
+						],
+					});
+				}
+				if (program === "gh" && args[0] === "api")
+					return JSON.stringify({
+						data: {
+							repository: {
+								pullRequest: {
+									reviewThreads: {
+										nodes: [],
+										pageInfo: { hasNextPage: false },
+									},
+								},
+							},
+						},
+					});
+				if (program === "git" && args[0] === "show")
+					return args[3] === plan.requiredSourceCommit
+						? `${"e".repeat(40)} ${"c".repeat(40)}`
+						: `${"f".repeat(40)} ${"d".repeat(40)}`;
+				throw new Error(`Unexpected review command ${program} ${args.join(" ")}`);
+			};
+			expect(
+				assertReviewedCanonicalMain(
+					plan,
+					head,
+					noSelfApproval,
+					fixture.root,
+				),
+			).toMatchObject({
+				engine: { githubApproved: false },
+				release: { githubApproved: false },
+				independentReceipt: { reviewerPrincipalId: "reviewer-fixture" },
+			});
+			writeReceipt("producer-fixture");
+			expect(() => verifyIndependentReviewReceipt(plan, head)).toThrow(
+				/producer-disjoint release/i,
+			);
+		} finally {
+			if (previous === undefined)
+				delete process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH;
+			else process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH = previous;
+		}
+	});
+
 	it("models resumable promotion without accepting an unexpected latest value", () => {
+		expect(() =>
+			assertMonotonicLatestPromotion("5.0.0-beta.26.solo.18", version),
+		).not.toThrow();
+		expect(() =>
+			assertMonotonicLatestPromotion("5.0.0-beta.29.solo.2", version),
+		).toThrow(/move latest backward/i);
+		expect(() =>
+			assertMonotonicLatestPromotion("5.0.0-beta.30.solo.0", version),
+		).toThrow(/move latest backward/i);
+		expect(() => assertMonotonicLatestPromotion("5.0.0", version)).toThrow(
+			/invalid live Solo version/i,
+		);
 		expect(
 			nextPromotionAction({
 				currentLatest: "old",
@@ -745,7 +1002,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	it("packs one immutable external cohort manifest with source, tree, lock, and tarball SHA-512", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
-		applySoloReleasePlan(fixture.root, plan);
+		applyFixtureRelease(fixture, plan);
 		for (const record of packages) {
 			mkdirSync(join(fixture.root, record.directory, "dist"));
 			writeFileSync(
@@ -778,12 +1035,13 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			artifactsDirectory: artifacts,
 			source: { head: "a".repeat(40), tree: "b".repeat(40) },
 			command: build,
+			signer: testProvenanceSigner,
 		});
 		expect(built).toEqual(packages.map(({ name }) => name));
 		expect(result.manifest.source).toMatchObject({
 			commit: "a".repeat(40),
 			tree: "b".repeat(40),
-			upstreamCommit: "3".repeat(40),
+			upstreamCommit: plan.upstreamCommit,
 		});
 		expect(result.manifest.lockfile.sha512).toBe(
 			sha512File(join(fixture.root, "pnpm-lock.yaml")),
@@ -801,6 +1059,17 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			});
 		}
 		expect(existsSync(result.sidecarPath)).toBe(true);
+		expect(existsSync(result.statement)).toBe(true);
+		expect(existsSync(result.signature)).toBe(true);
+		expect(() => loadProvenance(result.manifestPath, plan, fixture.root)).not.toThrow();
+		writeJson(result.manifestPath, { ...result.manifest, coherentTamper: true });
+		writeFileSync(
+			result.sidecarPath,
+			`${sha512File(result.manifestPath)}  ${result.manifestPath.split("/").at(-1)}\n`,
+		);
+		expect(() => loadProvenance(result.manifestPath, plan, fixture.root)).toThrow(
+			/attestation statement drifted|signature is invalid/i,
+		);
 		expect(
 			existsSync(join(fixture.root, `${plan.releaseId}.provenance.json`)),
 		).toBe(false);
@@ -809,7 +1078,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	it("preflights the artifact output before deleting any build output", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
-		applySoloReleasePlan(fixture.root, plan);
+		applyFixtureRelease(fixture, plan);
 		const stale = join(fixture.root, packages[0].directory, "dist/stale.js");
 		mkdirSync(join(stale, ".."), { recursive: true });
 		writeFileSync(stale, "preserve on refusal\n");
@@ -826,6 +1095,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				command: () => {
 					throw new Error("build must not start");
 				},
+				signer: testProvenanceSigner,
 			}),
 		).toThrow(/new and empty/i);
 		expect(readFileSync(stale, "utf8")).toBe("preserve on refusal\n");
@@ -834,7 +1104,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	it("rejects an archive missing any conditional export target", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
-		applySoloReleasePlan(fixture.root, plan);
+		applyFixtureRelease(fixture, plan);
 		const artifacts = join(tmpdir(), `solo-release-artifacts-${randomUUID()}`);
 		temporaryDirectories.push(artifacts);
 		expect(() =>
@@ -850,6 +1120,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					writeFileSync(join(dist, "index.js"), "export {};\n");
 					return "";
 				},
+				signer: testProvenanceSigner,
 			}),
 		).toThrow(/missing export target .*index\.d\.ts/i);
 	});
@@ -1094,6 +1365,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		const archivePath = join(directory, "archive.tgz");
 		writeFileSync(manifestPath, "{}\n");
 		writeFileSync(sidecarPath, "sidecar\n");
+		writeFileSync(`${manifestPath}.attestation.json`, "{}\n");
+		writeFileSync(`${manifestPath}.attestation.sig`, "signature\n");
 		writeFileSync(archivePath, "archive\n");
 		const manifest = {
 			source: {

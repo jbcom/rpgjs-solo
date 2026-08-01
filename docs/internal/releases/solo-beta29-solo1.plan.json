@@ -1,11 +1,56 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "releaseId": "solo-beta29-solo1",
   "sourceBaseCommit": "98bdb58b4afafdea0685d69ae046f5eb7239def2",
   "requiredSourceCommit": "f0144127fe43c264638ca2699b8bfcd3cd55fea6",
   "sourceBinding": {
     "status": "provisional",
     "requiredUpdate": "After PR #20 merges, replace sourceBaseCommit and requiredSourceCommit with that exact canonical merge SHA and set status to final."
+  },
+  "reviewEvidence": {
+    "status": "provisional",
+    "requiredUpdate": "After PR #20 merges and the release transition PR is opened, bind the exact engine merge and release PR number, retain the required successful checks and approval policy, and set status to final.",
+    "enginePullRequest": {
+      "repository": "jbcom/rpgjs-solo",
+      "number": 20,
+      "mergeCommit": null,
+      "minimumApprovals": 1,
+      "requiredChecks": [
+        "Analyze (actions)",
+        "Analyze (javascript-typescript)",
+        "CodeQL",
+        "CodeRabbit",
+        "tests (24)"
+      ]
+    },
+    "releasePullRequest": {
+      "repository": "jbcom/rpgjs-solo",
+      "number": null,
+      "mergeCommitBinding": "canonical-head",
+      "minimumApprovals": 1,
+      "requiredChecks": [
+        "Analyze (actions)",
+        "Analyze (javascript-typescript)",
+        "CodeQL",
+        "CodeRabbit",
+        "tests (24)"
+      ]
+    },
+    "independentReceipt": {
+      "status": "provisional",
+      "algorithm": "ed25519",
+      "keyId": null,
+      "publicKeyPem": null,
+      "producerPrincipalId": null,
+      "requiredUpdate": "Commit the trusted independent reviewer public key and producer principal, then provide a detached signed ACCEPT receipt after merge through RPGJS_SOLO_REVIEW_RECEIPT_PATH whenever lawful GitHub approvals are unavailable. The receipt must bind both exact PR merges, plan SHA-512, and a distinct reviewer principal."
+    }
+  },
+  "provenanceAttestation": {
+    "status": "provisional",
+    "algorithm": "ed25519",
+    "keyId": null,
+    "publicKeyPem": null,
+    "requiredUpdate": "Commit the trusted Ed25519 public key and its SHA-256 SPKI key id, set status to final, and provide the matching mode-0600 private key only through RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE during pack."
   },
   "upstreamCommit": "2fab01fb8e93ad13902b07db28935f058b387213",
   "previousVersion": "5.0.0-beta.29.solo.0",
@@ -72,7 +117,7 @@
     },
     {
       "id": "solo-beta29-release-transaction",
-      "sha256": "6c2e7ffc8d4c18447316f23aa27b9fb333eed2cec7596fa1b54652cfa464a2c0"
+      "sha256": "bc67b80fa40584f7aef4e8be86b34ffd8c4b61c3e2a8b52ea4bc3b7c88171035"
     }
   ],
   "carriedChangesets": [

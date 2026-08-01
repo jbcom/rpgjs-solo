@@ -6,6 +6,7 @@
 ---
 
 Publish canonical GitHub source metadata and add a fail-closed coordinated
-release transaction with clean export-complete archives, immutable provenance,
-candidate and live-latest verification, retry-safe versioning, and resumable
-byte-verified GitHub/Gitea prerelease evidence.
+release transaction with exact-toolchain enforcement, a byte-journaled apply
+state machine, reviewed-merge or signed producer-disjoint review evidence,
+clean export-complete archives, signed immutable provenance, monotonic candidate
+promotion, and resumable byte-verified GitHub/Gitea prerelease evidence.
