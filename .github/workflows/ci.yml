@@ -33,6 +33,8 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Dependency currency
+        run: pnpm verify:toolchain-currency
       - name: Build
         run: pnpm build
       - name: Public API boundary
@@ -45,6 +47,8 @@ jobs:
         run: pnpm verify:solo-package-contracts
       - name: Solo packed consumer execution
         run: pnpm verify:solo-consumer
+      - name: Published package dependency contracts
+        run: pnpm verify:published-package-contracts
       - name: Unit tests
         run: pnpm test --run
       - name: Cloudflare MMORPG runtime tests

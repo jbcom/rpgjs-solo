@@ -51,7 +51,7 @@
   "license": "MIT",
   "description": "A deterministic 2D top-down physics library for RPG, sandbox and MMO games",
   "devDependencies": {
-    "@types/node": "^25.9.3",
+    "@types/node": "24.13.3",
     "@vitest/coverage-v8": "^4.1.9",
     "@vitest/ui": "^4.1.9",
     "tsx": "^4.22.4",

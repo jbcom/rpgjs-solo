@@ -9,7 +9,6 @@ allowBuilds:
   workerd: true
   ws: true
 overrides:
-  '@hono/vite-dev-server>@hono/node-server': 2.0.12
   'miniflare@3.20240718.0>undici': 6.27.0
   'partykit>esbuild': 0.28.1
 minimumReleaseAgeExclude:

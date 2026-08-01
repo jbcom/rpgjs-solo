@@ -33,7 +33,7 @@
     "@rpgjs/ui-css": "workspace:*",
     "@rpgjs/vite": "workspace:*",
     "@rpgjs/vue": "workspace:*",
-    "@signe/di": "3.1.0",
+    "@signe/di": "3.1.1",
     "canvasengine": "2.1.1",
     "express": "^5.2.1",
     "pixi.js": "^8.19.0",

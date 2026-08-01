@@ -22,6 +22,8 @@
     "verify:solo-boundary": "pnpm --filter @jbcom/rpgjs-solo --filter @jbcom/rpgjs-solo-action-battle --filter @jbcom/rpgjs-solo-renderer -r verify:boundary",
     "verify:solo-package-contracts": "node bin/verify-solo-package-contracts.mjs",
     "verify:solo-consumer": "node bin/verify-solo-consumer.mjs",
+    "verify:published-package-contracts": "node bin/verify-published-package-contracts.mjs",
+    "verify:toolchain-currency": "node bin/verify-toolchain-currency.mjs",
     "test": "vitest",
     "test:types": "vitest --typecheck run packages/client/src/public-api-types.spec.ts packages/common/src/foundation.spec.ts packages/server/tests/server-api-types.spec.ts"
   },
