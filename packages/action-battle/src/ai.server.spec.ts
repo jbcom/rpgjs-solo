@@ -2057,7 +2057,6 @@ describe("BattleAi behavior tree", () => {
     const ai = new BattleAi(event as any, {
       attackSkill: skill,
       attackRange: 50,
-      moveToCooldown: 0,
       patrolWaypoints: [{ x: 32, y: 48 }],
     });
     event.moveTo.mockClear();
@@ -2067,14 +2066,18 @@ describe("BattleAi behavior tree", () => {
 
     expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
     const actionLockedUntil = (ai as any).actionLockedUntil;
+    const patrolResumesAt = Math.max(
+      actionLockedUntil,
+      (ai as any).lastMoveToTime + (ai as any).moveToCooldown,
+    );
     target.hp = 0;
     vi.advanceTimersByTime(100);
 
     expect(ai.getState()).toBe(AiState.Idle);
     expect(event.moveTo).not.toHaveBeenCalled();
-    const remainingLockMs = actionLockedUntil - Date.now();
-    expect(remainingLockMs).toBeGreaterThan(0);
-    vi.advanceTimersByTime(remainingLockMs - 1);
+    const remainingResumeMs = patrolResumesAt - Date.now();
+    expect(remainingResumeMs).toBeGreaterThan(0);
+    vi.advanceTimersByTime(remainingResumeMs - 1);
     expect(event.moveTo).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
 

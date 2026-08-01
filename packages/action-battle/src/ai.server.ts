@@ -2701,11 +2701,14 @@ export class BattleAi {
       || this.stateGeneration !== stateGeneration
       || this.patrolWaypoints.length === 0
     ) return;
-    const remainingLockMs = this.actionLockedUntil - Date.now();
-    if (remainingLockMs > 0) {
+    const now = Date.now();
+    const remainingLockMs = this.actionLockedUntil - now;
+    const remainingMoveCooldownMs = this.moveToCooldown - (now - this.lastMoveToTime);
+    const retryAfterMs = Math.max(remainingLockMs, remainingMoveCooldownMs);
+    if (retryAfterMs > 0) {
       this.schedule(
         () => this.resumePatrolWhenActionUnlocked(stateGeneration),
-        remainingLockMs,
+        retryAfterMs,
       );
       return;
     }
