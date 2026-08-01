@@ -643,6 +643,8 @@ interface PlayerCombatRuntimeState {
   comboIndex: number;
   lastAttackAt: number;
   queuedCombo: boolean;
+  pendingComboToken: number;
+  pendingComboTimer: ReturnType<typeof setTimeout> | null;
   chargeStartedAt: number | null;
   chargeToken: number;
 }
@@ -657,12 +659,26 @@ const getPlayerCombatState = (player: RpgPlayer): PlayerCombatRuntimeState => {
       comboIndex: 0,
       lastAttackAt: 0,
       queuedCombo: false,
+      pendingComboToken: 0,
+      pendingComboTimer: null,
       chargeStartedAt: null,
       chargeToken: 0,
     };
     playerCombatStates.set(player, state);
   }
   return state;
+};
+
+const invalidatePendingPlayerCombo = (
+  state: PlayerCombatRuntimeState | undefined,
+) => {
+  if (!state) return;
+  state.pendingComboToken++;
+  state.queuedCombo = false;
+  if (state.pendingComboTimer !== null) {
+    clearTimeout(state.pendingComboTimer);
+    state.pendingComboTimer = null;
+  }
 };
 
 const objectOption = <T extends object>(value: boolean | T | undefined): T | undefined =>
@@ -705,6 +721,54 @@ const resolvePlayerComboProfile = (
     ),
     step,
   };
+};
+
+const isBufferedPlayerComboContextCurrent = (
+  player: RpgPlayer,
+  originMap: ReturnType<RpgPlayer["getCurrentMap"]>,
+) => {
+  if (typeof player.hp !== "number" || player.hp <= 0) return false;
+  if (!originMap || player.getCurrentMap() !== originMap) return false;
+  return (originMap as any).getPlayer?.(player.id) === player;
+};
+
+const queuePendingPlayerCombo = (
+  player: RpgPlayer,
+  input: any,
+  options: ActionBattleOptions,
+  state: PlayerCombatRuntimeState,
+  delayMs: number,
+) => {
+  const originMap = player.getCurrentMap();
+  invalidatePendingPlayerCombo(state);
+  if (!originMap) return false;
+
+  const token = state.pendingComboToken;
+  state.queuedCombo = true;
+  const timer = setTimeout(() => {
+    if (
+      state.pendingComboToken !== token
+      || state.pendingComboTimer !== timer
+    ) {
+      return;
+    }
+    state.pendingComboToken++;
+    state.pendingComboTimer = null;
+    state.queuedCombo = false;
+    if (!isBufferedPlayerComboContextCurrent(player, originMap)) return;
+
+    const next = resolvePlayerComboProfile(player, options);
+    if (
+      performPlayerAttack(player, input, options, next.profile, {
+        comboStep: next.step,
+      })
+    ) {
+      state.lastAttackAt = Date.now();
+      state.comboIndex = next.step + 1;
+    }
+  }, delayMs);
+  state.pendingComboTimer = timer;
+  return true;
 };
 
 const resolveSignal = (value: any) =>
@@ -1242,7 +1306,7 @@ export const createActionBattleServer = (
           directionalActions.has(input.action)
         ) {
           cancelPlayerAttackRecovery(player);
-          state.queuedCombo = false;
+          invalidatePendingPlayerCombo(state);
         }
 
         if (input.action === ACTION_BATTLE_GUARD_END) {
@@ -1254,7 +1318,7 @@ export const createActionBattleServer = (
           if (activeUntil > now) return;
           if (lockedUntil > now) {
             cancelPlayerAttackRecovery(player);
-            state.queuedCombo = false;
+            invalidatePendingPlayerCombo(state);
           }
           beginActionBattleGuard(player, guard, now);
           emitActionBattleClientVisual({
@@ -1284,7 +1348,7 @@ export const createActionBattleServer = (
             (activeProfile?.control.dodgeCancelsRecovery ?? true)
           ) {
             cancelPlayerAttackRecovery(player);
-            state.queuedCombo = false;
+            invalidatePendingPlayerCombo(state);
           }
           (player as any).__actionBattleDodgeLockedUntil =
             now + Math.max(0, dodge.cooldownMs ?? 650);
@@ -1356,23 +1420,18 @@ export const createActionBattleServer = (
                   160) &&
               !state.queuedCombo
             ) {
-              state.queuedCombo = true;
-              setTimeout(() => {
-                state.queuedCombo = false;
-                const next = resolvePlayerComboProfile(player, options);
-                if (
-                  performPlayerAttack(player, input, options, next.profile, {
-                    comboStep: next.step,
-                  })
-                ) {
-                  state.lastAttackAt = Date.now();
-                  state.comboIndex = next.step + 1;
-                }
-              }, remaining + 1);
+              queuePendingPlayerCombo(
+                player,
+                input,
+                options,
+                state,
+                remaining + 1,
+              );
             }
             return;
           }
 
+          invalidatePendingPlayerCombo(state);
           const next = resolvePlayerComboProfile(player, options, now);
           if (
             performPlayerAttack(player, input, options, next.profile, {
@@ -1385,14 +1444,23 @@ export const createActionBattleServer = (
         }
       },
       onConnected(player: RpgPlayer) {
+        invalidatePendingPlayerCombo(playerCombatStates.get(player));
         player.initializeHotbar?.();
         syncActionBattleHotbar(player, options);
       },
       onJoinMap(player: RpgPlayer) {
+        invalidatePendingPlayerCombo(playerCombatStates.get(player));
         player.initializeHotbar?.();
         syncActionBattleHotbar(player, options);
       },
+      onLeaveMap(player: RpgPlayer) {
+        invalidatePendingPlayerCombo(playerCombatStates.get(player));
+      },
+      onDead(player: RpgPlayer) {
+        invalidatePendingPlayerCombo(playerCombatStates.get(player));
+      },
       onDisconnected(player: RpgPlayer) {
+        invalidatePendingPlayerCombo(playerCombatStates.get(player));
         releaseActionBattleControls(player);
         clearActionBattleDefense(player);
         playerCombatStates.delete(player);

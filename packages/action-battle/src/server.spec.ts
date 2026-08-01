@@ -291,3 +291,198 @@ describe("action battle player visuals", () => {
     expect(player.hideHotbar).toHaveBeenCalledTimes(1);
   });
 });
+
+const createBufferedComboHarness = () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(1_000);
+
+  let connected = true;
+  let currentMap: any;
+  const clientVisual = vi.fn();
+  const player: any = {
+    id: "buffered-hero",
+    hp: 10,
+    canMove: true,
+    directionFixed: false,
+    animationFixed: false,
+    pendingInputs: [],
+    lastProcessedInputTs: 0,
+    x: () => 100,
+    y: () => 120,
+    hitbox: () => ({ w: 32, h: 32 }),
+    getDirection: () => "down",
+    changeDirection: vi.fn(),
+    getCurrentMap: () => currentMap,
+    equipments: () => [],
+  };
+  const createMap = () => {
+    const map: any = {
+      clientVisual,
+      getEvents: () => [],
+      getPlayers: () => connected && currentMap === map ? [player] : [],
+      getPlayer: (id: string) =>
+        connected && currentMap === map && id === player.id
+          ? player
+          : undefined,
+      queryHitbox: () => [],
+      stopMovement: vi.fn(),
+    };
+    return map;
+  };
+  const originMap = createMap();
+  const destinationMap = createMap();
+  currentMap = originMap;
+
+  const attackStep = {
+    startupMs: 0,
+    activeMs: 1,
+    recoveryMs: 49,
+    control: {
+      movementLock: "none" as const,
+      directionLock: "none" as const,
+    },
+  };
+  const server = createActionBattleServer({
+    attack: { profile: attackStep },
+    combat: {
+      player: {
+        combo: {
+          enabled: true,
+          bufferMs: 150,
+          resetMs: 700,
+          steps: [attackStep, attackStep],
+        },
+      },
+    },
+  });
+  const pressAction = () => (server.player?.onInput as any)(player, {
+    action: "action",
+    data: { direction: "down" },
+  });
+  const queueCombo = (remainingMs = 100) => {
+    player.__actionBattleAttackLockedUntil = Date.now() + remainingMs;
+    player.__actionBattleAttackActiveUntil = Date.now();
+    pressAction();
+  };
+  const attackCount = () => clientVisual.mock.calls.filter(
+    ([, payload]) => payload?.moment === "attack",
+  ).length;
+
+  return {
+    server,
+    player,
+    originMap,
+    destinationMap,
+    pressAction,
+    queueCombo,
+    attackCount,
+    disconnect: () => {
+      connected = false;
+    },
+    setCurrentMap: (map: any) => {
+      currentMap = map;
+    },
+  };
+};
+
+describe("action battle buffered combo lifecycle", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("invalidates a buffered combo when the player dies", () => {
+    const harness = createBufferedComboHarness();
+    harness.queueCombo();
+    expect(vi.getTimerCount()).toBe(1);
+
+    harness.player.hp = 0;
+    (harness.server.player?.onDead as any)(harness.player);
+
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(200);
+    expect(harness.attackCount()).toBe(0);
+  });
+
+  test("invalidates a buffered combo when the player disconnects", () => {
+    const harness = createBufferedComboHarness();
+    harness.queueCombo();
+    harness.disconnect();
+
+    (harness.server.player?.onDisconnected as any)(harness.player);
+
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(200);
+    expect(harness.attackCount()).toBe(0);
+  });
+
+  test("invalidates a buffered combo across a map transition", () => {
+    const harness = createBufferedComboHarness();
+    harness.queueCombo();
+
+    (harness.server.player?.onLeaveMap as any)(
+      harness.player,
+      harness.originMap,
+    );
+    harness.setCurrentMap(harness.destinationMap);
+    (harness.server.player?.onJoinMap as any)(
+      harness.player,
+      harness.destinationMap,
+    );
+
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(200);
+    expect(harness.attackCount()).toBe(0);
+  });
+
+  test("fails closed when the player no longer has a current map", () => {
+    const harness = createBufferedComboHarness();
+    harness.queueCombo();
+    harness.setCurrentMap(null);
+
+    vi.advanceTimersByTime(101);
+
+    expect(harness.attackCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("fails closed when the originating map no longer owns the player", () => {
+    const harness = createBufferedComboHarness();
+    harness.queueCombo();
+    harness.disconnect();
+
+    vi.advanceTimersByTime(101);
+
+    expect(harness.attackCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("replaces an obsolete buffer before queuing the next combo", () => {
+    const harness = createBufferedComboHarness();
+    harness.queueCombo(100);
+
+    harness.player.__actionBattleAttackLockedUntil = Date.now();
+    harness.pressAction();
+    expect(harness.attackCount()).toBe(1);
+
+    vi.advanceTimersByTime(10);
+    harness.pressAction();
+    vi.advanceTimersByTime(41);
+    expect(harness.attackCount()).toBe(2);
+
+    vi.advanceTimersByTime(100);
+    expect(harness.attackCount()).toBe(2);
+  });
+
+  test("executes an uncontested buffered combo exactly once", () => {
+    const harness = createBufferedComboHarness();
+    harness.queueCombo();
+
+    vi.advanceTimersByTime(100);
+    expect(harness.attackCount()).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(harness.attackCount()).toBe(1);
+
+    vi.runAllTimers();
+    expect(harness.attackCount()).toBe(1);
+  });
+});
