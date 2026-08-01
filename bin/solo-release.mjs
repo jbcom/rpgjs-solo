@@ -17,6 +17,7 @@ import {
 	constants as fsConstants,
 	fstatSync,
 	fsyncSync,
+	ftruncateSync,
 	lstatSync,
 	mkdirSync,
 	mkdtempSync,
@@ -73,7 +74,7 @@ const orchestratorTrustDomain = "jbcom/rpgjs-solo-release-orchestrator";
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const writeJson = (path, value) =>
-	writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+	writeExclusiveFile(path, `${JSON.stringify(value, null, 2)}\n`, 0o644);
 const digest = (algorithm, value) =>
 	createHash(algorithm).update(value).digest("hex");
 export const sha256File = (path) => digest("sha256", readFileSync(path));
@@ -183,6 +184,54 @@ const writeExclusiveFile = (path, value, mode) => {
 	} finally {
 		closeSync(descriptor);
 	}
+};
+
+const rewriteOwnedFile = (path, value, mode, label) => {
+	const before = lstatSync(path);
+	assert(
+		before.isFile() &&
+			!before.isSymbolicLink() &&
+			before.uid === currentUid() &&
+			before.nlink === 1,
+		`${label} must be an owned single-link regular file`,
+	);
+	const descriptor = openSync(path, fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW);
+	try {
+		const opened = fstatSync(descriptor);
+		assert(
+			opened.isFile() &&
+				opened.dev === before.dev &&
+				opened.ino === before.ino &&
+				opened.uid === currentUid() &&
+				opened.nlink === 1,
+			`${label} changed during no-follow rewrite`,
+		);
+		ftruncateSync(descriptor, 0);
+		writeFileSync(descriptor, value);
+		fchmodSync(descriptor, mode);
+		fsyncSync(descriptor);
+	} finally {
+		closeSync(descriptor);
+	}
+};
+
+const ensureExactFile = (path, value, mode, label) => {
+	const expected = Buffer.isBuffer(value) ? value : Buffer.from(value);
+	const existing = regularFileState(path, label, {
+		owner: currentUid(),
+		mode,
+	});
+	if (existing) {
+		assert(existing.bytes.equals(expected), `${label} has foreign bytes`);
+		return existing;
+	}
+	writeExclusiveFile(path, expected, mode);
+	const created = regularFileState(path, label, {
+		owner: currentUid(),
+		mode,
+	});
+	assert(created?.bytes.equals(expected), `${label} creation was not durable`);
+	return created;
 };
 
 const removeOwnedTempDirectory = (path) => {
@@ -1555,7 +1604,12 @@ const computeTargetLockfile = (root, manifestTransitions, command = run) => {
 			timeout: 600_000,
 		});
 		for (const descriptor of manifestTransitions)
-			writeFileSync(join(directory, descriptor.path), descriptor.target);
+			rewriteOwnedFile(
+				join(directory, descriptor.path),
+				descriptor.target,
+				descriptor.targetMode,
+				`Lockfile-stage input ${descriptor.path}`,
+			);
 		command("pnpm", ["install", "--lockfile-only", "--ignore-scripts"], {
 			cwd: directory,
 			timeout: 600_000,
@@ -1827,27 +1881,32 @@ export const assertCanonicalMain = (root, plan, command = run) => {
 	return { head, tree, reviewEvidence };
 };
 
-const preflightArtifactDirectory = (root, path) => {
+const prepareArtifactDirectory = (root, path) => {
 	assert(
 		path && isAbsolute(path),
 		"--artifacts must be an absolute directory outside the repository",
 	);
 	const rootReal = realpathSync(root);
-	const parent = existsSync(path)
-		? realpathSync(path)
-		: realpathSync(dirname(path));
-	const resolved = existsSync(path)
-		? parent
-		: join(parent, path.split(sep).at(-1));
+	const parent = realpathSync(dirname(path));
+	const resolved = join(parent, basename(path));
 	assert(
 		resolved !== rootReal && !resolved.startsWith(`${rootReal}${sep}`),
 		"Release artifacts must remain outside the repository",
 	);
-	if (existsSync(path))
-		assert(
+	assert(
+		lstatOrNull(path) === null,
+		"Release artifacts directory must be new and empty",
+	);
+	mkdirSync(path, { recursive: false, mode: 0o700 });
+	const created = lstatSync(path);
+	assert(
+		created.isDirectory() &&
+			!created.isSymbolicLink() &&
+			created.uid === currentUid() &&
+			permissionMode(created) === 0o700 &&
 			readdirSync(path).length === 0,
-			"Release artifacts directory must be new and empty",
-		);
+		"Release artifacts directory was not created securely",
+	);
 };
 
 const collectExportTargets = (value, targets = []) => {
@@ -2011,11 +2070,12 @@ const writeProvenanceAttestation = (
 		},
 	};
 	const statementBytes = Buffer.from(`${JSON.stringify(statement, null, 2)}\n`);
-	writeFileSync(paths.statement, statementBytes);
+	writeExclusiveFile(paths.statement, statementBytes, 0o644);
 	const signature = signer(statementBytes);
-	writeFileSync(
+	writeExclusiveFile(
 		paths.signature,
 		`${Buffer.from(signature).toString("base64")}\n`,
+		0o644,
 	);
 	return paths;
 };
@@ -2084,11 +2144,9 @@ export const createProvenanceManifest = ({
 		validateSoloReleaseState(root, plan).phase === "applied",
 		"Provenance requires the applied version phase",
 	);
-	preflightArtifactDirectory(root, artifactsDirectory);
+	prepareArtifactDirectory(root, artifactsDirectory);
 	assertExactSourceWorktree(root, source, sourceCommand);
 	cleanBuildSoloCohort(root, plan, source, command, sourceCommand);
-	if (!existsSync(artifactsDirectory))
-		mkdirSync(artifactsDirectory, { recursive: false });
 	let reviewReceipt;
 	if (source.reviewEvidence?.independentReceipt) {
 		const sourceStatement = process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH;
@@ -2117,18 +2175,8 @@ export const createProvenanceManifest = ({
 		const signatureName = `${statementName}.sig`;
 		const statementPath = join(artifactsDirectory, statementName);
 		const signaturePath = join(artifactsDirectory, signatureName);
-		writeFileSync(
-			statementPath,
-			sourceStatementState.bytes,
-			{ mode: 0o600 },
-		);
-		writeFileSync(
-			signaturePath,
-			sourceSignatureState.bytes,
-			{ mode: 0o600 },
-		);
-		chmodSync(statementPath, 0o600);
-		chmodSync(signaturePath, 0o600);
+		writeExclusiveFile(statementPath, sourceStatementState.bytes, 0o600);
+		writeExclusiveFile(signaturePath, sourceSignatureState.bytes, 0o600);
 		reviewReceipt = {
 			statement: statementName,
 			signature: signatureName,
@@ -2143,7 +2191,7 @@ export const createProvenanceManifest = ({
 			artifactsDirectory,
 			record.name.replaceAll("/", "-"),
 		);
-		mkdirSync(packageArtifacts);
+		mkdirSync(packageArtifacts, { mode: 0o700 });
 		const { archivePath } = packPackageArchive({
 			packageDirectory: join(root, record.directory),
 			destinationDirectory: packageArtifacts,
@@ -2229,9 +2277,10 @@ export const createProvenanceManifest = ({
 	);
 	writeJson(manifestPath, manifest);
 	const sidecarPath = `${manifestPath}.sha512`;
-	writeFileSync(
+	writeExclusiveFile(
 		sidecarPath,
 		`${sha512File(manifestPath)}  ${manifestPath.split(sep).at(-1)}\n`,
+		0o644,
 	);
 	const signed = writeProvenanceAttestation(
 		manifestPath,
@@ -2251,12 +2300,11 @@ export const withEphemeralNpmAuth = async (token, registry, callback) => {
 		"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/";
 	const arcadePath =
 		new URL(arcadeRegistry).host + new URL(arcadeRegistry).pathname;
-	writeFileSync(
+	writeExclusiveFile(
 		npmrc,
 		`registry=https://registry.npmjs.org/\n@jbcom:registry=${registry}\n@arcade-cabinet:registry=${arcadeRegistry}\n//${registryPath}:_authToken=${token}\n//${arcadePath}:_authToken=${token}\nalways-auth=true\n`,
-		{ mode: 0o600 },
+		0o600,
 	);
-	chmodSync(npmrc, 0o600);
 	try {
 		const childEnvironment = {
 			...process.env,
@@ -2554,9 +2602,10 @@ const verifyPublishedConsumer = (manifest, plan, env) => {
 				["vite", "8.2.0"],
 			]),
 		});
-		writeFileSync(
+		writeExclusiveFile(
 			join(directory, "check.mjs"),
 			`import { SoloRuntime } from '@jbcom/rpgjs-solo'\nimport { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'\nimport { resolveInitialMute } from '@jbcom/rpgjs-solo-renderer'\nimport { inspectSoloBundle } from '@jbcom/rpgjs-solo-vite'\nimport { installCanvasEnginePatches } from '@arcade-cabinet/rpgjs-patches'\nconst runtime = new SoloRuntime({ fixedStepMs: 16 })\nruntime.registerMap({ id: 'release', width: 32, height: 32, entities: [{ id: 'hero', kind: 'player', x: 1, y: 1 }] })\nruntime.setActiveMap('release')\nif (!new SoloActionBattle(runtime).canMove('hero').available) throw new Error('action battle failed')\nif (!resolveInitialMute({ autoMuteInTests: true }, true)) throw new Error('test mute failed')\nif (inspectSoloBundle({}).length !== 0) throw new Error('vite boundary failed')\nif (typeof installCanvasEnginePatches !== 'function') throw new Error('patch package failed')\n`,
+			0o644,
 		);
 		run("pnpm", ["install", "--ignore-scripts"], {
 			cwd: directory,
@@ -3052,11 +3101,18 @@ export const prepareReleaseEvidence = (
 			resolve(dirname(manifestPath), archive),
 		),
 	];
-	for (const path of sourcePaths)
-		assert(existsSync(path), `Release evidence is missing: ${path}`);
-	if (existsSync(notesPath))
+	const sourceStates = sourcePaths.map((path) => {
+		const state = regularFileState(path, `Release evidence ${basename(path)}`);
+		assert(state, `Release evidence is missing: ${path}`);
+		return { path, state };
+	});
+	const notesState = regularFileState(notesPath, "Release-note output", {
+		owner: currentUid(),
+		mode: 0o644,
+	});
+	if (notesState)
 		assert(
-			readFileSync(notesPath, "utf8") === notes,
+			notesState.bytes.equals(Buffer.from(notes)),
 			"Existing release-note output has foreign bytes",
 		);
 	const names = [
@@ -3064,11 +3120,12 @@ export const prepareReleaseEvidence = (
 		basename(notesPath),
 	];
 	assert(new Set(names).size === names.length, "Release asset names collide");
-	if (writeNotes && !existsSync(notesPath)) writeFileSync(notesPath, notes);
-	const assets = sourcePaths.map((path) => ({
+	if (writeNotes && !notesState)
+		ensureExactFile(notesPath, notes, 0o644, "Release-note output");
+	const assets = sourceStates.map(({ path, state }) => ({
 		path,
 		name: basename(path),
-		sha512: sha512File(path),
+		sha512: state.sha512,
 	}));
 	assets.push({
 		path: notesPath,
@@ -3467,8 +3524,12 @@ const publishReleases = async (manifest, manifestPath, plan, args) => {
 	);
 	if (!lstatOrNull(journalPath))
 		secureAtomicWriteJson(journalPath, journal, { purpose: journalPurpose });
-	if (!existsSync(expected.notesPath))
-		writeFileSync(expected.notesPath, expected.body);
+	ensureExactFile(
+		expected.notesPath,
+		expected.body,
+		0o644,
+		"Release-note output",
+	);
 	const tags = [...plan.packages.map(({ tag }) => tag), plan.trainTag];
 	reconcileLocalTags(tags, manifest.source.commit);
 	reconcileRemoteTags(plan.canonical.repository, tags, manifest.source.commit);

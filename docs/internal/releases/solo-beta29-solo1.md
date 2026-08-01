@@ -2,10 +2,13 @@
 
 Status: tooling rebased onto the exact canonical, two-parent PR #20 merge
 `82a9e56d106e87c37df4602055a6a22ec22218dc`, with release PR #22 and the
-release-scoped provenance public key bound in the plan. Publication remains
-blocked until this release PR carries its deterministic apply transition,
-passes every required check, receives the detached producer-disjoint review
-receipt, and is merged without changing the reviewed release source.
+release-scoped provenance public key bound in the plan. The deterministic apply
+transition is committed on release PR #22. Publication remains blocked until
+that exact PR head passes every required check, is independently accepted, and
+is merged without changing the reviewed release source. The detached
+producer-disjoint review receipt is created only after that exact reviewed head
+becomes a canonical two-parent merge, because the receipt binds the final merge
+SHA as well as the immutable plan and assignment.
 `fair-studio-success-rates.introducedBy` remains its own immutable `f014412...`
 commit and is verified as an ancestor of the required source instead of being
 made equal to it.

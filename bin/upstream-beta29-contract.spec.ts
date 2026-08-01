@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 
 const rootDirectory = dirname(dirname(fileURLToPath(import.meta.url)));
 const upstreamCommit = "2fab01fb8e93ad13902b07db28935f058b387213";
-const soloVersion = "5.0.0-beta.29.solo.0";
 
 const readText = (path: string) =>
 	readFileSync(join(rootDirectory, path), "utf8");
@@ -31,6 +30,24 @@ const soloManifests = [
 	"packages/solo-renderer/package.json",
 	"packages/solo-vite/package.json",
 ];
+const releasePlan = readJson(
+	"docs/internal/releases/solo-beta29-solo1.plan.json",
+);
+
+const currentSoloPhase = () => {
+	const versions = new Set(
+		soloManifests.map((path) => readJson(path).version as string),
+	);
+	expect([...versions], "Solo cohort must have one release identity").toHaveLength(
+		1,
+	);
+	const version = [...versions][0];
+	expect([releasePlan.previousVersion, releasePlan.version]).toContain(version);
+	return {
+		version,
+		phase: version === releasePlan.version ? "applied" : "source",
+	};
+};
 
 describe("RPGJS beta.29 adoption contract", () => {
 	it("binds the exact upstream source and inherited release identities", () => {
@@ -47,6 +64,7 @@ describe("RPGJS beta.29 adoption contract", () => {
 	});
 
 	it("coordinates all Solo source packages on the beta.29 identity", () => {
+		const { version: soloVersion, phase } = currentSoloPhase();
 		for (const path of soloManifests) {
 			expect(readJson(path).version, path).toBe(soloVersion);
 		}
@@ -79,7 +97,7 @@ describe("RPGJS beta.29 adoption contract", () => {
 		);
 		expect(
 			existsSync(join(rootDirectory, ".changeset/solo-beta29-baseline.md")),
-		).toBe(true);
+		).toBe(phase === "source");
 		expect(
 			existsSync(join(rootDirectory, ".changeset/solo-beta28-baseline.md")),
 		).toBe(false);

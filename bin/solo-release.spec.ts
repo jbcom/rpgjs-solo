@@ -7,12 +7,18 @@ import {
 } from "node:crypto";
 import {
 	chmodSync,
+	closeSync,
+	constants as fsConstants,
 	existsSync,
+	fchmodSync,
+	fsyncSync,
 	linkSync,
 	mkdirSync,
 	mkdtempSync,
+	openSync,
 	readdirSync,
 	readFileSync,
+	renameSync,
 	rmSync,
 	statSync,
 	symlinkSync,
@@ -130,8 +136,34 @@ const testProvenanceKeyId = createHash("sha256")
 	.digest("hex");
 const testProvenanceSigner = (value: Buffer) =>
 	signBytes(null, value, testProvenanceKeys.privateKey);
+const writeTestFile = (
+	path: string,
+	value: string | NodeJS.ArrayBufferView,
+	mode = 0o644,
+) => {
+	const temporaryPath = join(
+		dirname(path),
+		`.${basename(path)}.${randomUUID()}.tmp`,
+	);
+	const descriptor = openSync(
+		temporaryPath,
+		fsConstants.O_WRONLY |
+			fsConstants.O_CREAT |
+			fsConstants.O_EXCL |
+			fsConstants.O_NOFOLLOW,
+		mode,
+	);
+	try {
+		writeFileSync(descriptor, value);
+		fchmodSync(descriptor, mode);
+		fsyncSync(descriptor);
+	} finally {
+		closeSync(descriptor);
+	}
+	renameSync(temporaryPath, path);
+};
 const writeJson = (path: string, value: unknown) =>
-	writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+	writeTestFile(path, `${JSON.stringify(value, null, 2)}\n`);
 
 afterEach(() => {
 	for (const directory of temporaryDirectories.splice(0))
@@ -542,7 +574,10 @@ function createReleaseAdapter(
 			calls.order.push(
 				`download:${release?.draft === true ? "draft" : "published"}:${asset.name}`,
 			);
-			writeFileSync(destination, bytes.get(asset.name) ?? Buffer.alloc(0));
+			writeTestFile(
+				destination,
+				bytes.get(asset.name) ?? Buffer.alloc(0),
+			);
 		},
 		publishRelease() {
 			calls.publish += 1;
@@ -1924,9 +1959,10 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		const replay = createCandidateFixture();
 		replay.manifest.releaseId = "different-release";
 		writeJson(replay.manifestPath, replay.manifest);
-		writeFileSync(
+		writeTestFile(
 			`${replay.manifestPath}.candidate-publish.json`,
 			readFileSync(`${candidate.manifestPath}.candidate-publish.json`),
+			0o600,
 		);
 		chmodSync(`${replay.manifestPath}.candidate-publish.json`, 0o600);
 		await expect(
@@ -1992,7 +2028,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		const source = commitAppliedFixture(fixture);
 		for (const record of packages) {
 			mkdirSync(join(fixture.root, record.directory, "dist"));
-			writeFileSync(
+			writeTestFile(
 				join(fixture.root, record.directory, "dist/stale.js"),
 				"must be removed\n",
 			);
@@ -2006,8 +2042,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			const dist = join(fixture.root, record?.directory ?? "", "dist");
 			expect(existsSync(join(dist, "stale.js"))).toBe(false);
 			mkdirSync(dist, { recursive: true });
-			writeFileSync(join(dist, "index.js"), "export const built = true;\n");
-			writeFileSync(
+			writeTestFile(join(dist, "index.js"), "export const built = true;\n");
+			writeTestFile(
 				join(dist, "index.d.ts"),
 				"export declare const built: true;\n",
 			);
@@ -2059,16 +2095,18 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		).not.toThrow();
 		const writeSignedManifest = (manifest: typeof result.manifest) => {
 			writeJson(result.manifestPath, manifest);
-			writeFileSync(
+			writeTestFile(
 				result.sidecarPath,
 				`${sha512File(result.manifestPath)}  ${result.manifestPath.split("/").at(-1)}\n`,
+				0o644,
 			);
 			const statement = JSON.parse(readFileSync(result.statement, "utf8"));
 			statement.subject.manifestSha512 = sha512File(result.manifestPath);
 			writeJson(result.statement, statement);
-			writeFileSync(
+			writeTestFile(
 				result.signature,
 				`${testProvenanceSigner(readFileSync(result.statement)).toString("base64")}\n`,
+				0o644,
 			);
 		};
 		const manifestMetadataForgery = structuredClone(result.manifest);
@@ -2084,7 +2122,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		);
 		temporaryDirectories.push(externalDirectory);
 		const externalArchive = join(externalDirectory, "foreign.tgz");
-		writeFileSync(externalArchive, "foreign archive\n");
+		writeTestFile(externalArchive, "foreign archive\n");
 		writeJson(result.manifestPath, {
 			...result.manifest,
 			packages: result.manifest.packages.map((item, index) => ({
@@ -2092,16 +2130,18 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				...(index === 0 ? { archive: externalArchive } : {}),
 			})),
 		});
-		writeFileSync(
+		writeTestFile(
 			result.sidecarPath,
 			`${sha512File(result.manifestPath)}  ${result.manifestPath.split("/").at(-1)}\n`,
+			0o644,
 		);
 		const forgedStatement = JSON.parse(readFileSync(result.statement, "utf8"));
 		forgedStatement.subject.manifestSha512 = sha512File(result.manifestPath);
 		writeJson(result.statement, forgedStatement);
-		writeFileSync(
+		writeTestFile(
 			result.signature,
 			`${testReviewSigner(readFileSync(result.statement)).toString("base64")}\n`,
+			0o644,
 		);
 		const accesses: string[] = [];
 		let inspections = 0;
@@ -2180,9 +2220,10 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			assignmentSha512: sha512File(fixture.assignmentPath),
 			trustRootKeyId: testOrchestratorKeyId,
 		});
-		writeFileSync(
+		writeTestFile(
 			`${receiptPath}.sig`,
 			`${testReviewSigner(readFileSync(receiptPath)).toString("base64")}\n`,
+			0o600,
 		);
 		chmodSync(receiptPath, 0o600);
 		chmodSync(`${receiptPath}.sig`, 0o600);
@@ -2205,8 +2246,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				const record = packages.find(({ name }) => name === args[1]);
 				const dist = join(fixture.root, record?.directory ?? "", "dist");
 				mkdirSync(dist, { recursive: true });
-				writeFileSync(join(dist, "index.js"), "export const built = true;\n");
-				writeFileSync(
+				writeTestFile(join(dist, "index.js"), "export const built = true;\n");
+				writeTestFile(
 					join(dist, "index.d.ts"),
 					"export declare const built: true;\n",
 				);
@@ -2250,18 +2291,20 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					const record = packages.find(({ name }) => name === args[1]);
 					const dist = join(fixture.root, record?.directory ?? "", "dist");
 					mkdirSync(dist, { recursive: true });
-					writeFileSync(join(dist, "index.js"), "export {};\n");
-					writeFileSync(join(dist, "index.d.ts"), "export {};\n");
-					writeFileSync(
+					writeTestFile(join(dist, "index.js"), "export {};\n");
+					writeTestFile(join(dist, "index.d.ts"), "export {};\n");
+					writeTestFile(
 						join(fixture.root, record?.directory ?? "", "package.json"),
 						"{}\n",
+						0o644,
 					);
 					return "";
 				},
 				signer: testProvenanceSigner,
 			}),
 		).toThrow(/reviewed source worktree changed/i);
-		expect(existsSync(artifacts)).toBe(false);
+		expect(statSync(artifacts).mode & 0o777).toBe(0o700);
+		expect(readdirSync(artifacts)).toEqual([]);
 	});
 
 	it("rejects an archive missing any conditional export target", () => {
@@ -2281,7 +2324,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					const record = packages.find(({ name }) => name === args[1]);
 					const dist = join(fixture.root, record?.directory ?? "", "dist");
 					mkdirSync(dist, { recursive: true });
-					writeFileSync(join(dist, "index.js"), "export {};\n");
+					writeTestFile(join(dist, "index.js"), "export {};\n");
 					return "";
 				},
 				signer: testProvenanceSigner,
@@ -2431,7 +2474,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			if (args[1] === "download") {
 				const name = args[args.indexOf("--pattern") + 1];
 				const destination = args[args.indexOf("--output") + 1];
-				writeFileSync(destination, bytes.get(name) ?? Buffer.alloc(0));
+				writeTestFile(destination, bytes.get(name) ?? Buffer.alloc(0));
 				return "";
 			}
 			if (args[1] === "edit") {
