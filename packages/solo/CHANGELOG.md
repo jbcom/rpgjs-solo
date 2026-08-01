@@ -1,0 +1,39 @@
+# @jbcom/rpgjs-solo
+
+## 5.0.0-beta.29.solo.1
+
+- Add isolated one-fixed-tick candidates with buffered runtime and domain-event
+egress, pure game-state reducers, atomic commit publication, stale-candidate
+rejection, abort-without-live-mutation, same-tick retry semantics, immutable
+candidate inputs, executable-authority revisioning, and serialized publication.
+  (calm-solos-commit)
+- Align the Solo build boundary and the fork's build/test consumers with the
+current stable Vite 8 release, and align the repository release workflow with
+the current stable pnpm 11 release.
+
+Remove the unreachable VitePress/Cloudflare documentation deployment left
+behind by the upstream Mintlify migration, so obsolete build-only dependencies
+cannot keep vulnerable transitive packages in the fork.
+  (current-solo-toolchain)
+- Adopt the audited RPGJS v5 `2fab01fb` beta.29 baseline, including the current
+item, skill, hotbar, combat, GUI, audio, spritesheet, and Studio behavior and
+tests in the inherited compatibility source. Preserve the transport-free Solo
+package boundary and keep server, room, synchronization, and multiplayer code
+out of Solo production bundles.
+  (solo-beta29-baseline)
+- Publish canonical GitHub source metadata and add a fail-closed coordinated
+release transaction with exact-toolchain enforcement, descriptor-captured
+security inputs, single-link byte-journaled recovery that preserves unproven
+state, an externally pinned orchestrator trust root and signed
+producer-disjoint reviewer assignment, clean export-complete archives, a
+descriptor-captured in-memory `libnpmpublish` handoff with the complete packed
+manifest bound into schema-3 signed provenance, monotonic candidate promotion,
+and resumable byte-verified GitHub/Gitea prerelease evidence.
+  (solo-beta29-release-transaction)
+- Adopt the beta.29 action-battle safety boundary in Solo: preserve native skill
+and item restrictions, derive AI and projectile execution from one physical
+descriptor, reject defeated actors across delayed work, bind telegraphed target
+and life generations, cancel stale AI-state work, preserve valid self-support
+and actor-centered zones, and replan delayed skills against current policy,
+geometry, resources, blockers, and target identity before hooks or spend.
+  (wise-solo-action-battle-guards)

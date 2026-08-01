@@ -1,6 +1,6 @@
 {
   "name": "@jbcom/rpgjs-solo-vite",
-  "version": "5.0.0-beta.29.solo.0",
+  "version": "5.0.0-beta.29.solo.1",
   "description": "Vite production-boundary enforcement for RPGJS Solo games",
   "license": "MIT",
   "repository": {
@@ -21,7 +21,10 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "vite build",
