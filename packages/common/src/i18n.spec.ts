@@ -6,6 +6,7 @@ import {
   I18nService,
   isI18nMessageDescriptor,
   registerI18nMessages,
+  type I18nParams,
 } from "./i18n";
 
 describe("i18n service", () => {
@@ -72,6 +73,27 @@ describe("i18n service", () => {
     expect(service.t("npc.hello", { name: "Alex" }, "fr")).toBe("Bonjour Alex");
     expect(service.t("npc.only-en", undefined, "fr")).toBe("Only English");
     expect(service.t("npc.missing", undefined, "fr")).toBe("npc.missing");
+  });
+
+  test("preserves permissive parameters for local-only translations", () => {
+    const when = new Date("2026-08-01T12:00:00.000Z");
+    const params = {
+      when,
+      values: ["iron", "salt"],
+      metadata: { source: "game" },
+    } satisfies I18nParams;
+    const service = new I18nService({
+      messages: {
+        en: {
+          "local.values": "{when}|{values}|{metadata}",
+        },
+      },
+    });
+
+    expect(service.t("local.values", params)).toBe(
+      `${when}|iron,salt|[object Object]`
+    );
+    expect(isI18nMessageDescriptor({ key: "wire.values", params })).toBe(false);
   });
 
   test("lets game messages override module messages", async () => {

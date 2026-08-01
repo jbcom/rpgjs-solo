@@ -310,6 +310,17 @@ const getPlayerMap = (player: RpgPlayer) => {
     : undefined;
 };
 
+const getRewardItemName = (inventoryItem: any, itemRef: any): string | undefined => {
+  if (inventoryItem && typeof inventoryItem.name === "function") {
+    return inventoryItem.name();
+  }
+  if (inventoryItem?.name) return inventoryItem.name;
+  if (typeof itemRef === "string") return itemRef;
+  if (itemRef?.name) return itemRef.name;
+  if (itemRef?.id) return itemRef.id;
+  return undefined;
+};
+
 const createDefeatReward = (
   rewards: BattleAiRewards | undefined
 ): BattleAiDefeatReward => {
@@ -341,7 +352,7 @@ const createDefeatReward = (
         if (Math.random() * 100 >= (item.chance ?? 100)) continue;
 
         const amount = item.amount ?? 1;
-        player.addItem(itemRef, amount);
+        const inventoryItem = player.addItem(itemRef, amount);
         if (rewards.showNotification) {
           const itemData =
             typeof itemRef === "string"
@@ -351,16 +362,18 @@ const createDefeatReward = (
             typeof item.itemNameKey === "string" && item.itemNameKey.length > 0
               ? item.itemNameKey
               : undefined;
+          const itemName = getRewardItemName(inventoryItem, itemRef);
+          const itemNameParam = itemNameKey ? { key: itemNameKey } : itemName;
           player.showNotification(
             {
-              key: itemNameKey
+              key: itemNameParam
                 ? ACTION_BATTLE_I18N_KEYS.rewardNamedItem
                 : ACTION_BATTLE_I18N_KEYS.rewardItem,
               count: amount,
               params: {
                 count: amount,
-                ...(itemNameKey
-                  ? { item: { key: itemNameKey } }
+                ...(itemNameParam
+                  ? { item: itemNameParam }
                   : {}),
               },
             },

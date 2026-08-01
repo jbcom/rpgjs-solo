@@ -4,14 +4,21 @@ import type { RpgContext, RpgFactoryProvider } from "./foundation";
 export type I18nLocaleMessages = Record<string, string>;
 export type I18nMessages = Record<string, I18nLocaleMessages>;
 
+/** Local translation parameters may contain any value accepted by the game. */
+export type I18nParams = Record<string, unknown>;
 export type I18nParamPrimitive = string | number | boolean | null;
-export type I18nParamValue = I18nParamPrimitive | I18nMessageDescriptor;
-export type I18nParams = Record<string, I18nParamValue>;
+export type I18nDescriptorParamValue =
+  | I18nParamPrimitive
+  | I18nMessageDescriptor;
+/** JSON-safe interpolation values allowed across the server/client boundary. */
+export type I18nDescriptorParams = Record<string, I18nDescriptorParamValue>;
+/** @deprecated Use `I18nDescriptorParamValue` for transported descriptors. */
+export type I18nParamValue = I18nDescriptorParamValue;
 
 /** A translation key and serializable interpolation values resolved by the consumer locale. */
 export interface I18nMessageDescriptor {
   key: string;
-  params?: I18nParams;
+  params?: I18nDescriptorParams;
   /** Selects `<key>.<Intl.PluralRules category>` on the receiving client. */
   count?: number;
 }
@@ -27,7 +34,7 @@ const isPlainRecord = (value: object): value is Record<string, unknown> => {
 const isI18nParamValue = (
   value: unknown,
   ancestors: Set<object>
-): value is I18nParamValue => {
+): value is I18nDescriptorParamValue => {
   if (
     value === null ||
     typeof value === "string" ||
@@ -135,7 +142,7 @@ function hasMessages(messages?: I18nMessages): messages is I18nMessages {
 function interpolate(
   message: string,
   params: I18nParams,
-  resolveParam: (value: I18nParamValue) => string
+  resolveParam: (value: unknown) => string
 ): string {
   return message.replace(/\{([^{}]+)\}/g, (match, key) => {
     const name = String(key).trim();

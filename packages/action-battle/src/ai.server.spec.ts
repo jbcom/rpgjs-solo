@@ -217,7 +217,6 @@ describe("BattleAi defeat flow", () => {
         items: [
           {
             itemId: "potion",
-            itemNameKey: "game.item.potion",
             amount: 2,
             chance: 100,
           },
@@ -240,7 +239,7 @@ describe("BattleAi defeat flow", () => {
       {
         key: ACTION_BATTLE_I18N_KEYS.rewardNamedItem,
         count: 2,
-        params: { count: 2, item: { key: "game.item.potion" } },
+        params: { count: 2, item: "Potion" },
       },
       { icon: "potion-icon" }
     );
@@ -309,6 +308,28 @@ describe("BattleAi defeat flow", () => {
         key: ACTION_BATTLE_I18N_KEYS.rewardNamedItem,
         count: 3,
         params: { count: 3, item: { key: "game.item.potion" } },
+      },
+      { icon: "potion-icon" }
+    );
+  });
+
+  test("preserves the resolved database item name when no localization key is authored", () => {
+    const event = createEvent();
+    const attacker = createPlayer();
+    const ai = new BattleAi(event as any, {
+      rewards: {
+        items: [{ itemId: "potion", amount: 2, chance: 100 }],
+        showNotification: true,
+      },
+    });
+
+    ai.handleDamage(attacker as any, { damage: 10, defeated: true });
+
+    expect(attacker.showNotification).toHaveBeenCalledWith(
+      {
+        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItem,
+        count: 2,
+        params: { count: 2, item: "Potion" },
       },
       { icon: "potion-icon" }
     );

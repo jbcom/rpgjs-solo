@@ -20,9 +20,10 @@ previous combat and UI defaults.
 
 Resolve Action Battle reward notifications on the client through stable i18n
 keys and JSON-safe interpolation parameters. Plural categories use the active
-client locale, and authored item-name keys resolve on that same client instead
-of embedding server database text. `showNotification()` now accepts a deferred
-translation descriptor while preserving literal notification strings.
+client locale, and authored item-name keys resolve on that same client. Existing
+rewards without an item-name key retain their resolved database display name.
+`showNotification()` now accepts a deferred translation descriptor while
+preserving literal notification strings and permissive local translation params.
 
 Position transient component animations from numeric world coordinates and
 derive component bounds from visible pixels for generated Studio spritesheets,

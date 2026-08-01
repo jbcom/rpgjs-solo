@@ -1019,8 +1019,10 @@ receiving client's active locale. Games can override the stable
 Plural categories are selected on the receiving client with `Intl.PluralRules`,
 not guessed by the server. Set `itemNameKey` on a reward item and provide that
 translation key in the game catalog to localize the item name as well; rewards
-without an authored item-name key deliberately use the localized generic item
-message instead of embedding a server-side database name.
+without an authored item-name key preserve the resolved database item name for
+backward compatibility. The localized generic item message is used only when
+neither a translation key nor a display name can be resolved. Adding
+`itemNameKey` upgrades that legacy literal name to receiving-locale translation.
 
 ```ts
 rewards: {
