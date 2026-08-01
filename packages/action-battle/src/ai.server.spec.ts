@@ -1970,6 +1970,198 @@ describe("BattleAi behavior tree", () => {
     },
   );
 
+  test.each(["defeated", "left vision"] as const)(
+    "keeps delayed self support through production target loss when the selected target is %s",
+    (targetLoss) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1_000);
+      const event = {
+        ...createEvent(),
+        hp: 5,
+        sp: 12,
+      };
+      const onUse = vi.fn();
+      const skill = {
+        id: "production-self",
+        skillType: "support",
+        spCost: 4,
+        action: { mode: "instant" as const, target: "self" as const },
+        onUse,
+      };
+      const target = {
+        ...createPlayer(),
+        hp: 10,
+        x: vi.fn(() => 20),
+        y: vi.fn(() => 0),
+      };
+      event.getCurrentMap.mockReturnValue({
+        getPlayers: () => [],
+        getEvents: () => [event],
+      });
+      const ai = new BattleAi(event as any, {
+        attackSkill: skill,
+        attackRange: 50,
+      });
+      ai.onDetectInShape(target as any, {});
+      ai.onDetectInShape(target as any, {});
+      const evaluation = (ai as any).evaluateSkillActions(1_000)[0];
+
+      expect((ai as any).updateInterval).toBeDefined();
+      expect(ai.getState()).toBe(AiState.Combat);
+      expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
+      if (targetLoss === "defeated") {
+        target.hp = 0;
+        // Exercise the real 100 ms production behavior loop. It observes the
+        // defeated target before the delayed skill's 120 ms startup resolves.
+        vi.advanceTimersByTime(100);
+      } else {
+        ai.onDetectOutShape(target as any, {});
+      }
+
+      expect(ai.getState()).toBe(AiState.Idle);
+      expect(ai.getTarget()).toBeNull();
+      vi.advanceTimersByTime(500);
+
+      expect(onUse).toHaveBeenCalledOnce();
+      expect(event.sp).toBe(8);
+      ai.destroy();
+    },
+  );
+
+  test("cancels delayed self support when target loss is followed by a new combat epoch", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = {
+      ...createEvent(),
+      hp: 5,
+      sp: 12,
+    };
+    const onUse = vi.fn();
+    const skill = {
+      id: "self-before-reengage",
+      skillType: "support",
+      spCost: 4,
+      action: { mode: "instant" as const, target: "self" as const },
+      onUse,
+    };
+    const original = {
+      ...createPlayer(),
+      id: "original",
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const replacement = {
+      ...createPlayer(),
+      id: "replacement",
+      hp: 10,
+      x: vi.fn(() => -20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+    });
+    ai.onDetectInShape(original as any, {});
+    ai.onDetectInShape(original as any, {});
+    const evaluation = (ai as any).evaluateSkillActions(1_000)[0];
+
+    expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
+    ai.onDetectOutShape(original as any, {});
+    ai.onDetectInShape(replacement as any, {});
+    expect(ai.getState()).toBe(AiState.Alert);
+    vi.advanceTimersByTime(500);
+
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+    expect((ai as any).skillCooldowns.size).toBe(0);
+    ai.destroy();
+  });
+
+  test("cancels delayed self support after an incompatible target-policy change", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = {
+      ...createEvent(),
+      hp: 5,
+      sp: 12,
+    };
+    const onUse = vi.fn();
+    const skill = {
+      id: "self-before-policy-change",
+      skillType: "support",
+      spCost: 4,
+      action: { mode: "instant" as const, target: "self" as const },
+      onUse,
+    };
+    const target = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+      targets: "players",
+    });
+    ai.onDetectInShape(target as any, {});
+    ai.onDetectInShape(target as any, {});
+    const evaluation = (ai as any).evaluateSkillActions(1_000)[0];
+
+    expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
+    ai.setTargets("events");
+    expect(ai.getState()).toBe(AiState.Idle);
+    vi.advanceTimersByTime(500);
+
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+    expect((ai as any).skillCooldowns.size).toBe(0);
+    ai.destroy();
+  });
+
+  test("cancels delayed self support across actor death and revival", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = {
+      ...createEvent(),
+      hp: 5,
+      sp: 12,
+    };
+    const onUse = vi.fn();
+    const skill = {
+      id: "self-before-revival",
+      skillType: "support",
+      spCost: 4,
+      action: { mode: "instant" as const, target: "self" as const },
+      onUse,
+    };
+    const target = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+    });
+    ai.onDetectInShape(target as any, {});
+    ai.onDetectInShape(target as any, {});
+    const evaluation = (ai as any).evaluateSkillActions(1_000)[0];
+
+    expect((ai as any).updateInterval).toBeDefined();
+    expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
+    event.hp = 0;
+    event.hp = 5;
+    vi.advanceTimersByTime(500);
+
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+    expect((ai as any).skillCooldowns.size).toBe(0);
+    ai.destroy();
+  });
+
   test.each([
     { label: "Stunned", states: [AiState.Stunned] },
     { label: "Flee", states: [AiState.Flee] },

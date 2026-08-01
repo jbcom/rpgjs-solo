@@ -94,6 +94,8 @@ interface ActionBattleAiAttackBoundary {
   actorGeneration: ActionBattleActorGeneration;
   state: AiState;
   stateGeneration: number;
+  stateInterruptionGeneration: number;
+  preserveAcrossTargetLoss: boolean;
   selectedTarget?: ActionBattleEntity;
   targets: Array<{
     entity: ActionBattleEntity;
@@ -684,6 +686,10 @@ export class BattleAi {
   // Delayed attacks belong to one uninterrupted state epoch. Comparing only
   // the current enum value would let Stunned -> Combat revive stale work.
   private stateGeneration: number = 0;
+  // A self-targeted skill does not belong to the selected enemy, so ordinary
+  // target loss may move the actor to Idle without interrupting that skill.
+  // Every other state transition still advances this stricter epoch.
+  private stateInterruptionGeneration: number = 0;
   private stateStartTime: number = 0;
   private stunnedUntil: number = 0;
 
@@ -1114,7 +1120,10 @@ export class BattleAi {
   /**
    * Change AI state with validated transitions
    */
-  private changeState(newState: AiState) {
+  private changeState(
+    newState: AiState,
+    options: { preserveSelfTargetedActions?: boolean } = {},
+  ) {
     if (newState === this.state) {
       return;
     }
@@ -1143,6 +1152,9 @@ export class BattleAi {
     });
     this.state = newState;
     this.stateGeneration++;
+    if (!options.preserveSelfTargetedActions) {
+      this.stateInterruptionGeneration++;
+    }
     this.stateStartTime = Date.now();
     this.syncThreat();
 
@@ -1178,7 +1190,7 @@ export class BattleAi {
     if (this.target && this.isTargetDefeated(this.target)) {
       this.debugLog('combat', `Target ${this.target.id} is defeated, returning to idle`);
       this.clearTarget();
-      this.changeState(AiState.Idle);
+      this.returnToIdleAfterTargetLoss();
       this.checkDamageTaken();
       return;
     }
@@ -1308,10 +1320,10 @@ export class BattleAi {
       } else {
         this.debugLog('combat', `Alert target out of range (dist=${distance.toFixed(1)})`);
         this.clearTarget();
-        this.changeState(AiState.Idle);
+        this.returnToIdleAfterTargetLoss();
       }
     } else {
-      this.changeState(AiState.Idle);
+      this.returnToIdleAfterTargetLoss();
     }
   }
 
@@ -1321,7 +1333,7 @@ export class BattleAi {
   private updateCombatBehavior(currentTime: number) {
     if (!this.target) {
       this.debugLog('combat', 'No target, returning to idle');
-      this.changeState(AiState.Idle);
+      this.returnToIdleAfterTargetLoss();
       return;
     }
 
@@ -1340,7 +1352,7 @@ export class BattleAi {
     if (distance > this.visionRange * 1.5) {
       this.debugLog('combat', `Target out of range (dist=${distance.toFixed(1)}, maxRange=${(this.visionRange * 1.5).toFixed(1)})`);
       this.clearTarget();
-      this.changeState(AiState.Idle);
+      this.returnToIdleAfterTargetLoss();
       return;
     }
 
@@ -1612,6 +1624,7 @@ export class BattleAi {
       // not an unrelated combat-selection pointer.
       bindSelectedTarget:
         this.target !== null && plannedTargets.includes(this.target),
+      preserveAcrossTargetLoss: evaluation.targetPolicy === "self",
     });
     if (!attackBoundary) return false;
 
@@ -2807,7 +2820,7 @@ export class BattleAi {
     });
     if (this.target === target) {
       this.clearTarget();
-      this.changeState(AiState.Idle);
+      this.returnToIdleAfterTargetLoss();
     }
   }
 
@@ -3174,6 +3187,12 @@ export class BattleAi {
     this.target = null;
     this.isMovingToTarget = false;
     this.event.stopMoveTo();
+  }
+
+  private returnToIdleAfterTargetLoss(): void {
+    this.changeState(AiState.Idle, {
+      preserveSelfTargetedActions: true,
+    });
   }
 
   private updateBehavior(currentTime: number) {
@@ -3698,6 +3717,7 @@ export class BattleAi {
     options: {
       targets?: ActionBattleEntity[];
       bindSelectedTarget?: boolean;
+      preserveAcrossTargetLoss?: boolean;
     } = {},
   ): ActionBattleAiAttackBoundary | null {
     if (this.isTargetDefeated(this.event)) return null;
@@ -3716,6 +3736,8 @@ export class BattleAi {
       actorGeneration: captureActionBattleActorGeneration(this.event),
       state: this.state,
       stateGeneration: this.stateGeneration,
+      stateInterruptionGeneration: this.stateInterruptionGeneration,
+      preserveAcrossTargetLoss: options.preserveAcrossTargetLoss ?? false,
       ...(bindSelectedTarget && selectedTarget ? { selectedTarget } : {}),
       targets: targets.map((entity) => ({
         entity,
@@ -3727,6 +3749,12 @@ export class BattleAi {
   private isAttackBoundaryCurrent(
     boundary: ActionBattleAiAttackBoundary,
   ): boolean {
+    const stateBoundaryCurrent = boundary.preserveAcrossTargetLoss
+      ? this.stateInterruptionGeneration === boundary.stateInterruptionGeneration
+      : (
+          this.state === boundary.state
+          && this.stateGeneration === boundary.stateGeneration
+        );
     return (
       boundary.selectedTarget === undefined
       || (
@@ -3734,8 +3762,7 @@ export class BattleAi {
         && this.canTarget(boundary.selectedTarget)
       )
     )
-      && this.state === boundary.state
-      && this.stateGeneration === boundary.stateGeneration
+      && stateBoundaryCurrent
       && !this.isTargetDefeated(this.event)
       && isActionBattleActorGenerationCurrent(
         this.event,
