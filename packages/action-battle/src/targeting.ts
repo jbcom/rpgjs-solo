@@ -4,6 +4,13 @@ import {
   ActionBattleUiTargetingOptions,
 } from "./types";
 import type { ActionBattleResolvedDirection } from "./attack-input";
+import {
+  AABBCollider,
+  Entity,
+  Vector2,
+  capsuleCastCollider,
+  raycastCollider,
+} from "@rpgjs/common";
 
 export interface ParsedAoeMask {
   width: number;
@@ -203,6 +210,34 @@ type SoftTargetEntity = {
   };
 };
 
+export type ActionBattleProjectileGeometryInput = {
+  source: SoftTargetEntity;
+  target?: SoftTargetEntity | null;
+  projectile?: {
+    origin?: { x: number; y: number };
+    direction?: ActionBattleWorldDirection;
+    range?: number;
+    trajectory?: { range?: number };
+    collision?: {
+      radius?: number;
+      width?: number;
+      height?: number;
+    };
+  };
+  actionRange?: number;
+  targetingRange?: number;
+  tileSize: ActionBattleTileSize;
+};
+
+export interface ActionBattleProjectileGeometry {
+  origin: { x: number; y: number };
+  direction: { x: number; y: number };
+  range: number;
+  radius: number;
+  width: number;
+  shape: "ray" | "capsule";
+}
+
 export const getActionBattleEntityCenter = (entity: SoftTargetEntity) => {
   const hitbox = entity.hitbox?.() ?? {};
   return {
@@ -240,31 +275,181 @@ export const resolveActionBattleProjectileDirection = (
       "down",
   );
 
+const finitePositive = (value: unknown): number | undefined => {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : undefined;
+};
+
+const finitePoint = (
+  value: unknown,
+): { x: number; y: number } | undefined => {
+  if (!value || typeof value !== "object") return undefined;
+  const point = value as { x?: unknown; y?: unknown };
+  const x = Number(point.x);
+  const y = Number(point.y);
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : undefined;
+};
+
+/**
+ * Resolve exactly the origin, normalized direction, travel range, and collision
+ * shape passed to the authoritative projectile emitter.
+ */
+export const resolveActionBattleProjectileGeometry = (
+  input: ActionBattleProjectileGeometryInput,
+): ActionBattleProjectileGeometry => {
+  const projectile = input.projectile ?? {};
+  const origin = finitePoint(projectile.origin)
+    ?? getActionBattleEntityCenter(input.source);
+  const targetCenter = input.target
+    ? getActionBattleEntityCenter(input.target)
+    : undefined;
+  const inferredDirection = targetCenter
+    ? { x: targetCenter.x - origin.x, y: targetCenter.y - origin.y }
+    : undefined;
+  const direction = getActionBattleDirectionVector(
+    projectile.direction
+      ?? inferredDirection
+      ?? input.source.getDirection?.()
+      ?? "down",
+  );
+  const directionalTargetingRange = finitePositive(input.targetingRange) !== undefined
+    ? getActionBattleDirectionalTileRange(
+        input.targetingRange!,
+        input.tileSize,
+        direction,
+      )
+    : undefined;
+  const range =
+    finitePositive(projectile.trajectory?.range)
+    ?? finitePositive(projectile.range)
+    ?? finitePositive(input.actionRange)
+    ?? directionalTargetingRange
+    ?? 160;
+  const collision = projectile.collision ?? {};
+  const configuredRadius = finitePositive(collision.radius);
+  const configuredWidth = Math.max(
+    finitePositive(collision.width) ?? 0,
+    finitePositive(collision.height) ?? 0,
+  );
+  const radius = configuredRadius ?? configuredWidth / 2;
+
+  return {
+    origin,
+    direction,
+    range,
+    radius,
+    width: radius * 2,
+    shape: radius > 0 ? "capsule" : "ray",
+  };
+};
+
+export const getActionBattleProjectileTargetIntersection = (
+  geometry: ActionBattleProjectileGeometry,
+  target: SoftTargetEntity,
+  map?: any,
+) => {
+  const origin = new Vector2(geometry.origin.x, geometry.origin.y);
+  const direction = new Vector2(geometry.direction.x, geometry.direction.y);
+  const physics = map?.physic;
+  if (
+    target.id &&
+    physics &&
+    typeof physics.raycast === "function"
+  ) {
+    const filter = (entity: { uuid?: string }) => entity.uuid === target.id;
+    return geometry.radius > 0 && typeof physics.capsuleCast === "function"
+      ? physics.capsuleCast(
+          origin,
+          direction,
+          geometry.range,
+          geometry.radius,
+          undefined,
+          filter,
+        )
+      : physics.raycast(
+          origin,
+          direction,
+          geometry.range,
+          undefined,
+          filter,
+        );
+  }
+
+  // Lightweight harnesses may not own a map world. Reuse the same canonical
+  // collider ray/capsule primitives against the target's synchronized AABB.
+  const hitbox = target.hitbox?.() ?? {};
+  const center = getActionBattleEntityCenter(target);
+  const entity = new Entity({
+    uuid: target.id,
+    position: center,
+    width: finitePositive(hitbox.w) ?? 0,
+    height: finitePositive(hitbox.h) ?? 0,
+  });
+  const collider = new AABBCollider(entity);
+  return geometry.radius > 0
+    ? capsuleCastCollider(
+        collider,
+        origin,
+        direction,
+        geometry.range,
+        geometry.radius,
+      )
+    : raycastCollider(collider, origin, direction, geometry.range);
+};
+
+/**
+ * Return a finite cast length that reaches beyond every point of the target's
+ * synchronized AABB. This is used only to distinguish an aligned target that
+ * is out of range from one the projectile can never intersect; it must never
+ * become an unbounded world broad-phase query.
+ */
+export const getActionBattleProjectileTargetProofRange = (
+  geometry: ActionBattleProjectileGeometry,
+  target: SoftTargetEntity,
+): number => {
+  const center = getActionBattleEntityCenter(target);
+  const hitbox = target.hitbox?.() ?? {};
+  const width = Math.max(0, Number(hitbox.w) || 0);
+  const height = Math.max(0, Number(hitbox.h) || 0);
+  const centerDistance = Math.hypot(
+    center.x - geometry.origin.x,
+    center.y - geometry.origin.y,
+  );
+  if (!Number.isFinite(centerDistance)) return geometry.range;
+  return centerDistance + Math.hypot(width, height) / 2 + geometry.radius;
+};
+
 export const getActionBattleTargetTrajectory = (
   source: SoftTargetEntity,
   target: SoftTargetEntity,
   configuredDirection?: ActionBattleWorldDirection,
 ) => {
   const vector = getActionBattleTargetVector(source, target);
-  const direction = resolveActionBattleProjectileDirection(
+  const geometry = resolveActionBattleProjectileGeometry({
     source,
     target,
-    configuredDirection,
-  );
+    projectile: {
+      direction: configuredDirection,
+      trajectory: { range: Number.MAX_SAFE_INTEGER },
+    },
+    tileSize: { width: 32, height: 32 },
+  });
+  const direction = geometry.direction;
   const forwardDistance =
     vector.x * direction.x + vector.y * direction.y;
   const lateralDistance = Math.abs(
     vector.x * direction.y - vector.y * direction.x,
   );
-  const alignmentTolerance =
-    Number.EPSILON * Math.max(1, vector.distance) * 8;
+  const hit = getActionBattleProjectileTargetIntersection(
+    geometry,
+    target,
+  );
   return {
     ...vector,
     direction,
     forwardDistance,
     lateralDistance,
-    aligned:
-      forwardDistance > 0 && lateralDistance <= alignmentTolerance,
+    aligned: hit !== null,
   };
 };
 
@@ -272,6 +457,10 @@ export interface ActionBattleDirectionalTargetBoundary {
   tileRange: number;
   tileSize: ActionBattleTileSize;
   direction?: ActionBattleWorldDirection;
+  projectile?: ActionBattleProjectileGeometryInput["projectile"];
+  actionRange?: number;
+  geometry?: ActionBattleProjectileGeometry;
+  map?: any;
 }
 
 export const getActionBattleDirectionalTargetBoundary = (
@@ -279,20 +468,38 @@ export const getActionBattleDirectionalTargetBoundary = (
   target: SoftTargetEntity,
   boundary: ActionBattleDirectionalTargetBoundary,
 ) => {
-  const vector = getActionBattleTargetTrajectory(
+  const trajectory = getActionBattleTargetVector(source, target);
+  const geometry = boundary.geometry ?? resolveActionBattleProjectileGeometry({
     source,
     target,
-    boundary.direction,
-  );
-  const range = getActionBattleDirectionalTileRange(
-    boundary.tileRange,
-    boundary.tileSize,
-    vector.direction,
+    projectile: {
+      ...boundary.projectile,
+      direction: boundary.projectile?.direction ?? boundary.direction,
+    },
+    actionRange: boundary.actionRange,
+    targetingRange: boundary.tileRange,
+    tileSize: boundary.tileSize,
+  });
+  const hit = getActionBattleProjectileTargetIntersection(
+    geometry,
+    target,
+    boundary.map,
   );
   return {
-    ...vector,
-    range,
-    eligible: vector.aligned && vector.distance <= range,
+    ...trajectory,
+    direction: geometry.direction,
+    forwardDistance:
+      trajectory.x * geometry.direction.x
+      + trajectory.y * geometry.direction.y,
+    lateralDistance: Math.abs(
+      trajectory.x * geometry.direction.y
+      - trajectory.y * geometry.direction.x,
+    ),
+    range: geometry.range,
+    aligned: hit !== null,
+    eligible: hit !== null,
+    physical: true,
+    hitDistance: hit?.distance,
   };
 };
 
@@ -357,14 +564,16 @@ export const resolveActionBattleSoftTarget = <T extends SoftTargetEntity>(
     ) {
       continue;
     }
-    const dot = Math.max(
-      -1,
-      Math.min(1, (facing.x * dx + facing.y * dy) / distance)
-    );
+    const dot = distance <= 0
+      ? 1
+      : Math.max(
+          -1,
+          Math.min(1, (facing.x * dx + facing.y * dy) / distance)
+        );
     const angle = Math.acos(dot) * (180 / Math.PI);
-    if (angle > coneDegrees / 2) continue;
+    if (!targetBoundary?.physical && angle > coneDegrees / 2) continue;
     const directionScore = (dot + 1) / 2;
-    const distanceScore = 1 - distance / candidateRange;
+    const distanceScore = Math.max(0, 1 - distance / candidateRange);
     const threatScore =
       target.battleAi?.getTarget?.()?.id === source.id ? 1 : 0;
     const score =

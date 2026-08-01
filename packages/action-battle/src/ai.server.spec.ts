@@ -28,7 +28,7 @@ import { ACTION_BATTLE_I18N_KEYS } from "./i18n";
 
 const createEvent = () => ({
   id: "monster-1",
-  hp: 0,
+  hp: 10,
   param: {
     [MAXHP]: 10,
   },
@@ -651,6 +651,36 @@ describe("BattleAi behavior tree", () => {
     expect((ai as any).applyCustomBehavior(1200)).toBe(false);
     expect(performAttack).toHaveBeenCalledOnce();
     expect(performSkill).toHaveBeenCalledOnce();
+    ai.destroy();
+  });
+
+  test("rejects AI attack intents while defeated and resumes after revival", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.hp = 0;
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackCooldown: 0,
+      attackRange: 50,
+      behaviorTree: once("defeated-ai", useAttack(AttackPattern.Melee)),
+    });
+    const performAttack = vi
+      .spyOn(ai as any, "performAttackPattern")
+      .mockImplementation(() => undefined);
+    ai.onDetectInShape(player as any, {});
+
+    expect((ai as any).applyCustomBehavior(1000)).toBe(false);
+    expect(performAttack).not.toHaveBeenCalled();
+
+    event.hp = 10;
+    expect((ai as any).applyCustomBehavior(1001)).toBe(true);
+    expect(performAttack).toHaveBeenCalledOnce();
     ai.destroy();
   });
 

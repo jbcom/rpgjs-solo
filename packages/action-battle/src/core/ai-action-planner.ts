@@ -1,10 +1,11 @@
 import { getActionBattleOptions } from "../config";
 import {
-  getActionBattleDirectionalTileRange,
   getActionBattleEntityTile,
+  getActionBattleProjectileTargetIntersection,
+  getActionBattleProjectileTargetProofRange,
   getActionBattleTargetingTileSize,
-  getActionBattleTargetTrajectory,
   getActionBattleTargetVector,
+  resolveActionBattleProjectileGeometry,
   resolveActionBattleAoeCells,
   resolveActionBattleAoeTarget,
 } from "../targeting";
@@ -220,32 +221,44 @@ export const evaluateActionBattleAiSkill = (input: {
       map,
       getActionBattleOptions().ui?.targeting,
     );
-    const trajectory = getActionBattleTargetTrajectory(
-      attacker as any,
-      target as any,
-      action?.projectile?.direction,
-    );
     const targetingRange = normalizeRange(targeting?.range);
-    const range =
-      normalizeRange(action?.projectile?.range) ??
-      normalizeRange(action?.range) ??
-      (targetingRange !== undefined
-        ? getActionBattleDirectionalTileRange(
-            targetingRange,
-            tileSize,
-            trajectory.direction,
-          )
-        : 160);
+    const geometry = resolveActionBattleProjectileGeometry({
+      source: attacker as any,
+      target: target as any,
+      projectile: action?.projectile,
+      actionRange: action?.range,
+      targetingRange,
+      tileSize,
+    });
+    const hit = getActionBattleProjectileTargetIntersection(
+      geometry,
+      target as any,
+      map,
+    );
+    // The second proof is target-only and rigorously finite. Passing an
+    // effectively infinite range to the real world would make a capsule cast
+    // query an astronomical broad-phase AABB merely to classify out-of-range.
+    const forwardHit = hit ?? getActionBattleProjectileTargetIntersection(
+      {
+        ...geometry,
+        range: getActionBattleProjectileTargetProofRange(
+          geometry,
+          target as any,
+        ),
+      },
+      target as any,
+    );
+    const range = geometry.range;
     return applyCooldown({
       ...base,
       range,
       preferredRange: range * 0.75,
       target,
-      ...(!trajectory.aligned
-        ? { rejection: "invalidTarget" as const }
-        : distance <= range
-          ? {}
-          : { rejection: "outOfRange" as const }),
+      ...(hit
+        ? {}
+        : forwardHit
+          ? { rejection: "outOfRange" as const }
+          : { rejection: "invalidTarget" as const }),
     });
   }
 

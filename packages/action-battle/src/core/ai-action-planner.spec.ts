@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { PhysicsEngine } from "@rpgjs/common";
 import { setActionBattleOptions } from "../config";
 import { evaluateActionBattleAiSkill } from "./ai-action-planner";
 
@@ -84,6 +85,53 @@ describe("Action Battle AI skill planner", () => {
 
     expect(evaluation.range).toBe(80);
     expect(evaluation.rejection).toBe("outOfRange");
+  });
+
+  test("treats trajectory range and authored origin as emission-authoritative", () => {
+    setActionBattleOptions({
+      ui: { targeting: { tileSize: { width: 10, height: 24 } } },
+    });
+    const target = player("hero", 20, 20);
+    const map = { tileWidth: 10, tileHeight: 24 };
+    const skill = {
+      id: "authored-bolt",
+      targeting: { range: 3 },
+      action: {
+        mode: "projectile" as const,
+        target: "enemy" as const,
+        projectile: {
+          origin: { x: 0, y: 20 },
+          direction: { x: 1, y: 0 },
+          range: 30,
+          trajectory: { type: "linear", speed: 100, range: 5 },
+        },
+      },
+    };
+    const tooShort = evaluateActionBattleAiSkill({
+      attacker: enemy(map) as any,
+      target: target as any,
+      skill,
+      now: 1000,
+      readyAt: 0,
+      attackRange: 50,
+      hpPercent: 1,
+    });
+
+    expect(tooShort.range).toBe(5);
+    expect(tooShort.rejection).toBe("outOfRange");
+
+    skill.action.projectile.trajectory.range = 25;
+    const admitted = evaluateActionBattleAiSkill({
+      attacker: enemy(map) as any,
+      target: target as any,
+      skill,
+      now: 1000,
+      readyAt: 0,
+      attackRange: 50,
+      hpPercent: 1,
+    });
+    expect(admitted.range).toBe(25);
+    expect(admitted.rejection).toBeUndefined();
   });
 
   test("plans vertical projectiles with the configured rectangular tile reach", () => {
@@ -175,6 +223,75 @@ describe("Action Battle AI skill planner", () => {
     });
     expect(aligned.range).toBe(30);
     expect(aligned.rejection).toBeUndefined();
+  });
+
+  test("bounds real physics work while classifying out-of-range versus invalid projectile targets", () => {
+    const physics = new PhysicsEngine({ spatialCellSize: 8 });
+    const world = physics.getWorld() as any;
+    const queryAABB = vi.spyOn(world.spatialPartition, "queryAABB");
+    const attacker = {
+      ...enemy(null),
+      x: () => 0,
+      y: () => 0,
+      hitbox: () => ({ w: 8, h: 8 }),
+    };
+    const map = {
+      tileWidth: 10,
+      tileHeight: 24,
+      physic: physics,
+    };
+    attacker.getCurrentMap = () => map;
+    const skill = {
+      id: "bounded-bolt",
+      action: {
+        mode: "projectile" as const,
+        target: "enemy" as const,
+        projectile: {
+          direction: { x: 1, y: 0 },
+          trajectory: { type: "linear", range: 20 },
+          collision: { radius: 2 },
+        },
+      },
+    };
+    const evaluate = (target: any) => evaluateActionBattleAiSkill({
+      attacker: attacker as any,
+      target,
+      skill,
+      now: 1000,
+      readyAt: 0,
+      attackRange: 50,
+      hpPercent: 1,
+    });
+
+    const aligned = {
+      ...player("aligned", 100, 0),
+      hitbox: () => ({ w: 8, h: 8 }),
+    };
+    physics.createEntity({
+      uuid: aligned.id,
+      position: { x: 104, y: 4 },
+      width: 8,
+      height: 8,
+    });
+    expect(evaluate(aligned).rejection).toBe("outOfRange");
+
+    const offAxis = {
+      ...player("off-axis", 0, 100),
+      hitbox: () => ({ w: 8, h: 8 }),
+    };
+    physics.createEntity({
+      uuid: offAxis.id,
+      position: { x: 4, y: 104 },
+      width: 8,
+      height: 8,
+    });
+    expect(evaluate(offAxis).rejection).toBe("invalidTarget");
+
+    expect(queryAABB).toHaveBeenCalledTimes(2);
+    for (const [bounds] of queryAABB.mock.calls) {
+      expect(bounds.maxX - bounds.minX).toBeLessThanOrEqual(24);
+      expect(bounds.maxY - bounds.minY).toBeLessThanOrEqual(4);
+    }
   });
 
   test("places an instant area skill so a hollow mask covers the player", () => {

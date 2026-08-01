@@ -283,19 +283,26 @@ omitted, learned skills use the numeric slots `1` through `0`. The Adventure
 preset reserves its charged-attack and guard keys, so Studio reports `E` and
 `F` conflicts without blocking the save.
 
-`targeting.range` is expressed in map tiles. A projectile can override its
-travel range in pixels; otherwise Action Battle derives it from the targeting
-range, the shared configured rectangular tile geometry, and its firing
-direction. When `action.mode` is `projectile` and no custom
+`targeting.range` is expressed in map tiles. `projectile.trajectory.range`,
+`projectile.range`, and `action.range` override it in that order and are
+expressed in pixels. Otherwise Action Battle derives travel from the shared
+configured rectangular tile geometry and firing direction. Planning, player
+soft-target admission, and emission use the same resolved origin, normalized
+direction, travel range, and collision radius. When `action.mode` is
+`projectile` and no custom
 projectile `type` is supplied, the built-in `action-battle-skill` CanvasEngine
 renderer displays `projectile.graphic`, applies `scale`, and optionally rotates
 the graphic along its trajectory. Damage and the impact animation/sound occur
 only when the authoritative projectile collides.
 
-An explicit `projectile.direction` defines a fixed firing ray. Player soft
-targeting and enemy planning admit only targets aligned with that ray and use
-the same direction to derive rectangular-tile travel range; without an explicit
-direction, both systems aim at the selected target before deriving range.
+An explicit `projectile.direction` defines a fixed firing ray, and
+`projectile.origin` defines its world-space start. Player soft targeting and
+enemy planning admit a target when that ray or swept `collision.radius`
+intersects the target's physical bounds within the effective range. Exact
+centerline alignment is not required. Without an explicit direction, both
+systems aim from the resolved origin at the selected target before deriving
+range. A defeated caster is rejected at every public cast and hotbar boundary,
+including the server-owned GUI callback.
 
 Area masks use `#` for affected tiles and `.` for empty tiles. Studio exposes
 this as a visual grid and canonicalizes legacy binary masks by treating `1` as

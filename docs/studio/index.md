@@ -40,6 +40,17 @@ Or in a `.env` file:
 RPGSTUDIO_API_KEY=your-api-key
 ```
 
+The runtime keeps public `/game/*` reads credential-free. Protected block
+collection reads send this value only as the `x-api-key` header; authorization
+errors never include the credential. Offline mode remains local, while auto
+mode attempts the local bundle before an authenticated online fallback.
+
+Block collections are validated immediately before execution against the same
+canonical JSON Schemas used by Studio's runtime block registry. Unknown block
+types, missing or invalid data, and malformed nested children are rejected as a
+whole before any block runs. Direct hydrated workflows, Common Event links, and
+queued fresh-read behavior are unchanged.
+
 ## Next step
 
 - [Use a game with Studio](/studio/game-integration)

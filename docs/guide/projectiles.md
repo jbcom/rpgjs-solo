@@ -294,6 +294,20 @@ player.projectiles.emit({
 })
 ```
 
+Set `collision.radius` when the projectile has physical width. The server then
+sweeps a circle along every simulated segment (and instant cast) instead of
+casting a point ray. The same radius is included in the client-safe spawn
+descriptor so prediction and rendering use the authoritative shape.
+
+```ts
+player.projectiles.emit({
+  type: 'heavy-arrow',
+  direction: player.getDirection(),
+  trajectory: { type: 'linear', speed: 450, range: 700 },
+  collision: { radius: 3 }
+})
+```
+
 ## Client Registration
 
 Register a CanvasEngine component for each projectile type:

@@ -158,6 +158,14 @@ export class AABBCollider implements Collider {
    */
   public raycast(ray: Ray): RaycastHit | null {
     const bounds = this.getBounds();
+    if (bounds.contains(ray.origin)) {
+      return {
+        entity: this.entity,
+        point: ray.origin.clone(),
+        normal: ray.direction.mul(-1),
+        distance: 0,
+      };
+    }
     const tMin = (bounds.minX - ray.origin.x) / ray.direction.x;
     const tMax = (bounds.maxX - ray.origin.x) / ray.direction.x;
     const tymin = (bounds.minY - ray.origin.y) / ray.direction.y;
@@ -199,4 +207,3 @@ export class AABBCollider implements Collider {
     };
   }
 }
-

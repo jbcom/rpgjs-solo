@@ -58,6 +58,34 @@ describe('ProjectileSystem', () => {
     expect(onDestroy).toHaveBeenCalledWith(expect.objectContaining({ reason: 'hit' }));
   });
 
+  it('uses swept projectile radius for authoritative collision', () => {
+    const engine = new PhysicsEngine();
+    engine.createStaticObstacle('offset-wall', {
+      x: 50,
+      y: 5,
+      width: 8,
+      height: 8,
+    });
+    const projectiles = new ProjectileSystem(engine);
+    const onHit = vi.fn();
+    projectiles.onHit(onHit);
+
+    projectiles.spawn({
+      id: 'wide-arrow',
+      origin: { x: 0, y: 0 },
+      direction: { x: 1, y: 0 },
+      speed: 100,
+      range: 100,
+      ttl: 2,
+      radius: 1,
+    });
+    projectiles.step(1);
+
+    expect(onHit).toHaveBeenCalledOnce();
+    expect(onHit.mock.calls[0][0].hit.entity.uuid).toBe('offset-wall');
+    expect(onHit.mock.calls[0][0].projectile.radius).toBe(1);
+  });
+
   it('destroys projectiles when ttl expires', () => {
     const projectiles = new ProjectileSystem(new PhysicsEngine());
     const onDestroy = vi.fn();

@@ -21,9 +21,8 @@ import type {
 } from "./contracts";
 import type { NormalizedActionBattleAttackProfile } from "../types";
 import {
-  getActionBattleDirectionalTileRange,
   getActionBattleTargetingTileSize,
-  resolveActionBattleProjectileDirection,
+  resolveActionBattleProjectileGeometry,
 } from "../targeting";
 
 const projectileHandlers = new Map<
@@ -298,44 +297,39 @@ const buildActionContext = (input: {
         ...configured,
         ...options,
       };
-      const targetingRange = Number(
-        getActionBattleSkillTargetingConfig(input.skill)?.range ??
-        input.skill?.range
-      );
-      const configuredDirection = projectile.direction;
-      const direction = resolveActionBattleProjectileDirection(
-        input.attacker as any,
-        firstTarget(input.target) as any,
-        configuredDirection,
-      );
       const tileSize = getActionBattleTargetingTileSize(
         map,
         getActionBattleOptions().ui?.targeting,
       );
-      const derivedRange =
-        Number.isFinite(targetingRange) && targetingRange > 0
-          ? getActionBattleDirectionalTileRange(
-              targetingRange,
-              tileSize,
-              direction,
-            )
-          : undefined;
-      const range =
-        projectile.range ?? input.action?.range ?? derivedRange ?? 160;
+      const geometry = resolveActionBattleProjectileGeometry({
+        source: input.attacker as any,
+        target: firstTarget(input.target) as any,
+        projectile,
+        actionRange: input.action?.range,
+        targetingRange:
+          getActionBattleSkillTargetingConfig(input.skill)?.range
+          ?? input.skill?.range,
+        tileSize,
+      });
       const speed = projectile.speed ?? 180;
       const emitted = map.projectiles.emit(
         {
           type: projectile.type ?? "action-battle-skill",
-          origin: projectile.origin,
-          direction,
+          origin: geometry.origin,
+          direction: geometry.direction,
           spreadDegrees: projectile.spreadDegrees,
           accuracy: projectile.accuracy,
-          trajectory: projectile.trajectory ?? {
-            type: "linear",
-            speed,
-            range,
+          trajectory: projectile.trajectory
+            ? { ...projectile.trajectory, range: geometry.range }
+            : {
+                type: "linear",
+                speed,
+                range: geometry.range,
+              },
+          collision: {
+            ...projectile.collision,
+            radius: geometry.radius,
           },
-          collision: projectile.collision,
           repeat: projectile.repeat,
           pattern: projectile.pattern,
           payload: {
@@ -452,6 +446,7 @@ export const executeActionBattleUse = (input: {
   profile?: NormalizedActionBattleAttackProfile;
   playVisual?: boolean;
 }): boolean => {
+  if (isActionBattleTargetDefeated(input.attacker)) return false;
   if (!shouldUseActionBattleUsable(input.usable, input.skill)) return false;
   if (
     hasNativeActionBattleUseRestriction(

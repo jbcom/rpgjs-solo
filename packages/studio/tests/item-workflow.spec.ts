@@ -28,7 +28,8 @@ const setVariable = (
   data: {
     variableId,
     operation,
-    value,
+    valueSource: "constant",
+    value: String(value),
   },
 });
 
@@ -191,7 +192,9 @@ describe("Studio item workflows", () => {
     expect(error).toHaveBeenCalledWith(
       '[studio] Item workflow "malformed-item-use" failed during onUse',
       expect.objectContaining({
-        message: 'Studio block collection "malformed-item-use" is malformed',
+        message: expect.stringContaining(
+          'Studio block collection "malformed-item-use" is malformed',
+        ),
       }),
     );
   });

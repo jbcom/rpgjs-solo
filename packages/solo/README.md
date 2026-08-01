@@ -162,6 +162,11 @@ on RPGJS `5.0.0-beta.29` and bundles the fork's audited `@rpgjs/physic@5.0.2`
 source. That source is newer than the public registry's `5.0.1`; consumers do
 not inherit an unavailable or floating runtime dependency.
 
+The bundled physics source includes authoritative point-ray and swept-radius
+projectile intersections. Solo's production boundary therefore allows at most
+240,000 bytes while still requiring zero runtime imports, runtime dependencies,
+rooms, sockets, or synchronization code.
+
 The `.solo.N` suffix identifies the coordinated private release. Runtime and
 build inputs are pinned exactly and refreshed to current compatible releases
 before that coordinated version is published.

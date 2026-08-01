@@ -347,7 +347,8 @@ export class PolygonCollider implements Collider {
     return null;
   }
 
-  private getWorldParts(): Vector2[][] {
+  /** Return the configured convex parts transformed into world coordinates. */
+  public getWorldParts(): Vector2[][] {
     const rotation = this.entity.rotation;
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
@@ -415,4 +416,3 @@ function polygonCentroid(poly: Vector2[]): Vector2 {
   const n = poly.length > 0 ? poly.length : 1;
   return new Vector2(cx / n, cy / n);
 }
-

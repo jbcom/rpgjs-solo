@@ -63,7 +63,17 @@ export interface ActionBattleProjectileOptions {
   trajectory?: any;
   direction?: { x: number; y: number };
   origin?: { x: number; y: number };
-  collision?: any;
+  collision?: {
+    collisionMask?: number;
+    ignoreOwner?: boolean;
+    predictImpact?: boolean;
+    /** Circular swept collision radius. */
+    radius?: number;
+    /** Convenience diameter used when radius is omitted. */
+    width?: number;
+    /** Convenience diameter used when radius and width are omitted. */
+    height?: number;
+  };
   repeat?: any;
   pattern?: any;
   payload?: Record<string, unknown>;

@@ -91,6 +91,59 @@ describe("executeActionBattleUse", () => {
     expect(itemHook).toHaveBeenCalledOnce();
   });
 
+  test("rejects defeated attackers before every use side effect and allows revival", () => {
+    const onUse = vi.fn();
+    const emit = vi.fn(() => [{ id: "revival-bolt" }]);
+    const attacker = {
+      ...createEntity("caster", 0),
+      sp: 20,
+      getCurrentMap: () => ({ projectiles: { emit } }),
+    };
+    const skill = {
+      id: "revival-bolt",
+      _type: "skill",
+      spCost: 5,
+      hitRate: 1,
+      action: { mode: "projectile" as const },
+      onUse,
+    };
+    const projectileSkill = {
+      ...skill,
+      id: "revival-projectile",
+      onUse: undefined,
+    };
+
+    expect(executeActionBattleUse({
+      attacker: attacker as any,
+      usable: skill,
+      skill,
+    })).toBe(false);
+    expect(executeActionBattleUse({
+      attacker: attacker as any,
+      usable: projectileSkill,
+      skill: projectileSkill,
+    })).toBe(false);
+    expect(attacker.sp).toBe(20);
+    expect(onUse).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+
+    attacker.hp = 10;
+    expect(executeActionBattleUse({
+      attacker: attacker as any,
+      usable: skill,
+      skill,
+    })).toBe(true);
+    expect(attacker.sp).toBe(15);
+    expect(onUse).toHaveBeenCalledOnce();
+    expect(executeActionBattleUse({
+      attacker: attacker as any,
+      usable: projectileSkill,
+      skill: projectileSkill,
+    })).toBe(true);
+    expect(attacker.sp).toBe(10);
+    expect(emit).toHaveBeenCalledOnce();
+  });
+
   test("applies the standard skill effect when no onUse hook is defined", () => {
     const attacker = createEntity("caster");
     const target = createEntity("target");
@@ -702,5 +755,51 @@ describe("executeActionBattleUse", () => {
     });
     expect(emit.mock.calls[0][0].trajectory.range).toBeCloseTo(range);
     expect(emit.mock.calls[0][0].trajectory.range).toBeLessThan(distance);
+  });
+
+  test("emits the same authored origin, normalized direction, radius, and trajectory range used for admission", () => {
+    const emit = vi.fn(() => [{ id: "authored-bolt" }]);
+    const attacker = {
+      ...createEntity("caster"),
+      getCurrentMap: () => ({
+        tileWidth: 10,
+        tileHeight: 24,
+        projectiles: { emit },
+      }),
+    };
+    const target = {
+      ...createEntity("target"),
+      x: () => 20,
+      y: () => 20,
+    };
+    const skill = {
+      id: "authored-bolt",
+      _type: "skill",
+      spCost: 0,
+      targeting: { range: 3 },
+      action: {
+        mode: "projectile" as const,
+        range: 30,
+        projectile: {
+          origin: { x: 0, y: 24 },
+          direction: { x: 7, y: 0 },
+          trajectory: { type: "linear", speed: 120, range: 5 },
+          collision: { width: 4 },
+        },
+      },
+    };
+
+    expect(executeActionBattleUse({
+      attacker: attacker as any,
+      target: target as any,
+      usable: skill,
+      skill,
+    })).toBe(true);
+    expect(emit.mock.calls[0][0]).toMatchObject({
+      origin: { x: 0, y: 24 },
+      direction: { x: 1, y: 0 },
+      trajectory: { type: "linear", speed: 120, range: 5 },
+      collision: { width: 4, radius: 2 },
+    });
   });
 });

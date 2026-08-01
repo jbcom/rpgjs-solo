@@ -14,7 +14,8 @@ const workflow = (phase: "cast" | "impact" | "defeat", variableId: string) => ({
       data: {
         variableId,
         operation: "set",
-        value: 1,
+        valueSource: "constant",
+        value: "1",
       },
     }],
 });
@@ -166,8 +167,10 @@ describe("Studio skill workflows", () => {
 
   test("resolves a referenced current block collection before execution", async () => {
     const getBlockCollection = vi.fn(async (id: string) => ({
-      _id: id,
-      blocks: workflow("cast", "resolved-cast").blocks,
+      data: {
+        _id: id,
+        blocks: workflow("cast", "resolved-cast").blocks,
+      },
     }));
     configureBlockCollections(getBlockCollection);
     const { player, variables } = createWorkflowPlayer();
@@ -222,7 +225,9 @@ describe("Studio skill workflows", () => {
     expect(error).toHaveBeenCalledWith(
       '[studio] Skill workflow "malformed-cast" failed during cast',
       expect.objectContaining({
-        message: 'Studio block collection "malformed-cast" is malformed',
+        message: expect.stringContaining(
+          'Studio block collection "malformed-cast" is malformed',
+        ),
       }),
     );
   });
@@ -236,7 +241,8 @@ describe("Studio skill workflows", () => {
         data: {
           variableId: "skill-revisions",
           operation: "add",
-          value: revision++,
+          valueSource: "constant",
+          value: String(revision++),
         },
       }],
     }));

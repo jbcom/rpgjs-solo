@@ -48,3 +48,9 @@ configured Studio data provider immediately before execution. Online and
 offline providers support collection reads without caching workflow content,
 so the next invocation observes saved updates while direct hydrated blocks and
 legacy Common Event references retain their existing behavior.
+
+Authenticate protected online block-collection reads with
+`RPGSTUDIO_API_KEY` through the `x-api-key` header without attaching it to
+public game-data requests. Validate fetched collections recursively against the
+canonical runtime block schemas before execution, rejecting unknown block
+types and malformed data without mutating editor schema metadata.

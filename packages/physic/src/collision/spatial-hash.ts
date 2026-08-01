@@ -2,6 +2,7 @@ import { Entity } from '../physics/Entity';
 import { AABB } from '../core/math/AABB';
 import { createCollider } from './detector';
 import { Ray, RaycastHit } from './Ray';
+import { raycastCollider } from './raycast';
 
 /**
  * Spatial hash cell containing entities
@@ -408,7 +409,16 @@ export class SpatialHash {
 
           const collider = createCollider(entity);
           if (collider) {
-            const hit = collider.raycast(ray);
+            // Keep the optimized grid traversal as broad phase, but use the
+            // same exact narrow phase as World/projectile admission. Collider
+            // legacy methods are not all equivalent for parallel, overlap,
+            // polygon, and capsule cases.
+            const hit = raycastCollider(
+              collider,
+              ray.origin,
+              ray.direction,
+              ray.length,
+            );
             if (hit) {
               if (!closestHit || hit.distance < closestHit.distance) {
                 closestHit = hit;
@@ -513,4 +523,3 @@ export class SpatialHash {
     return closestHit;
   }
 }
-

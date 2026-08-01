@@ -2,9 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { Vector2 } from '../core/math/Vector2';
 import { SpatialHash } from './spatial-hash';
 import { Entity } from '../physics/Entity';
-import { raycast } from './raycast';
+import {
+  capsuleCast,
+  capsuleCastCollider,
+  raycast,
+  raycastCollider,
+} from './raycast';
 import { assignPolygonCollider } from './PolygonCollider';
 import { Ray } from './Ray';
+import { createCollider } from './detector';
+import { PhysicsEngine } from '../api/PhysicsEngine';
 
 describe('raycast', () => {
   it('hits nearest circle', () => {
@@ -25,6 +32,183 @@ describe('raycast', () => {
     const hit = raycast(partition as any, new Vector2(0,0), new Vector2(1,0), 100);
     expect(hit).not.toBeNull();
     expect(hit!.entity).toBe(box);
+  });
+
+  it('handles parallel slabs, overlap, and targets behind the origin exactly', () => {
+    const partition = new SpatialHash(10, 32);
+    const overlap = new Entity({
+      uuid: 'overlap',
+      position: { x: 0, y: 0 },
+      width: 8,
+      height: 8,
+    });
+    const behind = new Entity({
+      uuid: 'behind',
+      position: { x: -20, y: 0 },
+      width: 8,
+      height: 8,
+    });
+    partition.insert(overlap);
+    partition.insert(behind);
+
+    const hit = raycast(
+      partition as any,
+      new Vector2(0, 0),
+      new Vector2(1, 0),
+      100,
+    );
+
+    expect(hit?.entity).toBe(overlap);
+    expect(hit?.distance).toBe(0);
+    expect(raycast(
+      partition as any,
+      new Vector2(5, 0),
+      new Vector2(1, 0),
+      100,
+      undefined,
+      (entity) => entity === behind,
+    )).toBeNull();
+  });
+
+  it('sweeps projectile radius against a laterally offset AABB', () => {
+    const partition = new SpatialHash(10, 32);
+    const target = new Entity({
+      uuid: 'target',
+      position: { x: 20, y: 5 },
+      width: 8,
+      height: 8,
+    });
+    partition.insert(target);
+
+    expect(raycast(
+      partition as any,
+      new Vector2(0, 0),
+      new Vector2(1, 0),
+      40,
+    )).toBeNull();
+    expect(capsuleCast(
+      partition as any,
+      new Vector2(0, 0),
+      new Vector2(1, 0),
+      40,
+      1,
+    )?.entity).toBe(target);
+  });
+
+  it('uses rounded capsule corners instead of an expanded-box approximation', () => {
+    const partition = new SpatialHash(10, 32);
+    const target = new Entity({
+      uuid: 'corner-target',
+      position: { x: 24, y: 24 },
+      width: 8,
+      height: 8,
+    });
+    partition.insert(target);
+
+    expect(capsuleCast(
+      partition as any,
+      new Vector2(0, 15),
+      new Vector2(1, 0),
+      16,
+      5,
+    )).toBeNull();
+    expect(capsuleCast(
+      partition as any,
+      new Vector2(0, 15),
+      new Vector2(1, 0),
+      21,
+      5,
+    )?.entity).toBe(target);
+  });
+
+  it.each([
+    {
+      shape: 'circle',
+      create: () => new Entity({
+        uuid: 'circle',
+        position: { x: 20, y: 0 },
+        radius: 4,
+      }),
+    },
+    {
+      shape: 'AABB',
+      create: () => new Entity({
+        uuid: 'aabb',
+        position: { x: 20, y: 0 },
+        width: 8,
+        height: 8,
+      }),
+    },
+    {
+      shape: 'capsule',
+      create: () => new Entity({
+        uuid: 'capsule',
+        position: { x: 20, y: 0 },
+        capsule: { radius: 4, height: 12 },
+      }),
+    },
+    {
+      shape: 'polygon',
+      create: () => {
+        const entity = new Entity({
+          uuid: 'polygon',
+          position: { x: 20, y: 0 },
+        });
+        assignPolygonCollider(entity, {
+          vertices: [
+            new Vector2(-4, -4),
+            new Vector2(4, -4),
+            new Vector2(4, 4),
+            new Vector2(-4, 4),
+          ],
+          isConvex: true,
+        });
+        return entity;
+      },
+    },
+  ])('keeps direct and PhysicsEngine casts equivalent for $shape colliders', ({ create }) => {
+    const target = create();
+    const collider = createCollider(target);
+    const engine = new PhysicsEngine({ spatialCellSize: 10 });
+    engine.addEntity(target);
+    expect(collider).not.toBeNull();
+
+    const origin = new Vector2(0, 0);
+    const nonUnitDirection = new Vector2(7, 0);
+    const directRay = raycastCollider(
+      collider!,
+      origin,
+      nonUnitDirection,
+      40,
+    );
+    const worldRay = engine.raycast(origin, nonUnitDirection, 40);
+    expect(worldRay?.entity).toBe(target);
+    expect(worldRay?.distance).toBeCloseTo(directRay!.distance, 8);
+
+    const directCapsule = capsuleCastCollider(
+      collider!,
+      origin,
+      nonUnitDirection,
+      40,
+      2,
+    );
+    const worldCapsule = engine.capsuleCast(
+      origin,
+      nonUnitDirection,
+      40,
+      2,
+    );
+    expect(worldCapsule?.entity).toBe(target);
+    expect(worldCapsule?.distance).toBeCloseTo(directCapsule!.distance, 8);
+
+    const overlapOrigin = target.position.clone();
+    expect(engine.raycast(overlapOrigin, nonUnitDirection, 1)?.distance).toBe(0);
+    expect(engine.capsuleCast(
+      overlapOrigin,
+      nonUnitDirection,
+      1,
+      2,
+    )?.distance).toBe(0);
   });
 
   it('hits polygon', () => {
@@ -114,4 +298,3 @@ describe('raycast', () => {
     expect(ray.getPoint(5).y).toBeCloseTo(2);
   });
 });
-

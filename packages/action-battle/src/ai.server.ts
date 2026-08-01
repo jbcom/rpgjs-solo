@@ -1541,7 +1541,11 @@ export class BattleAi {
   }
 
   private performPlannedBasicAttack(): boolean {
-    if (!this.target || this.isTargetDefeated(this.target)) return false;
+    if (
+      this.isTargetDefeated(this.event) ||
+      !this.target ||
+      this.isTargetDefeated(this.target)
+    ) return false;
     this.debugLog(
       "attack",
       `Using basic attack (cooldown=${this.attackCooldown}ms)`
@@ -1553,7 +1557,11 @@ export class BattleAi {
   private performPlannedSkill(
     evaluation: ActionBattleAiSkillEvaluation
   ): boolean {
-    if (!this.target || this.isTargetDefeated(this.target)) return false;
+    if (
+      this.isTargetDefeated(this.event) ||
+      !this.target ||
+      this.isTargetDefeated(this.target)
+    ) return false;
     if (
       hasNativeActionBattleUseRestriction(
         this.event,
@@ -1586,6 +1594,7 @@ export class BattleAi {
       evaluation.mode === "melee" ? undefined : "castSkill"
     );
     this.scheduleAttackStartup(profile, () => {
+      if (this.isTargetDefeated(this.event)) return;
       if (
         hasNativeActionBattleUseRestriction(
           this.event,
@@ -1878,6 +1887,7 @@ export class BattleAi {
    * Perform attack pattern
    */
   private performAttackPattern(pattern: AttackPattern) {
+    if (this.isTargetDefeated(this.event)) return;
     switch (pattern) {
       case AttackPattern.Melee:
         this.performMeleeAttack();
@@ -1902,7 +1912,7 @@ export class BattleAi {
    * Uses skill if configured, otherwise creates hitbox
    */
   private performMeleeAttack() {
-    if (!this.target) return;
+    if (this.isTargetDefeated(this.event) || !this.target) return;
     const profile = this.getAttackProfile(AttackPattern.Melee);
 
     this.faceTarget({ force: true });
@@ -1919,7 +1929,11 @@ export class BattleAi {
     profile: NormalizedActionBattleAttackProfile,
     pattern: AttackPattern
   ) {
-    if (!this.target || this.isTargetDefeated(this.target)) return;
+    if (
+      this.isTargetDefeated(this.event) ||
+      !this.target ||
+      this.isTargetDefeated(this.target)
+    ) return;
     this.debugLog('attack', `Applying ${pattern} hit`);
 
     const weapon = resolveActionBattleWeapon(this.event);
@@ -1950,7 +1964,11 @@ export class BattleAi {
     ),
     pattern: AttackPattern = AttackPattern.Melee
   ) {
-    if (!this.target || this.isTargetDefeated(this.target)) return;
+    if (
+      this.isTargetDefeated(this.event) ||
+      !this.target ||
+      this.isTargetDefeated(this.target)
+    ) return;
 
     const hitTracker = new ActionBattleHitTracker(profile.hitPolicy);
     runActionBattleActiveHitbox(
@@ -2007,6 +2025,7 @@ export class BattleAi {
     profile: NormalizedActionBattleAttackProfile,
     pattern: AttackPattern
   ) {
+    if (this.isTargetDefeated(this.event)) return;
     for (const hit of this.queryHitboxCandidates(hitboxes)) {
       if (
         hit !== this.event &&
@@ -3350,7 +3369,12 @@ export class BattleAi {
     pattern: AttackPattern | string | undefined,
     currentTime: number
   ): boolean {
-    if (!this.target || this.isTargetDefeated(this.target) || this.chargingAttack) return false;
+    if (
+      this.isTargetDefeated(this.event) ||
+      !this.target ||
+      this.isTargetDefeated(this.target) ||
+      this.chargingAttack
+    ) return false;
     const distance = this.getDistance(this.event, this.target);
     if (distance > this.attackRange) return false;
     if (!this.isAttackReady(currentTime)) return false;
@@ -3368,7 +3392,12 @@ export class BattleAi {
     skill: any,
     currentTime: number
   ): boolean {
-    if (!this.target || this.isTargetDefeated(this.target) || !skill) return false;
+    if (
+      this.isTargetDefeated(this.event) ||
+      !this.target ||
+      this.isTargetDefeated(this.target) ||
+      !skill
+    ) return false;
     const resolvedSkill = this.resolveUsable(skill);
     const evaluation = evaluateActionBattleAiSkill({
       attacker: this.event,

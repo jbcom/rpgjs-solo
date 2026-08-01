@@ -4,18 +4,20 @@ import {
   getActionBattleDirectionalTargetBoundary,
   getActionBattleDirectionalTileRange,
   getActionBattleEntityTile,
+  getActionBattleProjectileTargetIntersection,
   getActionBattleTileSize,
   parseAoeMask,
   resolveActionBattleAoeCells,
   resolveActionBattleAoeTarget,
+  resolveActionBattleProjectileGeometry,
   resolveActionBattleSoftTarget,
 } from "./targeting";
 
-const entity = (id: string, x: number, y: number) => ({
+const entity = (id: string, x: number, y: number, size = 32) => ({
   id,
   x: () => x,
   y: () => y,
-  hitbox: () => ({ w: 32, h: 32 }),
+  hitbox: () => ({ w: size, h: size }),
 });
 
 describe("action battle soft targeting", () => {
@@ -118,8 +120,8 @@ describe("action battle soft targeting", () => {
   });
 
   test("uses the candidate direction for rectangular soft-target eligibility", () => {
-    const source = entity("hero", 0, 0);
-    const outside = entity("outside", 26, 12);
+    const source = entity("hero", 0, 0, 8);
+    const outside = entity("outside", 32, 12, 8);
     const boundary = {
       tileRange: 3,
       tileSize: { width: 10, height: 24 },
@@ -130,7 +132,7 @@ describe("action battle soft targeting", () => {
       boundary,
     );
 
-    expect(measured.distance).toBeCloseTo(Math.hypot(26, 12));
+    expect(measured.distance).toBeCloseTo(Math.hypot(32, 12));
     expect(measured.eligible).toBe(false);
     expect(
       resolveActionBattleSoftTarget(
@@ -142,7 +144,7 @@ describe("action battle soft targeting", () => {
       ),
     ).toBeNull();
 
-    const legal = entity("legal", 24, 12);
+    const legal = entity("legal", 29, 12, 8);
     expect(
       resolveActionBattleSoftTarget(
         source,
@@ -180,5 +182,97 @@ describe("action battle soft targeting", () => {
         boundary,
       )?.target,
     ).toBe(aligned);
+  });
+
+  test("admits collider intersections rather than exact centerlines", () => {
+    const source = entity("hero", 0, 0, 8);
+    const onePixelOffset = entity("offset", 20, 1, 8);
+    const vertical = entity("vertical", 0, 20, 8);
+    const horizontal = entity("horizontal", 20, 0, 8);
+    const boundary = {
+      tileRange: 3,
+      tileSize: { width: 10, height: 24 },
+      direction: { x: 1, y: 0 },
+    };
+
+    expect(getActionBattleDirectionalTargetBoundary(
+      source,
+      onePixelOffset,
+      boundary,
+    ).eligible).toBe(true);
+    expect(getActionBattleDirectionalTargetBoundary(
+      source,
+      vertical,
+      boundary,
+    ).eligible).toBe(false);
+    expect(getActionBattleDirectionalTargetBoundary(
+      source,
+      horizontal,
+      boundary,
+    ).eligible).toBe(true);
+  });
+
+  test("shares authored origin, arbitrary direction, overlap, and projectile radius", () => {
+    const source = entity("hero", 0, 0, 8);
+    const authoredTarget = entity("authored", 20, 20, 8);
+    const authored = resolveActionBattleProjectileGeometry({
+      source,
+      target: authoredTarget,
+      projectile: {
+        origin: { x: 0, y: 24 },
+        direction: { x: 7, y: 0 },
+        trajectory: { range: 30 },
+      },
+      tileSize: { width: 10, height: 24 },
+    });
+    expect(authored).toMatchObject({
+      origin: { x: 0, y: 24 },
+      direction: { x: 1, y: 0 },
+      range: 30,
+    });
+    expect(getActionBattleProjectileTargetIntersection(
+      authored,
+      authoredTarget,
+    )).not.toBeNull();
+
+    const overlap = entity("overlap", 0, 0, 8);
+    const overlapGeometry = resolveActionBattleProjectileGeometry({
+      source,
+      target: overlap,
+      projectile: { direction: { x: 1, y: 1 }, range: 1 },
+      tileSize: { width: 10, height: 24 },
+    });
+    expect(overlapGeometry.direction.x).toBeCloseTo(Math.SQRT1_2);
+    expect(overlapGeometry.direction.y).toBeCloseTo(Math.SQRT1_2);
+    expect(getActionBattleProjectileTargetIntersection(
+      overlapGeometry,
+      overlap,
+    )?.distance).toBe(0);
+
+    const laterallyOffset = {
+      id: "wide-hit",
+      x: () => 20,
+      y: () => 1,
+      hitbox: () => ({ w: 8, h: 8 }),
+    };
+    const pointRay = resolveActionBattleProjectileGeometry({
+      source: {
+        id: "origin",
+        x: () => -4,
+        y: () => -4,
+        hitbox: () => ({ w: 8, h: 8 }),
+      },
+      target: laterallyOffset,
+      projectile: { direction: { x: 1, y: 0 }, range: 40 },
+      tileSize: { width: 10, height: 24 },
+    });
+    expect(getActionBattleProjectileTargetIntersection(
+      pointRay,
+      laterallyOffset,
+    )).toBeNull();
+    expect(getActionBattleProjectileTargetIntersection(
+      { ...pointRay, radius: 1, width: 2, shape: "capsule" },
+      laterallyOffset,
+    )).not.toBeNull();
   });
 });

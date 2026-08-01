@@ -6,6 +6,7 @@ import {
   ACTION_BATTLE_HOTBAR_USE,
   ACTION_BATTLE_SKILL_USE,
   createActionBattleServer,
+  openActionBattleHotbar,
 } from "./server";
 import { hasActionBattleControl } from "./core/control-state";
 import { isActionBattleGuarding } from "./core/defense";
@@ -635,7 +636,7 @@ describe("action battle player visuals", () => {
       action: { mode: "projectile", target: "enemy" },
       onUse,
     };
-    let enemyX = 26;
+    let enemyX = 32;
     const enemy = {
       id: "enemy",
       hp: 10,
@@ -683,7 +684,7 @@ describe("action battle player visuals", () => {
     });
     expect(onUse).not.toHaveBeenCalled();
 
-    enemyX = 24;
+    enemyX = 29;
     (server.player?.onInput as any)(player, {
       action: ACTION_BATTLE_SKILL_USE,
       data: { id: skill.id },
@@ -776,6 +777,24 @@ describe("action battle player visuals", () => {
     enemyY = 0;
     useSkill();
     expect(onUse).toHaveBeenCalledOnce();
+
+    onUse.mockClear();
+    Object.assign((skill.action as any).projectile, {
+      origin: { x: 0, y: 24 },
+      trajectory: { type: "linear", speed: 100, range: 5 },
+    });
+    enemyX = 20;
+    enemyY = 20;
+    useSkill();
+    expect(onUse).not.toHaveBeenCalled();
+
+    (skill.action as any).projectile.trajectory.range = 25;
+    useSkill();
+    expect(onUse).toHaveBeenCalledWith(
+      player,
+      enemy,
+      expect.objectContaining({ target: enemy }),
+    );
   });
 
   test("opens or hides the hotbar from the per-player resolver on map changes", () => {
@@ -805,6 +824,29 @@ describe("action battle player visuals", () => {
     player.enabled = false;
     (server.player?.onJoinMap as any)(player);
     expect(player.hideHotbar).toHaveBeenCalledTimes(1);
+  });
+
+  test("guards the GUI hotbar callback itself before slot validation", () => {
+    let options: any;
+    const player = {
+      id: "hero",
+      hp: 0,
+      showHotbar: vi.fn((next) => {
+        options = next;
+      }),
+      validateHotbarSlot: vi.fn(() => ({ type: "item", id: "tonic" })),
+      useHotbarSlot: vi.fn(() => true),
+    };
+
+    openActionBattleHotbar(player as any);
+    expect(options.onUse(player, { slot: 0 })).toBe(false);
+    expect(player.validateHotbarSlot).not.toHaveBeenCalled();
+    expect(player.useHotbarSlot).not.toHaveBeenCalled();
+
+    player.hp = 10;
+    expect(options.onUse(player, { slot: 0 })).toBe(true);
+    expect(player.validateHotbarSlot).toHaveBeenCalledOnce();
+    expect(player.useHotbarSlot).toHaveBeenCalledOnce();
   });
 });
 

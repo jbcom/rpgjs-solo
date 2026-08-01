@@ -37,6 +37,8 @@ export interface ProjectileCollisionOptions {
   collisionMask?: number;
   ignoreOwner?: boolean;
   predictImpact?: boolean;
+  /** Circular collision radius. Omit or use zero for a point ray. */
+  radius?: number;
 }
 
 export interface ProjectileEmitOptions {
@@ -84,6 +86,7 @@ export interface ProjectileServerState {
   delay: number;
   index: number;
   count: number;
+  radius: number;
   payload?: Record<string, unknown>;
   params?: Record<string, unknown>;
 }
@@ -110,6 +113,7 @@ interface PendingProjectile {
     collisionMask?: number;
     ignoreOwner?: boolean;
     predictImpact?: boolean;
+    radius?: number;
     canHit?: (context: ProjectileCanHitContext) => boolean;
   };
   remainingDelay: number;
@@ -239,6 +243,7 @@ function toNetworkProjectile(projectile: ProjectileServerState, config?: Pending
     delay: projectile.delay,
     index: projectile.index,
     count: projectile.count,
+    radius: projectile.radius,
   };
   if (projectile.ownerId !== undefined) network.ownerId = projectile.ownerId;
   if (projectile.params !== undefined) network.params = projectile.params;
@@ -286,6 +291,7 @@ export class RpgMapProjectiles {
           collisionMask: options.collision?.collisionMask,
           ignoreOwner: options.collision?.ignoreOwner,
           predictImpact: options.collision?.predictImpact,
+          radius: options.collision?.radius,
           canHit: options.canHit,
         },
         remainingDelay: state.delay,
@@ -367,6 +373,9 @@ export class RpgMapProjectiles {
         : `${options.id ?? options.type}-${(this.map as any).getTick()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
       const speed = trajectory.type === "instant" ? Number.MAX_SAFE_INTEGER : trajectory.speed;
       const ttl = trajectory.type === "instant" ? 0.1 : trajectory.ttl ?? trajectory.range / trajectory.speed;
+      const radius = Number.isFinite(options.collision?.radius)
+        ? Math.max(0, options.collision?.radius ?? 0)
+        : 0;
       return {
         id,
         type: options.type,
@@ -380,6 +389,7 @@ export class RpgMapProjectiles {
         delay: interval * index,
         index,
         count,
+        radius,
         payload: options.payload,
         params: options.params,
       };
@@ -430,6 +440,7 @@ export class RpgMapProjectiles {
       ttl: projectile.ttl,
       spawnTick: projectile.spawnTick,
       collisionMask: pending.config.collisionMask,
+      radius: projectile.radius,
       ignoreOwner: pending.config.ignoreOwner ?? true,
       metadata: {
         type: projectile.type,
@@ -440,13 +451,24 @@ export class RpgMapProjectiles {
 
   private spawnInstant(pending: PendingProjectile): void {
     const projectile = pending.state;
-    const hit = (this.map as any).physic.raycast(
-      new Vector2(projectile.origin.x, projectile.origin.y),
-      new Vector2(projectile.direction.x, projectile.direction.y),
-      projectile.range,
-      pending.config.collisionMask,
-      (entity) => this.canHit(entity, projectile, pending),
-    );
+    const origin = new Vector2(projectile.origin.x, projectile.origin.y);
+    const direction = new Vector2(projectile.direction.x, projectile.direction.y);
+    const hit = projectile.radius > 0
+      ? (this.map as any).physic.capsuleCast(
+          origin,
+          direction,
+          projectile.range,
+          projectile.radius,
+          pending.config.collisionMask,
+          (entity: Entity) => this.canHit(entity, projectile, pending),
+        )
+      : (this.map as any).physic.raycast(
+          origin,
+          direction,
+          projectile.range,
+          pending.config.collisionMask,
+          (entity: Entity) => this.canHit(entity, projectile, pending),
+        );
     if (hit) {
       this.handleHitState(projectile, hit);
     }

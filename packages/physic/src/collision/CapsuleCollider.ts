@@ -103,7 +103,8 @@ export class CapsuleCollider implements Collider {
         return collision ? collision.contacts : [];
     }
 
-    private getCapsuleConfig(): { radius: number; height: number } {
+    /** Return the authoritative radius and total height used by this collider. */
+    public getCapsuleConfig(): { radius: number; height: number } {
         if (this.entity.capsule) {
             return this.entity.capsule;
         }
@@ -111,7 +112,8 @@ export class CapsuleCollider implements Collider {
         return { radius: this.entity.radius || 10, height: this.entity.height || 30 };
     }
 
-    private getSegment(): { a: Vector2; b: Vector2 } {
+    /** Return the capsule center segment in world coordinates. */
+    public getSegment(): { a: Vector2; b: Vector2 } {
         const { radius, height } = this.getCapsuleConfig();
         const pos = this.entity.position;
         const halfSegment = Math.max(0, height / 2 - radius);

@@ -13,7 +13,6 @@ import {
 import { normalizeActionBattleOptions, setActionBattleOptions } from "./config";
 import {
   getActionBattleEntityTile,
-  getActionBattleTargetTrajectory,
   getActionBattleTargetingTileSize,
   manhattanDistance,
   resolveActionBattleAoeCells,
@@ -489,6 +488,7 @@ const performPlayerAttack = (
   attackProfile: NormalizedActionBattleAttackProfile,
   metadata: Record<string, any> = {}
 ): boolean => {
+  if (isActionBattleTargetDefeated(player)) return false;
   const map = player.getCurrentMap();
   const inputDirection = resolveActionBattleAttackDirection(player, input);
   const softTargeting = options.combat?.player?.softTargeting;
@@ -579,6 +579,7 @@ const performPlayerAttack = (
   if (weapon && !weaponUsesMeleeContact) {
     scheduleActionBattleStartup(attackProfile, () => {
       if (
+        isActionBattleTargetDefeated(player) ||
         player.getCurrentMap() !== map ||
         (actionLocked &&
           (player as any).__actionBattleAttackLockId !== attackLockId)
@@ -597,6 +598,7 @@ const performPlayerAttack = (
   }
 
   const processHits = (hits: any[]) => {
+    if (isActionBattleTargetDefeated(player)) return;
     if (weapon && !weaponUsesMeleeContact) return;
     hits.forEach((hit: any) => {
       if (
@@ -630,6 +632,7 @@ const performPlayerAttack = (
     attackProfile,
     resolveActiveHitboxes,
     (activeHitboxes) => {
+      if (isActionBattleTargetDefeated(player)) return;
       const candidates = getActionBattleHitboxCandidates(map, activeHitboxes, {
         excludeIds: [player.id],
         kinds: ["players", "events"],
@@ -1024,6 +1027,7 @@ const actionBattleHotbarOptions = (
       };
     },
     onUse(player, request) {
+      if (isActionBattleTargetDefeated(player)) return false;
       return handleActionBattleHotbarUse(
         player,
         request.slot,
@@ -1086,6 +1090,7 @@ const handleActionBattleSkillUse = (
   target: { x: number; y: number } | undefined,
   options: ActionBattleOptions
 ) => {
+  if (isActionBattleTargetDefeated(player)) return false;
   if (!isPlayerSkillLearned(player, skillId)) return false;
   const skillData = resolvePlayerSkillUsable(player, skillId);
   if (!skillData) return false;
@@ -1187,27 +1192,28 @@ const handleActionBattleSkillUse = (
         options.combat?.player?.softTargeting
       );
       const tileSize = getPlayerTargetingTileSize(map, options);
-      const admittedCandidates = projectileDirection
-        ? candidates.filter((candidate) =>
-            getActionBattleTargetTrajectory(
-              player,
-              candidate,
-              projectileDirection,
-            ).aligned
-          )
-        : candidates;
+      const projectileBoundary = actionConfig.mode === "projectile"
+        ? {
+            tileRange: targeting?.range ?? 0,
+            tileSize,
+            direction: projectileDirection,
+            projectile: actionConfig.projectile,
+            actionRange: actionConfig.range,
+            map,
+          }
+        : undefined;
       const softTarget = resolveActionBattleSoftTarget(
         player,
-        admittedCandidates,
+        candidates,
         projectileDirection ?? direction,
         softTargeting,
-        targeting
+        projectileBoundary ?? (targeting
           ? {
               tileRange: targeting.range,
               tileSize,
               direction: projectileDirection,
             }
-          : undefined,
+          : undefined),
       );
       if (
         targeting
@@ -1297,6 +1303,7 @@ const handleActionBattleHotbarUse = (
   target: { x: number; y: number } | undefined,
   options: ActionBattleOptions,
 ) => {
+  if (isActionBattleTargetDefeated(player)) return false;
   if (!Number.isInteger(slot) || slot < 0 || slot >= 10) return false;
   let entry: ReturnType<RpgPlayer["validateHotbarSlot"]>;
   try {
