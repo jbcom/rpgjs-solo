@@ -11,6 +11,7 @@ import {
 	constants as fsConstants,
 	existsSync,
 	fchmodSync,
+	fstatSync,
 	fsyncSync,
 	linkSync,
 	mkdirSync,
@@ -18,6 +19,7 @@ import {
 	openSync,
 	readdirSync,
 	readFileSync,
+	realpathSync,
 	renameSync,
 	rmSync,
 	statSync,
@@ -164,6 +166,18 @@ const writeTestFile = (
 };
 const writeJson = (path: string, value: unknown) =>
 	writeTestFile(path, `${JSON.stringify(value, null, 2)}\n`);
+const inspectTestFile = (path: string) => {
+	const descriptor = openSync(path, "r");
+	try {
+		const state = fstatSync(descriptor);
+		return {
+			mode: state.mode & 0o777,
+			text: readFileSync(descriptor, "utf8"),
+		};
+	} finally {
+		closeSync(descriptor);
+	}
+};
 
 afterEach(() => {
 	for (const directory of temporaryDirectories.splice(0))
@@ -2171,7 +2185,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		const artifacts = join(tmpdir(), `solo-release-artifacts-${randomUUID()}`);
 		temporaryDirectories.push(artifacts);
 		mkdirSync(artifacts);
-		writeFileSync(join(artifacts, "foreign"), "occupied\n");
+		writeTestFile(join(artifacts, "foreign"), "occupied\n");
 		expect(() =>
 			createProvenanceManifest({
 				root: fixture.root,
@@ -2185,6 +2199,50 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			}),
 		).toThrow(/new and empty/i);
 		expect(readFileSync(stale, "utf8")).toBe("preserve on refusal\n");
+	});
+
+	it("pins an aliased artifact parent before later alias replacement", () => {
+		const fixture = createFixture();
+		const plan = loadSoloReleasePlan(fixture.planPath);
+		applyFixtureRelease(fixture, plan);
+		const source = commitAppliedFixture(fixture);
+		const parent = mkdtempSync(join(tmpdir(), "solo-release-real-parent-"));
+		const redirect = mkdtempSync(
+			join(tmpdir(), "solo-release-redirect-parent-"),
+		);
+		const alias = join(tmpdir(), `solo-release-parent-alias-${randomUUID()}`);
+		temporaryDirectories.push(alias, parent, redirect);
+		symlinkSync(parent, alias);
+		const artifacts = join(alias, "artifacts");
+		let redirected = false;
+		const result = createProvenanceManifest({
+			root: fixture.root,
+			plan,
+			artifactsDirectory: artifacts,
+			source,
+			command: (_command: string, args: string[]) => {
+				if (!redirected) {
+					rmSync(alias);
+					symlinkSync(redirect, alias);
+					mkdirSync(join(redirect, "artifacts"), { mode: 0o700 });
+					redirected = true;
+				}
+				const record = packages.find(({ name }) => name === args[1]);
+				const dist = join(fixture.root, record?.directory ?? "", "dist");
+				mkdirSync(dist, { recursive: true });
+				writeTestFile(join(dist, "index.js"), "export const built = true;\n");
+				writeTestFile(
+					join(dist, "index.d.ts"),
+					"export declare const built: true;\n",
+				);
+				return "";
+			},
+			signer: testProvenanceSigner,
+		});
+		expect(
+			result.manifestPath.startsWith(join(realpathSync(parent), "artifacts")),
+		).toBe(true);
+		expect(readdirSync(join(redirect, "artifacts"))).toEqual([]);
 	});
 
 	it("preserves mode-0600 independent review evidence through provenance create and load", () => {
@@ -2601,8 +2659,9 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					npmrc = env.npm_config_userconfig ?? "";
 					expect(npmrc).not.toBe("");
 					expect(env.RPGJS_SOLO_NPM_TOKEN).toBeUndefined();
-					expect(statSync(npmrc).mode & 0o777).toBe(0o600);
-					expect(readFileSync(npmrc, "utf8")).toContain("do-not-persist");
+					const npmrcState = inspectTestFile(npmrc);
+					expect(npmrcState.mode).toBe(0o600);
+					expect(npmrcState.text).toContain("do-not-persist");
 					throw new Error("stop");
 				}),
 			).rejects.toThrow("stop");

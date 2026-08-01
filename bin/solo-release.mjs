@@ -106,30 +106,38 @@ const lstatOrNull = (path) => {
 const permissionMode = (stats) => stats.mode & 0o7777;
 
 const regularFileState = (path, label, { owner, mode } = {}) => {
-	const stats = lstatOrNull(path);
-	if (!stats) return null;
-	assert(
-		stats.isFile() && !stats.isSymbolicLink(),
-		`${label} must be a regular non-symlink file`,
-	);
-	assert(stats.nlink === 1, `${label} must have exactly one hard link`);
-	if (owner !== undefined)
-		assert(stats.uid === owner, `${label} has unexpected ownership`);
-	if (mode !== undefined)
-		assert(permissionMode(stats) === mode, `${label} has unexpected mode`);
-	const descriptor = openSync(
-		path,
-		fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
-	);
+	let descriptor;
+	try {
+		descriptor = openSync(path, "r");
+	} catch (error) {
+		if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
+		throw error;
+	}
 	try {
 		const openedStats = fstatSync(descriptor);
+		const currentStats = lstatSync(path);
 		assert(
 			openedStats.isFile() &&
-				openedStats.dev === stats.dev &&
-				openedStats.ino === stats.ino &&
-				openedStats.nlink === 1,
+				currentStats.isFile() &&
+				!currentStats.isSymbolicLink(),
+			`${label} must be a regular non-symlink file`,
+		);
+		assert(
+			openedStats.nlink === 1 && currentStats.nlink === 1,
+			`${label} must have exactly one hard link`,
+		);
+		assert(
+			openedStats.dev === currentStats.dev &&
+				openedStats.ino === currentStats.ino,
 			`${label} changed during no-follow inspection`,
 		);
+		if (owner !== undefined)
+			assert(openedStats.uid === owner, `${label} has unexpected ownership`);
+		if (mode !== undefined)
+			assert(
+				permissionMode(openedStats) === mode,
+				`${label} has unexpected mode`,
+			);
 		const bytes = readFileSync(descriptor);
 		return {
 			bytes,
@@ -187,21 +195,16 @@ const writeExclusiveFile = (path, value, mode) => {
 };
 
 const rewriteOwnedFile = (path, value, mode, label) => {
-	const before = lstatSync(path);
-	assert(
-		before.isFile() &&
-			!before.isSymbolicLink() &&
-			before.uid === currentUid() &&
-			before.nlink === 1,
-		`${label} must be an owned single-link regular file`,
-	);
-	const descriptor = openSync(path, fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW);
+	const descriptor = openSync(path, "r+");
 	try {
 		const opened = fstatSync(descriptor);
+		const current = lstatSync(path);
 		assert(
 			opened.isFile() &&
-				opened.dev === before.dev &&
-				opened.ino === before.ino &&
+				current.isFile() &&
+				!current.isSymbolicLink() &&
+				opened.dev === current.dev &&
+				opened.ino === current.ino &&
 				opened.uid === currentUid() &&
 				opened.nlink === 1,
 			`${label} changed during no-follow rewrite`,
@@ -1894,19 +1897,20 @@ const prepareArtifactDirectory = (root, path) => {
 		"Release artifacts must remain outside the repository",
 	);
 	assert(
-		lstatOrNull(path) === null,
+		lstatOrNull(resolved) === null,
 		"Release artifacts directory must be new and empty",
 	);
-	mkdirSync(path, { recursive: false, mode: 0o700 });
-	const created = lstatSync(path);
+	mkdirSync(resolved, { recursive: false, mode: 0o700 });
+	const created = lstatSync(resolved);
 	assert(
 		created.isDirectory() &&
 			!created.isSymbolicLink() &&
 			created.uid === currentUid() &&
 			permissionMode(created) === 0o700 &&
-			readdirSync(path).length === 0,
+			readdirSync(resolved).length === 0,
 		"Release artifacts directory was not created securely",
 	);
+	return resolved;
 };
 
 const collectExportTargets = (value, targets = []) => {
@@ -2144,7 +2148,7 @@ export const createProvenanceManifest = ({
 		validateSoloReleaseState(root, plan).phase === "applied",
 		"Provenance requires the applied version phase",
 	);
-	prepareArtifactDirectory(root, artifactsDirectory);
+	const artifactRoot = prepareArtifactDirectory(root, artifactsDirectory);
 	assertExactSourceWorktree(root, source, sourceCommand);
 	cleanBuildSoloCohort(root, plan, source, command, sourceCommand);
 	let reviewReceipt;
@@ -2173,8 +2177,8 @@ export const createProvenanceManifest = ({
 		);
 		const statementName = `${plan.releaseId}.review-receipt.json`;
 		const signatureName = `${statementName}.sig`;
-		const statementPath = join(artifactsDirectory, statementName);
-		const signaturePath = join(artifactsDirectory, signatureName);
+		const statementPath = join(artifactRoot, statementName);
+		const signaturePath = join(artifactRoot, signatureName);
 		writeExclusiveFile(statementPath, sourceStatementState.bytes, 0o600);
 		writeExclusiveFile(signaturePath, sourceSignatureState.bytes, 0o600);
 		reviewReceipt = {
@@ -2188,7 +2192,7 @@ export const createProvenanceManifest = ({
 	for (const record of plan.packages) {
 		assertExactSourceWorktree(root, source, sourceCommand);
 		const packageArtifacts = join(
-			artifactsDirectory,
+			artifactRoot,
 			record.name.replaceAll("/", "-"),
 		);
 		mkdirSync(packageArtifacts, { mode: 0o700 });
@@ -2227,7 +2231,7 @@ export const createProvenanceManifest = ({
 			name: record.name,
 			version: plan.version,
 			tag: record.tag,
-			archive: relative(artifactsDirectory, archivePath),
+			archive: relative(artifactRoot, archivePath),
 			sha512: sha512File(archivePath),
 			integrity: sri512File(archivePath),
 			repository: packedManifest.repository,
@@ -2272,7 +2276,7 @@ export const createProvenanceManifest = ({
 		reviewReceipt,
 	};
 	const manifestPath = join(
-		artifactsDirectory,
+		artifactRoot,
 		`${plan.releaseId}.provenance.json`,
 	);
 	writeJson(manifestPath, manifest);
