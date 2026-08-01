@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-07-22
 - Decision owners: jbcom RPGJS Solo maintainers
-- Upstream baseline: `RSamaium/RPG-JS:v5` at `c858081051a18bc9410cb2f78deafcc31a40f07f`
+- Upstream baseline: `RSamaium/RPG-JS:v5` at `2fab01fb8e93ad13902b07db28935f058b387213`
 
 ## Context
 

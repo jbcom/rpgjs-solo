@@ -40,9 +40,6 @@ describe("RPGJS beta.29 adoption contract", () => {
 
 		const upstreamLedger = readText("docs/upstream-sync.md");
 		expect(upstreamLedger).toContain(upstreamCommit);
-		expect(upstreamLedger).toMatch(
-			/2fab01fb8e93ad13902b07db28935f058b387213[^\n]+Adopted by one upstream merge/,
-		);
 		const adr = readText("docs/internal/adr/005-solo-runtime.md");
 		expect(adr).toContain(
 			`Upstream baseline: \`RSamaium/RPG-JS:v5\` at \`${upstreamCommit}\``,
@@ -69,7 +66,9 @@ describe("RPGJS beta.29 adoption contract", () => {
 			"@jbcom/rpgjs-solo-renderer",
 			"@jbcom/rpgjs-solo-vite",
 		]) {
-			expect(playground.dependencies[name]).toBe(`workspace:${soloVersion}`);
+			expect(
+				playground.dependencies[name] ?? playground.devDependencies[name],
+			).toBe(`workspace:${soloVersion}`);
 		}
 
 		expect(readText("packages/solo/README.md")).toContain(

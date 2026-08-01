@@ -1,0 +1,101 @@
+name: Fork CI
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}-${{ inputs.commit || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - "*"
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Exact 40-character v5 tracking commit to validate
+        required: true
+        type: string
+
+jobs:
+  tests:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        node-version: [24]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit || github.sha }}
+
+      - name: Prove requested tracking commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          REQUESTED_COMMIT: ${{ inputs.commit }}
+        run: |
+          if [[ ! "$REQUESTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Requested commit must be a lowercase 40-character SHA" >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$REQUESTED_COMMIT"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --strict-peer-dependencies
+
+      - name: Dependency currency
+        if: github.event_name != 'workflow_dispatch'
+        run: pnpm verify:toolchain-currency
+
+      - name: Workspace dependency audit
+        run: pnpm audit --audit-level=low
+
+      - name: Build
+        run: pnpm build
+
+      - name: Public API boundary
+        run: pnpm api:boundary
+
+      - name: Public API type contracts
+        run: pnpm test:types
+
+      - name: Solo production boundary
+        if: github.event_name != 'workflow_dispatch'
+        run: pnpm verify:solo-boundary
+
+      - name: Solo packed package contracts
+        if: github.event_name != 'workflow_dispatch'
+        run: pnpm verify:solo-package-contracts
+
+      - name: Solo packed consumer execution
+        if: github.event_name != 'workflow_dispatch'
+        run: pnpm verify:solo-consumer
+
+      - name: Published package dependency contracts
+        if: github.event_name != 'workflow_dispatch'
+        run: pnpm verify:published-package-contracts
+
+      - name: Unit tests
+        run: pnpm test --run
+
+      - name: Cloudflare MMORPG runtime tests
+        run: pnpm --dir samples/cloudflare-mmorpg test
+
+      - name: Cloudflare Studio runtime tests
+        run: pnpm --dir playground/games/studio test
+
+      - name: Playground and sample builds
+        run: pnpm --filter '@rpgjs/playground-*' --filter sample run build

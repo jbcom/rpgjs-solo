@@ -16,8 +16,30 @@ import { getStudioSkillChangeNotification } from "./skill-notification";
 import { triggerMatchesExecution, type StudioTouchTarget } from "./touch-runtime";
 import { compileStudioMapStream, isStudioDirectLoadPayload, prepareStudioMapPayload, type PreparedStudioMapPayload } from "./map-streaming";
 import { prepareStudioTerrainControlRegions } from "./terrain-control-streaming";
+import { assignStudioEventPlacementIds } from "./event-placement";
+import {
+  isStartingEquipmentCompatible,
+  resolveStartingEquipmentType,
+  resolveStudioItemType,
+} from "./starting-equipment";
 export { createStudioActionBattleAnimations } from "./action-battle-animations";
 export type { StudioCombatAnimationIds, StudioCombatAnimationOptions } from "./action-battle-animations";
+export {
+  createStudioActionBattleAudio,
+  createStudioActionBattlePreset,
+} from "./action-battle-audio";
+export type { StudioCombatAudioConfig } from "./action-battle-audio";
+export type {
+  StudioGuiBinding,
+  StudioHotbarContent,
+  StudioHotbarBinding,
+  StudioHotbarSettings,
+  StudioMenusSettings,
+} from "./action-battle-audio";
+export {
+  normalizeStudioHotbarSettings,
+  resolveStudioHotbarSettings,
+} from "./action-battle-audio";
 
 const mergePlayerConfig = (baseConfig: ProjectBasic = {}, overrideConfig?: Partial<ProjectBasic> | null): ProjectBasic => {
   if (!overrideConfig) {
@@ -229,6 +251,16 @@ const assignPlayerStartParams = (player: RpgPlayer, config: ProjectBasic, starti
         console.warn(`[StudioGame] starting equipment item ${itemId} was not found in the database`);
         continue;
       }
+      if (!isStartingEquipmentCompatible(type, itemData)) {
+        const expectedType = resolveStartingEquipmentType(type);
+        const actualType = resolveStudioItemType(itemData) ?? "unknown";
+        console.warn(
+          expectedType
+            ? `[StudioGame] starting equipment ${type}=${itemId} must reference a ${expectedType}, received ${actualType}`
+            : `[StudioGame] starting equipment field ${type} is not supported`,
+        );
+        continue;
+      }
       if (!player.getItem(itemId)) {
         player.addItem(itemData, 1);
       }
@@ -280,9 +312,42 @@ const ensureStartingItemsInDatabase = async (player: RpgPlayer, config: ProjectB
   return startingItems;
 };
 
-const databaseCacheByProjectId = new Map<string, any>();
 const eventsCacheByBundlePath = new Map<string, Promise<any[]>>();
 const projectCacheByKey = new Map<string, Promise<any>>();
+
+const getPublishedStudioDatabase = (map?: RpgMap): any => {
+  const publishedMapData =
+    typeof (map as any)?.data === "function"
+      ? (map as any).data()
+      : undefined;
+  return publishedMapData?.database;
+};
+
+const refreshOnlineStudioDatabase = async (map: RpgMap): Promise<void> => {
+  const publishedDatabase = getPublishedStudioDatabase(map);
+  if (
+    Array.isArray(publishedDatabase)
+    || (publishedDatabase && typeof publishedDatabase === "object")
+  ) {
+    return;
+  }
+
+  const provider = getGameDataProvider();
+  if (provider.kind === "offline") return;
+
+  const { projectId } = resolveStudioRuntimeContext(map);
+  if (!projectId || typeof (map as any).addInDatabase !== "function") return;
+
+  try {
+    const records = await provider.getDatabase(projectId);
+    const database = normalizeStudioDatabase(records);
+    for (const [id, data] of Object.entries(database)) {
+      (map as any).addInDatabase(id, data, { force: true });
+    }
+  } catch (error) {
+    console.error("[StudioGame] database refresh failed", error);
+  }
+};
 
 /** Server-side and trusted-publisher options for a Studio game. */
 export interface CreateStudioMapUpdatePayloadOptions {
@@ -321,7 +386,10 @@ export interface CreateStudioMapUpdatePayloadOptions {
       };
 }
 
-type StudioServerConfig = CreateStudioMapUpdatePayloadOptions;
+type StudioServerConfig = CreateStudioMapUpdatePayloadOptions & {
+  autoStart?: boolean;
+  displayTitleScreen?: boolean;
+};
 
 const prepareStudioWorldMaps = (worldMaps: unknown): WorldMapConfig[] =>
   parseArrayValue(worldMaps).map((worldMap: any) => ({
@@ -566,7 +634,9 @@ const normalizeStudioMapPayload = async (
   const params = mapResponse.params ?? {};
   const isV2 = mapResponse.creationDetails?.version === "v2";
   const resolvedEvents = await resolveMapEventReferences(mapResponse.events ?? mapResponse.data?.events, { useLocalBundleEvents });
-  const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents, resolvedProvider);
+  const hydratedEvents = assignStudioEventPlacementIds(
+    await hydrateEventMediaReferences(resolvedEvents, resolvedProvider)
+  );
   const hydratedCommonEvents = await hydrateEventMediaReferences(
     parseArrayValue(mapResponse.commonEvents ?? mapResponse.data?.commonEvents),
     resolvedProvider,
@@ -671,6 +741,12 @@ export async function createStudioMapUpdatePayload(mapId: string, config: Create
 
 export default (_config?: unknown) => {
   const config = (_config ?? {}) as StudioServerConfig;
+  const shouldAutoStart = async () => {
+    if (config.autoStart === true) return true;
+    if (config.displayTitleScreen === true) return false;
+    const project = await resolveStudioProject(undefined, config);
+    return project?.menus?.titleScreen?.enabled === false;
+  };
   const streamingOptions = config.streaming === false ? undefined : config.streaming ?? {};
   const streamingModule = streamingOptions
     ? provideServerMapStreaming(
@@ -688,10 +764,17 @@ export default (_config?: unknown) => {
 
   return defineModule<RpgServer>({
     player: {
+      onConnected: async (player: RpgPlayer) => {
+        if (!await shouldAutoStart()) return;
+        player.initializeDefaultStats();
+        await player.changeMap(await resolveStartMapId(config));
+      },
       onStart: async (player: RpgPlayer) => {
+        if (await shouldAutoStart()) return;
         await player.changeMap(await resolveStartMapId(config));
       },
       onJoinMap: async (player: RpgPlayer, map: RpgMap) => {
+        await refreshOnlineStudioDatabase(map);
         const startMapId = map.globalConfig.startMapId;
         const mapExtended = map as RpgMapExtended;
         const heroGraphic = (mapExtended.globalConfig.hero as any)?.graphic;
@@ -714,6 +797,8 @@ export default (_config?: unknown) => {
       },
       onInput: (player: RpgPlayer, input: RpgActionInput<unknown>) => {
         if (input.action == "escape") {
+          const map = player.getCurrentMap?.();
+          if (map?.globalConfig?.menus?.mainMenu?.enabled === false) return;
           player.callMainMenu({
             menus: [
               {
@@ -779,7 +864,9 @@ export default (_config?: unknown) => {
         mapExtended.globalConfig = mapData.config ?? {};
 
         const resolvedEvents = await resolveMapEventReferences(mapData?.events ?? mapData?.data?.events, { useLocalBundleEvents });
-        const hydratedEvents = await hydrateEventMediaReferences(resolvedEvents, provider);
+        const hydratedEvents = assignStudioEventPlacementIds(
+          await hydrateEventMediaReferences(resolvedEvents, provider)
+        );
         const resolvedEventsById = new Map<string, any>();
         hydratedEvents.forEach((entry) => {
           const id = String(entry?.eventId ?? entry?.id ?? entry?._id ?? "");
@@ -807,10 +894,16 @@ export default (_config?: unknown) => {
         }
         mapExtended.startPosition = mapData.data?.start;
         mapExtended.scale = mapData.data?.params?.scale || 1;
-        const normalizedInitialWeather = normalizeWeatherState(mapData?.data?.weather);
+        const initialWeather = mapData?.data?.weather !== undefined
+          ? mapData.data.weather
+          : mapData?.data?.params?.weather;
+        const normalizedInitialWeather = normalizeWeatherState(initialWeather);
         if (mapData?.data) {
           mapData.data.weather = normalizedInitialWeather;
           mapData.data.lighting = normalizeLightingState(mapData?.data?.lighting);
+        }
+        if (normalizedInitialWeather) {
+          mapExtended.setWeather(normalizedInitialWeather);
         }
         // Add baseUrl to map context for use in block executors
         (mapExtended as any).apiBaseUrl = apiUrl;
@@ -944,6 +1037,9 @@ export default (_config?: unknown) => {
 
           // Add trigger-specific execution methods
           eventObj.onInit = async function () {
+            (this as any).sourceEventId =
+              object.sourceEventId ?? object.eventId ?? object.id ?? object._id;
+            (this as any).studioEventId = (this as any).sourceEventId;
             setTimeout(async () => {
               const map = this.getCurrentMap();
               const [player] = map?.getPlayers() ?? [];
@@ -1077,16 +1173,16 @@ export default (_config?: unknown) => {
           x: object.x * mapExtended.scale,
           y: object.y * mapExtended.scale,
           ...(hitbox ? { hitbox } : {}),
-          id: object.eventId || object.id || object._id,
+          id:
+            object.runtimeEventId ||
+            object.eventId ||
+            object.id ||
+            object._id,
         };
       },
     },
     database: async (map: RpgMap) => {
-      const publishedMapData =
-        typeof (map as any)?.data === "function"
-          ? (map as any).data()
-          : undefined;
-      const publishedDatabase = publishedMapData?.database;
+      const publishedDatabase = getPublishedStudioDatabase(map);
       if (Array.isArray(publishedDatabase)) {
         return normalizeStudioDatabase(publishedDatabase);
       }
@@ -1095,16 +1191,8 @@ export default (_config?: unknown) => {
       }
       const configuredProjectId = getStudioGameRuntimeConfig().projectId?.trim() || null;
       const gameConfig = readGameConfig();
-      const resolvedProjectId = configuredProjectId || gameConfig?._id || "";
-
-      if (databaseCacheByProjectId.has(resolvedProjectId)) {
-        return databaseCacheByProjectId.get(resolvedProjectId);
-      }
-
       const response = await getGameDataProvider().getDatabase(configuredProjectId || gameConfig?._id);
-      const database = normalizeStudioDatabase(response);
-      databaseCacheByProjectId.set(resolvedProjectId, database);
-      return database;
+      return normalizeStudioDatabase(response);
     },
   });
 };

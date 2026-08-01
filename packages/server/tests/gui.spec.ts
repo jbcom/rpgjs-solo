@@ -13,6 +13,12 @@ import {
   TitleGui,
 } from "../src";
 import { signal } from "@signe/reactive";
+import { createHotbarState } from "@rpgjs/common";
+
+const emptyHotbarPlayer = {
+  getHotbar: () => createHotbarState(),
+  isHotbarEntryTypeAllowed: () => true,
+};
 
 describe("GUI", () => {
   test("input gui returns typed text and number values", async () => {
@@ -118,6 +124,7 @@ describe("GUI", () => {
     };
     const sent: any[] = [];
     const player: any = {
+      ...emptyHotbarPlayer,
       canMove: signal(true),
       items: signal([inventoryItem]),
       equipments: signal([inventoryItem]),
@@ -153,6 +160,7 @@ describe("GUI", () => {
               id: "sword",
               icon: "db-icon",
               type: "weapon",
+              hotbarAssignable: false,
               equipped: true,
             },
           ],
@@ -174,6 +182,7 @@ describe("GUI", () => {
   test("main menu item and equipment actions sync the player and refresh the client", async () => {
     const sent: any[] = [];
     const player: any = {
+      ...emptyHotbarPlayer,
       canMove: true,
       items: signal([{ id: "potion", name: "Potion", quantity: 2 }]),
       equipments: signal([]),
@@ -194,6 +203,13 @@ describe("GUI", () => {
     const gui = new MenuGui(player);
     const pending = gui.open();
 
+    expect(sent[0].value.data.items[0]).toMatchObject({
+      id: "potion",
+      type: "item",
+      usable: true,
+      hotbarAssignable: true,
+    });
+
     await gui.emit("useItem", { id: "potion", clientActionId: "use-1" });
     await gui.emit("equipItem", { id: "sword", equip: true, clientActionId: "equip-1" });
 
@@ -213,6 +229,7 @@ describe("GUI", () => {
   test("main menu reports action errors and still refreshes the menu", async () => {
     const sent: any[] = [];
     const player: any = {
+      ...emptyHotbarPlayer,
       canMove: true,
       items: signal([{ id: "potion", name: "Potion", quantity: 1 }]),
       equipments: signal([]),
@@ -246,6 +263,7 @@ describe("GUI", () => {
 
   test("main menu exit resolves the waiting open call and restores movement", async () => {
     const player: any = {
+      ...emptyHotbarPlayer,
       canMove: true,
       items: signal([]),
       equipments: signal([]),

@@ -1,6 +1,6 @@
 {
   "name": "@jbcom/rpgjs-solo",
-  "version": "5.0.0-beta.28.solo.0",
+  "version": "5.0.0-beta.29.solo.0",
   "description": "Transport-free, deterministic single-player RPG runtime built from RPGJS v5",
   "license": "MIT",
   "type": "module",

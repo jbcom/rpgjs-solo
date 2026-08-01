@@ -1,9 +1,9 @@
 import {
   HudComponent,
+  PrebuiltComponentAnimations,
   RpgClient,
   RpgClientEngine,
   RpgGui,
-  RpgSound,
   TitleScreenComponent,
   inject,
 } from "@rpgjs/client";
@@ -23,6 +23,8 @@ import {
 import type { StudioGameModuleConfig } from ".";
 import { createStudioMapPlugins, type StudioMapPlugin } from "./studio-map-plugins";
 import { bindInitialStudioEventHitboxes } from "./initial-event-hitboxes-client";
+import { bindStudioCombatAnimationsToEntity } from "./action-battle-animations";
+import { collectStudioActionBattleMediaRefs } from "./action-battle-animation-preload";
 
 interface GlobalConfig {
   projectId?: string;
@@ -36,6 +38,10 @@ interface GlobalConfig {
   };
   animations?: Record<string, any>;
   database?: any[];
+  menus?: {
+    titleScreen?: { enabled: boolean };
+    hud?: { enabled: boolean };
+  };
 }
 
 interface RpgClientEngineWithConfig extends RpgClientEngine {
@@ -52,6 +58,16 @@ const DEFAULT_STUDIO_KEYBOARD_CONTROLS = {
   action: "space",
   dash: "shift",
   escape: "escape",
+  hotbar1: "n1",
+  hotbar2: "n2",
+  hotbar3: "n3",
+  hotbar4: "n4",
+  hotbar5: "n5",
+  hotbar6: "n6",
+  hotbar7: "n7",
+  hotbar8: "n8",
+  hotbar9: "n9",
+  hotbar0: "n0",
 };
 
 const normalizeStudioKeyboardControls = (
@@ -63,6 +79,11 @@ const normalizeStudioKeyboardControls = (
     ...(current ?? {}),
     ...(incoming ?? {}),
   };
+  for (const key of Object.keys(DEFAULT_STUDIO_KEYBOARD_CONTROLS)) {
+    if (key.startsWith("hotbar") && /^[0-9]$/.test(merged[key])) {
+      merged[key] = `n${merged[key]}`;
+    }
+  }
 
   if (incoming?.back && !incoming.escape) {
     merged.escape = incoming.back;
@@ -103,35 +124,6 @@ const resolveHeroMediaSpritesheet = async (value: unknown): Promise<any | null> 
   }
 
   return null;
-};
-
-const getMediaRefKey = (value: unknown): string | null => {
-  if (!value) return null;
-  if (typeof value === "string") return value;
-  if (typeof value !== "object") return null;
-  const candidate = value as Record<string, unknown>;
-  const key =
-    candidate.id ?? candidate._id ?? candidate.mediaId ?? candidate.fileName;
-  return typeof key === "string" && key.trim().length > 0 ? key : null;
-};
-
-const collectStudioCombatAnimationRefs = (database: any[] = []): unknown[] => {
-  const refs: unknown[] = [];
-  const seen = new Set<string>();
-  const add = (value: unknown) => {
-    const key = getMediaRefKey(value);
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    refs.push(value);
-  };
-
-  for (const entry of database) {
-    const animations = entry?.animations ?? entry?.combatAnimations;
-    if (!animations || typeof animations !== "object") continue;
-    Object.values(animations).forEach(add);
-  }
-
-  return refs;
 };
 
 const resolveStudioDatabaseForPreload = async (
@@ -207,7 +199,7 @@ export default (config: StudioGameModuleConfig) => {
           engine.globalConfig.database = database;
         }
         const databaseAnimationMediaRefs =
-          collectStudioCombatAnimationRefs(database);
+          collectStudioActionBattleMediaRefs(database);
 
         const heroMediaRefs = [
           engine.globalConfig.hero?.graphic,
@@ -229,7 +221,10 @@ export default (config: StudioGameModuleConfig) => {
             engine.addSpriteSheet(spritesheet);
           });
 
-        if (config.displayTitleScreen !== false) {
+        const displayTitleScreen = config.displayTitleScreen
+          ?? response.menus?.titleScreen?.enabled
+          ?? true;
+        if (displayTitleScreen) {
           gui.display("rpg-title-screen", {
             title: response.name,
             subtitle: response.subtitle,
@@ -288,12 +283,14 @@ export default (config: StudioGameModuleConfig) => {
             loadingText: engine.t("rpg.transition.loading"),
             onCovered: complete,
             onRevealed: () => {
-              gui.display("hud", {
-                faceset: {
-                  id: resolveMediaId(engine.globalConfig?.hero?.faceset),
-                  expression: "happy",
-                },
-              });
+              if (engine.globalConfig.menus?.hud?.enabled !== false) {
+                gui.display("hud", {
+                  faceset: {
+                    id: resolveMediaId(engine.globalConfig?.hero?.faceset),
+                    expression: "happy",
+                  },
+                });
+              }
             },
           });
         });
@@ -301,6 +298,10 @@ export default (config: StudioGameModuleConfig) => {
       onAfterLoading: async (scene) => {
         const engine = inject(RpgClientEngine) as RpgClientEngineWithConfig;
         engine.scene.clearLocalWeather?.();
+        bindStudioCombatAnimationsToEntity(
+          engine.scene.getCurrentPlayer?.(),
+          engine.globalConfig.animations,
+        );
         bindInitialStudioEventHitboxes(scene);
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         fadeTrigger.start();
@@ -328,7 +329,6 @@ export default (config: StudioGameModuleConfig) => {
       return resolveSpritesheet(id);
     },
     soundResolver: async (id: string) => {
-      RpgSound.global.stop();
       try {
         const media = await getGameDataProvider().getMedia(id);
         return {
@@ -341,6 +341,10 @@ export default (config: StudioGameModuleConfig) => {
     },
 
     componentAnimations: [
+      {
+        id: "studio-item-use-fx",
+        component: PrebuiltComponentAnimations.Fx,
+      },
       {
         id: "up",
         component: UpComponent,

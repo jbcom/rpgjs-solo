@@ -66,8 +66,23 @@ export default {
     provideClientGlobalConfig(),
     provideActionBattle({
       visual: createActionBattleVisual("fx"),
+      ai: {
+        visuals: {
+          bubble({ object, visual }, fx) {
+            fx.showHit(object, String(visual.text ?? "!"));
+          },
+          rage({ object, visual }, fx) {
+            fx.flash(object, {
+              type: "tint",
+              tint: "red",
+              duration: Number(visual.durationMs ?? 900),
+              cycles: 3,
+            });
+          },
+        },
+      },
       ui: createActionBattleUi({
-        actionBar: false,
+        hotbar: false,
         targeting: true,
         attackPreview: true,
       }),

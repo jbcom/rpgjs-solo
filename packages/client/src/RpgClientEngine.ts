@@ -43,6 +43,7 @@ import { applySyncedHitboxPayload } from "./utils/syncHitbox";
 import { EventComponentResolverRegistry, type EventComponentResolver } from "./Game/EventComponentResolver";
 import { RpgClientBuiltinI18n } from "./i18n";
 import type { CameraFollowSmoothMove } from "./services/cameraFollow";
+import { RpgMusicManager } from "./Game/MusicManager";
 export type {
   CameraFollowEase,
   CameraFollowSmoothMove,
@@ -152,6 +153,8 @@ type MapShakeOptions = {
 };
 
 export class RpgClientEngine<T = any> {
+  /** Runtime defaults used by modules that specialize the built-in dash. */
+  dashDefaults: Partial<RpgDashInput> = {};
   private guiService: RpgGui;
   private webSocket: AbstractWebsocket;
   private loadMapService: LoadMapService;
@@ -167,6 +170,12 @@ export class RpgClientEngine<T = any> {
   spritesheets: Map<string | number, any> = new Map();
   private spritesheetPromises: Map<string | number, Promise<any>> = new Map();
   sounds: Map<string, any> = new Map();
+  /** Client-only controller for temporary looping music and map BGM crossfades. */
+  music = new RpgMusicManager({
+    getSound: (id) => this.getSound(id),
+    createSound: (src, options) =>
+      new (Howl as any).Howl({ src: [src], ...options }),
+  });
   componentAnimations: any[] = [];
   clientVisuals = new ClientVisualRegistry();
   projectiles: ProjectileManager;
@@ -232,6 +241,11 @@ export class RpgClientEngine<T = any> {
 
   controlsReady = signal<boolean | undefined>(undefined); 
   gamePause = signal(false);
+  /**
+   * Freezes map rendering for short presentation-only beats such as combat
+   * hit-stop. It is deliberately separate from menu/gameplay pause ownership.
+   */
+  visualPause = signal(false);
 
   private predictionEnabled = false;
   private prediction?: PredictionController<RpgMovementInput, Direction>;
@@ -2017,7 +2031,10 @@ export class RpgClientEngine<T = any> {
       typeof currentPlayer?.direction === "function"
         ? currentPlayer.direction()
         : currentPlayer?.direction;
-    const dashInput = normalizeDashInput(input, fallbackDirection);
+    const dashInput = normalizeDashInput(
+      { ...this.dashDefaults, ...input },
+      fallbackDirection
+    );
     if (!dashInput) return;
     await this.processInput({ input: dashInput });
   }

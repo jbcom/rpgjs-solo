@@ -49,6 +49,44 @@ export const configServer = {
 
 When `projectId` is set, the runtime uses online Studio data by default.
 
+## Studio hotbar settings
+
+`createStudioActionBattlePreset()` connects the Action Battle hotbar to the
+Studio project and map menu settings:
+
+```ts
+import { provideActionBattle } from "@rpgjs/action-battle/server"
+import { createStudioActionBattlePreset } from "@rpgjs/studio/server"
+
+provideActionBattle({
+  ...createStudioActionBattlePreset(),
+})
+```
+
+Studio persists the project default under `menus.hotbar`:
+
+```json
+{
+  "menus": {
+    "hotbar": {
+      "enabled": true,
+      "guiId": null,
+      "settings": {
+        "content": "mixed",
+        "slotCount": 8
+      }
+    }
+  }
+}
+```
+
+`guiId: null` selects the native RPGJS GUI. Inside `settings`, `content` is
+`skills`, `items`, or `mixed`, and `slotCount` is between 1 and 10. A map can
+persist the same complete binding to override the project. A map without
+`menus.hotbar` inherits the project configuration. The preset opens or closes
+the hotbar on map changes, filters its allowed entries, and preserves
+temporarily hidden player assignments.
+
 ## MMORPG mode
 
 Studio MMORPG maps use an authoritative, chunked data path:
@@ -259,7 +297,99 @@ The project can define hero skill progression with `skills` or `skillsToLearn`. 
 
 Studio listens to the RPGJS `player.onSkillChange` hook and displays a notification when the hero learns or forgets a skill.
 
-Enemy records can also drive action-battle AI. Use `behavior` on the enemy to set fields such as `enemyType`, `behaviorKey`, `visionRange`, `attackRange`, `attackCooldown`, `dodgeChance`, `dodgeCooldown`, `fleeThreshold`, `attackPatterns`, `patrolWaypoints`, `groupBehavior`, or the nested behavior gauge options. The older `aiBehavior` field is still accepted as a compatibility alias. If the enemy has `attackSkillId`, that skill is used for attacks; otherwise the first learned enemy skill is used.
+Enemy records can also drive action-battle AI. Use `behavior` on the enemy to set fields such as `enemyType`, `behaviorKey`, `visionRange`, `attackRange`, `attackCooldown`, `dodgeChance`, `dodgeCooldown`, `fleeThreshold`, `attackPatterns`, `patrolWaypoints`, `groupBehavior`, or the nested behavior gauge options. The older `aiBehavior` field is still accepted as a compatibility alias. Every learned enemy skill is evaluated from its action mode, targeting range, area mask, SP cost, and cooldown. `attackSkillId` gives one skill priority without disabling normal attacks or the other learned skills.
+
+### Skill workflow triggers
+
+Studio skills may declare `workflowTriggers` that reference Studio block
+collections:
+
+```json
+{
+  "workflowTriggers": [
+    { "phase": "cast", "blockCollectionId": "cast-workflow" },
+    { "phase": "impact", "blockCollectionId": "impact-workflow" },
+    { "phase": "defeat", "blockCollectionId": "defeat-workflow" }
+  ]
+}
+```
+
+This is a Studio orchestration feature built on RPGJS's native skill `onUse`
+hook. It does not add a second engine hook. Studio preserves the default skill
+effect, waits for projectile impact when applicable, then executes the blocks
+from the referenced collection. The block context exposes the caster as the
+player and the affected map event as the current event when one exists. A skill
+workflow can call or spawn Common Events through the corresponding blocks.
+
+### Item workflow triggers
+
+Studio item records expose fields and workflow phases according to their item
+type:
+
+- regular items expose `hpValue`, `mpValue`, `hitRate`, `consumable`,
+  `onAdd`, `onUse`, `onUseFailed`, and `onRemove`;
+- weapons and armors expose their equipment statistics, parameter modifiers,
+  `onAdd`, `onRemove`, and `onEquip`;
+- weapons and armors do not expose `consumable`, `onUse`, or `onUseFailed`.
+
+`hitRate` is edited as a percentage from 0 to 100 and normalized to the
+native RPGJS `hitRate` value from 0 to 1. An equipment `onEquip` workflow can
+test `variables.equip`: it is `true` after equipping and `false` after
+unequipping.
+
+```json
+{
+  "itemType": "weapon",
+  "atk": 12,
+  "workflowTriggers": [
+    { "phase": "onAdd", "blockCollectionId": "sword-found" },
+    { "phase": "onEquip", "blockCollectionId": "sword-equipped" }
+  ]
+}
+```
+
+The runtime maps these workflows to the native item hooks. Workflow blocks run
+in order for each player, can call Common Events, and keep the normal RPGJS item
+or equipment behavior.
+
+The same Studio enemy definition can be placed on a map more than once. The
+runtime keeps the first placement's legacy id and assigns deterministic ids
+such as `enemy-id::2` to later placements, while preserving `sourceEventId` for
+database lookups. Each placement therefore gets its own sprite, hitbox, HP,
+Battle AI state, and defeat lifecycle.
+
+## Built-in GUI settings
+
+Studio projects can bind the native Title Screen, Hotbar, HUD, and Main Menu
+roles. A `null` `guiId` selects the built-in RPGJS component and leaves room
+for a future Studio GUI definition:
+
+```json
+{
+  "menus": {
+    "titleScreen": { "enabled": true, "guiId": null },
+    "hotbar": {
+      "enabled": true,
+      "guiId": null,
+      "settings": { "content": "mixed", "slotCount": 8 }
+    },
+    "hud": { "enabled": true, "guiId": null },
+    "mainMenu": { "enabled": true, "guiId": null }
+  },
+  "keyboardControls": {
+    "back": "escape"
+  }
+}
+```
+
+The client applies Title Screen and HUD visibility. The server starts directly
+when the project disables the Title Screen, controls Main Menu availability,
+and remains authoritative for Hotbar state. The configured Back key and the
+mobile Back touch button produce the same logical action.
+
+Map settings do not override the Hotbar. Studio workflows and events use the
+`set_hotbar` block to display it with `skills`, `items`, or `mixed` content and
+1 to 10 slots, or to hide it without clearing persistent assignments.
 
 ## Auto mode
 
@@ -272,12 +402,38 @@ provideStudioGame({
 });
 ```
 
+## Start without a title screen
+
+Use `autoStart` when the player should enter the starting map as soon as the
+server connection is established:
+
+```ts
+provideStudioGame({
+  projectId: "your-project-id",
+  startMapId: "requested-map",
+  displayTitleScreen: false,
+  autoStart: true,
+});
+```
+
+The server initializes the built-in default player stats, then transfers the
+player to `startMapId` or to the starting map defined by the Studio project.
+`autoStart` defaults to `false`, so games using the title-screen `start`
+interaction keep their existing behavior. `displayTitleScreen` controls only
+the client display and does not enable immediate startup by itself.
+
 ## Options
 
 - `projectId`: Studio project identifier. When provided, the default runtime mode is `"online"`.
 - `runtimeMode`: data loading strategy. Use `"online"`, `"offline"`, or `"auto"`.
 - `bundleBasePath`: public path for exported Studio data. Defaults to `/game-data`.
 - `displayTitleScreen`: display the Studio title screen when supported by the project.
+- `autoStart`: initialize the player and enter the starting map immediately on
+connection. Defaults to `false`.
+
+Studio projects can instead persist `menus.titleScreen.enabled: false`; the
+Studio runtime then enables immediate startup automatically. Explicit
+`autoStart` remains useful for non-Studio configuration and overrides.
 - `startMapId`: force the map used to start the player.
 - `streaming`: authoritative Studio v2 chunk settings for MMORPG mode. Set it to
   `false` only when another server map provider replaces the built-in streaming

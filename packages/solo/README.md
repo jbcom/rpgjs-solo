@@ -158,7 +158,7 @@ Scripted transitions that truly intend to bypass collision can still use
 `collision: 'ignore'`; map bounds remain authoritative in either mode.
 
 The package version records its exact RPGJS v5 baseline. This release is based
-on RPGJS `5.0.0-beta.28` and bundles the fork's audited `@rpgjs/physic@5.0.2`
+on RPGJS `5.0.0-beta.29` and bundles the fork's audited `@rpgjs/physic@5.0.2`
 source. That source is newer than the public registry's `5.0.1`; consumers do
 not inherit an unavailable or floating runtime dependency.
 

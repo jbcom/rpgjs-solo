@@ -218,19 +218,14 @@ const resolveEnemySkillIds = (enemy: any): string[] => {
   return [...ids];
 };
 
-const learnEnemySkills = (event: RpgEvent, enemy: any): string | undefined => {
-  let firstSkillId: string | undefined;
-
+const learnEnemySkills = (event: RpgEvent, enemy: any): void => {
   for (const skillId of resolveEnemySkillIds(enemy)) {
     try {
       (event as any).learnSkill?.(skillId);
-      firstSkillId ??= skillId;
     } catch (error) {
       console.warn(`[StudioGame] enemy skill ${skillId} could not be learned`, error);
     }
   }
-
-  return firstSkillId;
 };
 
 const hasStudioParameter = (config: any, parameter: string): boolean => {
@@ -315,6 +310,15 @@ export const resolveEnemyBattleAiOptions = (
     visionRange: 150,
     attackRange: 50,
     animations: createStudioActionBattleAnimations(enemy.animations),
+    presentation: {
+      ...(enemy.presentation ?? {}),
+      music: {
+        battle: enemy.combatMusic ?? enemy.presentation?.music?.battle,
+        priority:
+          toNumber(enemy.combatMusicPriority) ??
+          toNumber(enemy.presentation?.music?.priority),
+      },
+    },
   };
 
   if (typeof behaviorKey === "string" && behaviorKey.trim()) {
@@ -668,8 +672,8 @@ const enemyRuntime: EventTypeRuntime = {
         context.event.level = trigger?.typeData?.level ?? enemy.initialLevel ?? 1;
         initializeEnemyNaturalAttackFromStudioConfig(context.event, enemy);
         initializeEnemyVitalsFromParameters(context.event);
-        const attackSkill = learnEnemySkills(context.event, enemy);
-        const aiOptions = resolveEnemyBattleAiOptions(enemy, attackSkill);
+        learnEnemySkills(context.event, enemy);
+        const aiOptions = resolveEnemyBattleAiOptions(enemy);
         (context.event as any).battleAi = new BattleAi(context.event, {
           ...aiOptions,
           rewards: {

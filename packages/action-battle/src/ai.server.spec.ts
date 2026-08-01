@@ -1,7 +1,19 @@
 import { MAXHP } from "@rpgjs/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { AttackPattern, BattleAi } from "./ai.server";
-import { chase, idle, ifTargetVisible } from "./core/ai-behavior-tree";
+import { AiDebug, AttackPattern, BattleAi } from "./ai.server";
+import {
+  callAction,
+  chase,
+  holdPosition,
+  idle,
+  ifTargetVisible,
+  moveToPoint,
+  run,
+  setSpeed,
+  teleportNearTarget,
+  teleportTo,
+  visual,
+} from "./core/ai-behavior-tree";
 import { setActionBattleSystems } from "./core/context";
 import { ACTION_BATTLE_CLIENT_VISUAL_ID } from "./visual";
 
@@ -15,8 +27,12 @@ const createEvent = () => ({
   flash: vi.fn(),
   showHit: vi.fn(),
   setGraphicAnimation: vi.fn(),
+  mergeComponents: vi.fn(),
+  componentsTop: vi.fn(() => null),
   stopMoveTo: vi.fn(),
   moveTo: vi.fn(),
+  teleport: vi.fn(async () => undefined),
+  speed: 4,
   getCurrentMap: vi.fn(() => ({})),
   remove: vi.fn(),
   x: vi.fn(() => 0),
@@ -36,6 +52,136 @@ const createPlayer = () => ({
       potion: { icon: "potion-icon" },
     }),
   })),
+});
+
+describe("AiDebug", () => {
+  test("emits structured and filtered decision logs only when enabled", () => {
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    AiDebug.enabled = false;
+    AiDebug.filterEventId = null;
+    AiDebug.categories = [];
+
+    AiDebug.log("decision", "enemy-1", "disabled");
+    expect(debug).not.toHaveBeenCalled();
+
+    AiDebug.enabled = true;
+    AiDebug.filterEventId = "enemy-1";
+    AiDebug.categories = ["decision"];
+    AiDebug.log("movement", "enemy-1", "filtered category");
+    AiDebug.log("decision", "enemy-2", "filtered enemy");
+    AiDebug.log("decision", "enemy-1", "selected", { id: "fireball" });
+
+    expect(debug).toHaveBeenCalledOnce();
+    expect(debug).toHaveBeenCalledWith(
+      "[ActionBattle AI]",
+      expect.objectContaining({
+        category: "decision",
+        eventId: "enemy-1",
+        message: "selected",
+        data: { id: "fireball" },
+      })
+    );
+
+    AiDebug.enabled = false;
+    AiDebug.filterEventId = null;
+    AiDebug.categories = [];
+    debug.mockRestore();
+  });
+});
+
+describe("BattleAi health presentation", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    setActionBattleSystems({});
+  });
+
+  test("reuses the standard RPGJS HP component above the entity graphic", () => {
+    const event = createEvent();
+    const ai = new BattleAi(event as any, {
+      presentation: {
+        role: "boss",
+        healthBar: {
+          style: { width: 120, fillColor: "#cc2244" },
+        },
+      },
+    });
+
+    expect(event.mergeComponents).toHaveBeenCalledWith(
+      "top",
+      [
+        expect.objectContaining({
+          id: "rpg:hpBar",
+          props: expect.objectContaining({
+            style: expect.objectContaining({
+              width: 120,
+              height: 9,
+              fillColor: "#cc2244",
+            }),
+            text: undefined,
+          }),
+        }),
+      ],
+      expect.objectContaining({
+        width: 120,
+        marginBottom: 4,
+      })
+    );
+    ai.destroy();
+  });
+
+  test("can disable the standard HP component for one AI", () => {
+    const event = createEvent();
+    const ai = new BattleAi(event as any, {
+      presentation: { healthBar: false },
+    });
+
+    expect(event.mergeComponents).not.toHaveBeenCalled();
+    ai.destroy();
+  });
+
+  test("does not duplicate an HP component already supplied by the game", () => {
+    const event = createEvent();
+    event.componentsTop.mockReturnValue(
+      JSON.stringify({
+        components: [[{ id: "rpg:hpBar", type: "hpBar" }]],
+        layout: {},
+      })
+    );
+    const ai = new BattleAi(event as any);
+
+    expect(event.mergeComponents).not.toHaveBeenCalled();
+    ai.destroy();
+  });
+
+  test("keeps the skill impact media in AI-owned hurt visuals", () => {
+    const clientVisual = vi.fn();
+    const event = createEvent();
+    event.hp = 10;
+    event.getCurrentMap.mockReturnValue({ clientVisual });
+    const ai = new BattleAi(event as any);
+
+    ai.handleDamage(createPlayer() as any, {
+      damage: 3,
+      defeated: false,
+      skill: {
+        id: "arcane",
+        name: "Arcane",
+        animation: "arcane-impact",
+      },
+    });
+
+    expect(clientVisual).toHaveBeenCalledWith(
+      ACTION_BATTLE_CLIENT_VISUAL_ID,
+      expect.objectContaining({
+        moment: "hurt",
+        skill: expect.objectContaining({
+          id: "arcane",
+          animation: "arcane-impact",
+        }),
+      }),
+    );
+    ai.destroy();
+  });
 });
 
 describe("BattleAi defeat flow", () => {
@@ -77,10 +223,17 @@ describe("BattleAi defeat flow", () => {
           animationName: "die",
           delayMs: 700,
         }),
+        deathPresentation: {
+          effect: "explosionSmall",
+          durationMs: 450,
+          scale: 1.4,
+          shake: true,
+        },
       },
       transition: {
         animation: "die",
         graphic: undefined,
+        effect: "explosionSmall",
         duration: 700,
       },
       timeoutMs: 700,
@@ -118,6 +271,36 @@ describe("BattleAi defeat flow", () => {
       reason: "defeated",
       data: {
         animation: null,
+        deathPresentation: {
+          effect: "explosionSmall",
+          durationMs: 450,
+          scale: 1.4,
+          shake: true,
+        },
+      },
+      transition: {
+        animation: undefined,
+        graphic: undefined,
+        effect: "explosionSmall",
+        duration: 450,
+      },
+      timeoutMs: 450,
+    });
+  });
+
+  test("can disable the fallback death presentation", () => {
+    const event = createEvent();
+    const ai = new BattleAi(event as any, {
+      presentation: { death: false },
+    });
+
+    ai.handleDamage(createPlayer() as any, { damage: 10, defeated: true });
+
+    expect(event.remove).toHaveBeenCalledWith({
+      reason: "defeated",
+      data: {
+        animation: null,
+        deathPresentation: false,
       },
       transition: undefined,
       timeoutMs: 0,
@@ -494,6 +677,272 @@ describe("BattleAi behavior tree", () => {
         pattern: AttackPattern.DashAttack,
       })
     );
+    ai.destroy();
+  });
+
+  test("selects distance-appropriate special attacks without repetition", () => {
+    const event = createEvent();
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackRange: 100,
+      attackPatterns: [
+        AttackPattern.Zone,
+        AttackPattern.DashAttack,
+        AttackPattern.Melee,
+      ],
+    });
+    ai.onDetectInShape(player as any, {});
+
+    expect((ai as any).selectAttackCandidates(20)).toEqual([
+      AttackPattern.Zone,
+      AttackPattern.Melee,
+    ]);
+    (ai as any).lastAttackPattern = AttackPattern.Zone;
+    expect((ai as any).selectAttackCandidates(20)).toEqual([
+      AttackPattern.Melee,
+    ]);
+    expect((ai as any).selectAttackCandidates(90)).toEqual([
+      AttackPattern.DashAttack,
+      AttackPattern.Melee,
+    ]);
+    ai.destroy();
+  });
+
+  test("falls back to a basic attack while the preferred skill cools down", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const event = createEvent();
+    const onUse = vi.fn();
+    const skill = {
+      id: "fire",
+      spCost: 0,
+      action: { cooldownMs: 800 },
+      onUse,
+    };
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+    });
+    ai.onDetectInShape(player as any, {});
+    const firstEvaluations = (ai as any).evaluateSkillActions(1000);
+    const firstAction = (ai as any).selectCombatAction(firstEvaluations, 20);
+    expect(firstAction).toMatchObject({
+      kind: "skill",
+      evaluation: { id: "fire" },
+    });
+
+    expect((ai as any).performPlannedSkill(firstAction.evaluation)).toBe(true);
+    vi.advanceTimersByTime(500);
+    expect(onUse).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(1600);
+    const cooldownEvaluations = (ai as any).evaluateSkillActions(1600);
+    expect(cooldownEvaluations[0].rejection).toBe("cooldown");
+    expect((ai as any).selectCombatAction(cooldownEvaluations, 20)).toEqual({
+      kind: "basic",
+    });
+    ai.destroy();
+  });
+
+  test("selects a learned ranged skill while keeping other learned skills", () => {
+    const event = createEvent();
+    const clientVisual = vi.fn();
+    const melee = {
+      id: "slash",
+      spCost: 0,
+      action: { mode: "melee", target: "enemy" },
+    };
+    const projectile = {
+      id: () => "fireball",
+      skillType: () => "magical",
+      animation: () => "fireball-impact",
+      spCost: 0,
+      targeting: { range: 6 },
+      action: { mode: "projectile", target: "enemy" },
+    };
+    (event as any).skills = vi.fn(() => [melee, projectile]);
+    event.getCurrentMap.mockReturnValue({
+      tileWidth: 32,
+      tileHeight: 32,
+      getPlayers: () => [],
+      getEvents: () => [],
+      clientVisual,
+    });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 150),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, { attackRange: 50 });
+    ai.onDetectInShape(player as any, {});
+
+    const evaluations = (ai as any).evaluateSkillActions(1000);
+    expect(evaluations.map((entry: any) => entry.id)).toEqual([
+      "slash",
+      "fireball",
+    ]);
+    const selection = (ai as any).selectCombatAction(evaluations, 150);
+    expect(selection).toMatchObject({
+      kind: "skill",
+      evaluation: { id: "fireball", mode: "projectile" },
+    });
+    expect((ai as any).performPlannedSkill(selection.evaluation)).toBe(true);
+    expect(clientVisual).toHaveBeenCalledWith(
+      ACTION_BATTLE_CLIENT_VISUAL_ID,
+      expect.objectContaining({
+        moment: "castSkill",
+        skill: expect.objectContaining({
+          id: "fireball",
+          skillType: "magical",
+          animation: "fireball-impact",
+        }),
+      })
+    );
+    ai.destroy();
+  });
+
+  test("strafes laterally while already inside its preferred range", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const event = createEvent();
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 40),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackRange: 50,
+      moveToCooldown: 0,
+    });
+    ai.onDetectInShape(player as any, {});
+
+    (ai as any).handleSmartCombatMovement(40, [], 1000);
+
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 0, y: 32 });
+    ai.destroy();
+  });
+
+  test("executes advanced server intents and emits a generic visual cue", () => {
+    vi.useFakeTimers();
+    const clientVisual = vi.fn();
+    const event = createEvent();
+    event.getCurrentMap.mockReturnValue({ clientVisual });
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const customRun = vi.fn();
+    const customAction = vi.fn();
+    setActionBattleSystems({
+      ai: {
+        actions: {
+          enrage: customAction,
+        },
+      },
+    });
+    const ai = new BattleAi(event as any, {
+      moveToCooldown: 0,
+      behaviorTree: () => ({
+        status: "success",
+        intent: [
+          run(customRun),
+          setSpeed(7),
+          moveToPoint({ x: 40, y: 60 }),
+          holdPosition(),
+          teleportTo({ x: 80, y: 90 }),
+          visual({ kind: "rage", durationMs: 500 }),
+          callAction("enrage", { multiplier: 2 }),
+        ],
+      }),
+    });
+
+    vi.advanceTimersByTime(100);
+
+    expect(customRun).toHaveBeenCalledWith(
+      expect.objectContaining({ event, memory: expect.any(Object) })
+    );
+    expect(event.speed).toBe(7);
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 40, y: 60 });
+    expect(event.teleport).toHaveBeenCalledWith({ x: 80, y: 90 });
+    expect(customAction).toHaveBeenCalledWith(
+      expect.objectContaining({ event }),
+      { multiplier: 2 }
+    );
+    expect(clientVisual).toHaveBeenCalledWith(
+      ACTION_BATTLE_CLIENT_VISUAL_ID,
+      expect.objectContaining({
+        moment: "ai",
+        objectId: "monster-1",
+        visual: {
+          kind: "rage",
+          durationMs: 500,
+        },
+      })
+    );
+    ai.destroy();
+  });
+
+  test("continues with default AI when a registered action is unknown", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 120),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackRange: 50,
+      visionRange: 150,
+      moveToCooldown: 0,
+      behaviorTree: () => ({
+        status: "success",
+        intent: callAction("not-registered"),
+      }),
+    });
+
+    ai.onDetectInShape(player as any, {});
+    vi.advanceTimersByTime(100);
+
+    expect(event.moveTo).toHaveBeenCalledWith(player);
+    ai.destroy();
+  });
+
+  test("teleports near the current target using a server-selected position", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 100),
+      y: vi.fn(() => 50),
+    };
+    const ai = new BattleAi(event as any, {
+      behaviorTree: () => ({
+        status: "success",
+        intent: teleportNearTarget({
+          distance: 30,
+          angleDegrees: 0,
+        }),
+      }),
+    });
+
+    ai.onDetectInShape(player as any, {});
+    vi.advanceTimersByTime(100);
+
+    expect(event.teleport).toHaveBeenCalledWith({ x: 130, y: 50 });
     ai.destroy();
   });
 });

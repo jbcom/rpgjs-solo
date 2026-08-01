@@ -10,6 +10,7 @@ import {
 } from "./map-renderer";
 import { resolveStudioElementSize } from "./studio-element-size";
 import { STUDIO_DIRECT_LOAD_MARKER } from "./map-streaming";
+import { assignStudioEventPlacementIds } from "./event-placement";
 
 // Type definitions for better type safety
 interface GlobalConfig {
@@ -498,12 +499,13 @@ export const loadMap = async (mapId: string) => {
 
   params.backgroundMusic = await resolveAudioSource(params.backgroundMusic);
   params.backgroundAmbientSound = await resolveAudioSource(params.backgroundAmbientSound);
+  params.combatMusic = await resolveAudioSource(params.combatMusic);
 
-  const resolvedMapEvents = await hydrateEventMediaReferences(
+  const resolvedMapEvents = assignStudioEventPlacementIds(await hydrateEventMediaReferences(
     await resolveMapEventReferences(mapResponse.events, {
       useLocalBundleEvents,
     })
-  );
+  ));
   // Merge polygons with hitboxes to create polygon-based hitboxes
   const mergedHitboxes = [...(mapResponse.hitboxes ?? [])];
   
@@ -1000,6 +1002,7 @@ export const loadMap = async (mapId: string) => {
     params: {
       backgroundMusic: map.params.backgroundMusic,
       backgroundAmbientSound: map.params.backgroundAmbientSound,
+      combatMusic: map.params.combatMusic,
     }
   };
 };

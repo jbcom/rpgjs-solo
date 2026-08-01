@@ -435,6 +435,7 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       const hookTarget = (instance as any)._itemInstance || instance;
       // Only call onAdd if it exists and is a function
       (this as any)["execMethod"]("onAdd", [this], hookTarget);
+      this["refreshHotbar"]?.();
       return instance;
     }
 
@@ -458,6 +459,7 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       if (hookTarget && typeof hookTarget.onRemove === 'function') {
         this["execMethod"]("onRemove", [this], hookTarget);
       }
+      this["refreshHotbar"]?.();
       return this.items()[itemIndex];
     }
 
@@ -568,7 +570,14 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       }
       
       const hitRate = itemData?.hitRate ?? 1;
-      const hookTarget = (inventory as any)._itemInstance || inventory;
+      // Database records can be refreshed while an inventory entry remains
+      // alive (for example after editing an item in RPGJS Studio). Prefer the
+      // current object from the map database so removed or replaced hooks do
+      // not keep executing from the stale inventory snapshot. Class-based
+      // records remain functions and still use their instantiated hook target.
+      const hookTarget = itemData && typeof itemData === "object"
+        ? itemData
+        : (inventory as any)._itemInstance || inventory;
       
       if (Math.random() > hitRate) {
         this.removeItem(itemClass);
@@ -626,6 +635,7 @@ export function WithItemManager<TBase extends PlayerCtor>(Base: TBase) {
       // Call onEquip hook - use stored instance if available
       const hookTarget = (item as any)._itemInstance || item;
       this["execMethod"]("onEquip", [this, equipState], hookTarget);
+      this["refreshHotbar"]?.();
     }
   } as unknown as TBase;
 }
