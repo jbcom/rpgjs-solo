@@ -8,7 +8,10 @@ import {
 import {
 	mkdtempSync,
 	mkdirSync,
+	linkSync,
+	readFileSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,9 +27,13 @@ const createArchive = ({
 		dependencies: { signal: "1.0.0" },
 	},
 	files = { "dist/index.js": 'import "signal";\n' },
+	hardlinks = {},
+	symlinks = {},
 }: {
 	manifest?: Record<string, unknown>;
 	files?: Record<string, string>;
+	hardlinks?: Record<string, string>;
+	symlinks?: Record<string, string>;
 } = {}) => {
 	const directory = mkdtempSync(join(tmpdir(), "rpgjs-archive-fixture-"));
 	temporaryDirectories.push(directory);
@@ -40,6 +47,16 @@ const createArchive = ({
 		const filePath = join(packageDirectory, path);
 		mkdirSync(dirname(filePath), { recursive: true });
 		writeFileSync(filePath, source);
+	}
+	for (const [path, target] of Object.entries(hardlinks)) {
+		const filePath = join(packageDirectory, path);
+		mkdirSync(dirname(filePath), { recursive: true });
+		linkSync(join(packageDirectory, target), filePath);
+	}
+	for (const [path, target] of Object.entries(symlinks)) {
+		const filePath = join(packageDirectory, path);
+		mkdirSync(dirname(filePath), { recursive: true });
+		symlinkSync(target, filePath);
 	}
 	const archivePath = join(directory, "fixture.tgz");
 	execFileSync("tar", ["-czf", archivePath, "-C", directory, "package"]);
@@ -70,6 +87,27 @@ describe("portable package archive contracts", () => {
 		).not.toThrow();
 	});
 
+	it("ignores import-shaped text in comments and strings", () => {
+		const { archivePath, directory } = createArchive({
+			files: {
+				"dist/index.js": [
+					'// documentation: import "/tmp/not-runtime.js"',
+					'const note = \'require("file:../not-runtime.js")\';',
+					"export { note };",
+					"",
+				].join("\n"),
+			},
+		});
+
+		expect(() =>
+			inspectPortablePackageArchive({
+				archivePath,
+				extractDirectory: join(directory, "extract"),
+				packageName: "archive-contract-fixture",
+			}),
+		).not.toThrow();
+	});
+
 	it.each([
 		["workspace manifest", { dependencies: { signal: "workspace:*" } }, {}],
 		[
@@ -81,6 +119,11 @@ describe("portable package archive contracts", () => {
 			"CommonJS local reference",
 			{},
 			{ "dist/index.cjs": 'require("file:../signal");\n' },
+		],
+		[
+			"CommonJS require.resolve local reference",
+			{},
+			{ "dist/index.cjs": 'require.resolve("/tmp/signal");\n' },
 		],
 		[
 			"declaration absolute reference",
@@ -104,5 +147,43 @@ describe("portable package archive contracts", () => {
 				packageName: "archive-contract-fixture",
 			}),
 		).toThrow(/non-portable|retains local/);
+	});
+
+	it("rejects archive links before extraction", () => {
+		const { archivePath, directory } = createArchive({
+			files: {},
+			symlinks: { "dist/escape.js": "/etc/hosts" },
+		});
+		const extractDirectory = join(directory, "extract");
+
+		expect(() =>
+			inspectPortablePackageArchive({
+				archivePath,
+				extractDirectory,
+				packageName: "archive-contract-fixture",
+			}),
+		).toThrow(/link|entry type|non-portable/i);
+		expect(() =>
+			readFileSync(join(extractDirectory, "package/dist/escape.js")),
+		).toThrow();
+	});
+
+	it("rejects archive hard links before extraction", () => {
+		const { archivePath, directory } = createArchive({
+			files: { "dist/target.js": "export {};\n" },
+			hardlinks: { "dist/linked.js": "dist/target.js" },
+		});
+		const extractDirectory = join(directory, "extract");
+
+		expect(() =>
+			inspectPortablePackageArchive({
+				archivePath,
+				extractDirectory,
+				packageName: "archive-contract-fixture",
+			}),
+		).toThrow(/link|entry type|non-portable/i);
+		expect(() =>
+			readFileSync(join(extractDirectory, "package/dist/linked.js")),
+		).toThrow();
 	});
 });

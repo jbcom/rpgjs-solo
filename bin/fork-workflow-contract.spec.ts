@@ -55,6 +55,13 @@ describe("fork-owned CI boundary", () => {
 				job.steps.some((step: { name?: string }) => step.name === requiredStep),
 			).toBe(true);
 		}
+		const stepNames = job.steps.map((step: { name?: string }) => step.name);
+		expect(stepNames.indexOf("Build")).toBeLessThan(
+			stepNames.indexOf("Package archive boundaries"),
+		);
+		expect(stepNames.indexOf("Package archive boundaries")).toBeLessThan(
+			stepNames.indexOf("Public API boundary"),
+		);
 
 		expect(source).not.toMatch(
 			/changesets\/action|publish-packages|npm publish|pnpm publish/i,

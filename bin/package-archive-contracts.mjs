@@ -6,6 +6,7 @@ import {
 	readFileSync,
 } from "node:fs";
 import { isAbsolute, join, win32 } from "node:path";
+import ts from "typescript";
 
 const dependencyFields = [
 	"dependencies",
@@ -13,11 +14,6 @@ const dependencyFields = [
 	"optionalDependencies",
 	"peerDependencies",
 ];
-const importSpecifierPattern =
-	/(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["']([^"']+)["']/g;
-const requireSpecifierPattern = /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g;
-const referenceSpecifierPattern =
-	/\/\/\/\s*<reference\s+(?:path|types)=["']([^"']+)["']/g;
 const commandTimeoutMs = 300_000;
 const commandMaxBuffer = 32 * 1024 * 1024;
 
@@ -45,38 +41,135 @@ const isNonPortable = (specifier) =>
 	specifier.startsWith("portal:") ||
 	specifier.startsWith("workspace:");
 
+const readStaticSpecifier = (node) =>
+	ts.isStringLiteralLike(node) ? node.text : undefined;
+
+const isRequireResolve = (expression) => {
+	if (
+		ts.isPropertyAccessExpression(expression) &&
+		ts.isIdentifier(expression.expression) &&
+		expression.expression.text === "require" &&
+		expression.name.text === "resolve"
+	) {
+		return true;
+	}
+	return (
+		ts.isElementAccessExpression(expression) &&
+		ts.isIdentifier(expression.expression) &&
+		expression.expression.text === "require" &&
+		readStaticSpecifier(expression.argumentExpression) === "resolve"
+	);
+};
+
+const isModuleRequire = (expression) =>
+	ts.isPropertyAccessExpression(expression) &&
+	ts.isIdentifier(expression.expression) &&
+	expression.expression.text === "module" &&
+	expression.name.text === "require";
+
+const isImportMetaResolve = (expression) =>
+	ts.isPropertyAccessExpression(expression) &&
+	ts.isMetaProperty(expression.expression) &&
+	expression.expression.keywordToken === ts.SyntaxKind.ImportKeyword &&
+	expression.name.text === "resolve";
+
+const collectStaticModuleSpecifiers = (path, source) => {
+	const scriptKind = /\.d\.[cm]?ts$/.test(path)
+		? ts.ScriptKind.TS
+		: ts.ScriptKind.JS;
+	const sourceFile = ts.createSourceFile(
+		path,
+		source,
+		ts.ScriptTarget.Latest,
+		true,
+		scriptKind,
+	);
+	const specifiers = [
+		...sourceFile.referencedFiles.map((reference) => reference.fileName),
+		...sourceFile.typeReferenceDirectives.map(
+			(reference) => reference.fileName,
+		),
+	];
+	const add = (node) => {
+		const specifier = node && readStaticSpecifier(node);
+		if (specifier !== undefined) specifiers.push(specifier);
+	};
+	const visit = (node) => {
+		if (
+			(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+			node.moduleSpecifier
+		) {
+			add(node.moduleSpecifier);
+		} else if (
+			ts.isImportEqualsDeclaration(node) &&
+			ts.isExternalModuleReference(node.moduleReference)
+		) {
+			add(node.moduleReference.expression);
+		} else if (ts.isImportTypeNode(node)) {
+			if (ts.isLiteralTypeNode(node.argument)) add(node.argument.literal);
+		} else if (ts.isCallExpression(node)) {
+			const isStaticModuleCall =
+				node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+				(ts.isIdentifier(node.expression) && node.expression.text === "require") ||
+				isRequireResolve(node.expression) ||
+				isModuleRequire(node.expression) ||
+				isImportMetaResolve(node.expression);
+			if (isStaticModuleCall) add(node.arguments[0]);
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(sourceFile);
+	return specifiers;
+};
+
 const assertPortableImports = (directory, packageName) => {
 	visitModules(directory, (path) => {
 		const source = readFileSync(path, "utf8");
-		for (const pattern of [
-			importSpecifierPattern,
-			requireSpecifierPattern,
-			referenceSpecifierPattern,
-		]) {
-			for (const match of source.matchAll(pattern)) {
-				const specifier = match[1];
-				if (!isNonPortable(specifier)) continue;
-				throw new Error(
-					`${packageName} archive contains non-portable import ${specifier} in ${path}`,
-				);
-			}
+		for (const specifier of collectStaticModuleSpecifiers(path, source)) {
+			if (!isNonPortable(specifier)) continue;
+			throw new Error(
+				`${packageName} archive contains non-portable import ${specifier} in ${path}`,
+			);
 		}
 	});
 };
 
 const assertPortableEntries = (archivePath, packageName) => {
-	const entries = execFileSync("tar", ["-tzf", archivePath], {
-		encoding: "utf8",
-		timeout: commandTimeoutMs,
-		maxBuffer: commandMaxBuffer,
-	})
-		.split("\n")
-		.filter(Boolean);
-	for (const entry of entries) {
+	const listArchive = (arguments_) =>
+		execFileSync("tar", arguments_, {
+			encoding: "utf8",
+			timeout: commandTimeoutMs,
+			maxBuffer: commandMaxBuffer,
+		})
+			.split("\n")
+			.filter(Boolean);
+	const entries = listArchive(["-tzf", archivePath]);
+	const verboseEntries = listArchive(["-tvzf", archivePath]);
+	if (entries.length !== verboseEntries.length) {
+		throw new Error(
+			`${packageName} archive listing is ambiguous and cannot be extracted safely`,
+		);
+	}
+	const seenEntries = new Set();
+	for (const [index, entry] of entries.entries()) {
+		const entryType = verboseEntries[index][0];
+		const segments = entry.split("/");
+		const containsPnpmLayout = segments.some(
+			(segment, segmentIndex) =>
+				segment === "node_modules" && segments[segmentIndex + 1] === ".pnpm",
+		);
+		if (entryType !== "-" && entryType !== "d") {
+			throw new Error(
+				`${packageName} archive contains unsafe entry type ${entryType} for ${entry}`,
+			);
+		}
 		if (
+			seenEntries.has(entry) ||
+			entry.includes("\\") ||
 			!entry.startsWith("package/") ||
-			entry.split("/").includes("..") ||
-			entry.includes("node_modules/.pnpm/") ||
+			segments.includes("..") ||
+			segments.includes(".") ||
+			containsPnpmLayout ||
 			isAbsolute(entry) ||
 			win32.isAbsolute(entry)
 		) {
@@ -84,6 +177,7 @@ const assertPortableEntries = (archivePath, packageName) => {
 				`${packageName} archive contains non-portable entry ${entry}`,
 			);
 		}
+		seenEntries.add(entry);
 	}
 };
 
@@ -157,6 +251,11 @@ export const inspectPortablePackageArchive = ({
 	packageName,
 }) => {
 	assertPortableEntries(archivePath, packageName);
+	if (existsSync(extractDirectory)) {
+		throw new Error(
+			`${packageName} archive requires a fresh extraction directory`,
+		);
+	}
 	mkdirSync(extractDirectory, { recursive: true });
 	execFileSync("tar", ["-xzf", archivePath, "-C", extractDirectory], {
 		stdio: "pipe",
