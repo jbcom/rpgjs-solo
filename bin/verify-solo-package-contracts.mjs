@@ -24,7 +24,7 @@ for (const { manifest } of sourceManifests.values()) {
   execFileSync(process.execPath, [publishGuard], {
     env: {
       ...process.env,
-      npm_config_user_agent: 'pnpm/11.16.0',
+      npm_config_user_agent: 'pnpm/11.18.0',
       npm_package_name: manifest.name
     },
     stdio: 'pipe'

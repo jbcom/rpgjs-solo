@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "@canvasengine/compiler": "2.1.0",
-    "vite": "^8.0.16",
+    "vite": "^8.2.0",
     "vite-plugin-dts": "^5.0.2",
     "vitest": "^4.1.9"
   },
