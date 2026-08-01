@@ -11,7 +11,8 @@ permissions:
 on:
   push:
     branches:
-      - "**"
+      - main
+      - v5
     paths-ignore:
       - "docs/**"
   pull_request:
