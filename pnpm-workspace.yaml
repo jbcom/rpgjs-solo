@@ -19,3 +19,7 @@ minimumReleaseAgeExclude:
   - 'canvasengine@2.1.1'
   - vite@8.2.0
   - pnpm@11.18.0
+  - '@babel/generator@7.29.8'
+  - '@babel/parser@7.29.8'
+  - '@babel/traverse@7.29.8'
+  - '@babel/types@7.29.8'
