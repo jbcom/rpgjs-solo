@@ -1,151 +1,161 @@
 {
-  "schemaVersion": 2,
-  "releaseId": "solo-beta29-solo1",
-  "sourceBaseCommit": "98bdb58b4afafdea0685d69ae046f5eb7239def2",
-  "requiredSourceCommit": "f0144127fe43c264638ca2699b8bfcd3cd55fea6",
-  "sourceBinding": {
-    "status": "provisional",
-    "requiredUpdate": "After PR #20 merges, replace sourceBaseCommit and requiredSourceCommit with that exact canonical merge SHA and set status to final."
-  },
-  "reviewEvidence": {
-    "status": "provisional",
-    "requiredUpdate": "After PR #20 merges and the release transition PR is opened, bind the exact engine merge and release PR number, retain the required successful checks and approval policy, and set status to final.",
-    "enginePullRequest": {
-      "repository": "jbcom/rpgjs-solo",
-      "number": 20,
-      "mergeCommit": null,
-      "minimumApprovals": 1,
-      "requiredChecks": [
-        "Analyze (actions)",
-        "Analyze (javascript-typescript)",
-        "CodeQL",
-        "CodeRabbit",
-        "tests (24)"
-      ]
-    },
-    "releasePullRequest": {
-      "repository": "jbcom/rpgjs-solo",
-      "number": null,
-      "mergeCommitBinding": "canonical-head",
-      "minimumApprovals": 1,
-      "requiredChecks": [
-        "Analyze (actions)",
-        "Analyze (javascript-typescript)",
-        "CodeQL",
-        "CodeRabbit",
-        "tests (24)"
-      ]
-    },
-    "independentReceipt": {
-      "status": "provisional",
-      "algorithm": "ed25519",
-      "keyId": null,
-      "publicKeyPem": null,
-      "producerPrincipalId": null,
-      "requiredUpdate": "Commit the trusted independent reviewer public key and producer principal, then provide a detached signed ACCEPT receipt after merge through RPGJS_SOLO_REVIEW_RECEIPT_PATH whenever lawful GitHub approvals are unavailable. The receipt must bind both exact PR merges, plan SHA-512, and a distinct reviewer principal."
-    }
-  },
-  "provenanceAttestation": {
-    "status": "provisional",
-    "algorithm": "ed25519",
-    "keyId": null,
-    "publicKeyPem": null,
-    "requiredUpdate": "Commit the trusted Ed25519 public key and its SHA-256 SPKI key id, set status to final, and provide the matching mode-0600 private key only through RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE during pack."
-  },
-  "upstreamCommit": "2fab01fb8e93ad13902b07db28935f058b387213",
-  "previousVersion": "5.0.0-beta.29.solo.0",
-  "version": "5.0.0-beta.29.solo.1",
-  "registry": "https://git.local.jonbogaty.com/api/packages/jbcom/npm/",
-  "candidateDistTag": "beta29-solo1-candidate",
-  "promotionDistTag": "latest",
-  "trainTag": "solo-v5.0.0-beta.29.solo.1",
-  "canonical": {
-    "repository": "https://github.com/jbcom/rpgjs-solo.git",
-    "branch": "main"
-  },
-  "backup": {
-    "repository": "ssh://gitea@git.local.jonbogaty.com/jbcom/rpgjs-solo.git",
-    "apiRepository": "jbcom/rpgjs-solo"
-  },
-  "packages": [
-    {
-      "name": "@jbcom/rpgjs-solo",
-      "directory": "packages/solo",
-      "tag": "rpgjs-solo-v5.0.0-beta.29.solo.1"
-    },
-    {
-      "name": "@jbcom/rpgjs-solo-action-battle",
-      "directory": "packages/solo-action-battle",
-      "tag": "rpgjs-solo-action-battle-v5.0.0-beta.29.solo.1"
-    },
-    {
-      "name": "@jbcom/rpgjs-solo-renderer",
-      "directory": "packages/solo-renderer",
-      "tag": "rpgjs-solo-renderer-v5.0.0-beta.29.solo.1"
-    },
-    {
-      "name": "@jbcom/rpgjs-solo-vite",
-      "directory": "packages/solo-vite",
-      "tag": "rpgjs-solo-vite-v5.0.0-beta.29.solo.1"
-    }
-  ],
-  "inheritedReleaseDirectories": [
-    "packages/common",
-    "packages/server",
-    "packages/client",
-    "packages/action-battle",
-    "packages/studio",
-    "packages/tiledmap",
-    "packages/vite"
-  ],
-  "consumedChangesets": [
-    {
-      "id": "calm-pixel-props",
-      "sha256": "b5bf82687d23107322ccc27054365d0a28e7ccf197c92dc54d2602ac179ae8cc"
-    },
-    {
-      "id": "calm-solos-commit",
-      "sha256": "fbbe9262f0e5417ca387aee98922474a70f8b9be13ce7b8dcd38c59e1a02008f"
-    },
-    {
-      "id": "current-solo-toolchain",
-      "sha256": "f2bb459a5c1cc7264d31090491c70145b8c511f180f3b520574077d055b08187"
-    },
-    {
-      "id": "solo-beta29-baseline",
-      "sha256": "44850b98482213c5e788b27eb35dcace6a68e0789f600e8d77f74b62b6e74bb7"
-    },
-    {
-      "id": "solo-beta29-release-transaction",
-      "sha256": "bc67b80fa40584f7aef4e8be86b34ffd8c4b61c3e2a8b52ea4bc3b7c88171035"
-    }
-  ],
-  "carriedChangesets": [
-    {
-      "id": "calm-music-package-boundaries",
-      "sha256": "e4799b002a1b521b431e03d18862fddd8c8dbc68768954e55d4b20f4fa62cd3a"
-    },
-    {
-      "id": "current-fork-toolchain",
-      "sha256": "f54c5ef17ee37fe4439eb94da95859105417ac6e0327f9f2e407d36e441d667c"
-    },
-    {
-      "id": "firm-hotbar-authority",
-      "sha256": "18aa6bd8264df2a73b0a06aee16899c8da03a5e241617f5cadf2b329547d0b86"
-    },
-    {
-      "id": "warm-combat-feedback",
-      "sha256": "9a31fcd4af11525beb1b83f09003a31a273f0d29908ae1dd0c8edbc8c21390d8"
-    },
-    {
-      "id": "fair-studio-success-rates",
-      "sha256": "7707eae5cafe061c115e0ac8c0498fdb65de0afe4eda74ff3adec5e7269338b6",
-      "introducedBy": "f0144127fe43c264638ca2699b8bfcd3cd55fea6"
-    }
-  ],
-  "requiredConsumer": {
-    "package": "@arcade-cabinet/rpgjs-patches",
-    "version": "0.2.0",
-    "registry": "https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/"
-  }
+	"schemaVersion": 2,
+	"releaseId": "solo-beta29-solo1",
+	"sourceBaseCommit": "98bdb58b4afafdea0685d69ae046f5eb7239def2",
+	"requiredSourceCommit": "f0144127fe43c264638ca2699b8bfcd3cd55fea6",
+	"sourceBinding": {
+		"status": "provisional",
+		"requiredUpdate": "After PR #20 merges, replace sourceBaseCommit and requiredSourceCommit with that exact canonical merge SHA and set status to final."
+	},
+	"reviewEvidence": {
+		"status": "provisional",
+		"requiredUpdate": "After PR #20 merges, rebase and open the release transition PR. In that still-open PR, bind the exact engine merge and release PR number, distinct review/provenance keys, and predeclared orchestrator assignment; finalize the plan before apply, commit the apply transition in the same PR, then merge after checks/review. Any detached receipt is created only after merge without a source edit.",
+		"enginePullRequest": {
+			"repository": "jbcom/rpgjs-solo",
+			"number": 20,
+			"mergeCommit": null,
+			"minimumApprovals": 1,
+			"requiredChecks": [
+				"Analyze (actions)",
+				"Analyze (javascript-typescript)",
+				"CodeQL",
+				"CodeRabbit",
+				"tests (24)"
+			]
+		},
+		"releasePullRequest": {
+			"repository": "jbcom/rpgjs-solo",
+			"number": null,
+			"mergeCommitBinding": "canonical-head",
+			"minimumApprovals": 1,
+			"requiredChecks": [
+				"Analyze (actions)",
+				"Analyze (javascript-typescript)",
+				"CodeQL",
+				"CodeRabbit",
+				"tests (24)"
+			]
+		},
+		"independentReceipt": {
+			"status": "provisional",
+			"algorithm": "ed25519",
+			"keyId": null,
+			"publicKeyPem": null,
+			"orchestratorAssignment": {
+				"schemaVersion": 1,
+				"status": "provisional",
+				"producerTaskId": null,
+				"producerPrincipalId": null,
+				"reviewerTaskId": null,
+				"reviewerPrincipalId": null,
+				"reviewerRole": "independent-release-auditor",
+				"reviewerForkId": null,
+				"assignmentSha512": null
+			},
+			"requiredUpdate": "Before apply, commit the distinct trusted reviewer public key and the orchestrator's predeclared producer/reviewer task, principal, role, fork, and canonical assignment SHA-512. After merge, the assigned reviewer may create a detached signed ACCEPT receipt through RPGJS_SOLO_REVIEW_RECEIPT_PATH without editing source. The receipt must bind both exact PR merges, plan SHA-512, and the exact reviewed assignment."
+		}
+	},
+	"provenanceAttestation": {
+		"status": "provisional",
+		"algorithm": "ed25519",
+		"keyId": null,
+		"publicKeyPem": null,
+		"requiredUpdate": "Commit the trusted Ed25519 public key and its SHA-256 SPKI key id, set status to final, and provide the matching mode-0600 private key only through RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE during pack."
+	},
+	"upstreamCommit": "2fab01fb8e93ad13902b07db28935f058b387213",
+	"previousVersion": "5.0.0-beta.29.solo.0",
+	"version": "5.0.0-beta.29.solo.1",
+	"registry": "https://git.local.jonbogaty.com/api/packages/jbcom/npm/",
+	"candidateDistTag": "beta29-solo1-candidate",
+	"promotionDistTag": "latest",
+	"trainTag": "solo-v5.0.0-beta.29.solo.1",
+	"canonical": {
+		"repository": "https://github.com/jbcom/rpgjs-solo.git",
+		"branch": "main"
+	},
+	"backup": {
+		"repository": "ssh://gitea@git.local.jonbogaty.com/jbcom/rpgjs-solo.git",
+		"apiRepository": "jbcom/rpgjs-solo"
+	},
+	"packages": [
+		{
+			"name": "@jbcom/rpgjs-solo",
+			"directory": "packages/solo",
+			"tag": "rpgjs-solo-v5.0.0-beta.29.solo.1"
+		},
+		{
+			"name": "@jbcom/rpgjs-solo-action-battle",
+			"directory": "packages/solo-action-battle",
+			"tag": "rpgjs-solo-action-battle-v5.0.0-beta.29.solo.1"
+		},
+		{
+			"name": "@jbcom/rpgjs-solo-renderer",
+			"directory": "packages/solo-renderer",
+			"tag": "rpgjs-solo-renderer-v5.0.0-beta.29.solo.1"
+		},
+		{
+			"name": "@jbcom/rpgjs-solo-vite",
+			"directory": "packages/solo-vite",
+			"tag": "rpgjs-solo-vite-v5.0.0-beta.29.solo.1"
+		}
+	],
+	"inheritedReleaseDirectories": [
+		"packages/common",
+		"packages/server",
+		"packages/client",
+		"packages/action-battle",
+		"packages/studio",
+		"packages/tiledmap",
+		"packages/vite"
+	],
+	"consumedChangesets": [
+		{
+			"id": "calm-pixel-props",
+			"sha256": "b5bf82687d23107322ccc27054365d0a28e7ccf197c92dc54d2602ac179ae8cc"
+		},
+		{
+			"id": "calm-solos-commit",
+			"sha256": "fbbe9262f0e5417ca387aee98922474a70f8b9be13ce7b8dcd38c59e1a02008f"
+		},
+		{
+			"id": "current-solo-toolchain",
+			"sha256": "f2bb459a5c1cc7264d31090491c70145b8c511f180f3b520574077d055b08187"
+		},
+		{
+			"id": "solo-beta29-baseline",
+			"sha256": "44850b98482213c5e788b27eb35dcace6a68e0789f600e8d77f74b62b6e74bb7"
+		},
+		{
+			"id": "solo-beta29-release-transaction",
+			"sha256": "eab0afefc5b5a28a4f96c754c3d92d2027f6853e4456aa285c755107d5e92f45"
+		}
+	],
+	"carriedChangesets": [
+		{
+			"id": "calm-music-package-boundaries",
+			"sha256": "e4799b002a1b521b431e03d18862fddd8c8dbc68768954e55d4b20f4fa62cd3a"
+		},
+		{
+			"id": "current-fork-toolchain",
+			"sha256": "f54c5ef17ee37fe4439eb94da95859105417ac6e0327f9f2e407d36e441d667c"
+		},
+		{
+			"id": "firm-hotbar-authority",
+			"sha256": "18aa6bd8264df2a73b0a06aee16899c8da03a5e241617f5cadf2b329547d0b86"
+		},
+		{
+			"id": "warm-combat-feedback",
+			"sha256": "9a31fcd4af11525beb1b83f09003a31a273f0d29908ae1dd0c8edbc8c21390d8"
+		},
+		{
+			"id": "fair-studio-success-rates",
+			"sha256": "7707eae5cafe061c115e0ac8c0498fdb65de0afe4eda74ff3adec5e7269338b6",
+			"introducedBy": "f0144127fe43c264638ca2699b8bfcd3cd55fea6"
+		}
+	],
+	"requiredConsumer": {
+		"package": "@arcade-cabinet/rpgjs-patches",
+		"version": "0.2.0",
+		"registry": "https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/"
+	}
 }

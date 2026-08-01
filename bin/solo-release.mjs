@@ -5,14 +5,22 @@ import {
 	createHash,
 	createPrivateKey,
 	createPublicKey,
+	randomBytes,
 	sign as signBytes,
 	verify as verifyBytes,
 } from "node:crypto";
 import {
 	chmodSync,
+	closeSync,
 	existsSync,
+	fchmodSync,
+	constants as fsConstants,
+	fstatSync,
+	fsyncSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
+	openSync,
 	readdirSync,
 	readFileSync,
 	realpathSync,
@@ -61,11 +69,6 @@ const applyJournalName = ".rpgjs-solo-release-apply.json";
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const writeJson = (path, value) =>
 	writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
-const atomicWriteFile = (path, value) => {
-	const temporary = `${path}.tmp-${process.pid}`;
-	writeFileSync(temporary, value);
-	renameSync(temporary, path);
-};
 const digest = (algorithm, value) =>
 	createHash(algorithm).update(value).digest("hex");
 export const sha256File = (path) => digest("sha256", readFileSync(path));
@@ -75,6 +78,258 @@ const sri512File = (path) =>
 
 const assert = (condition, message) => {
 	if (!condition) throw new Error(message);
+};
+
+const currentUid = () => {
+	assert(
+		typeof process.getuid === "function",
+		"Release transactions require POSIX file ownership",
+	);
+	return process.getuid();
+};
+
+const lstatOrNull = (path) => {
+	try {
+		return lstatSync(path);
+	} catch (error) {
+		if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
+		throw error;
+	}
+};
+
+const permissionMode = (stats) => stats.mode & 0o7777;
+
+const regularFileState = (path, label, { owner, mode } = {}) => {
+	const stats = lstatOrNull(path);
+	if (!stats) return null;
+	assert(
+		stats.isFile() && !stats.isSymbolicLink(),
+		`${label} must be a regular non-symlink file`,
+	);
+	if (owner !== undefined)
+		assert(stats.uid === owner, `${label} has unexpected ownership`);
+	if (mode !== undefined)
+		assert(permissionMode(stats) === mode, `${label} has unexpected mode`);
+	const descriptor = openSync(
+		path,
+		fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+	);
+	try {
+		const openedStats = fstatSync(descriptor);
+		assert(
+			openedStats.isFile() &&
+				openedStats.dev === stats.dev &&
+				openedStats.ino === stats.ino,
+			`${label} changed during no-follow inspection`,
+		);
+		const bytes = readFileSync(descriptor);
+		return {
+			sha256: digest("sha256", bytes),
+			sha512: digest("sha512", bytes),
+			mode: permissionMode(openedStats),
+			uid: openedStats.uid,
+		};
+	} finally {
+		closeSync(descriptor);
+	}
+};
+
+const sameFileState = (left, right) =>
+	left === null
+		? right === null
+		: right !== null &&
+			left.sha512 === right.sha512 &&
+			left.mode === right.mode &&
+			left.uid === right.uid;
+
+const transactionTempPrefix = (path) => `.${basename(path)}.solo-txn-`;
+
+const writeExclusiveFile = (path, value, mode) => {
+	const descriptor = openSync(
+		path,
+		fsConstants.O_WRONLY |
+			fsConstants.O_CREAT |
+			fsConstants.O_EXCL |
+			fsConstants.O_NOFOLLOW,
+		mode,
+	);
+	try {
+		writeFileSync(descriptor, value);
+		fchmodSync(descriptor, mode);
+		fsyncSync(descriptor);
+	} finally {
+		closeSync(descriptor);
+	}
+};
+
+const removeOwnedTempDirectory = (path) => {
+	const stats = lstatSync(path);
+	assert(
+		stats.isDirectory() &&
+			!stats.isSymbolicLink() &&
+			stats.uid === currentUid() &&
+			permissionMode(stats) === 0o700,
+		"Transaction temporary path is not an owned mode-0700 directory",
+	);
+	for (const name of readdirSync(path)) {
+		const child = join(path, name);
+		const childStats = lstatSync(child);
+		assert(
+			childStats.isFile() &&
+				!childStats.isSymbolicLink() &&
+				childStats.uid === currentUid(),
+			"Transaction temporary directory contains a non-regular entry",
+		);
+	}
+	rmSync(path, { recursive: true });
+};
+
+const recoverTransactionTemps = (path, value, mode, purpose) => {
+	const desired = Buffer.isBuffer(value) ? value : Buffer.from(value);
+	const desiredSha512 = digest("sha512", desired);
+	const parent = dirname(path);
+	const prefix = transactionTempPrefix(path);
+	for (const name of readdirSync(parent).filter((entry) =>
+		entry.startsWith(prefix),
+	)) {
+		const directory = join(parent, name);
+		const directoryStats = lstatSync(directory);
+		assert(
+			directoryStats.isDirectory() &&
+				!directoryStats.isSymbolicLink() &&
+				directoryStats.uid === currentUid() &&
+				permissionMode(directoryStats) === 0o700,
+			"Transaction temporary path is forged or unsafe",
+		);
+		const markerPath = join(directory, "owner.json");
+		const payloadPath = join(directory, "payload");
+		const markerStats = lstatOrNull(markerPath);
+		const payloadStats = lstatOrNull(payloadPath);
+		for (const stats of [markerStats, payloadStats].filter(Boolean))
+			assert(
+				stats.isFile() && !stats.isSymbolicLink() && stats.uid === currentUid(),
+				"Transaction temporary entry is forged or unsafe",
+			);
+		if (!markerStats) {
+			removeOwnedTempDirectory(directory);
+			continue;
+		}
+		assert(
+			permissionMode(markerStats) === 0o600,
+			"Transaction ownership marker has unexpected mode",
+		);
+		const marker = readJson(markerPath);
+		assert(
+			marker.schemaVersion === 1 &&
+				marker.target === basename(path) &&
+				marker.purpose === purpose &&
+				typeof marker.payloadSha512 === "string" &&
+				Number.isInteger(marker.mode) &&
+				(marker.previous === null ||
+					(typeof marker.previous?.sha512 === "string" &&
+						Number.isInteger(marker.previous?.mode) &&
+						Number.isInteger(marker.previous?.uid))),
+			"Transaction ownership marker drifted",
+		);
+		const current = regularFileState(path, "Transaction target");
+		if (!payloadStats) {
+			assert(
+				current?.sha512 === marker.payloadSha512 &&
+					current.mode === marker.mode,
+				"Transaction payload disappeared before commit",
+			);
+			removeOwnedTempDirectory(directory);
+			continue;
+		}
+		assert(
+			permissionMode(payloadStats) === marker.mode &&
+				sha512File(payloadPath) === marker.payloadSha512,
+			"Transaction temporary payload drifted",
+		);
+		assert(
+			sameFileState(current, marker.previous),
+			"Transaction target changed after its temporary payload was prepared",
+		);
+		if (marker.payloadSha512 === desiredSha512 && marker.mode === mode)
+			renameSync(payloadPath, path);
+		removeOwnedTempDirectory(directory);
+	}
+};
+
+export const secureAtomicWriteFile = (
+	path,
+	value,
+	{ mode = 0o600, purpose, beforeRename = () => {} },
+) => {
+	assert(
+		typeof purpose === "string" && purpose.length > 0,
+		"Secure write purpose is required",
+	);
+	recoverTransactionTemps(path, value, mode, purpose);
+	const desired = Buffer.isBuffer(value) ? value : Buffer.from(value);
+	const desiredSha512 = digest("sha512", desired);
+	const previous = regularFileState(path, "Transaction target");
+	if (previous?.sha512 === desiredSha512 && previous.mode === mode) return;
+	const parent = dirname(path);
+	let directory;
+	for (let attempt = 0; attempt < 8 && !directory; attempt += 1) {
+		const candidate = join(
+			parent,
+			`${transactionTempPrefix(path)}${randomBytes(24).toString("hex")}`,
+		);
+		try {
+			mkdirSync(candidate, { mode: 0o700 });
+			chmodSync(candidate, 0o700);
+			directory = candidate;
+		} catch (error) {
+			if (error?.code !== "EEXIST") throw error;
+		}
+	}
+	assert(
+		directory,
+		"Unable to allocate an exclusive transaction temporary directory",
+	);
+	const payloadPath = join(directory, "payload");
+	const markerPath = join(directory, "owner.json");
+	writeExclusiveFile(payloadPath, desired, mode);
+	writeExclusiveFile(
+		markerPath,
+		`${JSON.stringify(
+			{
+				schemaVersion: 1,
+				target: basename(path),
+				purpose,
+				payloadSha512: desiredSha512,
+				mode,
+				previous,
+			},
+			null,
+			2,
+		)}\n`,
+		0o600,
+	);
+	beforeRename({ path, directory, payloadPath, markerPath });
+	assert(
+		sameFileState(regularFileState(path, "Transaction target"), previous),
+		"Transaction target changed before atomic rename",
+	);
+	renameSync(payloadPath, path);
+	removeOwnedTempDirectory(directory);
+};
+
+export const secureAtomicWriteJson = (path, value, options) =>
+	secureAtomicWriteFile(path, `${JSON.stringify(value, null, 2)}\n`, options);
+
+export const readTransactionJournal = (path, purpose) => {
+	assert(
+		typeof purpose === "string" && purpose.length > 0,
+		"Journal purpose is required",
+	);
+	regularFileState(path, `${purpose} journal`, {
+		owner: currentUid(),
+		mode: 0o600,
+	});
+	return readJson(path);
 };
 
 const run = (command, args, options = {}) => {
@@ -137,6 +392,19 @@ export const assertMonotonicLatestPromotion = (currentLatest, target) => {
 		`Refusing to move latest backward from ${currentLatest} to ${target}`,
 	);
 };
+
+const reviewAssignmentPayload = (assignment) => ({
+	schemaVersion: 1,
+	producerTaskId: assignment.producerTaskId,
+	producerPrincipalId: assignment.producerPrincipalId,
+	reviewerTaskId: assignment.reviewerTaskId,
+	reviewerPrincipalId: assignment.reviewerPrincipalId,
+	reviewerRole: assignment.reviewerRole,
+	reviewerForkId: assignment.reviewerForkId,
+});
+
+export const reviewAssignmentSha512 = (assignment) =>
+	digest("sha512", JSON.stringify(reviewAssignmentPayload(assignment)));
 
 export const parseChangeset = (source, id = "<changeset>") => {
 	const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(source);
@@ -265,6 +533,7 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 	const engineReview = plan.reviewEvidence?.enginePullRequest;
 	const releaseReview = plan.reviewEvidence?.releasePullRequest;
 	const independentReceipt = plan.reviewEvidence?.independentReceipt;
+	const assignment = independentReceipt?.orchestratorAssignment;
 	assert(
 		engineReview?.repository === "jbcom/rpgjs-solo" &&
 			engineReview.number === 20 &&
@@ -275,7 +544,8 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 	);
 	assert(
 		releaseReview?.repository === "jbcom/rpgjs-solo" &&
-			(releaseReview.number === null || Number.isInteger(releaseReview.number)) &&
+			(releaseReview.number === null ||
+				Number.isInteger(releaseReview.number)) &&
 			Array.isArray(releaseReview.requiredChecks) &&
 			Number.isInteger(releaseReview.minimumApprovals) &&
 			releaseReview.minimumApprovals >= 1 &&
@@ -284,7 +554,9 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 	);
 	assert(
 		["provisional", "final"].includes(independentReceipt?.status) &&
-			independentReceipt?.algorithm === "ed25519",
+			independentReceipt?.algorithm === "ed25519" &&
+			["provisional", "final"].includes(assignment?.status) &&
+			assignment?.schemaVersion === 1,
 		"Independent review receipt configuration is incomplete",
 	);
 	if (plan.reviewEvidence.status === "final") {
@@ -293,18 +565,33 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 				engineReview.mergeCommit === plan.requiredSourceCommit &&
 				Number.isInteger(releaseReview.number) &&
 				independentReceipt.status === "final" &&
-				typeof independentReceipt.producerPrincipalId === "string" &&
+				assignment.status === "final" &&
+				plan.provenanceAttestation?.status === "final" &&
 				typeof independentReceipt.keyId === "string" &&
 				/^[0-9a-f]{64}$/.test(independentReceipt.keyId) &&
 				typeof independentReceipt.publicKeyPem === "string",
 			"Final review evidence must bind the engine merge and release pull request",
 		);
+		assert(
+			[
+				assignment.producerTaskId,
+				assignment.producerPrincipalId,
+				assignment.reviewerTaskId,
+				assignment.reviewerPrincipalId,
+				assignment.reviewerForkId,
+			].every((value) => typeof value === "string" && value.length > 0) &&
+				assignment.reviewerRole === "independent-release-auditor" &&
+				assignment.producerTaskId !== assignment.reviewerTaskId &&
+				assignment.producerTaskId !== assignment.reviewerForkId &&
+				assignment.producerPrincipalId !== assignment.reviewerPrincipalId &&
+				assignment.assignmentSha512 === reviewAssignmentSha512(assignment),
+			"Final review evidence requires an exact predeclared producer-disjoint orchestrator assignment",
+		);
 		const receiptKey = createPublicKey(independentReceipt.publicKeyPem);
 		assert(
-			digest(
-				"sha256",
-				receiptKey.export({ type: "spki", format: "der" }),
-			) === independentReceipt.keyId,
+			receiptKey.asymmetricKeyType === "ed25519" &&
+				digest("sha256", receiptKey.export({ type: "spki", format: "der" })) ===
+					independentReceipt.keyId,
 			"Independent review receipt key id does not match its public key",
 		);
 	}
@@ -326,8 +613,25 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 			publicKey.export({ type: "spki", format: "der" }),
 		);
 		assert(
-			keyId === plan.provenanceAttestation.keyId,
+			publicKey.asymmetricKeyType === "ed25519" &&
+				keyId === plan.provenanceAttestation.keyId,
 			"Provenance attestation key id does not match its public key",
+		);
+	}
+	if (
+		independentReceipt.status === "final" &&
+		plan.provenanceAttestation.status === "final"
+	) {
+		const reviewKey = createPublicKey(independentReceipt.publicKeyPem);
+		const provenanceKey = createPublicKey(
+			plan.provenanceAttestation.publicKeyPem,
+		);
+		assert(
+			independentReceipt.keyId !== plan.provenanceAttestation.keyId &&
+				!reviewKey
+					.export({ type: "spki", format: "der" })
+					.equals(provenanceKey.export({ type: "spki", format: "der" })),
+			"Independent review and provenance must use distinct Ed25519 keys",
 		);
 	}
 	return { ...plan, planPath };
@@ -616,7 +920,9 @@ export const assertPullRequestReviewEvidence = ({
 		pullRequest.reviewDecision === "APPROVED" &&
 		approvalCount >= record.minimumApprovals;
 	const passed = successfulCheckNames(pullRequest.statusCheckRollup);
-	const missingChecks = record.requiredChecks.filter((name) => !passed.has(name));
+	const missingChecks = record.requiredChecks.filter(
+		(name) => !passed.has(name),
+	);
 	assert(
 		missingChecks.length === 0,
 		`Pull request #${record.number} is missing successful checks: ${missingChecks.join(", ")}`,
@@ -641,7 +947,10 @@ export const assertPullRequestReviewEvidence = ({
 		),
 	);
 	const threads = threadResult.data?.repository?.pullRequest?.reviewThreads;
-	assert(threads, `Pull request #${record.number} review threads are unavailable`);
+	assert(
+		threads,
+		`Pull request #${record.number} review threads are unavailable`,
+	);
 	assert(
 		threads.pageInfo?.hasNextPage === false,
 		`Pull request #${record.number} has more review threads than the verifier can attest`,
@@ -668,16 +977,21 @@ export const verifyIndependentReviewReceipt = (
 	receiptPath = process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH,
 ) => {
 	const config = plan.reviewEvidence.independentReceipt;
+	const assignment = config.orchestratorAssignment;
 	assert(
 		config.status === "final",
 		"A producer-disjoint signed review receipt is required",
 	);
 	assert(
-		receiptPath && isAbsolute(receiptPath) && existsSync(receiptPath),
+		receiptPath && isAbsolute(receiptPath),
 		"RPGJS_SOLO_REVIEW_RECEIPT_PATH must name the signed review statement",
 	);
 	const signaturePath = `${receiptPath}.sig`;
-	assert(existsSync(signaturePath), "Independent review receipt signature is missing");
+	assert(
+		regularFileState(receiptPath, "Independent review receipt") &&
+			regularFileState(signaturePath, "Independent review receipt signature"),
+		"Independent review receipt or signature is missing",
+	);
 	const receiptBytes = readFileSync(receiptPath);
 	const receipt = JSON.parse(receiptBytes);
 	assert(
@@ -694,10 +1008,16 @@ export const verifyIndependentReviewReceipt = (
 				plan.reviewEvidence.releasePullRequest.number &&
 			receipt.releaseMergeCommit === head &&
 			receipt.planSha512 === sha512File(plan.planPath) &&
-			receipt.producerPrincipalId === config.producerPrincipalId &&
-			typeof receipt.reviewerPrincipalId === "string" &&
-			receipt.reviewerPrincipalId.length > 0 &&
-			receipt.reviewerPrincipalId !== receipt.producerPrincipalId,
+			receipt.producerTaskId === assignment.producerTaskId &&
+			receipt.producerPrincipalId === assignment.producerPrincipalId &&
+			receipt.reviewerTaskId === assignment.reviewerTaskId &&
+			receipt.reviewerPrincipalId === assignment.reviewerPrincipalId &&
+			receipt.reviewerRole === assignment.reviewerRole &&
+			receipt.reviewerForkId === assignment.reviewerForkId &&
+			receipt.assignmentSha512 === assignment.assignmentSha512 &&
+			receipt.assignmentSha512 === reviewAssignmentSha512(assignment) &&
+			receipt.producerTaskId !== receipt.reviewerTaskId &&
+			receipt.producerPrincipalId !== receipt.reviewerPrincipalId,
 		"Independent review receipt does not bind the exact producer-disjoint release",
 	);
 	const signature = Buffer.from(
@@ -716,7 +1036,13 @@ export const verifyIndependentReviewReceipt = (
 	return {
 		sha512: sha512File(receiptPath),
 		signatureSha512: sha512File(signaturePath),
+		assignmentSha512: receipt.assignmentSha512,
+		producerTaskId: receipt.producerTaskId,
+		producerPrincipalId: receipt.producerPrincipalId,
+		reviewerTaskId: receipt.reviewerTaskId,
 		reviewerPrincipalId: receipt.reviewerPrincipalId,
+		reviewerRole: receipt.reviewerRole,
+		reviewerForkId: receipt.reviewerForkId,
 	};
 };
 
@@ -799,18 +1125,27 @@ const expectedAppliedManifest = (source, path, plan) => {
 	return `${JSON.stringify(manifest, null, 2)}\n`;
 };
 
-const readHeadFile = (root, path, command = run) =>
-	command("git", ["show", `HEAD:${path}`], {
+const readHeadEntry = (root, path, command = run) => {
+	const treeEntry = command("git", ["ls-tree", "HEAD", "--", path], {
 		cwd: root,
-		trim: false,
 	});
+	const match = /^(100644|100755) blob [0-9a-f]{40}\t/.exec(treeEntry);
+	assert(match, `${path} HEAD entry must be a regular Git blob`);
+	return {
+		source: command("git", ["show", `HEAD:${path}`], {
+			cwd: root,
+			trim: false,
+		}),
+		mode: Number.parseInt(match[1].slice(-3), 8),
+	};
+};
 
 const createApplyContentTransitions = (root, plan, command = run) => {
 	const cohort = new Set(plan.packages.map(({ name }) => name));
 	const descriptors = [];
 	for (const absolutePath of walkPackageJson(root)) {
 		const path = relative(root, absolutePath);
-		const source = readHeadFile(root, path, command);
+		const { source, mode } = readHeadEntry(root, path, command);
 		const manifest = JSON.parse(source);
 		const dependencyNames = dependencyFields.flatMap((field) =>
 			Object.keys(manifest[field] ?? {}),
@@ -824,12 +1159,14 @@ const createApplyContentTransitions = (root, plan, command = run) => {
 			path,
 			kind: "manifest",
 			source,
+			sourceMode: mode,
 			target: expectedAppliedManifest(source, path, plan),
+			targetMode: mode,
 		});
 	}
 	const changesets = plan.consumedChangesets.map((entry) => {
 		const path = `.changeset/${entry.id}.md`;
-		const source = readHeadFile(root, path, command);
+		const { source } = readHeadEntry(root, path, command);
 		assert(
 			digest("sha256", source) === entry.sha256,
 			`${entry.id} HEAD bytes differ from the release plan`,
@@ -840,9 +1177,13 @@ const createApplyContentTransitions = (root, plan, command = run) => {
 		const path = `${record.directory}/CHANGELOG.md`;
 		let headEntry = "";
 		try {
-			headEntry = command("git", ["ls-tree", "--name-only", "HEAD", "--", path], {
-				cwd: root,
-			});
+			headEntry = command(
+				"git",
+				["ls-tree", "--name-only", "HEAD", "--", path],
+				{
+					cwd: root,
+				},
+			);
 		} catch {
 			headEntry = "";
 		}
@@ -851,34 +1192,34 @@ const createApplyContentTransitions = (root, plan, command = run) => {
 			path,
 			kind: "changelog",
 			source: null,
+			sourceMode: null,
 			target: changelogEntry(record, plan, changesets),
+			targetMode: 0o644,
 		});
 	}
 	for (const entry of plan.consumedChangesets) {
 		const path = `.changeset/${entry.id}.md`;
+		const { source, mode } = readHeadEntry(root, path, command);
 		descriptors.push({
 			path,
 			kind: "changeset-delete",
-			source: readHeadFile(root, path, command),
+			source,
+			sourceMode: mode,
 			target: null,
+			targetMode: null,
 		});
 	}
 	return descriptors;
 };
 
-const computeTargetLockfile = (
-	root,
-	manifestTransitions,
-	command = run,
-) => {
+const computeTargetLockfile = (root, manifestTransitions, command = run) => {
 	const directory = mkdtempSync(join(tmpdir(), "rpgjs-solo-lock-stage-"));
 	const archive = join(directory, "source.tar");
 	try {
-		command(
-			"git",
-			["archive", "--format=tar", "--output", archive, "HEAD"],
-			{ cwd: root, timeout: 600_000 },
-		);
+		command("git", ["archive", "--format=tar", "--output", archive, "HEAD"], {
+			cwd: root,
+			timeout: 600_000,
+		});
 		command("tar", ["-xf", archive, "-C", directory], {
 			cwd: root,
 			timeout: 600_000,
@@ -895,25 +1236,37 @@ const computeTargetLockfile = (
 	}
 };
 
-const applyDescriptorRecord = ({ path, kind, source, target }) => ({
+const applyDescriptorRecord = ({
+	path,
+	kind,
+	source,
+	sourceMode,
+	target,
+	targetMode,
+}) => ({
 	path,
 	kind,
 	source:
 		source === null
 			? { exists: false }
-			: { exists: true, sha256: digest("sha256", source) },
+			: {
+					exists: true,
+					type: "file",
+					mode: sourceMode,
+					sha256: digest("sha256", source),
+				},
 	target:
 		target === null
 			? { exists: false }
-			: { exists: true, sha256: digest("sha256", target) },
+			: {
+					exists: true,
+					type: "file",
+					mode: targetMode,
+					sha256: digest("sha256", target),
+				},
 });
 
-const createApplyTransaction = (
-	root,
-	plan,
-	command,
-	targetLockfileFactory,
-) => {
+const createApplyTransaction = (root, plan, command, targetLockfileFactory) => {
 	const head = command("git", ["rev-parse", "HEAD"], { cwd: root });
 	assertReleaseCommitAncestry(root, plan, head, command);
 	const content = createApplyContentTransitions(root, plan, command);
@@ -922,11 +1275,14 @@ const createApplyTransaction = (
 		content.filter(({ kind }) => kind === "manifest"),
 		command,
 	);
+	const lockfileSource = readHeadEntry(root, "pnpm-lock.yaml", command);
 	const lockfile = {
 		path: "pnpm-lock.yaml",
 		kind: "lockfile",
-		source: readHeadFile(root, "pnpm-lock.yaml", command),
+		source: lockfileSource.source,
+		sourceMode: lockfileSource.mode,
 		target: targetLockfile,
+		targetMode: lockfileSource.mode,
 	};
 	const descriptors = [...content, lockfile];
 	return {
@@ -944,16 +1300,36 @@ const createApplyTransaction = (
 
 const fileMatchesRecord = (root, path, record) => {
 	const absolutePath = join(root, path);
-	if (!record.exists) return !existsSync(absolutePath);
+	if (!record.exists) return lstatOrNull(absolutePath) === null;
+	let state;
+	try {
+		state = regularFileState(absolutePath, `${path} apply output`);
+	} catch {
+		return false;
+	}
 	return (
-		existsSync(absolutePath) && sha256File(absolutePath) === record.sha256
+		state !== null &&
+		record.type === "file" &&
+		state.mode === record.mode &&
+		state.sha256 === record.sha256
 	);
 };
 
-const assertApplyTransactionState = (root, transaction, journalPath, command) => {
+const applyJournalPurpose = (plan) => `solo-apply:${plan.releaseId}:journal`;
+const applyOutputPurpose = (plan, descriptor) =>
+	`solo-apply:${plan.releaseId}:${descriptor.path}`;
+
+const assertApplyTransactionState = (
+	root,
+	plan,
+	transaction,
+	journalPath,
+	command,
+) => {
 	assert(
-		JSON.stringify(readJson(journalPath)) ===
-			JSON.stringify(transaction.journal),
+		JSON.stringify(
+			readTransactionJournal(journalPath, applyJournalPurpose(plan)),
+		) === JSON.stringify(transaction.journal),
 		"Apply journal differs from the exact planned transaction",
 	);
 	const allowed = new Set([
@@ -977,10 +1353,20 @@ const assertApplyTransactionState = (root, transaction, journalPath, command) =>
 	}
 };
 
-const applyTransactionDescriptor = (root, descriptor) => {
+const applyTransactionDescriptor = (root, plan, descriptor, beforeRename) => {
 	const path = join(root, descriptor.path);
 	if (descriptor.target === null) rmSync(path);
-	else atomicWriteFile(path, descriptor.target);
+	else
+		secureAtomicWriteFile(path, descriptor.target, {
+			mode: descriptor.targetMode,
+			purpose: applyOutputPurpose(plan, descriptor),
+			beforeRename: (details) =>
+				beforeRename({
+					kind: descriptor.kind,
+					path: descriptor.path,
+					...details,
+				}),
+		});
 };
 
 export const applySoloReleaseTransaction = (
@@ -989,11 +1375,13 @@ export const applySoloReleaseTransaction = (
 	command = run,
 	{
 		afterBoundary = () => {},
+		beforeRename = () => {},
 		targetLockfileFactory = computeTargetLockfile,
 	} = {},
 ) => {
 	const journalPath = join(root, applyJournalName);
-	if (!existsSync(journalPath)) {
+	const journalInitiallyExists = lstatOrNull(journalPath) !== null;
+	if (!journalInitiallyExists) {
 		const before = validateSoloReleaseState(root, plan);
 		if (before.phase === "applied")
 			return {
@@ -1002,10 +1390,9 @@ export const applySoloReleaseTransaction = (
 				lockfileRefreshed: false,
 				appliedBoundaries: 0,
 			};
-		assert(before.phase === "source", "A new apply transaction requires source state");
 		assert(
-			command("git", ["status", "--porcelain"], { cwd: root }) === "",
-			"The version transition requires a clean worktree",
+			before.phase === "source",
+			"A new apply transaction requires source state",
 		);
 	}
 	const transaction = createApplyTransaction(
@@ -1014,13 +1401,45 @@ export const applySoloReleaseTransaction = (
 		command,
 		targetLockfileFactory,
 	);
-	if (!existsSync(journalPath)) atomicWriteJson(journalPath, transaction.journal);
-	assertApplyTransactionState(root, transaction, journalPath, command);
+	const journalBytes = `${JSON.stringify(transaction.journal, null, 2)}\n`;
+	recoverTransactionTemps(
+		journalPath,
+		journalBytes,
+		0o600,
+		applyJournalPurpose(plan),
+	);
+	const journalRecovered = lstatOrNull(journalPath) !== null;
+	if (!journalInitiallyExists && !journalRecovered)
+		assert(
+			command("git", ["status", "--porcelain"], { cwd: root }) === "",
+			"The version transition requires a clean worktree",
+		);
+	if (!journalRecovered)
+		secureAtomicWriteFile(journalPath, journalBytes, {
+			mode: 0o600,
+			purpose: applyJournalPurpose(plan),
+			beforeRename: (details) =>
+				beforeRename({ kind: "journal", path: applyJournalName, ...details }),
+		});
+	for (const descriptor of transaction.descriptors)
+		if (descriptor.target !== null)
+			recoverTransactionTemps(
+				join(root, descriptor.path),
+				descriptor.target,
+				descriptor.targetMode,
+				applyOutputPurpose(plan, descriptor),
+			);
+	assertApplyTransactionState(root, plan, transaction, journalPath, command);
 	let appliedBoundaries = 0;
 	for (const [index, descriptor] of transaction.descriptors.entries()) {
-		const target = transaction.journal.outputs[index].target;
+		const output = transaction.journal.outputs[index];
+		const target = output.target;
 		if (!fileMatchesRecord(root, descriptor.path, target)) {
-			applyTransactionDescriptor(root, descriptor);
+			assert(
+				fileMatchesRecord(root, descriptor.path, output.source),
+				`${descriptor.path} changed immediately before its transaction boundary`,
+			);
+			applyTransactionDescriptor(root, plan, descriptor, beforeRename);
 			appliedBoundaries += 1;
 			afterBoundary({
 				index,
@@ -1215,29 +1634,33 @@ const writeProvenanceAttestation = (
 	};
 	writeJson(paths.statement, statement);
 	const signature = signer(readFileSync(paths.statement));
-	writeFileSync(paths.signature, `${Buffer.from(signature).toString("base64")}\n`);
+	writeFileSync(
+		paths.signature,
+		`${Buffer.from(signature).toString("base64")}\n`,
+	);
 	return paths;
 };
 
-const verifyProvenanceAttestation = (manifestPath, manifest, plan) => {
+const verifyProvenanceEnvelope = (manifestPath, plan) => {
 	assertFinalAttestationConfiguration(plan);
 	const paths = attestationPaths(manifestPath);
 	assert(
-		existsSync(paths.statement) && existsSync(paths.signature),
+		regularFileState(manifestPath, "Provenance manifest") &&
+			regularFileState(paths.statement, "Provenance attestation statement") &&
+			regularFileState(paths.signature, "Provenance attestation signature"),
 		"Signed provenance attestation is missing",
 	);
+	const manifestBytes = readFileSync(manifestPath);
 	const statementBytes = readFileSync(paths.statement);
 	const statement = JSON.parse(statementBytes);
 	assert(
 		statement.schemaVersion === 1 &&
 			statement.algorithm === "ed25519" &&
 			statement.keyId === plan.provenanceAttestation.keyId &&
-			statement.subject?.releaseId === manifest.releaseId &&
-			statement.subject?.version === manifest.version &&
-			statement.subject?.manifestSha512 === sha512File(manifestPath) &&
-			statement.subject?.sourceCommit === manifest.source.commit &&
-			statement.subject?.sourceTree === manifest.source.tree &&
-			statement.subject?.planSha512 === manifest.plan.sha512,
+			statement.subject?.releaseId === plan.releaseId &&
+			statement.subject?.version === plan.version &&
+			statement.subject?.manifestSha512 === digest("sha512", manifestBytes) &&
+			statement.subject?.planSha512 === sha512File(plan.planPath),
 		"Provenance attestation statement drifted",
 	);
 	const signature = Buffer.from(
@@ -1253,7 +1676,7 @@ const verifyProvenanceAttestation = (manifestPath, manifest, plan) => {
 		),
 		"Provenance attestation signature is invalid",
 	);
-	return paths;
+	return { ...paths, manifestBytes, statement };
 };
 
 export const createProvenanceManifest = ({
@@ -1300,9 +1723,7 @@ export const createProvenanceManifest = ({
 			statement: statementName,
 			signature: signatureName,
 			sha512: sha512File(join(artifactsDirectory, statementName)),
-			signatureSha512: sha512File(
-				join(artifactsDirectory, signatureName),
-			),
+			signatureSha512: sha512File(join(artifactsDirectory, signatureName)),
 		};
 	}
 	const packages = [];
@@ -1439,9 +1860,20 @@ export const loadProvenance = (
 	manifestPath,
 	plan,
 	root = rootDirectory,
+	{
+		inspectArchive = inspectPortablePackageArchive,
+		onArtifactAccess = () => {},
+	} = {},
 ) => {
 	assert(isAbsolute(manifestPath), "--manifest must be an absolute path");
-	const manifest = readJson(manifestPath);
+	const envelope = verifyProvenanceEnvelope(manifestPath, plan);
+	const manifest = JSON.parse(envelope.manifestBytes);
+	assert(
+		envelope.statement.subject.sourceCommit === manifest.source?.commit &&
+			envelope.statement.subject.sourceTree === manifest.source?.tree &&
+			envelope.statement.subject.planSha512 === manifest.plan?.sha512,
+		"Provenance attestation source binding drifted",
+	);
 	assert(
 		manifest.schemaVersion === 2 &&
 			manifest.releaseId === plan.releaseId &&
@@ -1481,8 +1913,7 @@ export const loadProvenance = (
 		"Provenance lockfile path drifted",
 	);
 	assert(
-		manifest.lockfile.sha512 ===
-			sha512File(join(root, manifest.lockfile.path)),
+		manifest.lockfile.sha512 === sha512File(join(root, manifest.lockfile.path)),
 		"Provenance lockfile hash drifted",
 	);
 	assert(
@@ -1496,6 +1927,7 @@ export const loadProvenance = (
 		"Provenance package cohort drifted",
 	);
 	if (manifest.source.reviewEvidence?.independentReceipt) {
+		onArtifactAccess({ kind: "review-receipt" });
 		assert(manifest.reviewReceipt, "Signed review receipt evidence is missing");
 		assert(
 			manifest.reviewReceipt.signature ===
@@ -1508,7 +1940,10 @@ export const loadProvenance = (
 			["statement", "sha512"],
 			["signature", "signatureSha512"],
 		]) {
-			const path = resolve(dirname(manifestPath), manifest.reviewReceipt[field]);
+			const path = resolve(
+				dirname(manifestPath),
+				manifest.reviewReceipt[field],
+			);
 			const realPath = existsSync(path) ? realpathSync(path) : path;
 			assert(
 				path.startsWith(`${dirname(manifestPath)}${sep}`) &&
@@ -1539,6 +1974,7 @@ export const loadProvenance = (
 		);
 	}
 	for (const item of manifest.packages) {
+		onArtifactAccess({ kind: "archive", name: item.name });
 		const archivePath = resolve(dirname(manifestPath), item.archive);
 		const artifactRoot = realpathSync(dirname(manifestPath));
 		const archiveRealPath = realpathSync(archivePath);
@@ -1555,12 +1991,11 @@ export const loadProvenance = (
 			join(tmpdir(), "rpgjs-solo-provenance-inspection-"),
 		);
 		try {
-			const { packedDirectory, packedManifest } =
-				inspectPortablePackageArchive({
-					archivePath: archiveRealPath,
-					extractDirectory: join(inspectionDirectory, "extract"),
-					packageName: item.name,
-				});
+			const { packedDirectory, packedManifest } = inspectArchive({
+				archivePath: archiveRealPath,
+				extractDirectory: join(inspectionDirectory, "extract"),
+				packageName: item.name,
+			});
 			assert(
 				packedManifest.name === item.name &&
 					packedManifest.version === plan.version &&
@@ -1589,7 +2024,6 @@ export const loadProvenance = (
 			`${sha512File(manifestPath)}  ${manifestPath.split(sep).at(-1)}\n`,
 		"Provenance SHA-512 sidecar drifted",
 	);
-	verifyProvenanceAttestation(manifestPath, manifest, plan);
 	return manifest;
 };
 
@@ -1674,12 +2108,6 @@ export const nextPromotionAction = ({
 	throw new Error(
 		`latest changed unexpectedly from ${String(priorLatest)} to ${String(currentLatest)}`,
 	);
-};
-
-const atomicWriteJson = (path, value) => {
-	const temporary = `${path}.tmp-${process.pid}`;
-	writeJson(temporary, value);
-	renameSync(temporary, path);
 };
 
 const verifyPublishedConsumer = (manifest, plan, env) => {
@@ -1824,14 +2252,15 @@ const publishCandidate = async (manifest, manifestPath, plan, args) => {
 const promoteLatest = async (manifest, manifestPath, plan, args) => {
 	requireExecution(args, plan);
 	const journalPath = `${manifestPath}.promotion.json`;
+	const journalPurpose = `solo-promotion:${plan.releaseId}`;
 	await withEphemeralNpmAuth(
 		process.env.RPGJS_SOLO_NPM_TOKEN,
 		plan.registry,
 		async (env) => {
 			assertCandidateCohort(manifest, plan, env);
 			let journal;
-			if (existsSync(journalPath)) {
-				journal = readJson(journalPath);
+			if (lstatOrNull(journalPath)) {
+				journal = readTransactionJournal(journalPath, journalPurpose);
 				assert(
 					journal.releaseId === plan.releaseId &&
 						journal.manifestSha512 === sha512File(manifestPath),
@@ -1874,7 +2303,9 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 						}),
 					),
 				};
-				atomicWriteJson(journalPath, journal);
+				secureAtomicWriteJson(journalPath, journal, {
+					purpose: journalPurpose,
+				});
 			}
 			const preflightActions = manifest.packages.map((item) => {
 				const state = journal.packages[item.name];
@@ -1896,8 +2327,7 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 				const liveBeforeMutation =
 					pnpmView(item.name, "dist-tags", plan, env) ?? {};
 				const action = nextPromotionAction({
-					currentLatest:
-						liveBeforeMutation[plan.promotionDistTag] ?? null,
+					currentLatest: liveBeforeMutation[plan.promotionDistTag] ?? null,
 					priorLatest: state.priorLatest,
 					version: plan.version,
 					complete: state.complete,
@@ -1926,7 +2356,9 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 					`${item.name} latest promotion did not persist`,
 				);
 				state.complete = true;
-				atomicWriteJson(journalPath, journal);
+				secureAtomicWriteJson(journalPath, journal, {
+					purpose: journalPurpose,
+				});
 			}
 			for (const item of manifest.packages) {
 				const live = pnpmView(item.name, "dist-tags", plan, env);
@@ -1940,7 +2372,9 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 				journal.complete,
 				"Live registry reconciliation found an incomplete latest promotion",
 			);
-			atomicWriteJson(journalPath, journal);
+			secureAtomicWriteJson(journalPath, journal, {
+				purpose: journalPurpose,
+			});
 		},
 	);
 };
@@ -2436,6 +2870,7 @@ const publishReleases = async (manifest, manifestPath, plan, args) => {
 		writeNotes: false,
 	});
 	const journalPath = `${manifestPath}.releases.json`;
+	const journalPurpose = `solo-source-releases:${plan.releaseId}`;
 	const identity = {
 		schemaVersion: 1,
 		releaseId: plan.releaseId,
@@ -2445,8 +2880,8 @@ const publishReleases = async (manifest, manifestPath, plan, args) => {
 		),
 	};
 	let journal;
-	if (existsSync(journalPath)) {
-		journal = readJson(journalPath);
+	if (lstatOrNull(journalPath)) {
+		journal = readTransactionJournal(journalPath, journalPurpose);
 		assert(
 			journal.releaseId === identity.releaseId &&
 				journal.manifestSha512 === identity.manifestSha512 &&
@@ -2464,7 +2899,8 @@ const publishReleases = async (manifest, manifestPath, plan, args) => {
 		plan.registry,
 		async (env) => assertLivePromotedCohort(manifest, plan, env),
 	);
-	if (!existsSync(journalPath)) atomicWriteJson(journalPath, journal);
+	if (!lstatOrNull(journalPath))
+		secureAtomicWriteJson(journalPath, journal, { purpose: journalPurpose });
 	if (!existsSync(expected.notesPath))
 		writeFileSync(expected.notesPath, expected.body);
 	const tags = [...plan.packages.map(({ tag }) => tag), plan.trainTag];
@@ -2477,7 +2913,7 @@ const publishReleases = async (manifest, manifestPath, plan, args) => {
 		remotes: [github],
 		onVerified(name, result) {
 			journal.remotes[name] = result;
-			atomicWriteJson(journalPath, journal);
+			secureAtomicWriteJson(journalPath, journal, { purpose: journalPurpose });
 		},
 	});
 	reconcileRemoteTags(plan.backup.repository, tags, manifest.source.commit);
@@ -2486,14 +2922,14 @@ const publishReleases = async (manifest, manifestPath, plan, args) => {
 		remotes: [gitea],
 		onVerified(name, result) {
 			journal.remotes[name] = result;
-			atomicWriteJson(journalPath, journal);
+			secureAtomicWriteJson(journalPath, journal, { purpose: journalPurpose });
 		},
 	});
 	journal.complete = ["github", "gitea"].every(
 		(name) => journal.remotes[name]?.tag === plan.trainTag,
 	);
 	assert(journal.complete, "Source release reconciliation is incomplete");
-	atomicWriteJson(journalPath, journal);
+	secureAtomicWriteJson(journalPath, journal, { purpose: journalPurpose });
 };
 
 const parseArguments = (raw) => {

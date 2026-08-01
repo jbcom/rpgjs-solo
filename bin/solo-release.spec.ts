@@ -1,17 +1,20 @@
+import { execFileSync } from "node:child_process";
 import {
 	createHash,
 	generateKeyPairSync,
 	randomUUID,
 	sign as signBytes,
 } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import {
+	chmodSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
 	statSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,7 +25,6 @@ import {
 	assertCanonicalMain,
 	assertLivePromotedCohort,
 	assertMonotonicLatestPromotion,
-	assertPullRequestReviewEvidence,
 	assertReleaseToolchain,
 	assertReviewedCanonicalMain,
 	createGiteaReleaseAdapter,
@@ -36,6 +38,8 @@ import {
 	publishCandidateCohort,
 	reconcileReleaseRemotes,
 	reconcileReleaseWithAdapter,
+	reviewAssignmentSha512,
+	secureAtomicWriteJson,
 	sha512File,
 	validateSoloReleaseState,
 	verifyIndependentReviewReceipt,
@@ -79,18 +83,30 @@ const inheritedReleaseDirectories = [
 const temporaryDirectories: string[] = [];
 const sha256 = (value: string) =>
 	createHash("sha256").update(value).digest("hex");
-const testAttestationKeys = generateKeyPairSync("ed25519");
-const testPublicKeyPem = testAttestationKeys.publicKey.export({
-	type: "spki",
-	format: "pem",
-}).toString();
-const testAttestationKeyId = createHash("sha256")
-	.update(
-		testAttestationKeys.publicKey.export({ type: "spki", format: "der" }),
-	)
+const testReviewKeys = generateKeyPairSync("ed25519");
+const testReviewPublicKeyPem = testReviewKeys.publicKey
+	.export({
+		type: "spki",
+		format: "pem",
+	})
+	.toString();
+const testReviewKeyId = createHash("sha256")
+	.update(testReviewKeys.publicKey.export({ type: "spki", format: "der" }))
+	.digest("hex");
+const testReviewSigner = (value: Buffer) =>
+	signBytes(null, value, testReviewKeys.privateKey);
+const testProvenanceKeys = generateKeyPairSync("ed25519");
+const testProvenancePublicKeyPem = testProvenanceKeys.publicKey
+	.export({
+		type: "spki",
+		format: "pem",
+	})
+	.toString();
+const testProvenanceKeyId = createHash("sha256")
+	.update(testProvenanceKeys.publicKey.export({ type: "spki", format: "der" }))
 	.digest("hex");
 const testProvenanceSigner = (value: Buffer) =>
-	signBytes(null, value, testAttestationKeys.privateKey);
+	signBytes(null, value, testProvenanceKeys.privateKey);
 const writeJson = (path: string, value: unknown) =>
 	writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 
@@ -204,6 +220,20 @@ function createFixture() {
 			...(id === "studio" ? { introducedBy: "4".repeat(40) } : {}),
 		}),
 	);
+	const orchestratorAssignment = {
+		schemaVersion: 1,
+		status: "final",
+		producerTaskId: "/root/solo_release_transaction_audit",
+		producerPrincipalId: "producer-fixture",
+		reviewerTaskId: "/root/solo_fix_release_review",
+		reviewerPrincipalId: "reviewer-fixture",
+		reviewerRole: "independent-release-auditor",
+		reviewerForkId: "fork-solo-fix-release-review",
+		assignmentSha512: "",
+	};
+	orchestratorAssignment.assignmentSha512 = reviewAssignmentSha512(
+		orchestratorAssignment,
+	);
 	const plan = {
 		schemaVersion: 2,
 		releaseId: "fixture",
@@ -229,16 +259,16 @@ function createFixture() {
 			independentReceipt: {
 				status: "final",
 				algorithm: "ed25519",
-				keyId: testAttestationKeyId,
-				publicKeyPem: testPublicKeyPem,
-				producerPrincipalId: "producer-fixture",
+				keyId: testReviewKeyId,
+				publicKeyPem: testReviewPublicKeyPem,
+				orchestratorAssignment,
 			},
 		},
 		provenanceAttestation: {
 			status: "final",
 			algorithm: "ed25519",
-			keyId: testAttestationKeyId,
-			publicKeyPem: testPublicKeyPem,
+			keyId: testProvenanceKeyId,
+			publicKeyPem: testProvenancePublicKeyPem,
 		},
 		upstreamCommit: "3".repeat(40),
 		previousVersion,
@@ -426,9 +456,10 @@ function createReleaseAdapter(
 
 describe("Solo beta.29 coordinated release transaction", () => {
 	it("fails closed unless the executing toolchain is exact Node 24 and pnpm 11.18.0", () => {
-		expect(
-			assertReleaseToolchain(() => "11.18.0", "24.18.1"),
-		).toEqual({ nodeVersion: "24.18.1", pnpmVersion: "11.18.0" });
+		expect(assertReleaseToolchain(() => "11.18.0", "24.18.1")).toEqual({
+			nodeVersion: "24.18.1",
+			pnpmVersion: "11.18.0",
+		});
 		expect(() => assertReleaseToolchain(() => "11.18.0", "26.5.0")).toThrow(
 			/requires Node 24/i,
 		);
@@ -455,6 +486,38 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.sourceBinding.status).toBe("provisional");
 		expect(plan.reviewEvidence.status).toBe("provisional");
 		expect(plan.provenanceAttestation.status).toBe("provisional");
+	});
+
+	it("requires distinct review/provenance keys and an exact producer-disjoint orchestrator assignment", () => {
+		const fixture = createFixture();
+		const source = JSON.parse(readFileSync(fixture.planPath, "utf8"));
+		const sameKey = structuredClone(source);
+		sameKey.provenanceAttestation.keyId =
+			sameKey.reviewEvidence.independentReceipt.keyId;
+		sameKey.provenanceAttestation.publicKeyPem =
+			sameKey.reviewEvidence.independentReceipt.publicKeyPem;
+		writeJson(fixture.planPath, sameKey);
+		expect(() => loadSoloReleasePlan(fixture.planPath)).toThrow(
+			/distinct Ed25519 keys/i,
+		);
+
+		const sameTask = structuredClone(source);
+		const assignment =
+			sameTask.reviewEvidence.independentReceipt.orchestratorAssignment;
+		assignment.reviewerTaskId = assignment.producerTaskId;
+		assignment.assignmentSha512 = reviewAssignmentSha512(assignment);
+		writeJson(fixture.planPath, sameTask);
+		expect(() => loadSoloReleasePlan(fixture.planPath)).toThrow(
+			/exact predeclared producer-disjoint orchestrator assignment/i,
+		);
+
+		const missingAssignment = structuredClone(source);
+		delete missingAssignment.reviewEvidence.independentReceipt
+			.orchestratorAssignment;
+		writeJson(fixture.planPath, missingAssignment);
+		expect(() => loadSoloReleasePlan(fixture.planPath)).toThrow(
+			/configuration is incomplete/i,
+		);
 	});
 
 	it("applies only the cohort once, preserves inherited changesets, and never creates beta.30", () => {
@@ -539,7 +602,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			new Set(["manifest", "changelog", "changeset-delete", "lockfile"]),
 		);
 
-		for (let failureIndex = 0; failureIndex < boundaries.length; failureIndex++) {
+		for (
+			let failureIndex = 0;
+			failureIndex < boundaries.length;
+			failureIndex++
+		) {
 			const fixture = createFixture();
 			const plan = loadSoloReleasePlan(fixture.planPath);
 			initializeFixtureGit(fixture, plan);
@@ -548,7 +615,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				applySoloReleaseTransaction(fixture.root, plan, undefined, {
 					targetLockfileFactory: () => "deterministic-lock\n",
 					afterBoundary: () => {
-						if (seen++ === failureIndex) throw new Error("injected interruption");
+						if (seen++ === failureIndex)
+							throw new Error("injected interruption");
 					},
 				}),
 			).toThrow(/injected interruption/);
@@ -557,11 +625,90 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					targetLockfileFactory: () => "deterministic-lock\n",
 				}),
 			).toMatchObject({ phase: "applied", lockfileRefreshed: true });
-			expect(validateSoloReleaseState(fixture.root, plan).phase).toBe("applied");
-			expect(existsSync(join(fixture.root, ".rpgjs-solo-release-apply.json"))).toBe(
-				false,
+			expect(validateSoloReleaseState(fixture.root, plan).phase).toBe(
+				"applied",
 			);
+			expect(
+				existsSync(join(fixture.root, ".rpgjs-solo-release-apply.json")),
+			).toBe(false);
 		}
+	});
+
+	it("recovers secure transaction-owned writes interrupted before journal or output rename", () => {
+		for (const failureKind of ["journal", "manifest"]) {
+			const fixture = createFixture();
+			const plan = loadSoloReleasePlan(fixture.planPath);
+			initializeFixtureGit(fixture, plan);
+			let interrupted = false;
+			expect(() =>
+				applySoloReleaseTransaction(fixture.root, plan, undefined, {
+					targetLockfileFactory: () => "deterministic-lock\n",
+					beforeRename: ({ kind }) => {
+						if (!interrupted && kind === failureKind) {
+							interrupted = true;
+							throw new Error(`crash before ${failureKind} rename`);
+						}
+					},
+				}),
+			).toThrow(`crash before ${failureKind} rename`);
+			expect(
+				applySoloReleaseTransaction(fixture.root, plan, undefined, {
+					targetLockfileFactory: () => "deterministic-lock\n",
+				}),
+			).toMatchObject({ phase: "applied" });
+			expect(
+				execFileSync("find", [fixture.root, "-name", "*.solo-txn-*"], {
+					encoding: "utf8",
+				}).trim(),
+			).toBe("");
+		}
+	});
+
+	it("rejects precreated journal targets and temporary-path symlinks", () => {
+		const directory = mkdtempSync(join(tmpdir(), "solo-secure-journal-"));
+		temporaryDirectories.push(directory);
+		const external = join(directory, "external.json");
+		writeFileSync(external, "external\n");
+		const targetSymlink = join(directory, "target.json");
+		symlinkSync(external, targetSymlink);
+		expect(() =>
+			secureAtomicWriteJson(
+				targetSymlink,
+				{ releaseId: "fixture" },
+				{ purpose: "promotion:fixture" },
+			),
+		).toThrow(/regular non-symlink file/i);
+		expect(readFileSync(external, "utf8")).toBe("external\n");
+
+		const journal = join(directory, "journal.json");
+		const forgedTemp = join(directory, ".journal.json.solo-txn-forged");
+		symlinkSync(directory, forgedTemp);
+		expect(() =>
+			secureAtomicWriteJson(
+				journal,
+				{ releaseId: "fixture" },
+				{ purpose: "promotion:fixture" },
+			),
+		).toThrow(/temporary path is forged or unsafe/i);
+	});
+
+	it("recovers shared promotion/release journal writes without manual cleanup", () => {
+		const directory = mkdtempSync(join(tmpdir(), "solo-journal-recovery-"));
+		temporaryDirectories.push(directory);
+		const path = join(directory, "promotion.json");
+		const value = { schemaVersion: 1, releaseId: "fixture", complete: false };
+		expect(() =>
+			secureAtomicWriteJson(path, value, {
+				purpose: "promotion:fixture",
+				beforeRename: () => {
+					throw new Error("crash before journal rename");
+				},
+			}),
+		).toThrow(/crash before journal rename/i);
+		secureAtomicWriteJson(path, value, { purpose: "promotion:fixture" });
+		expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(value);
+		expect(statSync(path).mode & 0o777).toBe(0o600);
+		expect(readdirSync(directory).sort()).toEqual(["promotion.json"]);
 	});
 
 	it("rejects foreign bytes inside an interrupted apply transaction", () => {
@@ -584,6 +731,71 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				targetLockfileFactory: () => "deterministic-lock\n",
 			}),
 		).toThrow(/outside the exact source\/target transaction/i);
+	});
+
+	it("rejects exact-byte external symlinks and mode substitution for apply outputs", () => {
+		for (const attack of ["symlink", "mode"]) {
+			const fixture = createFixture();
+			const plan = loadSoloReleasePlan(fixture.planPath);
+			initializeFixtureGit(fixture, plan);
+			let firstPath = "";
+			expect(() =>
+				applySoloReleaseTransaction(fixture.root, plan, undefined, {
+					targetLockfileFactory: () => "deterministic-lock\n",
+					afterBoundary: ({ path }) => {
+						firstPath = path;
+						throw new Error("pause transaction");
+					},
+				}),
+			).toThrow(/pause transaction/i);
+			const journal = JSON.parse(
+				readFileSync(
+					join(fixture.root, ".rpgjs-solo-release-apply.json"),
+					"utf8",
+				),
+			);
+			const victim = journal.outputs.find(
+				(output: {
+					path: string;
+					source: { exists: boolean };
+					target: { exists: boolean };
+				}) =>
+					output.path !== firstPath &&
+					output.source.exists &&
+					output.target.exists,
+			);
+			expect(victim).toBeDefined();
+			const victimPath = join(fixture.root, victim.path);
+			if (attack === "symlink") {
+				const externalDirectory = mkdtempSync(
+					join(tmpdir(), "solo-apply-external-"),
+				);
+				temporaryDirectories.push(externalDirectory);
+				const external = join(externalDirectory, "exact-source.json");
+				writeFileSync(
+					external,
+					execFileSync("git", ["show", `HEAD:${victim.path}`], {
+						cwd: fixture.root,
+					}),
+				);
+				const before = readFileSync(external);
+				rmSync(victimPath);
+				symlinkSync(external, victimPath);
+				expect(() =>
+					applySoloReleaseTransaction(fixture.root, plan, undefined, {
+						targetLockfileFactory: () => "deterministic-lock\n",
+					}),
+				).toThrow(/outside the exact source\/target transaction/i);
+				expect(readFileSync(external)).toEqual(before);
+			} else {
+				chmodSync(victimPath, 0o600);
+				expect(() =>
+					applySoloReleaseTransaction(fixture.root, plan, undefined, {
+						targetLockfileFactory: () => "deterministic-lock\n",
+					}),
+				).toThrow(/outside the exact source\/target transaction/i);
+			}
+		}
 	});
 
 	it("derives the full inherited release surface and rejects undeclared work", () => {
@@ -719,11 +931,16 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		temporaryDirectories.push(directory);
 		const receiptPath = join(directory, "receipt.json");
 		const previous = process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH;
-		const writeReceipt = (reviewerPrincipalId: string) => {
-			writeJson(receiptPath, {
+		const assignment =
+			plan.reviewEvidence.independentReceipt.orchestratorAssignment;
+		const writeReceipt = (
+			overrides: Record<string, unknown> = {},
+			signer = testReviewSigner,
+		) => {
+			const receipt = {
 				schemaVersion: 1,
 				algorithm: "ed25519",
-				keyId: testAttestationKeyId,
+				keyId: testReviewKeyId,
 				verdict: "ACCEPT",
 				releaseId: plan.releaseId,
 				version: plan.version,
@@ -732,18 +949,24 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				releasePullRequest: plan.reviewEvidence.releasePullRequest.number,
 				releaseMergeCommit: head,
 				planSha512: sha512File(plan.planPath),
-				producerPrincipalId:
-					plan.reviewEvidence.independentReceipt.producerPrincipalId,
-				reviewerPrincipalId,
-			});
+				producerTaskId: assignment.producerTaskId,
+				producerPrincipalId: assignment.producerPrincipalId,
+				reviewerTaskId: assignment.reviewerTaskId,
+				reviewerPrincipalId: assignment.reviewerPrincipalId,
+				reviewerRole: assignment.reviewerRole,
+				reviewerForkId: assignment.reviewerForkId,
+				assignmentSha512: assignment.assignmentSha512,
+				...overrides,
+			};
+			writeJson(receiptPath, receipt);
 			writeFileSync(
 				`${receiptPath}.sig`,
-				`${testProvenanceSigner(readFileSync(receiptPath)).toString("base64")}\n`,
+				`${signer(readFileSync(receiptPath)).toString("base64")}\n`,
 			);
 		};
 		try {
 			process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH = receiptPath;
-			writeReceipt("reviewer-fixture");
+			writeReceipt();
 			expect(verifyIndependentReviewReceipt(plan, head)).toMatchObject({
 				reviewerPrincipalId: "reviewer-fixture",
 			});
@@ -761,9 +984,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 						},
 						reviewDecision: "",
 						reviews: [],
-						statusCheckRollup: [
-							{ name: "tests (24)", conclusion: "SUCCESS" },
-						],
+						statusCheckRollup: [{ name: "tests (24)", conclusion: "SUCCESS" }],
 					});
 				}
 				if (program === "gh" && args[0] === "api")
@@ -783,23 +1004,36 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					return args[3] === plan.requiredSourceCommit
 						? `${"e".repeat(40)} ${"c".repeat(40)}`
 						: `${"f".repeat(40)} ${"d".repeat(40)}`;
-				throw new Error(`Unexpected review command ${program} ${args.join(" ")}`);
+				throw new Error(
+					`Unexpected review command ${program} ${args.join(" ")}`,
+				);
 			};
 			expect(
-				assertReviewedCanonicalMain(
-					plan,
-					head,
-					noSelfApproval,
-					fixture.root,
-				),
+				assertReviewedCanonicalMain(plan, head, noSelfApproval, fixture.root),
 			).toMatchObject({
 				engine: { githubApproved: false },
 				release: { githubApproved: false },
 				independentReceipt: { reviewerPrincipalId: "reviewer-fixture" },
 			});
-			writeReceipt("producer-fixture");
+			writeReceipt({ reviewerPrincipalId: assignment.producerPrincipalId });
 			expect(() => verifyIndependentReviewReceipt(plan, head)).toThrow(
 				/producer-disjoint release/i,
+			);
+			writeReceipt({ reviewerTaskId: assignment.producerTaskId });
+			expect(() => verifyIndependentReviewReceipt(plan, head)).toThrow(
+				/producer-disjoint release/i,
+			);
+			writeReceipt({ reviewerForkId: undefined });
+			expect(() => verifyIndependentReviewReceipt(plan, head)).toThrow(
+				/exact producer-disjoint release/i,
+			);
+			writeReceipt({ reviewerTaskId: "/root/substituted-reviewer" });
+			expect(() => verifyIndependentReviewReceipt(plan, head)).toThrow(
+				/exact producer-disjoint release/i,
+			);
+			writeReceipt({}, testProvenanceSigner);
+			expect(() => verifyIndependentReviewReceipt(plan, head)).toThrow(
+				/signature is invalid/i,
 			);
 		} finally {
 			if (previous === undefined)
@@ -1061,15 +1295,46 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(existsSync(result.sidecarPath)).toBe(true);
 		expect(existsSync(result.statement)).toBe(true);
 		expect(existsSync(result.signature)).toBe(true);
-		expect(() => loadProvenance(result.manifestPath, plan, fixture.root)).not.toThrow();
-		writeJson(result.manifestPath, { ...result.manifest, coherentTamper: true });
+		expect(() =>
+			loadProvenance(result.manifestPath, plan, fixture.root),
+		).not.toThrow();
+		const externalDirectory = mkdtempSync(
+			join(tmpdir(), "solo-foreign-archive-"),
+		);
+		temporaryDirectories.push(externalDirectory);
+		const externalArchive = join(externalDirectory, "foreign.tgz");
+		writeFileSync(externalArchive, "foreign archive\n");
+		writeJson(result.manifestPath, {
+			...result.manifest,
+			packages: result.manifest.packages.map((item, index) => ({
+				...item,
+				...(index === 0 ? { archive: externalArchive } : {}),
+			})),
+		});
 		writeFileSync(
 			result.sidecarPath,
 			`${sha512File(result.manifestPath)}  ${result.manifestPath.split("/").at(-1)}\n`,
 		);
-		expect(() => loadProvenance(result.manifestPath, plan, fixture.root)).toThrow(
-			/attestation statement drifted|signature is invalid/i,
+		const forgedStatement = JSON.parse(readFileSync(result.statement, "utf8"));
+		forgedStatement.subject.manifestSha512 = sha512File(result.manifestPath);
+		writeJson(result.statement, forgedStatement);
+		writeFileSync(
+			result.signature,
+			`${testReviewSigner(readFileSync(result.statement)).toString("base64")}\n`,
 		);
+		const accesses: string[] = [];
+		let inspections = 0;
+		expect(() =>
+			loadProvenance(result.manifestPath, plan, fixture.root, {
+				onArtifactAccess: ({ kind }) => accesses.push(kind),
+				inspectArchive: () => {
+					inspections += 1;
+					throw new Error("archive inspection must not run");
+				},
+			}),
+		).toThrow(/signature is invalid/i);
+		expect(accesses).toEqual([]);
+		expect(inspections).toBe(0);
 		expect(
 			existsSync(join(fixture.root, `${plan.releaseId}.provenance.json`)),
 		).toBe(false);
