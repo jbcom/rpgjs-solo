@@ -95,4 +95,30 @@ describe('SoloRendererModel', () => {
     expect(hero.animation()).toBe('attack')
     model.dispose()
   })
+
+  it('projects changing game-owned visibility without replacing the stable appearance', () => {
+    const { runtime, model } = createModel((entity) => entity.id === 'hero' ? {
+      color: '#fff',
+      visible: (state) => state.data.rendered !== false
+    } : undefined)
+    const hero = model.entities()[0]
+    runtime.registerAction('test:hide', ({ entity }) => {
+      entity.data.rendered = false
+    })
+    runtime.registerAction('test:show', ({ entity }) => {
+      entity.data.rendered = true
+    })
+
+    expect(hero.visible()).toBe(true)
+    runtime.dispatch({ type: 'action', entityId: 'hero', action: 'test:hide' })
+    runtime.stepTicks(1)
+    expect(model.entities()[0]).toBe(hero)
+    expect(hero.visible()).toBe(false)
+
+    runtime.dispatch({ type: 'action', entityId: 'hero', action: 'test:show' })
+    runtime.stepTicks(1)
+    expect(model.entities()[0]).toBe(hero)
+    expect(hero.visible()).toBe(true)
+    model.dispose()
+  })
 })
