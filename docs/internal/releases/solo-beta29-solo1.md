@@ -1,14 +1,16 @@
 # RPGJS Solo `5.0.0-beta.29.solo.1` release transaction
 
-Status: tooling rebased onto the exact canonical, two-parent PR #20 merge
-`82a9e56d106e87c37df4602055a6a22ec22218dc`, with release PR #22 and the
-release-scoped provenance public key bound in the plan. The deterministic apply
-transition is committed on release PR #22. Publication remains blocked until
-that exact PR head passes every required check, is independently accepted, and
-is merged without changing the reviewed release source. The detached
-producer-disjoint review receipt is created only after that exact reviewed head
-becomes a canonical two-parent merge, because the receipt binds the final merge
-SHA as well as the immutable plan and assignment.
+Status: tooling is based on the exact canonical, two-parent PR #20 merge
+`82a9e56d106e87c37df4602055a6a22ec22218dc`. Release PR #22 merged the
+deterministic apply transition as `39ee42bd...`; its first pack attempt halted
+before creating an archive when inherited build stdio returned a successful
+null buffer. Corrective release PR #23 fixes that runner boundary and is now
+the release PR bound by the plan. Publication remains blocked until that exact
+PR head passes every required check, is independently accepted, and is merged
+without changing the reviewed source. A new detached producer-disjoint review
+receipt is created only after that exact corrective head becomes a canonical
+two-parent merge, because the receipt binds the final merge SHA as well as the
+updated immutable plan and assignment.
 `fair-studio-success-rates.introducedBy` remains its own immutable `f014412...`
 commit and is verified as an ancestor of the required source instead of being
 made equal to it.
