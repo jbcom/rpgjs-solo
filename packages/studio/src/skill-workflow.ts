@@ -212,7 +212,11 @@ export const createStudioSkillOnUse = (
       action.projectile({
         ...(action.action.projectile ?? {}),
         onImpact: (context: { target?: unknown }, battleAction: StudioActionUseContext) => {
-          const impactTarget = context.target ?? target;
+          // A physics-only collision deliberately has no combat target. Pass
+          // null instead of undefined so ActionUse.defaultEffect() cannot
+          // restore the originally selected target through its default
+          // parameter and damage an entity behind the blocker.
+          const impactTarget = context.target ?? null;
           const result = battleAction.defaultEffect(impactTarget);
           dispatchImpactWorkflows(player, skillId, triggers, impactTarget, result);
         },

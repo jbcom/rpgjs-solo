@@ -1498,6 +1498,30 @@ provideActionBattle({
 `callAction()` returns failure when its name is not registered, allowing a
 selector to continue to a fallback branch.
 
+Every intent returned by `once()` is acknowledged only after the authoritative
+server operation accepts it. A rejected movement, skill, attack, action, or
+teleport remains pending, and an asynchronous teleport is not acknowledged
+until its promise settles successfully. Pending work also preserves
+`consume: false`, so it does not suppress the controller's ordinary behavior
+while an asynchronous operation is in flight. If a dynamic `once()` result can
+contain two otherwise identical sibling intents, give each one a unique,
+stable `receiptKey` so filtering or reordering cannot assign success to the
+wrong action:
+
+```ts
+once("two-waves", () => [
+  { ...callAction("summon-wave", { count: 1 }), receiptKey: "opening" },
+  { ...callAction("summon-wave", { count: 1 }), receiptKey: "reinforcement" }
+]);
+```
+
+The engine rejects ambiguous duplicate siblings instead of guessing. Keep a
+receipt key attached to the same logical action for the lifetime of that
+`once()` node; changing its payload does not create a second action while that
+key is unchanged. Also provide a receipt key when a dynamic action recreates
+opaque, accessor-backed, or exceptionally deep payload objects: the engine
+does not execute accessors or recurse without a bound merely to infer identity.
+
 ### Server-driven AI visuals
 
 `visual()` sends a JSON-shaped cue through the existing Action Battle client
@@ -1540,9 +1564,9 @@ The advanced intent helpers are thin wrappers over the controlled event:
 | Helper | Runtime behavior |
 |---|---|
 | `setSpeed(value)` | Set the event's synchronized speed; non-consuming by default. |
-| `moveToPoint({ x, y })` | Use RPGJS `moveTo()` with the AI movement throttle. |
+| `moveToPoint({ x, y })` | Use RPGJS `moveTo()` with the AI movement throttle after the controlled event has a live map physics body. |
 | `holdPosition()` | Stop the current movement. |
-| `teleportTo({ x, y })` | Use RPGJS `teleport()` at a fixed position. |
+| `teleportTo({ x, y })` | Use RPGJS `teleport()` at a fixed position and observe its asynchronous result. |
 | `teleportNearTarget({ distance, angleDegrees? })` | Compute a position around the current target on the server, then teleport. |
 | `run(callback)` | Execute project logic directly with the current tree context. |
 | `callAction(name, payload?)` | Execute a reusable action from `ai.actions`. |

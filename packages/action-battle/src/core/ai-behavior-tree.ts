@@ -6,6 +6,7 @@ import type {
 } from "./contracts";
 import {
   createActionBattleAiIntentCompletion,
+  getActionBattleAiIntentCompletionPendingConsume,
   isActionBattleAiIntentCompletion,
   isActionBattleAiIntentCompletionComplete,
   prepareActionBattleAiIntentCompletion,
@@ -55,6 +56,14 @@ export type ActionBattleAiRunCallback = (
 ) => void | boolean;
 
 export interface ActionBattleAiIntentBase {
+  /**
+   * Stable identity for one intent inside a dynamic `once()` result.
+   *
+   * Supply this when two sibling intents are otherwise semantically identical.
+   * Keys must be unique and stable for the lifetime of that `once()` node so
+   * filtering or reordering cannot acknowledge the wrong sibling.
+   */
+  receiptKey?: string;
   consume?: boolean;
   metadata?: Record<string, any>;
 }
@@ -138,6 +147,11 @@ export interface ActionBattleAiTreeContext extends ActionBattleAiContext {
 
 export interface ActionBattleAiTreeResult {
   status: ActionBattleAiTreeStatus;
+  /**
+   * Whether a `running` result suppresses the controller's default AI for this
+   * tick. Omit for the normal consuming behavior.
+   */
+  consume?: boolean;
   decision?: ActionBattleAiDecision;
   intent?: ActionBattleAiIntent | ActionBattleAiIntent[];
 }
@@ -338,8 +352,29 @@ export const once = (
         );
         if (prepared.deferred) {
           context.memory[keyInMemory] = completion;
-          return { ...result, intent: prepared.intent };
+          return prepared.waiting
+            ? prepared.waitingConsumes
+              ? {
+                  ...result,
+                  status: "running",
+                  intent: prepared.intent,
+                }
+              : {
+                  ...result,
+                  status: "running",
+                  consume: false,
+                  intent: prepared.intent,
+                }
+            : { ...result, intent: prepared.intent };
         }
+      }
+      if (
+        isActionBattleAiIntentCompletion(storedCompletion) &&
+        !isActionBattleAiIntentCompletionComplete(storedCompletion)
+      ) {
+        return getActionBattleAiIntentCompletionPendingConsume(storedCompletion)
+          ? { ...result, status: "running" }
+          : { ...result, status: "running", consume: false };
       }
       context.memory[keyInMemory] = true;
     }

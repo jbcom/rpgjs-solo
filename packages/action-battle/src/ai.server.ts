@@ -41,7 +41,10 @@ import {
 } from "./core/ai-action-planner";
 import { resolveActionBattleWeapon } from "./core/equipment";
 import { withActionBattleAnimationUnlocked } from "./locomotion";
-import { safeActionBattleDash } from "./movement";
+import {
+  isActionBattleMovementResolutionError,
+  safeActionBattleDash,
+} from "./movement";
 import {
   acquireActionBattleAttackSlot,
   releaseActionBattleAttackSlot,
@@ -779,6 +782,9 @@ export class BattleAi {
   // Movement throttling
   private moveToCooldown: number = 400;
   private lastMoveToTime: number = 0;
+  private readonly patrolRetryDelayMs: number = 100;
+  private patrolResumeTimer?: ReturnType<typeof setTimeout>;
+  private patrolResumeGeneration?: number;
   private retreatCooldown: number = 600;
   private lastRetreatTime: number = 0;
   private lastStrafeTime: number = 0;
@@ -967,7 +973,7 @@ export class BattleAi {
     this.scheduleVisionSetup();
     this.startAiBehaviorLoop();
     if (this.patrolWaypoints.length > 0) {
-      this.startPatrol();
+      this.resumePatrolWhenActionUnlocked(this.stateGeneration);
     }
 
     this.debugLog('init', `AI created (type=${this.enemyType}, visionRange=${this.visionRange}, attackRange=${this.attackRange})`);
@@ -1286,7 +1292,7 @@ export class BattleAi {
 
       if (distance < 10) {
         this.currentPatrolIndex = (this.currentPatrolIndex + 1) % this.patrolWaypoints.length;
-        this.startPatrol();
+        this.resumePatrolWhenActionUnlocked(this.stateGeneration);
       }
     }
   }
@@ -2633,43 +2639,44 @@ export class BattleAi {
   /**
    * Flee from target
    */
-  private fleeFromTarget() {
-    if (!this.target) return;
+  private fleeFromTarget(): boolean {
+    if (!this.target) return false;
 
     const dx = this.event.x() - this.target.x();
     const dy = this.event.y() - this.target.y();
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist === 0) return;
+    if (dist === 0) return false;
 
     const fleeTarget = {
       x: this.event.x() + (dx / dist) * 200,
       y: this.event.y() + (dy / dist) * 200
     };
 
-    this.requestMoveTo(fleeTarget as any);
+    return this.requestMoveTo(fleeTarget as any);
   }
 
   /**
    * Retreat from target (temporary)
    */
-  private retreatFromTarget() {
-    if (!this.target) return;
+  private retreatFromTarget(): boolean {
+    if (!this.target) return false;
     const currentTime = Date.now();
     if (currentTime - this.lastRetreatTime < this.retreatCooldown) {
-      return;
+      return false;
     }
 
     const dx = this.event.x() - this.target.x();
     const dy = this.event.y() - this.target.y();
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist === 0) return;
+    if (dist === 0) return false;
 
     if (!safeActionBattleDash(this.event, { x: dx / dist, y: dy / dist }, 8, 200)) {
-      return;
+      return false;
     }
     this.lastRetreatTime = currentTime;
+    return true;
   }
 
   /**
@@ -2687,11 +2694,45 @@ export class BattleAi {
   /**
    * Start patrol
    */
-  private startPatrol() {
-    if (this.patrolWaypoints.length === 0) return;
+  private startPatrol(): boolean {
+    if (this.patrolWaypoints.length === 0) return false;
 
     const waypoint = this.patrolWaypoints[this.currentPatrolIndex];
-    this.requestMoveTo({ x: waypoint.x, y: waypoint.y } as any);
+    return this.requestMoveTo({ x: waypoint.x, y: waypoint.y } as any);
+  }
+
+  private schedulePatrolResume(
+    stateGeneration: number,
+    delayMs: number,
+  ): void {
+    if (this.patrolResumeTimer !== undefined) {
+      if (this.patrolResumeGeneration === stateGeneration) return;
+      this.clearPatrolResumeTimer();
+    }
+    let timer: ReturnType<typeof setTimeout>;
+    timer = this.schedule(() => {
+      if (this.patrolResumeTimer === timer) {
+        this.patrolResumeTimer = undefined;
+        this.patrolResumeGeneration = undefined;
+      }
+      this.resumePatrolWhenActionUnlocked(stateGeneration);
+    }, Math.max(1, delayMs));
+    this.patrolResumeTimer = timer;
+    this.patrolResumeGeneration = stateGeneration;
+  }
+
+  private clearPatrolResumeTimer(stateGeneration?: number): void {
+    if (this.patrolResumeTimer === undefined) return;
+    if (
+      stateGeneration !== undefined &&
+      this.patrolResumeGeneration !== stateGeneration
+    ) return;
+    clearTimeout(this.patrolResumeTimer);
+    this.timers = this.timers.filter(
+      (entry) => entry !== this.patrolResumeTimer
+    );
+    this.patrolResumeTimer = undefined;
+    this.patrolResumeGeneration = undefined;
   }
 
   private resumePatrolWhenActionUnlocked(stateGeneration: number): void {
@@ -2706,13 +2747,20 @@ export class BattleAi {
     const remainingMoveCooldownMs = this.moveToCooldown - (now - this.lastMoveToTime);
     const retryAfterMs = Math.max(remainingLockMs, remainingMoveCooldownMs);
     if (retryAfterMs > 0) {
-      this.schedule(
-        () => this.resumePatrolWhenActionUnlocked(stateGeneration),
-        retryAfterMs,
-      );
+      this.schedulePatrolResume(stateGeneration, retryAfterMs);
       return;
     }
-    this.startPatrol();
+    if (this.startPatrol()) {
+      this.clearPatrolResumeTimer(stateGeneration);
+    } else {
+      const remainingCooldownMs = this.moveToCooldown - (Date.now() - this.lastMoveToTime);
+      this.schedulePatrolResume(
+        stateGeneration,
+        remainingCooldownMs > 0
+          ? remainingCooldownMs
+          : this.patrolRetryDelayMs,
+      );
+    }
   }
 
   /**
@@ -3285,7 +3333,7 @@ export class BattleAi {
       if (result.intent) {
         handled = this.executeAiIntents(result.intent, currentTime) || handled;
       }
-      if (result.status === "running") {
+      if (result.status === "running" && result.consume !== false) {
         handled = true;
       }
     }
@@ -3380,15 +3428,26 @@ export class BattleAi {
     currentTime: number
   ): boolean {
     const consumes = intent.consume !== false;
+    const accepted = executeActionBattleAiIntentWithReceipt(
+      intent,
+      this,
+      () => this.executeAiIntentAuthoritatively(intent, currentTime)
+    );
+    return accepted && consumes;
+  }
 
+  private executeAiIntentAuthoritatively(
+    intent: ActionBattleAiIntent,
+    currentTime: number
+  ): boolean | Promise<boolean> {
     switch (intent.type) {
       case "setMode":
         this.behaviorMode = intent.mode;
         this.behaviorEnabled = true;
-        return consumes;
+        return true;
       case "run": {
         const result = intent.callback(this.createAiTreeContext(currentTime));
-        return result === false ? false : consumes;
+        return result !== false;
       }
       case "visual":
         emitActionBattleClientVisual({
@@ -3397,19 +3456,19 @@ export class BattleAi {
           target: this.target ?? undefined,
           visual: intent.visual,
         });
-        return consumes;
+        return true;
       case "setSpeed":
         if (!Number.isFinite(intent.value) || intent.value < 0) return false;
         this.event.speed = intent.value;
-        return consumes;
+        return true;
       case "moveToPoint":
-        return this.requestMoveTo(intent.position) ? consumes : false;
+        return this.requestMoveTo(intent.position);
       case "holdPosition":
         this.isMovingToTarget = false;
         this.event.stopMoveTo();
-        return consumes;
+        return true;
       case "teleportTo":
-        return this.executeTeleport(intent.position, consumes);
+        return this.executeTeleport(intent.position);
       case "teleportNearTarget": {
         if (!this.target) return false;
         const distance = intent.options.distance;
@@ -3422,8 +3481,7 @@ export class BattleAi {
           {
             x: this.target.x() + Math.cos(angle) * distance,
             y: this.target.y() + Math.sin(angle) * distance,
-          },
-          consumes
+          }
         );
       }
       case "callAction": {
@@ -3434,90 +3492,79 @@ export class BattleAi {
           this.createAiTreeContext(currentTime),
           intent.payload
         );
-        return result === false ? false : consumes;
+        return result !== false;
       }
       case "idle":
         this.isMovingToTarget = false;
         this.event.stopMoveTo();
-        return consumes;
+        return true;
       case "patrol":
-        this.startPatrol();
-        return consumes;
+        return this.startPatrol();
       case "faceTarget":
+        if (!this.target) return false;
         this.faceTarget();
-        return consumes;
+        return true;
       case "moveToTarget":
         if (!this.target) return false;
-        this.requestTargetMovement();
-        return consumes;
+        return this.requestTargetMovement();
       case "fleeFromTarget":
         if (!this.target) return false;
         this.isMovingToTarget = false;
         if (this.state === AiState.Combat) {
           this.changeState(AiState.Flee);
-        } else {
-          this.fleeFromTarget();
+          return true;
         }
-        return consumes;
+        return this.fleeFromTarget();
       case "keepDistance":
-        return this.executeKeepDistance(intent, consumes);
-      case "useAttack": {
-        const executed = executeActionBattleAiIntentWithReceipt(
-          intent,
-          this,
-          () => this.executeRequestedAttack(intent.pattern, currentTime)
-        );
-        return executed && consumes;
-      }
-      case "useSkill": {
-        const executed = executeActionBattleAiIntentWithReceipt(
-          intent,
-          this,
-          () => this.executeRequestedSkill(intent.skill, currentTime)
-        );
-        return executed && consumes;
-      }
+        return this.executeKeepDistance(intent);
+      case "useAttack":
+        return this.executeRequestedAttack(intent.pattern, currentTime);
+      case "useSkill":
+        return this.executeRequestedSkill(intent.skill, currentTime);
     }
   }
 
   private executeTeleport(
-    position: { x: number; y: number },
-    consumes: boolean
-  ): boolean {
+    position: { x: number; y: number }
+  ): boolean | Promise<boolean> {
     if (
       !Number.isFinite(position.x) ||
       !Number.isFinite(position.y) ||
-      typeof this.event.teleport !== "function"
+      typeof this.event.teleport !== "function" ||
+      !this.event.getCurrentMap?.()
     ) {
       return false;
     }
     this.isMovingToTarget = false;
     this.event.stopMoveTo();
-    void this.event.teleport(position);
-    return consumes;
+    try {
+      return Promise.resolve(this.event.teleport(position)).then(
+        (result) => result !== false,
+        () => false
+      );
+    } catch {
+      return false;
+    }
   }
 
   private executeKeepDistance(
-    intent: Extract<ActionBattleAiIntent, { type: "keepDistance" }>,
-    consumes: boolean
+    intent: Extract<ActionBattleAiIntent, { type: "keepDistance" }>
   ): boolean {
     if (!this.target) return false;
     const tolerance = intent.tolerance ?? Math.max(8, intent.distance * 0.15);
     const distance = this.getDistance(this.event, this.target);
     if (distance < intent.distance - tolerance) {
       this.isMovingToTarget = false;
-      this.retreatFromTarget();
-      return consumes;
+      return this.retreatFromTarget();
     }
     if (distance > intent.distance + tolerance) {
-      this.requestTargetMovement();
-      return consumes;
+      return this.requestTargetMovement();
     }
     if (this.isMovingToTarget) {
       this.isMovingToTarget = false;
       this.event.stopMoveTo();
     }
-    return consumes;
+    return true;
   }
 
   private executeRequestedAttack(
@@ -3680,9 +3727,7 @@ export class BattleAi {
       return false;
     }
     const map = this.event.getCurrentMap?.() as any;
-    const hasBody =
-      !!map?.physic?.getEntityByUUID?.(this.event.id) ||
-      !!map?.getBody?.(this.event.id);
+    const hasBody = this.hasMovementBody(map);
     this.traceLog("movement", "moveTo requested", {
       targetKind: resolvedTarget.kind,
       targetId:
@@ -3698,9 +3743,35 @@ export class BattleAi {
       hasMap: !!map,
       hasMovementBody: hasBody,
     });
-    this.event.moveTo(resolvedTarget.target as any);
+    if (!map || !hasBody) {
+      this.traceLog("movement", "moveTo skipped: missing movement body", {
+        hasMap: !!map,
+        hasMovementBody: hasBody,
+      });
+      return false;
+    }
+    try {
+      this.event.moveTo(resolvedTarget.target as any);
+    } catch (error) {
+      if (isActionBattleMovementResolutionError(error)) return false;
+      throw error;
+    }
+    const mapAfterDispatch = this.event.getCurrentMap?.() as any;
+    if (!this.hasMovementBody(mapAfterDispatch)) {
+      this.traceLog("movement", "moveTo rejected: movement body vanished", {
+        hasMap: !!mapAfterDispatch,
+      });
+      return false;
+    }
     this.lastMoveToTime = currentTime;
     return true;
+  }
+
+  private hasMovementBody(map: any): boolean {
+    return (
+      !!map?.physic?.getEntityByUUID?.(this.event.id) ||
+      !!map?.getBody?.(this.event.id)
+    );
   }
 
   private requestTargetMovement(target: ActionBattleEntity | null = this.target): boolean {
@@ -3876,5 +3947,7 @@ export class BattleAi {
     this.nearbyEnemies = [];
     this.timers.forEach((timer) => clearTimeout(timer));
     this.timers = [];
+    this.patrolResumeTimer = undefined;
+    this.patrolResumeGeneration = undefined;
   }
 }

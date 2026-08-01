@@ -127,13 +127,64 @@ describe("Studio skill workflows", () => {
     expect(defaultEffect).not.toHaveBeenCalled();
     expect(projectileOptions).toMatchObject({ speed: 240 });
 
-    const onImpact = projectileOptions?.["onImpact"];
+    const onImpact = projectileOptions?.onImpact;
     expect(onImpact).toBeTypeOf("function");
-    (onImpact as Function)({ target }, { defaultEffect });
+    (onImpact as (
+      context: { target?: unknown },
+      action: { defaultEffect: typeof defaultEffect },
+    ) => void)({ target }, { defaultEffect });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(defaultEffect).toHaveBeenCalledWith(target);
     expect(variables.get("impact")).toBe(1);
+  });
+
+  test("keeps physics-only projectile impacts targetless", async () => {
+    const map = {};
+    const variables = new Map<string, unknown>();
+    const player = {
+      id: "hero",
+      getCurrentMap: () => map,
+      getVariable: (id: string) => variables.get(id),
+      setVariable: (id: string, value: unknown) => variables.set(id, value),
+      syncChanges: vi.fn(),
+    };
+    const selectedTarget = {
+      id: "slime-behind-wall",
+      hp: 5,
+      isEvent: () => true,
+    };
+    const defaultEffect = vi.fn((impactTarget: unknown = selectedTarget) => {
+      if (impactTarget === selectedTarget) selectedTarget.hp = 0;
+      return impactTarget ? [{ defeated: true }] : undefined;
+    });
+    let projectileOptions: Record<string, unknown> | undefined;
+    const onUse = createStudioSkillOnUse("wall-blocked-fireball", [
+      workflow("impact", "impact"),
+      workflow("defeat", "defeat"),
+    ]);
+
+    await onUse?.(player as any, selectedTarget, {
+      action: { mode: "projectile" },
+      defaultEffect,
+      projectile: (options) => {
+        projectileOptions = options;
+      },
+    });
+
+    const onImpact = projectileOptions?.onImpact;
+    expect(onImpact).toBeTypeOf("function");
+    (onImpact as (
+      context: { target?: unknown },
+      action: { defaultEffect: typeof defaultEffect },
+    ) => void)({ target: undefined }, { defaultEffect });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(defaultEffect).toHaveBeenCalledOnce();
+    expect(defaultEffect).toHaveBeenCalledWith(null);
+    expect(selectedTarget.hp).toBe(5);
+    expect(variables.has("impact")).toBe(false);
+    expect(variables.has("defeat")).toBe(false);
   });
 
   test("keeps compatibility with Common Event workflow references", async () => {

@@ -48,7 +48,9 @@ const createEvent = () => ({
   moveTo: vi.fn(),
   teleport: vi.fn(async () => undefined),
   speed: 4,
-  getCurrentMap: vi.fn(() => ({})),
+  getCurrentMap: vi.fn(() => ({
+    getBody: vi.fn(() => ({})),
+  })),
   remove: vi.fn(),
   x: vi.fn(() => 0),
   y: vi.fn(() => 0),
@@ -660,6 +662,322 @@ describe("BattleAi behavior tree", () => {
     ai.destroy();
   });
 
+  test("retries a once-wrapped movement after authoritative cooldown rejection", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = createEvent();
+    const ai = new BattleAi(event as any, {
+      behaviorTree: once("advance", moveToPoint({ x: 64, y: 0 })),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    expect((ai as any).requestMoveTo({ x: 8, y: 0 })).toBe(true);
+    event.moveTo.mockClear();
+
+    expect((ai as any).applyCustomBehavior(1_000)).toBe(false);
+    expect(event.moveTo).not.toHaveBeenCalled();
+
+    vi.setSystemTime(1_399);
+    expect((ai as any).applyCustomBehavior(1_399)).toBe(false);
+    expect(event.moveTo).not.toHaveBeenCalled();
+
+    vi.setSystemTime(1_400);
+    expect((ai as any).applyCustomBehavior(1_400)).toBe(true);
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 64, y: 0 });
+
+    vi.setSystemTime(1_800);
+    expect((ai as any).applyCustomBehavior(1_800)).toBe(false);
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    ai.destroy();
+  });
+
+  test("acknowledges accepted non-consuming once-wrapped intents", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = createEvent();
+    const ai = new BattleAi(event as any, {
+      behaviorTree: once("non-consuming-advance", {
+        ...moveToPoint({ x: 64, y: 0 }),
+        consume: false,
+      }),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect((ai as any).applyCustomBehavior(1_000)).toBe(false);
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    vi.setSystemTime(1_500);
+    expect((ai as any).applyCustomBehavior(1_500)).toBe(false);
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    ai.destroy();
+  });
+
+  test("retries a once-wrapped movement when the actor has no physics body", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = createEvent();
+    event.getCurrentMap.mockReturnValue({});
+    const ai = new BattleAi(event as any, {
+      moveToCooldown: 0,
+      behaviorTree: once("body-gated-movement", moveToPoint({ x: 64, y: 0 })),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect((ai as any).applyCustomBehavior(1_000)).toBe(false);
+    expect(event.moveTo).not.toHaveBeenCalled();
+
+    event.getCurrentMap.mockReturnValue({ getBody: () => ({}) });
+    expect((ai as any).applyCustomBehavior(1_001)).toBe(true);
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 64, y: 0 });
+    expect((ai as any).applyCustomBehavior(1_002)).toBe(false);
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    ai.destroy();
+  });
+
+  test("retries a once-wrapped movement after a physics-body dispatch race", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.moveTo.mockImplementationOnce(() => {
+      throw new Error("unable to resolve entity monster-1");
+    });
+    const ai = new BattleAi(event as any, {
+      moveToCooldown: 0,
+      behaviorTree: once("body-race-movement", moveToPoint({ x: 64, y: 0 })),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect((ai as any).applyCustomBehavior(1_000)).toBe(false);
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    expect((ai as any).applyCustomBehavior(1_001)).toBe(true);
+    expect(event.moveTo).toHaveBeenCalledTimes(2);
+    expect((ai as any).applyCustomBehavior(1_002)).toBe(false);
+    ai.destroy();
+  });
+
+  test("retries when RPGJS silently loses the body inside moveTo", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    let attached = true;
+    let bodyChecks = 0;
+    let movesStarted = 0;
+    const map = {
+      getBody: vi.fn(() => {
+        bodyChecks++;
+        return attached ? {} : null;
+      }),
+    };
+    event.getCurrentMap.mockReturnValue(map);
+    event.moveTo.mockImplementationOnce(() => {
+      attached = false;
+      if (map.getBody()) movesStarted++;
+    });
+    event.moveTo.mockImplementation(() => {
+      if (map.getBody()) movesStarted++;
+    });
+    const ai = new BattleAi(event as any, {
+      moveToCooldown: 0,
+      behaviorTree: once("silent-body-race", moveToPoint({ x: 64, y: 0 })),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect((ai as any).applyCustomBehavior(1_000)).toBe(false);
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    expect(movesStarted).toBe(0);
+    expect(bodyChecks).toBe(3);
+
+    attached = true;
+    expect((ai as any).applyCustomBehavior(1_001)).toBe(true);
+    expect(event.moveTo).toHaveBeenCalledTimes(2);
+    expect(movesStarted).toBe(1);
+    expect((ai as any).applyCustomBehavior(1_002)).toBe(false);
+    ai.destroy();
+  });
+
+  test("propagates unrelated movement errors without losing the receipt", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.moveTo.mockImplementationOnce(() => {
+      throw new Error("project movement callback failed");
+    });
+    const ai = new BattleAi(event as any, {
+      moveToCooldown: 0,
+      behaviorTree: once("movement-error", moveToPoint({ x: 64, y: 0 })),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect(() => (ai as any).applyCustomBehavior(1_000)).toThrow(
+      "project movement callback failed"
+    );
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(0);
+    expect((ai as any).applyCustomBehavior(1_001)).toBe(true);
+    expect(event.moveTo).toHaveBeenCalledTimes(2);
+    expect((ai as any).applyCustomBehavior(1_002)).toBe(false);
+    ai.destroy();
+  });
+
+  test("settles a once-wrapped teleport from its asynchronous result", async () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    const resolvers: Array<(value: boolean | undefined) => void> = [];
+    event.teleport.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        })
+    );
+    const ai = new BattleAi(event as any, {
+      behaviorTree: once("authoritative-teleport", {
+        ...teleportTo({ x: 80, y: 90 }),
+        consume: false,
+      }),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect((ai as any).applyCustomBehavior(1_000)).toBe(false);
+    expect(event.teleport).toHaveBeenCalledOnce();
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(1);
+    expect((ai as any).applyCustomBehavior(1_001)).toBe(false);
+    expect(event.teleport).toHaveBeenCalledOnce();
+
+    resolvers[0](false);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(0);
+    expect((ai as any).applyCustomBehavior(1_002)).toBe(false);
+    expect(event.teleport).toHaveBeenCalledTimes(2);
+
+    resolvers[1](undefined);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(0);
+    expect((ai as any).applyCustomBehavior(1_003)).toBe(false);
+    expect(event.teleport).toHaveBeenCalledTimes(2);
+    ai.destroy();
+  });
+
+  test("retries a once-wrapped teleport after an asynchronous rejection", async () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    let rejectTeleport: ((reason?: unknown) => void) | undefined;
+    event.teleport.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectTeleport = reject;
+        })
+    );
+    const ai = new BattleAi(event as any, {
+      behaviorTree: once("rejected-teleport", {
+        ...teleportTo({ x: 80, y: 90 }),
+        consume: false,
+      }),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect((ai as any).applyCustomBehavior(1_000)).toBe(false);
+    rejectTeleport?.(new Error("physics refused teleport"));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect((ai as any).applyCustomBehavior(1_001)).toBe(false);
+    expect(event.teleport).toHaveBeenCalledTimes(2);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect((ai as any).applyCustomBehavior(1_002)).toBe(false);
+    ai.destroy();
+  });
+
+  test("preflights the map before attempting a once-wrapped teleport", async () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    event.getCurrentMap.mockReturnValue(null);
+    const ai = new BattleAi(event as any, {
+      behaviorTree: once("map-gated-teleport", teleportTo({ x: 80, y: 90 })),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect((ai as any).applyCustomBehavior(1_000)).toBe(false);
+    expect(event.teleport).not.toHaveBeenCalled();
+
+    event.getCurrentMap.mockReturnValue({ getBody: () => ({}) });
+    expect((ai as any).applyCustomBehavior(1_001)).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect((ai as any).applyCustomBehavior(1_002)).toBe(false);
+    expect(event.teleport).toHaveBeenCalledOnce();
+    ai.destroy();
+  });
+
+  test("cancels an in-flight teleport receipt when its BattleAi is destroyed", async () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    let resolveTeleport: ((value: boolean) => void) | undefined;
+    event.teleport.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveTeleport = resolve;
+        })
+    );
+    const ai = new BattleAi(event as any, {
+      behaviorTree: once("destroyed-teleport", teleportTo({ x: 80, y: 90 })),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect((ai as any).applyCustomBehavior(1_000)).toBe(true);
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(1);
+    ai.destroy();
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(0);
+    resolveTeleport?.(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(getActionBattleAiPendingExecutionCountForTests()).toBe(0);
+  });
+
+  test("abandons an async receipt when teleport destroys its BattleAi", async () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    let ai: BattleAi;
+    event.teleport.mockImplementation(() => {
+      ai.destroy();
+      return Promise.resolve(undefined);
+    });
+    ai = new BattleAi(event as any, {
+      behaviorTree: once(
+        "destroyed-during-teleport",
+        teleportTo({ x: 80, y: 90 })
+      ),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect((ai as any).applyCustomBehavior(1_000)).toBe(false);
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(0);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(getActionBattleAiPendingExecutionCountForTests()).toBe(0);
+  });
+
   test("rejects AI attack intents while defeated and resumes after revival", () => {
     vi.useFakeTimers();
     const event = createEvent();
@@ -1129,6 +1447,27 @@ describe("BattleAi behavior tree", () => {
     ai.onDetectInShape(player as any, {});
 
     expect((ai as any).applyCustomBehavior(1000)).toBe(false);
+    expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(0);
+    expect(getActionBattleAiPendingExecutionCountForTests()).toBe(0);
+  });
+
+  test("destroy abandons a synchronously accepted receipt", () => {
+    vi.useFakeTimers();
+    const event = createEvent();
+    let ai: BattleAi;
+    ai = new BattleAi(event as any, {
+      behaviorTree: once(
+        "destroyed-during-run",
+        run(() => {
+          ai.destroy();
+          return true;
+        })
+      ),
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect((ai as any).applyCustomBehavior(1_000)).toBe(false);
     expect(getActionBattleAiPendingExecutionCountForTests(ai)).toBe(0);
     expect(getActionBattleAiPendingExecutionCountForTests()).toBe(0);
   });
@@ -2053,6 +2392,7 @@ describe("BattleAi behavior tree", () => {
     event.getCurrentMap.mockReturnValue({
       getPlayers: () => [],
       getEvents: () => [event],
+      getBody: () => ({}),
     });
     const ai = new BattleAi(event as any, {
       attackSkill: skill,
@@ -2084,6 +2424,116 @@ describe("BattleAi behavior tree", () => {
     expect(onUse).toHaveBeenCalledOnce();
     expect(event.sp).toBe(8);
     expect(event.moveTo).toHaveBeenCalledWith({ x: 32, y: 48 });
+    ai.destroy();
+  });
+
+  test("retries the next patrol waypoint after a sub-cooldown arrival", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = createEvent();
+    const ai = new BattleAi(event as any, {
+      patrolWaypoints: [
+        { x: 0, y: 0 },
+        { x: 64, y: 0 },
+      ],
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 0, y: 0 });
+    event.moveTo.mockClear();
+
+    vi.setSystemTime(1_100);
+    (ai as any).updateIdleBehavior();
+
+    expect((ai as any).currentPatrolIndex).toBe(1);
+    expect(event.moveTo).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(299);
+    expect(event.moveTo).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 64, y: 0 });
+    ai.destroy();
+  });
+
+  test("starts patrol after a late constructor-time physics-body attachment", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = createEvent();
+    event.getCurrentMap.mockReturnValue({});
+    const ai = new BattleAi(event as any, {
+      moveToCooldown: 0,
+      patrolWaypoints: [{ x: 32, y: 48 }],
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+
+    expect(event.moveTo).not.toHaveBeenCalled();
+    event.getCurrentMap.mockReturnValue({ getBody: () => ({}) });
+    vi.advanceTimersByTime(99);
+    expect(event.moveTo).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 32, y: 48 });
+    ai.destroy();
+  });
+
+  test("retries a waypoint transition after its physics body reattaches", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = createEvent();
+    const ai = new BattleAi(event as any, {
+      patrolWaypoints: [
+        { x: 0, y: 0 },
+        { x: 64, y: 0 },
+      ],
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 0, y: 0 });
+    event.moveTo.mockClear();
+
+    vi.setSystemTime(1_400);
+    event.getCurrentMap.mockReturnValue({});
+    (ai as any).updateIdleBehavior();
+    expect((ai as any).currentPatrolIndex).toBe(1);
+    expect(event.moveTo).not.toHaveBeenCalled();
+
+    event.getCurrentMap.mockReturnValue({ getBody: () => ({}) });
+    vi.advanceTimersByTime(99);
+    expect(event.moveTo).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 64, y: 0 });
+    ai.destroy();
+  });
+
+  test("cancels the body-retry timer when the behavior loop starts patrol", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = createEvent();
+    let bodyAttached = false;
+    event.getCurrentMap.mockReturnValue({
+      getBody: () => (bodyAttached ? {} : null),
+      getPlayers: () => [],
+      getEvents: () => [event],
+    });
+    const ai = new BattleAi(event as any, {
+      patrolWaypoints: [
+        { x: 0, y: 0 },
+        { x: 32, y: 0 },
+      ],
+    });
+    expect(event.moveTo).not.toHaveBeenCalled();
+
+    bodyAttached = true;
+    vi.advanceTimersByTime(100);
+    expect(event.moveTo).toHaveBeenCalledOnce();
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 32, y: 0 });
+    vi.advanceTimersByTime(500);
+
+    expect(event.moveTo).toHaveBeenCalledOnce();
     ai.destroy();
   });
 
@@ -2486,7 +2936,10 @@ describe("BattleAi behavior tree", () => {
     vi.useFakeTimers();
     const clientVisual = vi.fn();
     const event = createEvent();
-    event.getCurrentMap.mockReturnValue({ clientVisual });
+    event.getCurrentMap.mockReturnValue({
+      clientVisual,
+      getBody: () => ({}),
+    });
     event.attachShape.mockReturnValue({ id: "vision_monster-1" });
     const customRun = vi.fn();
     const customAction = vi.fn();

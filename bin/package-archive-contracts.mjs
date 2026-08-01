@@ -141,6 +141,13 @@ const assertPortableImports = (directory, packageName) => {
 	});
 };
 
+const getPortableArchiveMemberKey = (entry) =>
+	// ECMAScript case conversion is locale-independent. Uppercase followed by
+	// lowercase conservatively folds expansions and contextual lowercase forms
+	// that a lowercase-only key can leave distinct. Normalize both before and
+	// after folding so canonically equivalent Unicode spellings share one key.
+	entry.normalize("NFC").toUpperCase().toLowerCase().normalize("NFC");
+
 const assertPortableEntries = (archivePath, packageName) => {
 	const listArchive = (arguments_) =>
 		execFileSync("tar", arguments_, {
@@ -157,10 +164,15 @@ const assertPortableEntries = (archivePath, packageName) => {
 			`${packageName} archive listing is ambiguous and cannot be extracted safely`,
 		);
 	}
-	const seenEntries = new Set();
+	// Retain exact POSIX member identity while also rejecting aliases that common
+	// case-insensitive or Unicode-normalizing consumer filesystems can collapse.
+	const canonicalEntries = new Map();
+	const portableEntries = new Map();
 	for (const [index, entry] of entries.entries()) {
 		const entryType = verboseEntries[index][0];
-		const segments = entry.split("/");
+		const canonicalEntry =
+			entryType === "d" && entry.endsWith("/") ? entry.slice(0, -1) : entry;
+		const segments = canonicalEntry.split("/");
 		const containsPnpmLayout = segments.some(
 			(segment, segmentIndex) =>
 				segment === "node_modules" && segments[segmentIndex + 1] === ".pnpm",
@@ -171,9 +183,11 @@ const assertPortableEntries = (archivePath, packageName) => {
 			);
 		}
 		if (
-			seenEntries.has(entry) ||
+			segments.includes("") ||
 			entry.includes("\\") ||
-			!entry.startsWith("package/") ||
+			(canonicalEntry !== "package" &&
+				!canonicalEntry.startsWith("package/")) ||
+			(entryType !== "d" && canonicalEntry === "package") ||
 			segments.includes("..") ||
 			segments.includes(".") ||
 			containsPnpmLayout ||
@@ -184,7 +198,21 @@ const assertPortableEntries = (archivePath, packageName) => {
 				`${packageName} archive contains non-portable entry ${entry}`,
 			);
 		}
-		seenEntries.add(entry);
+		const previousEntry = canonicalEntries.get(canonicalEntry);
+		if (previousEntry !== undefined) {
+			throw new Error(
+				`${packageName} archive contains canonical member collision ${previousEntry} and ${entry}`,
+			);
+		}
+		canonicalEntries.set(canonicalEntry, entry);
+		const portableEntry = getPortableArchiveMemberKey(canonicalEntry);
+		const previousPortableEntry = portableEntries.get(portableEntry);
+		if (previousPortableEntry !== undefined) {
+			throw new Error(
+				`${packageName} archive contains portable member collision ${previousPortableEntry} and ${entry}`,
+			);
+		}
+		portableEntries.set(portableEntry, entry);
 	}
 };
 
