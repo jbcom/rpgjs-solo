@@ -44,6 +44,10 @@ import { EventComponentResolverRegistry, type EventComponentResolver } from "./G
 import { RpgClientBuiltinI18n } from "./i18n";
 import type { CameraFollowSmoothMove } from "./services/cameraFollow";
 import { RpgMusicManager } from "./Game/MusicManager";
+import {
+  ClientInputLockManager,
+  type ClientInputLockRelease,
+} from "./services/inputLock";
 export type {
   CameraFollowEase,
   CameraFollowSmoothMove,
@@ -165,6 +169,7 @@ export class RpgClientEngine<T = any> {
   public sceneComponent: any;
   public sceneMapComponent: any = BuiltinSceneMap;
   stopProcessingInput = false;
+  private readonly inputLocks = new ClientInputLockManager();
   width = signal("100%");
   height = signal("100%");
   spritesheets: Map<string | number, any> = new Map();
@@ -1950,7 +1955,7 @@ export class RpgClientEngine<T = any> {
   }
 
   async processInput({ input }: { input: RpgMovementInput }) {
-    if (this.stopProcessingInput) return;
+    if (this.isInputProcessingStopped()) return;
 
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
     const canMove =
@@ -2060,7 +2065,7 @@ export class RpgClientEngine<T = any> {
   processAction(action: RpgActionName, data?: any): void;
   processAction(action: RpgActionInput): void;
   processAction(action: RpgActionName | RpgActionInput, data?: any): void {
-    if (this.stopProcessingInput) return;
+    if (this.isInputProcessingStopped()) return;
     const currentPlayer = this.sceneMap.getCurrentPlayer() as any;
     const canMove =
       !currentPlayer ||
@@ -2080,6 +2085,21 @@ export class RpgClientEngine<T = any> {
 
   get PIXI() {
     return PIXI
+  }
+
+  /**
+   * Prevent normal movement and action processing until this owner releases.
+   * Independent overlays can overlap without restoring input prematurely.
+   */
+  acquireInputLock(owner?: object): ClientInputLockRelease {
+    const release = this.inputLocks.acquire(owner);
+    this.interruptCurrentPlayerMovement?.();
+    return release;
+  }
+
+  /** Return whether legacy state or any scoped owner currently blocks input. */
+  isInputProcessingStopped(): boolean {
+    return this.stopProcessingInput || this.inputLocks.active;
   }
 
   get socket() {
@@ -2814,6 +2834,7 @@ export class RpgClientEngine<T = any> {
 
       // Reset state
       this.stopProcessingInput = false;
+      this.inputLocks.reset();
       this.lastInputTime = 0;
       this.inputFrameCounter = 0;
       this.frameOffset = 0;

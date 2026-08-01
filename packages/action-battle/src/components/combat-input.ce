@@ -1,16 +1,18 @@
 <Container controls={controls} />
 
 <script>
-  import { computed, effect, signal } from "canvasengine";
+  import { computed, effect, mount, signal } from "canvasengine";
   import { inject, RpgClientEngine } from "@rpgjs/client";
   import { getKeyboardControlBind } from "@rpgjs/client";
   import {
     actionBattleCombatOptions,
     actionBattleTargetingState,
+    actionBattleUiOptions,
     confirmActionBattleTarget,
     moveTargetingOffset,
     stopTargeting,
   } from "../ui/state";
+  import { createActionBattleTargetingInputController } from "../ui/targeting-controls";
 
   const { object } = defineProps();
   const engine = inject(RpgClientEngine);
@@ -39,28 +41,16 @@
         : sprite?.direction ?? "down";
 
   const keyboardControls = engine.globalConfig.keyboardControls;
-  const getPlayerTile = () => {
-    const player = engine.scene.getCurrentPlayer();
-    if (!player) return null;
-    const hitbox = player.hitbox?.() || { w: 32, h: 32 };
-    const tileWidth = hitbox.w || 32;
-    const tileHeight = hitbox.h || 32;
-    return {
-      x: Math.floor((player.x() + hitbox.w / 2) / tileWidth),
-      y: Math.floor((player.y() + hitbox.h / 2) / tileHeight),
-    };
-  };
-
-  const confirmTargeting = () => {
-    const state = actionBattleTargetingState();
-    if (!state.skill) return;
-    const origin = getPlayerTile();
-    if (!origin) return;
-    confirmActionBattleTarget({
-      x: origin.x + state.offset.x,
-      y: origin.y + state.offset.y,
-    });
-  };
+  const targetingController = createActionBattleTargetingInputController({
+    engine,
+    isCurrentPlayer: () => isCurrentPlayer(),
+    getState: () => actionBattleTargetingState(),
+    getPlayer: () => engine.scene.getCurrentPlayer(),
+    getTileSizeOverride: () => actionBattleUiOptions().targeting?.tileSize,
+    move: moveTargetingOffset,
+    confirm: confirmActionBattleTarget,
+    cancel: stopTargeting,
+  });
 
   const buildControls = () => {
     const chargedBind = chargedOptions()?.control ?? "e";
@@ -101,7 +91,7 @@
         throttle: 150,
         bind: keyboardControls.left,
         keyDown() {
-          if (actionBattleTargetingState().active) moveTargetingOffset(-1, 0);
+          targetingController.move(-1, 0);
         },
       },
       targetRight: {
@@ -109,7 +99,7 @@
         throttle: 150,
         bind: keyboardControls.right,
         keyDown() {
-          if (actionBattleTargetingState().active) moveTargetingOffset(1, 0);
+          targetingController.move(1, 0);
         },
       },
       targetUp: {
@@ -117,7 +107,7 @@
         throttle: 150,
         bind: keyboardControls.up,
         keyDown() {
-          if (actionBattleTargetingState().active) moveTargetingOffset(0, -1);
+          targetingController.move(0, -1);
         },
       },
       targetDown: {
@@ -125,19 +115,19 @@
         throttle: 150,
         bind: keyboardControls.down,
         keyDown() {
-          if (actionBattleTargetingState().active) moveTargetingOffset(0, 1);
+          targetingController.move(0, 1);
         },
       },
       targetConfirm: {
         bind: getKeyboardControlBind(keyboardControls.action),
         keyDown() {
-          if (actionBattleTargetingState().active) confirmTargeting();
+          targetingController.confirm();
         },
       },
       targetCancel: {
         bind: keyboardControls.escape,
         keyDown() {
-          if (actionBattleTargetingState().active) stopTargeting();
+          targetingController.cancel();
         },
       },
       gamepad: {
@@ -151,4 +141,12 @@
   effect(() => {
     controls.set(buildControls());
   });
+
+  effect(() => {
+    actionBattleTargetingState();
+    isCurrentPlayer();
+    targetingController.sync();
+  });
+
+  mount(() => () => targetingController.destroy());
 </script>

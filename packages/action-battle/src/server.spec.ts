@@ -200,6 +200,68 @@ describe("action battle player visuals", () => {
     expect(player.useHotbarSlot).not.toHaveBeenCalled();
   });
 
+  test("validates manual targets with the configured client tile geometry", () => {
+    const onUse = vi.fn();
+    const skill = {
+      id: "cross-cut",
+      _type: "skill",
+      spCost: 0,
+      hitRate: 1,
+      targeting: { range: 1, aoeMask: ["#"] },
+      action: { mode: "melee", target: "enemy" },
+      onUse,
+    };
+    const enemy = {
+      id: "enemy",
+      hp: 10,
+      x: () => 26,
+      y: () => 24,
+      hitbox: () => ({ w: 8, h: 8 }),
+      battleAi: {
+        getFaction: () => "enemies",
+      },
+    };
+    const map = {
+      tileWidth: 32,
+      tileHeight: 32,
+      getEvents: () => [enemy],
+      getPlayers: () => [],
+    };
+    const player = {
+      id: "hero",
+      hp: 10,
+      sp: 10,
+      x: () => 16,
+      y: () => 24,
+      hitbox: () => ({ w: 8, h: 8 }),
+      skills: () => [{ id: skill.id }],
+      getSkill: (id: string) => id === skill.id ? skill : null,
+      databaseById: (id: string) => id === skill.id ? skill : null,
+      hasEffect: () => false,
+      clientVisual: vi.fn(),
+      getGui: () => null,
+      getCurrentMap: () => map,
+    };
+    const server = createActionBattleServer({
+      ui: {
+        targeting: {
+          tileSize: { width: 10, height: 14 },
+        },
+      },
+    });
+
+    (server.player?.onInput as any)(player, {
+      action: ACTION_BATTLE_SKILL_USE,
+      data: { id: skill.id, target: { x: 3, y: 2 } },
+    });
+
+    expect(onUse).toHaveBeenCalledWith(
+      player,
+      [enemy],
+      expect.objectContaining({ target: [enemy] }),
+    );
+  });
+
   test("opens or hides the hotbar from the per-player resolver on map changes", () => {
     const player = {
       initializeHotbar: vi.fn(),

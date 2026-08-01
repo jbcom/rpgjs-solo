@@ -1351,6 +1351,7 @@
       "packages/client/dist/services/actionInput.d.ts",
       "packages/client/dist/services/cameraFollow.d.ts",
       "packages/client/dist/services/hotbar.d.ts",
+      "packages/client/dist/services/inputLock.d.ts",
       "packages/client/dist/services/interactions.d.ts",
       "packages/client/dist/services/keyboardControls.d.ts",
       "packages/client/dist/services/loadMap.d.ts",

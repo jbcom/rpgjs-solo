@@ -44,7 +44,11 @@
   import { inject } from "@rpgjs/client";
   import { RpgClientEngine } from "@rpgjs/client";
   import { actionBattleTargetingState, actionBattleUiOptions } from "../ui/state";
-  import { parseAoeMask } from "../targeting";
+  import {
+    getActionBattleEntityTile,
+    getActionBattleTileSize,
+    parseAoeMask,
+  } from "../targeting";
 
   const { object } = defineProps();
   const engine = inject(RpgClientEngine);
@@ -66,18 +70,10 @@
 
   const getTileSize = () => {
     const uiTile = uiOptions().targeting?.tileSize;
-    if (uiTile?.width && uiTile?.height) return uiTile;
-    const hitbox = object.hitbox?.() || { w: 32, h: 32 };
-    return { width: hitbox.w || 32, height: hitbox.h || 32 };
+    return getActionBattleTileSize(engine.sceneMap, uiTile);
   };
 
-  const getOriginTile = () => {
-    const hitbox = object.hitbox?.() || { w: 32, h: 32 };
-    const tileSize = getTileSize();
-    const x = Math.floor((object.x() + hitbox.w / 2) / tileSize.width);
-    const y = Math.floor((object.y() + hitbox.h / 2) / tileSize.height);
-    return { x, y };
-  };
+  const getOriginTile = () => getActionBattleEntityTile(object, getTileSize());
 
   const toColor = (value, fallback) => {
     if (typeof value === "number") return value;

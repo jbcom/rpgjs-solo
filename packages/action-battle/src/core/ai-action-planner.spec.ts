@@ -119,6 +119,7 @@ describe("Action Battle AI skill planner", () => {
       id: "heal",
       skillType: "healing",
       action: { mode: "instant", target: "self" },
+      onUse: () => {},
     };
     const lowHealth = evaluateActionBattleAiSkill({
       attacker: attacker as any,
@@ -142,5 +143,28 @@ describe("Action Battle AI skill planner", () => {
     expect(lowHealth.target).toBe(attacker);
     expect(lowHealth.rejection).toBeUndefined();
     expect(healthy.rejection).toBe("notUseful");
+  });
+
+  test("rejects self healing without an authored healing effect", () => {
+    const map = {};
+    const attacker = enemy(map, 5);
+    const target = player("hero", 20, 0);
+    const evaluation = evaluateActionBattleAiSkill({
+      attacker: attacker as any,
+      target: target as any,
+      skill: {
+        id: "empty-heal",
+        skillType: "healing",
+        power: 20,
+        action: { mode: "instant", target: "self" },
+      },
+      now: 1000,
+      readyAt: 0,
+      attackRange: 50,
+      hpPercent: 0.25,
+    });
+
+    expect(evaluation.target).toBe(attacker);
+    expect(evaluation.rejection).toBe("missingEffect");
   });
 });

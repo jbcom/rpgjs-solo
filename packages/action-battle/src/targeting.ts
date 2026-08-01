@@ -58,10 +58,30 @@ export const parseAoeMask = (mask: ActionBattleAoeMask | undefined): ParsedAoeMa
 export const manhattanDistance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
-export const getActionBattleTileSize = (map: any): ActionBattleTileSize => ({
-  width: Number(map?.tileWidth ?? 32),
-  height: Number(map?.tileHeight ?? 32),
-});
+const positiveDimension = (value: unknown): number | undefined => {
+  const resolved = typeof value === "function" ? value() : value;
+  const number = Number(resolved);
+  return Number.isFinite(number) && number > 0 ? number : undefined;
+};
+
+export const getActionBattleTileSize = (
+  map: any,
+  override?: Partial<ActionBattleTileSize>,
+): ActionBattleTileSize => {
+  const data = typeof map?.data === "function" ? map.data() : map?.data;
+  return {
+    width:
+      positiveDimension(override?.width)
+      ?? positiveDimension(map?.tileWidth)
+      ?? positiveDimension(data?.tileWidth ?? data?.parsedMap?.tilewidth)
+      ?? 32,
+    height:
+      positiveDimension(override?.height)
+      ?? positiveDimension(map?.tileHeight)
+      ?? positiveDimension(data?.tileHeight ?? data?.parsedMap?.tileheight)
+      ?? 32,
+  };
+};
 
 export const getActionBattleEntityTile = (
   entity: any,

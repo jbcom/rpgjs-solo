@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
   directionToActionBattleTarget,
+  getActionBattleEntityTile,
+  getActionBattleTileSize,
   parseAoeMask,
   resolveActionBattleAoeCells,
   resolveActionBattleAoeTarget,
@@ -78,5 +80,28 @@ describe("action battle soft targeting", () => {
         ["#"]
       )
     ).toBeNull();
+  });
+
+  test("derives entity coordinates from map tiles rather than hitbox size", () => {
+    const tileSize = getActionBattleTileSize({
+      tileWidth: 16,
+      tileHeight: 24,
+    });
+    const target = {
+      x: () => 16,
+      y: () => 24,
+      hitbox: () => ({ w: 8, h: 8 }),
+    };
+
+    expect(getActionBattleEntityTile(target, tileSize)).toEqual({ x: 1, y: 1 });
+  });
+
+  test("honors one shared targeting tile override on client and server", () => {
+    expect(
+      getActionBattleTileSize(
+        { tileWidth: 32, tileHeight: 32 },
+        { width: 10, height: 14 },
+      ),
+    ).toEqual({ width: 10, height: 14 });
   });
 });

@@ -5,6 +5,7 @@ import {
   startGame,
   type GuiRegistration,
   type GuiRenderer,
+  type RpgClientEngine,
   type RpgMusicManager,
   type RpgMusicTransitionOptions,
 } from "./index";
@@ -47,5 +48,14 @@ describe("client public API types", () => {
       options?: RpgMusicTransitionOptions,
       owner?: object,
     ) => void>();
+  });
+
+  test("scoped input locks expose an idempotent release boundary", () => {
+    expectTypeOf<RpgClientEngine["acquireInputLock"]>().returns.toEqualTypeOf<
+      () => void
+    >();
+    expectTypeOf<
+      RpgClientEngine["isInputProcessingStopped"]
+    >().returns.toEqualTypeOf<boolean>();
   });
 });

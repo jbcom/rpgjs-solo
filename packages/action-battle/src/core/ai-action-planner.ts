@@ -8,6 +8,7 @@ import {
   canActionBattleUseTarget,
   getActionBattleActionConfig,
   getActionBattleSkillTargetingConfig,
+  hasActionBattleUseHook,
 } from "./action-use";
 import type {
   ActionBattleActionConfig,
@@ -23,6 +24,7 @@ export type ActionBattleAiActionRejectionReason =
   | "insufficientSp"
   | "outOfRange"
   | "invalidTarget"
+  | "missingEffect"
   | "maskMiss"
   | "notUseful";
 
@@ -159,6 +161,15 @@ export const evaluateActionBattleAiSkill = (input: {
         preferredRange: 0,
         target: attacker,
         rejection: "invalidTarget",
+      };
+    }
+    if (!hasActionBattleUseHook(skill)) {
+      return {
+        ...base,
+        range: 0,
+        preferredRange: 0,
+        target: attacker,
+        rejection: "missingEffect",
       };
     }
     if (hpPercent === null || hpPercent > 0.6) {

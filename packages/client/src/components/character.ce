@@ -363,7 +363,10 @@
 
   const particleSettings = client.particleSettings;
 
-  const canControls = () => isMe() && getCanMoveValue(sprite)
+  const canControls = () =>
+    isMe()
+    && getCanMoveValue(sprite)
+    && !client.isInputProcessingStopped()
   const keyboardControls = client.globalConfig.keyboardControls;
   const activeDirectionKeys = new Map();
   const activeControlDirections = new Map();

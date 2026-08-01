@@ -9,6 +9,7 @@ import { BattleAi, HitResult, ApplyHitHooks, DEFAULT_KNOCKBACK } from "./ai.serv
 import {
   ActionBattleHotbarSkill,
   ActionBattleOptions,
+  ActionBattleUiTargetingOptions,
 } from "./types";
 import { normalizeActionBattleOptions, setActionBattleOptions } from "./config";
 import {
@@ -667,6 +668,14 @@ const getPlayerCombatState = (player: RpgPlayer): PlayerCombatRuntimeState => {
 const objectOption = <T extends object>(value: boolean | T | undefined): T | undefined =>
   value && typeof value === "object" ? value : undefined;
 
+const getPlayerTargetingTileSize = (
+  map: any,
+  options: ActionBattleOptions,
+) => getActionBattleTileSize(
+  map,
+  objectOption<ActionBattleUiTargetingOptions>(options.ui?.targeting)?.tileSize,
+);
+
 const resolvePlayerComboProfile = (
   player: RpgPlayer,
   options: ActionBattleOptions,
@@ -1034,7 +1043,7 @@ const handleActionBattleSkillUse = (
       const softTargeting = objectOption(
         options.combat?.player?.softTargeting
       );
-      const tileSize = getActionBattleTileSize(map);
+      const tileSize = getPlayerTargetingTileSize(map, options);
       const softTarget = resolveActionBattleSoftTarget(
         player,
         candidates,
@@ -1069,7 +1078,7 @@ const handleActionBattleSkillUse = (
     }
   }
 
-  const tileSize = getActionBattleTileSize(map);
+  const tileSize = getPlayerTargetingTileSize(map, options);
   const origin = getActionBattleEntityTile(player, tileSize);
   const targetTile = { x: target.x, y: target.y };
 

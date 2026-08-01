@@ -77,6 +77,9 @@ const getUseHook = (usable: any) => {
     : undefined;
 };
 
+export const hasActionBattleUseHook = (usable: any): boolean =>
+  !!getUseHook(usable);
+
 const resolveUsableField = (usable: any, key: string) => {
   for (const source of [
     usable,
