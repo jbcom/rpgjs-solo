@@ -45,8 +45,10 @@ export interface SoloEntityDefinition {
 }
 
 /**
- * The one gameplay-authoritative entity object. The runtime mutates this object
- * in place so renderers, UI, combat, AI, and saves all observe the same identity.
+ * A gameplay-authoritative entity object for the current committed graph.
+ * Ordinary direct dispatch and stepping mutate that graph in place. An atomic
+ * candidate commit replaces the graph, so identity-caching consumers must
+ * reacquire entities by id or rebind from the candidate publication.
  */
 export interface SoloEntityState {
   id: string
@@ -176,6 +178,14 @@ export interface SoloActionContext {
   source: SoloCommandSource
 }
 
+export interface SoloCandidateSafeRegistration {
+  /**
+   * Explicitly attest that the handler reads and mutates candidate-owned input
+   * only and performs no persistence, UI, audio, telemetry, or other egress.
+   */
+  candidateSafe?: boolean
+}
+
 export type SoloActionHandler = (context: SoloActionContext) => void | SoloCommandRejection
 export type SoloCommandInterceptor = (
   command: SoloCommand,
@@ -183,3 +193,60 @@ export type SoloCommandInterceptor = (
   source: SoloCommandSource
 ) => void | SoloCommandRejection
 export type SoloRuntimeListener = (event: SoloRuntimeEvent) => void
+
+export type SoloDeepReadonly<T> =
+  T extends SoloJsonPrimitive ? T
+    : T extends readonly (infer TValue)[] ? readonly SoloDeepReadonly<TValue>[]
+      : T extends object ? { readonly [TKey in keyof T]: SoloDeepReadonly<T[TKey]> }
+        : never
+
+/** A game-owned event staged beside one isolated Rules candidate tick. */
+export interface SoloDomainEvent<TPayload extends SoloJsonValue = SoloJsonValue> {
+  id: string
+  type: string
+  tick: number
+  payload: TPayload
+}
+
+/** Pure application reducer for Narrative, Agency, quest, or other JSON state. */
+export type SoloDomainReducer<
+  TState extends SoloJsonValue,
+  TEvent extends SoloDomainEvent = SoloDomainEvent
+> = (
+  state: SoloDeepReadonly<TState>,
+  event: SoloDeepReadonly<TEvent>
+) => TState
+
+export interface SoloCandidateTickOptions<TState extends SoloJsonValue> {
+  /** Stable caller-owned identity used by receipts and diagnostics. */
+  id: string
+  /** Game-owned JSON state reduced in the same isolated candidate as Rules. */
+  state: TState
+  /** Optional optimistic concurrency check against the current committed tick. */
+  expectedBaseTick?: number
+}
+
+export type SoloCandidateTickStatus = 'active' | 'failed' | 'aborted' | 'committed'
+
+/** One immutable publication; no command, tick, or domain event escapes before it. */
+export interface SoloCandidateTickPublication<TState extends SoloJsonValue = SoloJsonValue> {
+  readonly id: string
+  readonly baseTick: number
+  readonly tick: number
+  readonly state: SoloDeepReadonly<TState>
+  readonly view: SoloDeepReadonly<SoloRuntimeView>
+  readonly runtimeEvents: readonly SoloDeepReadonly<SoloRuntimeEvent>[]
+  readonly domainEvents: readonly SoloDeepReadonly<SoloDomainEvent>[]
+}
+
+export type SoloCandidateTickListener = (publication: SoloCandidateTickPublication) => void
+
+export interface SoloCandidateTickNotificationError {
+  candidateId: string
+  tick: number
+  phase: 'candidate-publication' | 'legacy-runtime-event'
+  runtimeEventType?: SoloRuntimeEvent['type']
+  error: unknown
+}
+
+export type SoloCandidateTickErrorListener = (failure: SoloCandidateTickNotificationError) => void

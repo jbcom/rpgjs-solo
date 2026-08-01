@@ -1,12 +1,22 @@
 import { PhysicsEngine, type Entity, type RPGHitbox } from '@rpgjs/physic'
 import type {
   SoloActionHandler,
+  SoloCandidateTickListener,
+  SoloCandidateTickErrorListener,
+  SoloCandidateTickNotificationError,
+  SoloCandidateTickOptions,
+  SoloCandidateTickPublication,
+  SoloCandidateTickStatus,
   SoloCommand,
   SoloCommandRecord,
   SoloCommandResult,
   SoloCommandInterceptor,
   SoloCommandSource,
+  SoloCandidateSafeRegistration,
   SoloDirection,
+  SoloDomainEvent,
+  SoloDomainReducer,
+  SoloDeepReadonly,
   SoloEntityDefinition,
   SoloEntitySnapshot,
   SoloEntityState,
@@ -40,7 +50,94 @@ interface SoloMapRuntime {
 const cloneJson = <T extends SoloJsonValue | Record<string, SoloJsonValue>>(value: T): T =>
   JSON.parse(JSON.stringify(value)) as T
 
+const cloneStrictJson = <T extends SoloJsonValue>(value: T, seen = new WeakSet<object>()): T => {
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') return value
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new SoloRuntimeError('Candidate JSON numbers must be finite')
+    return value
+  }
+  if (typeof value !== 'object') throw new SoloRuntimeError('Candidate state must contain JSON values only')
+  if (seen.has(value)) throw new SoloRuntimeError('Candidate state must not contain cycles')
+  seen.add(value)
+  if (Array.isArray(value)) {
+    if (Object.keys(value).length !== value.length) {
+      throw new SoloRuntimeError('Candidate state arrays must not be sparse or contain named properties')
+    }
+    const copy = value.map((entry) => cloneStrictJson(entry, seen))
+    seen.delete(value)
+    return copy as T
+  }
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new SoloRuntimeError('Candidate state must contain plain JSON objects only')
+  }
+  const copy: Record<string, SoloJsonValue> = {}
+  for (const key of Object.keys(value).sort()) {
+    copy[key] = cloneStrictJson((value as Record<string, SoloJsonValue>)[key], seen)
+  }
+  seen.delete(value)
+  return copy as T
+}
+
+const deepFreeze = <T>(value: T, seen = new WeakSet<object>()): SoloDeepReadonly<T> => {
+  if (typeof value !== 'object' || value === null || seen.has(value)) return value as SoloDeepReadonly<T>
+  seen.add(value)
+  for (const entry of Object.values(value)) deepFreeze(entry, seen)
+  return Object.freeze(value) as SoloDeepReadonly<T>
+}
+
+const frozenJson = <T extends SoloJsonValue>(value: T): SoloDeepReadonly<T> => deepFreeze(cloneStrictJson(value))
+
 const cloneVector = (value: SoloVector): SoloVector => ({ x: value.x, y: value.y })
+
+const cloneEntityState = (entity: SoloEntityState): SoloEntityState => ({
+  id: entity.id,
+  kind: entity.kind,
+  mapId: entity.mapId,
+  position: cloneVector(entity.position),
+  velocity: cloneVector(entity.velocity),
+  direction: entity.direction,
+  moving: entity.moving,
+  hitbox: cloneJson(entity.hitbox as SoloJsonValue) as SoloEntityState['hitbox'],
+  speed: entity.speed,
+  immovable: entity.immovable,
+  stats: resolveStats(entity.stats),
+  data: cloneJson(entity.data)
+})
+
+const cloneRuntimeView = (view: SoloRuntimeView): SoloRuntimeView => ({
+  tick: view.tick,
+  paused: view.paused,
+  activeMapId: view.activeMapId,
+  entities: view.entities.map(cloneEntityState)
+})
+
+const cloneRuntimeEvent = (event: SoloRuntimeEvent): SoloRuntimeEvent => {
+  switch (event.type) {
+    case 'command':
+      return {
+        type: 'command',
+        record: cloneJson(event.record as unknown as Record<string, SoloJsonValue>) as unknown as SoloCommandRecord
+      }
+    case 'tick':
+    case 'restored':
+      return { type: event.type, view: cloneRuntimeView(event.view) }
+    case 'pause':
+      return { type: 'pause', paused: event.paused }
+    case 'active-map':
+      return { type: 'active-map', mapId: event.mapId }
+    case 'entity-spawned':
+      return { type: 'entity-spawned', entity: cloneEntityState(event.entity) }
+    case 'entity-removed':
+      return { type: 'entity-removed', entityId: event.entityId }
+    case 'entity-transferred':
+      return {
+        type: 'entity-transferred',
+        entity: cloneEntityState(event.entity),
+        fromMapId: event.fromMapId
+      }
+  }
+}
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value))
@@ -183,6 +280,22 @@ export class SoloRuntimeError extends Error {
   }
 }
 
+/** Error raised when an isolated candidate can no longer publish safely. */
+export class SoloCandidateTickError extends SoloRuntimeError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SoloCandidateTickError'
+  }
+}
+
+/** A candidate was based on a committed runtime that has since changed. */
+export class SoloCandidateTickConflictError extends SoloCandidateTickError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SoloCandidateTickConflictError'
+  }
+}
+
 const validateObstacles = (
   mapId: string,
   obstacles: readonly SoloObstacleDefinition[] = []
@@ -212,25 +325,33 @@ const validateObstacles = (
  *
  * Human controls, replays, and AI governors all call {@link dispatch}; no
  * socket, room, request, serialization, prediction, or reconciliation layer is
- * involved. Entity objects are mutated in place and are the sole gameplay
- * authority observed by renderers and UI.
+ * involved. Ordinary commands mutate authoritative entity objects in place;
+ * candidate commits replace the complete authority graph at a documented
+ * post-commit renderer rebind seam.
  */
 export class SoloRuntime {
   readonly fixedStepMs: number
   readonly maxFrameDeltaMs: number
   readonly maxStepsPerFrame: number
 
-  private readonly maps = new Map<string, SoloMapRuntime>()
-  private readonly entities = new Map<string, SoloEntityState>()
-  private readonly physicalEntities = new Map<string, Entity>()
+  private maps = new Map<string, SoloMapRuntime>()
+  private entities = new Map<string, SoloEntityState>()
+  private physicalEntities = new Map<string, Entity>()
   private readonly listeners = new Set<SoloRuntimeListener>()
+  private readonly candidateTickListeners = new Set<SoloCandidateTickListener>()
+  private readonly candidateTickErrorListeners = new Set<SoloCandidateTickErrorListener>()
   private readonly actions = new Map<string, SoloActionHandler>()
+  private readonly candidateSafeActions = new Set<string>()
   private readonly commandInterceptors = new Set<SoloCommandInterceptor>()
-  private readonly commandLog: SoloCommandRecord[] = []
+  private readonly candidateSafeCommandInterceptors = new Set<SoloCommandInterceptor>()
+  private commandLog: SoloCommandRecord[] = []
   private accumulatorMs = 0
   private currentTick = 0
   private isPaused = false
   private currentMapId: string | null = null
+  private authorityRevision = 0
+  private candidateEvaluation = false
+  private publishingCandidateTick = false
 
   constructor(options: SoloRuntimeOptions = {}) {
     this.fixedStepMs = options.fixedStepMs ?? DEFAULT_FIXED_STEP_MS
@@ -393,32 +514,63 @@ export class SoloRuntime {
     return mapId === undefined ? values : values.filter((entity) => entity.mapId === mapId)
   }
 
-  registerAction(name: string, handler: SoloActionHandler): () => void {
+  registerAction(
+    name: string,
+    handler: SoloActionHandler,
+    options: SoloCandidateSafeRegistration = {}
+  ): () => void {
     if (this.actions.has(name)) throw new SoloRuntimeError(`Action already registered: ${name}`)
     this.actions.set(name, handler)
+    if (options.candidateSafe === true) this.candidateSafeActions.add(name)
+    this.authorityRevision += 1
     return () => {
-      if (this.actions.get(name) === handler) this.actions.delete(name)
+      if (this.actions.get(name) === handler) {
+        this.actions.delete(name)
+        this.candidateSafeActions.delete(name)
+        this.authorityRevision += 1
+      }
     }
   }
 
-  registerCommandInterceptor(interceptor: SoloCommandInterceptor): () => void {
+  registerCommandInterceptor(
+    interceptor: SoloCommandInterceptor,
+    options: SoloCandidateSafeRegistration = {}
+  ): () => void {
+    const wasRegistered = this.commandInterceptors.has(interceptor)
+    const wasCandidateSafe = this.candidateSafeCommandInterceptors.has(interceptor)
     this.commandInterceptors.add(interceptor)
-    return () => this.commandInterceptors.delete(interceptor)
+    if (options.candidateSafe === true) this.candidateSafeCommandInterceptors.add(interceptor)
+    if (!wasRegistered || (options.candidateSafe === true && !wasCandidateSafe)) {
+      this.authorityRevision += 1
+    }
+    return () => {
+      const safeDeleted = this.candidateSafeCommandInterceptors.delete(interceptor)
+      const interceptorDeleted = this.commandInterceptors.delete(interceptor)
+      if (safeDeleted || interceptorDeleted) this.authorityRevision += 1
+      return interceptorDeleted
+    }
   }
 
   dispatch(command: SoloCommand): SoloCommandResult {
-    const source = command.source ?? 'human'
-    const entity = this.entities.get(command.entityId)
-    if (!entity) return { accepted: false, tick: this.currentTick, reason: `Unknown entity: ${command.entityId}` }
+    const evaluatedCommand = this.candidateEvaluation
+      ? deepFreeze(
+        cloneStrictJson(command as unknown as SoloJsonValue) as unknown as SoloCommand
+      ) as SoloCommand
+      : command
+    const source = evaluatedCommand.source ?? 'human'
+    const entity = this.entities.get(evaluatedCommand.entityId)
+    if (!entity) {
+      return { accepted: false, tick: this.currentTick, reason: `Unknown entity: ${evaluatedCommand.entityId}` }
+    }
 
     for (const interceptor of this.commandInterceptors) {
-      const rejection = interceptor(command, entity, source)
+      const rejection = interceptor(evaluatedCommand, entity, source)
       if (rejection?.accepted === false) {
         return { accepted: false, tick: this.currentTick, reason: rejection.reason }
       }
     }
 
-    switch (command.type) {
+    switch (evaluatedCommand.type) {
       case 'move': {
         if (entity.immovable) {
           return {
@@ -427,11 +579,11 @@ export class SoloRuntime {
             reason: `Entity is immovable: ${entity.id}`
           }
         }
-        const physical = this.requirePhysical(command.entityId)
+        const physical = this.requirePhysical(evaluatedCommand.entityId)
         const accepted = this.requireMap(entity.mapId).physics.moveEntity(
           physical,
-          command.vector,
-          command.speed ?? entity.speed
+          evaluatedCommand.vector,
+          evaluatedCommand.speed ?? entity.speed
         )
         if (!accepted) return { accepted: false, tick: this.currentTick, reason: 'Physics entity unavailable' }
         break
@@ -443,25 +595,25 @@ export class SoloRuntime {
         const map = this.requireMap(entity.mapId)
         const physical = this.requirePhysical(entity.id)
         const destination =
-          command.collision === 'ignore'
-            ? boundedPosition(map.definition, entity.hitbox, command.position)
-            : collisionSafePosition(map.definition, entity.hitbox, entity.position, command.position)
+          evaluatedCommand.collision === 'ignore'
+            ? boundedPosition(map.definition, entity.hitbox, evaluatedCommand.position)
+            : collisionSafePosition(map.definition, entity.hitbox, entity.position, evaluatedCommand.position)
         map.physics.teleportEntity(physical, destination)
-        if (destination.x !== command.position.x || destination.y !== command.position.y) {
+        if (destination.x !== evaluatedCommand.position.x || destination.y !== evaluatedCommand.position.y) {
           physical.setVelocity({ x: 0, y: 0 })
         }
         this.syncEntity(entity)
         break
       }
       case 'transfer-map':
-        this.transferEntity(entity, command.mapId, command.position)
+        this.transferEntity(entity, evaluatedCommand.mapId, evaluatedCommand.position)
         break
       case 'action': {
-        const handler = this.actions.get(command.action)
+        const handler = this.actions.get(evaluatedCommand.action)
         if (!handler) {
-          return { accepted: false, tick: this.currentTick, reason: `Unknown action: ${command.action}` }
+          return { accepted: false, tick: this.currentTick, reason: `Unknown action: ${evaluatedCommand.action}` }
         }
-        const rejection = handler({ entity, payload: command.payload, source })
+        const rejection = handler({ entity, payload: evaluatedCommand.payload, source })
         if (rejection?.accepted === false) {
           return { accepted: false, tick: this.currentTick, reason: rejection.reason }
         }
@@ -472,7 +624,7 @@ export class SoloRuntime {
     const record: SoloCommandRecord = {
       tick: this.currentTick,
       source,
-      command: cloneJson(command as SoloCommand & SoloJsonValue) as SoloCommand
+      command: cloneJson(evaluatedCommand as SoloCommand & SoloJsonValue) as SoloCommand
     }
     this.commandLog.push(record)
     this.emit({ type: 'command', record })
@@ -522,6 +674,77 @@ export class SoloRuntime {
   subscribe(listener: SoloRuntimeListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  /**
+   * Subscribe to one immutable candidate-tick publication at a time.
+   *
+   * Unlike {@link subscribe}, this callback never observes candidate work that
+   * later aborts. Its Rules view, game-owned reduced state, runtime events, and
+   * domain events become visible together after the candidate commits.
+   */
+  subscribeCandidateTicks(listener: SoloCandidateTickListener): () => void {
+    this.candidateTickListeners.add(listener)
+    return () => this.candidateTickListeners.delete(listener)
+  }
+
+  /** Observe post-commit notification failures without changing commit status. */
+  subscribeCandidateTickErrors(listener: SoloCandidateTickErrorListener): () => void {
+    this.candidateTickErrorListeners.add(listener)
+    return () => this.candidateTickErrorListeners.delete(listener)
+  }
+
+  /**
+   * Fork the current committed runtime into one isolated next fixed tick.
+   *
+   * Commands and pure domain reducers execute against the candidate. No legacy
+   * runtime listener or candidate-tick listener receives egress until commit.
+   * Abort simply discards the candidate; it never restores over live state.
+   */
+  beginCandidateTick<TState extends SoloJsonValue>(
+    options: SoloCandidateTickOptions<TState>
+  ): SoloCandidateTick<TState> {
+    if (!options || typeof options.id !== 'string' || options.id.length === 0) {
+      throw new SoloCandidateTickError('Candidate tick id must be a non-empty string')
+    }
+    if (this.publishingCandidateTick) {
+      throw new SoloCandidateTickConflictError('Cannot begin a candidate tick during committed publication')
+    }
+    if (this.isPaused) throw new SoloCandidateTickError('A paused runtime cannot begin a candidate tick')
+    if (options.expectedBaseTick !== undefined && options.expectedBaseTick !== this.currentTick) {
+      throw new SoloCandidateTickConflictError(
+        `Expected committed tick ${options.expectedBaseTick}, received ${this.currentTick}`
+      )
+    }
+
+    const baseTick = this.currentTick
+    const baseToken = this.candidateBaseToken()
+    const candidate = this.forkCandidateRuntime()
+    const runtimeEvents: SoloRuntimeEvent[] = []
+    const unsubscribe = candidate.subscribe((event) => runtimeEvents.push(cloneRuntimeEvent(event)))
+    candidate.stepTicks(1)
+    if (candidate.tick !== baseTick + 1) {
+      unsubscribe()
+      throw new SoloCandidateTickError('Candidate fixed tick did not advance exactly once')
+    }
+
+    return new SoloCandidateTick({
+      id: options.id,
+      state: options.state,
+      baseTick,
+      candidate,
+      runtimeEvents,
+      dispose: unsubscribe,
+      commit: (state, domainEvents) => this.commitCandidateTick(
+        options.id,
+        baseTick,
+        baseToken,
+        candidate,
+        state,
+        runtimeEvents,
+        domainEvents
+      )
+    })
   }
 
   getView(mapId = this.currentMapId): SoloRuntimeView {
@@ -625,6 +848,266 @@ export class SoloRuntime {
     this.emit({ type: 'tick', view: this.getView() })
   }
 
+  private forkCandidateRuntime(): SoloRuntime {
+    const candidate = new SoloRuntime({
+      fixedStepMs: this.fixedStepMs,
+      maxFrameDeltaMs: this.maxFrameDeltaMs,
+      maxStepsPerFrame: this.maxStepsPerFrame
+    })
+
+    for (const map of this.maps.values()) {
+      const definition = cloneJson(map.definition as unknown as Record<string, SoloJsonValue>) as unknown as SoloMapDefinition
+      candidate.registerMap({ ...definition, entities: undefined })
+      candidate.requireMap(definition.id).definition = definition
+    }
+    for (const entity of this.entities.values()) {
+      const physical = this.requirePhysical(entity.id)
+      const candidateEntity = candidate.spawnEntity({
+        id: entity.id,
+        kind: entity.kind,
+        mapId: entity.mapId,
+        x: physical.position.x,
+        y: physical.position.y,
+        hitbox: cloneJson(entity.hitbox as SoloJsonValue) as SoloEntityState['hitbox'],
+        speed: entity.speed,
+        immovable: entity.immovable,
+        direction: entity.direction,
+        stats: resolveStats(entity.stats),
+        data: cloneJson(entity.data)
+      })
+      candidate.requirePhysical(entity.id).setVelocity(cloneVector(physical.velocity))
+      candidate.syncEntity(candidateEntity)
+    }
+    candidate.currentTick = this.currentTick
+    candidate.isPaused = this.isPaused
+    candidate.currentMapId = this.currentMapId
+    candidate.accumulatorMs = this.accumulatorMs
+    candidate.commandLog = this.commandLog.map((record) =>
+      cloneJson(record as unknown as Record<string, SoloJsonValue>) as unknown as SoloCommandRecord
+    )
+    candidate.authorityRevision = this.authorityRevision
+    candidate.candidateEvaluation = true
+    for (const name of this.candidateSafeActions) {
+      const handler = this.actions.get(name)
+      if (handler) {
+        candidate.actions.set(name, handler)
+        candidate.candidateSafeActions.add(name)
+      }
+    }
+    for (const interceptor of this.candidateSafeCommandInterceptors) {
+      candidate.commandInterceptors.add(interceptor)
+      candidate.candidateSafeCommandInterceptors.add(interceptor)
+    }
+    return candidate
+  }
+
+  private candidateBaseToken(): string {
+    const maps = [...this.maps.values()]
+      .map(({ definition }) => cloneJson(definition as unknown as Record<string, SoloJsonValue>))
+      .sort((left, right) => String(left.id) < String(right.id) ? -1 : String(left.id) > String(right.id) ? 1 : 0)
+    const entities = [...this.entities.values()]
+      .map((entity) => {
+        const physical = this.requirePhysical(entity.id)
+        return {
+          ...cloneEntityState(entity),
+          position: cloneVector(physical.position),
+          velocity: cloneVector(physical.velocity)
+        }
+      })
+      .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
+    return JSON.stringify({
+      maps,
+      entities,
+      tick: this.currentTick,
+      paused: this.isPaused,
+      activeMapId: this.currentMapId,
+      accumulatorMs: this.accumulatorMs,
+      commandLog: this.commandLog,
+      authorityRevision: this.authorityRevision,
+      actionIds: [...this.actions.keys()].sort(),
+      candidateSafeActionIds: [...this.candidateSafeActions].sort(),
+      interceptorCount: this.commandInterceptors.size,
+      candidateSafeInterceptorCount: this.candidateSafeCommandInterceptors.size
+    })
+  }
+
+  private commitCandidateTick<TState extends SoloJsonValue>(
+    id: string,
+    baseTick: number,
+    baseToken: string,
+    candidate: SoloRuntime,
+    state: SoloDeepReadonly<TState>,
+    runtimeEvents: readonly SoloRuntimeEvent[],
+    domainEvents: readonly SoloDeepReadonly<SoloDomainEvent>[]
+  ): SoloCandidateTickPublication<TState> {
+    if (this.publishingCandidateTick) {
+      throw new SoloCandidateTickConflictError(`Candidate ${id} cannot commit during another publication`)
+    }
+    if (this.currentTick !== baseTick || this.candidateBaseToken() !== baseToken) {
+      throw new SoloCandidateTickConflictError(
+        `Candidate ${id} was based on stale committed runtime state at tick ${baseTick}`
+      )
+    }
+    if (candidate.currentTick !== baseTick + 1) {
+      throw new SoloCandidateTickError(`Candidate ${id} must publish exactly tick ${baseTick + 1}`)
+    }
+
+    // Prepare a complete replacement physics world before touching live state.
+    const preparedMaps = new Map<string, SoloMapRuntime>()
+    for (const candidateMap of candidate.maps.values()) {
+      const definition = cloneJson(
+        candidateMap.definition as unknown as Record<string, SoloJsonValue>
+      ) as unknown as SoloMapDefinition
+      const obstacles = validateObstacles(definition.id, definition.obstacles)
+      definition.obstacles = obstacles
+      const physics = new PhysicsEngine({
+        timeStep: this.fixedStepMs / 1000,
+        enableSleep: false
+      })
+      const obstacleEntities = new Map<string, Entity>()
+      for (const obstacle of obstacles) {
+        obstacleEntities.set(
+          obstacle.id,
+          physics.createStaticObstacle(`map:${definition.id}:obstacle:${obstacle.id}`, {
+            ...obstacle,
+            collisionCategory: MAP_OBSTACLE_COLLISION_CATEGORY
+          })
+        )
+      }
+      preparedMaps.set(definition.id, { definition, physics, obstacleEntities })
+    }
+
+    const preparedStates = new Map<string, SoloEntityState>()
+    const preparedPhysicalEntities = new Map<string, Entity>()
+    for (const candidateEntity of candidate.entities.values()) {
+      const candidatePhysical = candidate.requirePhysical(candidateEntity.id)
+      const source = cloneEntityState(candidateEntity)
+      source.position = cloneVector(candidatePhysical.position)
+      source.velocity = cloneVector(candidatePhysical.velocity)
+      source.moving = source.velocity.x !== 0 || source.velocity.y !== 0
+      source.direction = directionFromVelocity(source.velocity, source.direction)
+
+      preparedStates.set(source.id, source)
+      const map = preparedMaps.get(source.mapId)
+      if (!map) throw new SoloCandidateTickError(`Candidate entity ${source.id} references unknown map ${source.mapId}`)
+      const physical = this.createPhysicalEntity(map, source)
+      physical.setVelocity(cloneVector(source.velocity))
+      preparedPhysicalEntities.set(source.id, physical)
+    }
+
+    if (candidate.currentMapId !== null && !preparedMaps.has(candidate.currentMapId)) {
+      throw new SoloCandidateTickError(`Candidate active map is unknown: ${candidate.currentMapId}`)
+    }
+    const preparedCommandLog = candidate.commandLog.map((record) =>
+      cloneJson(record as unknown as Record<string, SoloJsonValue>) as unknown as SoloCommandRecord
+    )
+    const preparedView: SoloRuntimeView = {
+      tick: candidate.currentTick,
+      paused: candidate.isPaused,
+      activeMapId: candidate.currentMapId,
+      entities: candidate.currentMapId === null
+        ? []
+        : [...preparedStates.values()].filter((entity) => entity.mapId === candidate.currentMapId)
+    }
+    // Materialize every legacy event before any live reference changes. A
+    // publication callback therefore cannot make a later outer event resolve
+    // against a nested or otherwise newer tick.
+    const committedRuntimeEvents = runtimeEvents.map((event) => deepFreeze(cloneRuntimeEvent(
+      this.materializePreparedEvent(event, preparedStates, preparedView)
+    )) as SoloRuntimeEvent)
+    const publishedRuntimeEvents = Object.freeze(committedRuntimeEvents)
+    const publishedDomainEvents = Object.freeze(domainEvents.map((event) => deepFreeze(
+      cloneStrictJson(event as unknown as SoloJsonValue) as unknown as SoloDomainEvent
+    )))
+    const publication = Object.freeze({
+      id,
+      baseTick,
+      tick: candidate.currentTick,
+      state,
+      view: deepFreeze(cloneRuntimeView(preparedView)),
+      runtimeEvents: publishedRuntimeEvents,
+      domainEvents: publishedDomainEvents
+    }) as SoloCandidateTickPublication<TState>
+
+    const notificationErrors: SoloCandidateTickNotificationError[] = []
+    this.publishingCandidateTick = true
+    try {
+      // All error-prone cloning, validation, physics construction, receipt
+      // creation, and event materialization completed above. These reference
+      // assignments form the synchronous all-or-nothing authority swap.
+      this.maps = preparedMaps
+      this.entities = preparedStates
+      this.physicalEntities = preparedPhysicalEntities
+      this.currentTick = candidate.currentTick
+      this.isPaused = candidate.isPaused
+      this.currentMapId = candidate.currentMapId
+      this.accumulatorMs = candidate.accumulatorMs
+      this.commandLog = preparedCommandLog
+
+      for (const listener of this.candidateTickListeners) {
+        try {
+          listener(publication as unknown as SoloCandidateTickPublication)
+        } catch (error) {
+          notificationErrors.push({
+            candidateId: id,
+            tick: this.currentTick,
+            phase: 'candidate-publication',
+            error
+          })
+        }
+      }
+      for (const committedEvent of committedRuntimeEvents) {
+        for (const listener of this.listeners) {
+          try {
+            listener(committedEvent)
+          } catch (error) {
+            notificationErrors.push({
+              candidateId: id,
+              tick: this.currentTick,
+              phase: 'legacy-runtime-event',
+              runtimeEventType: committedEvent.type,
+              error
+            })
+          }
+        }
+      }
+      for (const failure of notificationErrors) {
+        for (const listener of this.candidateTickErrorListeners) {
+          try {
+            listener(failure)
+          } catch {
+            // Post-commit diagnostics cannot change commit status or block peers.
+          }
+        }
+      }
+    } finally {
+      this.publishingCandidateTick = false
+    }
+    return publication
+  }
+
+  private materializePreparedEvent(
+    event: SoloRuntimeEvent,
+    entities: ReadonlyMap<string, SoloEntityState>,
+    view: SoloRuntimeView
+  ): SoloRuntimeEvent {
+    switch (event.type) {
+      case 'tick':
+      case 'restored':
+        return { type: event.type, view }
+      case 'entity-spawned':
+        return { type: 'entity-spawned', entity: entities.get(event.entity.id) ?? event.entity }
+      case 'entity-transferred':
+        return {
+          type: 'entity-transferred',
+          entity: entities.get(event.entity.id) ?? event.entity,
+          fromMapId: event.fromMapId
+        }
+      default:
+        return cloneRuntimeEvent(event)
+    }
+  }
+
   private syncEntity(state: SoloEntityState): void {
     const physical = this.requirePhysical(state.id)
     state.position.x = physical.position.x
@@ -713,5 +1196,191 @@ export class SoloRuntime {
 
   private emit(event: SoloRuntimeEvent): void {
     for (const listener of this.listeners) listener(event)
+  }
+}
+
+interface SoloCandidateTickConstruction<TState extends SoloJsonValue> {
+  id: string
+  state: TState
+  baseTick: number
+  candidate: SoloRuntime
+  runtimeEvents: SoloRuntimeEvent[]
+  dispose: () => void
+  commit: (
+    state: SoloDeepReadonly<TState>,
+    domainEvents: readonly SoloDeepReadonly<SoloDomainEvent>[]
+  ) => SoloCandidateTickPublication<TState>
+}
+
+/**
+ * One isolated, exactly-next fixed tick of Solo Rules plus game-owned JSON state.
+ *
+ * Use {@link SoloRuntime.beginCandidateTick}; constructing this class directly
+ * is intentionally unsupported.
+ */
+export class SoloCandidateTick<TState extends SoloJsonValue> {
+  readonly id: string
+  readonly baseTick: number
+  readonly tick: number
+  private readonly candidate: SoloRuntime
+  private readonly runtimeEvents: SoloRuntimeEvent[]
+  private readonly disposeCandidateListener: () => void
+  private readonly commitCandidate: SoloCandidateTickConstruction<TState>['commit']
+  private readonly domainEvents: SoloDeepReadonly<SoloDomainEvent>[] = []
+  private readonly domainEventIds = new Set<string>()
+  private candidateState: SoloDeepReadonly<TState>
+  private currentStatus: SoloCandidateTickStatus = 'active'
+
+  constructor(construction: SoloCandidateTickConstruction<TState>) {
+    this.id = construction.id
+    this.baseTick = construction.baseTick
+    this.tick = construction.candidate.tick
+    this.candidate = construction.candidate
+    this.runtimeEvents = construction.runtimeEvents
+    this.disposeCandidateListener = construction.dispose
+    this.commitCandidate = construction.commit
+    this.candidateState = frozenJson(construction.state)
+  }
+
+  get status(): SoloCandidateTickStatus {
+    return this.currentStatus
+  }
+
+  get state(): SoloDeepReadonly<TState> {
+    return this.candidateState
+  }
+
+  getView(mapId?: string | null): SoloDeepReadonly<SoloRuntimeView> {
+    this.requireActive()
+    return deepFreeze(cloneRuntimeView(this.candidate.getView(mapId)))
+  }
+
+  getEntity(entityId: string): SoloDeepReadonly<SoloEntityState> | undefined {
+    this.requireActive()
+    const entity = this.candidate.getEntity(entityId)
+    return entity ? deepFreeze(cloneEntityState(entity)) : undefined
+  }
+
+  getMap(mapId: string): SoloDeepReadonly<SoloMapDefinition> | undefined {
+    this.requireActive()
+    const map = this.candidate.getMap(mapId)
+    if (!map) return undefined
+    return deepFreeze(
+      cloneJson(map as unknown as Record<string, SoloJsonValue>) as unknown as SoloMapDefinition
+    )
+  }
+
+  getCommandLog(): readonly SoloDeepReadonly<SoloCommandRecord>[] {
+    this.requireActive()
+    return Object.freeze(this.candidate.getCommandLog().map((record) => deepFreeze(
+      cloneJson(record as unknown as Record<string, SoloJsonValue>) as unknown as SoloCommandRecord
+    )))
+  }
+
+  dispatch(command: SoloCommand): SoloCommandResult {
+    this.requireActive()
+    try {
+      return this.candidate.dispatch(command)
+    } catch (error) {
+      this.currentStatus = 'failed'
+      throw error
+    }
+  }
+
+  dispatchMany(commands: readonly SoloCommand[]): SoloCommandResult[] {
+    return commands.map((command) => this.dispatch(command))
+  }
+
+  spawnEntity(definition: SoloEntityDefinition): SoloDeepReadonly<SoloEntityState> {
+    this.requireActive()
+    return deepFreeze(cloneEntityState(this.candidate.spawnEntity(definition)))
+  }
+
+  removeEntity(entityId: string): boolean {
+    this.requireActive()
+    return this.candidate.removeEntity(entityId)
+  }
+
+  replaceMapObstacles(mapId: string, obstacles: readonly SoloObstacleDefinition[]): void {
+    this.requireActive()
+    this.candidate.replaceMapObstacles(mapId, obstacles)
+  }
+
+  /** Stage a typed event and replace game-owned candidate state through a pure reducer. */
+  reduce<TEvent extends SoloDomainEvent>(
+    event: TEvent,
+    reducer: SoloDomainReducer<TState, TEvent>
+  ): SoloDeepReadonly<TState> {
+    this.requireActive()
+    try {
+      const stagedEvent = this.validateDomainEvent(event) as SoloDeepReadonly<TEvent>
+      const next = reducer(this.candidateState, stagedEvent)
+      this.candidateState = frozenJson(next)
+      this.domainEventIds.add(stagedEvent.id)
+      this.domainEvents.push(stagedEvent as SoloDeepReadonly<SoloDomainEvent>)
+      return this.candidateState
+    } catch (error) {
+      this.currentStatus = 'failed'
+      throw error
+    }
+  }
+
+  /** Dispatch, then reduce only when the authoritative candidate accepts. */
+  dispatchAndReduce<TEvent extends SoloDomainEvent>(
+    command: SoloCommand,
+    event: TEvent,
+    reducer: SoloDomainReducer<TState, TEvent>
+  ): SoloCommandResult {
+    const result = this.dispatch(command)
+    if (result.accepted) this.reduce(event, reducer)
+    return result
+  }
+
+  commit(): SoloCandidateTickPublication<TState> {
+    this.requireActive()
+    this.disposeCandidateListener()
+    // No observer is invoked until the live runtime has committed, but those
+    // observers run inside the commit callback. Close this candidate first so
+    // a publication listener cannot re-enter, abort, or mutate it.
+    this.currentStatus = 'committed'
+    try {
+      return this.commitCandidate(this.candidateState, this.domainEvents)
+    } catch (error) {
+      this.currentStatus = 'aborted'
+      throw error
+    }
+  }
+
+  abort(): void {
+    if (this.currentStatus === 'committed') {
+      throw new SoloCandidateTickError(`Candidate ${this.id} has already committed`)
+    }
+    if (this.currentStatus === 'aborted') return
+    this.disposeCandidateListener()
+    this.runtimeEvents.length = 0
+    this.domainEvents.length = 0
+    this.currentStatus = 'aborted'
+  }
+
+  private validateDomainEvent<TEvent extends SoloDomainEvent>(event: TEvent): SoloDeepReadonly<TEvent> {
+    if (!event || typeof event.id !== 'string' || event.id.length === 0) {
+      throw new SoloCandidateTickError('Domain event id must be a non-empty string')
+    }
+    if (typeof event.type !== 'string' || event.type.length === 0) {
+      throw new SoloCandidateTickError('Domain event type must be a non-empty string')
+    }
+    if (event.tick !== this.tick) {
+      throw new SoloCandidateTickError(`Domain event ${event.id} must target candidate tick ${this.tick}`)
+    }
+    if (this.domainEventIds.has(event.id)) {
+      throw new SoloCandidateTickError(`Duplicate domain event id: ${event.id}`)
+    }
+    return deepFreeze(cloneStrictJson(event as unknown as SoloJsonValue) as unknown as TEvent)
+  }
+
+  private requireActive(): void {
+    if (this.currentStatus !== 'active') {
+      throw new SoloCandidateTickError(`Candidate ${this.id} is ${this.currentStatus}`)
+    }
   }
 }
