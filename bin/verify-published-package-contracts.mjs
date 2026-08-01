@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
 	mkdirSync,
 	mkdtempSync,
@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseNpmAuditReport } from "./command-report-contracts.mjs";
 
 const rootDirectory = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageDirectory = join(rootDirectory, "packages", "vite");
@@ -103,18 +104,16 @@ try {
 		}
 	}
 
-	let auditOutput;
-	try {
-		auditOutput = run("npm", ["audit", "--audit-level=low", "--json"]);
-	} catch (error) {
-		auditOutput = error.stdout?.toString() ?? "";
-	}
-	const audit = JSON.parse(auditOutput);
-	if ((audit.metadata?.vulnerabilities?.total ?? 0) !== 0) {
-		throw new Error(
-			`External @rpgjs/vite consumer audit found ${String(audit.metadata?.vulnerabilities?.total)} vulnerabilities`,
-		);
-	}
+	const auditResult = spawnSync(
+		"npm",
+		["audit", "--audit-level=low", "--json"],
+		{
+			cwd: consumerDirectory,
+			encoding: "utf8",
+			stdio: "pipe",
+		},
+	);
+	parseNpmAuditReport(auditResult);
 
 	console.log(
 		"@rpgjs/vite external packed dependency and audit contract passed",

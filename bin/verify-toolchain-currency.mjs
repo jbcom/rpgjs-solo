@@ -1,4 +1,5 @@
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
+import { parsePnpmOutdatedReport } from "./command-report-contracts.mjs";
 
 const intentionalMajorBoundaries = new Map([
 	["@babel/generator", [7, 8, "Babel 8 migration boundary"]],
@@ -67,21 +68,16 @@ const latestStableVersionInMajor = async (packageName, expectedMajor) => {
 	return latestVersion;
 };
 
-let output;
-try {
-	output = execFileSync("pnpm", ["-r", "outdated", "--format", "json"], {
+const outdatedResult = spawnSync(
+	"pnpm",
+	["-r", "outdated", "--format", "json"],
+	{
 		encoding: "utf8",
 		stdio: "pipe",
-	});
-} catch (error) {
-	output = error.stdout?.toString() ?? "";
-}
+	},
+);
 
-if (!output.trim()) {
-	throw new Error("pnpm outdated returned no JSON dependency report");
-}
-
-const outdated = JSON.parse(output);
+const outdated = parsePnpmOutdatedReport(outdatedResult);
 const unresolved = [];
 const accepted = [];
 
