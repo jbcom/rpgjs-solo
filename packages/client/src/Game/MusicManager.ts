@@ -14,9 +14,37 @@ type MusicHost = {
 };
 
 const clampVolume = (value: number) => Math.max(0, Math.min(1, value));
-const isSource = (value: string) =>
-  /^(https?:\/\/|\/|data:|blob:)/.test(value) ||
-  /\.(aac|flac|m4a|mp3|oga|ogg|opus|wav|webm)(\?.*)?$/i.test(value);
+const audioExtensions = new Set([
+  "aac",
+  "flac",
+  "m4a",
+  "mp3",
+  "oga",
+  "ogg",
+  "opus",
+  "wav",
+  "webm",
+]);
+const isSource = (value: string) => {
+  const normalized = value.toLowerCase();
+  if (
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://") ||
+    normalized.startsWith("/") ||
+    normalized.startsWith("data:") ||
+    normalized.startsWith("blob:")
+  ) {
+    return true;
+  }
+
+  const suffixStart = normalized.search(/[?#]/);
+  const path = suffixStart === -1
+    ? normalized
+    : normalized.slice(0, suffixStart);
+  const extensionStart = path.lastIndexOf(".");
+  return extensionStart !== -1 &&
+    audioExtensions.has(path.slice(extensionStart + 1));
+};
 
 /**
  * Controls temporary music layers without stopping map ambience or sound

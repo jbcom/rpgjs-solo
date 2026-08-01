@@ -61,4 +61,38 @@ describe("RpgMusicManager", () => {
     expect(sound.stop).toHaveBeenCalledOnce();
     expect(manager.mapVolume()).toBe(1);
   });
+
+  it("resolves audio paths with arbitrary query strings in linear time", async () => {
+    const sound = createSound();
+    const createSoundHost = vi.fn(() => sound);
+    const getSound = vi.fn();
+    const manager = new RpgMusicManager({
+      getSound,
+      createSound: createSoundHost,
+    });
+    const source = `battle.m4a?${"aac?".repeat(10_000)}`;
+
+    await manager.enter(source, { fadeInMs: 0 });
+
+    expect(getSound).not.toHaveBeenCalled();
+    expect(createSoundHost).toHaveBeenCalledWith(source, {
+      loop: true,
+      volume: 0,
+    });
+  });
+
+  it("does not mistake an unknown dotted identifier for an audio source", async () => {
+    const sound = createSound();
+    const createSoundHost = vi.fn();
+    const getSound = vi.fn(() => sound);
+    const manager = new RpgMusicManager({
+      getSound,
+      createSound: createSoundHost,
+    });
+
+    await manager.enter("encounter.boss", { fadeInMs: 0 });
+
+    expect(getSound).toHaveBeenCalledWith("encounter.boss");
+    expect(createSoundHost).not.toHaveBeenCalled();
+  });
 });
