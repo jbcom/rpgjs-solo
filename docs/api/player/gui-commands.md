@@ -187,9 +187,19 @@ its active locale and game overrides:
 ```ts
 player.showNotification({
   key: "game.reward.item",
-  params: { count: 2, item: "Potion" },
+  count: 2,
+  params: {
+    count: 2,
+    item: { key: "game.item.potion" },
+  },
 });
 ```
+
+`count` selects `<key>.<plural-category>` with `Intl.PluralRules` for the
+receiving locale, then falls back to `<key>.other` and the configured fallback
+locale. Parameters may contain JSON-safe primitives or nested translation
+descriptors. Invalid values such as `bigint`, functions, cyclic objects, and
+non-finite numbers are rejected before the server emits the packet.
 
 ## Hide Hotbar
 

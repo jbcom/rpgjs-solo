@@ -86,10 +86,17 @@ describe("server public API types", () => {
         .toEqualTypeOf<HotbarEntry | null>();
       const localizedReward = {
         key: "game.reward.item",
-        params: { count: 2, item: "Potion" },
+        count: 2,
+        params: { count: 2, item: { key: "game.item.potion" } },
       } satisfies I18nMessageDescriptor;
       expectTypeOf(player.showNotification(localizedReward, { type: "info" }))
         .toEqualTypeOf<Promise<boolean>>();
+      const unsafeReward = {
+        key: "game.reward.item",
+        params: { count: 1n },
+      };
+      // @ts-expect-error bigint cannot cross the notification JSON transport.
+      player.showNotification(unsafeReward);
     };
 
     expectTypeOf(assertions).toBeFunction();

@@ -1,6 +1,7 @@
 import { signal, animatedSignal } from "canvasengine";
 import {
   isI18nMessageDescriptor,
+  type I18nMessageDescriptor,
   type I18nParams,
   type I18nText,
 } from "@rpgjs/common";
@@ -26,6 +27,7 @@ export interface NotificationItem extends Omit<NotificationPayload, "message"> {
 
 export interface NotificationTranslationEngine {
   t?: (key: string, params?: I18nParams) => string;
+  translateDescriptor?: (descriptor: I18nMessageDescriptor) => string;
   playSound?: (id: string) => void;
 }
 
@@ -35,6 +37,7 @@ export function resolveNotificationMessage(
 ): string {
   if (typeof message === "string") return message;
   if (!isI18nMessageDescriptor(message)) return "";
+  if (engine?.translateDescriptor) return engine.translateDescriptor(message);
   return engine?.t?.(message.key, message.params) ?? message.key;
 }
 

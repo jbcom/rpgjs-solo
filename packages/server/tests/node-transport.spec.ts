@@ -160,6 +160,30 @@ describe("createRpgServerTransport", () => {
     expect(engine.io).toBe(io);
   });
 
+  it("serializes nested i18n notification descriptors across the node transport", async () => {
+    const ws = new MockWebSocket();
+    const connection = new PartyConnection(ws as any, "connection-1");
+    const payload = {
+      type: "notification",
+      value: {
+        message: {
+          key: "rpg.action-battle.reward.item.named",
+          count: 2,
+          params: {
+            count: 2,
+            item: { key: "game.item.potion" },
+          },
+        },
+      },
+    };
+
+    await connection.send(payload);
+    await wait();
+
+    expect(ws.sent).toHaveLength(1);
+    expect(JSON.parse(ws.sent[0])).toEqual(payload);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     if (typeof originalMapUpdateToken === "string") {

@@ -6,7 +6,7 @@ import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { RpgSound } from "./Sound";
 import { RpgResource } from "./Resource";
-import { getOrCreateI18nService, Hooks, ModulesToken, Direction, normalizeLightingState, Vector2, type I18nParams, type I18nService } from "@rpgjs/common";
+import { getOrCreateI18nService, Hooks, ModulesToken, Direction, normalizeLightingState, Vector2, type I18nMessageDescriptor, type I18nParams, type I18nService } from "@rpgjs/common";
 import type { EventComponentConfig } from "./RpgClient";
 import type { RpgClientEvent } from "./Game/Event";
 import { load } from "@signe/sync";
@@ -381,6 +381,10 @@ export class RpgClientEngine<T = any> {
 
   t(key: string, params?: I18nParams): string {
     return this.i18nService.t(key, params, this.getLocale());
+  }
+
+  translateI18nDescriptor(descriptor: I18nMessageDescriptor): string {
+    return this.i18nService.translateDescriptor(descriptor, this.getLocale());
   }
 
   i18n() {
@@ -833,6 +837,8 @@ export class RpgClientEngine<T = any> {
     this.webSocket.on("notification", (data) => {
       this.notificationManager.add(data, {
         t: (key, params) => this.t(key, params),
+        translateDescriptor: (descriptor) =>
+          this.translateI18nDescriptor(descriptor),
       });
     });
 

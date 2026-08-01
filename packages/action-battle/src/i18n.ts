@@ -3,8 +3,10 @@ export const ACTION_BATTLE_I18N_KEYS = {
   feedbackParry: "rpg.action-battle.feedback.parry",
   feedbackMiss: "rpg.action-battle.feedback.miss",
   rewardCurrency: "rpg.action-battle.reward.currency",
+  rewardNamedItem: "rpg.action-battle.reward.item.named",
   rewardNamedItemOne: "rpg.action-battle.reward.item.named.one",
   rewardNamedItemOther: "rpg.action-battle.reward.item.named.other",
+  rewardItem: "rpg.action-battle.reward.item",
   rewardItemOne: "rpg.action-battle.reward.item.one",
   rewardItemOther: "rpg.action-battle.reward.item.other",
 } as const;

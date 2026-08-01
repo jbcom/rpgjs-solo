@@ -1013,10 +1013,26 @@ server removes collision immediately while clients keep the sprite long enough
 to play its Studio `die` animation and a configurable CanvasEngine death effect.
 When `showNotification` is enabled, reward messages are translated by the
 receiving client's active locale. Games can override the stable
-`rpg.action-battle.reward.currency`, `rpg.action-battle.reward.item.named.one`,
-`rpg.action-battle.reward.item.named.other`, `rpg.action-battle.reward.item.one`,
-and `rpg.action-battle.reward.item.other` keys through `provideI18n()`; reward
-counts and item names are supplied as interpolation parameters.
+`rpg.action-battle.reward.currency`,
+`rpg.action-battle.reward.item.named.<plural-category>`, and
+`rpg.action-battle.reward.item.<plural-category>` keys through `provideI18n()`.
+Plural categories are selected on the receiving client with `Intl.PluralRules`,
+not guessed by the server. Set `itemNameKey` on a reward item and provide that
+translation key in the game catalog to localize the item name as well; rewards
+without an authored item-name key deliberately use the localized generic item
+message instead of embedding a server-side database name.
+
+```ts
+rewards: {
+  items: [{
+    itemId: "potion",
+    itemNameKey: "game.item.potion",
+    amount: 2,
+  }],
+  showNotification: true,
+}
+```
+
 Use `presentation.death` to tune the effect, scale, shake, and duration, or set
 it to `false` for immediate removal. The legacy `onDefeated(event, attacker)`
 signature remains supported for two-argument callbacks.

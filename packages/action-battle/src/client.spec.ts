@@ -76,7 +76,10 @@ describe("action battle client attack recovery", () => {
 
   test("interpolates English reward defaults and custom locale plural overrides", () => {
     const client = createActionBattleClient();
-    const english = new I18nService({ messages: client.i18n });
+    const english = new I18nService({
+      messages: { en: { "game.item.potion": "Potion" } },
+    });
+    english.addMessages(client.i18n, "action-battle", 10);
 
     expect(
       english.t(ACTION_BATTLE_I18N_KEYS.rewardCurrency, {
@@ -85,19 +88,25 @@ describe("action battle client attack recovery", () => {
       })
     ).toBe("You won 25 experience and 7 gold");
     expect(
-      english.t(ACTION_BATTLE_I18N_KEYS.rewardNamedItemOne, {
+      english.translateDescriptor({
+        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItem,
         count: 1,
-        item: "Potion",
+        params: { count: 1, item: { key: "game.item.potion" } },
       })
     ).toBe("You won 1 Potion");
     expect(
-      english.t(ACTION_BATTLE_I18N_KEYS.rewardNamedItemOther, {
+      english.translateDescriptor({
+        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItem,
         count: 3,
-        item: "Potion",
+        params: { count: 3, item: { key: "game.item.potion" } },
       })
     ).toBe("You won 3 units of Potion");
     expect(
-      english.t(ACTION_BATTLE_I18N_KEYS.rewardItemOther, { count: 3 })
+      english.translateDescriptor({
+        key: ACTION_BATTLE_I18N_KEYS.rewardItem,
+        count: 3,
+        params: { count: 3 },
+      })
     ).toBe("You won 3 items");
 
     const spanish = new I18nService({
@@ -127,13 +136,48 @@ describe("action battle client attack recovery", () => {
       })
     ).toBe("Ganaste 25 de experiencia y 7 de oro");
     expect(
-      spanish.t(ACTION_BATTLE_I18N_KEYS.rewardNamedItemOther, {
+      spanish.translateDescriptor({
+        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItem,
         count: 3,
-        item: "Poción",
+        params: { count: 3, item: "Poción" },
       })
     ).toBe("Ganaste 3 unidades de Poción");
     expect(
-      spanish.t(ACTION_BATTLE_I18N_KEYS.rewardItemOther, { count: 3 })
+      spanish.translateDescriptor({
+        key: ACTION_BATTLE_I18N_KEYS.rewardItem,
+        count: 3,
+        params: { count: 3 },
+      })
     ).toBe("Ganaste 3 objetos");
+  });
+
+  test("selects receiving-locale plural categories beyond one and other", () => {
+    const russian = new I18nService({
+      defaultLocale: "ru",
+      fallbackLocale: "en",
+      messages: {
+        ru: {
+          [`${ACTION_BATTLE_I18N_KEYS.rewardItem}.one`]:
+            "Получен {count} предмет",
+          [`${ACTION_BATTLE_I18N_KEYS.rewardItem}.few`]:
+            "Получено {count} предмета",
+          [`${ACTION_BATTLE_I18N_KEYS.rewardItem}.many`]:
+            "Получено {count} предметов",
+          [`${ACTION_BATTLE_I18N_KEYS.rewardItem}.other`]:
+            "Получено {count} предмета",
+        },
+      },
+    });
+    const reward = (count: number) =>
+      russian.translateDescriptor({
+        key: ACTION_BATTLE_I18N_KEYS.rewardItem,
+        count,
+        params: { count },
+      });
+
+    expect(reward(1)).toBe("Получен 1 предмет");
+    expect(reward(2)).toBe("Получено 2 предмета");
+    expect(reward(5)).toBe("Получено 5 предметов");
+    expect(reward(21)).toBe("Получен 21 предмет");
   });
 });

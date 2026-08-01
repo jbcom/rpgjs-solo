@@ -7,7 +7,7 @@ import { SaveLoadOptions, SaveSlot } from "../Gui/SaveLoadGui";
 import { MenuGuiOptions } from "../Gui/MenuGui";
 import { GameoverGuiOptions, GameoverGuiSelection } from "../Gui/GameoverGui";
 import { InputOptions, NumberInputOptions, TextInputOptions, TextareaInputOptions } from "../Gui/InputForm";
-import { Constructor, PlayerCtor, PrebuiltGui, type I18nText } from "@rpgjs/common";
+import { assertI18nText, Constructor, PlayerCtor, PrebuiltGui, type I18nText } from "@rpgjs/common";
 
 export interface NotificationOptions {
   time?: number;
@@ -75,6 +75,7 @@ export function WithGuiManager<TBase extends PlayerCtor>(
       message: I18nText,
       options: NotificationOptions = {}
     ): Promise<boolean> {
+      assertI18nText(message);
       ;(this as unknown as { emit(type: string, value?: unknown): void }).emit('notification', {
         message,
         ...options,
@@ -494,7 +495,8 @@ export interface IGuiManager {
    * ```ts
    * player.showNotification({
    *   key: 'game.reward.item',
-   *   params: { count: 2, item: 'Potion' }
+   *   count: 2,
+   *   params: { count: 2, item: { key: 'game.item.potion' } }
    * })
    * ```
    *

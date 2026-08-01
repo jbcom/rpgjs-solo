@@ -12,10 +12,9 @@ describe("NotificationManager localization", () => {
 
   test("resolves deferred messages with the client translator and interpolation params", () => {
     vi.useFakeTimers();
-    const t = vi.fn((key: string, params?: Record<string, unknown>) =>
-      key === "reward.items"
-        ? `Recibiste ${params?.count} unidades de ${params?.item}`
-        : key
+    const translateDescriptor = vi.fn(
+      (message: { key: string; count?: number }) =>
+        `${message.key}:${message.count}`
     );
     const manager = new NotificationManager();
 
@@ -23,17 +22,19 @@ describe("NotificationManager localization", () => {
       {
         message: {
           key: "reward.items",
+          count: 3,
           params: { count: 3, item: "Poción" },
         },
       },
-      { t }
+      { translateDescriptor }
     );
 
-    expect(t).toHaveBeenCalledWith("reward.items", {
+    expect(translateDescriptor).toHaveBeenCalledWith({
+      key: "reward.items",
       count: 3,
-      item: "Poción",
+      params: { count: 3, item: "Poción" },
     });
-    expect(manager.stack()[0]?.message).toBe("Recibiste 3 unidades de Poción");
+    expect(manager.stack()[0]?.message).toBe("reward.items:3");
   });
 
   test("falls back to the stable key when no translator is available", () => {

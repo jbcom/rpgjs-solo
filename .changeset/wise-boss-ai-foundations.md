@@ -19,9 +19,10 @@ and optional mobile heavy-attack controls. `preset: "classic"` preserves the
 previous combat and UI defaults.
 
 Resolve Action Battle reward notifications on the client through stable i18n
-keys and interpolation parameters, including count-aware item keys and game
-locale overrides. `showNotification()` now accepts a deferred translation
-descriptor while preserving literal notification strings.
+keys and JSON-safe interpolation parameters. Plural categories use the active
+client locale, and authored item-name keys resolve on that same client instead
+of embedding server database text. `showNotification()` now accepts a deferred
+translation descriptor while preserving literal notification strings.
 
 Position transient component animations from numeric world coordinates and
 derive component bounds from visible pixels for generated Studio spritesheets,

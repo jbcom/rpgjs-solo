@@ -1,5 +1,6 @@
 import { MAXHP } from "@rpgjs/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { I18nService } from "@rpgjs/common";
 import { AiDebug, AttackPattern, BattleAi } from "./ai.server";
 import {
   callAction,
@@ -213,7 +214,14 @@ describe("BattleAi defeat flow", () => {
       rewards: {
         exp: 25,
         gold: 7,
-        items: [{ itemId: "potion", amount: 2, chance: 100 }],
+        items: [
+          {
+            itemId: "potion",
+            itemNameKey: "game.item.potion",
+            amount: 2,
+            chance: 100,
+          },
+        ],
         showNotification: true,
       },
     });
@@ -230,8 +238,9 @@ describe("BattleAi defeat flow", () => {
     expect(attacker.showNotification).toHaveBeenNthCalledWith(
       2,
       {
-        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItemOther,
-        params: { count: 2, item: "Potion" },
+        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItem,
+        count: 2,
+        params: { count: 2, item: { key: "game.item.potion" } },
       },
       { icon: "potion-icon" }
     );
@@ -260,14 +269,24 @@ describe("BattleAi defeat flow", () => {
     });
   });
 
-  test("selects stable singular and plural reward keys from the item count", () => {
+  test("defers plural category and authored item-name translation to the client", () => {
     const event = createEvent();
     const attacker = createPlayer();
     const ai = new BattleAi(event as any, {
       rewards: {
         items: [
-          { itemId: "potion", amount: 1, chance: 100 },
-          { itemId: "potion", amount: 3, chance: 100 },
+          {
+            itemId: "potion",
+            itemNameKey: "game.item.potion",
+            amount: 1,
+            chance: 100,
+          },
+          {
+            itemId: "potion",
+            itemNameKey: "game.item.potion",
+            amount: 3,
+            chance: 100,
+          },
         ],
         showNotification: true,
       },
@@ -278,16 +297,18 @@ describe("BattleAi defeat flow", () => {
     expect(attacker.showNotification).toHaveBeenNthCalledWith(
       1,
       {
-        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItemOne,
-        params: { count: 1, item: "Potion" },
+        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItem,
+        count: 1,
+        params: { count: 1, item: { key: "game.item.potion" } },
       },
       { icon: "potion-icon" }
     );
     expect(attacker.showNotification).toHaveBeenNthCalledWith(
       2,
       {
-        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItemOther,
-        params: { count: 3, item: "Potion" },
+        key: ACTION_BATTLE_I18N_KEYS.rewardNamedItem,
+        count: 3,
+        params: { count: 3, item: { key: "game.item.potion" } },
       },
       { icon: "potion-icon" }
     );
@@ -308,10 +329,51 @@ describe("BattleAi defeat flow", () => {
 
     expect(attacker.showNotification).toHaveBeenCalledWith(
       {
-        key: ACTION_BATTLE_I18N_KEYS.rewardItemOther,
+        key: ACTION_BATTLE_I18N_KEYS.rewardItem,
+        count: 2,
         params: { count: 2 },
       },
       { icon: undefined }
+    );
+  });
+
+  test("round-trips an AI reward into a fully localized client message", () => {
+    const event = createEvent();
+    const attacker = createPlayer();
+    const ai = new BattleAi(event as any, {
+      rewards: {
+        items: [
+          {
+            itemId: "potion",
+            itemNameKey: "game.item.potion",
+            amount: 2,
+            chance: 100,
+          },
+        ],
+        showNotification: true,
+      },
+    });
+
+    ai.handleDamage(attacker as any, { damage: 10, defeated: true });
+    const wireMessage = JSON.parse(
+      JSON.stringify(attacker.showNotification.mock.calls[0][0])
+    );
+    const service = new I18nService({
+      defaultLocale: "es",
+      fallbackLocale: "en",
+      messages: {
+        es: {
+          [ACTION_BATTLE_I18N_KEYS.rewardNamedItemOne]:
+            "Ganaste {count} {item}",
+          [ACTION_BATTLE_I18N_KEYS.rewardNamedItemOther]:
+            "Ganaste {count} unidades de {item}",
+          "game.item.potion": "Poción",
+        },
+      },
+    });
+
+    expect(service.translateDescriptor(wireMessage, "es")).toBe(
+      "Ganaste 2 unidades de Poción"
     );
   });
 

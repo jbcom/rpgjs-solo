@@ -30,7 +30,8 @@ describe("GUI", () => {
     const player: any = new LocalizedPlayer();
     const message = {
       key: "game.reward.item",
-      params: { count: 2, item: "Potion" },
+      count: 2,
+      params: { count: 2, item: { key: "game.item.potion" } },
     };
 
     await player.showNotification(message, { icon: "potion" });
@@ -39,6 +40,28 @@ describe("GUI", () => {
       message,
       icon: "potion",
     });
+    expect(() => JSON.stringify(player.emit.mock.calls[0][1])).not.toThrow();
+  });
+
+  test("rejects unsafe notification descriptors before transport", () => {
+    class PlayerBase {
+      emit = vi.fn();
+    }
+    const LocalizedPlayer = WithGuiManager(PlayerBase as any);
+    const player: any = new LocalizedPlayer();
+    const cyclic: any = { key: "game.reward.item" };
+    cyclic.params = { nested: cyclic };
+
+    expect(() =>
+      player.showNotification({
+        key: "game.reward.item",
+        params: { count: 1n },
+      })
+    ).toThrow(/JSON-safe i18n descriptor/);
+    expect(() => player.showNotification(cyclic)).toThrow(
+      /JSON-safe i18n descriptor/
+    );
+    expect(player.emit).not.toHaveBeenCalled();
   });
 
   test("input gui returns typed text and number values", async () => {

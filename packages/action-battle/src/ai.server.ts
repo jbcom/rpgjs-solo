@@ -111,6 +111,8 @@ const createMoveSignature = (x: number, y: number): string =>
 export interface BattleAiRewardItem {
   item?: any;
   itemId?: string;
+  /** Client i18n key for the item name used in reward notifications. */
+  itemNameKey?: string;
   amount?: number;
   chance?: number;
 }
@@ -308,17 +310,6 @@ const getPlayerMap = (player: RpgPlayer) => {
     : undefined;
 };
 
-const getRewardItemName = (inventoryItem: any, itemRef: any): string | undefined => {
-  if (inventoryItem && typeof inventoryItem.name === "function") {
-    return inventoryItem.name();
-  }
-  if (inventoryItem?.name) return inventoryItem.name;
-  if (typeof itemRef === "string") return itemRef;
-  if (itemRef?.name) return itemRef.name;
-  if (itemRef?.id) return itemRef.id;
-  return undefined;
-};
-
 const createDefeatReward = (
   rewards: BattleAiRewards | undefined
 ): BattleAiDefeatReward => {
@@ -350,26 +341,27 @@ const createDefeatReward = (
         if (Math.random() * 100 >= (item.chance ?? 100)) continue;
 
         const amount = item.amount ?? 1;
-        const inventoryItem = player.addItem(itemRef, amount);
+        player.addItem(itemRef, amount);
         if (rewards.showNotification) {
           const itemData =
             typeof itemRef === "string"
               ? getPlayerMap(player)?.database?.()?.[itemRef]
               : undefined;
-          const itemName = getRewardItemName(inventoryItem, itemRef);
-          const key = itemName
-            ? amount === 1
-              ? ACTION_BATTLE_I18N_KEYS.rewardNamedItemOne
-              : ACTION_BATTLE_I18N_KEYS.rewardNamedItemOther
-            : amount === 1
-              ? ACTION_BATTLE_I18N_KEYS.rewardItemOne
-              : ACTION_BATTLE_I18N_KEYS.rewardItemOther;
+          const itemNameKey =
+            typeof item.itemNameKey === "string" && item.itemNameKey.length > 0
+              ? item.itemNameKey
+              : undefined;
           player.showNotification(
             {
-              key,
+              key: itemNameKey
+                ? ACTION_BATTLE_I18N_KEYS.rewardNamedItem
+                : ACTION_BATTLE_I18N_KEYS.rewardItem,
+              count: amount,
               params: {
                 count: amount,
-                ...(itemName ? { item: itemName } : {}),
+                ...(itemNameKey
+                  ? { item: { key: itemNameKey } }
+                  : {}),
               },
             },
             { icon: itemData?.icon }

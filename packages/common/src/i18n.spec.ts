@@ -3,6 +3,7 @@ import { Context, injector } from "@signe/di";
 import {
   createI18nProvider,
   getOrCreateI18nService,
+  I18nService,
   isI18nMessageDescriptor,
   registerI18nMessages,
 } from "./i18n";
@@ -12,6 +13,45 @@ describe("i18n service", () => {
     expect(isI18nMessageDescriptor({ key: "reward.item", params: { count: 2 } })).toBe(true);
     expect(isI18nMessageDescriptor("reward.item")).toBe(false);
     expect(isI18nMessageDescriptor({ params: { count: 2 } })).toBe(false);
+    expect(
+      isI18nMessageDescriptor({ key: "reward.item", params: { count: 1n } })
+    ).toBe(false);
+    expect(
+      isI18nMessageDescriptor({ key: "reward.item", params: { format: () => "x" } })
+    ).toBe(false);
+    expect(isI18nMessageDescriptor({ key: "reward.item", count: NaN })).toBe(false);
+    const cyclic: Record<string, unknown> = { key: "reward.item" };
+    cyclic.params = { nested: cyclic };
+    expect(isI18nMessageDescriptor(cyclic)).toBe(false);
+  });
+
+  test("selects locale plural categories and resolves nested message params", () => {
+    const service = new I18nService({
+      defaultLocale: "ru",
+      fallbackLocale: "en",
+      messages: {
+        en: {
+          "reward.item.other": "Received {count} {item}",
+          "item.potion": "Potion",
+        },
+        ru: {
+          "reward.item.one": "Получен {count} {item}",
+          "reward.item.few": "Получено {count} предмета: {item}",
+          "reward.item.many": "Получено {count} предметов: {item}",
+          "item.potion": "Зелье",
+        },
+      },
+    });
+    const message = (count: number) =>
+      service.translateDescriptor({
+        key: "reward.item",
+        count,
+        params: { count, item: { key: "item.potion" } },
+      });
+
+    expect(message(1)).toBe("Получен 1 Зелье");
+    expect(message(2)).toBe("Получено 2 предмета: Зелье");
+    expect(message(5)).toBe("Получено 5 предметов: Зелье");
   });
 
   test("translates with fallback locale and raw key fallback", () => {
