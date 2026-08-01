@@ -17,6 +17,27 @@ const dependencyFields = [
 const commandTimeoutMs = 300_000;
 const commandMaxBuffer = 32 * 1024 * 1024;
 
+export const getDeterministicTarEnvironment = () => {
+	const environment = Object.fromEntries(
+		Object.entries(process.env).filter(([name]) => {
+			const normalizedName = name.toUpperCase();
+			return (
+				normalizedName !== "TAR_OPTIONS" &&
+				normalizedName !== "TAR_READER_OPTIONS" &&
+				normalizedName !== "LC_ALL"
+			);
+		}),
+	);
+	// Both variables are implicitly parsed by their respective tar families and
+	// can change listing bytes or extraction paths despite explicit CLI flags.
+	// TAPE is harmless because every invocation supplies -f; writer-only options
+	// do not affect this read/extract boundary. Filter names case-insensitively
+	// because Windows child environments resolve them that way, then add exactly
+	// one deterministic locale key so a mixed-case ambient alias cannot win.
+	environment.LC_ALL = "C";
+	return environment;
+};
+
 const readManifest = (directory) =>
 	JSON.parse(readFileSync(join(directory, "package.json"), "utf8"));
 
@@ -148,16 +169,132 @@ const getPortableArchiveMemberKey = (entry) =>
 	// after folding so canonically equivalent Unicode spellings share one key.
 	entry.normalize("NFC").toUpperCase().toLowerCase().normalize("NFC");
 
+const win32ForbiddenComponentCharacter = /[<>:"\\|?*\u0000-\u001f]/u;
+const win32ReservedDeviceBase =
+	/^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])$/iu;
+
+const assertPortableComponentLength = (component, entry, packageName) => {
+	// JavaScript string length is the UTF-16 code-unit count used by Win32.
+	// Count it separately from UTF-8 bytes so astral code points cannot bypass
+	// the Windows component limit merely because there are fewer code points.
+	const utf16CodeUnits = component.length;
+	if (utf16CodeUnits > 255) {
+		throw new Error(
+			`${packageName} archive component ${JSON.stringify(component)} exceeds the Win32 255 UTF-16-code-unit limit (${utf16CodeUnits}) for ${entry}`,
+		);
+	}
+	const utf8Bytes = Buffer.byteLength(component, "utf8");
+	if (utf8Bytes > 255) {
+		throw new Error(
+			`${packageName} archive component ${JSON.stringify(component)} exceeds the common filesystem 255 UTF-8-byte limit (${utf8Bytes}) for ${entry}`,
+		);
+	}
+};
+
+const assertWin32PortableComponent = (component, entry, packageName) => {
+	const forbiddenCharacter = component.match(
+		win32ForbiddenComponentCharacter,
+	)?.[0];
+	if (forbiddenCharacter !== undefined) {
+		const codePoint = forbiddenCharacter.codePointAt(0)
+			.toString(16)
+			.toUpperCase()
+			.padStart(4, "0");
+		throw new Error(
+			`${packageName} archive contains Win32-forbidden character ${JSON.stringify(forbiddenCharacter)} (U+${codePoint}) in component ${JSON.stringify(component)} for ${entry}`,
+		);
+	}
+	if (/[ .]$/u.test(component)) {
+		throw new Error(
+			`${packageName} archive contains Win32-trimmed trailing dot or space in component ${JSON.stringify(component)} for ${entry}`,
+		);
+	}
+	// Win32 reserves device basenames even when an extension is present. Trim
+	// spaces and dots immediately before that extension as a conservative guard
+	// against aliases such as `CON .txt`; whole-component trailing dots/spaces
+	// were rejected above. Windows also reserves the historical superscript
+	// COM¹/COM²/COM³ and LPT¹/LPT²/LPT³ forms.
+	const deviceBase = component
+		.normalize("NFC")
+		.split(".", 1)[0]
+		.replace(/[ .]+$/u, "");
+	if (win32ReservedDeviceBase.test(deviceBase)) {
+		throw new Error(
+			`${packageName} archive contains reserved Win32 device component ${JSON.stringify(component)} for ${entry}`,
+		);
+	}
+};
+
+const decodeTarListingEscapes = (entry, packageName) => {
+	// Both bsdtar and GNU tar escape controls, literal backslashes, and (under a
+	// C locale) UTF-8 bytes in listing output. Rebuild the original byte stream
+	// before applying path contracts so `\\037` is a control byte, `\\\\037` is
+	// a real backslash followed by digits, and octal UTF-8 still participates in
+	// the existing NFC/case collision key.
+	const pattern = /\\(?:([0-7]{3})|x([\da-f]{2})|([abfnrtv\\]))/giu;
+	const parts = [];
+	let cursor = 0;
+	for (const match of entry.matchAll(pattern)) {
+		parts.push(Buffer.from(entry.slice(cursor, match.index), "utf8"));
+		const [, octal, hexadecimal, named] = match;
+		if (octal !== undefined || hexadecimal !== undefined) {
+			parts.push(
+				Buffer.from([
+					Number.parseInt(octal ?? hexadecimal, octal === undefined ? 16 : 8),
+				]),
+			);
+		} else {
+			parts.push(
+				Buffer.from(
+					{
+						a: "\u0007",
+						b: "\b",
+						f: "\f",
+						n: "\n",
+						r: "\r",
+						t: "\t",
+						v: "\v",
+						"\\": "\\",
+					}[named.toLowerCase()],
+					"utf8",
+				),
+			);
+		}
+		cursor = match.index + match[0].length;
+	}
+	parts.push(Buffer.from(entry.slice(cursor), "utf8"));
+	try {
+		return new TextDecoder("utf-8", {
+			fatal: true,
+			// Preserve a leading UTF-8 BOM as U+FEFF because it is part of an
+			// archive member name, not a marker for a standalone text document.
+			ignoreBOM: true,
+		}).decode(
+			Buffer.concat(parts),
+		);
+	} catch {
+		throw new Error(
+			`${packageName} archive contains invalid UTF-8 entry name ${JSON.stringify(entry)}`,
+		);
+	}
+};
+
 const assertPortableEntries = (archivePath, packageName) => {
-	const listArchive = (arguments_) =>
+	const listArchive = (arguments_, decodeEntries = false) =>
 		execFileSync("tar", arguments_, {
 			encoding: "utf8",
+			env: getDeterministicTarEnvironment(),
 			timeout: commandTimeoutMs,
 			maxBuffer: commandMaxBuffer,
 		})
 			.split("\n")
-			.filter(Boolean);
-	const entries = listArchive(["-tzf", archivePath]);
+			.filter(Boolean)
+			.map((entry) =>
+				decodeEntries
+					? decodeTarListingEscapes(entry, packageName)
+					: entry,
+			);
+	const entries = listArchive(["-tzf", archivePath], true);
 	const verboseEntries = listArchive(["-tvzf", archivePath]);
 	if (entries.length !== verboseEntries.length) {
 		throw new Error(
@@ -184,7 +321,6 @@ const assertPortableEntries = (archivePath, packageName) => {
 		}
 		if (
 			segments.includes("") ||
-			entry.includes("\\") ||
 			(canonicalEntry !== "package" &&
 				!canonicalEntry.startsWith("package/")) ||
 			(entryType !== "d" && canonicalEntry === "package") ||
@@ -197,6 +333,10 @@ const assertPortableEntries = (archivePath, packageName) => {
 			throw new Error(
 				`${packageName} archive contains non-portable entry ${entry}`,
 			);
+		}
+		for (const segment of segments) {
+			assertPortableComponentLength(segment, entry, packageName);
+			assertWin32PortableComponent(segment, entry, packageName);
 		}
 		const previousEntry = canonicalEntries.get(canonicalEntry);
 		if (previousEntry !== undefined) {
@@ -294,6 +434,7 @@ export const inspectPortablePackageArchive = ({
 	mkdirSync(extractDirectory, { recursive: true });
 	execFileSync("tar", ["-xzf", archivePath, "-C", extractDirectory], {
 		stdio: "pipe",
+		env: getDeterministicTarEnvironment(),
 		timeout: commandTimeoutMs,
 		maxBuffer: commandMaxBuffer,
 	});
