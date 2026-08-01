@@ -1,8 +1,17 @@
 {
   "name": "@jbcom/rpgjs-solo-vite",
-  "version": "5.0.0-beta.29.solo.0",
+  "version": "5.0.0-beta.29.solo.1",
   "description": "Vite production-boundary enforcement for RPGJS Solo games",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jbcom/rpgjs-solo.git",
+    "directory": "packages/solo-vite"
+  },
+  "homepage": "https://github.com/jbcom/rpgjs-solo/tree/main/packages/solo-vite#readme",
+  "bugs": {
+    "url": "https://github.com/jbcom/rpgjs-solo/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,7 +21,10 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "vite build",

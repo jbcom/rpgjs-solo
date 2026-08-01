@@ -4,7 +4,6 @@
 "@rpgjs/common": patch
 "@rpgjs/physic": patch
 "@rpgjs/server": patch
-"@jbcom/rpgjs-solo": patch
 ---
 
 Preserve native skill and item effect restrictions in Action Battle casts,
