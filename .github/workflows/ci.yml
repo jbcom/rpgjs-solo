@@ -32,9 +32,11 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: "pnpm"
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --strict-peer-dependencies
       - name: Dependency currency
         run: pnpm verify:toolchain-currency
+      - name: Workspace dependency audit
+        run: pnpm audit --audit-level=low
       - name: Build
         run: pnpm build
       - name: Public API boundary
