@@ -8,9 +8,9 @@ import {
 import {
 	chmodSync,
 	closeSync,
-	constants as fsConstants,
 	existsSync,
 	fchmodSync,
+	constants as fsConstants,
 	fstatSync,
 	fsyncSync,
 	linkSync,
@@ -37,8 +37,8 @@ import {
 	assertLivePromotedCohort,
 	assertMonotonicLatestPromotion,
 	assertReleaseToolchain,
-	assertReviewedPlanSource,
 	assertReviewedCanonicalMain,
+	assertReviewedPlanSource,
 	createGiteaReleaseAdapter,
 	createGitHubReleaseAdapter,
 	createProvenanceManifest,
@@ -51,6 +51,7 @@ import {
 	pnpmView,
 	prepareReleaseEvidence,
 	publishCandidateCohort,
+	publishedConsumerInstallArgs,
 	publishVerifiedPackageBytes,
 	readTransactionJournal,
 	reconcileReleaseRemotes,
@@ -589,10 +590,7 @@ function createReleaseAdapter(
 			calls.order.push(
 				`download:${release?.draft === true ? "draft" : "published"}:${asset.name}`,
 			);
-			writeTestFile(
-				destination,
-				bytes.get(asset.name) ?? Buffer.alloc(0),
-			);
+			writeTestFile(destination, bytes.get(asset.name) ?? Buffer.alloc(0));
 		},
 		publishRelease() {
 			calls.publish += 1;
@@ -618,6 +616,50 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(normalizeCommandOutput("  output  ", false)).toBe("  output  ");
 	});
 
+	it("isolates the published consumer from an unrelated parent pnpm workspace", () => {
+		const parent = mkdtempSync(join(tmpdir(), "solo-parent-workspace-"));
+		temporaryDirectories.push(parent);
+		const consumer = join(parent, "consumer");
+		const fixture = join(parent, "fixture");
+		mkdirSync(consumer);
+		mkdirSync(fixture);
+		writeJson(join(parent, "package.json"), {
+			name: "unrelated-parent",
+			private: true,
+		});
+		writeTestFile(
+			join(parent, "pnpm-workspace.yaml"),
+			"packages:\n  - packages/**\n",
+		);
+		writeJson(join(fixture, "package.json"), {
+			name: "solo-consumer-fixture",
+			version: "1.0.0",
+		});
+		writeJson(join(consumer, "package.json"), {
+			name: "solo-consumer",
+			private: true,
+			dependencies: {
+				"solo-consumer-fixture": "file:../fixture",
+			},
+		});
+
+		execFileSync("pnpm", ["install", "--ignore-scripts"], {
+			cwd: consumer,
+			stdio: "pipe",
+		});
+		expect(existsSync(join(consumer, "node_modules"))).toBe(false);
+
+		execFileSync("pnpm", [...publishedConsumerInstallArgs], {
+			cwd: consumer,
+			stdio: "pipe",
+		});
+		expect(
+			existsSync(
+				join(consumer, "node_modules", "solo-consumer-fixture", "package.json"),
+			),
+		).toBe(true);
+	});
+
 	it("fails closed unless the executing toolchain is exact Node 24 and pnpm 11.18.0", () => {
 		const exactToolchain = (_program: string, args: string[]) =>
 			args[0] === "--version"
@@ -634,18 +676,10 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		});
 		expect(() =>
 			assertReleaseToolchain(exactToolchain, "26.5.0", process.execPath),
-		).toThrow(
-			/requires Node 24/i,
-		);
+		).toThrow(/requires Node 24/i);
 		expect(() =>
-			assertReleaseToolchain(
-				() => "11.17.0",
-				"24.18.1",
-				process.execPath,
-			),
-		).toThrow(
-			/requires pnpm 11\.18\.0/i,
-		);
+			assertReleaseToolchain(() => "11.17.0", "24.18.1", process.execPath),
+		).toThrow(/requires pnpm 11\.18\.0/i);
 		expect(() =>
 			assertReleaseToolchain(
 				(_program, args) =>
@@ -680,7 +714,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 
 		const root = mkdtempSync(join(tmpdir(), "solo-reviewed-plan-"));
 		temporaryDirectories.push(root);
-		const planPath = join(root, "docs/internal/releases", basename(defaultPlanPath));
+		const planPath = join(
+			root,
+			"docs/internal/releases",
+			basename(defaultPlanPath),
+		);
 		mkdirSync(dirname(planPath), { recursive: true });
 		writeFileSync(planPath, readFileSync(defaultPlanPath));
 		execFileSync("git", ["init", "-q"], { cwd: root });
@@ -697,11 +735,14 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			path: planPath,
 			sha512: reviewed.planSha512,
 		});
-		writeFileSync(planPath, Buffer.concat([readFileSync(planPath), Buffer.from("\n")]));
+		writeFileSync(
+			planPath,
+			Buffer.concat([readFileSync(planPath), Buffer.from("\n")]),
+		);
 		const substituted = loadSoloReleasePlan(planPath);
-		expect(() =>
-			assertReviewedPlanSource(substituted, planPath, root),
-		).toThrow(/exact reviewed HEAD blob/i);
+		expect(() => assertReviewedPlanSource(substituted, planPath, root)).toThrow(
+			/exact reviewed HEAD blob/i,
+		);
 	});
 
 	it("rejects traversal or aliasing in the fixed Solo package cohort", () => {
@@ -727,7 +768,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.reviewEvidence.enginePullRequest.mergeCommit).toBe(
 			plan.requiredSourceCommit,
 		);
-		expect(plan.reviewEvidence.releasePullRequest.number).toBe(23);
+		expect(plan.reviewEvidence.releasePullRequest.number).toBe(24);
 		expect(
 			plan.carriedChangesets.find(
 				({ id }: { id: string }) => id === "fair-studio-success-rates",

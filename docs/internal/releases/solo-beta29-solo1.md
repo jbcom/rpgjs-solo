@@ -4,13 +4,21 @@ Status: tooling is based on the exact canonical, two-parent PR #20 merge
 `82a9e56d106e87c37df4602055a6a22ec22218dc`. Release PR #22 merged the
 deterministic apply transition as `39ee42bd...`; its first pack attempt halted
 before creating an archive when inherited build stdio returned a successful
-null buffer. Corrective release PR #23 fixes that runner boundary and is now
-the release PR bound by the plan. Publication remains blocked until that exact
-PR head passes every required check, is independently accepted, and is merged
-without changing the reviewed source. A new detached producer-disjoint review
-receipt is created only after that exact corrective head becomes a canonical
-two-parent merge, because the receipt binds the final merge SHA as well as the
-updated immutable plan and assignment.
+null buffer. Corrective release PR #23 merged as `e0ba2b8f...`, fixed that
+runner boundary, and produced the signed candidate cohort. Release PR #24 now
+owns the pnpm consumer-isolation correction and is the release PR bound by the
+plan. Promotion remains blocked until that exact PR head passes every required
+check, is independently accepted, and is merged without changing the reviewed
+source. A new detached producer-disjoint review receipt is created only after
+that exact corrective head becomes a canonical two-parent merge, because the
+receipt binds the final merge SHA as well as the updated immutable plan and
+assignment.
+The four exact candidate versions were then published without moving `latest`,
+but the clean-consumer verifier exposed a second environmental boundary: pnpm
+walked upward from its `/private/tmp` consumer into an unrelated parent
+workspace and therefore left the intended consumer empty. Promotion remains
+blocked while PR #24 forces pnpm's documented `--ignore-workspace` isolation
+and proves the hostile-parent case directly.
 `fair-studio-success-rates.introducedBy` remains its own immutable `f014412...`
 commit and is verified as an ancestor of the required source instead of being
 made equal to it.
@@ -49,7 +57,7 @@ never logged, and deleted in `finally`.
 5. Build and run the complete Solo package, boundary, consumer, type, lint, and test gates from clean canonical `main`.
 6. Run `pnpm release:solo:pack --artifacts <absolute-directory-outside-repository>` once. It preflights the output, deletes all four ignored `dist` trees, clean-builds the cohort, and proves every conditional export target from every archive before writing provenance. The manifest is schema 3, binds the complete packed `package.json` used for publication, and is covered by a detached Ed25519 attestation using `RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE`; any independent review receipt is copied into and hash-bound within the artifact set. Retain those exact archives, manifest, SHA-512 sidecar, attestation statement and signature, and review receipt when present.
 7. Run `pnpm publish:solo --manifest <absolute-provenance-path> --execute`; it distinguishes a verified registry package/version-not-found response (including a registry 404) from authentication, transport, and server errors and read-only preflights the complete cohort before local or remote mutation. For every missing candidate package, it opens the provenance archive once with no-follow, regular-file, single-link, inode, SHA-512, and SRI checks, reads the verified bytes through that descriptor, and hands that exact in-memory `Buffer` plus a clone of the fully bound packed manifest directly to `libnpmpublish`. No mutable archive pathname is reopened by the publisher, so a later same-UID replacement cannot change the command input. A mode-0600 journal binds the manifest and completion state for fail-closed recovery; registry fetch-back remains the secondary post-publication proof.
-8. Run `pnpm release:solo:verify-candidate --manifest <absolute-provenance-path> --execute`; it verifies registry integrity and installs the exact cohort with `@arcade-cabinet/rpgjs-patches@0.2.0` in a fresh authenticated consumer.
+8. Run `pnpm release:solo:verify-candidate --manifest <absolute-provenance-path> --execute`; it verifies registry integrity and installs the exact cohort with `@arcade-cabinet/rpgjs-patches@0.2.0` in a fresh authenticated consumer. The install passes pnpm `--ignore-workspace`, so an unrelated `pnpm-workspace.yaml` in any parent of the operating-system temporary directory cannot capture or empty that consumer.
 9. Run `pnpm release:solo:promote --manifest <absolute-provenance-path> --execute`; preflight must pass for the entire cohort. Every existing `latest` must be absent, equal to the target, or an older well-formed Solo prerelease; promotion refuses stable, malformed, or newer tags. A secure owned journal beside the manifest records previous tags and each completed `latest` update so an interruption is detectable and safely resumable. Once an entry is complete, a later retry refuses to overwrite a deliberate live rollback.
 10. Run `pnpm release:solo:publish-releases --manifest <absolute-provenance-path> --execute`; it rechecks the live registry `latest` value for every package rather than trusting the promotion journal. Package and train tags must point at the manifest source commit. GitHub and Gitea are reconciled independently, so a completed GitHub release is verified and reused after a later Gitea failure. Each new source release remains a draft while existing assets are authenticated and verified, missing assets are uploaded, and the complete set is fetched back and hash-verified byte for byte; only then is the release published and verified again. This ordering is compatible with GitHub immutable releases and resumes safely after upload or publish-response interruption.
 
