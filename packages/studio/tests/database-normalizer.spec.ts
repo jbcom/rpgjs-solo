@@ -70,15 +70,40 @@ describe("Studio database normalizer", () => {
   });
 
   test("maps Studio successRate percentages to RPGJS hit rates", () => {
-    const normalized = normalizeStudioDatabaseRecord({
-      _id: "beast-strike",
+    for (const [successRate, hitRate] of [
+      [0, 0],
+      [0.5, 0.005],
+      [1, 0.01],
+      [95, 0.95],
+      [100, 1],
+    ]) {
+      const normalized = normalizeStudioDatabaseRecord({
+        _id: `skill-${successRate}`,
+        type: "skill",
+        name: "Frappe bestiale",
+        successRate,
+        spCost: 5,
+      });
+
+      expect(normalized?.data.hitRate).toBe(hitRate);
+    }
+  });
+
+  test("keeps legacy hitRate ratio compatibility separate from successRate", () => {
+    const ratio = normalizeStudioDatabaseRecord({
+      _id: "ratio-skill",
       type: "skill",
-      name: "Frappe bestiale",
-      successRate: 95,
-      spCost: 5,
+      hitRate: 0.5,
+      successRate: 1,
+    });
+    const percentage = normalizeStudioDatabaseRecord({
+      _id: "percentage-skill",
+      type: "skill",
+      hitRate: 50,
     });
 
-    expect(normalized?.data.hitRate).toBe(0.95);
+    expect(ratio?.data.hitRate).toBe(0.5);
+    expect(percentage?.data.hitRate).toBe(0.5);
   });
 
   test("normalizes Studio action-battle media and legacy targeting", () => {

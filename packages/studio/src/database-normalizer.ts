@@ -11,13 +11,23 @@ const normalizeHitRate = (value: unknown): number | undefined => {
   return Math.max(0, Math.min(1, normalized));
 };
 
+const normalizeSuccessRate = (value: unknown): number | undefined => {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return Math.max(0, Math.min(1, value / 100));
+};
+
+const normalizeRecordHitRate = (record: any): number | undefined =>
+  record.hitRate == null
+    ? normalizeSuccessRate(record.successRate)
+    : normalizeHitRate(record.hitRate);
+
 const mediaId = (value: any): any =>
   value && typeof value === "object"
     ? value._id ?? value.id ?? value.mediaId ?? value.fileName
     : value;
 
 const normalizeSkillRecord = (record: any): any => {
-  const hitRate = normalizeHitRate(record.hitRate ?? record.successRate);
+  const hitRate = normalizeRecordHitRate(record);
   const legacyTarget =
     record.target === "self"
       ? "self"
@@ -128,7 +138,7 @@ const normalizeItemRecord = (record: any, type: string): any => {
     ? {
         hpValue: Number(record.hpValue ?? 0),
         mpValue: Number(record.mpValue ?? 0),
-        hitRate: normalizeHitRate(record.hitRate ?? record.successRate) ?? 1,
+        hitRate: normalizeRecordHitRate(record) ?? 1,
         consumable: typeof record.consumable === "boolean"
           ? record.consumable
           : true,
