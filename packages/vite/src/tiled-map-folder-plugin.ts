@@ -1,7 +1,11 @@
 import {
+    closeSync,
+    constants,
     copyFileSync,
     existsSync,
+    fstatSync,
     mkdirSync,
+    openSync,
     readFileSync,
     readdirSync,
     realpathSync,
@@ -276,26 +280,51 @@ export function tiledMapFolderPlugin(options: DataFolderPluginOptions): Plugin {
                     res.end('Forbidden');
                     return;
                 }
-                if (!existsSync(filePath) || !isAllowedFile(filePath) || !statSync(filePath).isFile()) {
+                if (!isAllowedFile(filePath)) {
                     res.statusCode = 404;
                     res.end('Not Found');
                     return;
                 }
-                if (!pathIsWithin(canonicalSourceFolder, realpathSync(filePath))) {
-                    res.statusCode = 403;
-                    res.end('Forbidden');
-                    return;
-                }
 
+                let fileDescriptor: number | undefined;
                 try {
+                    const canonicalFilePath = realpathSync(filePath);
+                    if (!pathIsWithin(canonicalSourceFolder, canonicalFilePath)) {
+                        res.statusCode = 403;
+                        res.end('Forbidden');
+                        return;
+                    }
+                    fileDescriptor = openSync(
+                        canonicalFilePath,
+                        constants.O_RDONLY | constants.O_NOFOLLOW,
+                    );
+                    if (!fstatSync(fileDescriptor).isFile()) {
+                        res.statusCode = 404;
+                        res.end('Not Found');
+                        return;
+                    }
+                    const contents = readFileSync(fileDescriptor);
                     res.setHeader('Content-Type', getMimeType(filePath));
                     res.setHeader('Cache-Control', 'no-cache');
                     res.setHeader('Access-Control-Allow-Origin', '*');
-                    res.end(readFileSync(filePath));
+                    res.end(contents);
                 } catch (error) {
+                    const code = (error as NodeJS.ErrnoException).code;
+                    if (code === 'ENOENT' || code === 'ENOTDIR') {
+                        res.statusCode = 404;
+                        res.end('Not Found');
+                        return;
+                    }
+                    if (code === 'ELOOP') {
+                        res.statusCode = 403;
+                        res.end('Forbidden');
+                        return;
+                    }
                     server.config.logger.error(`[tiled-map-folder] Unable to serve ${filePath}: ${String(error)}`);
                     res.statusCode = 500;
                     res.end('Internal Server Error');
+                } finally {
+                    if (fileDescriptor !== undefined) closeSync(fileDescriptor);
                 }
             });
         },

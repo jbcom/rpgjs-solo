@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -192,5 +193,51 @@ describe("tiledMapFolderPlugin development routing", () => {
 
     middleware!({ url: "/quest-for-the-crown/maps/simplemap.tmx" }, response, next);
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves only a regular file opened inside the canonical data folder", () => {
+    const root = createFixture();
+    const outsideRoot = mkdtempSync(join(tmpdir(), "rpgjs-tiled-outside-"));
+    fixtureRoots.push(outsideRoot);
+    writeFileSync(join(outsideRoot, "private.tmx"), "<map id=\"private\" />\n");
+    symlinkSync(
+      join(outsideRoot, "private.tmx"),
+      join(root, "src/tiled/linked.tmx")
+    );
+
+    const plugin = createPlugin({ publicPath: "/map" });
+    resolvePlugin(plugin, root, { command: "serve", base: "/" } as Partial<ResolvedConfig>);
+    let middleware: ((req: any, res: any, next: () => void) => void) | undefined;
+    const logger = { warn: vi.fn(), error: vi.fn() };
+    hookHandler(plugin.configureServer).call(plugin, {
+      config: { logger },
+      middlewares: { use(handler: typeof middleware) { middleware = handler; } },
+    });
+
+    const invoke = (url: string) => {
+      let statusCode = 200;
+      let body = "";
+      middleware!(
+        { url },
+        {
+          get statusCode() { return statusCode; },
+          set statusCode(value: number) { statusCode = value; },
+          setHeader() {},
+          end(value: Buffer | string = "") { body = value.toString(); },
+        },
+        vi.fn()
+      );
+      return { statusCode, body };
+    };
+
+    expect(invoke("/map/linked.tmx")).toEqual({
+      statusCode: 403,
+      body: "Forbidden",
+    });
+    expect(invoke("/map/vanished.tmx")).toEqual({
+      statusCode: 404,
+      body: "Not Found",
+    });
+    expect(logger.error).not.toHaveBeenCalled();
   });
 });
