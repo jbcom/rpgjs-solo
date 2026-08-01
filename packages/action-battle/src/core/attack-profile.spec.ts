@@ -185,6 +185,37 @@ describe("normalizeActionBattleAttackProfile", () => {
     });
   });
 
+  test("merges partial Adventure attack controls over the Adventure defaults", () => {
+    const options = normalizeActionBattleOptions({
+      combat: {
+        attack: {
+          profile: {
+            control: { inputBufferMs: 0 },
+          },
+        },
+      },
+    });
+
+    expect(
+      (options.attack?.profile as NormalizedActionBattleAttackProfile).control
+    ).toEqual({
+      movementLock: "active",
+      directionLock: "active",
+      moveCancelsRecovery: true,
+      dodgeCancelsRecovery: true,
+      inputBufferMs: 0,
+    });
+  });
+
+  test("honors a disabled combat director through the systems option", () => {
+    const options = normalizeActionBattleOptions({
+      systems: { ai: { director: false } },
+    });
+
+    expect(options.ai?.director).toBe(false);
+    expect(options.systems?.ai?.director).toBe(false);
+  });
+
   test("keeps legacy lockDurationMs when no explicit profile is provided", () => {
     const options = normalizeActionBattleOptions({
       attack: {

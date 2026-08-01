@@ -207,12 +207,7 @@ export function normalizeActionBattleOptions(
     ...options.attack,
     ...combat.attack,
   };
-  if (
-    !classic &&
-    options.attack?.profile?.control === undefined &&
-    options.combat?.attack?.profile?.control === undefined &&
-    options.systems?.combat?.attack?.profile?.control === undefined
-  ) {
+  if (!classic) {
     attack.profile = {
       ...attack.profile,
       control: {
@@ -221,6 +216,7 @@ export function normalizeActionBattleOptions(
         moveCancelsRecovery: true,
         dodgeCancelsRecovery: true,
         inputBufferMs: 160,
+        ...attack.profile?.control,
       },
     };
   }
@@ -273,6 +269,8 @@ export function normalizeActionBattleOptions(
               : undefined),
           },
         };
+  const requestedDirector =
+    options.ai?.director ?? options.systems?.ai?.director;
   const ai = {
     ...DEFAULT_ACTION_BATTLE_OPTIONS.systems?.ai,
     ...options.systems?.ai,
@@ -298,7 +296,7 @@ export function normalizeActionBattleOptions(
       ...options.ai?.visuals,
     },
     director:
-      options.ai?.director === false
+      requestedDirector === false
         ? false
         : {
             ...((DEFAULT_ACTION_BATTLE_OPTIONS.ai?.director as object) ?? {}),
