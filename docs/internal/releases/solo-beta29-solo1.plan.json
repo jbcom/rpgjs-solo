@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "solo-beta29-solo1",
+  "sourceBaseCommit": "98bdb58b4afafdea0685d69ae046f5eb7239def2",
+  "requiredSourceCommit": "f0144127fe43c264638ca2699b8bfcd3cd55fea6",
+  "upstreamCommit": "2fab01fb8e93ad13902b07db28935f058b387213",
+  "previousVersion": "5.0.0-beta.29.solo.0",
+  "version": "5.0.0-beta.29.solo.1",
+  "registry": "https://git.local.jonbogaty.com/api/packages/jbcom/npm/",
+  "candidateDistTag": "beta29-solo1-candidate",
+  "promotionDistTag": "latest",
+  "trainTag": "solo-v5.0.0-beta.29.solo.1",
+  "canonical": {
+    "repository": "https://github.com/jbcom/rpgjs-solo.git",
+    "branch": "main"
+  },
+  "backup": {
+    "repository": "ssh://gitea@git.local.jonbogaty.com/jbcom/rpgjs-solo.git",
+    "apiRepository": "jbcom/rpgjs-solo"
+  },
+  "packages": [
+    {
+      "name": "@jbcom/rpgjs-solo",
+      "directory": "packages/solo",
+      "tag": "rpgjs-solo-v5.0.0-beta.29.solo.1"
+    },
+    {
+      "name": "@jbcom/rpgjs-solo-action-battle",
+      "directory": "packages/solo-action-battle",
+      "tag": "rpgjs-solo-action-battle-v5.0.0-beta.29.solo.1"
+    },
+    {
+      "name": "@jbcom/rpgjs-solo-renderer",
+      "directory": "packages/solo-renderer",
+      "tag": "rpgjs-solo-renderer-v5.0.0-beta.29.solo.1"
+    },
+    {
+      "name": "@jbcom/rpgjs-solo-vite",
+      "directory": "packages/solo-vite",
+      "tag": "rpgjs-solo-vite-v5.0.0-beta.29.solo.1"
+    }
+  ],
+  "consumedChangesets": [
+    {
+      "id": "calm-pixel-props",
+      "sha256": "b5bf82687d23107322ccc27054365d0a28e7ccf197c92dc54d2602ac179ae8cc"
+    },
+    {
+      "id": "calm-solos-commit",
+      "sha256": "fbbe9262f0e5417ca387aee98922474a70f8b9be13ce7b8dcd38c59e1a02008f"
+    },
+    {
+      "id": "current-solo-toolchain",
+      "sha256": "f2bb459a5c1cc7264d31090491c70145b8c511f180f3b520574077d055b08187"
+    },
+    {
+      "id": "solo-beta29-baseline",
+      "sha256": "44850b98482213c5e788b27eb35dcace6a68e0789f600e8d77f74b62b6e74bb7"
+    },
+    {
+      "id": "solo-beta29-release-transaction",
+      "sha256": "e0cf5ee99cf646c723d9cf883997131a39b99b3d34d1fe78a25f8ad20c801514"
+    }
+  ],
+  "carriedChangesets": [
+    {
+      "id": "calm-music-package-boundaries",
+      "sha256": "e4799b002a1b521b431e03d18862fddd8c8dbc68768954e55d4b20f4fa62cd3a"
+    },
+    {
+      "id": "current-fork-toolchain",
+      "sha256": "f54c5ef17ee37fe4439eb94da95859105417ac6e0327f9f2e407d36e441d667c"
+    },
+    {
+      "id": "firm-hotbar-authority",
+      "sha256": "18aa6bd8264df2a73b0a06aee16899c8da03a5e241617f5cadf2b329547d0b86"
+    },
+    {
+      "id": "warm-combat-feedback",
+      "sha256": "9a31fcd4af11525beb1b83f09003a31a273f0d29908ae1dd0c8edbc8c21390d8"
+    },
+    {
+      "id": "fair-studio-success-rates",
+      "sha256": "7707eae5cafe061c115e0ac8c0498fdb65de0afe4eda74ff3adec5e7269338b6",
+      "introducedBy": "f0144127fe43c264638ca2699b8bfcd3cd55fea6"
+    }
+  ],
+  "requiredConsumer": {
+    "package": "@arcade-cabinet/rpgjs-patches",
+    "version": "0.2.0",
+    "registry": "https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/"
+  }
+}

@@ -3,6 +3,15 @@
   "version": "5.0.0-beta.29.solo.0",
   "description": "Transport-free, deterministic single-player RPG runtime built from RPGJS v5",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jbcom/rpgjs-solo.git",
+    "directory": "packages/solo"
+  },
+  "homepage": "https://github.com/jbcom/rpgjs-solo/tree/main/packages/solo#readme",
+  "bugs": {
+    "url": "https://github.com/jbcom/rpgjs-solo/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
