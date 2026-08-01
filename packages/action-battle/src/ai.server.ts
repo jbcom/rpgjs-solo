@@ -1161,7 +1161,7 @@ export class BattleAi {
     switch (newState) {
       case AiState.Idle:
         if (this.patrolWaypoints.length > 0) {
-          this.startPatrol();
+          this.resumePatrolWhenActionUnlocked(this.stateGeneration);
         }
         break;
       case AiState.Alert:
@@ -2694,6 +2694,24 @@ export class BattleAi {
     this.requestMoveTo({ x: waypoint.x, y: waypoint.y } as any);
   }
 
+  private resumePatrolWhenActionUnlocked(stateGeneration: number): void {
+    if (
+      this.destroyed
+      || this.state !== AiState.Idle
+      || this.stateGeneration !== stateGeneration
+      || this.patrolWaypoints.length === 0
+    ) return;
+    const remainingLockMs = this.actionLockedUntil - Date.now();
+    if (remainingLockMs > 0) {
+      this.schedule(
+        () => this.resumePatrolWhenActionUnlocked(stateGeneration),
+        remainingLockMs,
+      );
+      return;
+    }
+    this.startPatrol();
+  }
+
   /**
    * Update group behavior
    */
@@ -3805,6 +3823,11 @@ export class BattleAi {
     return this.targets;
   }
   setTargets(targets: ActionBattleTargetSelector): void {
+    if (targets !== this.targets) {
+      // Target-policy reconfiguration is an interruption boundary even after
+      // an earlier production tick has already cleared the selected target.
+      this.stateInterruptionGeneration++;
+    }
     this.targets = targets;
     if (this.target && !this.canTarget(this.target)) {
       this.clearTarget();

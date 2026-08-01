@@ -2028,6 +2028,62 @@ describe("BattleAi behavior tree", () => {
     },
   );
 
+  test("defers patrol restart until a preserved self-support action unlocks movement", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = {
+      ...createEvent(),
+      hp: 5,
+      sp: 12,
+    };
+    const onUse = vi.fn();
+    const skill = {
+      id: "self-before-patrol",
+      skillType: "support",
+      spCost: 4,
+      action: { mode: "instant" as const, target: "self" as const },
+      onUse,
+    };
+    const target = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    event.getCurrentMap.mockReturnValue({
+      getPlayers: () => [],
+      getEvents: () => [event],
+    });
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+      moveToCooldown: 0,
+      patrolWaypoints: [{ x: 32, y: 48 }],
+    });
+    event.moveTo.mockClear();
+    ai.onDetectInShape(target as any, {});
+    ai.onDetectInShape(target as any, {});
+    const evaluation = (ai as any).evaluateSkillActions(1_000)[0];
+
+    expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
+    const actionLockedUntil = (ai as any).actionLockedUntil;
+    target.hp = 0;
+    vi.advanceTimersByTime(100);
+
+    expect(ai.getState()).toBe(AiState.Idle);
+    expect(event.moveTo).not.toHaveBeenCalled();
+    const remainingLockMs = actionLockedUntil - Date.now();
+    expect(remainingLockMs).toBeGreaterThan(0);
+    vi.advanceTimersByTime(remainingLockMs - 1);
+    expect(event.moveTo).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+
+    expect(onUse).toHaveBeenCalledOnce();
+    expect(event.sp).toBe(8);
+    expect(event.moveTo).toHaveBeenCalledWith({ x: 32, y: 48 });
+    ai.destroy();
+  });
+
   test("cancels delayed self support when target loss is followed by a new combat epoch", () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
@@ -2112,6 +2168,55 @@ describe("BattleAi behavior tree", () => {
     expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
     ai.setTargets("events");
     expect(ai.getState()).toBe(AiState.Idle);
+    vi.advanceTimersByTime(500);
+
+    expect(onUse).not.toHaveBeenCalled();
+    expect(event.sp).toBe(12);
+    expect((ai as any).skillCooldowns.size).toBe(0);
+    ai.destroy();
+  });
+
+  test("cancels delayed self support when target policy changes after production target loss", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const event = {
+      ...createEvent(),
+      hp: 5,
+      sp: 12,
+    };
+    const onUse = vi.fn();
+    const skill = {
+      id: "self-after-target-loss-before-policy-change",
+      skillType: "support",
+      spCost: 4,
+      action: { mode: "instant" as const, target: "self" as const },
+      onUse,
+    };
+    const target = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    event.getCurrentMap.mockReturnValue({
+      getPlayers: () => [],
+      getEvents: () => [event],
+    });
+    const ai = new BattleAi(event as any, {
+      attackSkill: skill,
+      attackRange: 50,
+      targets: "players",
+    });
+    ai.onDetectInShape(target as any, {});
+    ai.onDetectInShape(target as any, {});
+    const evaluation = (ai as any).evaluateSkillActions(1_000)[0];
+
+    expect((ai as any).performPlannedSkill(evaluation)).toBe(true);
+    target.hp = 0;
+    vi.advanceTimersByTime(100);
+    expect(ai.getState()).toBe(AiState.Idle);
+    expect(ai.getTarget()).toBeNull();
+    ai.setTargets("events");
     vi.advanceTimersByTime(500);
 
     expect(onUse).not.toHaveBeenCalled();
