@@ -3,6 +3,10 @@
   "releaseId": "solo-beta29-solo1",
   "sourceBaseCommit": "98bdb58b4afafdea0685d69ae046f5eb7239def2",
   "requiredSourceCommit": "f0144127fe43c264638ca2699b8bfcd3cd55fea6",
+  "sourceBinding": {
+    "status": "provisional",
+    "requiredUpdate": "After PR #20 merges, replace sourceBaseCommit and requiredSourceCommit with that exact canonical merge SHA and set status to final."
+  },
   "upstreamCommit": "2fab01fb8e93ad13902b07db28935f058b387213",
   "previousVersion": "5.0.0-beta.29.solo.0",
   "version": "5.0.0-beta.29.solo.1",
@@ -40,6 +44,15 @@
       "tag": "rpgjs-solo-vite-v5.0.0-beta.29.solo.1"
     }
   ],
+  "inheritedReleaseDirectories": [
+    "packages/common",
+    "packages/server",
+    "packages/client",
+    "packages/action-battle",
+    "packages/studio",
+    "packages/tiledmap",
+    "packages/vite"
+  ],
   "consumedChangesets": [
     {
       "id": "calm-pixel-props",
@@ -59,7 +72,7 @@
     },
     {
       "id": "solo-beta29-release-transaction",
-      "sha256": "e0cf5ee99cf646c723d9cf883997131a39b99b3d34d1fe78a25f8ad20c801514"
+      "sha256": "6c2e7ffc8d4c18447316f23aa27b9fb333eed2cec7596fa1b54652cfa464a2c0"
     }
   ],
   "carriedChangesets": [
