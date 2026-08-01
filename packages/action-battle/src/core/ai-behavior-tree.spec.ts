@@ -260,6 +260,68 @@ describe("action battle AI behavior tree", () => {
     expect(outer.tick(context)).toEqual({ status: "failure" });
   });
 
+  test("keeps a direct sibling slot when a nested prepared prefix disappears", () => {
+    const directSkill = useSkill({ id: "direct-finisher" });
+    const inner = once("mixed-inner", useAttack("charged"));
+    const child = {
+      tick(context: ReturnType<typeof createContext>) {
+        const innerResult = inner.tick(context);
+        return {
+          status: "success" as const,
+          intent:
+            innerResult.status === "failure"
+              ? [directSkill]
+              : [
+                  innerResult.intent as ReturnType<typeof useAttack>,
+                  directSkill,
+                ],
+        };
+      },
+    };
+    const outer = once("mixed-outer", child);
+    const context = createContext();
+
+    const first = outer.tick(context);
+    acknowledgeActionBattleAiIntentExecution(
+      (first.intent as ReturnType<typeof useAttack>[])[0]
+    );
+
+    const retry = outer.tick(context);
+    expect(retry.intent).toEqual([directSkill]);
+    acknowledgeActionBattleAiIntentExecution(
+      (retry.intent as ReturnType<typeof useSkill>[])[0]
+    );
+
+    expect(inner.tick(context)).toEqual({ status: "failure" });
+    expect(outer.tick(context)).toEqual({ status: "failure" });
+  });
+
+  test("keeps semantic slots when a dynamic array recreates and filters intents", () => {
+    const openingSkill = { id: "opening" };
+    const finishingSkill = { id: "finishing" };
+    let tailOnly = false;
+    const node = once("dynamic-filter", () =>
+      tailOnly
+        ? [useSkill(finishingSkill)]
+        : [useSkill(openingSkill), useSkill(finishingSkill)]
+    );
+    const context = createContext();
+
+    const first = node.tick(context);
+    acknowledgeActionBattleAiIntentExecution(
+      (first.intent as ReturnType<typeof useSkill>[])[0]
+    );
+    tailOnly = true;
+
+    const retry = node.tick(context);
+    expect(retry.intent).toEqual([useSkill(finishingSkill)]);
+    acknowledgeActionBattleAiIntentExecution(
+      (retry.intent as ReturnType<typeof useSkill>[])[0]
+    );
+
+    expect(node.tick(context)).toEqual({ status: "failure" });
+  });
+
   test("isolates acknowledgements for reused intents across AI memories", () => {
     const sharedAttack = useAttack("charged");
     const node = once("shared", sharedAttack);

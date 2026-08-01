@@ -11,7 +11,11 @@ interface ActionBattleAiCompletionSlot {
 
 interface ActionBattleAiCompletionState {
   completed: boolean;
-  directSlots: ActionBattleAiCompletionSlot[];
+  directSlotsByIntent: WeakMap<
+    ActionBattleAiIntent,
+    ActionBattleAiCompletionSlot[]
+  >;
+  directSlotsBySemanticKey: Map<string, ActionBattleAiCompletionSlot[]>;
   inheritedSlots: Map<
     ActionBattleAiCompletionSlot,
     ActionBattleAiCompletionSlot
@@ -43,6 +47,8 @@ const pendingReceiptsByExecutor = new Map<
   object,
   Set<ActionBattleAiIntent>
 >();
+const referencedValueIds = new WeakMap<object, number>();
+let referencedValueId = 0;
 
 const isDeferredIntent = (
   intent: ActionBattleAiIntent
@@ -57,11 +63,103 @@ const createSlot = (
   return slot;
 };
 
-const getOrCreateDirectSlot = (
-  state: ActionBattleAiCompletionState,
-  index: number
-): ActionBattleAiCompletionSlot =>
-  (state.directSlots[index] ??= createSlot(state));
+const getReferencedValueId = (value: object): number => {
+  const existing = referencedValueIds.get(value);
+  if (existing !== undefined) return existing;
+  const id = referencedValueId++;
+  referencedValueIds.set(value, id);
+  return id;
+};
+
+const getStableValueKey = (value: unknown): string => {
+  if (
+    (typeof value === "object" && value !== null) ||
+    typeof value === "function"
+  ) {
+    try {
+      const explicitId = (value as { id?: unknown }).id;
+      if (
+        ["string", "number", "boolean", "bigint"].includes(typeof explicitId)
+      ) {
+        return `id:${typeof explicitId}:${String(explicitId)}`;
+      }
+    } catch {
+      // A getter-backed skill without a readable id still has stable identity.
+    }
+    return `ref:${getReferencedValueId(value as object)}`;
+  }
+  return `${typeof value}:${String(value)}`;
+};
+
+const getDirectIntentSemanticKey = (
+  intent: DeferredActionBattleAiIntent
+): string =>
+  // Consumption controls tree handling after execution, not receipt identity.
+  intent.type === "useAttack"
+    ? `attack:${getStableValueKey(intent.pattern)}`
+    : `skill:${getStableValueKey(intent.skill)}`;
+
+const getWeakOccurrence = <Key extends object>(
+  occurrences: WeakMap<Key, number>,
+  key: Key
+): number => {
+  const count = occurrences.get(key) ?? 0;
+  occurrences.set(key, count + 1);
+  return count;
+};
+
+const getMapOccurrence = <Key>(
+  occurrences: Map<Key, number>,
+  key: Key
+): number => {
+  const count = occurrences.get(key) ?? 0;
+  occurrences.set(key, count + 1);
+  return count;
+};
+
+const selectMappedSlot = (
+  slots: ActionBattleAiCompletionSlot[] | undefined,
+  occurrence: number,
+  claimed: Set<ActionBattleAiCompletionSlot>
+): ActionBattleAiCompletionSlot | undefined => {
+  if (!slots) return undefined;
+  const indexed = slots[occurrence];
+  if (indexed && !claimed.has(indexed) && !indexed.acknowledged) return indexed;
+  const pending = slots.find(
+    (slot) => !claimed.has(slot) && !slot.acknowledged
+  );
+  if (pending) return pending;
+  if (indexed && !claimed.has(indexed)) return indexed;
+  return slots.find((slot) => !claimed.has(slot));
+};
+
+const rememberWeakMappedSlot = <Key extends object>(
+  mappings: WeakMap<Key, ActionBattleAiCompletionSlot[]>,
+  key: Key,
+  occurrence: number,
+  slot: ActionBattleAiCompletionSlot
+): void => {
+  const slots = mappings.get(key) ?? [];
+  if (!slots.includes(slot)) {
+    if (slots[occurrence] === undefined) slots[occurrence] = slot;
+    else slots.push(slot);
+  }
+  mappings.set(key, slots);
+};
+
+const rememberMapMappedSlot = <Key>(
+  mappings: Map<Key, ActionBattleAiCompletionSlot[]>,
+  key: Key,
+  occurrence: number,
+  slot: ActionBattleAiCompletionSlot
+): void => {
+  const slots = mappings.get(key) ?? [];
+  if (!slots.includes(slot)) {
+    if (slots[occurrence] === undefined) slots[occurrence] = slot;
+    else slots.push(slot);
+  }
+  mappings.set(key, slots);
+};
 
 const getOrCreateInheritedSlot = (
   state: ActionBattleAiCompletionState,
@@ -89,7 +187,8 @@ export const createActionBattleAiIntentCompletion =
     const completion = Object.freeze(Object.create(null)) as object;
     completionStates.set(completion, {
       completed: false,
-      directSlots: [],
+      directSlotsByIntent: new WeakMap(),
+      directSlotsBySemanticKey: new Map(),
       inheritedSlots: new Map(),
       slots: [],
     });
@@ -113,6 +212,8 @@ export const isActionBattleAiIntentCompletionComplete = (
  * Receipt metadata lives only in this module's WeakMaps. Nested `once()`
  * nodes inherit the inner slot identity, allowing every owner to acknowledge
  * the same authoritative execution without changing the public intent shape.
+ * Direct slots prefer weak object identity and then a compact semantic key, so
+ * filtering or reordering a recreated dynamic array does not shift progress.
  */
 export const prepareActionBattleAiIntentCompletion = (
   input: ActionBattleAiIntent | ActionBattleAiIntent[],
@@ -127,7 +228,9 @@ export const prepareActionBattleAiIntentCompletion = (
   const intents = Array.isArray(input) ? input : [input];
   const prepared: ActionBattleAiIntent[] = [];
   let deferred = false;
-  let directIndex = 0;
+  const claimedSlots = new Set<ActionBattleAiCompletionSlot>();
+  const intentOccurrences = new WeakMap<ActionBattleAiIntent, number>();
+  const semanticOccurrences = new Map<string, number>();
 
   for (const intent of intents) {
     if (!isDeferredIntent(intent)) {
@@ -138,10 +241,42 @@ export const prepareActionBattleAiIntentCompletion = (
     deferred = true;
     const inheritedReceipt = executionReceipts.get(intent);
     const inheritedSlot = inheritedReceipt?.bindings[0]?.slot;
-    const slot = inheritedSlot
-      ? getOrCreateInheritedSlot(state, inheritedSlot)
-      : getOrCreateDirectSlot(state, directIndex);
-    directIndex++;
+    let slot: ActionBattleAiCompletionSlot;
+    if (inheritedSlot) {
+      slot = getOrCreateInheritedSlot(state, inheritedSlot);
+    } else {
+      const intentOccurrence = getWeakOccurrence(intentOccurrences, intent);
+      const semanticKey = getDirectIntentSemanticKey(intent);
+      const semanticOccurrence = getMapOccurrence(
+        semanticOccurrences,
+        semanticKey
+      );
+      slot =
+        selectMappedSlot(
+          state.directSlotsByIntent.get(intent),
+          intentOccurrence,
+          claimedSlots
+        ) ??
+        selectMappedSlot(
+          state.directSlotsBySemanticKey.get(semanticKey),
+          semanticOccurrence,
+          claimedSlots
+        ) ??
+        createSlot(state);
+      rememberWeakMappedSlot(
+        state.directSlotsByIntent,
+        intent,
+        intentOccurrence,
+        slot
+      );
+      rememberMapMappedSlot(
+        state.directSlotsBySemanticKey,
+        semanticKey,
+        semanticOccurrence,
+        slot
+      );
+    }
+    claimedSlots.add(slot);
 
     if (slot.acknowledged) continue;
 
