@@ -2106,13 +2106,8 @@ export class BattleAi {
    */
   private getWeaponKnockbackForce(): number {
     try {
-      const equipments = (this.event as any).equipments?.() || [];
-      for (const item of equipments) {
-        const itemData = (this.event as any).databaseById?.(item.id());
-        if (itemData?._type === 'weapon' && itemData.knockbackForce !== undefined) {
-          return itemData.knockbackForce;
-        }
-      }
+      return resolveActionBattleWeapon(this.event)?.knockbackForce
+        ?? DEFAULT_KNOCKBACK.force;
     } catch {
       // If error, return default
     }

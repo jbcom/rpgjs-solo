@@ -333,6 +333,10 @@ describe("executeActionBattleUse", () => {
     const emit = vi.fn(() => emitted);
     const attacker = {
       ...createEntity("caster"),
+      equipments: () => [{ id: "bow" }],
+      databaseById: (id: string) => id === "bow"
+        ? { id, _type: "weapon", knockbackForce: 70 }
+        : undefined,
       getCurrentMap: () => ({
         projectiles: {
           emit,

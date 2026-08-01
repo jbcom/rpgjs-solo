@@ -90,4 +90,57 @@ describe("hotbar activation authority", () => {
       feedback: { slot: 2, status: "selected" },
     })).toBe(false);
   });
+
+  test("preserves activation order under out-of-order cleanup", async () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const unregisterFirst = registerHotbarActivationHandler("layered", first);
+    const unregisterSecond = registerHotbarActivationHandler("layered", second);
+    const createContext = () => createHotbarInteractionContext({
+      slot: {
+        index: 0,
+        id: "layered-action",
+        type: "skill",
+        name: "Layered Action",
+        usable: true,
+        entry: { type: "skill", id: "layered-action" },
+        activation: { mode: "instant" as const, handler: "layered" },
+      },
+      setOptimisticSlot: vi.fn(),
+      onInteraction: vi.fn(),
+    });
+
+    try {
+      await activateHotbarSlot(createContext());
+      expect(second).toHaveBeenCalledOnce();
+      expect(first).not.toHaveBeenCalled();
+
+      unregisterFirst();
+      await activateHotbarSlot(createContext());
+      expect(second).toHaveBeenCalledTimes(2);
+
+      unregisterSecond();
+      const fallbackContext = createContext();
+      const fallbackUse = vi.spyOn(fallbackContext, "use");
+      await activateHotbarSlot(fallbackContext);
+      expect(second).toHaveBeenCalledTimes(2);
+      expect(fallbackUse).toHaveBeenCalledOnce();
+    } finally {
+      unregisterSecond();
+      unregisterFirst();
+    }
+
+    const third = vi.fn();
+    const fourth = vi.fn();
+    const unregisterThird = registerHotbarActivationHandler("layered", third);
+    const unregisterFourth = registerHotbarActivationHandler("layered", fourth);
+    try {
+      unregisterFourth();
+      await activateHotbarSlot(createContext());
+      expect(third).toHaveBeenCalledOnce();
+    } finally {
+      unregisterFourth();
+      unregisterThird();
+    }
+  });
 });

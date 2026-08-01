@@ -86,6 +86,16 @@ export interface HotbarChangePayload {
 }
 
 const entryTypes = new Map<string, HotbarEntryTypeDefinition>();
+const entryTypeRegistrations = new Map<
+  string,
+  {
+    base: HotbarEntryTypeDefinition | undefined;
+    entries: Array<{
+      definition: HotbarEntryTypeDefinition;
+      active: boolean;
+    }>;
+  }
+>();
 const playerConfigurations = new WeakMap<object, HotbarConfiguration>();
 
 const readValue = <T = unknown>(value: unknown, fallback?: T): T => {
@@ -200,10 +210,11 @@ entryTypes.set(nativeItemDefinition.type, nativeItemDefinition);
  * Register a server-side hotbar entry type.
  *
  * The definition owns validation, client presentation, and authoritative use.
- * The returned function restores the previous definition.
+ * The returned function removes this registration and restores the newest
+ * still-active definition, or the original definition when none remain.
  *
  * @param definition - Type definition shared by every player on this server.
- * @returns A cleanup function that restores the previous definition.
+ * @returns An idempotent cleanup function for this registration.
  *
  * @example
  * ```ts
@@ -233,11 +244,30 @@ export function registerHotbarEntryType(
   if (!definition?.type) {
     throw new TypeError("A hotbar entry type requires a non-empty type");
   }
-  const previous = entryTypes.get(definition.type);
+  const registrations = entryTypeRegistrations.get(definition.type) ?? {
+    base: entryTypes.get(definition.type),
+    entries: [],
+  };
+  entryTypeRegistrations.set(definition.type, registrations);
+  const registration = { definition, active: true };
+  registrations.entries.push(registration);
   entryTypes.set(definition.type, definition);
   return () => {
-    if (previous) entryTypes.set(definition.type, previous);
-    else entryTypes.delete(definition.type);
+    if (!registration.active) return;
+    registration.active = false;
+    const index = registrations.entries.indexOf(registration);
+    if (index >= 0) registrations.entries.splice(index, 1);
+
+    const current =
+      registrations.entries[registrations.entries.length - 1]?.definition;
+    if (current) entryTypes.set(definition.type, current);
+    else if (registrations.base) {
+      entryTypes.set(definition.type, registrations.base);
+      entryTypeRegistrations.delete(definition.type);
+    } else {
+      entryTypes.delete(definition.type);
+      entryTypeRegistrations.delete(definition.type);
+    }
   };
 }
 

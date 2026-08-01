@@ -93,6 +93,96 @@ describe("action battle player visuals", () => {
     expect(player.setGraphicAnimation).not.toHaveBeenCalledWith("stand");
   });
 
+  test("launches an equipped projectile weapon without melee contact", () => {
+    vi.useFakeTimers();
+    const emit = vi.fn(() => [{ id: "arrow-1" }]);
+    const weapon = {
+      id: "longbow",
+      _type: "weapon",
+      action: {
+        mode: "projectile",
+        target: "enemy",
+        projectile: { type: "arrow", speed: 240, range: 320 },
+      },
+    };
+    const nearbyEnemy = {
+      id: "nearby-enemy",
+      hp: 100,
+      x: () => 132,
+      y: () => 120,
+      hitbox: () => ({ w: 32, h: 32 }),
+      applyDamage: vi.fn(),
+      battleAi: {
+        getFaction: () => "enemies",
+        handleDamage: vi.fn(),
+      },
+    };
+    const map = {
+      clientVisual: vi.fn(),
+      getEvents: () => [nearbyEnemy],
+      getPlayers: () => [],
+      queryHitbox: vi.fn(() => [nearbyEnemy]),
+      stopMovement: vi.fn(),
+      projectiles: { emit },
+    };
+    const player = {
+      id: "archer",
+      canMove: true,
+      directionFixed: false,
+      animationFixed: false,
+      pendingInputs: [],
+      lastProcessedInputTs: 0,
+      x: () => 100,
+      y: () => 120,
+      hitbox: () => ({ w: 32, h: 32 }),
+      getDirection: () => "right",
+      changeDirection: vi.fn(),
+      getCurrentMap: () => map,
+      equipments: () => [{ id: weapon.id }],
+      databaseById: (id: string) => id === weapon.id ? weapon : undefined,
+    };
+    const server = createActionBattleServer({
+      combat: {
+        attack: {
+          profile: {
+            startupMs: 32,
+            activeMs: 40,
+            recoveryMs: 0,
+            control: {
+              movementLock: "none",
+              directionLock: "none",
+            },
+          },
+        },
+      },
+    });
+
+    (server.player?.onInput as any)(player, {
+      action: "action",
+      data: { direction: "right" },
+    });
+
+    expect(emit).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    vi.advanceTimersToNextTimer();
+    expect(emit).toHaveBeenCalledOnce();
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "arrow",
+        trajectory: expect.objectContaining({
+          speed: 240,
+          range: 320,
+        }),
+      }),
+      player,
+    );
+
+    vi.runAllTimers();
+    expect(map.queryHitbox).toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledOnce();
+    expect(nearbyEnemy.applyDamage).not.toHaveBeenCalled();
+  });
+
   test("validates learned skills and cooldowns on the server", () => {
     vi.useFakeTimers();
     const onUse = vi.fn();

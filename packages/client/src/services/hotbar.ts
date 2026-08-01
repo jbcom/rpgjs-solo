@@ -93,6 +93,16 @@ export function shouldClearHotbarOptimisticSlot({
 }
 
 const activationHandlers = new Map<string, HotbarActivationHandler>();
+const activationHandlerRegistrations = new Map<
+  string,
+  {
+    base: HotbarActivationHandler | undefined;
+    entries: Array<{
+      handler: HotbarActivationHandler;
+      active: boolean;
+    }>;
+  }
+>();
 
 /**
  * Register a client preparation handler for a serialized hotbar activation id.
@@ -102,7 +112,8 @@ const activationHandlers = new Map<string, HotbarActivationHandler>();
  *
  * @param id - Serialized handler id emitted by the server presentation.
  * @param handler - Client-only preparation callback.
- * @returns A function that restores the previous handler for the same id.
+ * @returns An idempotent cleanup function that restores the newest
+ * still-active handler for the same id.
  *
  * @example
  * ```ts
@@ -115,11 +126,30 @@ export function registerHotbarActivationHandler(
   id: string,
   handler: HotbarActivationHandler,
 ): () => void {
-  const previous = activationHandlers.get(id);
+  const registrations = activationHandlerRegistrations.get(id) ?? {
+    base: activationHandlers.get(id),
+    entries: [],
+  };
+  activationHandlerRegistrations.set(id, registrations);
+  const registration = { handler, active: true };
+  registrations.entries.push(registration);
   activationHandlers.set(id, handler);
   return () => {
-    if (previous) activationHandlers.set(id, previous);
-    else activationHandlers.delete(id);
+    if (!registration.active) return;
+    registration.active = false;
+    const index = registrations.entries.indexOf(registration);
+    if (index >= 0) registrations.entries.splice(index, 1);
+
+    const current =
+      registrations.entries[registrations.entries.length - 1]?.handler;
+    if (current) activationHandlers.set(id, current);
+    else if (registrations.base) {
+      activationHandlers.set(id, registrations.base);
+      activationHandlerRegistrations.delete(id);
+    } else {
+      activationHandlers.delete(id);
+      activationHandlerRegistrations.delete(id);
+    }
   };
 }
 

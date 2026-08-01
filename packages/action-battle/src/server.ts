@@ -35,6 +35,7 @@ import {
   createActionBattleAttackId,
   getNormalizedActionBattleAttackProfile,
   runActionBattleActiveHitbox,
+  scheduleActionBattleStartup,
 } from "./core/attack-runtime";
 import {
   clearActionBattleHitReaction,
@@ -280,13 +281,7 @@ const isActionReservedForNormalEvent = (
  */
 export function getPlayerWeaponKnockbackForce(player: RpgPlayer): number {
   try {
-    const equipments = player.equipments?.() || [];
-    for (const item of equipments) {
-      const itemData = (player as any).databaseById?.(item.id());
-      if (itemData?._type === 'weapon' && itemData.knockbackForce !== undefined) {
-        return itemData.knockbackForce;
-      }
-    }
+    return resolveActionBattleWeapon(player)?.knockbackForce ?? DEFAULT_KNOCKBACK.force;
   } catch {
     // If error, return default
   }
@@ -560,7 +555,11 @@ const performPlayerAttack = (
   });
 
   const attackId = createActionBattleAttackId(player.id, attackProfile.id);
+  const attackLockId = (player as any).__actionBattleAttackLockId;
   const weapon = resolveActionBattleWeapon(player);
+  const weaponAction = getActionBattleActionConfig(weapon);
+  const weaponUsesMeleeContact =
+    weaponAction?.mode !== "instant" && weaponAction?.mode !== "projectile";
   const hitTracker = new ActionBattleHitTracker(attackProfile.hitPolicy);
   const targetSelector = getActionBattleTargets(player, "events");
   const hitMetadata = {
@@ -575,7 +574,28 @@ const performPlayerAttack = (
       attackProfile.knockbackMultiplier * (counter?.staggerMultiplier ?? 1),
   };
 
+  if (weapon && !weaponUsesMeleeContact) {
+    scheduleActionBattleStartup(attackProfile, () => {
+      if (
+        player.getCurrentMap() !== map ||
+        (actionLocked &&
+          (player as any).__actionBattleAttackLockId !== attackLockId)
+      ) {
+        return;
+      }
+      executeActionBattleUse({
+        attacker: player,
+        target: weaponAction?.target === "self" ? player : softTarget?.target,
+        usable: weapon,
+        weapon,
+        profile: attackProfile,
+        playVisual: false,
+      });
+    });
+  }
+
   const processHits = (hits: any[]) => {
+    if (weapon && !weaponUsesMeleeContact) return;
     hits.forEach((hit: any) => {
       if (
         !canActionBattleTarget(
@@ -589,6 +609,7 @@ const performPlayerAttack = (
       }
       if (!hitTracker.tryHit(hit)) return;
       const handledByWeapon =
+        weaponUsesMeleeContact &&
         weapon &&
         executeActionBattleUse({
           attacker: player,

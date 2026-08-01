@@ -9,6 +9,7 @@ import type {
   ActionBattleKnockbackResult,
   ActionBattleSystems,
 } from "./contracts";
+import { resolveActionBattleWeapon } from "./equipment";
 
 const DEFAULT_CORE_KNOCKBACK = {
   force: 50,
@@ -37,16 +38,6 @@ export const DEFAULT_ZELDA_PLAYER_HITBOXES = {
   left: { offsetX: -48, offsetY: -16, width: 32, height: 32 },
   right: { offsetX: 16, offsetY: -16, width: 32, height: 32 },
   default: { offsetX: 0, offsetY: -32, width: 32, height: 32 },
-};
-
-const resolveEquippedWeapon = (entity: any) => {
-  const equipments = entity?.equipments?.() || [];
-  for (const item of equipments) {
-    const itemId = item?.id?.() ?? item?.id;
-    const itemData = entity?.databaseById?.(itemId);
-    if (itemData?._type === "weapon") return itemData;
-  }
-  return null;
 };
 
 const resolveDirection = (attacker: any, target: any) => {
@@ -157,7 +148,7 @@ export const defaultRpgjsDamageResolver = (
 export const defaultKnockbackResolver = (
   context: ActionBattleKnockbackContext
 ): ActionBattleKnockbackResult => {
-  const weapon = context.weapon ?? resolveEquippedWeapon(context.attacker);
+  const weapon = context.weapon ?? resolveActionBattleWeapon(context.attacker);
   return {
     force:
       (weapon?.knockbackForce ?? DEFAULT_CORE_KNOCKBACK.force) *

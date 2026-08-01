@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createModule, defineModule, PrebuiltGui } from "@rpgjs/common";
 import { testing, type TestingFixture } from "@rpgjs/testing";
-import { registerHotbarEntryType, RpgPlayer } from "../src";
+import {
+  getHotbarEntryType,
+  registerHotbarEntryType,
+  RpgPlayer,
+} from "../src";
 import { buildPlayerHotbarData } from "../src/Gui/HotbarGui";
 
 const onHotbarChange = vi.fn();
@@ -267,6 +271,52 @@ describe("player hotbar", () => {
       expect(use).toHaveBeenCalledWith("wave", 4);
     } finally {
       unregister();
+    }
+  });
+
+  test("preserves registration order under out-of-order cleanup", () => {
+    const type = "layered-emote";
+    const definition = (name: string) => ({
+      type,
+      validate: vi.fn(),
+      resolve: vi.fn(() => ({
+        id: name,
+        type,
+        name,
+        usable: true,
+        activation: { mode: "instant" as const },
+      })),
+      use: vi.fn(),
+    });
+    const first = definition("first");
+    const second = definition("second");
+    const unregisterFirst = registerHotbarEntryType(first);
+    const unregisterSecond = registerHotbarEntryType(second);
+
+    try {
+      expect(getHotbarEntryType(type)).toBe(second);
+      unregisterFirst();
+      expect(getHotbarEntryType(type)).toBe(second);
+      unregisterSecond();
+      expect(getHotbarEntryType(type)).toBeUndefined();
+    } finally {
+      unregisterSecond();
+      unregisterFirst();
+    }
+
+    const third = definition("third");
+    const fourth = definition("fourth");
+    const unregisterThird = registerHotbarEntryType(third);
+    const unregisterFourth = registerHotbarEntryType(fourth);
+
+    try {
+      unregisterFourth();
+      expect(getHotbarEntryType(type)).toBe(third);
+      unregisterThird();
+      expect(getHotbarEntryType(type)).toBeUndefined();
+    } finally {
+      unregisterFourth();
+      unregisterThird();
     }
   });
 
