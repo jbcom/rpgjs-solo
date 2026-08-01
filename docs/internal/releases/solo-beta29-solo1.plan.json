@@ -1,11 +1,11 @@
 {
 	"schemaVersion": 2,
 	"releaseId": "solo-beta29-solo1",
-	"sourceBaseCommit": "98bdb58b4afafdea0685d69ae046f5eb7239def2",
-	"requiredSourceCommit": "f0144127fe43c264638ca2699b8bfcd3cd55fea6",
+	"sourceBaseCommit": "82a9e56d106e87c37df4602055a6a22ec22218dc",
+	"requiredSourceCommit": "82a9e56d106e87c37df4602055a6a22ec22218dc",
 	"sourceBinding": {
-		"status": "provisional",
-		"requiredUpdate": "After PR #20 merges, replace sourceBaseCommit and requiredSourceCommit with that exact canonical merge SHA and set status to final."
+		"status": "final",
+		"requiredUpdate": "Satisfied by the exact canonical, two-parent PR #20 merge commit 82a9e56d106e87c37df4602055a6a22ec22218dc."
 	},
 	"reviewEvidence": {
 		"status": "provisional",
@@ -13,7 +13,7 @@
 		"enginePullRequest": {
 			"repository": "jbcom/rpgjs-solo",
 			"number": 20,
-			"mergeCommit": null,
+			"mergeCommit": "82a9e56d106e87c37df4602055a6a22ec22218dc",
 			"minimumApprovals": 1,
 			"requiredChecks": [
 				"Analyze (actions)",
@@ -25,7 +25,7 @@
 		},
 		"releasePullRequest": {
 			"repository": "jbcom/rpgjs-solo",
-			"number": null,
+			"number": 22,
 			"mergeCommitBinding": "canonical-head",
 			"minimumApprovals": 1,
 			"requiredChecks": [
@@ -51,11 +51,11 @@
 		}
 	},
 	"provenanceAttestation": {
-		"status": "provisional",
+		"status": "final",
 		"algorithm": "ed25519",
-		"keyId": null,
-		"publicKeyPem": null,
-		"requiredUpdate": "Commit the trusted Ed25519 public key and its SHA-256 SPKI key id, set status to final, and provide the matching mode-0600 private key only through RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE during pack."
+		"keyId": "ca802fcb1362d39dc6a9ca139da6c23ec324b7427b3f09be54e99ad31e3f401a",
+		"publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAqCA0VHjBwMLTB3eYdo3xn2nGn6Jl7yr9mqWo65pR5v0=\n-----END PUBLIC KEY-----\n",
+		"requiredUpdate": "Satisfied by the committed Ed25519 public key and SHA-256 SPKI key id; the matching mode-0600 private key remains outside the repository and is supplied only through RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE during pack."
 	},
 	"upstreamCommit": "2fab01fb8e93ad13902b07db28935f058b387213",
 	"previousVersion": "5.0.0-beta.29.solo.0",

@@ -553,13 +553,18 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		);
 	});
 
-	it("pins one beta.29 Solo increment and the post-review source requirement", () => {
+	it("pins one beta.29 Solo increment to the exact engine merge and release PR", () => {
 		const plan = loadSoloReleasePlan();
 		expect(plan.previousVersion).toBe(previousVersion);
 		expect(plan.version).toBe(version);
 		expect(plan.requiredSourceCommit).toBe(
-			"f0144127fe43c264638ca2699b8bfcd3cd55fea6",
+			"82a9e56d106e87c37df4602055a6a22ec22218dc",
 		);
+		expect(plan.sourceBaseCommit).toBe(plan.requiredSourceCommit);
+		expect(plan.reviewEvidence.enginePullRequest.mergeCommit).toBe(
+			plan.requiredSourceCommit,
+		);
+		expect(plan.reviewEvidence.releasePullRequest.number).toBe(22);
 		expect(
 			plan.carriedChangesets.find(
 				({ id }: { id: string }) => id === "fair-studio-success-rates",
@@ -568,11 +573,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.inheritedReleaseDirectories).toEqual(
 			inheritedReleaseDirectories,
 		);
-		expect(plan.sourceBinding.status).toBe("provisional");
+		expect(plan.sourceBinding.status).toBe("final");
 		expect(plan.reviewEvidence.status).toBe("provisional");
-		expect(plan.provenanceAttestation.status).toBe("provisional");
+		expect(plan.provenanceAttestation.status).toBe("final");
 		expect(() => assertFinalReleaseBindings(plan)).toThrow(
-			/sourceBinding, reviewEvidence, independentReceipt, orchestratorAssignment, provenanceAttestation/i,
+			/reviewEvidence, independentReceipt, orchestratorAssignment/i,
 		);
 	});
 

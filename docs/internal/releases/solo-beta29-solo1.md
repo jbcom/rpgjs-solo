@@ -1,11 +1,11 @@
 # RPGJS Solo `5.0.0-beta.29.solo.1` release transaction
 
-Status: tooling prepared on the reviewed `98bdb58` base. Publication remains
-blocked until PR #20, including `f014412`, is merged and this branch is rebased
-onto that exact canonical GitHub `main` history. At that point both
-`sourceBaseCommit` and `requiredSourceCommit` in the plan must be replaced with
-the real PR #20 merge commit and `sourceBinding.status` changed from
-`provisional` to `final`. The value is intentionally not guessed here.
+Status: tooling rebased onto the exact canonical, two-parent PR #20 merge
+`82a9e56d106e87c37df4602055a6a22ec22218dc`, with release PR #22 and the
+release-scoped provenance public key bound in the plan. Publication remains
+blocked until this release PR carries its deterministic apply transition,
+passes every required check, receives the detached producer-disjoint review
+receipt, and is merged without changing the reviewed release source.
 `fair-studio-success-rates.introducedBy` remains its own immutable `f014412...`
 commit and is verified as an ancestor of the required source instead of being
 made equal to it.
@@ -35,7 +35,7 @@ both `--execute` and
 read only from `RPGJS_SOLO_NPM_TOKEN`, written to a mode-0600 temporary npmrc,
 never logged, and deleted in `finally`.
 
-1. Wait for PR #20 to merge, then rebase this release branch onto that exact canonical merge. Replace both provisional source bindings with the merge SHA and recompute all final carry and changeset hashes.
+1. PR #20 is merged and this release branch is based on its exact canonical merge. Both source bindings carry that merge SHA; recompute all final carry and changeset hashes whenever the reviewed source changes before apply.
 2. Open the release-transition PR from this rebased branch. While that same PR is still open, bind its exact PR number and the trusted provenance Ed25519 public key in the plan, then set the source, review, external-assignment policy, and attestation statuses to `final`. The producer-controlled plan must not contain or select a reviewer identity, reviewer key, assignment, or orchestrator trust key.
 3. Still on the same open release PR branch and with the now-final plan committed, run `pnpm release:solo:validate`, then `pnpm release:solo:apply`. Validate explicitly lists and rejects every provisional source, review, independent-receipt, assignment-policy, or provenance binding. Commit the deterministic manifest/changelog/deletion/lock transition to that PR. Apply computes every target and the lockfile from exact `HEAD`, records regular-file modes and hashes, and uses an owned mode-0600 journal plus exclusive no-follow temporary files. Security-sensitive JSON is parsed from bytes read through its already-validated descriptor. Every journal, marker, payload, source, and target must have exactly one hard link. Retrying recovers proven state before or after rename; unmarked, mismatched, replayed, linked, or otherwise unverifiable lookalikes fail closed and remain untouched for investigation. Cleanup is non-recursive and occurs only after exact ownership and content proof.
 4. Let that PR complete all required checks and review, resolve every review thread, and merge it. Do not edit release source or the plan after merge. From exact canonical GitHub `main`, prove the engine and release PR identities, exact two-parent merge ancestry, successful required checks, and resolved threads. Before either lawful GitHub approval or a receipt is trusted, an independent supervisor supplies a mode-0600 trust root outside the repository through `RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_PATH`, pins its declared SHA-256 key fingerprint separately through `RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_KEY_ID`, and supplies its root-signed detached assignment through `RPGJS_SOLO_ORCHESTRATOR_ASSIGNMENT_PATH`. The verifier accepts the fleet's normative `arcade-cabinet.orchestrator-trust-root/v1` representation by canonically decoding its 32 raw Ed25519 bytes and hashing exactly those bytes; the legacy local SPKI representation remains supported only with its corresponding SPKI fingerprint. That assignment binds this release/version, producer task/principal, reviewer task/principal/role/fork, and the reviewer key fingerprint. If a single owner cannot self-approve, only that assigned reviewer creates the detached Ed25519 `ACCEPT` receipt after merge through `RPGJS_SOLO_REVIEW_RECEIPT_PATH`; the receipt binds both merge SHAs, immutable plan hash, external assignment SHA-512, and trust-root fingerprint. Creating these detached inputs does not require a source commit.
