@@ -10,12 +10,14 @@ Client preparation helpers for server-authoritative hotbar entries.
 ## Members
 
 - [activateHotbarSlot](#activatehotbarslot)
+- [createHotbarInteractionContext](#createhotbarinteractioncontext)
 - [entry](#entry)
 - [index](#index)
 - [locked](#locked)
 - [lockedHint](#lockedhint)
 - [registerHotbarActivationHandler](#registerhotbaractivationhandler)
 - [select](#select)
+- [shouldClearHotbarOptimisticSlot](#shouldclearhotbaroptimisticslot)
 - [slot](#slot)
 - [use](#use)
 
@@ -42,6 +44,45 @@ activateHotbarSlot(context: HotbarActivationContext): Promise<void>
 ### Returns
 
 A promise resolved after client preparation has completed.
+
+## createHotbarInteractionContext
+
+Build one ingress context for optimistic UI and authoritative server state.
+
+- Source: `packages/client/src/services/hotbar.ts`
+- Kind: `function`
+
+### Signature
+
+```ts
+createHotbarInteractionContext({
+  slot,
+  setOptimisticSlot,
+  onInteraction,
+}: {
+  slot: HotbarClientSlot;
+  setOptimisticSlot: (slot: number) => void;
+  onInteraction?: (
+    name: HotbarInteractionName,
+    payload: HotbarInteractionPayload,
+  ) => void;
+}): HotbarActivationContext
+```
+
+### Parameters
+
+- `{
+  slot,
+  setOptimisticSlot,
+  onInteraction,
+}`: `{
+  slot: HotbarClientSlot;
+  setOptimisticSlot: (slot: number) => void;
+  onInteraction?: (
+    name: HotbarInteractionName,
+    payload: HotbarInteractionPayload,
+  ) => void;
+}`
 
 ## entry
 
@@ -145,6 +186,39 @@ Select the slot without using its entry.
 ```ts
 select(): void
 ```
+
+## shouldClearHotbarOptimisticSlot
+
+Decide whether authoritative feedback has settled an optimistic selection.
+
+- Source: `packages/client/src/services/hotbar.ts`
+- Kind: `function`
+
+### Signature
+
+```ts
+shouldClearHotbarOptimisticSlot({
+  optimisticSlot,
+  serverActiveSlot,
+  feedback,
+}: {
+  optimisticSlot: number | null;
+  serverActiveSlot?: number | null;
+  feedback?: { slot?: number; status?: string };
+}): boolean
+```
+
+### Parameters
+
+- `{
+  optimisticSlot,
+  serverActiveSlot,
+  feedback,
+}`: `{
+  optimisticSlot: number | null;
+  serverActiveSlot?: number | null;
+  feedback?: { slot?: number; status?: string };
+}`
 
 ## slot
 
