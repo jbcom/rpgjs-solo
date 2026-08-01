@@ -92,6 +92,8 @@ type RpgEventWithBattleAi = RpgEvent & {
 
 interface ActionBattleAiAttackBoundary {
   actorGeneration: ActionBattleActorGeneration;
+  state: AiState;
+  stateGeneration: number;
   selectedTarget?: ActionBattleEntity;
   targets: Array<{
     entity: ActionBattleEntity;
@@ -679,6 +681,9 @@ export class BattleAi {
 
   // State machine
   private state: AiState = AiState.Idle;
+  // Delayed attacks belong to one uninterrupted state epoch. Comparing only
+  // the current enum value would let Stunned -> Combat revive stale work.
+  private stateGeneration: number = 0;
   private stateStartTime: number = 0;
   private stunnedUntil: number = 0;
 
@@ -1137,6 +1142,7 @@ export class BattleAi {
       targetId: this.target?.id,
     });
     this.state = newState;
+    this.stateGeneration++;
     this.stateStartTime = Date.now();
     this.syncThreat();
 
@@ -1687,24 +1693,27 @@ export class BattleAi {
   private revalidatePlannedSkill(
     planned: ActionBattleAiSkillEvaluation,
   ): ActionBattleAiSkillEvaluation | null {
-    if (
-      this.isTargetDefeated(this.event)
-      || !this.target
-      || this.isTargetDefeated(this.target)
-    ) return null;
-
     const plannedPrimary = Array.isArray(planned.target)
       ? planned.target[0]
       : planned.target;
-    if (
-      planned.targetPolicy !== "self"
-      && plannedPrimary !== this.target
-    ) return null;
+    if (this.isTargetDefeated(this.event)) return null;
+
+    const evaluationTarget = planned.targetPolicy === "self"
+      ? plannedPrimary
+      : this.target;
+    if (!evaluationTarget || this.isTargetDefeated(evaluationTarget)) {
+      return null;
+    }
+    if (planned.targetPolicy === "self") {
+      if (plannedPrimary !== this.event) return null;
+    } else if (plannedPrimary !== this.target) {
+      return null;
+    }
 
     const skill = this.resolveUsable(planned.skill);
     const current = evaluateActionBattleAiSkill({
       attacker: this.event,
-      target: this.target,
+      target: evaluationTarget,
       skill,
       now: Date.now(),
       readyAt:
@@ -2326,28 +2335,11 @@ export class BattleAi {
     this.telegraphAttack(profile, AttackPattern.Zone);
     this.playAttackVisual(profile, AttackPattern.Zone);
 
-    const eventX = this.event.x();
-    const eventY = this.event.y();
-    const radius = 50;
-
-    const hitboxes: Array<{ x: number; y: number; width: number; height: number }> = [];
-    const angles = [0, 90, 180, 270];
-
-    angles.forEach(angle => {
-      const rad = (angle * Math.PI) / 180;
-      hitboxes.push({
-        x: eventX + Math.cos(rad) * radius,
-        y: eventY + Math.sin(rad) * radius,
-        width: 40,
-        height: 40,
-      });
-    });
-
     this.scheduleAttackStartup(profile, () => {
       const hitTracker = new ActionBattleHitTracker(profile.hitPolicy);
       runActionBattleActiveHitbox(
         { ...profile, startupMs: 0 },
-        () => hitboxes,
+        () => this.resolveZoneHitboxes(),
         (activeHitboxes) => {
           this.processHitboxHits(
             activeHitboxes,
@@ -2363,6 +2355,22 @@ export class BattleAi {
         )
       );
     }, boundary);
+  }
+
+  private resolveZoneHitboxes(): ActionBattleHitbox[] {
+    const eventX = this.event.x();
+    const eventY = this.event.y();
+    const radius = 50;
+
+    return [0, 90, 180, 270].map((angle) => {
+      const radians = (angle * Math.PI) / 180;
+      return {
+        x: eventX + Math.cos(radians) * radius,
+        y: eventY + Math.sin(radians) * radius,
+        width: 40,
+        height: 40,
+      };
+    });
   }
 
   /**
@@ -3706,6 +3714,8 @@ export class BattleAi {
     if (targets.some((target) => this.isTargetDefeated(target))) return null;
     return {
       actorGeneration: captureActionBattleActorGeneration(this.event),
+      state: this.state,
+      stateGeneration: this.stateGeneration,
       ...(bindSelectedTarget && selectedTarget ? { selectedTarget } : {}),
       targets: targets.map((entity) => ({
         entity,
@@ -3724,6 +3734,8 @@ export class BattleAi {
         && this.canTarget(boundary.selectedTarget)
       )
     )
+      && this.state === boundary.state
+      && this.stateGeneration === boundary.stateGeneration
       && !this.isTargetDefeated(this.event)
       && isActionBattleActorGenerationCurrent(
         this.event,

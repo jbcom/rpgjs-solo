@@ -25,7 +25,13 @@ Bind every delayed AI attack pattern to the telegraphed target object and its
 life generation so target revival or replacement cancels rather than redirects
 pending melee, combo, charge, dash, or counter work. Keep actor-centered zone
 attacks independent of one selected target and bind planned support to its actual
-evaluation targets.
+evaluation targets. Scope every delayed attack, active frame, and planned skill
+to one continuous AI state generation so stun, flee, idle, or even a rapid
+leave-and-return transition interrupts stale work through the same boundary.
+Re-evaluate self support against its captured self recipient even if an unrelated
+selected target is missing, defeated, or replaced. Recenter every zone hitbox on
+the actor's current position at each active frame rather than its pre-startup
+position.
 Replan delayed AI skills against the same target identity and current defeat,
 policy, range, mask, blocker, cooldown, and resource state before hooks or spend.
 Use one blocker-aware collision policy for projectile admission and simulation,

@@ -16,7 +16,8 @@ test('Test HP', () => {
    expect(player.hp).toBe(MAXHP_CURVE.start)
 })
 
-test('HP transitions advance the monotonic life generation', () => {
+test('native RpgPlayer advances life generation across a rapid 10 -> 0 -> 10 transition', () => {
+   player.hp = 10
    const generation = player.lifeGeneration
 
    player.hp = 0

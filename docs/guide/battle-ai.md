@@ -341,9 +341,22 @@ target's life generation. Melee, combo, charged, dash, and defensive counter
 callbacks are cancelled if the target dies and revives or if AI target selection
 changes before execution. The next AI decision may replan against the revived or
 replacement target; an old telegraph is never redirected to it. Actor-centered
-zone attacks bind only the actor generation and remain independent of one
-selected target. Self-targeted support binds its actual self target rather than
-an unrelated selected enemy.
+zone attacks bind only the actor and remain independent of one selected target.
+Their four hitboxes are centered from the actor's current coordinates on every
+active frame, including movement during startup and between frames.
+
+Every delayed AI attack, active frame, counter, and planned skill also belongs to
+one continuous AI state generation. Leaving the originating state for stun,
+flee, or idle cancels its pending work, even if the AI returns to that state
+before the callback fires. This shared interruption boundary applies to melee,
+combo, charge, dash, actor-centered zone, and skill startup rather than relying
+on pattern-specific state checks. Charge and combo bookkeeping is cleared when
+their delayed work is invalidated.
+
+Self-targeted support binds and re-evaluates its captured self recipient rather
+than an unrelated selected enemy. Losing, defeating, or replacing that selected
+enemy alone does not cancel the support action; an actual actor life or AI state
+transition does.
 
 AI planned skills are proposals, not reservations. At the end of startup the AI
 requires the same target identity and reruns target policy, current defeat,
