@@ -11,6 +11,7 @@ import {
   resetGameDataProvider,
 } from "../src/data-provider";
 import type { GameDataProvider } from "../src/server-entry";
+import { change_item } from "../runtime/blocks/executors/change-item";
 
 afterEach(() => {
   delete (globalThis as typeof globalThis & { gameConfig?: unknown }).gameConfig;
@@ -303,6 +304,53 @@ describe("Studio server runtime", () => {
     expect(player.getItem("sword")?.quantity()).toBe(1);
     expect(player.equipments().some((item) => item.id() === "sword")).toBe(true);
     expect(getDatabase).not.toHaveBeenCalled();
+  });
+
+  test("change_item runs hydrated database hooks once per lifecycle operation", async () => {
+    const onAdd = vi.fn();
+    const onRemove = vi.fn();
+    const itemId = "scripted-keepsake";
+    const database = {
+      [itemId]: {
+        id: itemId,
+        _type: "item",
+        name: "Scripted Keepsake",
+        onAdd,
+        onRemove,
+      },
+    };
+    const map = {
+      database: () => database,
+      addInDatabase: vi.fn(),
+      startPosition: { x: 0, y: 0 },
+      scale: 1,
+    } as unknown as RpgMap;
+    const player = new RpgPlayer();
+    player.initializeDefaultStats();
+    player.setMap(map);
+    const context = {
+      player,
+      getVariable: vi.fn(),
+    } as any;
+
+    await change_item(context, {
+      itemId,
+      operation: "add",
+      amountType: "constant",
+      amount: 1,
+    });
+    await change_item(context, {
+      itemId,
+      operation: "remove",
+      amountType: "constant",
+      amount: 1,
+    });
+
+    expect(onAdd).toHaveBeenCalledTimes(1);
+    expect(onAdd).toHaveBeenLastCalledWith(player);
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(onRemove).toHaveBeenLastCalledWith(player);
+    expect(player.hasItem(itemId)).toBe(false);
   });
 
   test("ignores incompatible starting equipment without adding it to inventory", async () => {
