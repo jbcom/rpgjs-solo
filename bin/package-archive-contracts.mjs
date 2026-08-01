@@ -44,34 +44,41 @@ const isNonPortable = (specifier) =>
 const readStaticSpecifier = (node) =>
 	ts.isStringLiteralLike(node) ? node.text : undefined;
 
-const isRequireResolve = (expression) => {
-	if (
+const isStaticMemberAccess = (expression, isOwner, memberName) =>
+	(
 		ts.isPropertyAccessExpression(expression) &&
-		ts.isIdentifier(expression.expression) &&
-		expression.expression.text === "require" &&
-		expression.name.text === "resolve"
-	) {
-		return true;
-	}
-	return (
+		isOwner(expression.expression) &&
+		expression.name.text === memberName
+	) ||
+	(
 		ts.isElementAccessExpression(expression) &&
-		ts.isIdentifier(expression.expression) &&
-		expression.expression.text === "require" &&
-		readStaticSpecifier(expression.argumentExpression) === "resolve"
+		isOwner(expression.expression) &&
+		readStaticSpecifier(expression.argumentExpression) === memberName
 	);
-};
+
+const isIdentifierNamed = (node, name) =>
+	ts.isIdentifier(node) && node.text === name;
+
+const isImportMeta = (node) =>
+	ts.isMetaProperty(node) &&
+	node.keywordToken === ts.SyntaxKind.ImportKeyword;
+
+const isRequireResolve = (expression) =>
+	isStaticMemberAccess(
+		expression,
+		(owner) => isIdentifierNamed(owner, "require"),
+		"resolve",
+	);
 
 const isModuleRequire = (expression) =>
-	ts.isPropertyAccessExpression(expression) &&
-	ts.isIdentifier(expression.expression) &&
-	expression.expression.text === "module" &&
-	expression.name.text === "require";
+	isStaticMemberAccess(
+		expression,
+		(owner) => isIdentifierNamed(owner, "module"),
+		"require",
+	);
 
 const isImportMetaResolve = (expression) =>
-	ts.isPropertyAccessExpression(expression) &&
-	ts.isMetaProperty(expression.expression) &&
-	expression.expression.keywordToken === ts.SyntaxKind.ImportKeyword &&
-	expression.name.text === "resolve";
+	isStaticMemberAccess(expression, isImportMeta, "resolve");
 
 const collectStaticModuleSpecifiers = (path, source) => {
 	const scriptKind = /\.d\.[cm]?ts$/.test(path)
@@ -265,9 +272,6 @@ export const inspectPortablePackageArchive = ({
 	const packedDirectory = join(extractDirectory, "package");
 	const packedManifest = readManifest(packedDirectory);
 	assertPortableManifest(packedManifest);
-	const distributionDirectory = join(packedDirectory, "dist");
-	if (existsSync(distributionDirectory)) {
-		assertPortableImports(distributionDirectory, packageName);
-	}
+	assertPortableImports(packedDirectory, packageName);
 	return { packedDirectory, packedManifest };
 };

@@ -6,6 +6,7 @@ import {
 	it,
 } from "vitest";
 import {
+	existsSync,
 	mkdtempSync,
 	mkdirSync,
 	linkSync,
@@ -126,6 +127,21 @@ describe("portable package archive contracts", () => {
 			{ "dist/index.cjs": 'require.resolve("/tmp/signal");\n' },
 		],
 		[
+			"root package module local reference",
+			{},
+			{ "index.js": 'import "/tmp/signal";\n' },
+		],
+		[
+			"CommonJS module bracket require local reference",
+			{},
+			{ "dist/index.cjs": 'module["require"]("/tmp/signal");\n' },
+		],
+		[
+			"import.meta bracket resolve local reference",
+			{},
+			{ "dist/index.mjs": 'import.meta["resolve"]("/tmp/signal");\n' },
+		],
+		[
 			"declaration absolute reference",
 			{},
 			{ "dist/index.d.ts": 'export type Value = import("/tmp/signal").Value;\n' },
@@ -147,6 +163,24 @@ describe("portable package archive contracts", () => {
 				packageName: "archive-contract-fixture",
 			}),
 		).toThrow(/non-portable|retains local/);
+	});
+
+	it("rejects an existing extraction directory without modifying it", () => {
+		const { archivePath, directory } = createArchive();
+		const extractDirectory = join(directory, "extract");
+		const sentinelPath = join(extractDirectory, "sentinel.txt");
+		mkdirSync(extractDirectory);
+		writeFileSync(sentinelPath, "preserve me\n");
+
+		expect(() =>
+			inspectPortablePackageArchive({
+				archivePath,
+				extractDirectory,
+				packageName: "archive-contract-fixture",
+			}),
+		).toThrow(/fresh extraction directory/);
+		expect(readFileSync(sentinelPath, "utf8")).toBe("preserve me\n");
+		expect(existsSync(join(extractDirectory, "package"))).toBe(false);
 	});
 
 	it("rejects archive links before extraction", () => {
