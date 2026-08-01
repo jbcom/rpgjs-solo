@@ -50,6 +50,51 @@ describe("action battle soft targeting", () => {
     ).toBeNull();
   });
 
+  test("keeps the facing cone for target-inferred projectile rays", () => {
+    const source = entity("hero", 0, 0);
+    const behind = entity("behind", -40, 0);
+    const boundary = {
+      tileRange: 10,
+      tileSize: { width: 10, height: 10 },
+    };
+
+    expect(
+      resolveActionBattleSoftTarget(
+        source,
+        [behind],
+        "right",
+        { coneDegrees: 110 },
+        boundary,
+      ),
+    ).toBeNull();
+    expect(
+      getActionBattleDirectionalTargetBoundary(source, behind, boundary),
+    ).toMatchObject({ eligible: true, fixedRay: false });
+  });
+
+  test("lets an explicitly fixed authored ray override the facing cone", () => {
+    const source = entity("hero", 0, 0);
+    const behind = entity("behind", -40, 0);
+    const boundary = {
+      tileRange: 10,
+      tileSize: { width: 10, height: 10 },
+      direction: { x: -1, y: 0 },
+    };
+
+    expect(
+      resolveActionBattleSoftTarget(
+        source,
+        [behind],
+        "right",
+        { coneDegrees: 110 },
+        boundary,
+      )?.target,
+    ).toBe(behind);
+    expect(
+      getActionBattleDirectionalTargetBoundary(source, behind, boundary),
+    ).toMatchObject({ eligible: true, fixedRay: true });
+  });
+
   test("resolves a cardinal attack direction toward the selected target", () => {
     expect(
       directionToActionBattleTarget(
@@ -274,5 +319,19 @@ describe("action battle soft targeting", () => {
       { ...pointRay, radius: 1, width: 2, shape: "capsule" },
       laterallyOffset,
     )).not.toBeNull();
+  });
+
+  test("resolves collision size by radius, then width, then height", () => {
+    const source = entity("hero", 0, 0, 8);
+    const resolve = (collision: { radius?: number; width?: number; height?: number }) =>
+      resolveActionBattleProjectileGeometry({
+        source,
+        projectile: { direction: "right", collision },
+        tileSize: { width: 16, height: 16 },
+      });
+
+    expect(resolve({ radius: 3, width: 20, height: 100 }).radius).toBe(3);
+    expect(resolve({ width: 4, height: 100 }).radius).toBe(2);
+    expect(resolve({ height: 10 }).radius).toBe(5);
   });
 });

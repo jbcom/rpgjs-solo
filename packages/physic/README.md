@@ -463,6 +463,11 @@ const entity = engine.createEntity({
 const hit = engine.raycast(entity.position, { x: 1, y: 0 }, 200);
 ```
 
+Ray origins on collider boundaries count as immediate overlap. For polygons,
+starting exactly on any edge or corner returns distance `0`, including rays
+parallel to that edge in either direction. Direct collider casts and world
+casts preserve the same boundary contract.
+
 ## Movement Strategies
 
 Use `MovementManager` when a movement is not just direct player input. It is

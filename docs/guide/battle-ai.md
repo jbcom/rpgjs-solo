@@ -295,6 +295,13 @@ renderer displays `projectile.graphic`, applies `scale`, and optionally rotates
 the graphic along its trajectory. Damage and the impact animation/sound occur
 only when the authoritative projectile collides.
 
+Collision size resolves in a stable order: positive `collision.radius`, then
+half of positive `collision.width`, then half of positive `collision.height`.
+For example, `{ width: 4, height: 100 }` resolves to radius `2`; height is only
+a fallback when width is absent or invalid. The resolved radius and collision
+mask are transmitted to the client, whose optional local impact prediction uses
+the same capsule cast as the server.
+
 An explicit `projectile.direction` defines a fixed firing ray, and
 `projectile.origin` defines its world-space start. Player soft targeting and
 enemy planning admit a target when that ray or swept `collision.radius`
@@ -303,6 +310,21 @@ centerline alignment is not required. Without an explicit direction, both
 systems aim from the resolved origin at the selected target before deriving
 range. A defeated caster is rejected at every public cast and hotbar boundary,
 including the server-owned GUI callback.
+Target-inferred rays still obey the configured player-facing cone. Only an
+explicitly authored/input `projectile.direction` fixes the ray strongly enough
+to admit an aligned target outside that cone.
+
+Projectile admission and authoritative simulation share one blocker policy.
+The owner is transparent unless `ignoreOwner: false`, allies and other
+ineligible combatants are transparent, eligible targets collide, and
+physics-only world geometry blocks. A target behind a nearer wall is therefore
+not admitted by player soft targeting or enemy planning.
+
+AI attack startup, combo continuation, dash impact, and counterattack callbacks
+recheck the actor's current HP when their timer fires. Directly setting HP to
+zero cancels those not-yet-emitted side effects; revival permits future attacks.
+An already-emitted projectile is different: it is committed world state and
+continues after its caster is defeated until the projectile system resolves it.
 
 Area masks use `#` for affected tiles and `.` for empty tiles. Studio exposes
 this as a visual grid and canonicalizes legacy binary masks by treating `1` as

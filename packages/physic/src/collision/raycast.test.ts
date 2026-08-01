@@ -223,6 +223,62 @@ describe('raycast', () => {
     expect(hit!.entity).toBe(polyE);
   });
 
+  it.each([
+    { name: 'top edge', origin: [20, -4], directions: [[1, 0], [-1, 0]] },
+    { name: 'bottom edge', origin: [20, 4], directions: [[1, 0], [-1, 0]] },
+    { name: 'left edge', origin: [16, 0], directions: [[0, 1], [0, -1]] },
+    { name: 'right edge', origin: [24, 0], directions: [[0, 1], [0, -1]] },
+    {
+      name: 'top-left corner',
+      origin: [16, -4],
+      directions: [[1, 0], [-1, 0], [0, 1], [0, -1]],
+    },
+    {
+      name: 'top-right corner',
+      origin: [24, -4],
+      directions: [[1, 0], [-1, 0], [0, 1], [0, -1]],
+    },
+    {
+      name: 'bottom-left corner',
+      origin: [16, 4],
+      directions: [[1, 0], [-1, 0], [0, 1], [0, -1]],
+    },
+    {
+      name: 'bottom-right corner',
+      origin: [24, 4],
+      directions: [[1, 0], [-1, 0], [0, 1], [0, -1]],
+    },
+  ])('returns distance zero from the polygon $name in every parallel direction', ({
+    origin,
+    directions,
+  }) => {
+    const polygon = new Entity({
+      uuid: 'boundary-polygon',
+      position: { x: 20, y: 0 },
+    });
+    assignPolygonCollider(polygon, {
+      vertices: [
+        new Vector2(-4, -4),
+        new Vector2(4, -4),
+        new Vector2(4, 4),
+        new Vector2(-4, 4),
+      ],
+      isConvex: true,
+    });
+    const collider = createCollider(polygon)!;
+    const engine = new PhysicsEngine({ spatialCellSize: 8 });
+    engine.addEntity(polygon);
+
+    for (const [x, y] of directions) {
+      const rayOrigin = new Vector2(origin[0]!, origin[1]!);
+      const direction = new Vector2(x!, y!);
+      expect(
+        raycastCollider(collider, rayOrigin, direction, 10)?.distance,
+      ).toBe(0);
+      expect(engine.raycast(rayOrigin, direction, 10)?.distance).toBe(0);
+    }
+  });
+
   it('uses default direction when a zero vector is provided', () => {
     const partition = new SpatialHash(10, 32);
     const circle = new Entity({ position: { x: 20, y: 0 }, radius: 5 });

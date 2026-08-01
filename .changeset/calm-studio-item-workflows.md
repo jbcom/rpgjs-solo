@@ -54,3 +54,6 @@ Authenticate protected online block-collection reads with
 public game-data requests. Validate fetched collections recursively against the
 canonical runtime block schemas before execution, rejecting unknown block
 types and malformed data without mutating editor schema metadata.
+Validation now traverses every executable choice branch in
+`show_choices.data.choiceChildren`, rejecting malformed branch containers and
+deep unknown blocks before any branch executes.

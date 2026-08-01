@@ -15,6 +15,8 @@ export interface ClientProjectileSpawn {
   delay?: number;
   index?: number;
   count?: number;
+  /** Authoritative circular collision radius; zero/omitted means a point ray. */
+  radius?: number;
   params?: Record<string, unknown>;
   collisionMask?: number;
   ignoreOwner?: boolean;

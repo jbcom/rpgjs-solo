@@ -48,8 +48,10 @@ mode attempts the local bundle before an authenticated online fallback.
 Block collections are validated immediately before execution against the same
 canonical JSON Schemas used by Studio's runtime block registry. Unknown block
 types, missing or invalid data, and malformed nested children are rejected as a
-whole before any block runs. Direct hydrated workflows, Common Event links, and
-queued fresh-read behavior are unchanged.
+whole before any block runs. Validation follows every executable sequence,
+including each `show_choices.data.choiceChildren` branch, so an unknown or
+malformed block cannot hide in an unselected choice. Direct hydrated workflows,
+Common Event links, and queued fresh-read behavior are unchanged.
 
 ## Next step
 

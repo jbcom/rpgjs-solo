@@ -219,6 +219,8 @@ export type ActionBattleProjectileGeometryInput = {
     range?: number;
     trajectory?: { range?: number };
     collision?: {
+      collisionMask?: number;
+      ignoreOwner?: boolean;
       radius?: number;
       width?: number;
       height?: number;
@@ -236,6 +238,10 @@ export interface ActionBattleProjectileGeometry {
   radius: number;
   width: number;
   shape: "ray" | "capsule";
+  /** True only when an authored/input direction fixes the projectile ray. */
+  fixedRay: boolean;
+  collisionMask?: number;
+  ignoreOwner: boolean;
 }
 
 export const getActionBattleEntityCenter = (entity: SoftTargetEntity) => {
@@ -327,10 +333,10 @@ export const resolveActionBattleProjectileGeometry = (
     ?? 160;
   const collision = projectile.collision ?? {};
   const configuredRadius = finitePositive(collision.radius);
-  const configuredWidth = Math.max(
-    finitePositive(collision.width) ?? 0,
-    finitePositive(collision.height) ?? 0,
-  );
+  const configuredWidth =
+    finitePositive(collision.width)
+    ?? finitePositive(collision.height)
+    ?? 0;
   const radius = configuredRadius ?? configuredWidth / 2;
 
   return {
@@ -340,13 +346,21 @@ export const resolveActionBattleProjectileGeometry = (
     radius,
     width: radius * 2,
     shape: radius > 0 ? "capsule" : "ray",
+    fixedRay: projectile.direction !== undefined,
+    collisionMask: collision.collisionMask,
+    ignoreOwner: collision.ignoreOwner ?? true,
   };
 };
+
+export type ActionBattleProjectileCollisionFilter = (
+  entity: { uuid?: string },
+) => boolean;
 
 export const getActionBattleProjectileTargetIntersection = (
   geometry: ActionBattleProjectileGeometry,
   target: SoftTargetEntity,
   map?: any,
+  collisionFilter?: ActionBattleProjectileCollisionFilter,
 ) => {
   const origin = new Vector2(geometry.origin.x, geometry.origin.y);
   const direction = new Vector2(geometry.direction.x, geometry.direction.y);
@@ -356,21 +370,22 @@ export const getActionBattleProjectileTargetIntersection = (
     physics &&
     typeof physics.raycast === "function"
   ) {
-    const filter = (entity: { uuid?: string }) => entity.uuid === target.id;
+    const filter = collisionFilter
+      ?? ((entity: { uuid?: string }) => entity.uuid === target.id);
     return geometry.radius > 0 && typeof physics.capsuleCast === "function"
       ? physics.capsuleCast(
           origin,
           direction,
           geometry.range,
           geometry.radius,
-          undefined,
+          geometry.collisionMask,
           filter,
         )
       : physics.raycast(
           origin,
           direction,
           geometry.range,
-          undefined,
+          geometry.collisionMask,
           filter,
         );
   }
@@ -461,6 +476,7 @@ export interface ActionBattleDirectionalTargetBoundary {
   actionRange?: number;
   geometry?: ActionBattleProjectileGeometry;
   map?: any;
+  collisionFilter?: ActionBattleProjectileCollisionFilter;
 }
 
 export const getActionBattleDirectionalTargetBoundary = (
@@ -484,6 +500,10 @@ export const getActionBattleDirectionalTargetBoundary = (
     geometry,
     target,
     boundary.map,
+    boundary.collisionFilter,
+  );
+  const targetWasHit = hit !== null && (
+    !target.id || hit.entity.uuid === target.id
   );
   return {
     ...trajectory,
@@ -496,9 +516,11 @@ export const getActionBattleDirectionalTargetBoundary = (
       - trajectory.y * geometry.direction.x,
     ),
     range: geometry.range,
-    aligned: hit !== null,
-    eligible: hit !== null,
+    aligned: targetWasHit,
+    eligible: targetWasHit,
     physical: true,
+    fixedRay: geometry.fixedRay,
+    blockerId: hit && !targetWasHit ? hit.entity.uuid : undefined,
     hitDistance: hit?.distance,
   };
 };
@@ -571,7 +593,7 @@ export const resolveActionBattleSoftTarget = <T extends SoftTargetEntity>(
           Math.min(1, (facing.x * dx + facing.y * dy) / distance)
         );
     const angle = Math.acos(dot) * (180 / Math.PI);
-    if (!targetBoundary?.physical && angle > coneDegrees / 2) continue;
+    if (!targetBoundary?.fixedRay && angle > coneDegrees / 2) continue;
     const directionScore = (dot + 1) / 2;
     const distanceScore = Math.max(0, 1 - distance / candidateRange);
     const threatScore =

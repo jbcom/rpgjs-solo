@@ -1,7 +1,7 @@
 import { MAXHP } from "@rpgjs/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { I18nService } from "@rpgjs/common";
-import { AiDebug, AttackPattern, BattleAi } from "./ai.server";
+import { AiDebug, AiState, AttackPattern, BattleAi } from "./ai.server";
 import {
   callAction,
   chase,
@@ -681,6 +681,61 @@ describe("BattleAi behavior tree", () => {
     event.hp = 10;
     expect((ai as any).applyCustomBehavior(1001)).toBe(true);
     expect(performAttack).toHaveBeenCalledOnce();
+    ai.destroy();
+  });
+
+  test("cancels startup, combo, and dash callbacks at direct hp zero and permits revival", () => {
+    vi.useFakeTimers();
+    const event = {
+      ...createEvent(),
+      dash: vi.fn(),
+    };
+    event.attachShape.mockReturnValue({ id: "vision_monster-1" });
+    const player = {
+      ...createPlayer(),
+      hp: 10,
+      x: vi.fn(() => 20),
+      y: vi.fn(() => 0),
+    };
+    const ai = new BattleAi(event as any, {
+      attackRange: 50,
+      attackPatterns: [AttackPattern.Combo, AttackPattern.DashAttack],
+    });
+    clearInterval((ai as any).updateInterval);
+    (ai as any).updateInterval = undefined;
+    ai.onDetectInShape(player as any, {});
+    ai.onDetectInShape(player as any, {});
+    const executeMeleeAttack = vi.spyOn(ai as any, "executeMeleeAttack");
+    const genericStartup = vi.fn();
+
+    (ai as any).scheduleAttackStartup(
+      (ai as any).getAttackProfile(AttackPattern.Melee),
+      genericStartup,
+    );
+    (ai as any).performComboAttack();
+    (ai as any).performDashAttack();
+    event.hp = 0;
+    vi.advanceTimersByTime(2_000);
+
+    expect(genericStartup).not.toHaveBeenCalled();
+    expect(executeMeleeAttack).not.toHaveBeenCalled();
+    expect(event.dash).not.toHaveBeenCalled();
+    expect((ai as any).comboCount).toBe(0);
+
+    event.hp = 10;
+    ai.onDetectInShape(player as any, {});
+    ai.onDetectInShape(player as any, {});
+    (ai as any).state = AiState.Combat;
+    (ai as any).scheduleAttackStartup(
+      (ai as any).getAttackProfile(AttackPattern.Melee),
+      genericStartup,
+    );
+    (ai as any).performDashAttack();
+    vi.advanceTimersByTime(2_000);
+
+    expect(genericStartup).toHaveBeenCalledOnce();
+    expect(event.dash).toHaveBeenCalledOnce();
+    expect(executeMeleeAttack).toHaveBeenCalled();
     ai.destroy();
   });
 

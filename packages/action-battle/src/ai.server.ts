@@ -2175,7 +2175,7 @@ export class BattleAi {
    * Perform combo attack
    */
   private performComboAttack() {
-    if (!this.target) return;
+    if (this.isTargetDefeated(this.event) || !this.target) return;
 
     this.comboCount++;
     const profile = this.getAttackProfile(AttackPattern.Combo);
@@ -2189,7 +2189,11 @@ export class BattleAi {
 
     if (this.comboCount < this.comboMax) {
       this.schedule(() => {
-        if (this.target && this.state === AiState.Combat) {
+        if (
+          !this.isTargetDefeated(this.event)
+          && this.target
+          && this.state === AiState.Combat
+        ) {
           this.performComboAttack();
         } else {
           this.comboCount = 0;
@@ -2204,7 +2208,7 @@ export class BattleAi {
    * Perform charged attack
    */
   private performChargedAttack() {
-    if (!this.target) return;
+    if (this.isTargetDefeated(this.event) || !this.target) return;
     const profile = this.getAttackProfile(AttackPattern.Charged);
 
     this.chargingAttack = true;
@@ -2229,6 +2233,7 @@ export class BattleAi {
    * Perform zone attack (360 degrees)
    */
   private performZoneAttack() {
+    if (this.isTargetDefeated(this.event)) return;
     const profile = this.getAttackProfile(AttackPattern.Zone);
     this.lockForAttack(profile, AttackPattern.Zone);
     this.telegraphAttack(profile, AttackPattern.Zone);
@@ -2273,7 +2278,11 @@ export class BattleAi {
    * Perform dash attack
    */
   private performDashAttack() {
-    if (!this.target || this.isTargetDefeated(this.target)) return;
+    if (
+      this.isTargetDefeated(this.event)
+      || !this.target
+      || this.isTargetDefeated(this.target)
+    ) return;
     const profile = this.getAttackProfile(AttackPattern.DashAttack);
 
     const dx = this.target.x() - this.event.x();
@@ -2291,10 +2300,18 @@ export class BattleAi {
     this.playAttackVisual(profile, AttackPattern.DashAttack);
 
     this.scheduleAttackStartup(profile, () => {
-      if (!this.target || this.state !== AiState.Combat) return;
+      if (
+        this.isTargetDefeated(this.event)
+        || !this.target
+        || this.state !== AiState.Combat
+      ) return;
       safeActionBattleDash(this.event, { x: dirX, y: dirY }, 10, 200);
       this.schedule(() => {
-        if (!this.target || this.state !== AiState.Combat) return;
+        if (
+          this.isTargetDefeated(this.event)
+          || !this.target
+          || this.state !== AiState.Combat
+        ) return;
         this.executeMeleeAttack(profile, AttackPattern.DashAttack);
       }, 200);
     });
@@ -2380,7 +2397,10 @@ export class BattleAi {
     profile: NormalizedActionBattleAttackProfile,
     callback: () => void
   ) {
-    return scheduleActionBattleStartup(profile, callback, (scheduled, delay) =>
+    return scheduleActionBattleStartup(profile, () => {
+      if (this.isTargetDefeated(this.event)) return;
+      callback();
+    }, (scheduled, delay) =>
       this.schedule(scheduled, delay)
     );
   }
@@ -2483,7 +2503,11 @@ export class BattleAi {
     if (this.enemyType === EnemyType.Defensive && Math.random() < 0.5) {
       this.debugLog('dodge', 'Counter-attack after dodge');
       this.schedule(() => {
-        if (this.target && this.state === AiState.Combat) {
+        if (
+          !this.isTargetDefeated(this.event)
+          && this.target
+          && this.state === AiState.Combat
+        ) {
           this.selectAndPerformAttack();
         }
       }, 400);

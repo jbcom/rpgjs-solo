@@ -6,7 +6,7 @@ import { AbstractWebsocket, WebSocketToken } from "./services/AbstractSocket";
 import { LoadMapService, LoadMapToken } from "./services/loadMap";
 import { RpgSound } from "./Sound";
 import { RpgResource } from "./Resource";
-import { getOrCreateI18nService, Hooks, ModulesToken, Direction, normalizeLightingState, Vector2, type I18nMessageDescriptor, type I18nParams, type I18nService } from "@rpgjs/common";
+import { getOrCreateI18nService, Hooks, ModulesToken, Direction, normalizeLightingState, type I18nMessageDescriptor, type I18nParams, type I18nService } from "@rpgjs/common";
 import type { EventComponentConfig } from "./RpgClient";
 import type { RpgClientEvent } from "./Game/Event";
 import { load } from "@signe/sync";
@@ -34,6 +34,7 @@ import { NotificationManager } from "./Gui/NotificationManager";
 import { SaveClientService } from "./services/save";
 import { getCanMoveValue } from "./utils/readPropValue";
 import { ProjectileManager, type ClientProjectileImpact, type ClientProjectileSpawn } from "./Game/ProjectileManager";
+import { predictClientProjectileImpact } from "./Game/ProjectilePrediction";
 import { ClientVisualRegistry, type ClientVisualHandler, type ClientVisualMap, type ClientVisualPacket } from "./Game/ClientVisuals";
 import { normalizeActionInput } from "./services/actionInput";
 import { createClientPointerContext, type ClientPointerContext } from "./services/pointerContext";
@@ -2154,44 +2155,10 @@ export class RpgClientEngine<T = any> {
   }
 
   private predictProjectileImpact(projectile: ClientProjectileSpawn): ClientProjectileImpact | null {
-    if (projectile.predictImpact === false) {
-      return null;
-    }
-    const sceneMap = this.sceneMap as any;
-    if (!sceneMap?.physic || !Number.isFinite(projectile.range) || projectile.range <= 0) {
-      return null;
-    }
-    const origin = projectile.origin;
-    const direction = projectile.direction;
-    if (
-      !origin ||
-      !direction ||
-      !Number.isFinite(origin.x) ||
-      !Number.isFinite(origin.y) ||
-      !Number.isFinite(direction.x) ||
-      !Number.isFinite(direction.y) ||
-      (direction.x === 0 && direction.y === 0)
-    ) {
-      return null;
-    }
-
-    const hit = sceneMap.physic.raycast(
-      new Vector2(origin.x, origin.y),
-      new Vector2(direction.x, direction.y),
-      projectile.range,
-      projectile.collisionMask,
-      (entity) => projectile.ignoreOwner === false || !projectile.ownerId || entity.uuid !== projectile.ownerId,
+    return predictClientProjectileImpact(
+      (this.sceneMap as any)?.physic,
+      projectile,
     );
-    if (!hit) {
-      return null;
-    }
-    return {
-      id: projectile.id,
-      targetId: hit.entity.uuid,
-      x: hit.point.x,
-      y: hit.point.y,
-      distance: hit.distance,
-    };
   }
 
   private ensureCurrentPlayerBody(): boolean {

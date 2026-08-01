@@ -41,6 +41,22 @@ describe("Studio runtime block validation", () => {
     expect(blocks).toEqual(before);
   });
 
+  test("validates every executable show_choices branch without mutation", () => {
+    const blocks = [{
+      id: "route",
+      type: "show_choices",
+      data: {
+        question: "Which way?",
+        choices: [{ text: "Left" }, { text: "Right" }],
+        choiceChildren: [[validSetVariable()], []],
+      },
+    }];
+    const before = structuredClone(blocks);
+
+    expect(validateStudioBlockSequence(blocks)).toEqual({ valid: true, blocks });
+    expect(blocks).toEqual(before);
+  });
+
   test("compiles clones without mutating canonical editor schema metadata", () => {
     const setVariable = defaultBlocks.find(
       (definition) => definition.type === "set_variable",
@@ -106,6 +122,62 @@ describe("Studio runtime block validation", () => {
         children: [{ id: "nested", type: "unknown_nested", data: {} }],
       }],
       reason: "blocks[0].children[0] uses unknown block type",
+    },
+    {
+      name: "malformed choice branch collections",
+      blocks: [{
+        id: "route",
+        type: "show_choices",
+        data: {
+          question: "Which way?",
+          choices: [{ text: "Left" }, { text: "Right" }],
+          choiceChildren: {},
+        },
+      }],
+      reason: "data.choiceChildren must be an array of block arrays",
+    },
+    {
+      name: "malformed individual choice branches",
+      blocks: [{
+        id: "route",
+        type: "show_choices",
+        data: {
+          question: "Which way?",
+          choices: [{ text: "Left" }, { text: "Right" }],
+          choiceChildren: [[] as unknown[], {}],
+        },
+      }],
+      reason: "data.choiceChildren[1] must be an array",
+    },
+    {
+      name: "unknown blocks nested inside choice branches",
+      blocks: [{
+        id: "route",
+        type: "show_choices",
+        data: {
+          question: "Which way?",
+          choices: [{ text: "Left" }, { text: "Right" }],
+          choiceChildren: [[{
+            id: "nested",
+            type: "unknown_nested_choice",
+            data: {},
+          }], []],
+        },
+      }],
+      reason: "blocks[0].data.choiceChildren[0][0] uses unknown block type",
+    },
+    {
+      name: "malformed blocks nested inside choice branches",
+      blocks: [{
+        id: "route",
+        type: "show_choices",
+        data: {
+          question: "Which way?",
+          choices: [{ text: "Left" }, { text: "Right" }],
+          choiceChildren: [[{ id: "nested", type: "set_variable" }], []],
+        },
+      }],
+      reason: "blocks[0].data.choiceChildren[0][0].data is invalid",
     },
   ])("rejects $name", ({ blocks, reason }) => {
     expect(validateStudioBlockSequence(blocks)).toMatchObject({

@@ -10,6 +10,7 @@ import {
   resolveActionBattleAoeTarget,
 } from "../targeting";
 import {
+  canActionBattleProjectileCollide,
   canActionBattleUseTarget,
   getActionBattleActionConfig,
   getActionBattleSkillTargetingConfig,
@@ -230,15 +231,26 @@ export const evaluateActionBattleAiSkill = (input: {
       targetingRange,
       tileSize,
     });
+    const collisionFilter = (entity: { uuid?: string }) =>
+      canActionBattleProjectileCollide({
+        attacker,
+        entity,
+        map,
+        ignoreOwner: geometry.ignoreOwner,
+        actionTarget: targetPolicy,
+        targetOptions: input.targetOptions,
+      });
     const hit = getActionBattleProjectileTargetIntersection(
       geometry,
       target as any,
       map,
+      collisionFilter,
     );
     // The second proof is target-only and rigorously finite. Passing an
     // effectively infinite range to the real world would make a capsule cast
     // query an astronomical broad-phase AABB merely to classify out-of-range.
-    const forwardHit = hit ?? getActionBattleProjectileTargetIntersection(
+    const targetWasHit = !!hit && hit.entity.uuid === target.id;
+    const forwardHit = hit ? null : getActionBattleProjectileTargetIntersection(
       {
         ...geometry,
         range: getActionBattleProjectileTargetProofRange(
@@ -254,9 +266,11 @@ export const evaluateActionBattleAiSkill = (input: {
       range,
       preferredRange: range * 0.75,
       target,
-      ...(hit
+      ...(targetWasHit
         ? {}
-        : forwardHit
+        : hit
+          ? { rejection: "invalidTarget" as const }
+          : forwardHit
           ? { rejection: "outOfRange" as const }
           : { rejection: "invalidTarget" as const }),
     });

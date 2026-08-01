@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+  canActionBattleProjectileCollide,
   executeActionBattleUse,
   handleActionBattleProjectileImpact,
 } from "./action-use";
@@ -457,34 +458,30 @@ describe("executeActionBattleUse", () => {
         },
       }),
     };
+    const bolt = {
+      id: "bolt",
+      _type: "skill",
+      spCost: 5,
+      hitRate: 1,
+      action: {
+        mode: "projectile" as const,
+        range: 200,
+        visual: {
+          trailFx: "torchFire",
+        },
+        projectile: {
+          type: "bolt",
+          speed: 200,
+          range: 200,
+        },
+      },
+    };
 
     executeActionBattleUse({
       attacker: attacker as any,
       target: target as any,
-      usable: {
-        id: "bolt",
-        _type: "skill",
-        spCost: 5,
-        hitRate: 1,
-        action: {
-          mode: "projectile",
-          range: 200,
-          visual: {
-            trailFx: "torchFire",
-          },
-          projectile: {
-            type: "bolt",
-            speed: 200,
-            range: 200,
-          },
-        },
-      },
-      skill: {
-        id: "bolt",
-        _type: "skill",
-        spCost: 5,
-        hitRate: 1,
-      },
+      usable: bolt,
+      skill: bolt,
     });
 
     expect(target.applyDamage).not.toHaveBeenCalled();
@@ -495,6 +492,10 @@ describe("executeActionBattleUse", () => {
       attacker
     );
 
+    // Emission commits the projectile to the world. Defeating its caster does
+    // not retroactively cancel that in-flight impact, but it prevents a new
+    // combat entry from being emitted.
+    attacker.hp = 0;
     handleActionBattleProjectileImpact({
       attacker: attacker as any,
       target: target as any,
@@ -504,6 +505,13 @@ describe("executeActionBattleUse", () => {
     });
 
     expect(target.applyDamage).toHaveBeenCalledOnce();
+    expect(executeActionBattleUse({
+      attacker: attacker as any,
+      target: target as any,
+      usable: bolt,
+      skill: bolt,
+    })).toBe(false);
+    expect(emit).toHaveBeenCalledOnce();
   });
 
   test("uses the action target policy for projectile collisions", () => {
@@ -549,8 +557,43 @@ describe("executeActionBattleUse", () => {
     });
 
     const canHit = emit.mock.calls[0][0].canHit;
-    expect(canHit({ target: ally })).toBe(true);
-    expect(canHit({ target: enemy })).toBe(false);
+    expect(canHit({ entity: { uuid: ally.id }, target: ally })).toBe(true);
+    expect(canHit({ entity: { uuid: enemy.id }, target: enemy })).toBe(false);
+  });
+
+  test("uses one explicit owner, ally, environment, and enemy projectile blocker policy", () => {
+    const attacker = {
+      ...createEntity("caster"),
+      actionBattleFaction: "party",
+    };
+    const ally = {
+      ...createEntity("ally"),
+      actionBattleFaction: "party",
+    };
+    const enemy = {
+      ...createEntity("enemy"),
+      actionBattleFaction: "enemy",
+    };
+    const objects = new Map([
+      [attacker.id, attacker],
+      [ally.id, ally],
+      [enemy.id, enemy],
+    ]);
+    const map = { getObjectById: (id: string) => objects.get(id) };
+    const collide = (id: string, ignoreOwner = true) =>
+      canActionBattleProjectileCollide({
+        attacker: attacker as any,
+        entity: { uuid: id },
+        map,
+        ignoreOwner,
+        actionTarget: "enemy",
+      });
+
+    expect(collide("caster")).toBe(false);
+    expect(collide("caster", false)).toBe(true);
+    expect(collide("ally")).toBe(false);
+    expect(collide("stone-wall")).toBe(true);
+    expect(collide("enemy")).toBe(true);
   });
 
   test("passes projectile precision options to the generic projectile system", () => {

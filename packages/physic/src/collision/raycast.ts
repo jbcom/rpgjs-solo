@@ -406,6 +406,7 @@ function pointInPolygon(point: Vector2, vertices: Vector2[]): boolean {
     const currentPoint = vertices[i];
     const previousPoint = vertices[previous];
     if (!currentPoint || !previousPoint) continue;
+    if (pointOnSegment(point, previousPoint, currentPoint)) return true;
     const crosses = (currentPoint.y > point.y) !== (previousPoint.y > point.y)
       && point.x < (previousPoint.x - currentPoint.x)
         * (point.y - currentPoint.y)
@@ -415,6 +416,29 @@ function pointInPolygon(point: Vector2, vertices: Vector2[]): boolean {
   }
   return inside;
 }
+
+const pointOnSegment = (
+  point: Vector2,
+  start: Vector2,
+  end: Vector2,
+): boolean => {
+  const segmentX = end.x - start.x;
+  const segmentY = end.y - start.y;
+  const pointX = point.x - start.x;
+  const pointY = point.y - start.y;
+  const cross = segmentX * pointY - segmentY * pointX;
+  const scale = Math.max(
+    1,
+    Math.abs(segmentX * pointY),
+    Math.abs(segmentY * pointX),
+  );
+  if (Math.abs(cross) > Number.EPSILON * scale * 16) return false;
+
+  const dot = pointX * segmentX + pointY * segmentY;
+  const lengthSquared = segmentX * segmentX + segmentY * segmentY;
+  const tolerance = Number.EPSILON * Math.max(1, lengthSquared) * 16;
+  return dot >= -tolerance && dot <= lengthSquared + tolerance;
+};
 
 function raycastExpandedPolygon(
   polygon: PolygonCollider,

@@ -101,6 +101,33 @@ const validateBlock = (
     const result = validateBlock(child, `${path}.children[${index}]`);
     if (!result.valid) return result;
   }
+
+  if (block.type === "show_choices") {
+    const data = block.data as { choiceChildren?: unknown };
+    if (data.choiceChildren !== undefined) {
+      if (!Array.isArray(data.choiceChildren)) {
+        return {
+          valid: false,
+          reason: `${path}.data.choiceChildren must be an array of block arrays`,
+        };
+      }
+      for (const [choiceIndex, choiceBlocks] of data.choiceChildren.entries()) {
+        if (!Array.isArray(choiceBlocks)) {
+          return {
+            valid: false,
+            reason: `${path}.data.choiceChildren[${choiceIndex}] must be an array`,
+          };
+        }
+        for (const [blockIndex, choiceBlock] of choiceBlocks.entries()) {
+          const result = validateBlock(
+            choiceBlock,
+            `${path}.data.choiceChildren[${choiceIndex}][${blockIndex}]`,
+          );
+          if (!result.valid) return result;
+        }
+      }
+    }
+  }
   return { valid: true };
 };
 

@@ -353,15 +353,19 @@ const buildActionContext = (input: {
               ? { rotateToDirection: projectile.rotateToDirection }
               : {}),
           },
-          canHit: ({ target }: { target?: ActionBattleEntity }) => {
-            if (!target) return false;
-            return canActionBattleUseTarget(
-              input.attacker,
-              target,
-              input.action?.target ?? "enemy",
-              getActionBattleOptions().combat?.targets
-            );
-          },
+          canHit: ({ entity, map, target }: {
+            entity: { uuid?: string };
+            map: any;
+            target?: ActionBattleEntity;
+          }) => canActionBattleProjectileCollide({
+            attacker: input.attacker,
+            entity,
+            map,
+            target,
+            ignoreOwner: geometry.ignoreOwner,
+            actionTarget: input.action?.target ?? "enemy",
+            targetOptions: getActionBattleOptions().combat?.targets,
+          }),
         },
         input.attacker as any
       );
@@ -421,6 +425,36 @@ export const canActionBattleUseTarget = (
     target,
     getActionBattleTargets(attacker, "hostile"),
     options
+  );
+};
+
+/**
+ * One collision policy for both projectile admission casts and authoritative
+ * simulation. Owners and non-eligible combatants are transparent; eligible
+ * targets and physics-only world geometry are blockers.
+ */
+export const canActionBattleProjectileCollide = (input: {
+  attacker: ActionBattleEntity;
+  entity: { uuid?: string };
+  map?: any;
+  target?: ActionBattleEntity;
+  ignoreOwner?: boolean;
+  actionTarget?: ActionBattleActionTarget;
+  targetOptions?: ActionBattleTargetOptions;
+}): boolean => {
+  if (input.entity.uuid === input.attacker.id) {
+    return input.ignoreOwner === false;
+  }
+  const target = input.target
+    ?? input.map?.getObjectById?.(input.entity.uuid);
+  if (!target || !isActionBattleCombatEntity(target)) {
+    return true;
+  }
+  return canActionBattleUseTarget(
+    input.attacker,
+    target,
+    input.actionTarget ?? "enemy",
+    input.targetOptions,
   );
 };
 

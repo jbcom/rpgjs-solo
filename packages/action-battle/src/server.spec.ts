@@ -1,3 +1,4 @@
+import { PhysicsEngine } from "@rpgjs/common";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { ACTION_BATTLE_CLIENT_VISUAL_ID } from "./visual";
 import {
@@ -789,6 +790,95 @@ describe("action battle player visuals", () => {
     expect(onUse).not.toHaveBeenCalled();
 
     (skill.action as any).projectile.trajectory.range = 25;
+    useSkill();
+    expect(onUse).toHaveBeenCalledWith(
+      player,
+      enemy,
+      expect.objectContaining({ target: enemy }),
+    );
+  });
+
+  test("rejects a soft projectile target occluded by nearer world geometry", () => {
+    const physics = new PhysicsEngine({ spatialCellSize: 8 });
+    const onUse = vi.fn();
+    const skill = {
+      id: "occluded-player-bolt",
+      _type: "skill",
+      spCost: 0,
+      hitRate: 1,
+      targeting: { range: 8 },
+      action: {
+        mode: "projectile" as const,
+        target: "enemy" as const,
+        projectile: { direction: { x: 1, y: 0 }, range: 80 },
+      },
+      onUse,
+    };
+    const enemy = {
+      id: "enemy",
+      hp: 10,
+      x: () => 40,
+      y: () => 0,
+      hitbox: () => ({ w: 8, h: 8 }),
+      battleAi: { getFaction: () => "enemies" },
+    };
+    const objects = new Map<string, any>([[enemy.id, enemy]]);
+    const map = {
+      tileWidth: 10,
+      tileHeight: 10,
+      physic: physics,
+      getObjectById: (id: string) => objects.get(id),
+      getEvents: () => [enemy],
+      getPlayers: () => [],
+    };
+    const player = {
+      id: "hero",
+      hp: 10,
+      sp: 10,
+      x: () => 0,
+      y: () => 0,
+      hitbox: () => ({ w: 8, h: 8 }),
+      getDirection: () => "right",
+      skills: () => [{ id: skill.id }],
+      getSkill: (id: string) => id === skill.id ? skill : null,
+      databaseById: (id: string) => id === skill.id ? skill : null,
+      hasEffect: () => false,
+      clientVisual: vi.fn(),
+      getGui: () => null,
+      getCurrentMap: () => map,
+    };
+    objects.set(player.id, player);
+    physics.createEntity({
+      uuid: player.id,
+      position: { x: 4, y: 4 },
+      width: 8,
+      height: 8,
+    });
+    physics.createEntity({
+      uuid: enemy.id,
+      position: { x: 44, y: 4 },
+      width: 8,
+      height: 8,
+    });
+    const wall = physics.createStaticObstacle("stone-wall", {
+      x: 24,
+      y: 4,
+      width: 8,
+      height: 8,
+    });
+    const server = createActionBattleServer({
+      targeting: { allowEmptyTarget: false },
+      ui: { targeting: { tileSize: { width: 10, height: 10 } } },
+    });
+    const useSkill = () => (server.player?.onInput as any)(player, {
+      action: ACTION_BATTLE_SKILL_USE,
+      data: { id: skill.id },
+    });
+
+    useSkill();
+    expect(onUse).not.toHaveBeenCalled();
+
+    physics.removeEntity(wall);
     useSkill();
     expect(onUse).toHaveBeenCalledWith(
       player,

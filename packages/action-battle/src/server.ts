@@ -46,6 +46,7 @@ import {
   resolveActionBattleComboStep,
 } from "./core/player-combat";
 import {
+  canActionBattleProjectileCollide,
   canActionBattleUseTarget,
   executeActionBattleUse,
   getActionBattleActionConfig,
@@ -1200,6 +1201,16 @@ const handleActionBattleSkillUse = (
             projectile: actionConfig.projectile,
             actionRange: actionConfig.range,
             map,
+            collisionFilter: (entity: { uuid?: string }) =>
+              canActionBattleProjectileCollide({
+                attacker: player,
+                entity,
+                map,
+                ignoreOwner:
+                  actionConfig.projectile?.collision?.ignoreOwner ?? true,
+                actionTarget: actionConfig.target ?? "enemy",
+                targetOptions: options.combat?.targets,
+              }),
           }
         : undefined;
       const softTarget = resolveActionBattleSoftTarget(

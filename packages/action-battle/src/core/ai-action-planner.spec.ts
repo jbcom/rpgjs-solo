@@ -294,6 +294,77 @@ describe("Action Battle AI skill planner", () => {
     }
   });
 
+  test("rejects a projectile target behind a nearer world blocker but passes through allies", () => {
+    const physics = new PhysicsEngine({ spatialCellSize: 8 });
+    const target = {
+      ...player("hero", 40, 0),
+      hitbox: () => ({ w: 8, h: 8 }),
+    };
+    const ally = {
+      ...enemy(null),
+      id: "enemy-ally",
+      x: () => 20,
+      hitbox: () => ({ w: 8, h: 8 }),
+    };
+    const objects = new Map<string, any>([
+      [target.id, target],
+      [ally.id, ally],
+    ]);
+    const map = {
+      tileWidth: 10,
+      tileHeight: 10,
+      physic: physics,
+      getObjectById: (id: string) => objects.get(id),
+      getPlayers: () => [target],
+      getEvents: () => [ally],
+    };
+    const attacker = {
+      ...enemy(map),
+      x: () => 0,
+      y: () => 0,
+      hitbox: () => ({ w: 8, h: 8 }),
+    };
+    objects.set(attacker.id, attacker);
+    for (const entry of [attacker, ally, target]) {
+      physics.createEntity({
+        uuid: entry.id,
+        position: { x: entry.x() + 4, y: entry.y() + 4 },
+        width: 8,
+        height: 8,
+      });
+    }
+    const skill = {
+      id: "occluded-bolt",
+      action: {
+        mode: "projectile" as const,
+        target: "enemy" as const,
+        projectile: {
+          direction: { x: 1, y: 0 },
+          range: 80,
+        },
+      },
+    };
+    const evaluate = () => evaluateActionBattleAiSkill({
+      attacker: attacker as any,
+      target: target as any,
+      skill,
+      now: 1000,
+      readyAt: 0,
+      attackRange: 50,
+      hpPercent: 1,
+    });
+
+    expect(evaluate().rejection).toBeUndefined();
+
+    physics.createStaticObstacle("stone-wall", {
+      x: 28,
+      y: 4,
+      width: 8,
+      height: 8,
+    });
+    expect(evaluate().rejection).toBe("invalidTarget");
+  });
+
   test("places an instant area skill so a hollow mask covers the player", () => {
     const target = player("hero", 64, 0);
     const map = {
