@@ -457,6 +457,52 @@ describe("portable package archive contracts", () => {
 	});
 
 	it.each([
+		["small sharp S then capital sharp S", "ß", "ẞ"],
+		["capital sharp S then small sharp S", "ẞ", "ß"],
+		["Greek final sigma then sigma", "ς", "σ"],
+		["Latin ff ligature then letters", "ﬀ", "ff"],
+		["Latin long s then s", "ſ", "s"],
+	])("rejects a full Unicode fold alias: %s before extraction", (_name, first, second) => {
+		const { archivePath, directory } = createCraftedArchive([
+			{ name: "package/", type: "directory" },
+			{ name: "package/package.json", content: '{"name":"fixture"}\n' },
+			{ name: "package/dist/", type: "directory" },
+			{ name: `package/dist/fold-${first}.js`, content: "first\n" },
+			{ name: `package/dist/fold-${second}.js`, content: "second\n" },
+		]);
+
+		expectRejectedBeforeExtraction(
+			archivePath,
+			directory,
+			/portable member collision/,
+		);
+	});
+
+	it("accepts Unicode names outside the full-fold equivalence classes", () => {
+		const { archivePath, directory } = createCraftedArchive([
+			{ name: "package/", type: "directory" },
+			{ name: "package/package.json", content: '{"name":"fixture"}\n' },
+			{ name: "package/dist/", type: "directory" },
+			{ name: "package/dist/sharp-ß.js", content: "sharp s\n" },
+			{ name: "package/dist/sharp-β.js", content: "beta\n" },
+			{ name: "package/dist/sigma-ς.js", content: "final sigma\n" },
+			{ name: "package/dist/sigma-ϲ.js", content: "lunate sigma\n" },
+			{ name: "package/dist/ligature-ﬀ.js", content: "ligature\n" },
+			{ name: "package/dist/ligature-f.js", content: "letter\n" },
+			{ name: "package/dist/long-ſ.js", content: "long s\n" },
+			{ name: "package/dist/long-l.js", content: "letter\n" },
+		]);
+
+		expect(() =>
+			inspectPortablePackageArchive({
+				archivePath,
+				extractDirectory: join(directory, "extract"),
+				packageName: "archive-contract-fixture",
+			}),
+		).not.toThrow();
+	});
+
+	it.each([
 		["file then trailing dot alias", "package/dist/plugin.js", "package/dist/plugin.js."],
 		["trailing dot alias then file", "package/dist/plugin.js.", "package/dist/plugin.js"],
 		["file then trailing space alias", "package/dist/plugin.js", "package/dist/plugin.js   "],

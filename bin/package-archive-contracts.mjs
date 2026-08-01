@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { isAbsolute, join, win32 } from "node:path";
 import ts from "typescript";
+import { caseFold } from "unicode-case-folding";
 
 const dependencyFields = [
 	"dependencies",
@@ -163,11 +164,11 @@ const assertPortableImports = (directory, packageName) => {
 };
 
 const getPortableArchiveMemberKey = (entry) =>
-	// ECMAScript case conversion is locale-independent. Uppercase followed by
-	// lowercase conservatively folds expansions and contextual lowercase forms
-	// that a lowercase-only key can leave distinct. Normalize both before and
-	// after folding so canonically equivalent Unicode spellings share one key.
-	entry.normalize("NFC").toUpperCase().toLowerCase().normalize("NFC");
+	// Unicode Default Case Folding is designed for caseless matching and covers
+	// full fold mappings that chained ECMAScript case conversion misses, such as
+	// capital sharp S (U+1E9E) and small sharp S (U+00DF). Normalize before and
+	// after folding so canonically equivalent spellings share one portable key.
+	caseFold(entry.normalize("NFC")).normalize("NFC");
 
 const win32ForbiddenComponentCharacter = /[<>:"\\|?*\u0000-\u001f]/u;
 const win32ReservedDeviceBase =
