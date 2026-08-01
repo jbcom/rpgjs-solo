@@ -14,13 +14,56 @@ const commandResult = (
 	stdout: typeof stdout === "string" ? stdout : JSON.stringify(stdout),
 });
 
+interface AuditVulnerabilityFixture {
+	name: string;
+	severity: string;
+	isDirect: boolean;
+	via: string[];
+	effects: string[];
+	range: string;
+	nodes: string[];
+	fixAvailable: boolean;
+}
+
+interface AuditReportFixture {
+	auditReportVersion: number;
+	vulnerabilities: Record<string, AuditVulnerabilityFixture>;
+	metadata: {
+		vulnerabilities: {
+			info: number;
+			low: number;
+			moderate: number;
+			high: number;
+			critical: number;
+			total: number;
+		};
+	};
+}
+
+const zeroAuditReport = (): AuditReportFixture => ({
+	auditReportVersion: 2,
+	vulnerabilities: {},
+	metadata: {
+		vulnerabilities: {
+			info: 0,
+			low: 0,
+			moderate: 0,
+			high: 0,
+			critical: 0,
+			total: 0,
+		},
+	},
+});
+
 describe("external command report contracts", () => {
 	it("accepts only a successful, schema-valid zero-vulnerability audit", () => {
-		expect(
-			parseNpmAuditReport(
-				commandResult({ metadata: { vulnerabilities: { total: 0 } } }),
-			),
-		).toMatchObject({ metadata: { vulnerabilities: { total: 0 } } });
+		expect(parseNpmAuditReport(commandResult(zeroAuditReport()))).toMatchObject(
+			{
+				auditReportVersion: 2,
+				vulnerabilities: {},
+				metadata: { vulnerabilities: { total: 0 } },
+			},
+		);
 
 		expect(() =>
 			parseNpmAuditReport(
@@ -31,27 +74,73 @@ describe("external command report contracts", () => {
 			),
 		).toThrow(/failed operationally.*ENOLOCK/i);
 		expect(() => parseNpmAuditReport(commandResult({}, { status: 1 }))).toThrow(
-			/metadata\.vulnerabilities\.total/i,
+			/auditReportVersion/i,
 		);
 		expect(() =>
-			parseNpmAuditReport(
-				commandResult(
-					{ metadata: { vulnerabilities: { total: 0 } } },
-					{ status: 1 },
-				),
-			),
+			parseNpmAuditReport(commandResult(zeroAuditReport(), { status: 1 })),
 		).toThrow(/failed operationally despite reporting zero/i);
 	});
 
-	it("reports vulnerabilities without misclassifying them as an operational failure", () => {
+	it("rejects truncated and internally inconsistent npm audit v2 reports", () => {
 		expect(() =>
 			parseNpmAuditReport(
-				commandResult(
-					{ metadata: { vulnerabilities: { total: 2 } } },
-					{ status: 1 },
-				),
+				commandResult({
+					auditReportVersion: 2,
+					metadata: { vulnerabilities: { total: 0 } },
+				}),
 			),
-		).toThrow(/found 2 vulnerabilities/i);
+		).toThrow(/top-level vulnerabilities map/i);
+
+		const missingSeverityCounts = zeroAuditReport();
+		delete (missingSeverityCounts.metadata.vulnerabilities as { low?: number })
+			.low;
+		expect(() =>
+			parseNpmAuditReport(commandResult(missingSeverityCounts)),
+		).toThrow(/invalid metadata\.vulnerabilities\.low/i);
+
+		const inconsistentTotal = zeroAuditReport();
+		inconsistentTotal.metadata.vulnerabilities.total = 1;
+		expect(() => parseNpmAuditReport(commandResult(inconsistentTotal))).toThrow(
+			/severity counts sum to 0, not total 1/i,
+		);
+
+		const unexpectedEntry = zeroAuditReport();
+		unexpectedEntry.vulnerabilities = {
+			lodash: {
+				name: "lodash",
+				severity: "high",
+				isDirect: true,
+				via: ["advisory"],
+				effects: [],
+				range: "<4.17.21",
+				nodes: ["node_modules/lodash"],
+				fixAvailable: true,
+			},
+		};
+		expect(() => parseNpmAuditReport(commandResult(unexpectedEntry))).toThrow(
+			/vulnerability map has 1 entries, not total 0/i,
+		);
+	});
+
+	it("reports vulnerabilities without misclassifying them as an operational failure", () => {
+		const vulnerableAudit = zeroAuditReport();
+		vulnerableAudit.vulnerabilities = {
+			lodash: {
+				name: "lodash",
+				severity: "high",
+				isDirect: true,
+				via: ["advisory"],
+				effects: [],
+				range: "<4.17.21",
+				nodes: ["node_modules/lodash"],
+				fixAvailable: true,
+			},
+		};
+		vulnerableAudit.metadata.vulnerabilities.high = 1;
+		vulnerableAudit.metadata.vulnerabilities.total = 1;
+		expect(() =>
+			parseNpmAuditReport(commandResult(vulnerableAudit, { status: 1 })),
+		).toThrow(/found 1 vulnerabilities/i);
 	});
 
 	it("accepts complete pnpm outdated reports and rejects operational ambiguity", () => {

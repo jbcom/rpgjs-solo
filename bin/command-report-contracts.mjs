@@ -35,12 +35,90 @@ export const parseNpmAuditReport = (result) => {
 			`npm audit failed operationally: ${JSON.stringify(audit.error)}`,
 		);
 	}
-	const total = audit.metadata?.vulnerabilities?.total;
-	if (!Number.isSafeInteger(total) || total < 0) {
+	if (audit.auditReportVersion !== 2) {
 		throw new Error(
-			"npm audit returned no valid metadata.vulnerabilities.total field",
+			`npm audit returned unsupported auditReportVersion ${String(audit.auditReportVersion)}`,
 		);
 	}
+	if (
+		!audit.vulnerabilities ||
+		typeof audit.vulnerabilities !== "object" ||
+		Array.isArray(audit.vulnerabilities)
+	) {
+		throw new Error(
+			"npm audit returned no valid top-level vulnerabilities map",
+		);
+	}
+	const severityNames = ["info", "low", "moderate", "high", "critical"];
+	const severityCounts = audit.metadata?.vulnerabilities;
+	if (!severityCounts || typeof severityCounts !== "object") {
+		throw new Error(
+			"npm audit returned no valid metadata.vulnerabilities counts",
+		);
+	}
+	for (const severity of [...severityNames, "total"]) {
+		if (
+			!Number.isSafeInteger(severityCounts[severity]) ||
+			severityCounts[severity] < 0
+		) {
+			throw new Error(
+				`npm audit returned an invalid metadata.vulnerabilities.${severity} count`,
+			);
+		}
+	}
+	const severityTotal = severityNames.reduce(
+		(sum, severity) => sum + severityCounts[severity],
+		0,
+	);
+	if (severityCounts.total !== severityTotal) {
+		throw new Error(
+			`npm audit vulnerability severity counts sum to ${severityTotal}, not total ${severityCounts.total}`,
+		);
+	}
+	const vulnerabilityEntries = Object.entries(audit.vulnerabilities);
+	if (vulnerabilityEntries.length !== severityCounts.total) {
+		throw new Error(
+			`npm audit vulnerability map has ${vulnerabilityEntries.length} entries, not total ${severityCounts.total}`,
+		);
+	}
+	const countedSeverities = Object.fromEntries(
+		severityNames.map((severity) => [severity, 0]),
+	);
+	for (const [packageName, vulnerability] of vulnerabilityEntries) {
+		if (
+			!vulnerability ||
+			typeof vulnerability !== "object" ||
+			Array.isArray(vulnerability) ||
+			vulnerability.name !== packageName ||
+			!severityNames.includes(vulnerability.severity) ||
+			typeof vulnerability.isDirect !== "boolean" ||
+			!Array.isArray(vulnerability.via) ||
+			vulnerability.via.length === 0 ||
+			!Array.isArray(vulnerability.effects) ||
+			typeof vulnerability.range !== "string" ||
+			!Array.isArray(vulnerability.nodes) ||
+			!vulnerability.nodes.every((node) => typeof node === "string") ||
+			!(
+				typeof vulnerability.fixAvailable === "boolean" ||
+				(vulnerability.fixAvailable &&
+					typeof vulnerability.fixAvailable === "object" &&
+					!Array.isArray(vulnerability.fixAvailable))
+			)
+		) {
+			throw new Error(
+				`npm audit returned an incomplete vulnerability entry for ${packageName}`,
+			);
+		}
+		countedSeverities[vulnerability.severity] += 1;
+	}
+	for (const severity of severityNames) {
+		if (countedSeverities[severity] !== severityCounts[severity]) {
+			throw new Error(
+				`npm audit ${severity} vulnerability entries do not match metadata count`,
+			);
+		}
+	}
+	const total = severityCounts.total;
 	if (total !== 0) {
 		throw new Error(
 			`External @rpgjs/vite consumer audit found ${String(total)} vulnerabilities`,
