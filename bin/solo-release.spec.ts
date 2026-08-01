@@ -790,7 +790,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.reviewEvidence.enginePullRequest.mergeCommit).toBe(
 			plan.requiredSourceCommit,
 		);
-		expect(plan.reviewEvidence.releasePullRequest.number).toBe(24);
+		expect(plan.reviewEvidence.releasePullRequest.number).toBe(25);
 		expect(
 			plan.carriedChangesets.find(
 				({ id }: { id: string }) => id === "fair-studio-success-rates",
