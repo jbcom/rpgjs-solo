@@ -36,7 +36,10 @@ import {
   getNormalizedActionBattleAttackProfile,
   runActionBattleActiveHitbox,
 } from "./core/attack-runtime";
-import { setActionBattleInvincibility } from "./core/hit-reaction";
+import {
+  clearActionBattleHitReaction,
+  setActionBattleInvincibility,
+} from "./core/hit-reaction";
 import {
   canActionBattleDodge,
   resolveActionBattleCharge,
@@ -90,6 +93,11 @@ export const DEFAULT_PLAYER_ATTACK_HITBOXES = {
   ...DEFAULT_ZELDA_PLAYER_HITBOXES,
 };
 
+const playerAttackLockTimers = new WeakMap<
+  RpgPlayer,
+  ReturnType<typeof setTimeout>
+>();
+
 const beginPlayerAttackLock = (
   player: RpgPlayer,
   map: ReturnType<RpgPlayer["getCurrentMap"]> | undefined,
@@ -105,6 +113,10 @@ const beginPlayerAttackLock = (
   }
 
   releaseActionBattleControls(player, "attack");
+  const previousTimer = playerAttackLockTimers.get(player);
+  if (previousTimer) {
+    clearTimeout(previousTimer);
+  }
   const actionId = (runtimePlayer.__actionBattleAttackLockId ?? 0) + 1;
   runtimePlayer.__actionBattleAttackLockId = actionId;
   runtimePlayer.__actionBattleAttackLockedUntil =
@@ -144,19 +156,28 @@ const beginPlayerAttackLock = (
     animation: true,
     durationMs: profile.totalDurationMs,
   });
-  setTimeout(() => {
+  const attackLockTimer = setTimeout(() => {
     if (runtimePlayer.__actionBattleAttackLockId !== actionId) return;
+    if (playerAttackLockTimers.get(player) === attackLockTimer) {
+      playerAttackLockTimers.delete(player);
+    }
     runtimePlayer.__actionBattleAttackLockedUntil = 0;
     runtimePlayer.__actionBattleAttackActiveUntil = 0;
     runtimePlayer.__actionBattleAttackProfile = undefined;
     releaseActionBattleControls(player, "attack");
   }, profile.totalDurationMs);
+  playerAttackLockTimers.set(player, attackLockTimer);
 
   return true;
 };
 
 const cancelPlayerAttackRecovery = (player: RpgPlayer) => {
   const runtimePlayer = player as any;
+  const timer = playerAttackLockTimers.get(player);
+  if (timer) {
+    clearTimeout(timer);
+    playerAttackLockTimers.delete(player);
+  }
   runtimePlayer.__actionBattleAttackLockId =
     (runtimePlayer.__actionBattleAttackLockId ?? 0) + 1;
   runtimePlayer.__actionBattleAttackLockedUntil = 0;
@@ -647,6 +668,7 @@ interface PlayerCombatRuntimeState {
   pendingComboTimer: ReturnType<typeof setTimeout> | null;
   chargeStartedAt: number | null;
   chargeToken: number;
+  chargeTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const playerCombatStates = new WeakMap<RpgPlayer, PlayerCombatRuntimeState>();
@@ -663,6 +685,7 @@ const getPlayerCombatState = (player: RpgPlayer): PlayerCombatRuntimeState => {
       pendingComboTimer: null,
       chargeStartedAt: null,
       chargeToken: 0,
+      chargeTimer: null,
     };
     playerCombatStates.set(player, state);
   }
@@ -679,6 +702,32 @@ const invalidatePendingPlayerCombo = (
     clearTimeout(state.pendingComboTimer);
     state.pendingComboTimer = null;
   }
+};
+
+const invalidatePlayerCharge = (
+  state: PlayerCombatRuntimeState | undefined,
+) => {
+  if (!state) return;
+  state.chargeToken++;
+  state.chargeStartedAt = null;
+  if (state.chargeTimer !== null) {
+    clearTimeout(state.chargeTimer);
+    state.chargeTimer = null;
+  }
+};
+
+const resetPlayerCombatRuntime = (player: RpgPlayer) => {
+  const state = playerCombatStates.get(player);
+  if (state) {
+    invalidatePendingPlayerCombo(state);
+    invalidatePlayerCharge(state);
+    state.comboIndex = 0;
+    state.lastAttackAt = 0;
+  }
+  cancelPlayerAttackRecovery(player);
+  clearActionBattleDefense(player);
+  (player as any).__actionBattleDodgeLockedUntil = 0;
+  clearActionBattleHitReaction(player);
 };
 
 const objectOption = <T extends object>(value: boolean | T | undefined): T | undefined =>
@@ -1370,10 +1419,17 @@ export const createActionBattleServer = (
           if (lockedUntil > Date.now()) return;
           state.chargeStartedAt = Date.now();
           const chargeToken = ++state.chargeToken;
-          setTimeout(() => {
-            if (state.chargeToken !== chargeToken) return;
+          const chargeTimer = setTimeout(() => {
+            if (
+              state.chargeToken !== chargeToken
+              || state.chargeTimer !== chargeTimer
+            ) {
+              return;
+            }
+            state.chargeTimer = null;
             state.chargeStartedAt = null;
           }, (charged.maxChargeMs ?? 900) + 1000);
+          state.chargeTimer = chargeTimer;
           emitActionBattleClientVisual({
             moment: "chargeStart",
             entity: player,
@@ -1384,8 +1440,7 @@ export const createActionBattleServer = (
         if (input.action === ACTION_BATTLE_CHARGE_RELEASE && charged?.enabled) {
           if (state.chargeStartedAt === null) return;
           const elapsed = Math.max(0, Date.now() - state.chargeStartedAt);
-          state.chargeStartedAt = null;
-          state.chargeToken++;
+          invalidatePlayerCharge(state);
           const charge = resolveActionBattleCharge(elapsed, charged);
           const base = resolvePlayerAttackProfile(player, options);
           const profile = normalizeActionBattleAttackProfile(
@@ -1444,25 +1499,24 @@ export const createActionBattleServer = (
         }
       },
       onConnected(player: RpgPlayer) {
-        invalidatePendingPlayerCombo(playerCombatStates.get(player));
+        resetPlayerCombatRuntime(player);
         player.initializeHotbar?.();
         syncActionBattleHotbar(player, options);
       },
       onJoinMap(player: RpgPlayer) {
-        invalidatePendingPlayerCombo(playerCombatStates.get(player));
+        resetPlayerCombatRuntime(player);
         player.initializeHotbar?.();
         syncActionBattleHotbar(player, options);
       },
       onLeaveMap(player: RpgPlayer) {
-        invalidatePendingPlayerCombo(playerCombatStates.get(player));
+        resetPlayerCombatRuntime(player);
       },
       onDead(player: RpgPlayer) {
-        invalidatePendingPlayerCombo(playerCombatStates.get(player));
+        resetPlayerCombatRuntime(player);
       },
       onDisconnected(player: RpgPlayer) {
-        invalidatePendingPlayerCombo(playerCombatStates.get(player));
+        resetPlayerCombatRuntime(player);
         releaseActionBattleControls(player);
-        clearActionBattleDefense(player);
         playerCombatStates.delete(player);
         playerSkillCooldowns.delete(player);
       },

@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { ACTION_BATTLE_CLIENT_VISUAL_ID } from "./visual";
 import {
+  ACTION_BATTLE_DODGE,
+  ACTION_BATTLE_GUARD_START,
   ACTION_BATTLE_HOTBAR_USE,
   ACTION_BATTLE_SKILL_USE,
   createActionBattleServer,
 } from "./server";
+import { hasActionBattleControl } from "./core/control-state";
+import { isActionBattleGuarding } from "./core/defense";
+import { isActionBattleEntityInvincible } from "./core/hit-reaction";
 
 describe("action battle player visuals", () => {
   afterEach(() => {
@@ -140,6 +145,51 @@ describe("action battle player visuals", () => {
       action: ACTION_BATTLE_SKILL_USE,
       data: { id: "unknown" },
     });
+    expect(onUse).toHaveBeenCalledTimes(2);
+  });
+
+  test("preserves skill cooldowns across death and map lifecycle resets", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const onUse = vi.fn();
+    const skill = {
+      id: "steady-focus",
+      _type: "skill",
+      spCost: 0,
+      hitRate: 1,
+      action: { mode: "instant", target: "self", cooldownMs: 350 },
+      onUse,
+    };
+    const player = {
+      id: "hero",
+      hp: 10,
+      sp: 10,
+      skills: () => [{ id: skill.id }],
+      getSkill: (id: string) => id === skill.id ? skill : null,
+      databaseById: (id: string) => id === skill.id ? skill : null,
+      hasEffect: () => false,
+      clientVisual: vi.fn(),
+      getGui: () => null,
+      getCurrentMap: () => null,
+    };
+    const server = createActionBattleServer();
+    const useSkill = () =>
+      (server.player?.onInput as any)(player, {
+        action: ACTION_BATTLE_SKILL_USE,
+        data: { id: skill.id },
+      });
+
+    useSkill();
+    (server.player?.onDead as any)(player);
+    (server.player?.onLeaveMap as any)(player);
+    (server.player?.onJoinMap as any)(player);
+    useSkill();
+
+    expect(onUse).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(350);
+    useSkill();
+
     expect(onUse).toHaveBeenCalledTimes(2);
   });
 
@@ -338,8 +388,8 @@ const createBufferedComboHarness = () => {
     activeMs: 1,
     recoveryMs: 49,
     control: {
-      movementLock: "none" as const,
-      directionLock: "none" as const,
+      movementLock: "full" as const,
+      directionLock: "full" as const,
     },
   };
   const server = createActionBattleServer({
@@ -351,6 +401,18 @@ const createBufferedComboHarness = () => {
           bufferMs: 150,
           resetMs: 700,
           steps: [attackStep, attackStep],
+        },
+        chargedAttack: {
+          enabled: true,
+          maxChargeMs: 900,
+        },
+        dodge: {
+          enabled: true,
+          cooldownMs: 650,
+          invincibilityMs: 220,
+        },
+        guard: {
+          enabled: true,
         },
       },
     },
@@ -367,6 +429,12 @@ const createBufferedComboHarness = () => {
   const attackCount = () => clientVisual.mock.calls.filter(
     ([, payload]) => payload?.moment === "attack",
   ).length;
+  const attackPatterns = () => clientVisual.mock.calls
+    .filter(([, payload]) => payload?.moment === "attack")
+    .map(([, payload]) => payload.pattern);
+  const visualCount = (moment: string) => clientVisual.mock.calls.filter(
+    ([, payload]) => payload?.moment === moment,
+  ).length;
 
   return {
     server,
@@ -376,8 +444,13 @@ const createBufferedComboHarness = () => {
     pressAction,
     queueCombo,
     attackCount,
+    attackPatterns,
+    visualCount,
     disconnect: () => {
       connected = false;
+    },
+    setConnected: (value: boolean) => {
+      connected = value;
     },
     setCurrentMap: (map: any) => {
       currentMap = map;
@@ -432,6 +505,122 @@ describe("action battle buffered combo lifecycle", () => {
     expect(vi.getTimerCount()).toBe(0);
     vi.advanceTimersByTime(200);
     expect(harness.attackCount()).toBe(0);
+  });
+
+  test("starts the destination map with an immediate step-zero attack", () => {
+    const harness = createBufferedComboHarness();
+    harness.pressAction();
+
+    expect(harness.attackPatterns()).toEqual(["combo-1"]);
+    expect(harness.player.__actionBattleAttackLockedUntil).toBeGreaterThan(
+      Date.now(),
+    );
+    expect(harness.player.__actionBattleAttackProfile).toBeDefined();
+    expect(hasActionBattleControl(harness.player, "attack")).toBe(true);
+    expect(harness.player.canMove).toBe(false);
+    expect(harness.player.directionFixed).toBe(true);
+    expect(harness.player.animationFixed).toBe(true);
+
+    (harness.server.player?.onLeaveMap as any)(
+      harness.player,
+      harness.originMap,
+    );
+    harness.setCurrentMap(harness.destinationMap);
+    (harness.server.player?.onJoinMap as any)(
+      harness.player,
+      harness.destinationMap,
+    );
+
+    expect(harness.player.__actionBattleAttackLockedUntil).toBe(0);
+    expect(harness.player.__actionBattleAttackActiveUntil).toBe(0);
+    expect(harness.player.__actionBattleAttackProfile).toBeUndefined();
+    expect(hasActionBattleControl(harness.player, "attack")).toBe(false);
+    expect(harness.player.canMove).toBe(true);
+    expect(harness.player.directionFixed).toBe(false);
+    expect(harness.player.animationFixed).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+
+    harness.pressAction();
+
+    expect(harness.attackPatterns()).toEqual(["combo-1", "combo-1"]);
+  });
+
+  test("rapid death and revival cannot resume attack recovery or combo state", () => {
+    const harness = createBufferedComboHarness();
+    harness.pressAction();
+    harness.pressAction();
+    expect(harness.attackPatterns()).toEqual(["combo-1"]);
+
+    harness.player.hp = 0;
+    (harness.server.player?.onDead as any)(harness.player);
+    harness.player.hp = 10;
+
+    expect(harness.player.__actionBattleAttackLockedUntil).toBe(0);
+    expect(harness.player.__actionBattleAttackActiveUntil).toBe(0);
+    expect(harness.player.__actionBattleAttackProfile).toBeUndefined();
+    expect(hasActionBattleControl(harness.player, "attack")).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+
+    harness.pressAction();
+
+    expect(harness.attackPatterns()).toEqual(["combo-1", "combo-1"]);
+    vi.advanceTimersByTime(51);
+    expect(harness.attackCount()).toBe(2);
+  });
+
+  test("connection reset clears charge, guard, dodge, and their controls", () => {
+    const harness = createBufferedComboHarness();
+    const input = (action: string) =>
+      (harness.server.player?.onInput as any)(harness.player, { action });
+
+    input("action-battle:charge-start");
+    input(ACTION_BATTLE_GUARD_START as string);
+    input(ACTION_BATTLE_DODGE);
+
+    expect(harness.visualCount("chargeStart")).toBe(1);
+    expect(isActionBattleGuarding(harness.player)).toBe(true);
+    expect(hasActionBattleControl(harness.player, "guard")).toBe(true);
+    expect(harness.player.__actionBattleDodgeLockedUntil).toBeGreaterThan(
+      Date.now(),
+    );
+    expect(isActionBattleEntityInvincible(harness.player)).toBe(true);
+
+    (harness.server.player?.onConnected as any)(harness.player);
+
+    expect(isActionBattleGuarding(harness.player)).toBe(false);
+    expect(hasActionBattleControl(harness.player, "guard")).toBe(false);
+    expect(harness.player.directionFixed).toBe(false);
+    expect(harness.player.animationFixed).toBe(false);
+    expect(harness.player.__actionBattleDodgeLockedUntil).toBe(0);
+    expect(isActionBattleEntityInvincible(harness.player)).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+
+    input("action-battle:charge-release");
+    expect(harness.visualCount("chargeRelease")).toBe(0);
+    input("action-battle:charge-start");
+    expect(harness.visualCount("chargeStart")).toBe(2);
+  });
+
+  test("disconnect and reconnect leave no stale runtime on the player", () => {
+    const harness = createBufferedComboHarness();
+    harness.pressAction();
+    harness.pressAction();
+    harness.disconnect();
+
+    (harness.server.player?.onDisconnected as any)(harness.player);
+
+    expect(harness.player.__actionBattleAttackLockedUntil).toBe(0);
+    expect(harness.player.__actionBattleAttackActiveUntil).toBe(0);
+    expect(harness.player.__actionBattleAttackProfile).toBeUndefined();
+    expect(harness.player.__actionBattleDodgeLockedUntil).toBe(0);
+    expect(hasActionBattleControl(harness.player)).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+
+    harness.setConnected(true);
+    (harness.server.player?.onConnected as any)(harness.player);
+    harness.pressAction();
+
+    expect(harness.attackPatterns()).toEqual(["combo-1", "combo-1"]);
   });
 
   test("fails closed when the player no longer has a current map", () => {
