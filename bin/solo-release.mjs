@@ -764,10 +764,14 @@ export const assertReviewedPlanSource = (
 ) => {
 	const canonicalPath = join(root, canonicalPlanRelativePath);
 	assert(
-		resolve(planPath) === canonicalPath && resolve(plan.planPath) === canonicalPath,
+		resolve(planPath) === canonicalPath &&
+			resolve(plan.planPath) === canonicalPath,
 		"Production release commands require the canonical reviewed plan path",
 	);
-	const planState = regularFileState(canonicalPath, "Canonical Solo release plan");
+	const planState = regularFileState(
+		canonicalPath,
+		"Canonical Solo release plan",
+	);
 	assert(planState, "Canonical Solo release plan is missing");
 	const headBytes = Buffer.from(
 		command("git", ["show", `HEAD:${canonicalPlanRelativePath}`], {
@@ -1954,11 +1958,7 @@ const assertPackedExports = (packedDirectory, manifest, packageName) => {
 	}
 };
 
-export const assertExactSourceWorktree = (
-	root,
-	source,
-	command = run,
-) => {
+export const assertExactSourceWorktree = (root, source, command = run) => {
 	const head = command("git", ["rev-parse", "HEAD"], { cwd: root });
 	const tree = command("git", ["rev-parse", "HEAD^{tree}"], { cwd: root });
 	const status = command(
@@ -1978,7 +1978,8 @@ export const assertExactSourceWorktree = (
 		.filter(
 			(line) =>
 				!generatedDistPrefixes.some(
-					(prefix) => line.startsWith("?? ") && line.slice(3).startsWith(prefix),
+					(prefix) =>
+						line.startsWith("?? ") && line.slice(3).startsWith(prefix),
 				),
 		);
 	assert(
@@ -2280,10 +2281,7 @@ export const createProvenanceManifest = ({
 		requiredConsumer: plan.requiredConsumer,
 		reviewReceipt,
 	};
-	const manifestPath = join(
-		artifactRoot,
-		`${plan.releaseId}.provenance.json`,
-	);
+	const manifestPath = join(artifactRoot, `${plan.releaseId}.provenance.json`);
 	writeJson(manifestPath, manifest);
 	const sidecarPath = `${manifestPath}.sha512`;
 	writeExclusiveFile(
@@ -2594,6 +2592,12 @@ export const nextPromotionAction = ({
 	);
 };
 
+export const publishedConsumerInstallArgs = Object.freeze([
+	"install",
+	"--ignore-scripts",
+	"--ignore-workspace",
+]);
+
 const verifyPublishedConsumer = (manifest, plan, env) => {
 	const directory = mkdtempSync(
 		join(tmpdir(), "rpgjs-solo-registry-consumer-"),
@@ -2616,7 +2620,7 @@ const verifyPublishedConsumer = (manifest, plan, env) => {
 			`import { SoloRuntime } from '@jbcom/rpgjs-solo'\nimport { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'\nimport { resolveInitialMute } from '@jbcom/rpgjs-solo-renderer'\nimport { inspectSoloBundle } from '@jbcom/rpgjs-solo-vite'\nimport { installCanvasEnginePatches } from '@arcade-cabinet/rpgjs-patches'\nconst runtime = new SoloRuntime({ fixedStepMs: 16 })\nruntime.registerMap({ id: 'release', width: 32, height: 32, entities: [{ id: 'hero', kind: 'player', x: 1, y: 1 }] })\nruntime.setActiveMap('release')\nif (!new SoloActionBattle(runtime).canMove('hero').available) throw new Error('action battle failed')\nif (!resolveInitialMute({ autoMuteInTests: true }, true)) throw new Error('test mute failed')\nif (inspectSoloBundle({}).length !== 0) throw new Error('vite boundary failed')\nif (typeof installCanvasEnginePatches !== 'function') throw new Error('patch package failed')\n`,
 			0o644,
 		);
-		run("pnpm", ["install", "--ignore-scripts"], {
+		run("pnpm", [...publishedConsumerInstallArgs], {
 			cwd: directory,
 			env,
 			timeout: 600_000,
