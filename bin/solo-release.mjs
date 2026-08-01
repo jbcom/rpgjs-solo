@@ -2598,26 +2598,97 @@ export const publishedConsumerInstallArgs = Object.freeze([
 	"--ignore-workspace",
 ]);
 
-const verifyPublishedConsumer = (manifest, plan, env) => {
+export const createPublishedConsumerContract = (manifest, plan) => ({
+	packageJson: {
+		name: "rpgjs-solo-release-consumer",
+		private: true,
+		type: "module",
+		dependencies: Object.fromEntries([
+			...manifest.packages.map(({ name }) => [name, plan.version]),
+			[plan.requiredConsumer.package, plan.requiredConsumer.version],
+			["@types/react", "19.2.17"],
+			["canvasengine", "2.1.1"],
+			["pixi.js", "8.19.0"],
+			["react", "19.2.8"],
+			["typescript", "7.0.2"],
+			["vite", "8.2.0"],
+		]),
+	},
+	runtimeCheck: `import { SoloRuntime } from '@jbcom/rpgjs-solo'
+import { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'
+import { inspectSoloBundle } from '@jbcom/rpgjs-solo-vite'
+
+const runtime = new SoloRuntime({ fixedStepMs: 16 })
+runtime.registerMap({ id: 'release', width: 32, height: 32, entities: [{ id: 'hero', kind: 'player', x: 1, y: 1 }] })
+runtime.setActiveMap('release')
+if (!new SoloActionBattle(runtime).canMove('hero').available) throw new Error('action battle failed')
+if (inspectSoloBundle({}).length !== 0) throw new Error('vite boundary failed')
+`,
+	indexHtml:
+		'<!doctype html><html><body><main id="app"></main><script type="module" src="/src/main.ts"></script></body></html>\n',
+	tsconfig: {
+		compilerOptions: {
+			target: "ES2023",
+			module: "ESNext",
+			moduleResolution: "Bundler",
+			lib: ["ES2023", "DOM"],
+			strict: true,
+			noEmit: true,
+			skipLibCheck: true,
+		},
+		include: ["src", "vite.config.ts"],
+	},
+	viteConfig: `import { defineConfig } from 'vite'
+import { rpgjsSoloBoundary } from '@jbcom/rpgjs-solo-vite'
+
+export default defineConfig({
+  plugins: [rpgjsSoloBoundary()]
+})
+`,
+	browserEntry: `import { installCanvasEnginePatches } from '@arcade-cabinet/rpgjs-patches'
+import { SoloRuntime } from '@jbcom/rpgjs-solo'
+import { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'
+import { resolveInitialMute } from '@jbcom/rpgjs-solo-renderer'
+import { Sprite, Viewport } from 'canvasengine'
+
+const runtime = new SoloRuntime({ fixedStepMs: 16 })
+runtime.registerMap({ id: 'release', width: 32, height: 32, entities: [{ id: 'hero', kind: 'player', x: 1, y: 1 }] })
+runtime.setActiveMap('release')
+if (!new SoloActionBattle(runtime).canMove('hero').available) throw new Error('action battle failed')
+if (!resolveInitialMute({ autoMuteInTests: true }, true)) throw new Error('test mute failed')
+if (typeof installCanvasEnginePatches !== 'function') throw new Error('patch package failed')
+installCanvasEnginePatches({ Sprite, Viewport })
+document.querySelector('#app')!.textContent = 'RPGJS Solo registry consumer passed'
+`,
+});
+
+export const verifyPublishedConsumer = (manifest, plan, env) => {
 	const directory = mkdtempSync(
 		join(tmpdir(), "rpgjs-solo-registry-consumer-"),
 	);
 	try {
-		writeJson(join(directory, "package.json"), {
-			name: "rpgjs-solo-release-consumer",
-			private: true,
-			type: "module",
-			dependencies: Object.fromEntries([
-				...manifest.packages.map(({ name }) => [name, plan.version]),
-				[plan.requiredConsumer.package, plan.requiredConsumer.version],
-				["canvasengine", "2.1.1"],
-				["pixi.js", "8.19.0"],
-				["vite", "8.2.0"],
-			]),
-		});
+		const contract = createPublishedConsumerContract(manifest, plan);
+		writeJson(join(directory, "package.json"), contract.packageJson);
 		writeExclusiveFile(
-			join(directory, "check.mjs"),
-			`import { SoloRuntime } from '@jbcom/rpgjs-solo'\nimport { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'\nimport { resolveInitialMute } from '@jbcom/rpgjs-solo-renderer'\nimport { inspectSoloBundle } from '@jbcom/rpgjs-solo-vite'\nimport { installCanvasEnginePatches } from '@arcade-cabinet/rpgjs-patches'\nconst runtime = new SoloRuntime({ fixedStepMs: 16 })\nruntime.registerMap({ id: 'release', width: 32, height: 32, entities: [{ id: 'hero', kind: 'player', x: 1, y: 1 }] })\nruntime.setActiveMap('release')\nif (!new SoloActionBattle(runtime).canMove('hero').available) throw new Error('action battle failed')\nif (!resolveInitialMute({ autoMuteInTests: true }, true)) throw new Error('test mute failed')\nif (inspectSoloBundle({}).length !== 0) throw new Error('vite boundary failed')\nif (typeof installCanvasEnginePatches !== 'function') throw new Error('patch package failed')\n`,
+			join(directory, "runtime-check.mjs"),
+			contract.runtimeCheck,
+			0o644,
+		);
+		writeExclusiveFile(
+			join(directory, "index.html"),
+			contract.indexHtml,
+			0o644,
+		);
+		writeJson(join(directory, "tsconfig.json"), contract.tsconfig);
+		writeExclusiveFile(
+			join(directory, "vite.config.ts"),
+			contract.viteConfig,
+			0o644,
+		);
+		mkdirSync(join(directory, "src"), { mode: 0o755 });
+		writeExclusiveFile(
+			join(directory, "src", "main.ts"),
+			contract.browserEntry,
 			0o644,
 		);
 		run("pnpm", [...publishedConsumerInstallArgs], {
@@ -2625,7 +2696,17 @@ const verifyPublishedConsumer = (manifest, plan, env) => {
 			env,
 			timeout: 600_000,
 		});
-		run(process.execPath, ["check.mjs"], { cwd: directory, env });
+		run(process.execPath, ["runtime-check.mjs"], { cwd: directory, env });
+		run("pnpm", ["exec", "tsc", "--noEmit"], {
+			cwd: directory,
+			env,
+			timeout: 600_000,
+		});
+		run("pnpm", ["exec", "vite", "build"], {
+			cwd: directory,
+			env,
+			timeout: 600_000,
+		});
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
 	}

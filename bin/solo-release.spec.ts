@@ -42,6 +42,7 @@ import {
 	createGiteaReleaseAdapter,
 	createGitHubReleaseAdapter,
 	createProvenanceManifest,
+	createPublishedConsumerContract,
 	defaultPlanPath,
 	loadProvenance,
 	loadSoloReleasePlan,
@@ -658,6 +659,27 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				join(consumer, "node_modules", "solo-consumer-fixture", "package.json"),
 			),
 		).toBe(true);
+	});
+
+	it("keeps browser-only renderer and CanvasEngine checks out of the Node runtime probe", () => {
+		const fixture = createFixture();
+		const contract = createPublishedConsumerContract(
+			{ packages },
+			loadSoloReleasePlan(fixture.planPath),
+		);
+
+		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo");
+		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-action-battle");
+		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-vite");
+		expect(contract.runtimeCheck).not.toContain("rpgjs-solo-renderer");
+		expect(contract.runtimeCheck).not.toContain("canvasengine");
+		expect(contract.runtimeCheck).not.toContain("rpgjs-patches");
+		expect(contract.browserEntry).toContain("@jbcom/rpgjs-solo-renderer");
+		expect(contract.browserEntry).toContain("@arcade-cabinet/rpgjs-patches");
+		expect(contract.browserEntry).toContain("from 'canvasengine'");
+		expect(contract.browserEntry).toContain("installCanvasEnginePatches");
+		expect(contract.viteConfig).toContain("rpgjsSoloBoundary");
+		expect(contract.tsconfig.compilerOptions.lib).toContain("DOM");
 	});
 
 	it("fails closed unless the executing toolchain is exact Node 24 and pnpm 11.18.0", () => {
