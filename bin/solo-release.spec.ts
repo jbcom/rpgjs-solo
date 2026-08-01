@@ -574,11 +574,19 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			inheritedReleaseDirectories,
 		);
 		expect(plan.sourceBinding.status).toBe("final");
-		expect(plan.reviewEvidence.status).toBe("provisional");
+		expect(plan.reviewEvidence.status).toBe("final");
+		expect(plan.reviewEvidence.independentReceipt.status).toBe("final");
+		expect(
+			plan.reviewEvidence.independentReceipt.orchestratorAssignment.status,
+		).toBe("final");
 		expect(plan.provenanceAttestation.status).toBe("final");
-		expect(() => assertFinalReleaseBindings(plan)).toThrow(
-			/reviewEvidence, independentReceipt, orchestratorAssignment/i,
-		);
+		expect(assertFinalReleaseBindings(plan)).toEqual({
+			sourceBinding: "final",
+			reviewEvidence: "final",
+			independentReceipt: "final",
+			orchestratorAssignment: "final",
+			provenanceAttestation: "final",
+		});
 	});
 
 	it("keeps reviewer trust outside the plan and authenticates a producer-disjoint detached assignment", () => {
@@ -2030,6 +2038,88 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			}),
 		).toThrow(/new and empty/i);
 		expect(readFileSync(stale, "utf8")).toBe("preserve on refusal\n");
+	});
+
+	it("preserves mode-0600 independent review evidence through provenance create and load", () => {
+		const fixture = createFixture();
+		const plan = loadSoloReleasePlan(fixture.planPath);
+		applyFixtureRelease(fixture, plan);
+		const head = "a".repeat(40);
+		const receiptDirectory = mkdtempSync(
+			join(tmpdir(), "solo-review-provenance-"),
+		);
+		temporaryDirectories.push(receiptDirectory);
+		const receiptPath = join(receiptDirectory, "receipt.json");
+		const assignment = fixture.assignment;
+		writeJson(receiptPath, {
+			schemaVersion: 1,
+			algorithm: "ed25519",
+			keyId: testReviewKeyId,
+			verdict: "ACCEPT",
+			releaseId: plan.releaseId,
+			version: plan.version,
+			enginePullRequest: plan.reviewEvidence.enginePullRequest.number,
+			engineMergeCommit: plan.requiredSourceCommit,
+			releasePullRequest: plan.reviewEvidence.releasePullRequest.number,
+			releaseMergeCommit: head,
+			planSha512: plan.planSha512,
+			producerTaskId: assignment.producerTaskId,
+			producerPrincipalId: assignment.producerPrincipalId,
+			reviewerTaskId: assignment.reviewerTaskId,
+			reviewerPrincipalId: assignment.reviewerPrincipalId,
+			reviewerRole: assignment.reviewerRole,
+			reviewerForkId: assignment.reviewerForkId,
+			assignmentSha512: sha512File(fixture.assignmentPath),
+			trustRootKeyId: testOrchestratorKeyId,
+		});
+		writeFileSync(
+			`${receiptPath}.sig`,
+			`${testReviewSigner(readFileSync(receiptPath)).toString("base64")}\n`,
+		);
+		chmodSync(receiptPath, 0o600);
+		chmodSync(`${receiptPath}.sig`, 0o600);
+		process.env.RPGJS_SOLO_REVIEW_RECEIPT_PATH = receiptPath;
+		const independentReceipt = verifyIndependentReviewReceipt(plan, head);
+		const artifacts = join(
+			tmpdir(),
+			`solo-release-review-artifacts-${randomUUID()}`,
+		);
+		temporaryDirectories.push(artifacts);
+		const result = createProvenanceManifest({
+			root: fixture.root,
+			plan,
+			artifactsDirectory: artifacts,
+			source: {
+				head,
+				tree: "b".repeat(40),
+				reviewEvidence: { independentReceipt },
+			},
+			command: (_command: string, args: string[]) => {
+				const record = packages.find(({ name }) => name === args[1]);
+				const dist = join(fixture.root, record?.directory ?? "", "dist");
+				mkdirSync(dist, { recursive: true });
+				writeFileSync(join(dist, "index.js"), "export const built = true;\n");
+				writeFileSync(
+					join(dist, "index.d.ts"),
+					"export declare const built: true;\n",
+				);
+				return "";
+			},
+			signer: testProvenanceSigner,
+		});
+		const copiedReceipt = join(
+			artifacts,
+			result.manifest.reviewReceipt.statement,
+		);
+		const copiedSignature = join(
+			artifacts,
+			result.manifest.reviewReceipt.signature,
+		);
+		expect(statSync(copiedReceipt).mode & 0o777).toBe(0o600);
+		expect(statSync(copiedSignature).mode & 0o777).toBe(0o600);
+		expect(() =>
+			loadProvenance(result.manifestPath, plan, fixture.root),
+		).not.toThrow();
 	});
 
 	it("rejects an archive missing any conditional export target", () => {

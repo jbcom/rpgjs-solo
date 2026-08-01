@@ -8,8 +8,8 @@
 		"requiredUpdate": "Satisfied by the exact canonical, two-parent PR #20 merge commit 82a9e56d106e87c37df4602055a6a22ec22218dc."
 	},
 	"reviewEvidence": {
-		"status": "provisional",
-		"requiredUpdate": "After PR #20 merges, rebase and open the release transition PR. In that still-open PR, bind the exact engine merge and release PR number and provenance key; finalize the plan before apply, commit the apply transition in the same PR, then merge after checks/review. Reviewer identity and keys remain outside producer-controlled source and are authenticated by a detached orchestrator assignment rooted in an independently pinned runtime trust key.",
+		"status": "final",
+		"requiredUpdate": "Satisfied for source policy by the exact engine merge, release PR number, final external-assignment policy, and committed provenance key. The detached assignment and its trust-root fingerprint remain runtime inputs outside producer-controlled source; the assigned reviewer creates the exact-merge ACCEPT receipt only after PR #22 merges.",
 		"enginePullRequest": {
 			"repository": "jbcom/rpgjs-solo",
 			"number": 20,
@@ -37,17 +37,17 @@
 			]
 		},
 		"independentReceipt": {
-			"status": "provisional",
+			"status": "final",
 			"algorithm": "ed25519",
 			"orchestratorAssignment": {
 				"schemaVersion": 1,
-				"status": "provisional",
+				"status": "final",
 				"trustRootPathEnvironment": "RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_PATH",
 				"trustRootKeyIdEnvironment": "RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_KEY_ID",
 				"assignmentPathEnvironment": "RPGJS_SOLO_ORCHESTRATOR_ASSIGNMENT_PATH",
 				"requiredReviewerRole": "independent-release-auditor"
 			},
-			"requiredUpdate": "Before apply, set both statuses to final. At execution, a supervisor outside this repository supplies an absolute mode-0600 trust-root file, its independently pinned declared SHA-256 key fingerprint (the fleet normative root hashes exactly its decoded 32 raw Ed25519 bytes), and a root-signed detached assignment through the named environment variables. The assignment binds release/version, producer and reviewer task/principal/role/fork, and the distinct reviewer key. After merge, that assigned reviewer may create a detached signed ACCEPT receipt through RPGJS_SOLO_REVIEW_RECEIPT_PATH."
+			"requiredUpdate": "The policy is final. At execution, the supervisor supplies the absolute mode-0600 trust root, independently pinned SHA-256 key fingerprint, and root-signed detached assignment through the named environment variables. The assignment binds release/version, producer and reviewer task/principal/role/fork, and the distinct reviewer key. After merge, only that assigned reviewer creates the detached signed ACCEPT receipt through RPGJS_SOLO_REVIEW_RECEIPT_PATH."
 		}
 	},
 	"provenanceAttestation": {

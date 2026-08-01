@@ -1999,19 +1999,25 @@ export const createProvenanceManifest = ({
 		);
 		const statementName = `${plan.releaseId}.review-receipt.json`;
 		const signatureName = `${statementName}.sig`;
+		const statementPath = join(artifactsDirectory, statementName);
+		const signaturePath = join(artifactsDirectory, signatureName);
 		writeFileSync(
-			join(artifactsDirectory, statementName),
+			statementPath,
 			sourceStatementState.bytes,
+			{ mode: 0o600 },
 		);
 		writeFileSync(
-			join(artifactsDirectory, signatureName),
+			signaturePath,
 			sourceSignatureState.bytes,
+			{ mode: 0o600 },
 		);
+		chmodSync(statementPath, 0o600);
+		chmodSync(signaturePath, 0o600);
 		reviewReceipt = {
 			statement: statementName,
 			signature: signatureName,
-			sha512: sha512File(join(artifactsDirectory, statementName)),
-			signatureSha512: sha512File(join(artifactsDirectory, signatureName)),
+			sha512: sha512File(statementPath),
+			signatureSha512: sha512File(signaturePath),
 		};
 	}
 	const packages = [];
