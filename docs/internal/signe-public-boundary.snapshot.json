@@ -1441,6 +1441,8 @@
       "HotbarSlot",
       "HotbarState",
       "I18nConfig",
+      "I18nDescriptorParamValue",
+      "I18nDescriptorParams",
       "I18nLocaleMessages",
       "I18nMessageDescriptor",
       "I18nMessages",
