@@ -150,6 +150,18 @@ describe("RPGJS beta.29 adoption contract", () => {
 		expect(rootManifest.scripts["test:types"]).toContain(
 			"packages/action-battle/src/public-api-types.spec.ts",
 		);
+		for (const npmLauncher of [
+			"bin/common.ts",
+			"bin/tag-latest.ts",
+			"bin/verify-published-package-contracts.mjs",
+		]) {
+			const source = readText(npmLauncher);
+			expect(source, npmLauncher).toContain("npmChildEnvironment");
+			expect(source, npmLauncher).toContain("env: npmEnvironment");
+			if (npmLauncher.endsWith(".ts")) {
+				expect(source, npmLauncher).toContain("extendEnv: false");
+			}
+		}
 	});
 
 	it("keeps inherited server tooling and all multiplayer authority out of Solo packages", () => {
