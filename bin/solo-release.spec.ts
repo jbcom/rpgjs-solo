@@ -36,6 +36,8 @@ import {
 	assertFinalReleaseBindings,
 	assertLivePromotedCohort,
 	assertMonotonicLatestPromotion,
+	assertRequiredConsumerRegistryEvidence,
+	assertRequiredConsumerSourceReleaseEvidence,
 	assertReleaseToolchain,
 	assertReviewedCanonicalMain,
 	assertReviewedPlanSource,
@@ -60,12 +62,53 @@ import {
 	secureAtomicWriteJson,
 	sha512File,
 	validateSoloReleaseState,
+	verifyRequiredConsumerAnonymousArtifact,
 	verifyExternalOrchestratorAssignment,
 	verifyIndependentReviewReceipt,
+	withAnonymousFleetRegistry,
 	withEphemeralNpmAuth,
 } from "./solo-release.mjs";
 
 const registry = "https://git.local.jonbogaty.com/api/packages/jbcom/npm/";
+const currentPatchConsumer = {
+	package: "@arcade-cabinet/rpgjs-patches",
+	version: "0.3.0",
+	registry:
+		"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/",
+	integrity:
+		"sha512-KEpLrX/xkKfUftLcPDS9i6VTSzsAqndYvybFBSoFnHPA20cLlyZ7KyhVZ+nq7zX7gVUWkxP6AuDwtJ8VvSO5oQ==",
+	shasum: "fe8e6ed84f31d06415c82a61fbc212e151664362",
+	tarball:
+		"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/%40arcade-cabinet%2Frpgjs-patches/-/0.3.0/rpgjs-patches-0.3.0.tgz",
+	tarballSha256:
+		"09ee17ac365c08e96487a6e59da349bf7fe358f81683b0cc3bb1010338c122b3",
+	sourceCommit: "432cc108b1b6229577d907611487c315ad03e8f8",
+	tagObject: "78677ce7379dcedac13dc19b5aa529017fb0ab36",
+	githubRelease: "https://github.com/jbcom/rpgjs-patches/releases/tag/v0.3.0",
+	giteaRelease:
+		"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0",
+};
+const currentPatchSourceCommand = (program: string, args: string[]) => {
+	const tagReference = `refs/tags/v${currentPatchConsumer.version}`;
+	if (program === "git")
+		return `${currentPatchConsumer.tagObject}\t${tagReference}\n${currentPatchConsumer.sourceCommit}\t${tagReference}^{}\n`;
+	if (program === "gh")
+		return JSON.stringify({
+			tagName: `v${currentPatchConsumer.version}`,
+			url: currentPatchConsumer.githubRelease,
+			isDraft: false,
+			isPrerelease: false,
+		});
+	if (program === "tea")
+		return JSON.stringify({
+			tag_name: `v${currentPatchConsumer.version}`,
+			target_commitish: currentPatchConsumer.sourceCommit,
+			html_url: currentPatchConsumer.giteaRelease,
+			draft: false,
+			prerelease: false,
+		});
+	throw new Error(`Unexpected source-release command ${program} ${args.join(" ")}`);
+};
 const previousVersion = "5.0.0-beta.29.solo.0";
 const version = "5.0.0-beta.29.solo.1";
 const packages = [
@@ -699,13 +742,159 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	it("admits the exact 0.3 patch consumer for the CanvasEngine 2.2 release plan", () => {
 		const fixture = createFixture();
 		const plan = JSON.parse(readFileSync(fixture.planPath, "utf8"));
-		plan.requiredConsumer.version = "0.3.0";
+		plan.requiredConsumer = currentPatchConsumer;
 		writeJson(fixture.planPath, plan);
 
-		expect(loadSoloReleasePlan(fixture.planPath).requiredConsumer).toEqual({
-			package: "@arcade-cabinet/rpgjs-patches",
-			version: "0.3.0",
+		expect(loadSoloReleasePlan(fixture.planPath).requiredConsumer).toEqual(
+			currentPatchConsumer,
+		);
+	});
+
+	it("rechecks the reviewed 0.3 patch bytes before candidate execution", () => {
+		const plan = loadSoloReleasePlan();
+		const view = (spec: string, field: string, registryPlan: typeof plan) => {
+			expect(registryPlan.registry).toBe(currentPatchConsumer.registry);
+			if (field === "dist-tags") {
+				expect(spec).toBe(currentPatchConsumer.package);
+				return { latest: currentPatchConsumer.version };
+			}
+			expect(spec).toBe(
+				`${currentPatchConsumer.package}@${currentPatchConsumer.version}`,
+			);
+			return currentPatchConsumer[
+				field.slice("dist.".length) as "integrity" | "shasum" | "tarball"
+			];
+		};
+		expect(assertRequiredConsumerRegistryEvidence(plan, {}, view)).toEqual({
+			integrity: currentPatchConsumer.integrity,
+			shasum: currentPatchConsumer.shasum,
+			tarball: currentPatchConsumer.tarball,
+			latest: currentPatchConsumer.version,
 		});
+		expect(() =>
+			assertRequiredConsumerRegistryEvidence(plan, {}, (spec, field, registryPlan) =>
+				field === "dist.integrity"
+					? "sha512-foreign"
+					: view(spec, field, registryPlan),
+			),
+		).toThrow(/registry evidence differs from the reviewed release plan/i);
+	});
+
+	it("fetches and hash-binds the fleet tarball without credentials", async () => {
+		const bytes = Buffer.from("anonymous fleet package bytes\n");
+		const plan = loadSoloReleasePlan();
+		const requiredConsumer = {
+			...plan.requiredConsumer,
+			integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`,
+			shasum: createHash("sha1").update(bytes).digest("hex"),
+			tarballSha256: createHash("sha256").update(bytes).digest("hex"),
+		};
+		const fixturePlan = { ...plan, requiredConsumer };
+		const view = (spec: string, field: string) => {
+			if (field === "dist-tags") return { latest: requiredConsumer.version };
+			expect(spec).toBe(
+				`${requiredConsumer.package}@${requiredConsumer.version}`,
+			);
+			return requiredConsumer[
+				field.slice("dist.".length) as "integrity" | "shasum" | "tarball"
+			];
+		};
+		const responseFor = (payload: Buffer, declaredLength = payload.length) => ({
+			ok: true,
+			status: 200,
+			url: requiredConsumer.tarball,
+			headers: { get: () => String(declaredLength) },
+			body: new ReadableStream({
+				start(controller) {
+					controller.enqueue(Uint8Array.from(payload));
+					controller.close();
+				},
+			}),
+		});
+		const fetcher = async (url: string, options: { redirect: string }) => {
+			expect(url).toBe(requiredConsumer.tarball);
+			expect(options.redirect).toBe("error");
+			return responseFor(bytes);
+		};
+		expect(
+			await verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
+				view,
+				fetcher,
+				command: currentPatchSourceCommand,
+			}),
+		).toMatchObject({
+			tarballSha256: requiredConsumer.tarballSha256,
+			bytes: bytes.length,
+		});
+		await expect(
+			verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
+				view,
+				command: currentPatchSourceCommand,
+				fetcher: async (url, options) => {
+					await fetcher(url, options);
+					return responseFor(Buffer.from("foreign"));
+				},
+			}),
+		).rejects.toThrow(/anonymous tarball bytes differ from the reviewed release plan/i);
+		await expect(
+			verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
+				view,
+				command: currentPatchSourceCommand,
+				fetcher: async () =>
+					responseFor(Buffer.alloc(16 * 1024 * 1024 + 1), 1),
+			}),
+		).rejects.toThrow(/tarball has an unsafe size/i);
+	});
+
+	it("binds both patch source tags and non-draft releases before packing", () => {
+		const plan = loadSoloReleasePlan();
+		expect(
+			assertRequiredConsumerSourceReleaseEvidence(
+				plan,
+				currentPatchSourceCommand,
+			),
+		).toEqual({
+			tag: "v0.3.0",
+			tagObject: currentPatchConsumer.tagObject,
+			sourceCommit: currentPatchConsumer.sourceCommit,
+			githubRelease: currentPatchConsumer.githubRelease,
+			giteaRelease: currentPatchConsumer.giteaRelease,
+		});
+		expect(() =>
+			assertRequiredConsumerSourceReleaseEvidence(plan, (program, args) =>
+				program === "git"
+					? currentPatchSourceCommand(program, args).replace(
+							currentPatchConsumer.sourceCommit,
+							"0".repeat(40),
+						)
+					: currentPatchSourceCommand(program, args),
+			),
+		).toThrow(/does not resolve to the reviewed tag object and source commit/i);
+		expect(() =>
+			assertRequiredConsumerSourceReleaseEvidence(plan, (program, args) =>
+				program === "gh"
+					? JSON.stringify({
+							tagName: "v0.3.0",
+							url: currentPatchConsumer.githubRelease,
+							isDraft: true,
+							isPrerelease: false,
+						})
+					: currentPatchSourceCommand(program, args),
+			),
+		).toThrow(/GitHub fleet patch release differs/i);
+		expect(() =>
+			assertRequiredConsumerSourceReleaseEvidence(plan, (program, args) =>
+				program === "tea"
+					? JSON.stringify({
+							tag_name: "v0.3.0",
+							target_commitish: currentPatchConsumer.sourceCommit,
+							html_url: currentPatchConsumer.giteaRelease,
+							draft: true,
+							prerelease: false,
+						})
+					: currentPatchSourceCommand(program, args),
+			),
+		).toThrow(/Gitea fleet patch release differs/i);
 	});
 
 	it("fails closed unless the executing toolchain is exact Node 24.19.0 and pnpm 11.21.0", () => {
@@ -805,18 +994,23 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		);
 	});
 
-	it("pins one beta.29 Solo increment to the exact engine merge and release PR", () => {
+	it("pins the current beta.29 Solo increment to the exact source merge", () => {
 		const plan = loadSoloReleasePlan();
-		expect(plan.previousVersion).toBe(previousVersion);
-		expect(plan.version).toBe(version);
+		expect(plan.previousVersion).toBe("5.0.0-beta.29.solo.1");
+		expect(plan.version).toBe("5.0.0-beta.29.solo.2");
 		expect(plan.requiredSourceCommit).toBe(
-			"82a9e56d106e87c37df4602055a6a22ec22218dc",
+			"732d8fb540f89827443939f20d2d102531da8d17",
 		);
 		expect(plan.sourceBaseCommit).toBe(plan.requiredSourceCommit);
 		expect(plan.reviewEvidence.enginePullRequest.mergeCommit).toBe(
 			plan.requiredSourceCommit,
 		);
-		expect(plan.reviewEvidence.releasePullRequest.number).toBe(25);
+		expect(plan.reviewEvidence.enginePullRequest.number).toBe(26);
+		expect(plan.reviewEvidence.releasePullRequest.number).toBe(27);
+		expect(plan.requiredConsumer).toEqual(currentPatchConsumer);
+		expect(plan.consumedChangesets).toEqual([
+			expect.objectContaining({ id: "current-solo-canvasengine-2-2" }),
+		]);
 		expect(
 			plan.carriedChangesets.find(
 				({ id }: { id: string }) => id === "fair-studio-success-rates",
@@ -1008,6 +1202,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	it("applies only the cohort once, preserves inherited changesets, and never creates beta.30", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
+		const retainedHistory = `# ${packages[0].name}\n\n## ${previousVersion}\n\n- Previous release.\n`;
+		writeFileSync(
+			join(fixture.root, packages[0].directory, "CHANGELOG.md"),
+			retainedHistory,
+		);
 		expect(validateSoloReleaseState(fixture.root, plan).phase).toBe("source");
 		expect(applyFixtureRelease(fixture, plan)).toMatchObject({
 			changed: true,
@@ -1038,6 +1237,15 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				),
 			).not.toContain("beta.30");
 		}
+		const updatedHistory = readFileSync(
+			join(fixture.root, packages[0].directory, "CHANGELOG.md"),
+			"utf8",
+		);
+		expect(updatedHistory).toContain(`## ${version}`);
+		expect(updatedHistory).toContain(retainedHistory.slice(retainedHistory.indexOf("##")));
+		expect(updatedHistory.indexOf(`## ${version}`)).toBeLessThan(
+			updatedHistory.indexOf(`## ${previousVersion}`),
+		);
 		for (const [id, source] of Object.entries(fixture.carriedSources)) {
 			expect(
 				readFileSync(join(fixture.root, `.changeset/${id}.md`), "utf8"),
@@ -1045,7 +1253,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		}
 	});
 
-	it("preflights every changelog before mutating a manifest", () => {
+	it("preflights every changelog heading before mutating a manifest", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
 		const manifestPath = join(
@@ -1063,7 +1271,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			applySoloReleaseTransaction(fixture.root, plan, undefined, {
 				targetLockfileFactory: () => "deterministic-lock\n",
 			}),
-		).toThrow(/changelog already exists in HEAD/i);
+		).toThrow(/changelog does not have the canonical package heading/i);
 		expect(readFileSync(manifestPath, "utf8")).toBe(before);
 		expect(existsSync(join(fixture.root, ".changeset/solo.md"))).toBe(true);
 	});
@@ -1510,8 +1718,12 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			if (args[0] === "ls-remote") return `${"a".repeat(40)}\trefs/heads/main`;
 			if (args[0] === "show" && args[2] === "--format=%P")
 				return args[3] === plan.requiredSourceCommit
-					? `${"e".repeat(40)} ${"c".repeat(40)}`
-					: `${"f".repeat(40)} ${"d".repeat(40)}`;
+					? "e".repeat(40)
+					: "f".repeat(40);
+			if (args[0] === "show" && args[2] === "--format=%T")
+				return [plan.requiredSourceCommit, "c".repeat(40)].includes(args[3])
+					? "7".repeat(40)
+					: "8".repeat(40);
 			if (args[1] === "HEAD^{tree}") return "b".repeat(40);
 			if (args[0] === "merge-base") return "";
 			return "a".repeat(40);
@@ -1520,11 +1732,29 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			head: "a".repeat(40),
 			tree: "b".repeat(40),
 			reviewEvidence: {
-				engine: { githubApproved: true },
-				release: { githubApproved: true },
+				engine: { githubApproved: true, mergeStrategy: "squash" },
+				release: { githubApproved: true, mergeStrategy: "squash" },
 				independentReceipt: null,
 			},
 		});
+		expect(() =>
+			assertReviewedCanonicalMain(
+				plan,
+				"a".repeat(40),
+				(program, args) => {
+					if (
+						program === "git" &&
+						args[0] === "show" &&
+						args[2] === "--format=%T" &&
+						args[3] === plan.requiredSourceCommit
+					)
+						return "9".repeat(40);
+					return fake(program, args);
+				},
+				fixture.root,
+			),
+		).toThrow(/squash tree does not match its exact reviewed head/i);
+		expect(calls.some((call) => call.startsWith("patch-id"))).toBe(false);
 		expect(calls.filter((call) => call.startsWith("ls-remote"))).toHaveLength(
 			2,
 		);
@@ -2748,24 +2978,94 @@ describe("Solo beta.29 coordinated release transaction", () => {
 
 	it("uses mode-0600 ephemeral authentication and removes it even after failure", async () => {
 		let npmrc = "";
+		let globalNpmrc = "";
 		const previous = process.env.RPGJS_SOLO_NPM_TOKEN;
+		const previousNodeToken = process.env.NODE_AUTH_TOKEN;
+		const previousGlobalConfig = process.env.NPM_CONFIG_GLOBALCONFIG;
+		const previousPnpmAuthFile = process.env.PNPM_CONFIG_NPMRC_AUTH_FILE;
 		process.env.RPGJS_SOLO_NPM_TOKEN = "outer-secret";
+		process.env.NODE_AUTH_TOKEN = "another-outer-secret";
+		process.env.NPM_CONFIG_GLOBALCONFIG = "/ambient/global/npmrc";
+		process.env.PNPM_CONFIG_NPMRC_AUTH_FILE = "/ambient/auth/npmrc";
 		try {
 			await expect(
 				withEphemeralNpmAuth("do-not-persist", registry, async (env) => {
 					npmrc = env.npm_config_userconfig ?? "";
+					globalNpmrc = env.npm_config_globalconfig ?? "";
 					expect(npmrc).not.toBe("");
+					expect(globalNpmrc).not.toBe("");
 					expect(env.RPGJS_SOLO_NPM_TOKEN).toBeUndefined();
+					expect(env.NODE_AUTH_TOKEN).toBeUndefined();
+					expect(env.NPM_CONFIG_GLOBALCONFIG).toBeUndefined();
+					expect(env.PNPM_CONFIG_NPMRC_AUTH_FILE).toBeUndefined();
+					expect(env.npm_config_prefix).toBe(dirname(npmrc));
+					expect(env.RPGJS_SOLO_NPM_CONFIG_DIRECTORY).toBe(dirname(npmrc));
 					const npmrcState = inspectTestFile(npmrc);
+					const globalNpmrcState = inspectTestFile(globalNpmrc);
 					expect(npmrcState.mode).toBe(0o600);
+					expect(globalNpmrcState.mode).toBe(0o600);
+					expect(globalNpmrcState.text).toBe("\n");
 					expect(npmrcState.text).toContain("do-not-persist");
+					expect(npmrcState.text).toContain(
+						`@arcade-cabinet:registry=${currentPatchConsumer.registry}`,
+					);
+					expect(npmrcState.text).not.toMatch(
+						/api\/packages\/arcade-cabinet\/npm\/.*:_authToken/,
+					);
 					throw new Error("stop");
 				}),
 			).rejects.toThrow("stop");
 		} finally {
 			if (previous === undefined) delete process.env.RPGJS_SOLO_NPM_TOKEN;
 			else process.env.RPGJS_SOLO_NPM_TOKEN = previous;
+			if (previousNodeToken === undefined) delete process.env.NODE_AUTH_TOKEN;
+			else process.env.NODE_AUTH_TOKEN = previousNodeToken;
+			if (previousGlobalConfig === undefined)
+				delete process.env.NPM_CONFIG_GLOBALCONFIG;
+			else process.env.NPM_CONFIG_GLOBALCONFIG = previousGlobalConfig;
+			if (previousPnpmAuthFile === undefined)
+				delete process.env.PNPM_CONFIG_NPMRC_AUTH_FILE;
+			else process.env.PNPM_CONFIG_NPMRC_AUTH_FILE = previousPnpmAuthFile;
 		}
 		expect(existsSync(npmrc)).toBe(false);
+		expect(existsSync(globalNpmrc)).toBe(false);
+	});
+
+	it("uses a token-free fleet registry configuration and removes it", async () => {
+		let npmrc = "";
+		let globalNpmrc = "";
+		await withAnonymousFleetRegistry(
+			currentPatchConsumer.registry,
+			async (env) => {
+				npmrc = env.npm_config_userconfig ?? "";
+				globalNpmrc = env.npm_config_globalconfig ?? "";
+				expect(env.RPGJS_SOLO_NPM_TOKEN).toBeUndefined();
+				expect(env.NODE_AUTH_TOKEN).toBeUndefined();
+				expect(env.npm_config_prefix).toBe(dirname(npmrc));
+				expect(env.RPGJS_SOLO_NPM_CONFIG_DIRECTORY).toBe(dirname(npmrc));
+				const npmrcState = inspectTestFile(npmrc);
+				const globalNpmrcState = inspectTestFile(globalNpmrc);
+				expect(npmrcState.mode).toBe(0o600);
+				expect(globalNpmrcState.mode).toBe(0o600);
+				expect(globalNpmrcState.text).toBe("\n");
+				expect(npmrcState.text).toContain(
+					`@arcade-cabinet:registry=${currentPatchConsumer.registry}`,
+				);
+				expect(npmrcState.text).not.toContain("_authToken");
+				expect(npmrcState.text).toContain("always-auth=false");
+				pnpmView(
+					currentPatchConsumer.package,
+					"dist-tags",
+					{ registry: currentPatchConsumer.registry },
+					env,
+					(_program, _args, options) => {
+						expect(options.cwd).toBe(dirname(npmrc));
+						return JSON.stringify({ latest: currentPatchConsumer.version });
+					},
+				);
+			},
+		);
+		expect(existsSync(npmrc)).toBe(false);
+		expect(existsSync(globalNpmrc)).toBe(false);
 	});
 });

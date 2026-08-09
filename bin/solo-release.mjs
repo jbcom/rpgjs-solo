@@ -51,10 +51,10 @@ import {
 export const rootDirectory = dirname(dirname(fileURLToPath(import.meta.url)));
 export const defaultPlanPath = join(
 	rootDirectory,
-	"docs/internal/releases/solo-beta29-solo1.plan.json",
+	"docs/internal/releases/solo-beta29-solo2.plan.json",
 );
 const canonicalPlanRelativePath =
-	"docs/internal/releases/solo-beta29-solo1.plan.json";
+	"docs/internal/releases/solo-beta29-solo2.plan.json";
 const dependencyFields = [
 	"dependencies",
 	"devDependencies",
@@ -70,11 +70,47 @@ const releaseNodeVersion = "24.19.0";
 const releasePnpmVersion = "11.21.0";
 const fleetPatchCompatibility = new Map([
 	["0.2.0", { canvasengine: "2.1.1", vite: "8.2.0" }],
-	["0.3.0", { canvasengine: "2.2.0", vite: "8.2.1" }],
+	[
+		"0.3.0",
+		{
+			canvasengine: "2.2.0",
+			vite: "8.2.1",
+			registry:
+				"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/",
+			integrity:
+				"sha512-KEpLrX/xkKfUftLcPDS9i6VTSzsAqndYvybFBSoFnHPA20cLlyZ7KyhVZ+nq7zX7gVUWkxP6AuDwtJ8VvSO5oQ==",
+			shasum: "fe8e6ed84f31d06415c82a61fbc212e151664362",
+			tarball:
+				"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/%40arcade-cabinet%2Frpgjs-patches/-/0.3.0/rpgjs-patches-0.3.0.tgz",
+			tarballSha256:
+				"09ee17ac365c08e96487a6e59da349bf7fe358f81683b0cc3bb1010338c122b3",
+			sourceCommit: "432cc108b1b6229577d907611487c315ad03e8f8",
+			tagObject: "78677ce7379dcedac13dc19b5aa529017fb0ab36",
+			githubRelease:
+				"https://github.com/jbcom/rpgjs-patches/releases/tag/v0.3.0",
+			giteaRelease:
+				"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0",
+		},
+	],
 ]);
+const currentFleetPatchVersion = "0.3.0";
+const maximumFleetTarballBytes = 16 * 1024 * 1024;
+const fleetPatchSourceRepositories = {
+	github: {
+		repository: "jbcom/rpgjs-patches",
+		gitUrl: "https://github.com/jbcom/rpgjs-patches.git",
+	},
+	gitea: {
+		repository: "arcade-cabinet/rpgjs-patches",
+		gitUrl:
+			"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches.git",
+	},
+};
 const standardChangesetDocuments = new Set(["README.md"]);
 const applyJournalName = ".rpgjs-solo-release-apply.json";
 const orchestratorTrustDomain = "jbcom/rpgjs-solo-release-orchestrator";
+const isolatedNpmConfigDirectoryEnvironment =
+	"RPGJS_SOLO_NPM_CONFIG_DIRECTORY";
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const writeJson = (path, value) =>
@@ -451,6 +487,7 @@ const run = (command, args, options = {}) => {
 		env: options.env ?? process.env,
 		timeout: options.timeout ?? 300_000,
 		maxBuffer: 32 * 1024 * 1024,
+		input: options.input,
 	});
 	return normalizeCommandOutput(output, options.trim !== false);
 };
@@ -656,9 +693,15 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 			),
 		"Inherited release directories must be unique package paths",
 	);
+	const requiredCompatibility = fleetPatchCompatibility.get(
+		plan.requiredConsumer?.version,
+	);
 	assert(
 		plan.requiredConsumer?.package === "@arcade-cabinet/rpgjs-patches" &&
-			fleetPatchCompatibility.has(plan.requiredConsumer.version),
+			requiredCompatibility &&
+			Object.entries(requiredCompatibility)
+				.filter(([field]) => !["canvasengine", "vite"].includes(field))
+				.every(([field, value]) => plan.requiredConsumer[field] === value),
 		"The release plan must name a supported exact fleet compatibility consumer",
 	);
 	assert(
@@ -671,7 +714,10 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 	const assignment = independentReceipt?.orchestratorAssignment;
 	assert(
 		engineReview?.repository === "jbcom/rpgjs-solo" &&
-			engineReview.number === 20 &&
+			Number.isInteger(engineReview.number) &&
+			engineReview.number > 0 &&
+			/^[0-9a-f]{40}$/.test(engineReview.mergeCommit) &&
+			engineReview.mergeCommit === plan.requiredSourceCommit &&
 			Array.isArray(engineReview.requiredChecks) &&
 			Number.isInteger(engineReview.minimumApprovals) &&
 			engineReview.minimumApprovals >= 1,
@@ -992,14 +1038,25 @@ export const validateSoloReleaseState = (root, plan) => {
 	};
 };
 
-const changelogEntry = (record, plan, changesets) => {
+const changelogEntry = (record, plan, changesets, previous = null) => {
 	const notes = changesets
 		.filter(([, parsed]) =>
 			parsed.releases.some(({ name }) => name === record.name),
 		)
 		.map(([id, parsed]) => `- ${parsed.summary}\n  (${id})`)
 		.join("\n");
-	return `# ${record.name}\n\n## ${plan.version}\n\n${notes}\n`;
+	const header = `# ${record.name}\n\n`;
+	const section = `## ${plan.version}\n\n${notes}\n`;
+	if (previous === null) return `${header}${section}`;
+	assert(
+		previous.startsWith(header),
+		`${record.name} changelog does not have the canonical package heading`,
+	);
+	assert(
+		!previous.includes(`\n## ${plan.version}\n`),
+		`${record.name} changelog already contains ${plan.version}`,
+	);
+	return `${header}${section}\n${previous.slice(header.length)}`;
 };
 
 const assertReleaseCommitAncestry = (root, plan, head, command = run) => {
@@ -1440,12 +1497,33 @@ export const assertReviewedCanonicalMain = (
 			["show", "-s", "--format=%P", evidence.mergeCommit],
 			{ cwd: root },
 		).split(/\s+/);
-		assert(
+		const mergeCommit =
 			parents.length === 2 &&
-				parents[0] === evidence.baseCommit &&
-				parents[1] === evidence.headCommit,
-			`Pull request #${evidence.number} merge parents do not bind its exact base and head`,
+			parents[0] === evidence.baseCommit &&
+			parents[1] === evidence.headCommit;
+		const squashCommit =
+			parents.length === 1 && parents[0] === evidence.baseCommit;
+		assert(
+			mergeCommit || squashCommit,
+			`Pull request #${evidence.number} merge ancestry does not bind its exact base and head`,
 		);
+		if (squashCommit) {
+			const reviewedTree = command(
+				"git",
+				["show", "-s", "--format=%T", evidence.headCommit],
+				{ cwd: root },
+			);
+			const mergedTree = command(
+				"git",
+				["show", "-s", "--format=%T", evidence.mergeCommit],
+				{ cwd: root },
+			);
+			assert(
+				/^[0-9a-f]{40,64}$/.test(reviewedTree) && reviewedTree === mergedTree,
+				`Pull request #${evidence.number} squash tree does not match its exact reviewed head`,
+			);
+		}
+		evidence.mergeStrategy = squashCommit ? "squash" : "merge";
 	}
 	const independentReceipt =
 		engine.githubApproved && release.githubApproved
@@ -1577,14 +1655,14 @@ const createApplyContentTransitions = (root, plan, command = run) => {
 		} catch {
 			headEntry = "";
 		}
-		assert(!headEntry, `${record.name} changelog already exists in HEAD`);
+		const existing = headEntry ? readHeadEntry(root, path, command) : null;
 		descriptors.push({
 			path,
 			kind: "changelog",
-			source: null,
-			sourceMode: null,
-			target: changelogEntry(record, plan, changesets),
-			targetMode: 0o644,
+			source: existing?.source ?? null,
+			sourceMode: existing?.mode ?? null,
+			target: changelogEntry(record, plan, changesets, existing?.source ?? null),
+			targetMode: existing?.mode ?? 0o644,
 		});
 	}
 	for (const entry of plan.consumedChangesets) {
@@ -2297,26 +2375,80 @@ export const createProvenanceManifest = ({
 	return { manifestPath, sidecarPath, ...signed, manifest };
 };
 
+const sanitizedNpmEnvironment = () => {
+	const environment = { ...process.env };
+	for (const name of [
+		"RPGJS_SOLO_NPM_TOKEN",
+		isolatedNpmConfigDirectoryEnvironment,
+		"NODE_AUTH_TOKEN",
+		"NPM_TOKEN",
+		"NPM_AUTH_TOKEN",
+		"PNPM_CONFIG_NPMRC_AUTH_FILE",
+	])
+		delete environment[name];
+	for (const name of Object.keys(environment))
+		if (
+			/^npm_config_.*auth/i.test(name) ||
+			/^npm_config_(?:config|globalconfig|prefix|userconfig)$/i.test(name) ||
+			/^pnpm_config_npmrc_auth_file$/i.test(name)
+		)
+			delete environment[name];
+	return environment;
+};
+
+const isolatedNpmCommandOptions = (env) => ({
+	env,
+	...(env?.[isolatedNpmConfigDirectoryEnvironment]
+		? { cwd: env[isolatedNpmConfigDirectoryEnvironment] }
+		: {}),
+});
+
+export const withAnonymousFleetRegistry = async (registry, callback) => {
+	const directory = mkdtempSync(join(tmpdir(), "rpgjs-solo-npm-auth-"));
+	const npmrc = join(directory, ".npmrc");
+	const globalNpmrc = join(directory, "global.npmrc");
+	writeExclusiveFile(
+		npmrc,
+		`registry=https://registry.npmjs.org/\n@arcade-cabinet:registry=${registry}\nalways-auth=false\n`,
+		0o600,
+	);
+	writeExclusiveFile(globalNpmrc, "\n", 0o600);
+	try {
+		const childEnvironment = {
+			...sanitizedNpmEnvironment(),
+			[isolatedNpmConfigDirectoryEnvironment]: directory,
+			npm_config_globalconfig: globalNpmrc,
+			npm_config_prefix: directory,
+			npm_config_userconfig: npmrc,
+		};
+		return await callback(childEnvironment);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+};
+
 export const withEphemeralNpmAuth = async (token, registry, callback) => {
 	assert(token, "RPGJS_SOLO_NPM_TOKEN is required");
 	const directory = mkdtempSync(join(tmpdir(), "rpgjs-solo-npm-auth-"));
 	const npmrc = join(directory, ".npmrc");
+	const globalNpmrc = join(directory, "global.npmrc");
 	const registryPath = new URL(registry).host + new URL(registry).pathname;
 	const arcadeRegistry =
 		"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/";
-	const arcadePath =
-		new URL(arcadeRegistry).host + new URL(arcadeRegistry).pathname;
 	writeExclusiveFile(
 		npmrc,
-		`registry=https://registry.npmjs.org/\n@jbcom:registry=${registry}\n@arcade-cabinet:registry=${arcadeRegistry}\n//${registryPath}:_authToken=${token}\n//${arcadePath}:_authToken=${token}\nalways-auth=true\n`,
+		`registry=https://registry.npmjs.org/\n@jbcom:registry=${registry}\n@arcade-cabinet:registry=${arcadeRegistry}\n//${registryPath}:_authToken=${token}\nalways-auth=true\n`,
 		0o600,
 	);
+	writeExclusiveFile(globalNpmrc, "\n", 0o600);
 	try {
 		const childEnvironment = {
-			...process.env,
+			...sanitizedNpmEnvironment(),
+			[isolatedNpmConfigDirectoryEnvironment]: directory,
+			npm_config_globalconfig: globalNpmrc,
+			npm_config_prefix: directory,
 			npm_config_userconfig: npmrc,
 		};
-		delete childEnvironment.RPGJS_SOLO_NPM_TOKEN;
 		return await callback(childEnvironment, token);
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
@@ -2374,6 +2506,11 @@ export const loadProvenance = (
 			JSON.stringify(manifest.carriedChangesets) ===
 				JSON.stringify(plan.carriedChangesets),
 		"Provenance changeset contract drifted",
+	);
+	assert(
+		JSON.stringify(manifest.requiredConsumer) ===
+			JSON.stringify(plan.requiredConsumer),
+		"Provenance fleet compatibility consumer drifted",
 	);
 	assert(
 		manifest.lockfile.path === "pnpm-lock.yaml",
@@ -2520,7 +2657,7 @@ export const pnpmView = (spec, field, plan, env, command = run) => {
 		const output = command(
 			"pnpm",
 			["view", spec, field, "--json", "--registry", plan.registry],
-			{ env },
+			isolatedNpmCommandOptions(env),
 		);
 		assert(
 			output !== "",
@@ -2533,6 +2670,211 @@ export const pnpmView = (spec, field, plan, env, command = run) => {
 			cause: error,
 		});
 	}
+};
+
+export const assertRequiredConsumerRegistryEvidence = (
+	plan,
+	env,
+	view = pnpmView,
+) => {
+	const registryPlan = { ...plan, registry: plan.requiredConsumer.registry };
+	const spec = `${plan.requiredConsumer.package}@${plan.requiredConsumer.version}`;
+	const observed = {
+		integrity: view(spec, "dist.integrity", registryPlan, env),
+		shasum: view(spec, "dist.shasum", registryPlan, env),
+		tarball: view(spec, "dist.tarball", registryPlan, env),
+	};
+	const tags = view(plan.requiredConsumer.package, "dist-tags", registryPlan, env);
+	assert(
+		observed.integrity === plan.requiredConsumer.integrity &&
+			observed.shasum === plan.requiredConsumer.shasum &&
+			observed.tarball === plan.requiredConsumer.tarball &&
+			tags?.latest === plan.requiredConsumer.version,
+		`${spec} registry evidence differs from the reviewed release plan`,
+	);
+	return { ...observed, latest: tags.latest };
+};
+
+const parseRemoteTagEvidence = (output, tagReference) => {
+	const references = new Map(
+		output
+			.split("\n")
+			.filter(Boolean)
+			.map((line) => line.split(/\s+/))
+			.filter(([object, reference]) =>
+				/^[0-9a-f]{40}$/.test(object) && typeof reference === "string",
+			)
+			.map(([object, reference]) => [reference, object]),
+	);
+	return {
+		tagObject: references.get(tagReference),
+		sourceCommit: references.get(`${tagReference}^{}`),
+	};
+};
+
+export const assertRequiredConsumerSourceReleaseEvidence = (
+	plan,
+	command = run,
+) => {
+	const consumer = plan.requiredConsumer;
+	assert(
+		consumer.version === currentFleetPatchVersion,
+		"Fleet patch source-release verification requires the current reviewed version",
+	);
+	const tag = `v${currentFleetPatchVersion}`;
+	const tagReference = `refs/tags/${tag}`;
+	const expectedGitHubRelease =
+		`https://github.com/${fleetPatchSourceRepositories.github.repository}/releases/tag/${tag}`;
+	const expectedGiteaRelease =
+		`https://git.local.jonbogaty.com/${fleetPatchSourceRepositories.gitea.repository}/releases/tag/${tag}`;
+	assert(
+		consumer.githubRelease === expectedGitHubRelease &&
+			consumer.giteaRelease === expectedGiteaRelease,
+		"Fleet patch source release URLs differ from the reviewed repositories",
+	);
+	for (const source of Object.values(fleetPatchSourceRepositories)) {
+		const observed = parseRemoteTagEvidence(
+			command(
+				"git",
+				["ls-remote", source.gitUrl, tagReference, `${tagReference}^{}`],
+				{ timeout: 600_000 },
+			),
+			tagReference,
+		);
+		assert(
+			observed.tagObject === consumer.tagObject &&
+				observed.sourceCommit === consumer.sourceCommit,
+			`${source.repository} ${tag} does not resolve to the reviewed tag object and source commit`,
+		);
+	}
+	const githubRelease = JSON.parse(
+		command(
+			"gh",
+			[
+				"release",
+				"view",
+				tag,
+				"--repo",
+				fleetPatchSourceRepositories.github.repository,
+				"--json",
+				"tagName,url,isDraft,isPrerelease",
+			],
+			{ timeout: 600_000 },
+		),
+	);
+	assert(
+		githubRelease.tagName === tag &&
+			githubRelease.url === consumer.githubRelease &&
+			githubRelease.isDraft === false &&
+			githubRelease.isPrerelease === false,
+		"GitHub fleet patch release differs from the reviewed release plan",
+	);
+	const giteaRelease = JSON.parse(
+		command(
+			"tea",
+			[
+				"api",
+				`repos/${fleetPatchSourceRepositories.gitea.repository}/releases/tags/${tag}`,
+				"--repo",
+				fleetPatchSourceRepositories.gitea.repository,
+			],
+			{ timeout: 600_000 },
+		),
+	);
+	assert(
+		giteaRelease.tag_name === tag &&
+			giteaRelease.target_commitish === consumer.sourceCommit &&
+			giteaRelease.html_url === consumer.giteaRelease &&
+			giteaRelease.draft === false &&
+			giteaRelease.prerelease === false,
+		"Gitea fleet patch release differs from the reviewed release plan",
+	);
+	return {
+		tag,
+		tagObject: consumer.tagObject,
+		sourceCommit: consumer.sourceCommit,
+		githubRelease: consumer.githubRelease,
+		giteaRelease: consumer.giteaRelease,
+	};
+};
+
+export const verifyRequiredConsumerAnonymousArtifact = async (
+	plan,
+	env,
+	{ view = pnpmView, fetcher = globalThis.fetch, command = run } = {},
+) => {
+	const metadata = assertRequiredConsumerRegistryEvidence(plan, env, view);
+	const sourceRelease = assertRequiredConsumerSourceReleaseEvidence(plan, command);
+	assert(
+		typeof fetcher === "function",
+		"Anonymous fleet package verification requires fetch",
+	);
+	const reviewedCompatibility = fleetPatchCompatibility.get(
+		currentFleetPatchVersion,
+	);
+	assert(
+		plan.requiredConsumer.tarball === reviewedCompatibility.tarball,
+		"Fleet compatibility tarball URL differs from the executable review allowlist",
+	);
+	const response = await fetcher(reviewedCompatibility.tarball, {
+		redirect: "error",
+		signal: AbortSignal.timeout(60_000),
+	});
+	assert(
+		response?.ok === true &&
+			response.status === 200 &&
+			response.url === plan.requiredConsumer.tarball,
+		`${plan.requiredConsumer.package}@${plan.requiredConsumer.version} anonymous tarball fetch failed`,
+	);
+	const declaredLength = response.headers?.get?.("content-length");
+	if (declaredLength !== null && declaredLength !== undefined)
+		assert(
+			/^\d+$/.test(declaredLength) &&
+				Number(declaredLength) <= maximumFleetTarballBytes,
+			"Fleet compatibility tarball declares an unsafe size",
+		);
+	assert(
+		response.body && typeof response.body.getReader === "function",
+		"Fleet compatibility tarball response is not a readable byte stream",
+	);
+	const reader = response.body.getReader();
+	const chunks = [];
+	let tarballLength = 0;
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			assert(
+				value instanceof Uint8Array,
+				"Fleet compatibility tarball stream returned a non-byte chunk",
+			);
+			tarballLength += value.byteLength;
+			if (tarballLength > maximumFleetTarballBytes) {
+				await reader.cancel();
+				throw new Error("Fleet compatibility tarball has an unsafe size");
+			}
+			chunks.push(Buffer.from(value));
+		}
+	} finally {
+		reader.releaseLock?.();
+	}
+	const tarballBytes = Buffer.concat(chunks, tarballLength);
+	assert(
+		tarballBytes.length > 0 && tarballBytes.length <= maximumFleetTarballBytes,
+		"Fleet compatibility tarball has an unsafe size",
+	);
+	assert(
+		digest("sha256", tarballBytes) === plan.requiredConsumer.tarballSha256 &&
+			digest("sha1", tarballBytes) === plan.requiredConsumer.shasum &&
+			snapshotIntegrity(tarballBytes) === plan.requiredConsumer.integrity,
+		`${plan.requiredConsumer.package}@${plan.requiredConsumer.version} anonymous tarball bytes differ from the reviewed release plan`,
+	);
+	return {
+		...metadata,
+		...sourceRelease,
+		tarballSha256: plan.requiredConsumer.tarballSha256,
+		bytes: tarballBytes.length,
+	};
 };
 
 export const assertCandidateCohort = (manifest, plan, env, view = pnpmView) => {
@@ -2938,7 +3280,7 @@ export const publishCandidateCohort = async ({
 					"--registry",
 					plan.registry,
 				],
-				{ env },
+				isolatedNpmCommandOptions(env),
 			);
 		assert(
 			view(`${item.name}@${plan.version}`, "dist.integrity", plan, env) ===
@@ -2952,6 +3294,9 @@ export const publishCandidateCohort = async ({
 
 const publishCandidate = async (manifest, manifestPath, plan, args) => {
 	requireExecution(args, plan);
+	await withAnonymousFleetRegistry(plan.requiredConsumer.registry, async (env) =>
+		verifyRequiredConsumerAnonymousArtifact(plan, env),
+	);
 	await withEphemeralNpmAuth(
 		process.env.RPGJS_SOLO_NPM_TOKEN,
 		plan.registry,
@@ -3065,7 +3410,7 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 							"--registry",
 							plan.registry,
 						],
-						{ env },
+						isolatedNpmCommandOptions(env),
 					);
 				const verified = pnpmView(item.name, "dist-tags", plan, env);
 				assert(
@@ -3707,6 +4052,10 @@ export const main = async (
 			validateSoloReleaseState(rootDirectory, plan).phase === "applied",
 			"pack requires the applied version phase",
 		);
+		await withAnonymousFleetRegistry(
+			plan.requiredConsumer.registry,
+			async (env) => verifyRequiredConsumerAnonymousArtifact(plan, env),
+		);
 		const source = assertCanonicalMain(rootDirectory, plan);
 		const result = createProvenanceManifest({
 			root: rootDirectory,
@@ -3737,6 +4086,10 @@ export const main = async (
 		await publishCandidate(manifest, args.manifest, plan, args);
 	else if (args.command === "verify-candidate") {
 		requireExecution(args, plan);
+		await withAnonymousFleetRegistry(
+			plan.requiredConsumer.registry,
+			async (env) => verifyRequiredConsumerAnonymousArtifact(plan, env),
+		);
 		await withEphemeralNpmAuth(
 			process.env.RPGJS_SOLO_NPM_TOKEN,
 			plan.registry,
