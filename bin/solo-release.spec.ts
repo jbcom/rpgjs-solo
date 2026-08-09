@@ -1018,6 +1018,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	it("applies only the cohort once, preserves inherited changesets, and never creates beta.30", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
+		const retainedHistory = `# ${packages[0].name}\n\n## ${previousVersion}\n\n- Previous release.\n`;
+		writeFileSync(
+			join(fixture.root, packages[0].directory, "CHANGELOG.md"),
+			retainedHistory,
+		);
 		expect(validateSoloReleaseState(fixture.root, plan).phase).toBe("source");
 		expect(applyFixtureRelease(fixture, plan)).toMatchObject({
 			changed: true,
@@ -1048,6 +1053,12 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				),
 			).not.toContain("beta.30");
 		}
+		const updatedHistory = readFileSync(
+			join(fixture.root, packages[0].directory, "CHANGELOG.md"),
+			"utf8",
+		);
+		expect(updatedHistory).toContain(`## ${version}`);
+		expect(updatedHistory).toContain(retainedHistory.slice(retainedHistory.indexOf("##")));
 		for (const [id, source] of Object.entries(fixture.carriedSources)) {
 			expect(
 				readFileSync(join(fixture.root, `.changeset/${id}.md`), "utf8"),
@@ -1055,7 +1066,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		}
 	});
 
-	it("preflights every changelog before mutating a manifest", () => {
+	it("preflights every changelog heading before mutating a manifest", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
 		const manifestPath = join(
@@ -1073,7 +1084,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			applySoloReleaseTransaction(fixture.root, plan, undefined, {
 				targetLockfileFactory: () => "deterministic-lock\n",
 			}),
-		).toThrow(/changelog already exists in HEAD/i);
+		).toThrow(/changelog does not have the canonical package heading/i);
 		expect(readFileSync(manifestPath, "utf8")).toBe(before);
 		expect(existsSync(join(fixture.root, ".changeset/solo.md"))).toBe(true);
 	});

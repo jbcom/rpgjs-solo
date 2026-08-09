@@ -995,14 +995,25 @@ export const validateSoloReleaseState = (root, plan) => {
 	};
 };
 
-const changelogEntry = (record, plan, changesets) => {
+const changelogEntry = (record, plan, changesets, previous = null) => {
 	const notes = changesets
 		.filter(([, parsed]) =>
 			parsed.releases.some(({ name }) => name === record.name),
 		)
 		.map(([id, parsed]) => `- ${parsed.summary}\n  (${id})`)
 		.join("\n");
-	return `# ${record.name}\n\n## ${plan.version}\n\n${notes}\n`;
+	const header = `# ${record.name}\n\n`;
+	const section = `## ${plan.version}\n\n${notes}\n`;
+	if (previous === null) return `${header}${section}`;
+	assert(
+		previous.startsWith(header),
+		`${record.name} changelog does not have the canonical package heading`,
+	);
+	assert(
+		!previous.includes(`\n## ${plan.version}\n`),
+		`${record.name} changelog already contains ${plan.version}`,
+	);
+	return `${header}${section}\n${previous.slice(header.length)}`;
 };
 
 const assertReleaseCommitAncestry = (root, plan, head, command = run) => {
@@ -1580,14 +1591,14 @@ const createApplyContentTransitions = (root, plan, command = run) => {
 		} catch {
 			headEntry = "";
 		}
-		assert(!headEntry, `${record.name} changelog already exists in HEAD`);
+		const existing = headEntry ? readHeadEntry(root, path, command) : null;
 		descriptors.push({
 			path,
 			kind: "changelog",
-			source: null,
-			sourceMode: null,
-			target: changelogEntry(record, plan, changesets),
-			targetMode: 0o644,
+			source: existing?.source ?? null,
+			sourceMode: existing?.mode ?? null,
+			target: changelogEntry(record, plan, changesets, existing?.source ?? null),
+			targetMode: existing?.mode ?? 0o644,
 		});
 	}
 	for (const entry of plan.consumedChangesets) {
