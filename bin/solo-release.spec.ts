@@ -1010,7 +1010,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.reviewEvidence.supersededRejectedReleasePullRequests).toEqual([
 			expect.objectContaining({
 				number: 27,
+				baseCommit: "732d8fb540f89827443939f20d2d102531da8d17",
+				headCommit: "6f2f6c13cc12801a71921a2255e4ad049dc402f9",
 				mergeCommit: "013d59e4d5d619ad11ceb3df405ea6d6a987ed94",
+				planSha512:
+					"a3ed4697a604bf6f47ebdd8c562010719e0c65aae2eb16f40852923b0f73dd7bc33fe3fb741223cbdd1f82952fe8ade1074d178bd0cdfe508b9924b207f11a23",
 				outcome: "rejected",
 				receiptCreated: false,
 				authority: "historical-only",

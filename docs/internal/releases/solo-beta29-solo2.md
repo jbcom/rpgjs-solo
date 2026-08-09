@@ -14,11 +14,13 @@ audit rejected that exact merge: the Cloudflare MMORPG sample retained stale
 esbuild 0.28.1, and the documented
 `mise exec node@24.19.0 -- pnpm verify:published-package-contracts` route failed
 when pnpm's `manage-package-manager-versions` setting leaked into child npm.
-No independent ACCEPT receipt was created, and neither PR #27 nor its plan hash
-authorizes repaired bytes. Additive repair PR #28, named in the plan, is the
-only release-transition authority for this cohort after it passes exact-head
-review, merges, and receives a new producer-disjoint post-merge audit
-assignment.
+No independent ACCEPT receipt was created. The rejected plan's exact raw-byte
+SHA-512 is
+`a3ed4697a604bf6f47ebdd8c562010719e0c65aae2eb16f40852923b0f73dd7bc33fe3fb741223cbdd1f82952fe8ade1074d178bd0cdfe508b9924b207f11a23`;
+neither it nor PR #27 authorizes repaired bytes. Additive repair PR #28, named
+in the plan, is the only release-transition authority for this cohort after it
+passes exact-head review, merges, and receives a new producer-disjoint
+post-merge audit assignment.
 
 The machine-readable authority is
 [`solo-beta29-solo2.plan.json`](solo-beta29-solo2.plan.json). The historical
