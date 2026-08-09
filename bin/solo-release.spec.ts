@@ -1531,8 +1531,12 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			if (args[0] === "ls-remote") return `${"a".repeat(40)}\trefs/heads/main`;
 			if (args[0] === "show" && args[2] === "--format=%P")
 				return args[3] === plan.requiredSourceCommit
-					? `${"e".repeat(40)} ${"c".repeat(40)}`
-					: `${"f".repeat(40)} ${"d".repeat(40)}`;
+					? "e".repeat(40)
+					: "f".repeat(40);
+			if (args[0] === "show" && args[2] === "--format=%T")
+				return [plan.requiredSourceCommit, "c".repeat(40)].includes(args[3])
+					? "1".repeat(40)
+					: "2".repeat(40);
 			if (args[1] === "HEAD^{tree}") return "b".repeat(40);
 			if (args[0] === "merge-base") return "";
 			return "a".repeat(40);
@@ -1541,11 +1545,28 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			head: "a".repeat(40),
 			tree: "b".repeat(40),
 			reviewEvidence: {
-				engine: { githubApproved: true },
-				release: { githubApproved: true },
+				engine: { githubApproved: true, mergeStrategy: "squash" },
+				release: { githubApproved: true, mergeStrategy: "squash" },
 				independentReceipt: null,
 			},
 		});
+		expect(() =>
+			assertReviewedCanonicalMain(
+				plan,
+				"a".repeat(40),
+				(program, args) => {
+					if (
+						program === "git" &&
+						args[0] === "show" &&
+						args[2] === "--format=%T" &&
+						args[3] === "c".repeat(40)
+					)
+						return "3".repeat(40);
+					return fake(program, args);
+				},
+				fixture.root,
+			),
+		).toThrow(/squash tree does not match its exact reviewed head/i);
 		expect(calls.filter((call) => call.startsWith("ls-remote"))).toHaveLength(
 			2,
 		);

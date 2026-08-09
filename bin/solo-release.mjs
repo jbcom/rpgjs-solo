@@ -1454,12 +1454,33 @@ export const assertReviewedCanonicalMain = (
 			["show", "-s", "--format=%P", evidence.mergeCommit],
 			{ cwd: root },
 		).split(/\s+/);
-		assert(
+		const mergeCommit =
 			parents.length === 2 &&
-				parents[0] === evidence.baseCommit &&
-				parents[1] === evidence.headCommit,
-			`Pull request #${evidence.number} merge parents do not bind its exact base and head`,
+			parents[0] === evidence.baseCommit &&
+			parents[1] === evidence.headCommit;
+		const squashCommit =
+			parents.length === 1 && parents[0] === evidence.baseCommit;
+		assert(
+			mergeCommit || squashCommit,
+			`Pull request #${evidence.number} merge ancestry does not bind its exact base and head`,
 		);
+		if (squashCommit) {
+			const mergedTree = command(
+				"git",
+				["show", "-s", "--format=%T", evidence.mergeCommit],
+				{ cwd: root },
+			);
+			const reviewedTree = command(
+				"git",
+				["show", "-s", "--format=%T", evidence.headCommit],
+				{ cwd: root },
+			);
+			assert(
+				mergedTree === reviewedTree,
+				`Pull request #${evidence.number} squash tree does not match its exact reviewed head`,
+			);
+		}
+		evidence.mergeStrategy = squashCommit ? "squash" : "merge";
 	}
 	const independentReceipt =
 		engine.githubApproved && release.githubApproved
