@@ -62,7 +62,11 @@ mode-0600 npm configuration.
    GitHub release, and Gitea backup release. The plan binds all of those
    identities. Pack, publish, and candidate verification re-read exact
    integrity, shasum, tarball URL, and `latest`, then anonymously fetch and
-   compare the tarball SHA-256, SHA-1, and SHA-512 before installing it.
+   compare the tarball SHA-256, SHA-1, and SHA-512 before installing it. The
+   wrapper replaces both user and global npm configuration with mode-0600 files
+   and runs registry commands from that isolated directory, preventing project,
+   user, global, or ambient-environment credentials from authenticating the
+   fleet-package proof.
 7. Run `pnpm release:solo:pack --artifacts <absolute-directory-outside-repo>`
    once with `RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE`. Pack rechecks the bound
    patch metadata through a token-free npm configuration before it creates any

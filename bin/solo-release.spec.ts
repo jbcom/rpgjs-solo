@@ -2978,19 +2978,33 @@ describe("Solo beta.29 coordinated release transaction", () => {
 
 	it("uses mode-0600 ephemeral authentication and removes it even after failure", async () => {
 		let npmrc = "";
+		let globalNpmrc = "";
 		const previous = process.env.RPGJS_SOLO_NPM_TOKEN;
 		const previousNodeToken = process.env.NODE_AUTH_TOKEN;
+		const previousGlobalConfig = process.env.NPM_CONFIG_GLOBALCONFIG;
+		const previousPnpmAuthFile = process.env.PNPM_CONFIG_NPMRC_AUTH_FILE;
 		process.env.RPGJS_SOLO_NPM_TOKEN = "outer-secret";
 		process.env.NODE_AUTH_TOKEN = "another-outer-secret";
+		process.env.NPM_CONFIG_GLOBALCONFIG = "/ambient/global/npmrc";
+		process.env.PNPM_CONFIG_NPMRC_AUTH_FILE = "/ambient/auth/npmrc";
 		try {
 			await expect(
 				withEphemeralNpmAuth("do-not-persist", registry, async (env) => {
 					npmrc = env.npm_config_userconfig ?? "";
+					globalNpmrc = env.npm_config_globalconfig ?? "";
 					expect(npmrc).not.toBe("");
+					expect(globalNpmrc).not.toBe("");
 					expect(env.RPGJS_SOLO_NPM_TOKEN).toBeUndefined();
 					expect(env.NODE_AUTH_TOKEN).toBeUndefined();
+					expect(env.NPM_CONFIG_GLOBALCONFIG).toBeUndefined();
+					expect(env.PNPM_CONFIG_NPMRC_AUTH_FILE).toBeUndefined();
+					expect(env.npm_config_prefix).toBe(dirname(npmrc));
+					expect(env.RPGJS_SOLO_NPM_CONFIG_DIRECTORY).toBe(dirname(npmrc));
 					const npmrcState = inspectTestFile(npmrc);
+					const globalNpmrcState = inspectTestFile(globalNpmrc);
 					expect(npmrcState.mode).toBe(0o600);
+					expect(globalNpmrcState.mode).toBe(0o600);
+					expect(globalNpmrcState.text).toBe("\n");
 					expect(npmrcState.text).toContain("do-not-persist");
 					expect(npmrcState.text).toContain(
 						`@arcade-cabinet:registry=${currentPatchConsumer.registry}`,
@@ -3006,27 +3020,52 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			else process.env.RPGJS_SOLO_NPM_TOKEN = previous;
 			if (previousNodeToken === undefined) delete process.env.NODE_AUTH_TOKEN;
 			else process.env.NODE_AUTH_TOKEN = previousNodeToken;
+			if (previousGlobalConfig === undefined)
+				delete process.env.NPM_CONFIG_GLOBALCONFIG;
+			else process.env.NPM_CONFIG_GLOBALCONFIG = previousGlobalConfig;
+			if (previousPnpmAuthFile === undefined)
+				delete process.env.PNPM_CONFIG_NPMRC_AUTH_FILE;
+			else process.env.PNPM_CONFIG_NPMRC_AUTH_FILE = previousPnpmAuthFile;
 		}
 		expect(existsSync(npmrc)).toBe(false);
+		expect(existsSync(globalNpmrc)).toBe(false);
 	});
 
 	it("uses a token-free fleet registry configuration and removes it", async () => {
 		let npmrc = "";
+		let globalNpmrc = "";
 		await withAnonymousFleetRegistry(
 			currentPatchConsumer.registry,
 			async (env) => {
 				npmrc = env.npm_config_userconfig ?? "";
+				globalNpmrc = env.npm_config_globalconfig ?? "";
 				expect(env.RPGJS_SOLO_NPM_TOKEN).toBeUndefined();
 				expect(env.NODE_AUTH_TOKEN).toBeUndefined();
+				expect(env.npm_config_prefix).toBe(dirname(npmrc));
+				expect(env.RPGJS_SOLO_NPM_CONFIG_DIRECTORY).toBe(dirname(npmrc));
 				const npmrcState = inspectTestFile(npmrc);
+				const globalNpmrcState = inspectTestFile(globalNpmrc);
 				expect(npmrcState.mode).toBe(0o600);
+				expect(globalNpmrcState.mode).toBe(0o600);
+				expect(globalNpmrcState.text).toBe("\n");
 				expect(npmrcState.text).toContain(
 					`@arcade-cabinet:registry=${currentPatchConsumer.registry}`,
 				);
 				expect(npmrcState.text).not.toContain("_authToken");
 				expect(npmrcState.text).toContain("always-auth=false");
+				pnpmView(
+					currentPatchConsumer.package,
+					"dist-tags",
+					{ registry: currentPatchConsumer.registry },
+					env,
+					(_program, _args, options) => {
+						expect(options.cwd).toBe(dirname(npmrc));
+						return JSON.stringify({ latest: currentPatchConsumer.version });
+					},
+				);
 			},
 		);
 		expect(existsSync(npmrc)).toBe(false);
+		expect(existsSync(globalNpmrc)).toBe(false);
 	});
 });

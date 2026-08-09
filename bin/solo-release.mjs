@@ -109,6 +109,8 @@ const fleetPatchSourceRepositories = {
 const standardChangesetDocuments = new Set(["README.md"]);
 const applyJournalName = ".rpgjs-solo-release-apply.json";
 const orchestratorTrustDomain = "jbcom/rpgjs-solo-release-orchestrator";
+const isolatedNpmConfigDirectoryEnvironment =
+	"RPGJS_SOLO_NPM_CONFIG_DIRECTORY";
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const writeJson = (path, value) =>
@@ -2377,27 +2379,46 @@ const sanitizedNpmEnvironment = () => {
 	const environment = { ...process.env };
 	for (const name of [
 		"RPGJS_SOLO_NPM_TOKEN",
+		isolatedNpmConfigDirectoryEnvironment,
 		"NODE_AUTH_TOKEN",
 		"NPM_TOKEN",
 		"NPM_AUTH_TOKEN",
+		"PNPM_CONFIG_NPMRC_AUTH_FILE",
 	])
 		delete environment[name];
 	for (const name of Object.keys(environment))
-		if (/^npm_config_.*auth/i.test(name)) delete environment[name];
+		if (
+			/^npm_config_.*auth/i.test(name) ||
+			/^npm_config_(?:config|globalconfig|prefix|userconfig)$/i.test(name) ||
+			/^pnpm_config_npmrc_auth_file$/i.test(name)
+		)
+			delete environment[name];
 	return environment;
 };
+
+const isolatedNpmCommandOptions = (env) => ({
+	env,
+	...(env?.[isolatedNpmConfigDirectoryEnvironment]
+		? { cwd: env[isolatedNpmConfigDirectoryEnvironment] }
+		: {}),
+});
 
 export const withAnonymousFleetRegistry = async (registry, callback) => {
 	const directory = mkdtempSync(join(tmpdir(), "rpgjs-solo-npm-auth-"));
 	const npmrc = join(directory, ".npmrc");
+	const globalNpmrc = join(directory, "global.npmrc");
 	writeExclusiveFile(
 		npmrc,
 		`registry=https://registry.npmjs.org/\n@arcade-cabinet:registry=${registry}\nalways-auth=false\n`,
 		0o600,
 	);
+	writeExclusiveFile(globalNpmrc, "\n", 0o600);
 	try {
 		const childEnvironment = {
 			...sanitizedNpmEnvironment(),
+			[isolatedNpmConfigDirectoryEnvironment]: directory,
+			npm_config_globalconfig: globalNpmrc,
+			npm_config_prefix: directory,
 			npm_config_userconfig: npmrc,
 		};
 		return await callback(childEnvironment);
@@ -2410,6 +2431,7 @@ export const withEphemeralNpmAuth = async (token, registry, callback) => {
 	assert(token, "RPGJS_SOLO_NPM_TOKEN is required");
 	const directory = mkdtempSync(join(tmpdir(), "rpgjs-solo-npm-auth-"));
 	const npmrc = join(directory, ".npmrc");
+	const globalNpmrc = join(directory, "global.npmrc");
 	const registryPath = new URL(registry).host + new URL(registry).pathname;
 	const arcadeRegistry =
 		"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/";
@@ -2418,9 +2440,13 @@ export const withEphemeralNpmAuth = async (token, registry, callback) => {
 		`registry=https://registry.npmjs.org/\n@jbcom:registry=${registry}\n@arcade-cabinet:registry=${arcadeRegistry}\n//${registryPath}:_authToken=${token}\nalways-auth=true\n`,
 		0o600,
 	);
+	writeExclusiveFile(globalNpmrc, "\n", 0o600);
 	try {
 		const childEnvironment = {
 			...sanitizedNpmEnvironment(),
+			[isolatedNpmConfigDirectoryEnvironment]: directory,
+			npm_config_globalconfig: globalNpmrc,
+			npm_config_prefix: directory,
 			npm_config_userconfig: npmrc,
 		};
 		return await callback(childEnvironment, token);
@@ -2631,7 +2657,7 @@ export const pnpmView = (spec, field, plan, env, command = run) => {
 		const output = command(
 			"pnpm",
 			["view", spec, field, "--json", "--registry", plan.registry],
-			{ env },
+			isolatedNpmCommandOptions(env),
 		);
 		assert(
 			output !== "",
@@ -3254,7 +3280,7 @@ export const publishCandidateCohort = async ({
 					"--registry",
 					plan.registry,
 				],
-				{ env },
+				isolatedNpmCommandOptions(env),
 			);
 		assert(
 			view(`${item.name}@${plan.version}`, "dist.integrity", plan, env) ===
@@ -3384,7 +3410,7 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 							"--registry",
 							plan.registry,
 						],
-						{ env },
+						isolatedNpmCommandOptions(env),
 					);
 				const verified = pnpmView(item.name, "dist-tags", plan, env);
 				assert(
