@@ -1,4 +1,5 @@
 const pnpmOnlyNpmConfigKeys = new Set([
+	"npm_config_http_proxy",
 	"npm_config_manage_package_manager_versions",
 ]);
 
@@ -8,8 +9,8 @@ const pnpmOnlyNpmConfigKeys = new Set([
  * pnpm scripts expose workspace/package-manager configuration through the
  * historical npm_config_* namespace. npm treats unknown keys in that namespace
  * as its own configuration and warns on stderr. Remove only the one pnpm-owned
- * setting that npm cannot understand; every other variable and npm diagnostic
- * remains observable by the caller.
+ * settings that npm cannot understand; every supported npm setting, standard
+ * proxy variable, and npm diagnostic remains observable by the caller.
  */
 export const npmChildEnvironment = (environment = process.env) => {
 	const childEnvironment = { ...environment };
