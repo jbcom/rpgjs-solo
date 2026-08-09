@@ -682,36 +682,36 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(contract.tsconfig.compilerOptions.lib).toContain("DOM");
 	});
 
-	it("fails closed unless the executing toolchain is exact Node 24 and pnpm 11.18.0", () => {
+	it("fails closed unless the executing toolchain is exact Node 24.19.0 and pnpm 11.21.0", () => {
 		const exactToolchain = (_program: string, args: string[]) =>
 			args[0] === "--version"
-				? "11.18.0"
-				: JSON.stringify({ version: "24.18.1", execPath: process.execPath });
+				? "11.21.0"
+				: JSON.stringify({ version: "24.19.0", execPath: process.execPath });
 		expect(
-			assertReleaseToolchain(exactToolchain, "24.18.1", process.execPath),
+			assertReleaseToolchain(exactToolchain, "24.19.0", process.execPath),
 		).toEqual({
-			nodeVersion: "24.18.1",
+			nodeVersion: "24.19.0",
 			nodeExecPath: process.execPath,
-			pnpmVersion: "11.18.0",
-			childNodeVersion: "24.18.1",
+			pnpmVersion: "11.21.0",
+			childNodeVersion: "24.19.0",
 			childNodeExecPath: process.execPath,
 		});
 		expect(() =>
 			assertReleaseToolchain(exactToolchain, "26.5.0", process.execPath),
-		).toThrow(/requires Node 24/i);
+		).toThrow(/requires Node 24\.19\.0/i);
 		expect(() =>
-			assertReleaseToolchain(() => "11.17.0", "24.18.1", process.execPath),
-		).toThrow(/requires pnpm 11\.18\.0/i);
+			assertReleaseToolchain(() => "11.20.0", "24.19.0", process.execPath),
+		).toThrow(/requires pnpm 11\.21\.0/i);
 		expect(() =>
 			assertReleaseToolchain(
 				(_program, args) =>
 					args[0] === "--version"
-						? "11.18.0"
+						? "11.21.0"
 						: JSON.stringify({ version: "26.5.0", execPath: "/usr/bin/false" }),
-				"24.18.1",
+				"24.19.0",
 				process.execPath,
 			),
-		).toThrow(/pnpm child runtime must be the exact Node 24/i);
+		).toThrow(/pnpm child runtime must be the exact Node 24\.19\.0/i);
 	});
 
 	it("admits only the canonical plan path and exact reviewed HEAD bytes", async () => {
@@ -725,12 +725,12 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			main(["validate", "--plan", externalPlan], {
 				toolchainCommand: (_program, args) =>
 					args[0] === "--version"
-						? "11.18.0"
+						? "11.21.0"
 						: JSON.stringify({
 								version: process.versions.node,
 								execPath: process.execPath,
 							}),
-				nodeVersion: "24.18.1",
+				nodeVersion: "24.19.0",
 			}),
 		).rejects.toThrow(/canonical reviewed plan path/i);
 

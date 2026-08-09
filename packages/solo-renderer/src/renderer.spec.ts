@@ -32,6 +32,7 @@ vi.mock('./scene', () => ({
 }))
 
 import { SoloRenderer } from './renderer'
+import { rpgjsSoloRendererCompatibility } from './compatibility'
 import type { SoloRendererOptions } from './types'
 
 describe('SoloRenderer CanvasEngine compatibility', () => {
@@ -73,5 +74,18 @@ describe('SoloRenderer CanvasEngine compatibility', () => {
 
     expect(mocks.installCanvasEnginePatches).not.toHaveBeenCalled()
     renderer.destroy()
+  })
+
+  it('publishes the exact consumer-injected compatibility matrix', () => {
+    expect(rpgjsSoloRendererCompatibility).toEqual({
+      canvasengine: '2.2.0',
+      vite: '8.2.1',
+      patches: {
+        package: '@arcade-cabinet/rpgjs-patches',
+        version: '0.3.0',
+        installer: 'installCanvasEnginePatches',
+        timing: 'before-scene-bootstrap'
+      }
+    })
   })
 })

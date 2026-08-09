@@ -84,6 +84,13 @@ this public package. Fleet production consumers must pin the current compatible
 release and inject it as above; public or upstream-oriented consumers may omit
 the hook when no compatibility layer is required.
 
+The validated fleet matrix is exported as `rpgjsSoloRendererCompatibility`.
+This source cohort requires `canvasengine@2.2.0`, Vite `8.2.1`, and, for fleet
+production games, consumer-injected
+`@arcade-cabinet/rpgjs-patches@0.3.0`. The installer must run before scene
+creation; `SoloRenderer` guarantees that order when it receives
+`installCanvasEnginePatches` in its options.
+
 Story-driven terrain remains a game-owned decision while the renderer owns its
 safe scene lifecycle. Replace complete GID layers immutably, then register the
 revision; the active viewport is rebuilt under a new revision key without

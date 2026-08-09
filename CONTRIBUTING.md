@@ -147,8 +147,8 @@ pnpm build
 pnpm test -- --run
 ```
 
-Solo targets the current Node 24 LTS line. Do not retain an older inherited CI
-runtime merely because upstream still tests it.
+Solo development, CI, and releases use exact Node 24.19.0 LTS and pnpm 11.21.0.
+Do not retain an older inherited runtime merely because upstream still tests it.
 
 ## Packages and releases
 

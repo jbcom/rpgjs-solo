@@ -106,9 +106,25 @@ describe("RPGJS beta.29 adoption contract", () => {
 	it("retains the current fork toolchain and public API gate", () => {
 		const rootManifest = readJson("package.json");
 		expect(rootManifest.engines).toEqual({ node: ">=24 <25" });
-		expect(rootManifest.packageManager).toBe("pnpm@11.18.0");
-		expect(rootManifest.devDependencies.vite).toBe("8.2.0");
+		expect(rootManifest.packageManager).toBe("pnpm@11.21.0");
+		expect(rootManifest.devDependencies.vite).toBe("8.2.1");
+		expect(rootManifest.devDependencies.canvasengine).toBe("2.2.0");
+		expect(rootManifest.devDependencies["@canvasengine/compiler"]).toBe(
+			"2.2.0",
+		);
+		expect(rootManifest.devDependencies["@canvasengine/presets"]).toBe(
+			"2.2.0",
+		);
 		expect(rootManifest.devDependencies.vitest).toBe("4.1.10");
+		const soloRenderer = readJson("packages/solo-renderer/package.json");
+		expect(soloRenderer.dependencies).toMatchObject({
+			"@canvasengine/presets": "2.2.0",
+			"@canvasengine/tiled": "2.2.0",
+			canvasengine: "2.2.0",
+		});
+		expect(readJson("packages/solo-vite/package.json").peerDependencies.vite).toBe(
+			"8.2.1",
+		);
 		expect(rootManifest.scripts["test:types"]).toContain(
 			"packages/action-battle/src/public-api-types.spec.ts",
 		);

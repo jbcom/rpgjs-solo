@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { Plugin, ViteDevServer } from "vite";
-import sizeOf from "image-size";
+import probeImageSize from "probe-image-size";
 import { createRpgServerTransport, logNetworkSimulationStatus } from "@rpgjs/server/node";
 import type { RpgWebSocketServer } from "@rpgjs/server/node";
 import { flagTransform } from "./flag-transform";
@@ -361,7 +361,7 @@ export function loadSpriteSheet(directoryName: string, modulePath: string, optio
       const generatedSpritesheetsVariable = `__rpgjsV4Spritesheets_${formatVariableName(directoryName)}`;
       variablesString = `...${generatedSpritesheetsVariable}`;
 
-      const dimensions = sizeOf(fs.readFileSync(images.at(-1)!)) as { width?: number; height?: number };
+      const dimensions = probeImageSize.sync(fs.readFileSync(images.at(-1)!));
       propImagesString = dedent`
         ${imageImportString}
         const ${generatedSpritesheetsVariable} = [${importSprites.variablesString}].flatMap((spritesheet) => {
@@ -375,12 +375,12 @@ export function loadSpriteSheet(directoryName: string, modulePath: string, optio
         ;[${importSprites.variablesString}].forEach((spritesheet) => {
           spritesheet.images = { ${objectString} }
           spritesheet.prototype ||= {}
-          spritesheet.prototype.width = ${dimensions.width ?? 0}
-          spritesheet.prototype.height = ${dimensions.height ?? 0}
+          spritesheet.prototype.width = ${dimensions?.width ?? 0}
+          spritesheet.prototype.height = ${dimensions?.height ?? 0}
         })
         ${generatedSpritesheetsVariable}.forEach((spritesheet) => {
-          spritesheet.width = ${dimensions.width ?? 0}
-          spritesheet.height = ${dimensions.height ?? 0}
+          spritesheet.width = ${dimensions?.width ?? 0}
+          spritesheet.height = ${dimensions?.height ?? 0}
         })
       `;
     }

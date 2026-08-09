@@ -20,7 +20,7 @@ const readWorkflow = (path: string) => {
 };
 
 describe("fork-owned CI boundary", () => {
-	it("runs the complete Node 24 product lane without publication authority", () => {
+	it("runs the exact Node 24.19.0 product lane without publication authority", () => {
 		const { source, workflow } = readWorkflow(".github/workflows/fork-ci.yml");
 		expect(workflow.name).toBe("Fork CI");
 		expect(workflow.permissions).toEqual({ contents: "read" });
@@ -29,7 +29,7 @@ describe("fork-owned CI boundary", () => {
 
 		const job = workflow.jobs.tests;
 		expect(job["timeout-minutes"]).toBe(30);
-		expect(job.strategy.matrix["node-version"]).toEqual([24]);
+		expect(job.strategy.matrix["node-version"]).toEqual(["24.19.0"]);
 		for (const step of job.steps) {
 			if (step.uses) {
 				expect(step.uses).toMatch(/^[^@]+@[0-9a-f]{40}$/);

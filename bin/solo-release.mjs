@@ -66,8 +66,8 @@ const canonicalMetadata = {
 	homepageRoot: "https://github.com/jbcom/rpgjs-solo/tree/main/",
 	bugsUrl: "https://github.com/jbcom/rpgjs-solo/issues",
 };
-const releaseNodeMajor = 24;
-const releasePnpmVersion = "11.18.0";
+const releaseNodeVersion = "24.19.0";
+const releasePnpmVersion = "11.21.0";
 const standardChangesetDocuments = new Set(["README.md"]);
 const applyJournalName = ".rpgjs-solo-release-apply.json";
 const orchestratorTrustDomain = "jbcom/rpgjs-solo-release-orchestrator";
@@ -456,10 +456,9 @@ export const assertReleaseToolchain = (
 	nodeVersion = process.versions.node,
 	nodeExecPath = process.execPath,
 ) => {
-	const major = Number.parseInt(String(nodeVersion).split(".")[0] ?? "", 10);
 	assert(
-		major === releaseNodeMajor,
-		`Solo release requires Node ${releaseNodeMajor}; received ${nodeVersion}`,
+		nodeVersion === releaseNodeVersion,
+		`Solo release requires Node ${releaseNodeVersion}; received ${nodeVersion}`,
 	);
 	const pnpmVersion = command("pnpm", ["--version"]);
 	assert(
@@ -474,14 +473,10 @@ export const assertReleaseToolchain = (
 			"JSON.stringify({version:process.versions.node,execPath:process.execPath})",
 		]),
 	);
-	const childMajor = Number.parseInt(
-		String(childNode.version).split(".")[0] ?? "",
-		10,
-	);
 	assert(
-		childMajor === releaseNodeMajor &&
+		childNode.version === releaseNodeVersion &&
 			realpathSync(childNode.execPath) === realpathSync(nodeExecPath),
-		`Solo release pnpm child runtime must be the exact Node ${releaseNodeMajor} CLI runtime; received ${childNode.version} at ${childNode.execPath}`,
+		`Solo release pnpm child runtime must be the exact Node ${releaseNodeVersion} CLI runtime; received ${childNode.version} at ${childNode.execPath}`,
 	);
 	return {
 		nodeVersion,
@@ -2607,11 +2602,11 @@ export const createPublishedConsumerContract = (manifest, plan) => ({
 			...manifest.packages.map(({ name }) => [name, plan.version]),
 			[plan.requiredConsumer.package, plan.requiredConsumer.version],
 			["@types/react", "19.2.17"],
-			["canvasengine", "2.1.1"],
+			["canvasengine", "2.2.0"],
 			["pixi.js", "8.19.0"],
 			["react", "19.2.8"],
 			["typescript", "7.0.2"],
-			["vite", "8.2.0"],
+			["vite", "8.2.1"],
 		]),
 	},
 	runtimeCheck: `import { SoloRuntime } from '@jbcom/rpgjs-solo'

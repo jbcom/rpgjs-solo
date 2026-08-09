@@ -305,8 +305,13 @@
       if (value === null || value === undefined) return ''
       let result = String(value).trim()
       if (!result) return ''
+      // CanvasEngine's SFC block scanner intentionally skips quoted content but
+      // does not parse JavaScript regular-expression literals. Keep quote-bearing
+      // patterns inside strings so a literal quote cannot be mistaken for an
+      // unterminated script string while the SFC boundary is located.
       const objectIdMatch =
-        result.match(/^ObjectId\("([^"]+)"\)$/) || result.match(/^ObjectId\('([^']+)'\)$/)
+        result.match(new RegExp('^ObjectId\\("([^"]+)"\\)$')) ||
+        result.match(new RegExp("^ObjectId\\('([^']+)'\\)$"))
       if (objectIdMatch?.[1]) {
         result = objectIdMatch[1]
       }
