@@ -1,6 +1,6 @@
 {
   "name": "@jbcom/rpgjs-solo-action-battle",
-  "version": "5.0.0-beta.29.solo.1",
+  "version": "5.0.0-beta.29.solo.2",
   "description": "Transport-free deterministic action combat for RPGJS Solo",
   "license": "MIT",
   "repository": {
@@ -43,7 +43,7 @@
     "registry": "https://git.local.jonbogaty.com/api/packages/jbcom/npm/"
   },
   "dependencies": {
-    "@jbcom/rpgjs-solo": "workspace:5.0.0-beta.29.solo.1"
+    "@jbcom/rpgjs-solo": "workspace:5.0.0-beta.29.solo.2"
   },
   "devDependencies": {
     "@typescript/typescript6": "6.0.2",
