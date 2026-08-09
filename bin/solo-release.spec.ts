@@ -2940,30 +2940,36 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		]);
 	});
 
-	it("treats tea 0.14.2 structured not-found output as an absent Gitea release", () => {
-		const expected = createExpectedRelease();
-		const adapter = createGiteaReleaseAdapter(
-			{
-				backup: {
-					apiRepository: "jbcom/rpgjs-solo",
-					repository: "https://git.example.test/jbcom/rpgjs-solo.git",
+	it.each([
+		{ message: "not found" },
+		{
+			message: "not found",
+			url: "https://git.example.test/api/swagger",
+		},
+	])(
+		"treats tea 0.14.2 structured not-found output as an absent Gitea release %#",
+		(response) => {
+			const expected = createExpectedRelease();
+			const adapter = createGiteaReleaseAdapter(
+				{
+					backup: {
+						apiRepository: "jbcom/rpgjs-solo",
+						repository: "https://git.example.test/jbcom/rpgjs-solo.git",
+					},
+					trainTag: expected.tag,
 				},
-				trainTag: expected.tag,
-			},
-			(program: string, args: string[]) => {
-				expect(program).toBe("tea");
-				expect(args).toContain(
-					`repos/jbcom/rpgjs-solo/releases/tags/${encodeURIComponent(expected.tag)}`,
-				);
-				return JSON.stringify({
-					message: "not found",
-					url: "https://git.example.test/api/swagger",
-				});
-			},
-		);
+				(program: string, args: string[]) => {
+					expect(program).toBe("tea");
+					expect(args).toContain(
+						`repos/jbcom/rpgjs-solo/releases/tags/${encodeURIComponent(expected.tag)}`,
+					);
+					return JSON.stringify(response);
+				},
+			);
 
-		expect(adapter.getRelease(expected.tag)).toBeUndefined();
-	});
+			expect(adapter.getRelease(expected.tag)).toBeUndefined();
+		},
+	);
 
 	it.each([
 		{ message: "not found", tag_name: "foreign" },
