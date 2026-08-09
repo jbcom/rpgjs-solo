@@ -91,6 +91,14 @@ production games, consumer-injected
 creation; `SoloRenderer` guarantees that order when it receives
 `installCanvasEnginePatches` in its options.
 
+```ts
+import { rpgjsSoloRendererCompatibility } from '@jbcom/rpgjs-solo-renderer'
+
+console.log(
+  `${rpgjsSoloRendererCompatibility.patches.package}@${rpgjsSoloRendererCompatibility.patches.version}`
+)
+```
+
 Story-driven terrain remains a game-owned decision while the renderer owns its
 safe scene lifecycle. Replace complete GID layers immutably, then register the
 revision; the active viewport is rebuilt under a new revision key without
