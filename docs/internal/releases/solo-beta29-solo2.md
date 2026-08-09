@@ -73,8 +73,9 @@ mode-0600 npm configuration.
 6. Do not pack or publish until `@arcade-cabinet/rpgjs-patches@0.3.0` is proven
    immutable at the private registry and by an anonymous clean install/fetch.
    That proof must include the exact registry integrity, source/tag identity,
-   GitHub release, and Gitea backup release. The plan binds all of those
-   identities. Pack, publish, and candidate verification re-read exact
+   and Gitea release. The patches are Gitea-only: `arcade-cabinet/rpgjs-patches`
+   is their sole home, so there is no GitHub release to prove. The plan binds
+   all of those identities. Pack, publish, and candidate verification re-read exact
    integrity, shasum, tarball URL, and `latest`, then anonymously fetch and
    compare the tarball SHA-256, SHA-1, and SHA-512 before installing it. The
    wrapper replaces both user and global npm configuration with mode-0600 files
