@@ -83,6 +83,13 @@ describe("external command report contracts", () => {
 		expect(() =>
 			parseNpmAuditReport(commandResult(zeroAuditReport(), { status: 1 })),
 		).toThrow(/failed operationally despite reporting zero/i);
+		expect(() =>
+			parseNpmAuditReport(
+				commandResult(zeroAuditReport(), {
+					stderr: "npm warn registry returned an operational warning",
+				}),
+			),
+		).toThrow(/failed operationally.*operational warning/i);
 	});
 
 	it("rejects truncated and internally inconsistent npm audit v2 reports", () => {

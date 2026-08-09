@@ -9,7 +9,7 @@
   },
   "reviewEvidence": {
     "status": "final",
-    "requiredUpdate": "Satisfied for source policy by exact source PR #26 and release-transition PR #27. The independent reviewer creates the exact-merge ACCEPT receipt only after PR #27 merges.",
+    "requiredUpdate": "Source PR #26 remains the engine authority and repair PR #28 is the sole release-transition authority. Historical PR #27 was independently rejected and authorizes no repaired bytes. A newly assigned independent reviewer creates an ACCEPT receipt only after the exact PR #28 merge passes post-merge audit.",
     "enginePullRequest": {
       "repository": "jbcom/rpgjs-solo",
       "number": 26,
@@ -25,7 +25,7 @@
     },
     "releasePullRequest": {
       "repository": "jbcom/rpgjs-solo",
-      "number": 27,
+      "number": 28,
       "mergeCommitBinding": "canonical-head",
       "minimumApprovals": 1,
       "requiredChecks": [
@@ -35,6 +35,21 @@
         "tests (24.19.0)"
       ]
     },
+    "supersededRejectedReleasePullRequests": [
+      {
+        "repository": "jbcom/rpgjs-solo",
+        "number": 27,
+        "baseCommit": "732d8fb540f89827443939f20d2d102531da8d17",
+        "headCommit": "6f2f6c13cc12801a71921a2255e4ad049dc402f9",
+        "mergeCommit": "013d59e4d5d619ad11ceb3df405ea6d6a987ed94",
+        "reviewedHeadTree": "5a64cf9b2cf610be388aa58275cf1e4591d56903",
+        "planSha512": "a3ed4697a604bf6f47ebdd8c562010719e0c65aae2eb16f40852923b0f73dd7bc33fe3fb741223cbdd1f82952fe8ade1074d178bd0cdfe508b9924b207f11a23",
+        "outcome": "rejected",
+        "receiptCreated": false,
+        "authority": "historical-only",
+        "reason": "Independent post-merge audit found stale esbuild 0.28.1 and failure of the documented mise plus pnpm published-package-contract invocation. This merge and its plan hash do not authorize repaired bytes."
+      }
+    ],
     "independentReceipt": {
       "status": "final",
       "algorithm": "ed25519",
@@ -46,7 +61,7 @@
         "assignmentPathEnvironment": "RPGJS_SOLO_ORCHESTRATOR_ASSIGNMENT_PATH",
         "requiredReviewerRole": "independent-release-auditor"
       },
-      "requiredUpdate": "The policy is final. At execution, the supervisor supplies the mode-0600 trust root, its independently pinned key fingerprint, and root-signed detached assignment through the named environment variables. Only the assigned producer-disjoint reviewer may create the detached signed ACCEPT receipt after the exact release merge."
+      "requiredUpdate": "The repair PR #28 policy is final. At execution, the supervisor supplies a new mode-0600 trust root, independently pinned key fingerprint, and root-signed detached assignment through the named environment variables. The assignment used for rejected PR #27 must not be reused. Only the newly assigned producer-disjoint reviewer may create a detached signed ACCEPT receipt after the exact repair merge."
     }
   },
   "provenanceAttestation": {

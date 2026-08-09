@@ -3,6 +3,9 @@ import waitOn from 'wait-on';
 import process from 'process';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { npmChildEnvironment } from './npm-child-environment.mjs';
+
+const npmEnvironment = npmChildEnvironment();
 
 export interface PackageConfig {
     name: string;
@@ -132,6 +135,8 @@ export async function buildPackage(config: PackageConfig, basePath: string = 'pa
         console.log(`🚀 Building ${config.name}...`);
         const result = await execa('npm', ['run', config.buildScript], {
             cwd: packagePath,
+            env: npmEnvironment,
+            extendEnv: false,
             ...createStdio(config.name)
         });
 
@@ -262,6 +267,8 @@ export async function buildInParallel(packages: PackageConfig[]) {
             // Start the watch process (don't await it as it runs indefinitely)
             const childProcess = execa('npm', ['run', pkg.buildScript], {
                 cwd: packagePath,
+                env: npmEnvironment,
+                extendEnv: false,
                 ...createStdio(pkg.name)
             });
 

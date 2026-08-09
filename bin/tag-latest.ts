@@ -3,6 +3,9 @@
 import { readdir, readFile } from 'fs/promises';
 import { join, resolve } from 'path';
 import { execa } from 'execa';
+import { npmChildEnvironment } from './npm-child-environment.mjs';
+
+const npmEnvironment = npmChildEnvironment();
 
 interface PackageJson {
   name?: string;
@@ -28,7 +31,11 @@ async function main(): Promise<void> {
 
     const spec = `${packageJson.name}@${packageJson.version}`;
     console.log(`Tagging ${spec} as latest`);
-    await execa('npm', ['dist-tag', 'add', spec, 'latest'], { stdio: 'inherit' });
+    await execa('npm', ['dist-tag', 'add', spec, 'latest'], {
+      env: npmEnvironment,
+      extendEnv: false,
+      stdio: 'inherit'
+    });
   }
 }
 

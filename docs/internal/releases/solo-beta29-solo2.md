@@ -8,6 +8,20 @@ runtime, unit, and sample-build gates. This transaction advances the four
 the clean-consumer gate to `@arcade-cabinet/rpgjs-patches@0.3.0`,
 CanvasEngine 2.2.0, and Vite 8.2.1.
 
+Historical release-transition PR #27 merged as
+`013d59e4d5d619ad11ceb3df405ea6d6a987ed94`, but its independent post-merge
+audit rejected that exact merge: the Cloudflare MMORPG sample retained stale
+esbuild 0.28.1, and the documented
+`mise exec node@24.19.0 -- pnpm verify:published-package-contracts` route failed
+when pnpm's `manage-package-manager-versions` setting leaked into child npm.
+No independent ACCEPT receipt was created. The rejected plan's exact raw-byte
+SHA-512 is
+`a3ed4697a604bf6f47ebdd8c562010719e0c65aae2eb16f40852923b0f73dd7bc33fe3fb741223cbdd1f82952fe8ade1074d178bd0cdfe508b9924b207f11a23`;
+neither it nor PR #27 authorizes repaired bytes. Additive repair PR #28, named
+in the plan, is the only release-transition authority for this cohort after it
+passes exact-head review, merges, and receives a new producer-disjoint
+post-merge audit assignment.
+
 The machine-readable authority is
 [`solo-beta29-solo2.plan.json`](solo-beta29-solo2.plan.json). The historical
 Solo 1 plan and evidence are immutable records and are not inputs to this
@@ -29,10 +43,10 @@ mode-0600 npm configuration.
 
 ## Required sequence
 
-1. Open this release-transition PR from the exact source merge. Bind its PR
-   number in the plan, set `reviewEvidence.status` to `final`, and commit that
-   final source policy before apply. Producer-controlled source must not name
-   the reviewer, reviewer key, assignment, or orchestrator trust key.
+1. Use release-transition repair PR #28 from exact canonical merge
+   `013d59e4d5d619ad11ceb3df405ea6d6a987ed94`. Its number and final source
+   policy are bound in the plan. Producer-controlled source must not name the
+   reviewer, reviewer key, assignment, or orchestrator trust key.
 2. Run `pnpm release:solo:validate`, then `pnpm release:solo:apply`. Apply must
    deterministically update all four package identities and exact workspace
    references, create their changelogs, consume only the declared Solo
