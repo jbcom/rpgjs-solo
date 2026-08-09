@@ -84,7 +84,6 @@ const currentPatchConsumer = {
 		"09ee17ac365c08e96487a6e59da349bf7fe358f81683b0cc3bb1010338c122b3",
 	sourceCommit: "432cc108b1b6229577d907611487c315ad03e8f8",
 	tagObject: "78677ce7379dcedac13dc19b5aa529017fb0ab36",
-	githubRelease: "https://github.com/jbcom/rpgjs-patches/releases/tag/v0.3.0",
 	giteaRelease:
 		"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0",
 };
@@ -92,13 +91,6 @@ const currentPatchSourceCommand = (program: string, args: string[]) => {
 	const tagReference = `refs/tags/v${currentPatchConsumer.version}`;
 	if (program === "git")
 		return `${currentPatchConsumer.tagObject}\t${tagReference}\n${currentPatchConsumer.sourceCommit}\t${tagReference}^{}\n`;
-	if (program === "gh")
-		return JSON.stringify({
-			tagName: `v${currentPatchConsumer.version}`,
-			url: currentPatchConsumer.githubRelease,
-			isDraft: false,
-			isPrerelease: false,
-		});
 	if (program === "tea")
 		return JSON.stringify({
 			tag_name: `v${currentPatchConsumer.version}`,
@@ -857,7 +849,6 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			tag: "v0.3.0",
 			tagObject: currentPatchConsumer.tagObject,
 			sourceCommit: currentPatchConsumer.sourceCommit,
-			githubRelease: currentPatchConsumer.githubRelease,
 			giteaRelease: currentPatchConsumer.giteaRelease,
 		});
 		expect(() =>
@@ -870,18 +861,6 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					: currentPatchSourceCommand(program, args),
 			),
 		).toThrow(/does not resolve to the reviewed tag object and source commit/i);
-		expect(() =>
-			assertRequiredConsumerSourceReleaseEvidence(plan, (program, args) =>
-				program === "gh"
-					? JSON.stringify({
-							tagName: "v0.3.0",
-							url: currentPatchConsumer.githubRelease,
-							isDraft: true,
-							isPrerelease: false,
-						})
-					: currentPatchSourceCommand(program, args),
-			),
-		).toThrow(/GitHub fleet patch release differs/i);
 		expect(() =>
 			assertRequiredConsumerSourceReleaseEvidence(plan, (program, args) =>
 				program === "tea"

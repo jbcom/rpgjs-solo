@@ -86,8 +86,6 @@ const fleetPatchCompatibility = new Map([
 				"09ee17ac365c08e96487a6e59da349bf7fe358f81683b0cc3bb1010338c122b3",
 			sourceCommit: "432cc108b1b6229577d907611487c315ad03e8f8",
 			tagObject: "78677ce7379dcedac13dc19b5aa529017fb0ab36",
-			githubRelease:
-				"https://github.com/jbcom/rpgjs-patches/releases/tag/v0.3.0",
 			giteaRelease:
 				"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0",
 		},
@@ -95,11 +93,11 @@ const fleetPatchCompatibility = new Map([
 ]);
 const currentFleetPatchVersion = "0.3.0";
 const maximumFleetTarballBytes = 16 * 1024 * 1024;
+// The patches live only on Gitea. jbcom on GitHub is for public OSS releases;
+// rpgjs-patches is private fleet tooling, so its GitHub copy was removed on
+// 2026-08-09 after verifying the Gitea repository carried the identical history,
+// tags, release, and published package.
 const fleetPatchSourceRepositories = {
-	github: {
-		repository: "jbcom/rpgjs-patches",
-		gitUrl: "https://github.com/jbcom/rpgjs-patches.git",
-	},
 	gitea: {
 		repository: "arcade-cabinet/rpgjs-patches",
 		gitUrl:
@@ -2723,13 +2721,10 @@ export const assertRequiredConsumerSourceReleaseEvidence = (
 	);
 	const tag = `v${currentFleetPatchVersion}`;
 	const tagReference = `refs/tags/${tag}`;
-	const expectedGitHubRelease =
-		`https://github.com/${fleetPatchSourceRepositories.github.repository}/releases/tag/${tag}`;
 	const expectedGiteaRelease =
 		`https://git.local.jonbogaty.com/${fleetPatchSourceRepositories.gitea.repository}/releases/tag/${tag}`;
 	assert(
-		consumer.githubRelease === expectedGitHubRelease &&
-			consumer.giteaRelease === expectedGiteaRelease,
+		consumer.giteaRelease === expectedGiteaRelease,
 		"Fleet patch source release URLs differ from the reviewed repositories",
 	);
 	for (const source of Object.values(fleetPatchSourceRepositories)) {
@@ -2747,28 +2742,6 @@ export const assertRequiredConsumerSourceReleaseEvidence = (
 			`${source.repository} ${tag} does not resolve to the reviewed tag object and source commit`,
 		);
 	}
-	const githubRelease = JSON.parse(
-		command(
-			"gh",
-			[
-				"release",
-				"view",
-				tag,
-				"--repo",
-				fleetPatchSourceRepositories.github.repository,
-				"--json",
-				"tagName,url,isDraft,isPrerelease",
-			],
-			{ timeout: 600_000 },
-		),
-	);
-	assert(
-		githubRelease.tagName === tag &&
-			githubRelease.url === consumer.githubRelease &&
-			githubRelease.isDraft === false &&
-			githubRelease.isPrerelease === false,
-		"GitHub fleet patch release differs from the reviewed release plan",
-	);
 	const giteaRelease = JSON.parse(
 		command(
 			"tea",
@@ -2793,7 +2766,6 @@ export const assertRequiredConsumerSourceReleaseEvidence = (
 		tag,
 		tagObject: consumer.tagObject,
 		sourceCommit: consumer.sourceCommit,
-		githubRelease: consumer.githubRelease,
 		giteaRelease: consumer.giteaRelease,
 	};
 };

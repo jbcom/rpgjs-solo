@@ -185,7 +185,6 @@
     "tarballSha256": "09ee17ac365c08e96487a6e59da349bf7fe358f81683b0cc3bb1010338c122b3",
     "sourceCommit": "432cc108b1b6229577d907611487c315ad03e8f8",
     "tagObject": "78677ce7379dcedac13dc19b5aa529017fb0ab36",
-    "githubRelease": "https://github.com/jbcom/rpgjs-patches/releases/tag/v0.3.0",
     "giteaRelease": "https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0"
   }
 }
