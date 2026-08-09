@@ -2971,6 +2971,35 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		},
 	);
 
+	it.each([null, undefined])(
+		"normalizes tea 0.14.2 nullish assets for an asset-free Gitea release %#",
+		(assets) => {
+			const expected = createExpectedRelease();
+			const adapter = createGiteaReleaseAdapter(
+				{
+					backup: {
+						apiRepository: "jbcom/rpgjs-solo",
+						repository: "https://git.example.test/jbcom/rpgjs-solo.git",
+					},
+					trainTag: expected.tag,
+				},
+				() =>
+					JSON.stringify({
+						id: 1,
+						tag_name: expected.tag,
+						target_commitish: expected.target,
+						name: expected.title,
+						body: expected.body,
+						draft: true,
+						prerelease: true,
+						assets,
+					}),
+			);
+
+			expect(adapter.getRelease(expected.tag)).toMatchObject({ assets: [] });
+		},
+	);
+
 	it.each([
 		{ message: "not found", tag_name: "foreign" },
 		{ message: "permission denied" },

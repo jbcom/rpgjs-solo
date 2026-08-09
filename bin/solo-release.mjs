@@ -3854,7 +3854,7 @@ export const createGiteaReleaseAdapter = (plan, command = run) => {
 						typeof value.body === "string" &&
 						typeof value.draft === "boolean" &&
 						typeof value.prerelease === "boolean" &&
-						Array.isArray(value.assets),
+						(value.assets == null || Array.isArray(value.assets)),
 					"Gitea release API returned a malformed successful response",
 				);
 				return {
