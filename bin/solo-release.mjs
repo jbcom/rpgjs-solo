@@ -470,6 +470,7 @@ const run = (command, args, options = {}) => {
 		env: options.env ?? process.env,
 		timeout: options.timeout ?? 300_000,
 		maxBuffer: 32 * 1024 * 1024,
+		input: options.input,
 	});
 	return normalizeCommandOutput(output, options.trim !== false);
 };
@@ -1490,19 +1491,42 @@ export const assertReviewedCanonicalMain = (
 			`Pull request #${evidence.number} merge ancestry does not bind its exact base and head`,
 		);
 		if (squashCommit) {
-			const mergedTree = command(
+			const reviewedPatch = command(
 				"git",
-				["show", "-s", "--format=%T", evidence.mergeCommit],
-				{ cwd: root },
+				[
+					"diff",
+					"--binary",
+					"--full-index",
+					"--no-ext-diff",
+					"--no-textconv",
+					`${evidence.baseCommit}...${evidence.headCommit}`,
+				],
+				{ cwd: root, trim: false },
 			);
-			const reviewedTree = command(
+			const mergedPatch = command(
 				"git",
-				["show", "-s", "--format=%T", evidence.headCommit],
-				{ cwd: root },
+				[
+					"diff",
+					"--binary",
+					"--full-index",
+					"--no-ext-diff",
+					"--no-textconv",
+					`${evidence.baseCommit}..${evidence.mergeCommit}`,
+				],
+				{ cwd: root, trim: false },
 			);
+			const reviewedPatchId = command("git", ["patch-id", "--stable"], {
+				cwd: root,
+				input: reviewedPatch,
+			});
+			const mergedPatchId = command("git", ["patch-id", "--stable"], {
+				cwd: root,
+				input: mergedPatch,
+			});
 			assert(
-				mergedTree === reviewedTree,
-				`Pull request #${evidence.number} squash tree does not match its exact reviewed head`,
+				/^[0-9a-f]{40,64}\s+[0-9a-f]{40,64}$/.test(reviewedPatchId) &&
+					reviewedPatchId.split(/\s+/)[0] === mergedPatchId.split(/\s+/)[0],
+				`Pull request #${evidence.number} squash patch does not match its exact reviewed head`,
 			);
 		}
 		evidence.mergeStrategy = squashCommit ? "squash" : "merge";
@@ -2357,6 +2381,39 @@ export const createProvenanceManifest = ({
 	return { manifestPath, sidecarPath, ...signed, manifest };
 };
 
+const sanitizedNpmEnvironment = () => {
+	const environment = { ...process.env };
+	for (const name of [
+		"RPGJS_SOLO_NPM_TOKEN",
+		"NODE_AUTH_TOKEN",
+		"NPM_TOKEN",
+		"NPM_AUTH_TOKEN",
+	])
+		delete environment[name];
+	for (const name of Object.keys(environment))
+		if (/^npm_config_.*auth/i.test(name)) delete environment[name];
+	return environment;
+};
+
+export const withAnonymousFleetRegistry = async (registry, callback) => {
+	const directory = mkdtempSync(join(tmpdir(), "rpgjs-solo-npm-auth-"));
+	const npmrc = join(directory, ".npmrc");
+	writeExclusiveFile(
+		npmrc,
+		`registry=https://registry.npmjs.org/\n@arcade-cabinet:registry=${registry}\nalways-auth=false\n`,
+		0o600,
+	);
+	try {
+		const childEnvironment = {
+			...sanitizedNpmEnvironment(),
+			npm_config_userconfig: npmrc,
+		};
+		return await callback(childEnvironment);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+};
+
 export const withEphemeralNpmAuth = async (token, registry, callback) => {
 	assert(token, "RPGJS_SOLO_NPM_TOKEN is required");
 	const directory = mkdtempSync(join(tmpdir(), "rpgjs-solo-npm-auth-"));
@@ -2364,19 +2421,16 @@ export const withEphemeralNpmAuth = async (token, registry, callback) => {
 	const registryPath = new URL(registry).host + new URL(registry).pathname;
 	const arcadeRegistry =
 		"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/";
-	const arcadePath =
-		new URL(arcadeRegistry).host + new URL(arcadeRegistry).pathname;
 	writeExclusiveFile(
 		npmrc,
-		`registry=https://registry.npmjs.org/\n@jbcom:registry=${registry}\n@arcade-cabinet:registry=${arcadeRegistry}\n//${registryPath}:_authToken=${token}\n//${arcadePath}:_authToken=${token}\nalways-auth=true\n`,
+		`registry=https://registry.npmjs.org/\n@jbcom:registry=${registry}\n@arcade-cabinet:registry=${arcadeRegistry}\n//${registryPath}:_authToken=${token}\nalways-auth=true\n`,
 		0o600,
 	);
 	try {
 		const childEnvironment = {
-			...process.env,
+			...sanitizedNpmEnvironment(),
 			npm_config_userconfig: npmrc,
 		};
-		delete childEnvironment.RPGJS_SOLO_NPM_TOKEN;
 		return await callback(childEnvironment, token);
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
@@ -3040,6 +3094,9 @@ export const publishCandidateCohort = async ({
 
 const publishCandidate = async (manifest, manifestPath, plan, args) => {
 	requireExecution(args, plan);
+	await withAnonymousFleetRegistry(plan.requiredConsumer.registry, async (env) =>
+		assertRequiredConsumerRegistryEvidence(plan, env),
+	);
 	await withEphemeralNpmAuth(
 		process.env.RPGJS_SOLO_NPM_TOKEN,
 		plan.registry,
@@ -3795,6 +3852,10 @@ export const main = async (
 			validateSoloReleaseState(rootDirectory, plan).phase === "applied",
 			"pack requires the applied version phase",
 		);
+		await withAnonymousFleetRegistry(
+			plan.requiredConsumer.registry,
+			async (env) => assertRequiredConsumerRegistryEvidence(plan, env),
+		);
 		const source = assertCanonicalMain(rootDirectory, plan);
 		const result = createProvenanceManifest({
 			root: rootDirectory,
@@ -3825,12 +3886,15 @@ export const main = async (
 		await publishCandidate(manifest, args.manifest, plan, args);
 	else if (args.command === "verify-candidate") {
 		requireExecution(args, plan);
+		await withAnonymousFleetRegistry(
+			plan.requiredConsumer.registry,
+			async (env) => assertRequiredConsumerRegistryEvidence(plan, env),
+		);
 		await withEphemeralNpmAuth(
 			process.env.RPGJS_SOLO_NPM_TOKEN,
 			plan.registry,
 			async (env) => {
 				assertCandidateCohort(manifest, plan, env);
-				assertRequiredConsumerRegistryEvidence(plan, env);
 				verifyPublishedConsumer(manifest, plan, env);
 			},
 		);

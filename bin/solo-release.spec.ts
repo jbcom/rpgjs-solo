@@ -63,6 +63,7 @@ import {
 	validateSoloReleaseState,
 	verifyExternalOrchestratorAssignment,
 	verifyIndependentReviewReceipt,
+	withAnonymousFleetRegistry,
 	withEphemeralNpmAuth,
 } from "./solo-release.mjs";
 
@@ -1536,7 +1537,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
 		const calls: string[] = [];
-		const fake = (program: string, args: string[]) => {
+		const fake = (
+			program: string,
+			args: string[],
+			options: { input?: string } = {},
+		) => {
 			calls.push(args.join(" "));
 			if (program === "gh" && args[0] === "pr") {
 				const number = Number(args[2]);
@@ -1576,10 +1581,9 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				return args[3] === plan.requiredSourceCommit
 					? "e".repeat(40)
 					: "f".repeat(40);
-			if (args[0] === "show" && args[2] === "--format=%T")
-				return [plan.requiredSourceCommit, "c".repeat(40)].includes(args[3])
-					? "1".repeat(40)
-					: "2".repeat(40);
+			if (args[0] === "diff") return "reviewed patch\n";
+			if (args[0] === "patch-id")
+				return `${(options.input === "foreign patch\n" ? "5" : "4").repeat(40)} ${"0".repeat(40)}`;
 			if (args[1] === "HEAD^{tree}") return "b".repeat(40);
 			if (args[0] === "merge-base") return "";
 			return "a".repeat(40);
@@ -1597,19 +1601,19 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			assertReviewedCanonicalMain(
 				plan,
 				"a".repeat(40),
-				(program, args) => {
+				(program, args, options) => {
 					if (
 						program === "git" &&
-						args[0] === "show" &&
-						args[2] === "--format=%T" &&
-						args[3] === "c".repeat(40)
+						args[0] === "diff" &&
+						args.at(-1) ===
+							`${"e".repeat(40)}...${"c".repeat(40)}`
 					)
-						return "3".repeat(40);
-					return fake(program, args);
+						return "foreign patch\n";
+					return fake(program, args, options);
 				},
 				fixture.root,
 			),
-		).toThrow(/squash tree does not match its exact reviewed head/i);
+		).toThrow(/squash patch does not match its exact reviewed head/i);
 		expect(calls.filter((call) => call.startsWith("ls-remote"))).toHaveLength(
 			2,
 		);
@@ -2834,23 +2838,54 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	it("uses mode-0600 ephemeral authentication and removes it even after failure", async () => {
 		let npmrc = "";
 		const previous = process.env.RPGJS_SOLO_NPM_TOKEN;
+		const previousNodeToken = process.env.NODE_AUTH_TOKEN;
 		process.env.RPGJS_SOLO_NPM_TOKEN = "outer-secret";
+		process.env.NODE_AUTH_TOKEN = "another-outer-secret";
 		try {
 			await expect(
 				withEphemeralNpmAuth("do-not-persist", registry, async (env) => {
 					npmrc = env.npm_config_userconfig ?? "";
 					expect(npmrc).not.toBe("");
 					expect(env.RPGJS_SOLO_NPM_TOKEN).toBeUndefined();
+					expect(env.NODE_AUTH_TOKEN).toBeUndefined();
 					const npmrcState = inspectTestFile(npmrc);
 					expect(npmrcState.mode).toBe(0o600);
 					expect(npmrcState.text).toContain("do-not-persist");
+					expect(npmrcState.text).toContain(
+						`@arcade-cabinet:registry=${currentPatchConsumer.registry}`,
+					);
+					expect(npmrcState.text).not.toMatch(
+						/api\/packages\/arcade-cabinet\/npm\/.*:_authToken/,
+					);
 					throw new Error("stop");
 				}),
 			).rejects.toThrow("stop");
 		} finally {
 			if (previous === undefined) delete process.env.RPGJS_SOLO_NPM_TOKEN;
 			else process.env.RPGJS_SOLO_NPM_TOKEN = previous;
+			if (previousNodeToken === undefined) delete process.env.NODE_AUTH_TOKEN;
+			else process.env.NODE_AUTH_TOKEN = previousNodeToken;
 		}
+		expect(existsSync(npmrc)).toBe(false);
+	});
+
+	it("uses a token-free fleet registry configuration and removes it", async () => {
+		let npmrc = "";
+		await withAnonymousFleetRegistry(
+			currentPatchConsumer.registry,
+			async (env) => {
+				npmrc = env.npm_config_userconfig ?? "";
+				expect(env.RPGJS_SOLO_NPM_TOKEN).toBeUndefined();
+				expect(env.NODE_AUTH_TOKEN).toBeUndefined();
+				const npmrcState = inspectTestFile(npmrc);
+				expect(npmrcState.mode).toBe(0o600);
+				expect(npmrcState.text).toContain(
+					`@arcade-cabinet:registry=${currentPatchConsumer.registry}`,
+				);
+				expect(npmrcState.text).not.toContain("_authToken");
+				expect(npmrcState.text).toContain("always-auth=false");
+			},
+		);
 		expect(existsSync(npmrc)).toBe(false);
 	});
 });

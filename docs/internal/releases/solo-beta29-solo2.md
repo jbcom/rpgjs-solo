@@ -60,16 +60,21 @@ mode-0600 npm configuration.
    identities, and candidate verification re-reads exact integrity, shasum,
    tarball URL, and `latest` before installing it.
 7. Run `pnpm release:solo:pack --artifacts <absolute-directory-outside-repo>`
-   once with `RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE`. Retain the exact four
-   archives, schema-3 provenance manifest, SHA-512 sidecar, Ed25519 statement
-   and signature, and independent review receipt.
+   once with `RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE`. Pack rechecks the bound
+   patch metadata through a token-free npm configuration before it creates any
+   archive. Retain the exact four archives, schema-3 provenance manifest,
+   SHA-512 sidecar, Ed25519 statement and signature, and independent review
+   receipt.
 8. Publish the exact archive cohort to the candidate tag with
    `pnpm publish:solo --manifest <manifest> --execute`. A partial cohort is a
-   resumable transaction, not a successful release.
+   resumable transaction, not a successful release. Publish repeats the
+   token-free patch-package preflight before creating immutable Solo versions.
 9. Run `pnpm release:solo:verify-candidate --manifest <manifest> --execute`.
    It must install the four exact candidate packages plus the exact fleet patch
-   package in a fresh workspace-isolated consumer, execute the transport-free
-   Node surfaces, and typecheck and production-build the renderer/CanvasEngine
+   package in a fresh workspace-isolated consumer. The npm configuration grants
+   credentials only to the private `@jbcom` registry; the fleet patch remains
+   anonymous during the real install. The gate then executes the transport-free
+   Node surfaces and typechecks and production-builds the renderer/CanvasEngine
    browser surface.
 10. Promote only the verified cohort with
     `pnpm release:solo:promote --manifest <manifest> --execute`, then reconcile
