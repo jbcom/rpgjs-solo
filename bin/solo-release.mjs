@@ -3835,6 +3835,28 @@ export const createGiteaReleaseAdapter = (plan, command = run) => {
 						{ timeout: 600_000 },
 					),
 				);
+				const isRecord =
+					value !== null && typeof value === "object" && !Array.isArray(value);
+				const keys = isRecord ? Object.keys(value).sort() : [];
+				if (
+					isRecord &&
+					value.message === "not found" &&
+					keys.every((key) => key === "message" || key === "url") &&
+					(value.url === undefined || typeof value.url === "string")
+				)
+					return undefined;
+				assert(
+					isRecord &&
+						Number.isInteger(value.id) &&
+						typeof value.tag_name === "string" &&
+						typeof value.target_commitish === "string" &&
+						typeof value.name === "string" &&
+						typeof value.body === "string" &&
+						typeof value.draft === "boolean" &&
+						typeof value.prerelease === "boolean" &&
+						(value.assets == null || Array.isArray(value.assets)),
+					"Gitea release API returned a malformed successful response",
+				);
 				return {
 					id: value.id,
 					tag: value.tag_name,
