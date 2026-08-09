@@ -32,7 +32,6 @@
         "Analyze (actions)",
         "Analyze (javascript-typescript)",
         "CodeQL",
-        "CodeRabbit",
         "tests (24.19.0)"
       ]
     },

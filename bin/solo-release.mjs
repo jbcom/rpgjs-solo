@@ -91,6 +91,18 @@ const fleetPatchCompatibility = new Map([
 		},
 	],
 ]);
+const currentFleetPatchVersion = "0.3.0";
+const fleetPatchSourceRepositories = {
+	github: {
+		repository: "jbcom/rpgjs-patches",
+		gitUrl: "https://github.com/jbcom/rpgjs-patches.git",
+	},
+	gitea: {
+		repository: "arcade-cabinet/rpgjs-patches",
+		gitUrl:
+			"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches.git",
+	},
+};
 const standardChangesetDocuments = new Set(["README.md"]);
 const applyJournalName = ".rpgjs-solo-release-apply.json";
 const orchestratorTrustDomain = "jbcom/rpgjs-solo-release-orchestrator";
@@ -1491,42 +1503,19 @@ export const assertReviewedCanonicalMain = (
 			`Pull request #${evidence.number} merge ancestry does not bind its exact base and head`,
 		);
 		if (squashCommit) {
-			const reviewedPatch = command(
+			const reviewedTree = command(
 				"git",
-				[
-					"diff",
-					"--binary",
-					"--full-index",
-					"--no-ext-diff",
-					"--no-textconv",
-					`${evidence.baseCommit}...${evidence.headCommit}`,
-				],
-				{ cwd: root, trim: false },
+				["show", "-s", "--format=%T", evidence.headCommit],
+				{ cwd: root },
 			);
-			const mergedPatch = command(
+			const mergedTree = command(
 				"git",
-				[
-					"diff",
-					"--binary",
-					"--full-index",
-					"--no-ext-diff",
-					"--no-textconv",
-					`${evidence.baseCommit}..${evidence.mergeCommit}`,
-				],
-				{ cwd: root, trim: false },
+				["show", "-s", "--format=%T", evidence.mergeCommit],
+				{ cwd: root },
 			);
-			const reviewedPatchId = command("git", ["patch-id", "--verbatim"], {
-				cwd: root,
-				input: reviewedPatch,
-			});
-			const mergedPatchId = command("git", ["patch-id", "--verbatim"], {
-				cwd: root,
-				input: mergedPatch,
-			});
 			assert(
-				/^[0-9a-f]{40,64}\s+[0-9a-f]{40,64}$/.test(reviewedPatchId) &&
-					reviewedPatchId.split(/\s+/)[0] === mergedPatchId.split(/\s+/)[0],
-				`Pull request #${evidence.number} squash patch does not match its exact reviewed head`,
+				/^[0-9a-f]{40,64}$/.test(reviewedTree) && reviewedTree === mergedTree,
+				`Pull request #${evidence.number} squash tree does not match its exact reviewed head`,
 			);
 		}
 		evidence.mergeStrategy = squashCommit ? "squash" : "merge";
@@ -2677,17 +2666,128 @@ export const assertRequiredConsumerRegistryEvidence = (
 	return { ...observed, latest: tags.latest };
 };
 
+const parseRemoteTagEvidence = (output, tagReference) => {
+	const references = new Map(
+		output
+			.split("\n")
+			.filter(Boolean)
+			.map((line) => line.split(/\s+/))
+			.filter(([object, reference]) =>
+				/^[0-9a-f]{40}$/.test(object) && typeof reference === "string",
+			)
+			.map(([object, reference]) => [reference, object]),
+	);
+	return {
+		tagObject: references.get(tagReference),
+		sourceCommit: references.get(`${tagReference}^{}`),
+	};
+};
+
+export const assertRequiredConsumerSourceReleaseEvidence = (
+	plan,
+	command = run,
+) => {
+	const consumer = plan.requiredConsumer;
+	assert(
+		consumer.version === currentFleetPatchVersion,
+		"Fleet patch source-release verification requires the current reviewed version",
+	);
+	const tag = `v${currentFleetPatchVersion}`;
+	const tagReference = `refs/tags/${tag}`;
+	const expectedGitHubRelease =
+		`https://github.com/${fleetPatchSourceRepositories.github.repository}/releases/tag/${tag}`;
+	const expectedGiteaRelease =
+		`https://git.local.jonbogaty.com/${fleetPatchSourceRepositories.gitea.repository}/releases/tag/${tag}`;
+	assert(
+		consumer.githubRelease === expectedGitHubRelease &&
+			consumer.giteaRelease === expectedGiteaRelease,
+		"Fleet patch source release URLs differ from the reviewed repositories",
+	);
+	for (const source of Object.values(fleetPatchSourceRepositories)) {
+		const observed = parseRemoteTagEvidence(
+			command(
+				"git",
+				["ls-remote", source.gitUrl, tagReference, `${tagReference}^{}`],
+				{ timeout: 600_000 },
+			),
+			tagReference,
+		);
+		assert(
+			observed.tagObject === consumer.tagObject &&
+				observed.sourceCommit === consumer.sourceCommit,
+			`${source.repository} ${tag} does not resolve to the reviewed tag object and source commit`,
+		);
+	}
+	const githubRelease = JSON.parse(
+		command(
+			"gh",
+			[
+				"release",
+				"view",
+				tag,
+				"--repo",
+				fleetPatchSourceRepositories.github.repository,
+				"--json",
+				"tagName,url,isDraft,isPrerelease",
+			],
+			{ timeout: 600_000 },
+		),
+	);
+	assert(
+		githubRelease.tagName === tag &&
+			githubRelease.url === consumer.githubRelease &&
+			githubRelease.isDraft === false &&
+			githubRelease.isPrerelease === false,
+		"GitHub fleet patch release differs from the reviewed release plan",
+	);
+	const giteaRelease = JSON.parse(
+		command(
+			"tea",
+			[
+				"api",
+				`repos/${fleetPatchSourceRepositories.gitea.repository}/releases/tags/${tag}`,
+				"--repo",
+				fleetPatchSourceRepositories.gitea.repository,
+			],
+			{ timeout: 600_000 },
+		),
+	);
+	assert(
+		giteaRelease.tag_name === tag &&
+			giteaRelease.target_commitish === consumer.sourceCommit &&
+			giteaRelease.html_url === consumer.giteaRelease &&
+			giteaRelease.draft === false &&
+			giteaRelease.prerelease === false,
+		"Gitea fleet patch release differs from the reviewed release plan",
+	);
+	return {
+		tag,
+		tagObject: consumer.tagObject,
+		sourceCommit: consumer.sourceCommit,
+		githubRelease: consumer.githubRelease,
+		giteaRelease: consumer.giteaRelease,
+	};
+};
+
 export const verifyRequiredConsumerAnonymousArtifact = async (
 	plan,
 	env,
-	{ view = pnpmView, fetcher = globalThis.fetch } = {},
+	{ view = pnpmView, fetcher = globalThis.fetch, command = run } = {},
 ) => {
 	const metadata = assertRequiredConsumerRegistryEvidence(plan, env, view);
+	const sourceRelease = assertRequiredConsumerSourceReleaseEvidence(plan, command);
 	assert(
 		typeof fetcher === "function",
 		"Anonymous fleet package verification requires fetch",
 	);
-	const response = await fetcher(plan.requiredConsumer.tarball, {
+	const reviewedCompatibility = fleetPatchCompatibility.get(
+		currentFleetPatchVersion,
+	);
+	assert(
+		plan.requiredConsumer.tarball === reviewedCompatibility.tarball,
+		"Fleet compatibility tarball URL differs from the executable review allowlist",
+	);
+	const response = await fetcher(reviewedCompatibility.tarball, {
 		redirect: "error",
 		signal: AbortSignal.timeout(60_000),
 	});
@@ -2716,6 +2816,7 @@ export const verifyRequiredConsumerAnonymousArtifact = async (
 	);
 	return {
 		...metadata,
+		...sourceRelease,
 		tarballSha256: plan.requiredConsumer.tarballSha256,
 		bytes: tarballBytes.length,
 	};

@@ -37,6 +37,7 @@ import {
 	assertLivePromotedCohort,
 	assertMonotonicLatestPromotion,
 	assertRequiredConsumerRegistryEvidence,
+	assertRequiredConsumerSourceReleaseEvidence,
 	assertReleaseToolchain,
 	assertReviewedCanonicalMain,
 	assertReviewedPlanSource,
@@ -86,6 +87,27 @@ const currentPatchConsumer = {
 	githubRelease: "https://github.com/jbcom/rpgjs-patches/releases/tag/v0.3.0",
 	giteaRelease:
 		"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0",
+};
+const currentPatchSourceCommand = (program: string, args: string[]) => {
+	const tagReference = `refs/tags/v${currentPatchConsumer.version}`;
+	if (program === "git")
+		return `${currentPatchConsumer.tagObject}\t${tagReference}\n${currentPatchConsumer.sourceCommit}\t${tagReference}^{}\n`;
+	if (program === "gh")
+		return JSON.stringify({
+			tagName: `v${currentPatchConsumer.version}`,
+			url: currentPatchConsumer.githubRelease,
+			isDraft: false,
+			isPrerelease: false,
+		});
+	if (program === "tea")
+		return JSON.stringify({
+			tag_name: `v${currentPatchConsumer.version}`,
+			target_commitish: currentPatchConsumer.sourceCommit,
+			html_url: currentPatchConsumer.giteaRelease,
+			draft: false,
+			prerelease: false,
+		});
+	throw new Error(`Unexpected source-release command ${program} ${args.join(" ")}`);
 };
 const previousVersion = "5.0.0-beta.29.solo.0";
 const version = "5.0.0-beta.29.solo.1";
@@ -792,6 +814,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			await verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
 				view,
 				fetcher,
+				command: currentPatchSourceCommand,
 			}),
 		).toMatchObject({
 			tarballSha256: requiredConsumer.tarballSha256,
@@ -800,12 +823,51 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		await expect(
 			verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
 				view,
+				command: currentPatchSourceCommand,
 				fetcher: async (url, options) => ({
 					...(await fetcher(url, options)),
 					arrayBuffer: async () => Uint8Array.from(Buffer.from("foreign")).buffer,
 				}),
 			}),
 		).rejects.toThrow(/anonymous tarball bytes differ from the reviewed release plan/i);
+	});
+
+	it("binds both patch source tags and non-draft releases before packing", () => {
+		const plan = loadSoloReleasePlan();
+		expect(
+			assertRequiredConsumerSourceReleaseEvidence(
+				plan,
+				currentPatchSourceCommand,
+			),
+		).toEqual({
+			tag: "v0.3.0",
+			tagObject: currentPatchConsumer.tagObject,
+			sourceCommit: currentPatchConsumer.sourceCommit,
+			githubRelease: currentPatchConsumer.githubRelease,
+			giteaRelease: currentPatchConsumer.giteaRelease,
+		});
+		expect(() =>
+			assertRequiredConsumerSourceReleaseEvidence(plan, (program, args) =>
+				program === "git"
+					? currentPatchSourceCommand(program, args).replace(
+							currentPatchConsumer.sourceCommit,
+							"0".repeat(40),
+						)
+					: currentPatchSourceCommand(program, args),
+			),
+		).toThrow(/does not resolve to the reviewed tag object and source commit/i);
+		expect(() =>
+			assertRequiredConsumerSourceReleaseEvidence(plan, (program, args) =>
+				program === "gh"
+					? JSON.stringify({
+							tagName: "v0.3.0",
+							url: currentPatchConsumer.githubRelease,
+							isDraft: true,
+							isPrerelease: false,
+						})
+					: currentPatchSourceCommand(program, args),
+			),
+		).toThrow(/GitHub fleet patch release differs/i);
 	});
 
 	it("fails closed unless the executing toolchain is exact Node 24.19.0 and pnpm 11.21.0", () => {
@@ -1588,11 +1650,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		const fixture = createFixture();
 		const plan = loadSoloReleasePlan(fixture.planPath);
 		const calls: string[] = [];
-		const fake = (
-			program: string,
-			args: string[],
-			options: { input?: string } = {},
-		) => {
+		const fake = (program: string, args: string[]) => {
 			calls.push(args.join(" "));
 			if (program === "gh" && args[0] === "pr") {
 				const number = Number(args[2]);
@@ -1632,11 +1690,10 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				return args[3] === plan.requiredSourceCommit
 					? "e".repeat(40)
 					: "f".repeat(40);
-			if (args[0] === "diff") return "reviewed patch\n";
-			if (args[0] === "patch-id") {
-				expect(args[1]).toBe("--verbatim");
-				return `${(options.input === "foreign patch\n" ? "5" : "4").repeat(40)} ${"0".repeat(40)}`;
-			}
+			if (args[0] === "show" && args[2] === "--format=%T")
+				return [plan.requiredSourceCommit, "c".repeat(40)].includes(args[3])
+					? "7".repeat(40)
+					: "8".repeat(40);
 			if (args[1] === "HEAD^{tree}") return "b".repeat(40);
 			if (args[0] === "merge-base") return "";
 			return "a".repeat(40);
@@ -1654,19 +1711,20 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			assertReviewedCanonicalMain(
 				plan,
 				"a".repeat(40),
-				(program, args, options) => {
+				(program, args) => {
 					if (
 						program === "git" &&
-						args[0] === "diff" &&
-						args.at(-1) ===
-							`${"e".repeat(40)}...${"c".repeat(40)}`
+						args[0] === "show" &&
+						args[2] === "--format=%T" &&
+						args[3] === plan.requiredSourceCommit
 					)
-						return "foreign patch\n";
-					return fake(program, args, options);
+						return "9".repeat(40);
+					return fake(program, args);
 				},
 				fixture.root,
 			),
-		).toThrow(/squash patch does not match its exact reviewed head/i);
+		).toThrow(/squash tree does not match its exact reviewed head/i);
+		expect(calls.some((call) => call.startsWith("patch-id"))).toBe(false);
 		expect(calls.filter((call) => call.startsWith("ls-remote"))).toHaveLength(
 			2,
 		);

@@ -39,7 +39,10 @@ mode-0600 npm configuration.
    changeset, and update the lockfile through the owned fail-closed journal.
 3. Let the exact applied PR head pass every required check. Resolve every review
    thread, obtain the required independent review evidence, and merge without
-   changing reviewed source.
+   changing reviewed source. CodeRabbit reviewed the initial release transition
+   but exhausted its external review quota before the hardened exact head; it is
+   therefore not a required release-PR check. Exact-head Codex review, CodeQL,
+   the full CI gate, and the producer-disjoint signed auditor remain mandatory.
 4. Work only from the exact canonical GitHub merge. Prove GitHub and Gitea
    `main` equality, the upstream and source ancestry bindings, both PRs,
    required checks, and resolved threads. The supervisor supplies the detached
