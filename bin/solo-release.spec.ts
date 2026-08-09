@@ -36,6 +36,7 @@ import {
 	assertFinalReleaseBindings,
 	assertLivePromotedCohort,
 	assertMonotonicLatestPromotion,
+	assertRequiredConsumerRegistryEvidence,
 	assertReleaseToolchain,
 	assertReviewedCanonicalMain,
 	assertReviewedPlanSource,
@@ -66,6 +67,24 @@ import {
 } from "./solo-release.mjs";
 
 const registry = "https://git.local.jonbogaty.com/api/packages/jbcom/npm/";
+const currentPatchConsumer = {
+	package: "@arcade-cabinet/rpgjs-patches",
+	version: "0.3.0",
+	registry:
+		"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/",
+	integrity:
+		"sha512-KEpLrX/xkKfUftLcPDS9i6VTSzsAqndYvybFBSoFnHPA20cLlyZ7KyhVZ+nq7zX7gVUWkxP6AuDwtJ8VvSO5oQ==",
+	shasum: "fe8e6ed84f31d06415c82a61fbc212e151664362",
+	tarball:
+		"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/%40arcade-cabinet%2Frpgjs-patches/-/0.3.0/rpgjs-patches-0.3.0.tgz",
+	tarballSha256:
+		"09ee17ac365c08e96487a6e59da349bf7fe358f81683b0cc3bb1010338c122b3",
+	sourceCommit: "432cc108b1b6229577d907611487c315ad03e8f8",
+	tagObject: "78677ce7379dcedac13dc19b5aa529017fb0ab36",
+	githubRelease: "https://github.com/jbcom/rpgjs-patches/releases/tag/v0.3.0",
+	giteaRelease:
+		"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0",
+};
 const previousVersion = "5.0.0-beta.29.solo.0";
 const version = "5.0.0-beta.29.solo.1";
 const packages = [
@@ -699,13 +718,42 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	it("admits the exact 0.3 patch consumer for the CanvasEngine 2.2 release plan", () => {
 		const fixture = createFixture();
 		const plan = JSON.parse(readFileSync(fixture.planPath, "utf8"));
-		plan.requiredConsumer.version = "0.3.0";
+		plan.requiredConsumer = currentPatchConsumer;
 		writeJson(fixture.planPath, plan);
 
-		expect(loadSoloReleasePlan(fixture.planPath).requiredConsumer).toEqual({
-			package: "@arcade-cabinet/rpgjs-patches",
-			version: "0.3.0",
+		expect(loadSoloReleasePlan(fixture.planPath).requiredConsumer).toEqual(
+			currentPatchConsumer,
+		);
+	});
+
+	it("rechecks the reviewed 0.3 patch bytes before candidate execution", () => {
+		const plan = loadSoloReleasePlan();
+		const view = (spec: string, field: string, registryPlan: typeof plan) => {
+			expect(registryPlan.registry).toBe(currentPatchConsumer.registry);
+			if (field === "dist-tags") {
+				expect(spec).toBe(currentPatchConsumer.package);
+				return { latest: currentPatchConsumer.version };
+			}
+			expect(spec).toBe(
+				`${currentPatchConsumer.package}@${currentPatchConsumer.version}`,
+			);
+			return currentPatchConsumer[
+				field.slice("dist.".length) as "integrity" | "shasum" | "tarball"
+			];
+		};
+		expect(assertRequiredConsumerRegistryEvidence(plan, {}, view)).toEqual({
+			integrity: currentPatchConsumer.integrity,
+			shasum: currentPatchConsumer.shasum,
+			tarball: currentPatchConsumer.tarball,
+			latest: currentPatchConsumer.version,
 		});
+		expect(() =>
+			assertRequiredConsumerRegistryEvidence(plan, {}, (spec, field, registryPlan) =>
+				field === "dist.integrity"
+					? "sha512-foreign"
+					: view(spec, field, registryPlan),
+			),
+		).toThrow(/registry evidence differs from the reviewed release plan/i);
 	});
 
 	it("fails closed unless the executing toolchain is exact Node 24.19.0 and pnpm 11.21.0", () => {
@@ -818,12 +866,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		);
 		expect(plan.reviewEvidence.enginePullRequest.number).toBe(26);
 		expect(plan.reviewEvidence.releasePullRequest.number).toBe(27);
-		expect(plan.requiredConsumer).toEqual({
-			package: "@arcade-cabinet/rpgjs-patches",
-			version: "0.3.0",
-			registry:
-				"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/",
-		});
+		expect(plan.requiredConsumer).toEqual(currentPatchConsumer);
 		expect(plan.consumedChangesets).toEqual([
 			expect.objectContaining({ id: "current-solo-canvasengine-2-2" }),
 		]);

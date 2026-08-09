@@ -56,7 +56,9 @@ mode-0600 npm configuration.
 6. Do not pack or publish until `@arcade-cabinet/rpgjs-patches@0.3.0` is proven
    immutable at the private registry and by an anonymous clean install/fetch.
    That proof must include the exact registry integrity, source/tag identity,
-   GitHub release, and Gitea backup release.
+   GitHub release, and Gitea backup release. The plan binds all of those
+   identities, and candidate verification re-reads exact integrity, shasum,
+   tarball URL, and `latest` before installing it.
 7. Run `pnpm release:solo:pack --artifacts <absolute-directory-outside-repo>`
    once with `RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE`. Retain the exact four
    archives, schema-3 provenance manifest, SHA-512 sidecar, Ed25519 statement

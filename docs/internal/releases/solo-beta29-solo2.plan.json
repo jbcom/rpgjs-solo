@@ -164,6 +164,14 @@
   "requiredConsumer": {
     "package": "@arcade-cabinet/rpgjs-patches",
     "version": "0.3.0",
-    "registry": "https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/"
+    "registry": "https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/",
+    "integrity": "sha512-KEpLrX/xkKfUftLcPDS9i6VTSzsAqndYvybFBSoFnHPA20cLlyZ7KyhVZ+nq7zX7gVUWkxP6AuDwtJ8VvSO5oQ==",
+    "shasum": "fe8e6ed84f31d06415c82a61fbc212e151664362",
+    "tarball": "https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/%40arcade-cabinet%2Frpgjs-patches/-/0.3.0/rpgjs-patches-0.3.0.tgz",
+    "tarballSha256": "09ee17ac365c08e96487a6e59da349bf7fe358f81683b0cc3bb1010338c122b3",
+    "sourceCommit": "432cc108b1b6229577d907611487c315ad03e8f8",
+    "tagObject": "78677ce7379dcedac13dc19b5aa529017fb0ab36",
+    "githubRelease": "https://github.com/jbcom/rpgjs-patches/releases/tag/v0.3.0",
+    "giteaRelease": "https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0"
   }
 }

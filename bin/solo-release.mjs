@@ -70,7 +70,26 @@ const releaseNodeVersion = "24.19.0";
 const releasePnpmVersion = "11.21.0";
 const fleetPatchCompatibility = new Map([
 	["0.2.0", { canvasengine: "2.1.1", vite: "8.2.0" }],
-	["0.3.0", { canvasengine: "2.2.0", vite: "8.2.1" }],
+	[
+		"0.3.0",
+		{
+			canvasengine: "2.2.0",
+			vite: "8.2.1",
+			integrity:
+				"sha512-KEpLrX/xkKfUftLcPDS9i6VTSzsAqndYvybFBSoFnHPA20cLlyZ7KyhVZ+nq7zX7gVUWkxP6AuDwtJ8VvSO5oQ==",
+			shasum: "fe8e6ed84f31d06415c82a61fbc212e151664362",
+			tarball:
+				"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/%40arcade-cabinet%2Frpgjs-patches/-/0.3.0/rpgjs-patches-0.3.0.tgz",
+			tarballSha256:
+				"09ee17ac365c08e96487a6e59da349bf7fe358f81683b0cc3bb1010338c122b3",
+			sourceCommit: "432cc108b1b6229577d907611487c315ad03e8f8",
+			tagObject: "78677ce7379dcedac13dc19b5aa529017fb0ab36",
+			githubRelease:
+				"https://github.com/jbcom/rpgjs-patches/releases/tag/v0.3.0",
+			giteaRelease:
+				"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0",
+		},
+	],
 ]);
 const standardChangesetDocuments = new Set(["README.md"]);
 const applyJournalName = ".rpgjs-solo-release-apply.json";
@@ -656,9 +675,15 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 			),
 		"Inherited release directories must be unique package paths",
 	);
+	const requiredCompatibility = fleetPatchCompatibility.get(
+		plan.requiredConsumer?.version,
+	);
 	assert(
 		plan.requiredConsumer?.package === "@arcade-cabinet/rpgjs-patches" &&
-			fleetPatchCompatibility.has(plan.requiredConsumer.version),
+			requiredCompatibility &&
+			Object.entries(requiredCompatibility)
+				.filter(([field]) => !["canvasengine", "vite"].includes(field))
+				.every(([field, value]) => plan.requiredConsumer[field] === value),
 		"The release plan must name a supported exact fleet compatibility consumer",
 	);
 	assert(
@@ -2411,6 +2436,11 @@ export const loadProvenance = (
 		"Provenance changeset contract drifted",
 	);
 	assert(
+		JSON.stringify(manifest.requiredConsumer) ===
+			JSON.stringify(plan.requiredConsumer),
+		"Provenance fleet compatibility consumer drifted",
+	);
+	assert(
 		manifest.lockfile.path === "pnpm-lock.yaml",
 		"Provenance lockfile path drifted",
 	);
@@ -2568,6 +2598,29 @@ export const pnpmView = (spec, field, plan, env, command = run) => {
 			cause: error,
 		});
 	}
+};
+
+export const assertRequiredConsumerRegistryEvidence = (
+	plan,
+	env,
+	view = pnpmView,
+) => {
+	const registryPlan = { ...plan, registry: plan.requiredConsumer.registry };
+	const spec = `${plan.requiredConsumer.package}@${plan.requiredConsumer.version}`;
+	const observed = {
+		integrity: view(spec, "dist.integrity", registryPlan, env),
+		shasum: view(spec, "dist.shasum", registryPlan, env),
+		tarball: view(spec, "dist.tarball", registryPlan, env),
+	};
+	const tags = view(plan.requiredConsumer.package, "dist-tags", registryPlan, env);
+	assert(
+		observed.integrity === plan.requiredConsumer.integrity &&
+			observed.shasum === plan.requiredConsumer.shasum &&
+			observed.tarball === plan.requiredConsumer.tarball &&
+			tags?.latest === plan.requiredConsumer.version,
+		`${spec} registry evidence differs from the reviewed release plan`,
+	);
+	return { ...observed, latest: tags.latest };
 };
 
 export const assertCandidateCohort = (manifest, plan, env, view = pnpmView) => {
@@ -3777,6 +3830,7 @@ export const main = async (
 			plan.registry,
 			async (env) => {
 				assertCandidateCohort(manifest, plan, env);
+				assertRequiredConsumerRegistryEvidence(plan, env);
 				verifyPublishedConsumer(manifest, plan, env);
 			},
 		);
