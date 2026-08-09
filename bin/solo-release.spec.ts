@@ -667,7 +667,21 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			{ packages },
 			loadSoloReleasePlan(fixture.planPath),
 		);
+		const currentContract = createPublishedConsumerContract(
+			{ packages },
+			{
+				...loadSoloReleasePlan(fixture.planPath),
+				requiredConsumer: {
+					package: "@arcade-cabinet/rpgjs-patches",
+					version: "0.3.0",
+				},
+			},
+		);
 
+		expect(contract.packageJson.dependencies.canvasengine).toBe("2.1.1");
+		expect(contract.packageJson.dependencies.vite).toBe("8.2.0");
+		expect(currentContract.packageJson.dependencies.canvasengine).toBe("2.2.0");
+		expect(currentContract.packageJson.dependencies.vite).toBe("8.2.1");
 		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo");
 		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-action-battle");
 		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-vite");
@@ -680,6 +694,18 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(contract.browserEntry).toContain("installCanvasEnginePatches");
 		expect(contract.viteConfig).toContain("rpgjsSoloBoundary");
 		expect(contract.tsconfig.compilerOptions.lib).toContain("DOM");
+	});
+
+	it("admits the exact 0.3 patch consumer for the CanvasEngine 2.2 release plan", () => {
+		const fixture = createFixture();
+		const plan = JSON.parse(readFileSync(fixture.planPath, "utf8"));
+		plan.requiredConsumer.version = "0.3.0";
+		writeJson(fixture.planPath, plan);
+
+		expect(loadSoloReleasePlan(fixture.planPath).requiredConsumer).toEqual({
+			package: "@arcade-cabinet/rpgjs-patches",
+			version: "0.3.0",
+		});
 	});
 
 	it("fails closed unless the executing toolchain is exact Node 24.19.0 and pnpm 11.21.0", () => {

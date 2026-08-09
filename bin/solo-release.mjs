@@ -68,6 +68,10 @@ const canonicalMetadata = {
 };
 const releaseNodeVersion = "24.19.0";
 const releasePnpmVersion = "11.21.0";
+const fleetPatchCompatibility = new Map([
+	["0.2.0", { canvasengine: "2.1.1", vite: "8.2.0" }],
+	["0.3.0", { canvasengine: "2.2.0", vite: "8.2.1" }],
+]);
 const standardChangesetDocuments = new Set(["README.md"]);
 const applyJournalName = ".rpgjs-solo-release-apply.json";
 const orchestratorTrustDomain = "jbcom/rpgjs-solo-release-orchestrator";
@@ -654,8 +658,8 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 	);
 	assert(
 		plan.requiredConsumer?.package === "@arcade-cabinet/rpgjs-patches" &&
-			plan.requiredConsumer.version === "0.2.0",
-		"The exact fleet compatibility consumer is required",
+			fleetPatchCompatibility.has(plan.requiredConsumer.version),
+		"The release plan must name a supported exact fleet compatibility consumer",
 	);
 	assert(
 		["provisional", "final"].includes(plan.reviewEvidence?.status),
@@ -2593,7 +2597,15 @@ export const publishedConsumerInstallArgs = Object.freeze([
 	"--ignore-workspace",
 ]);
 
-export const createPublishedConsumerContract = (manifest, plan) => ({
+export const createPublishedConsumerContract = (manifest, plan) => {
+	const compatibility = fleetPatchCompatibility.get(
+		plan.requiredConsumer.version,
+	);
+	assert(
+		compatibility,
+		`No consumer toolchain is defined for ${plan.requiredConsumer.package}@${plan.requiredConsumer.version}`,
+	);
+	return {
 	packageJson: {
 		name: "rpgjs-solo-release-consumer",
 		private: true,
@@ -2602,11 +2614,11 @@ export const createPublishedConsumerContract = (manifest, plan) => ({
 			...manifest.packages.map(({ name }) => [name, plan.version]),
 			[plan.requiredConsumer.package, plan.requiredConsumer.version],
 			["@types/react", "19.2.17"],
-			["canvasengine", "2.2.0"],
+			["canvasengine", compatibility.canvasengine],
 			["pixi.js", "8.19.0"],
 			["react", "19.2.8"],
 			["typescript", "7.0.2"],
-			["vite", "8.2.1"],
+			["vite", compatibility.vite],
 		]),
 	},
 	runtimeCheck: `import { SoloRuntime } from '@jbcom/rpgjs-solo'
@@ -2655,7 +2667,8 @@ if (typeof installCanvasEnginePatches !== 'function') throw new Error('patch pac
 installCanvasEnginePatches({ Sprite, Viewport })
 document.querySelector('#app')!.textContent = 'RPGJS Solo registry consumer passed'
 `,
-});
+	};
+};
 
 export const verifyPublishedConsumer = (manifest, plan, env) => {
 	const directory = mkdtempSync(
