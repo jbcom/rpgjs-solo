@@ -817,7 +817,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			plan.requiredSourceCommit,
 		);
 		expect(plan.reviewEvidence.enginePullRequest.number).toBe(26);
-		expect(plan.reviewEvidence.releasePullRequest.number).toBeNull();
+		expect(plan.reviewEvidence.releasePullRequest.number).toBe(27);
 		expect(plan.requiredConsumer).toEqual({
 			package: "@arcade-cabinet/rpgjs-patches",
 			version: "0.3.0",
@@ -836,15 +836,19 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			inheritedReleaseDirectories,
 		);
 		expect(plan.sourceBinding.status).toBe("final");
-		expect(plan.reviewEvidence.status).toBe("provisional");
+		expect(plan.reviewEvidence.status).toBe("final");
 		expect(plan.reviewEvidence.independentReceipt.status).toBe("final");
 		expect(
 			plan.reviewEvidence.independentReceipt.orchestratorAssignment.status,
 		).toBe("final");
 		expect(plan.provenanceAttestation.status).toBe("final");
-		expect(() => assertFinalReleaseBindings(plan)).toThrow(
-			/Release bindings are not final: reviewEvidence/i,
-		);
+		expect(assertFinalReleaseBindings(plan)).toEqual({
+			sourceBinding: "final",
+			reviewEvidence: "final",
+			independentReceipt: "final",
+			orchestratorAssignment: "final",
+			provenanceAttestation: "final",
+		});
 	});
 
 	it("keeps reviewer trust outside the plan and authenticates a producer-disjoint detached assignment", () => {
