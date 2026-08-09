@@ -1006,7 +1006,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			plan.requiredSourceCommit,
 		);
 		expect(plan.reviewEvidence.enginePullRequest.number).toBe(26);
-		expect(plan.reviewEvidence.releasePullRequest.number).toBeNull();
+		expect(plan.reviewEvidence.releasePullRequest.number).toBe(28);
 		expect(plan.reviewEvidence.supersededRejectedReleasePullRequests).toEqual([
 			expect.objectContaining({
 				number: 27,
@@ -1029,15 +1029,19 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			inheritedReleaseDirectories,
 		);
 		expect(plan.sourceBinding.status).toBe("final");
-		expect(plan.reviewEvidence.status).toBe("provisional");
-		expect(plan.reviewEvidence.independentReceipt.status).toBe("provisional");
+		expect(plan.reviewEvidence.status).toBe("final");
+		expect(plan.reviewEvidence.independentReceipt.status).toBe("final");
 		expect(
 			plan.reviewEvidence.independentReceipt.orchestratorAssignment.status,
-		).toBe("provisional");
+		).toBe("final");
 		expect(plan.provenanceAttestation.status).toBe("final");
-		expect(() => assertFinalReleaseBindings(plan)).toThrow(
-			/release bindings are not final/i,
-		);
+		expect(assertFinalReleaseBindings(plan)).toEqual({
+			sourceBinding: "final",
+			reviewEvidence: "final",
+			independentReceipt: "final",
+			orchestratorAssignment: "final",
+			provenanceAttestation: "final",
+		});
 	});
 
 	it("keeps reviewer trust outside the plan and authenticates a producer-disjoint detached assignment", () => {

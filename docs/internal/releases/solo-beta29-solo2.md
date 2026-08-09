@@ -15,9 +15,10 @@ esbuild 0.28.1, and the documented
 `mise exec node@24.19.0 -- pnpm verify:published-package-contracts` route failed
 when pnpm's `manage-package-manager-versions` setting leaked into child npm.
 No independent ACCEPT receipt was created, and neither PR #27 nor its plan hash
-authorizes repaired bytes. The additive repair PR named in the plan is the only
-release-transition authority for this cohort after it passes exact-head review,
-merges, and receives a new producer-disjoint post-merge audit assignment.
+authorizes repaired bytes. Additive repair PR #28, named in the plan, is the
+only release-transition authority for this cohort after it passes exact-head
+review, merges, and receives a new producer-disjoint post-merge audit
+assignment.
 
 The machine-readable authority is
 [`solo-beta29-solo2.plan.json`](solo-beta29-solo2.plan.json). The historical
@@ -40,10 +41,10 @@ mode-0600 npm configuration.
 
 ## Required sequence
 
-1. Open this release-transition PR from the exact source merge. Bind its PR
-   number in the plan, set `reviewEvidence.status` to `final`, and commit that
-   final source policy before apply. Producer-controlled source must not name
-   the reviewer, reviewer key, assignment, or orchestrator trust key.
+1. Use release-transition repair PR #28 from exact canonical merge
+   `013d59e4d5d619ad11ceb3df405ea6d6a987ed94`. Its number and final source
+   policy are bound in the plan. Producer-controlled source must not name the
+   reviewer, reviewer key, assignment, or orchestrator trust key.
 2. Run `pnpm release:solo:validate`, then `pnpm release:solo:apply`. Apply must
    deterministically update all four package identities and exact workspace
    references, create their changelogs, consume only the declared Solo
