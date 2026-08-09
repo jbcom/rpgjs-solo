@@ -61,6 +61,7 @@ import {
 	secureAtomicWriteJson,
 	sha512File,
 	validateSoloReleaseState,
+	verifyRequiredConsumerAnonymousArtifact,
 	verifyExternalOrchestratorAssignment,
 	verifyIndependentReviewReceipt,
 	withAnonymousFleetRegistry,
@@ -755,6 +756,56 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					: view(spec, field, registryPlan),
 			),
 		).toThrow(/registry evidence differs from the reviewed release plan/i);
+	});
+
+	it("fetches and hash-binds the fleet tarball without credentials", async () => {
+		const bytes = Buffer.from("anonymous fleet package bytes\n");
+		const plan = loadSoloReleasePlan();
+		const requiredConsumer = {
+			...plan.requiredConsumer,
+			integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`,
+			shasum: createHash("sha1").update(bytes).digest("hex"),
+			tarballSha256: createHash("sha256").update(bytes).digest("hex"),
+		};
+		const fixturePlan = { ...plan, requiredConsumer };
+		const view = (spec: string, field: string) => {
+			if (field === "dist-tags") return { latest: requiredConsumer.version };
+			expect(spec).toBe(
+				`${requiredConsumer.package}@${requiredConsumer.version}`,
+			);
+			return requiredConsumer[
+				field.slice("dist.".length) as "integrity" | "shasum" | "tarball"
+			];
+		};
+		const fetcher = async (url: string, options: { redirect: string }) => {
+			expect(url).toBe(requiredConsumer.tarball);
+			expect(options.redirect).toBe("error");
+			return {
+				ok: true,
+				status: 200,
+				url,
+				headers: { get: () => String(bytes.length) },
+				arrayBuffer: async () => Uint8Array.from(bytes).buffer,
+			};
+		};
+		expect(
+			await verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
+				view,
+				fetcher,
+			}),
+		).toMatchObject({
+			tarballSha256: requiredConsumer.tarballSha256,
+			bytes: bytes.length,
+		});
+		await expect(
+			verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
+				view,
+				fetcher: async (url, options) => ({
+					...(await fetcher(url, options)),
+					arrayBuffer: async () => Uint8Array.from(Buffer.from("foreign")).buffer,
+				}),
+			}),
+		).rejects.toThrow(/anonymous tarball bytes differ from the reviewed release plan/i);
 	});
 
 	it("fails closed unless the executing toolchain is exact Node 24.19.0 and pnpm 11.21.0", () => {
@@ -1582,8 +1633,10 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					? "e".repeat(40)
 					: "f".repeat(40);
 			if (args[0] === "diff") return "reviewed patch\n";
-			if (args[0] === "patch-id")
+			if (args[0] === "patch-id") {
+				expect(args[1]).toBe("--verbatim");
 				return `${(options.input === "foreign patch\n" ? "5" : "4").repeat(40)} ${"0".repeat(40)}`;
+			}
 			if (args[1] === "HEAD^{tree}") return "b".repeat(40);
 			if (args[0] === "merge-base") return "";
 			return "a".repeat(40);

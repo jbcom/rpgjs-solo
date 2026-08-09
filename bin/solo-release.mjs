@@ -1515,11 +1515,11 @@ export const assertReviewedCanonicalMain = (
 				],
 				{ cwd: root, trim: false },
 			);
-			const reviewedPatchId = command("git", ["patch-id", "--stable"], {
+			const reviewedPatchId = command("git", ["patch-id", "--verbatim"], {
 				cwd: root,
 				input: reviewedPatch,
 			});
-			const mergedPatchId = command("git", ["patch-id", "--stable"], {
+			const mergedPatchId = command("git", ["patch-id", "--verbatim"], {
 				cwd: root,
 				input: mergedPatch,
 			});
@@ -2677,6 +2677,50 @@ export const assertRequiredConsumerRegistryEvidence = (
 	return { ...observed, latest: tags.latest };
 };
 
+export const verifyRequiredConsumerAnonymousArtifact = async (
+	plan,
+	env,
+	{ view = pnpmView, fetcher = globalThis.fetch } = {},
+) => {
+	const metadata = assertRequiredConsumerRegistryEvidence(plan, env, view);
+	assert(
+		typeof fetcher === "function",
+		"Anonymous fleet package verification requires fetch",
+	);
+	const response = await fetcher(plan.requiredConsumer.tarball, {
+		redirect: "error",
+		signal: AbortSignal.timeout(60_000),
+	});
+	assert(
+		response?.ok === true &&
+			response.status === 200 &&
+			response.url === plan.requiredConsumer.tarball,
+		`${plan.requiredConsumer.package}@${plan.requiredConsumer.version} anonymous tarball fetch failed`,
+	);
+	const declaredLength = response.headers?.get?.("content-length");
+	if (declaredLength !== null && declaredLength !== undefined)
+		assert(
+			/^\d+$/.test(declaredLength) && Number(declaredLength) <= 16 * 1024 * 1024,
+			"Fleet compatibility tarball declares an unsafe size",
+		);
+	const tarballBytes = Buffer.from(await response.arrayBuffer());
+	assert(
+		tarballBytes.length > 0 && tarballBytes.length <= 16 * 1024 * 1024,
+		"Fleet compatibility tarball has an unsafe size",
+	);
+	assert(
+		digest("sha256", tarballBytes) === plan.requiredConsumer.tarballSha256 &&
+			digest("sha1", tarballBytes) === plan.requiredConsumer.shasum &&
+			snapshotIntegrity(tarballBytes) === plan.requiredConsumer.integrity,
+		`${plan.requiredConsumer.package}@${plan.requiredConsumer.version} anonymous tarball bytes differ from the reviewed release plan`,
+	);
+	return {
+		...metadata,
+		tarballSha256: plan.requiredConsumer.tarballSha256,
+		bytes: tarballBytes.length,
+	};
+};
+
 export const assertCandidateCohort = (manifest, plan, env, view = pnpmView) => {
 	for (const item of manifest.packages) {
 		const tags = view(item.name, "dist-tags", plan, env);
@@ -3095,7 +3139,7 @@ export const publishCandidateCohort = async ({
 const publishCandidate = async (manifest, manifestPath, plan, args) => {
 	requireExecution(args, plan);
 	await withAnonymousFleetRegistry(plan.requiredConsumer.registry, async (env) =>
-		assertRequiredConsumerRegistryEvidence(plan, env),
+		verifyRequiredConsumerAnonymousArtifact(plan, env),
 	);
 	await withEphemeralNpmAuth(
 		process.env.RPGJS_SOLO_NPM_TOKEN,
@@ -3854,7 +3898,7 @@ export const main = async (
 		);
 		await withAnonymousFleetRegistry(
 			plan.requiredConsumer.registry,
-			async (env) => assertRequiredConsumerRegistryEvidence(plan, env),
+			async (env) => verifyRequiredConsumerAnonymousArtifact(plan, env),
 		);
 		const source = assertCanonicalMain(rootDirectory, plan);
 		const result = createProvenanceManifest({
@@ -3888,7 +3932,7 @@ export const main = async (
 		requireExecution(args, plan);
 		await withAnonymousFleetRegistry(
 			plan.requiredConsumer.registry,
-			async (env) => assertRequiredConsumerRegistryEvidence(plan, env),
+			async (env) => verifyRequiredConsumerAnonymousArtifact(plan, env),
 		);
 		await withEphemeralNpmAuth(
 			process.env.RPGJS_SOLO_NPM_TOKEN,

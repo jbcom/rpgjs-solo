@@ -57,8 +57,9 @@ mode-0600 npm configuration.
    immutable at the private registry and by an anonymous clean install/fetch.
    That proof must include the exact registry integrity, source/tag identity,
    GitHub release, and Gitea backup release. The plan binds all of those
-   identities, and candidate verification re-reads exact integrity, shasum,
-   tarball URL, and `latest` before installing it.
+   identities. Pack, publish, and candidate verification re-read exact
+   integrity, shasum, tarball URL, and `latest`, then anonymously fetch and
+   compare the tarball SHA-256, SHA-1, and SHA-512 before installing it.
 7. Run `pnpm release:solo:pack --artifacts <absolute-directory-outside-repo>`
    once with `RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE`. Pack rechecks the bound
    patch metadata through a token-free npm configuration before it creates any
