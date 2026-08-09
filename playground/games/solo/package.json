@@ -16,6 +16,6 @@
   },
   "devDependencies": {
     "@jbcom/rpgjs-solo-vite": "workspace:5.0.0-beta.29.solo.1",
-    "vite": "8.2.0"
+    "vite": "8.2.1"
   }
 }

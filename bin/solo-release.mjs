@@ -66,8 +66,12 @@ const canonicalMetadata = {
 	homepageRoot: "https://github.com/jbcom/rpgjs-solo/tree/main/",
 	bugsUrl: "https://github.com/jbcom/rpgjs-solo/issues",
 };
-const releaseNodeMajor = 24;
-const releasePnpmVersion = "11.18.0";
+const releaseNodeVersion = "24.19.0";
+const releasePnpmVersion = "11.21.0";
+const fleetPatchCompatibility = new Map([
+	["0.2.0", { canvasengine: "2.1.1", vite: "8.2.0" }],
+	["0.3.0", { canvasengine: "2.2.0", vite: "8.2.1" }],
+]);
 const standardChangesetDocuments = new Set(["README.md"]);
 const applyJournalName = ".rpgjs-solo-release-apply.json";
 const orchestratorTrustDomain = "jbcom/rpgjs-solo-release-orchestrator";
@@ -456,10 +460,9 @@ export const assertReleaseToolchain = (
 	nodeVersion = process.versions.node,
 	nodeExecPath = process.execPath,
 ) => {
-	const major = Number.parseInt(String(nodeVersion).split(".")[0] ?? "", 10);
 	assert(
-		major === releaseNodeMajor,
-		`Solo release requires Node ${releaseNodeMajor}; received ${nodeVersion}`,
+		nodeVersion === releaseNodeVersion,
+		`Solo release requires Node ${releaseNodeVersion}; received ${nodeVersion}`,
 	);
 	const pnpmVersion = command("pnpm", ["--version"]);
 	assert(
@@ -474,14 +477,10 @@ export const assertReleaseToolchain = (
 			"JSON.stringify({version:process.versions.node,execPath:process.execPath})",
 		]),
 	);
-	const childMajor = Number.parseInt(
-		String(childNode.version).split(".")[0] ?? "",
-		10,
-	);
 	assert(
-		childMajor === releaseNodeMajor &&
+		childNode.version === releaseNodeVersion &&
 			realpathSync(childNode.execPath) === realpathSync(nodeExecPath),
-		`Solo release pnpm child runtime must be the exact Node ${releaseNodeMajor} CLI runtime; received ${childNode.version} at ${childNode.execPath}`,
+		`Solo release pnpm child runtime must be the exact Node ${releaseNodeVersion} CLI runtime; received ${childNode.version} at ${childNode.execPath}`,
 	);
 	return {
 		nodeVersion,
@@ -659,8 +658,8 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 	);
 	assert(
 		plan.requiredConsumer?.package === "@arcade-cabinet/rpgjs-patches" &&
-			plan.requiredConsumer.version === "0.2.0",
-		"The exact fleet compatibility consumer is required",
+			fleetPatchCompatibility.has(plan.requiredConsumer.version),
+		"The release plan must name a supported exact fleet compatibility consumer",
 	);
 	assert(
 		["provisional", "final"].includes(plan.reviewEvidence?.status),
@@ -2598,7 +2597,15 @@ export const publishedConsumerInstallArgs = Object.freeze([
 	"--ignore-workspace",
 ]);
 
-export const createPublishedConsumerContract = (manifest, plan) => ({
+export const createPublishedConsumerContract = (manifest, plan) => {
+	const compatibility = fleetPatchCompatibility.get(
+		plan.requiredConsumer.version,
+	);
+	assert(
+		compatibility,
+		`No consumer toolchain is defined for ${plan.requiredConsumer.package}@${plan.requiredConsumer.version}`,
+	);
+	return {
 	packageJson: {
 		name: "rpgjs-solo-release-consumer",
 		private: true,
@@ -2607,11 +2614,11 @@ export const createPublishedConsumerContract = (manifest, plan) => ({
 			...manifest.packages.map(({ name }) => [name, plan.version]),
 			[plan.requiredConsumer.package, plan.requiredConsumer.version],
 			["@types/react", "19.2.17"],
-			["canvasengine", "2.1.1"],
+			["canvasengine", compatibility.canvasengine],
 			["pixi.js", "8.19.0"],
 			["react", "19.2.8"],
 			["typescript", "7.0.2"],
-			["vite", "8.2.0"],
+			["vite", compatibility.vite],
 		]),
 	},
 	runtimeCheck: `import { SoloRuntime } from '@jbcom/rpgjs-solo'
@@ -2660,7 +2667,8 @@ if (typeof installCanvasEnginePatches !== 'function') throw new Error('patch pac
 installCanvasEnginePatches({ Sprite, Viewport })
 document.querySelector('#app')!.textContent = 'RPGJS Solo registry consumer passed'
 `,
-});
+	};
+};
 
 export const verifyPublishedConsumer = (manifest, plan, env) => {
 	const directory = mkdtempSync(

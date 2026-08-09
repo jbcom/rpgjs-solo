@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        node-version: [24]
+        node-version: [24.19.0]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

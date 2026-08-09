@@ -1,5 +1,6 @@
 export * from './audio'
 export * from './camera'
+export * from './compatibility'
 export * from './fog'
 export * from './input'
 export * from './model'

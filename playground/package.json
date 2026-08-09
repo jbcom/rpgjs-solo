@@ -32,6 +32,6 @@
     "build:vue-gui": "pnpm --dir games/vue-gui build"
   },
   "devDependencies": {
-    "vite": "^8.2.0"
+    "vite": "8.2.1"
   }
 }

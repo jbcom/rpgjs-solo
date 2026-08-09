@@ -40,7 +40,7 @@ export default defineConfig({
         'vite-plugin-dts',
         '@canvasengine/compiler',
         '@iarna/toml',
-        'image-size',
+        'probe-image-size',
         '@babel/parser',
         '@babel/traverse',
         '@babel/generator',

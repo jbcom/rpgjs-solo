@@ -40,7 +40,7 @@ try {
     'pixi.js': '8.19.0',
     react: '19.2.8',
     typescript: '7.0.2',
-    vite: '8.2.0'
+    vite: '8.2.1'
   }
   const localPackageOverrides = {}
 

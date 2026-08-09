@@ -131,12 +131,14 @@
       "replaceSoloTiledLayers",
       "resolveInitialMute",
       "resolveSoloCameraZoom",
+      "rpgjsSoloRendererCompatibility",
       "setSoloMuted",
       "soloRenderedMapSceneKey"
     ],
     "declarations": [
       "packages/solo-renderer/dist/audio.d.ts",
       "packages/solo-renderer/dist/camera.d.ts",
+      "packages/solo-renderer/dist/compatibility.d.ts",
       "packages/solo-renderer/dist/fog.d.ts",
       "packages/solo-renderer/dist/index.d.ts",
       "packages/solo-renderer/dist/input.d.ts",

@@ -96,7 +96,7 @@ A Solo runtime release must prove all of the following:
   a substantial real game vertical slice;
 - an automated bundle audit fails if multiplayer-only code leaks back into the
   shipped Solo packages.
-- the current Node 24 LTS and committed latest pnpm version install the frozen
+- the exact current Node 24.19.0 LTS and committed pnpm 11.21.0 install the frozen
   lockfile, and each private package is built and tested with current compatible
   TypeScript, Vite, Vitest, and declaration tooling.
 
@@ -145,8 +145,9 @@ pnpm build
 pnpm test -- --run
 ```
 
-The supported toolchain is the current Node 24 LTS line with the committed pnpm
-version. The repository remains a pnpm monorepo while the direct runtime is extracted.
+The supported contributor and release toolchain is exact Node 24.19.0 LTS with
+pnpm 11.21.0. Consumer engines retain the compatible Node 24 major range. The
+repository remains a pnpm monorepo while the direct runtime is extracted.
 Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before changing engine architecture.
 
 ## Upstream and license
