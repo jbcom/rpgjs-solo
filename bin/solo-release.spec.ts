@@ -2940,6 +2940,58 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		]);
 	});
 
+	it("treats tea 0.14.2 structured not-found output as an absent Gitea release", () => {
+		const expected = createExpectedRelease();
+		const adapter = createGiteaReleaseAdapter(
+			{
+				backup: {
+					apiRepository: "jbcom/rpgjs-solo",
+					repository: "https://git.example.test/jbcom/rpgjs-solo.git",
+				},
+				trainTag: expected.tag,
+			},
+			(program: string, args: string[]) => {
+				expect(program).toBe("tea");
+				expect(args).toContain(
+					`repos/jbcom/rpgjs-solo/releases/tags/${encodeURIComponent(expected.tag)}`,
+				);
+				return JSON.stringify({
+					message: "not found",
+					url: "https://git.example.test/api/swagger",
+				});
+			},
+		);
+
+		expect(adapter.getRelease(expected.tag)).toBeUndefined();
+	});
+
+	it.each([
+		{ message: "not found", tag_name: "foreign" },
+		{ message: "permission denied" },
+		{ id: 1, tag_name: "tag-only" },
+		[],
+		null,
+	])(
+		"rejects malformed successful tea 0.14.2 Gitea release output %#",
+		(value) => {
+			const expected = createExpectedRelease();
+			const adapter = createGiteaReleaseAdapter(
+				{
+					backup: {
+						apiRepository: "jbcom/rpgjs-solo",
+						repository: "https://git.example.test/jbcom/rpgjs-solo.git",
+					},
+					trainTag: expected.tag,
+				},
+				() => JSON.stringify(value),
+			);
+
+			expect(() => adapter.getRelease(expected.tag)).toThrow(
+				/malformed successful response/i,
+			);
+		},
+	);
+
 	it("resumes Gitea after GitHub succeeds without recreating either release", async () => {
 		const expected = createExpectedRelease();
 		const github = createReleaseAdapter("github", expected, { existing: true });
