@@ -31,7 +31,7 @@ const soloManifests = [
 	"packages/solo-vite/package.json",
 ];
 const releasePlan = readJson(
-	"docs/internal/releases/solo-beta29-solo1.plan.json",
+	"docs/internal/releases/solo-beta29-solo2.plan.json",
 );
 
 const currentSoloPhase = () => {
@@ -95,9 +95,15 @@ describe("RPGJS beta.29 adoption contract", () => {
 		expect(readText("packages/solo/README.md")).toContain(
 			"RPGJS `5.0.0-beta.29`",
 		);
+		for (const { id } of releasePlan.consumedChangesets) {
+			expect(
+				existsSync(join(rootDirectory, `.changeset/${id}.md`)),
+				id,
+			).toBe(phase === "source");
+		}
 		expect(
 			existsSync(join(rootDirectory, ".changeset/solo-beta29-baseline.md")),
-		).toBe(phase === "source");
+		).toBe(false);
 		expect(
 			existsSync(join(rootDirectory, ".changeset/solo-beta28-baseline.md")),
 		).toBe(false);

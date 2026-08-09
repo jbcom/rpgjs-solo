@@ -805,18 +805,28 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		);
 	});
 
-	it("pins one beta.29 Solo increment to the exact engine merge and release PR", () => {
+	it("pins the current beta.29 Solo increment to the exact source merge", () => {
 		const plan = loadSoloReleasePlan();
-		expect(plan.previousVersion).toBe(previousVersion);
-		expect(plan.version).toBe(version);
+		expect(plan.previousVersion).toBe("5.0.0-beta.29.solo.1");
+		expect(plan.version).toBe("5.0.0-beta.29.solo.2");
 		expect(plan.requiredSourceCommit).toBe(
-			"82a9e56d106e87c37df4602055a6a22ec22218dc",
+			"732d8fb540f89827443939f20d2d102531da8d17",
 		);
 		expect(plan.sourceBaseCommit).toBe(plan.requiredSourceCommit);
 		expect(plan.reviewEvidence.enginePullRequest.mergeCommit).toBe(
 			plan.requiredSourceCommit,
 		);
-		expect(plan.reviewEvidence.releasePullRequest.number).toBe(25);
+		expect(plan.reviewEvidence.enginePullRequest.number).toBe(26);
+		expect(plan.reviewEvidence.releasePullRequest.number).toBeNull();
+		expect(plan.requiredConsumer).toEqual({
+			package: "@arcade-cabinet/rpgjs-patches",
+			version: "0.3.0",
+			registry:
+				"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/",
+		});
+		expect(plan.consumedChangesets).toEqual([
+			expect.objectContaining({ id: "current-solo-canvasengine-2-2" }),
+		]);
 		expect(
 			plan.carriedChangesets.find(
 				({ id }: { id: string }) => id === "fair-studio-success-rates",
@@ -826,19 +836,15 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			inheritedReleaseDirectories,
 		);
 		expect(plan.sourceBinding.status).toBe("final");
-		expect(plan.reviewEvidence.status).toBe("final");
+		expect(plan.reviewEvidence.status).toBe("provisional");
 		expect(plan.reviewEvidence.independentReceipt.status).toBe("final");
 		expect(
 			plan.reviewEvidence.independentReceipt.orchestratorAssignment.status,
 		).toBe("final");
 		expect(plan.provenanceAttestation.status).toBe("final");
-		expect(assertFinalReleaseBindings(plan)).toEqual({
-			sourceBinding: "final",
-			reviewEvidence: "final",
-			independentReceipt: "final",
-			orchestratorAssignment: "final",
-			provenanceAttestation: "final",
-		});
+		expect(() => assertFinalReleaseBindings(plan)).toThrow(
+			/Release bindings are not final: reviewEvidence/i,
+		);
 	});
 
 	it("keeps reviewer trust outside the plan and authenticates a producer-disjoint detached assignment", () => {

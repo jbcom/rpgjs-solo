@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 2,
+  "releaseId": "solo-beta29-solo2",
+  "sourceBaseCommit": "732d8fb540f89827443939f20d2d102531da8d17",
+  "requiredSourceCommit": "732d8fb540f89827443939f20d2d102531da8d17",
+  "sourceBinding": {
+    "status": "final",
+    "requiredUpdate": "Satisfied by the exact canonical GitHub squash merge for PR #26 at 732d8fb540f89827443939f20d2d102531da8d17."
+  },
+  "reviewEvidence": {
+    "status": "provisional",
+    "requiredUpdate": "Replace the null release pull-request number with this transition PR and set reviewEvidence.status to final before apply. The independent reviewer creates the exact-merge ACCEPT receipt only after that release PR merges.",
+    "enginePullRequest": {
+      "repository": "jbcom/rpgjs-solo",
+      "number": 26,
+      "mergeCommit": "732d8fb540f89827443939f20d2d102531da8d17",
+      "minimumApprovals": 1,
+      "requiredChecks": [
+        "Analyze (actions)",
+        "Analyze (javascript-typescript)",
+        "CodeQL",
+        "CodeRabbit",
+        "tests (24.19.0)"
+      ]
+    },
+    "releasePullRequest": {
+      "repository": "jbcom/rpgjs-solo",
+      "number": null,
+      "mergeCommitBinding": "canonical-head",
+      "minimumApprovals": 1,
+      "requiredChecks": [
+        "Analyze (actions)",
+        "Analyze (javascript-typescript)",
+        "CodeQL",
+        "CodeRabbit",
+        "tests (24.19.0)"
+      ]
+    },
+    "independentReceipt": {
+      "status": "final",
+      "algorithm": "ed25519",
+      "orchestratorAssignment": {
+        "schemaVersion": 1,
+        "status": "final",
+        "trustRootPathEnvironment": "RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_PATH",
+        "trustRootKeyIdEnvironment": "RPGJS_SOLO_ORCHESTRATOR_TRUST_ROOT_KEY_ID",
+        "assignmentPathEnvironment": "RPGJS_SOLO_ORCHESTRATOR_ASSIGNMENT_PATH",
+        "requiredReviewerRole": "independent-release-auditor"
+      },
+      "requiredUpdate": "The policy is final. At execution, the supervisor supplies the mode-0600 trust root, its independently pinned key fingerprint, and root-signed detached assignment through the named environment variables. Only the assigned producer-disjoint reviewer may create the detached signed ACCEPT receipt after the exact release merge."
+    }
+  },
+  "provenanceAttestation": {
+    "status": "final",
+    "algorithm": "ed25519",
+    "keyId": "ca802fcb1362d39dc6a9ca139da6c23ec324b7427b3f09be54e99ad31e3f401a",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAqCA0VHjBwMLTB3eYdo3xn2nGn6Jl7yr9mqWo65pR5v0=\n-----END PUBLIC KEY-----\n",
+    "requiredUpdate": "Satisfied by the committed Ed25519 public key and SHA-256 SPKI key id; the matching mode-0600 private key remains outside the repository and is supplied only through RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE during pack."
+  },
+  "upstreamCommit": "2fab01fb8e93ad13902b07db28935f058b387213",
+  "previousVersion": "5.0.0-beta.29.solo.1",
+  "version": "5.0.0-beta.29.solo.2",
+  "registry": "https://git.local.jonbogaty.com/api/packages/jbcom/npm/",
+  "candidateDistTag": "beta29-solo2-candidate",
+  "promotionDistTag": "latest",
+  "trainTag": "solo-v5.0.0-beta.29.solo.2",
+  "canonical": {
+    "repository": "https://github.com/jbcom/rpgjs-solo.git",
+    "branch": "main"
+  },
+  "backup": {
+    "repository": "ssh://gitea@git.local.jonbogaty.com/jbcom/rpgjs-solo.git",
+    "apiRepository": "jbcom/rpgjs-solo"
+  },
+  "packages": [
+    {
+      "name": "@jbcom/rpgjs-solo",
+      "directory": "packages/solo",
+      "tag": "rpgjs-solo-v5.0.0-beta.29.solo.2"
+    },
+    {
+      "name": "@jbcom/rpgjs-solo-action-battle",
+      "directory": "packages/solo-action-battle",
+      "tag": "rpgjs-solo-action-battle-v5.0.0-beta.29.solo.2"
+    },
+    {
+      "name": "@jbcom/rpgjs-solo-renderer",
+      "directory": "packages/solo-renderer",
+      "tag": "rpgjs-solo-renderer-v5.0.0-beta.29.solo.2"
+    },
+    {
+      "name": "@jbcom/rpgjs-solo-vite",
+      "directory": "packages/solo-vite",
+      "tag": "rpgjs-solo-vite-v5.0.0-beta.29.solo.2"
+    }
+  ],
+  "inheritedReleaseDirectories": [
+    "packages/common",
+    "packages/server",
+    "packages/client",
+    "packages/action-battle",
+    "packages/studio",
+    "packages/tiledmap",
+    "packages/vite"
+  ],
+  "consumedChangesets": [
+    {
+      "id": "current-solo-canvasengine-2-2",
+      "sha256": "3534eff5e838742fd4264c2e353d7d71f7f8cbce19c764db567d26d529a566a5"
+    }
+  ],
+  "carriedChangesets": [
+    {
+      "id": "calm-music-package-boundaries",
+      "sha256": "e4799b002a1b521b431e03d18862fddd8c8dbc68768954e55d4b20f4fa62cd3a",
+      "introducedBy": "2a52b8ccbae6aae847f5ae3d45aa0a3cbe6e7905"
+    },
+    {
+      "id": "current-fork-toolchain",
+      "sha256": "f54c5ef17ee37fe4439eb94da95859105417ac6e0327f9f2e407d36e441d667c",
+      "introducedBy": "7d2c4a5c7d1112910149153f9f8fc584ae414c18"
+    },
+    {
+      "id": "fair-studio-success-rates",
+      "sha256": "7707eae5cafe061c115e0ac8c0498fdb65de0afe4eda74ff3adec5e7269338b6",
+      "introducedBy": "f0144127fe43c264638ca2699b8bfcd3cd55fea6"
+    },
+    {
+      "id": "firm-hotbar-authority",
+      "sha256": "18aa6bd8264df2a73b0a06aee16899c8da03a5e241617f5cadf2b329547d0b86",
+      "introducedBy": "4cdd009cd240691e1c8dd5225bf11ebb25381434"
+    },
+    {
+      "id": "gentle-items-remember",
+      "sha256": "d274be0d27ced99ee3b6f343807f9783581b8a8fdffe4fb7e3344bf54ec72381",
+      "introducedBy": "9fc0dcfaf44043ea6c6c5e62974fe982aa463c81"
+    },
+    {
+      "id": "quiet-ais-confirm",
+      "sha256": "318f31b9355d342c1d66d7d026e49d45f50ed767d5decbc41e7e44215e7f3fb0",
+      "introducedBy": "20204938941fef75e31f3e6bb41b125ca22d3e2c"
+    },
+    {
+      "id": "steady-targeting-controls",
+      "sha256": "dceb28ff764ea7d2de3deef6115515917833f0fe4925293aaa77a358e8096ff5",
+      "introducedBy": "880816aebde4941b75d978684f0f7ec72f95b1c8"
+    },
+    {
+      "id": "strict-tiled-static-paths",
+      "sha256": "4a7c9c0d61e588ce8bd2c1a4e2795c9a9877f200fff812d26b21b567f8cea57a",
+      "introducedBy": "c6ba03e211f70ed5e2c1a3699b76a1160bfc65aa"
+    },
+    {
+      "id": "warm-combat-feedback",
+      "sha256": "9ee13550118496f689d713727d5fdacfc043e1322a4ab250c00df2ce0fe72cc2",
+      "introducedBy": "98bdb58b4afafdea0685d69ae046f5eb7239def2"
+    },
+    {
+      "id": "wise-action-battle-guards",
+      "sha256": "0e3041a807b735c0adca81223de2e0c5323e466a7ef58a85aa60bfb7a0ad9cb9",
+      "introducedBy": "81f8ad075a404548f9ff3ed388d1ef0eda0f89bd"
+    }
+  ],
+  "requiredConsumer": {
+    "package": "@arcade-cabinet/rpgjs-patches",
+    "version": "0.3.0",
+    "registry": "https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/"
+  }
+}

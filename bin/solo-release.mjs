@@ -51,10 +51,10 @@ import {
 export const rootDirectory = dirname(dirname(fileURLToPath(import.meta.url)));
 export const defaultPlanPath = join(
 	rootDirectory,
-	"docs/internal/releases/solo-beta29-solo1.plan.json",
+	"docs/internal/releases/solo-beta29-solo2.plan.json",
 );
 const canonicalPlanRelativePath =
-	"docs/internal/releases/solo-beta29-solo1.plan.json";
+	"docs/internal/releases/solo-beta29-solo2.plan.json";
 const dependencyFields = [
 	"dependencies",
 	"devDependencies",
@@ -671,7 +671,10 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 	const assignment = independentReceipt?.orchestratorAssignment;
 	assert(
 		engineReview?.repository === "jbcom/rpgjs-solo" &&
-			engineReview.number === 20 &&
+			Number.isInteger(engineReview.number) &&
+			engineReview.number > 0 &&
+			/^[0-9a-f]{40}$/.test(engineReview.mergeCommit) &&
+			engineReview.mergeCommit === plan.requiredSourceCommit &&
 			Array.isArray(engineReview.requiredChecks) &&
 			Number.isInteger(engineReview.minimumApprovals) &&
 			engineReview.minimumApprovals >= 1,
