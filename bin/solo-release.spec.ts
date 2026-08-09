@@ -1006,7 +1006,16 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			plan.requiredSourceCommit,
 		);
 		expect(plan.reviewEvidence.enginePullRequest.number).toBe(26);
-		expect(plan.reviewEvidence.releasePullRequest.number).toBe(27);
+		expect(plan.reviewEvidence.releasePullRequest.number).toBeNull();
+		expect(plan.reviewEvidence.supersededRejectedReleasePullRequests).toEqual([
+			expect.objectContaining({
+				number: 27,
+				mergeCommit: "013d59e4d5d619ad11ceb3df405ea6d6a987ed94",
+				outcome: "rejected",
+				receiptCreated: false,
+				authority: "historical-only",
+			}),
+		]);
 		expect(plan.requiredConsumer).toEqual(currentPatchConsumer);
 		expect(plan.consumedChangesets).toEqual([
 			expect.objectContaining({ id: "current-solo-canvasengine-2-2" }),
@@ -1020,19 +1029,15 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			inheritedReleaseDirectories,
 		);
 		expect(plan.sourceBinding.status).toBe("final");
-		expect(plan.reviewEvidence.status).toBe("final");
-		expect(plan.reviewEvidence.independentReceipt.status).toBe("final");
+		expect(plan.reviewEvidence.status).toBe("provisional");
+		expect(plan.reviewEvidence.independentReceipt.status).toBe("provisional");
 		expect(
 			plan.reviewEvidence.independentReceipt.orchestratorAssignment.status,
-		).toBe("final");
+		).toBe("provisional");
 		expect(plan.provenanceAttestation.status).toBe("final");
-		expect(assertFinalReleaseBindings(plan)).toEqual({
-			sourceBinding: "final",
-			reviewEvidence: "final",
-			independentReceipt: "final",
-			orchestratorAssignment: "final",
-			provenanceAttestation: "final",
-		});
+		expect(() => assertFinalReleaseBindings(plan)).toThrow(
+			/release bindings are not final/i,
+		);
 	});
 
 	it("keeps reviewer trust outside the plan and authenticates a producer-disjoint detached assignment", () => {

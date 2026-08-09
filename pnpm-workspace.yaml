@@ -9,11 +9,12 @@ allowBuilds:
   workerd: true
   ws: true
 overrides:
+  esbuild: 0.28.2
   'brace-expansion@>=4.0.0 <5.0.9': 5.0.9
   'js-yaml@>=3.0.0 <3.15.1': 3.15.1
   'js-yaml@>=4.0.0 <4.3.1': 4.3.1
   'miniflare@3.20240718.0>undici': 6.28.0
-  'partykit>esbuild': 0.28.1
+  'partykit>esbuild': 0.28.2
 minimumReleaseAgeExclude:
   - '@canvasengine/compiler@2.2.0'
   - '@canvasengine/presets@2.2.0'
@@ -32,3 +33,4 @@ minimumReleaseAgeExclude:
   - tsx@4.23.11
   - vue@3.5.41
   - ws@8.21.3
+  - esbuild@0.28.2

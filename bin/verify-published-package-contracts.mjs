@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseNpmAuditReport } from "./command-report-contracts.mjs";
+import { npmChildEnvironment } from "./npm-child-environment.mjs";
 import {
 	inspectPortablePackageArchive,
 	packPackageArchive,
@@ -24,6 +25,7 @@ const packDirectory = join(temporaryDirectory, "pack");
 const consumerDirectory = join(temporaryDirectory, "consumer");
 const commandTimeoutMs = 300_000;
 const commandMaxBuffer = 32 * 1024 * 1024;
+const npmEnvironment = npmChildEnvironment();
 
 const run = (command, arguments_, options = {}) =>
 	execFileSync(command, arguments_, {
@@ -32,6 +34,7 @@ const run = (command, arguments_, options = {}) =>
 		stdio: "pipe",
 		timeout: commandTimeoutMs,
 		maxBuffer: commandMaxBuffer,
+		env: command === "npm" ? npmEnvironment : process.env,
 		...options,
 	});
 
@@ -114,6 +117,7 @@ try {
 			stdio: "pipe",
 			timeout: commandTimeoutMs,
 			maxBuffer: commandMaxBuffer,
+			env: npmEnvironment,
 		},
 	);
 	parseNpmAuditReport(auditResult, "External @rpgjs/vite consumer audit");

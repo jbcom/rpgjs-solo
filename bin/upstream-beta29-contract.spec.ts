@@ -117,6 +117,11 @@ describe("RPGJS beta.29 adoption contract", () => {
 
 	it("retains the current fork toolchain and public API gate", () => {
 		const rootManifest = readJson("package.json");
+		const cloudflareManifest = readJson(
+			"samples/cloudflare-mmorpg/package.json",
+		);
+		const workspacePolicy = readText("pnpm-workspace.yaml");
+		const lockfile = readText("pnpm-lock.yaml");
 		expect(rootManifest.engines).toEqual({ node: ">=24 <25" });
 		expect(rootManifest.packageManager).toBe("pnpm@11.21.0");
 		expect(rootManifest.devDependencies.vite).toBe("8.2.1");
@@ -128,6 +133,11 @@ describe("RPGJS beta.29 adoption contract", () => {
 			"2.2.0",
 		);
 		expect(rootManifest.devDependencies.vitest).toBe("4.1.10");
+		expect(cloudflareManifest.devDependencies.esbuild).toBe("0.28.2");
+		expect(workspacePolicy).toContain("  esbuild: 0.28.2");
+		expect(workspacePolicy).toContain("  'partykit>esbuild': 0.28.2");
+		expect(lockfile).toContain("  esbuild@0.28.2:");
+		expect(lockfile).not.toMatch(/(?:^|\s)esbuild@0\.28\.1(?:\s|:|\))/m);
 		const soloRenderer = readJson("packages/solo-renderer/package.json");
 		expect(soloRenderer.dependencies).toMatchObject({
 			"@canvasengine/presets": "2.2.0",

@@ -97,7 +97,9 @@ jobs:
 
       - name: Published package dependency contracts
         if: github.event_name != 'workflow_dispatch'
-        run: pnpm verify:published-package-contracts
+        run: |
+          node bin/verify-published-package-contracts.mjs
+          pnpm verify:published-package-contracts
 
       - name: Unit tests
         run: pnpm test --run

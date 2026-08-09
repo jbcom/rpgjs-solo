@@ -8,6 +8,17 @@ runtime, unit, and sample-build gates. This transaction advances the four
 the clean-consumer gate to `@arcade-cabinet/rpgjs-patches@0.3.0`,
 CanvasEngine 2.2.0, and Vite 8.2.1.
 
+Historical release-transition PR #27 merged as
+`013d59e4d5d619ad11ceb3df405ea6d6a987ed94`, but its independent post-merge
+audit rejected that exact merge: the Cloudflare MMORPG sample retained stale
+esbuild 0.28.1, and the documented
+`mise exec node@24.19.0 -- pnpm verify:published-package-contracts` route failed
+when pnpm's `manage-package-manager-versions` setting leaked into child npm.
+No independent ACCEPT receipt was created, and neither PR #27 nor its plan hash
+authorizes repaired bytes. The additive repair PR named in the plan is the only
+release-transition authority for this cohort after it passes exact-head review,
+merges, and receives a new producer-disjoint post-merge audit assignment.
+
 The machine-readable authority is
 [`solo-beta29-solo2.plan.json`](solo-beta29-solo2.plan.json). The historical
 Solo 1 plan and evidence are immutable records and are not inputs to this
