@@ -75,6 +75,8 @@ const fleetPatchCompatibility = new Map([
 		{
 			canvasengine: "2.2.0",
 			vite: "8.2.1",
+			registry:
+				"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/",
 			integrity:
 				"sha512-KEpLrX/xkKfUftLcPDS9i6VTSzsAqndYvybFBSoFnHPA20cLlyZ7KyhVZ+nq7zX7gVUWkxP6AuDwtJ8VvSO5oQ==",
 			shasum: "fe8e6ed84f31d06415c82a61fbc212e151664362",
@@ -92,6 +94,7 @@ const fleetPatchCompatibility = new Map([
 	],
 ]);
 const currentFleetPatchVersion = "0.3.0";
+const maximumFleetTarballBytes = 16 * 1024 * 1024;
 const fleetPatchSourceRepositories = {
 	github: {
 		repository: "jbcom/rpgjs-patches",
@@ -2800,12 +2803,38 @@ export const verifyRequiredConsumerAnonymousArtifact = async (
 	const declaredLength = response.headers?.get?.("content-length");
 	if (declaredLength !== null && declaredLength !== undefined)
 		assert(
-			/^\d+$/.test(declaredLength) && Number(declaredLength) <= 16 * 1024 * 1024,
+			/^\d+$/.test(declaredLength) &&
+				Number(declaredLength) <= maximumFleetTarballBytes,
 			"Fleet compatibility tarball declares an unsafe size",
 		);
-	const tarballBytes = Buffer.from(await response.arrayBuffer());
 	assert(
-		tarballBytes.length > 0 && tarballBytes.length <= 16 * 1024 * 1024,
+		response.body && typeof response.body.getReader === "function",
+		"Fleet compatibility tarball response is not a readable byte stream",
+	);
+	const reader = response.body.getReader();
+	const chunks = [];
+	let tarballLength = 0;
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			assert(
+				value instanceof Uint8Array,
+				"Fleet compatibility tarball stream returned a non-byte chunk",
+			);
+			tarballLength += value.byteLength;
+			if (tarballLength > maximumFleetTarballBytes) {
+				await reader.cancel();
+				throw new Error("Fleet compatibility tarball has an unsafe size");
+			}
+			chunks.push(Buffer.from(value));
+		}
+	} finally {
+		reader.releaseLock?.();
+	}
+	const tarballBytes = Buffer.concat(chunks, tarballLength);
+	assert(
+		tarballBytes.length > 0 && tarballBytes.length <= maximumFleetTarballBytes,
 		"Fleet compatibility tarball has an unsafe size",
 	);
 	assert(

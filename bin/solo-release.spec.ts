@@ -799,16 +799,22 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				field.slice("dist.".length) as "integrity" | "shasum" | "tarball"
 			];
 		};
+		const responseFor = (payload: Buffer, declaredLength = payload.length) => ({
+			ok: true,
+			status: 200,
+			url: requiredConsumer.tarball,
+			headers: { get: () => String(declaredLength) },
+			body: new ReadableStream({
+				start(controller) {
+					controller.enqueue(Uint8Array.from(payload));
+					controller.close();
+				},
+			}),
+		});
 		const fetcher = async (url: string, options: { redirect: string }) => {
 			expect(url).toBe(requiredConsumer.tarball);
 			expect(options.redirect).toBe("error");
-			return {
-				ok: true,
-				status: 200,
-				url,
-				headers: { get: () => String(bytes.length) },
-				arrayBuffer: async () => Uint8Array.from(bytes).buffer,
-			};
+			return responseFor(bytes);
 		};
 		expect(
 			await verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
@@ -824,12 +830,20 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
 				view,
 				command: currentPatchSourceCommand,
-				fetcher: async (url, options) => ({
-					...(await fetcher(url, options)),
-					arrayBuffer: async () => Uint8Array.from(Buffer.from("foreign")).buffer,
-				}),
+				fetcher: async (url, options) => {
+					await fetcher(url, options);
+					return responseFor(Buffer.from("foreign"));
+				},
 			}),
 		).rejects.toThrow(/anonymous tarball bytes differ from the reviewed release plan/i);
+		await expect(
+			verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
+				view,
+				command: currentPatchSourceCommand,
+				fetcher: async () =>
+					responseFor(Buffer.alloc(16 * 1024 * 1024 + 1), 1),
+			}),
+		).rejects.toThrow(/tarball has an unsafe size/i);
 	});
 
 	it("binds both patch source tags and non-draft releases before packing", () => {
@@ -868,6 +882,19 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					: currentPatchSourceCommand(program, args),
 			),
 		).toThrow(/GitHub fleet patch release differs/i);
+		expect(() =>
+			assertRequiredConsumerSourceReleaseEvidence(plan, (program, args) =>
+				program === "tea"
+					? JSON.stringify({
+							tag_name: "v0.3.0",
+							target_commitish: currentPatchConsumer.sourceCommit,
+							html_url: currentPatchConsumer.giteaRelease,
+							draft: true,
+							prerelease: false,
+						})
+					: currentPatchSourceCommand(program, args),
+			),
+		).toThrow(/Gitea fleet patch release differs/i);
 	});
 
 	it("fails closed unless the executing toolchain is exact Node 24.19.0 and pnpm 11.21.0", () => {
@@ -1216,6 +1243,9 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		);
 		expect(updatedHistory).toContain(`## ${version}`);
 		expect(updatedHistory).toContain(retainedHistory.slice(retainedHistory.indexOf("##")));
+		expect(updatedHistory.indexOf(`## ${version}`)).toBeLessThan(
+			updatedHistory.indexOf(`## ${previousVersion}`),
+		);
 		for (const [id, source] of Object.entries(fixture.carriedSources)) {
 			expect(
 				readFileSync(join(fixture.root, `.changeset/${id}.md`), "utf8"),

@@ -101,6 +101,12 @@ describe("RPGJS beta.29 adoption contract", () => {
 				id,
 			).toBe(phase === "source");
 		}
+		for (const { id } of releasePlan.carriedChangesets) {
+			expect(
+				existsSync(join(rootDirectory, `.changeset/${id}.md`)),
+				id,
+			).toBe(true);
+		}
 		expect(
 			existsSync(join(rootDirectory, ".changeset/solo-beta29-baseline.md")),
 		).toBe(false);
