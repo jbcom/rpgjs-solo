@@ -24,6 +24,7 @@
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
     "benchmark": "tsx benchmarks/cli/benchmark.ts",
+    "benchmark:smoke": "tsx benchmarks/cli/benchmark.ts smoke",
     "benchmark:all": "tsx benchmarks/cli/benchmark.ts all",
     "benchmark:1000": "tsx benchmarks/cli/benchmark.ts 1000",
     "benchmark:10000": "tsx benchmarks/cli/benchmark.ts 10000",
