@@ -106,17 +106,21 @@ prose is only a summary and grants no implementation authority by itself.
 3. Add the ledger-prescribed focused Solo tests for class restoration, local
    world adjacency/border transfers, HUD continuity, icon aliasing, scene and
    terrain readiness, graphic bounds, and direct-command action-bar behavior.
-   Add its negative boundary tests for every excluded behavior.
+   Add its negative boundary tests for every excluded behavior. Add a new
+   Solo-owned Changeset that names all four `@jbcom/rpgjs-solo*` packages and
+   describes only the behavior actually implemented; upstream release
+   bookkeeping cannot substitute for this record.
 4. Run frozen install, build, complete unit/type/API/boundary gates, packed
    ESM/CJS/declaration consumers, the matching starter branch, and a silent
    rendered browser interaction under exact Node 24.19.0.
 5. Obtain a producer-disjoint independent review and merge the exact reviewed
    tree into public GitHub `main`; allow the checked GitHub-to-Gitea backup to
    converge without making Gitea a development authority.
-6. Create one coherent four-package Solo prerelease derived from beta.30. The
-   final suffix is selected by the release transaction and is not guessed in
-   this audit. Publish only byte-identical reviewed artifacts, tags, releases,
-   registry metadata, and tarballs.
+6. Bind the exact hash of that Solo-owned Changeset into the reviewed release
+   plan, then create one coherent four-package Solo prerelease derived from
+   beta.30. The final suffix is selected by the release transaction and is not
+   guessed in this audit. Publish only byte-identical reviewed artifacts, tags,
+   releases, registry metadata, and tarballs.
 
 Quest for the Crown may adopt the cohort only after this complete release gate.
 The currently published `5.0.0-beta.29.solo.2` packages are newer than Quest's
