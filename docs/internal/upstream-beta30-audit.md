@@ -14,8 +14,10 @@ RPGJS Solo audits upstream `RSamaium/RPG-JS:v5` from
 4. `5a306c9b` — upstream beta package metadata and changelogs.
 
 The tracking branch may fast-forward to the exact upstream commit only after
-the fork workflow containment gate passes. The product branch receives only
-the deliberately selected pieces below.
+the inherited publish workflow is confirmed disabled. The fork's exact-SHA CI
+then validates that public tracking ref, and no product-branch adoption may
+begin unless that run passes. The product branch receives only the deliberately
+selected pieces below.
 
 ## Classification
 
@@ -66,13 +68,15 @@ the deliberately selected pieces below.
 
 ## Required implementation sequence
 
-1. Fast-forward public GitHub `v5` exactly from `2fab01fb` to `5a306c9b` only
-   after confirming the inherited publish workflow remains disabled and the
-   exact-SHA fork workflow passes.
-2. Apply the three upstream implementation commits to a focused feature branch
-   based on canonical GitHub `main`; resolve conflicts by preserving the Solo
-   runtime and current toolchain. Regenerate the lockfile rather than choosing
-   either side.
+1. Confirm the inherited publish workflow remains disabled, then fast-forward
+   public GitHub `v5` exactly from `2fab01fb` to `5a306c9b`. Dispatch the fork
+   workflow against that exact SHA and block product work until it passes.
+2. Port only the approved files and hunks from the three upstream implementation
+   commits to a focused feature branch based on canonical GitHub `main`;
+   preserve the Solo runtime and current toolchain. Keep rooms, sockets,
+   synchronization, transports, server-owned execution, and upstream release
+   metadata out of the product branch unless a separate review explicitly
+   approves them. Regenerate the lockfile rather than choosing either side.
 3. Add focused Solo tests for class restoration, local map transitions,
    renderer bounds/hitboxes, terrain readiness, and direct-command action-bar
    behavior. Add negative production-bundle tests for every excluded category.
