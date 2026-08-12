@@ -1,5 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -52,6 +54,27 @@ const expectedArchivedIds = [
 const expectedArchiveSha256 =
 	"9a7e5fdf00024a0bdd1f8033da9f607173f474e36cc6c78c953fc0ae10a806f6";
 
+const changesetStateSha256 = () => {
+	const changesetDirectory = join(rootDirectory, ".changeset");
+	const files = [
+		"pre.json",
+		...readdirSync(changesetDirectory)
+			.filter((name) => name.endsWith(".md"))
+			.map((name) => name),
+		...readdirSync(join(changesetDirectory, "pre"))
+			.filter((name) => name.endsWith(".md"))
+			.map((name) => `pre/${name}`),
+	].sort();
+	const hash = createHash("sha256");
+	for (const file of files) {
+		hash.update(file);
+		hash.update("\0");
+		hash.update(readFileSync(join(changesetDirectory, file)));
+		hash.update("\0");
+	}
+	return hash.digest("hex");
+};
+
 describe("Changesets 3 repository migration", () => {
 	it("uses the current v3 CLI and schema", () => {
 		const manifest = readJson("package.json");
@@ -89,5 +112,40 @@ describe("Changesets 3 repository migration", () => {
 			)
 			.map((name) => name.slice(0, -3));
 		expect(pendingIds).not.toEqual(expect.arrayContaining(expectedArchivedIds));
+	});
+
+	it("runs the real v3 status command without mutating prerelease state", () => {
+		const outputDirectory = mkdtempSync(
+			join(tmpdir(), "rpgjs-solo-changesets3-status-"),
+		);
+		const outputPath = join(outputDirectory, "status.json");
+		const before = changesetStateSha256();
+
+		try {
+			const result = spawnSync(
+				process.execPath,
+				[
+					join(rootDirectory, "node_modules/@changesets/cli/bin.js"),
+					"status",
+					"--output",
+					outputPath,
+				],
+				{
+					cwd: rootDirectory,
+					encoding: "utf8",
+					timeout: 30_000,
+				},
+			);
+			expect(result.status, result.stderr || result.stdout).toBe(0);
+			const plan = JSON.parse(readFileSync(outputPath, "utf8"));
+			expect(plan.changesets).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ id: "tidy-solo-changesets-three" }),
+				]),
+			);
+			expect(changesetStateSha256()).toBe(before);
+		} finally {
+			rmSync(outputDirectory, { recursive: true, force: true });
+		}
 	});
 });
