@@ -55,6 +55,9 @@ prose is only a summary and grants no implementation authority by itself.
 - A one-frame Studio icon may expose `textures.default` as the same texture
   object as `textures.stand`; this is local spritesheet normalization, not
   permission to adopt remote Studio assets or GUI transport.
+
+### Tracking evidence only
+
 - The exact upstream package versions, changelogs, changesets, and public API
   snapshots are bookkeeping evidence for the audited candidate baseline only.
   They are excluded from the product port and do not version the four private
