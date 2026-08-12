@@ -62,7 +62,7 @@
   "devDependencies": {
     "@canvasengine/compiler": "2.2.0",
     "@canvasengine/presets": "2.2.0",
-    "@changesets/cli": "2.31.1",
+    "@changesets/cli": "3.0.0",
     "@types/node": "24.13.3",
     "@typescript/typescript6": "6.0.2",
     "canvasengine": "2.2.0",

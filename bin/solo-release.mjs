@@ -865,17 +865,26 @@ const walkPackageJson = (directory, results = []) => {
 	return results;
 };
 
-const pendingChangesetIds = (root) => {
+export const pendingChangesetIds = (root) => {
 	const prePath = join(root, ".changeset/pre.json");
-	const preConsumed = existsSync(prePath)
+	const embeddedConsumed = existsSync(prePath)
 		? new Set(readJson(prePath).changesets ?? [])
+		: new Set();
+	const archiveDirectory = join(root, ".changeset/pre");
+	const archivedConsumed = existsSync(archiveDirectory)
+		? new Set(
+				readdirSync(archiveDirectory)
+					.filter((name) => name.endsWith(".md"))
+					.map((name) => name.slice(0, -3)),
+			)
 		: new Set();
 	return readdirSync(join(root, ".changeset"))
 		.filter(
 			(name) =>
 				name.endsWith(".md") &&
 				!standardChangesetDocuments.has(name) &&
-				!preConsumed.has(name.slice(0, -3)),
+				!embeddedConsumed.has(name.slice(0, -3)) &&
+				!archivedConsumed.has(name.slice(0, -3)),
 		)
 		.map((name) => name.slice(0, -3));
 };

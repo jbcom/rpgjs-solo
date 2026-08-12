@@ -51,6 +51,7 @@ import {
 	main,
 	nextPromotionAction,
 	normalizeCommandOutput,
+	pendingChangesetIds,
 	pnpmView,
 	prepareReleaseEvidence,
 	publishCandidateCohort,
@@ -228,6 +229,50 @@ afterEach(() => {
 
 const changeset = (releases: string[], summary: string) =>
 	`---\n${releases.map((name) => `"${name}": patch`).join("\n")}\n---\n\n${summary}\n`;
+
+describe("Changesets prerelease-state boundary", () => {
+	it("treats v3 archived prerelease documents as consumed while retaining new pending documents", () => {
+		const root = mkdtempSync(join(tmpdir(), "changesets-v3-state-"));
+		temporaryDirectories.push(root);
+		mkdirSync(join(root, ".changeset/pre"), { recursive: true });
+		writeJson(join(root, ".changeset/pre.json"), {
+			mode: "pre",
+			tag: "beta",
+		});
+		writeFileSync(join(root, ".changeset/pre/consumed.md"), "historical\n");
+		writeFileSync(
+			join(root, ".changeset/consumed.md"),
+			changeset(["@rpgjs/client"], "Must not be pending twice."),
+		);
+		writeFileSync(
+			join(root, ".changeset/pending.md"),
+			changeset(["@jbcom/rpgjs-solo"], "Still pending."),
+		);
+
+		expect(pendingChangesetIds(root)).toEqual(["pending"]);
+	});
+
+	it("continues to recognize the v2 embedded consumed-id shape during migration", () => {
+		const root = mkdtempSync(join(tmpdir(), "changesets-v2-state-"));
+		temporaryDirectories.push(root);
+		mkdirSync(join(root, ".changeset"), { recursive: true });
+		writeJson(join(root, ".changeset/pre.json"), {
+			mode: "pre",
+			tag: "beta",
+			changesets: ["consumed"],
+		});
+		writeFileSync(
+			join(root, ".changeset/consumed.md"),
+			changeset(["@rpgjs/client"], "Already consumed."),
+		);
+		writeFileSync(
+			join(root, ".changeset/pending.md"),
+			changeset(["@jbcom/rpgjs-solo"], "Still pending."),
+		);
+
+		expect(pendingChangesetIds(root)).toEqual(["pending"]);
+	});
+});
 
 function createFixture() {
 	const root = mkdtempSync(join(tmpdir(), "solo-release-fixture-"));
