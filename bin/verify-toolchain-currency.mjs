@@ -15,14 +15,6 @@ const commandTimeoutMs = 60_000;
 const commandMaxBuffer = 32 * 1024 * 1024;
 
 const intentionalMajorBoundaries = new Map([
-	[
-		"@changesets/cli",
-		[
-			2,
-			3,
-			"Changesets 3 prerelease-state migration and custom Solo release-verifier boundary",
-		],
-	],
 	["@babel/generator", [7, 8, "Babel 8 migration boundary"]],
 	["@babel/parser", [7, 8, "Babel 8 migration boundary"]],
 	["@babel/traverse", [7, 8, "Babel 8 migration boundary"]],
