@@ -37,6 +37,8 @@ describe("fork-owned CI boundary", () => {
 		}
 		for (const requiredStep of [
 			"Dependency currency",
+			"Fetch audited beta.30 source objects",
+			"Upstream beta.30 disposition",
 			"Workspace dependency audit",
 			"Build",
 			"Package archive boundaries",
@@ -56,6 +58,15 @@ describe("fork-owned CI boundary", () => {
 			).toBe(true);
 		}
 		const stepNames = job.steps.map((step: { name?: string }) => step.name);
+		expect(stepNames.indexOf("Dependency currency")).toBeLessThan(
+			stepNames.indexOf("Fetch audited beta.30 source objects"),
+		);
+		expect(stepNames.indexOf("Fetch audited beta.30 source objects")).toBeLessThan(
+			stepNames.indexOf("Upstream beta.30 disposition"),
+		);
+		expect(stepNames.indexOf("Upstream beta.30 disposition")).toBeLessThan(
+			stepNames.indexOf("Workspace dependency audit"),
+		);
 		expect(stepNames.indexOf("Build")).toBeLessThan(
 			stepNames.indexOf("Package archive boundaries"),
 		);
@@ -93,5 +104,23 @@ describe("fork-owned CI boundary", () => {
 		expect(source).toContain("refs/remotes/origin/v5");
 		expect(source).toContain("refs/remotes/upstream/v5");
 		expect(source).toContain("https://github.com/RSamaium/RPG-JS.git");
+	});
+
+	it("keeps the audited beta.30 source reachable without freezing the tracking ref", () => {
+		const { workflow } = readWorkflow(".github/workflows/fork-ci.yml");
+		const sourceFetchStep = workflow.jobs.tests.steps.find(
+			(step: { name?: string }) => step.name === "Fetch audited beta.30 source objects",
+		);
+		expect(sourceFetchStep.run).toContain(
+			"5a306c9bd0caa1b65f5c73607eb0de7e60111078^{commit}",
+		);
+		expect(sourceFetchStep.run).toContain("git merge-base --is-ancestor");
+		expect(sourceFetchStep.run).not.toContain(
+			'test "$(git rev-parse refs/remotes/origin/v5)" =',
+		);
+		const dispositionStep = workflow.jobs.tests.steps.find(
+			(step: { name?: string }) => step.name === "Upstream beta.30 disposition",
+		);
+		expect(dispositionStep.run).toBe("pnpm verify:upstream-beta30-disposition");
 	});
 });

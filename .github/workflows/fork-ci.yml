@@ -67,6 +67,21 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         run: pnpm verify:toolchain-currency
 
+      - name: Fetch audited beta.30 source objects
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          git fetch --no-tags origin \
+            +refs/heads/v5:refs/remotes/origin/v5
+          git cat-file -e \
+            "5a306c9bd0caa1b65f5c73607eb0de7e60111078^{commit}"
+          git merge-base --is-ancestor \
+            "5a306c9bd0caa1b65f5c73607eb0de7e60111078" \
+            refs/remotes/origin/v5
+
+      - name: Upstream beta.30 disposition
+        if: github.event_name != 'workflow_dispatch'
+        run: pnpm verify:upstream-beta30-disposition
+
       - name: Workspace dependency audit
         run: pnpm audit --audit-level=low
 

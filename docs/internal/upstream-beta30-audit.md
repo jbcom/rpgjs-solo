@@ -10,14 +10,27 @@ RPGJS Solo audits upstream `RSamaium/RPG-JS:v5` from
 1. `e0bba296` — class restoration, Studio HUD/map changes, and an inherited
    Action Battle action bar;
 2. `d005fddb` — Studio terrain readiness and chunk-rendering work;
-3. `aed4d3ed` — scaled sprite bounds and character hitbox work; and
+3. `aed4d3ed` — scaled visible graphic bounds and component placement; and
 4. `5a306c9b` — upstream beta package metadata and changelogs.
 
-The tracking branch may fast-forward to the exact upstream commit only after
-the inherited publish workflow is confirmed disabled. The fork's exact-SHA CI
-then validates that public tracking ref, and no product-branch adoption may
-begin unless that run passes. The product branch receives only the deliberately
-selected pieces below.
+The inherited publish workflow was confirmed disabled and public GitHub `v5`
+was fast-forwarded exactly to `5a306c9b`. Exact-SHA Fork CI run
+[`31594915618`](https://github.com/jbcom/rpgjs-solo/actions/runs/31594915618)
+proved that requested fork and upstream identity and completed a frozen install,
+then failed the unmodified upstream tree's workspace audit with 69 advisories
+(1 critical, 33 high, 26 moderate, and 9 low). That is valid red source evidence:
+it permits recording the immutable tracking source but denies product adoption.
+The maintained GitHub mainline owns dependency repair and must pass its complete
+gate together with the deliberately selected ports.
+
+The exhaustive source authority is
+[`upstream-beta30-disposition.json`](./upstream-beta30-disposition.json). Its
+executable verifier reconstructs all four Git objects, exhaustively matches 64
+per-commit path touches across 63 unique paths, verifies every blob SHA-256,
+and binds each behavior to a disposition, additive Solo target, and focused or
+negative validation contract. It contains 21 `PORT_REQUIRED`, 12 `TEST_ONLY`,
+30 `BOOKKEEPING_ONLY`, one `REJECTED`, and zero `PORTED` path touches. This
+prose is only a summary and grants no implementation authority by itself.
 
 ## Classification
 
@@ -34,23 +47,32 @@ selected pieces below.
   does not introduce an HTTP, socket, room, or synchronization dependency.
 - Pure Studio terrain-readiness and chunk-rendering transforms are reusable as
   authoring/rendering behavior. Readiness must resolve from local loaded data.
-- Scaled sprite-alpha bounds and character-hitbox geometry are reusable as
-  renderer utilities. They must be consumed through the existing Solo
-  renderer boundary and preserve Pixi/CanvasEngine compatibility.
+- Intrinsic source-texture dimensions, alpha-bound refresh, scaled visible
+  graphic bounds (including mirrored and nonuniform scale), full-frame
+  fallback, and character-component placement are reusable renderer concepts.
+  They change graphic presentation bounds, not gameplay collision hitboxes,
+  and must preserve the Solo CanvasEngine renderer boundary.
+- A one-frame Studio icon may expose `textures.default` as the same texture
+  object as `textures.stand`; this is local spritesheet normalization, not
+  permission to adopt remote Studio assets or GUI transport.
 - The exact upstream package versions, changelogs, changesets, and public API
-  updates are audit evidence for the adopted baseline. They do not version the
-  four private Solo packages by themselves.
+  snapshots are bookkeeping evidence for the audited candidate baseline only.
+  They are excluded from the product port and do not version the four private
+  Solo packages.
 
 ### Adaptable
 
-- The inherited Action Battle hotbar is a useful UI and input reference, but
+- The inherited Action Battle-specific action bar is a useful UI and input
+  reference and remains distinct from upstream's generic persistent hotbar.
   Solo Action Battle owns command availability, targeting, execution, pause,
-  and modal input. Port its presentation and keyboard concepts only through
-  the direct Solo command surface; do not reintroduce `RpgPlayer` server
-  mutation or client/server messages.
+  and modal input. Port action-bar presentation and keyboard concepts only
+  through the direct Solo command surface; do not reintroduce `RpgPlayer`,
+  server-owned action execution, remote GUI lifecycle, or client/server
+  messages.
 - Studio HUD display and reactive parameter updates may be retained as local
   view projection. Rendering reads the authoritative local graph; it cannot
-  become a second synchronized source of gameplay truth.
+  become a second synchronized source of gameplay truth. Upstream server GUI
+  icon serialization is test evidence only and is not a Solo transport shape.
 - Map-transition helpers may be adapted into the Solo runtime only through
   direct local lifecycle calls with save/replay identity preserved.
 
@@ -62,24 +84,29 @@ selected pieces below.
 - Upstream room broadcasts, player sync calls, remote HUD messages, and
   server-owned Action Battle execution are compatibility source only. Version
   parity is not authority to include them.
+- The concrete hosted Studio playground project/map UUIDs and
+  `rpgjs.studio` API/assets endpoints are rejected; local examples and runtime
+  defaults must not embed them.
 - The upstream release commit cannot replace the fork's exact Node 24.19.0,
   pnpm 11.21.0, Vite/CanvasEngine cohort, public Solo packages, release
   transaction, GitHub-first authority, Gitea backup, or private-registry proof.
 
 ## Required implementation sequence
 
-1. Confirm the inherited publish workflow remains disabled, then fast-forward
-   public GitHub `v5` exactly from `2fab01fb` to `5a306c9b`. Dispatch the fork
-   workflow against that exact SHA and block product work until it passes.
-2. Port only the approved files and hunks from the three upstream implementation
-   commits to a focused feature branch based on canonical GitHub `main`;
-   preserve the Solo runtime and current toolchain. Keep rooms, sockets,
-   synchronization, transports, server-owned execution, and upstream release
-   metadata out of the product branch unless a separate review explicitly
-   approves them. Regenerate the lockfile rather than choosing either side.
-3. Add focused Solo tests for class restoration, local map transitions,
-   renderer bounds/hitboxes, terrain readiness, and direct-command action-bar
-   behavior. Add negative production-bundle tests for every excluded category.
+1. Preserve the completed exact public `v5` fast-forward and run
+   `31594915618` as immutable source evidence. Do not rewrite upstream tracking
+   history merely to make its dependency audit green.
+2. Repair the maintained mainline dependency/toolchain graph, then implement
+   only the 21 `PORT_REQUIRED` touches and translate the 12 `TEST_ONLY` touches
+   through the exact additive targets and contracts in the disposition ledger.
+   Keep the rejected hosted configuration, all excluded rooms/sync/transports,
+   server-owned execution, and all 30 bookkeeping touches out of the product
+   branch. Regenerate the lockfile from maintained main rather than choosing
+   either side wholesale.
+3. Add the ledger-prescribed focused Solo tests for class restoration, local
+   world adjacency/border transfers, HUD continuity, icon aliasing, scene and
+   terrain readiness, graphic bounds, and direct-command action-bar behavior.
+   Add its negative boundary tests for every excluded behavior.
 4. Run frozen install, build, complete unit/type/API/boundary gates, packed
    ESM/CJS/declaration consumers, the matching starter branch, and a silent
    rendered browser interaction under exact Node 24.19.0.
