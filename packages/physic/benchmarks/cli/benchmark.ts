@@ -162,6 +162,28 @@ function benchmarkProjectiles(): void {
   benchmarkProjectileHits(1000, 25);
 }
 
+/**
+ * Deterministic package-runner smoke used by the repository contract suite.
+ * It deliberately avoids timing assertions while proving that the package-local
+ * tsx executable can load the real benchmark graph and execute one physics step.
+ */
+function benchmarkSmoke(): void {
+  const engine = new PhysicsEngine({ timeStep: 1 / 60 });
+  const entity = engine.createEntity({
+    position: { x: 0, y: 0 },
+    radius: 4,
+    mass: 1,
+    velocity: { x: 1, y: 0 },
+  });
+
+  engine.step();
+  if (!Number.isFinite(entity.position.x)) {
+    throw new Error('Physics benchmark runner produced a non-finite position');
+  }
+
+  console.log('Physics benchmark runner smoke: PASS');
+}
+
 function benchmarkProjectileCount(count: number, iterations: number): void {
   const engine = new PhysicsEngine({ timeStep: 1 / 60 });
   const projectiles = new ProjectileSystem(engine);
@@ -235,6 +257,9 @@ const args = process.argv.slice(2);
 const command = args[0];
 
 switch (command) {
+  case 'smoke':
+    benchmarkSmoke();
+    break;
   case '1000':
     benchmark1000Entities();
     break;
