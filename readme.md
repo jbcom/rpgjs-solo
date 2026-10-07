@@ -65,9 +65,9 @@ publishable from the inherited RPGJS package graph:
 | `@jbcom/rpgjs-solo-vite` | Production-bundle rejection of room/sync/socket/prediction regressions |
 
 All Solo packages are versioned against the exact RPGJS beta baseline and
-publish only to the Gitea `jbcom` npm registry. Their direct runtime and build
+publish to the public npmjs registry. Their direct runtime and build
 dependencies are exact versions, and every release rechecks them against the
-current compatible upstream releases. A private Solo package is not
+current compatible upstream releases. A Solo package is not
 feature-complete while that check reports a knowingly stale direct dependency.
 
 After the Node 24 build, tests, Solo boundary, and
@@ -96,7 +96,7 @@ A Solo runtime release must prove all of the following:
   a substantial real game vertical slice;
 - an automated bundle audit fails if multiplayer-only code leaks back into the
   shipped Solo packages.
-- the exact current Node 24.19.0 LTS and committed pnpm 11.21.0 install the frozen
+- the supported Node 24 or 26 and committed pnpm 11.21.0 install the frozen
   lockfile, and each private package is built and tested with current compatible
   TypeScript, Vite, Vitest, and declaration tooling.
 
@@ -108,7 +108,7 @@ The accepted architecture decision is recorded in
 - `v5` mirrors the upstream default branch and is not the product branch.
 - GitHub `main` is the canonical RPGJS Solo product branch.
 - changes target GitHub `main` through reviewed feature branches.
-- Gitea is a checked downstream backup and the private npm registry.
+- Packages use the public npmjs registry.
 - upstream changes are first audited on `v5`, then deliberately ported or
   merged into `main`; transport/MMORPG changes are not inherited by default.
 
@@ -145,7 +145,7 @@ pnpm build
 pnpm test -- --run
 ```
 
-The supported contributor and release toolchain is exact Node 24.19.0 LTS with
+The supported contributor and release toolchain is Node 24 or 26 with
 pnpm 11.21.0. Consumer engines retain the compatible Node 24 major range. The
 repository remains a pnpm monorepo while the direct runtime is extracted.
 Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before changing engine architecture.
@@ -154,8 +154,7 @@ Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before changing engine architecture.
 
 RPGJS Solo is based on [RSamaium/RPG-JS](https://github.com/RSamaium/RPG-JS)
 and preserves its MIT license and attribution. The public
-[GitHub fork](https://github.com/jbcom/rpgjs-solo) is the product home; Gitea
-keeps a checked downstream backup and serves the private package registry. This
+[GitHub fork](https://github.com/jbcom/rpgjs-solo) is the product home. Packages use the public npmjs registry. This
 project does not submit changes back to upstream.
 
 MIT. Free for commercial use.

@@ -34,11 +34,12 @@
     "typecheck": "tsc --noEmit"
   },
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24 <25 || >=26 <27"
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://git.local.jonbogaty.com/api/packages/jbcom/npm/"
+    "registry": "https://registry.npmjs.org/",
+    "provenance": true
   },
   "peerDependencies": {
     "vite": "8.2.1"
@@ -49,5 +50,6 @@
     "vite": "8.2.1",
     "vite-plugin-dts": "5.0.3",
     "vitest": "4.1.10"
-  }
+  },
+  "author": "Jon Bogaty <jon@jonbogaty.com>"
 }

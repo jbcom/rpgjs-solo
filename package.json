@@ -34,7 +34,8 @@
     "verify:toolchain-currency": "node bin/verify-toolchain-currency.mjs",
     "verify:upstream-beta30-disposition": "node bin/verify-upstream-beta30-disposition.mjs",
     "test": "vitest",
-    "test:types": "vitest --typecheck run packages/action-battle/src/public-api-types.spec.ts packages/client/src/public-api-types.spec.ts packages/common/src/foundation.spec.ts packages/server/tests/server-api-types.spec.ts"
+    "test:types": "vitest --typecheck run packages/action-battle/src/public-api-types.spec.ts packages/client/src/public-api-types.spec.ts packages/common/src/foundation.spec.ts packages/server/tests/server-api-types.spec.ts",
+    "verify": "pnpm verify:toolchain-currency && pnpm verify:upstream-beta30-disposition && pnpm audit --audit-level=low && pnpm build && pnpm api:boundary && pnpm test:types && pnpm verify:solo-boundary && pnpm verify:package-archive-boundaries && pnpm verify:solo-package-contracts && pnpm verify:solo-consumer && pnpm verify:published-package-contracts && pnpm test --run && pnpm --dir samples/cloudflare-mmorpg test && pnpm --dir playground/games/studio test && pnpm --filter '@rpgjs/playground-*' --filter sample run build"
   },
   "author": "Samuel Ronce",
   "license": "MIT",
@@ -55,7 +56,7 @@
   ],
   "packageManager": "pnpm@11.21.0",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24 <25 || >=26 <27"
   },
   "private": true,
   "type": "module",

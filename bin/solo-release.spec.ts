@@ -41,7 +41,6 @@ import {
 	assertReleaseToolchain,
 	assertReviewedCanonicalMain,
 	assertReviewedPlanSource,
-	createGiteaReleaseAdapter,
 	createGitHubReleaseAdapter,
 	createProvenanceManifest,
 	createPublishedConsumerContract,
@@ -66,37 +65,38 @@ import {
 	verifyRequiredConsumerAnonymousArtifact,
 	verifyExternalOrchestratorAssignment,
 	verifyIndependentReviewReceipt,
-	withAnonymousFleetRegistry,
+	withAnonymousPatchRegistry,
 	withEphemeralNpmAuth,
 } from "./solo-release.mjs";
 
-const registry = "https://git.local.jonbogaty.com/api/packages/jbcom/npm/";
+const registry = "https://registry.npmjs.org/";
 const currentPatchConsumer = {
-	package: "@arcade-cabinet/rpgjs-patches",
-	version: "0.3.0",
+	package: "rpgjs-patches",
+	version: "0.4.0",
+	range: "^0.4.0",
 	registry:
-		"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/",
+		"https://registry.npmjs.org/",
 	integrity:
-		"sha512-KEpLrX/xkKfUftLcPDS9i6VTSzsAqndYvybFBSoFnHPA20cLlyZ7KyhVZ+nq7zX7gVUWkxP6AuDwtJ8VvSO5oQ==",
-	shasum: "fe8e6ed84f31d06415c82a61fbc212e151664362",
+		"sha512-QvuonXRzBrEDbPJxResH2x6LcbdBvpY6mi7cF0ArC224u8bCQ+Vl32q3R721a7ttmAR7ff6qYU4a9X1mF9JDBA==",
+	shasum: "d401481b2ce41834bdf970f233f6e6d68a55cfcd",
 	tarball:
-		"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/%40arcade-cabinet%2Frpgjs-patches/-/0.3.0/rpgjs-patches-0.3.0.tgz",
+		"https://registry.npmjs.org/rpgjs-patches/-/rpgjs-patches-0.4.0.tgz",
 	tarballSha256:
-		"09ee17ac365c08e96487a6e59da349bf7fe358f81683b0cc3bb1010338c122b3",
-	sourceCommit: "432cc108b1b6229577d907611487c315ad03e8f8",
-	tagObject: "78677ce7379dcedac13dc19b5aa529017fb0ab36",
-	giteaRelease:
-		"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0",
+		"c223c34a6eda57e1b024095eac244fe3ad1458a5228fcb0002a5d1790b90c62e",
+	sourceCommit: "7608ef012078a1aa1d88f5af20d52309497947f6",
+	tagObject: "7608ef012078a1aa1d88f5af20d52309497947f6",
+	githubRelease:
+		"https://github.com/jbcom/rpgjs-patches/releases/tag/v0.4.0",
 };
 const currentPatchSourceCommand = (program: string, args: string[]) => {
 	const tagReference = `refs/tags/v${currentPatchConsumer.version}`;
 	if (program === "git")
 		return `${currentPatchConsumer.tagObject}\t${tagReference}\n${currentPatchConsumer.sourceCommit}\t${tagReference}^{}\n`;
-	if (program === "tea")
+	if (program === "gh")
 		return JSON.stringify({
 			tag_name: `v${currentPatchConsumer.version}`,
 			target_commitish: currentPatchConsumer.sourceCommit,
-			html_url: currentPatchConsumer.giteaRelease,
+			html_url: currentPatchConsumer.githubRelease,
 			draft: false,
 			prerelease: false,
 		});
@@ -329,7 +329,7 @@ function createFixture() {
 			},
 			homepage: `https://github.com/jbcom/rpgjs-solo/tree/main/${record.directory}#readme`,
 			bugs: { url: "https://github.com/jbcom/rpgjs-solo/issues" },
-			engines: { node: ">=24 <25" },
+			engines: { node: ">=24 <25 || >=26 <27" },
 			publishConfig: { registry },
 			type: "module",
 			main: "./dist/index.js",
@@ -429,18 +429,11 @@ function createFixture() {
 			repository: "https://github.com/jbcom/rpgjs-solo.git",
 			branch: "main",
 		},
-		backup: {
-			repository: "ssh://gitea/repo.git",
-			apiRepository: "jbcom/rpgjs-solo",
-		},
 		packages,
 		inheritedReleaseDirectories,
 		consumedChangesets,
 		carriedChangesets,
-		requiredConsumer: {
-			package: "@arcade-cabinet/rpgjs-patches",
-			version: "0.2.0",
-		},
+		requiredConsumer: { ...currentPatchConsumer, range: "^0.4.0" },
 	};
 	const planPath = join(root, "plan.json");
 	writeJson(planPath, plan);
@@ -752,14 +745,14 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			{
 				...loadSoloReleasePlan(fixture.planPath),
 				requiredConsumer: {
-					package: "@arcade-cabinet/rpgjs-patches",
-					version: "0.3.0",
+					package: "rpgjs-patches",
+					version: "0.4.0",
 				},
 			},
 		);
 
-		expect(contract.packageJson.dependencies.canvasengine).toBe("2.1.1");
-		expect(contract.packageJson.dependencies.vite).toBe("8.2.0");
+		expect(contract.packageJson.dependencies.canvasengine).toBe("2.2.0");
+		expect(contract.packageJson.dependencies.vite).toBe("8.2.1");
 		expect(currentContract.packageJson.dependencies.canvasengine).toBe("2.2.0");
 		expect(currentContract.packageJson.dependencies.vite).toBe("8.2.1");
 		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo");
@@ -769,14 +762,14 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(contract.runtimeCheck).not.toContain("canvasengine");
 		expect(contract.runtimeCheck).not.toContain("rpgjs-patches");
 		expect(contract.browserEntry).toContain("@jbcom/rpgjs-solo-renderer");
-		expect(contract.browserEntry).toContain("@arcade-cabinet/rpgjs-patches");
+		expect(contract.browserEntry).toContain("rpgjs-patches");
 		expect(contract.browserEntry).toContain("from 'canvasengine'");
 		expect(contract.browserEntry).toContain("installCanvasEnginePatches");
 		expect(contract.viteConfig).toContain("rpgjsSoloBoundary");
 		expect(contract.tsconfig.compilerOptions.lib).toContain("DOM");
 	});
 
-	it("admits the exact 0.3 patch consumer for the CanvasEngine 2.2 release plan", () => {
+	it("admits the exact 0.4 patch consumer for the CanvasEngine 2.2 release plan", () => {
 		const fixture = createFixture();
 		const plan = JSON.parse(readFileSync(fixture.planPath, "utf8"));
 		plan.requiredConsumer = currentPatchConsumer;
@@ -787,7 +780,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		);
 	});
 
-	it("rechecks the reviewed 0.3 patch bytes before candidate execution", () => {
+	it("rechecks the reviewed 0.4 patch bytes before candidate execution", () => {
 		const plan = loadSoloReleasePlan();
 		const view = (spec: string, field: string, registryPlan: typeof plan) => {
 			expect(registryPlan.registry).toBe(currentPatchConsumer.registry);
@@ -817,8 +810,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		).toThrow(/registry evidence differs from the reviewed release plan/i);
 	});
 
-	it("fetches and hash-binds the fleet tarball without credentials", async () => {
-		const bytes = Buffer.from("anonymous fleet package bytes\n");
+	it("fetches and hash-binds the patch tarball without credentials", async () => {
+		const bytes = Buffer.from("anonymous patch package bytes\n");
 		const plan = loadSoloReleasePlan();
 		const requiredConsumer = {
 			...plan.requiredConsumer,
@@ -891,10 +884,10 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				currentPatchSourceCommand,
 			),
 		).toEqual({
-			tag: "v0.3.0",
+			tag: "v0.4.0",
 			tagObject: currentPatchConsumer.tagObject,
 			sourceCommit: currentPatchConsumer.sourceCommit,
-			giteaRelease: currentPatchConsumer.giteaRelease,
+			githubRelease: currentPatchConsumer.githubRelease,
 		});
 		expect(() =>
 			assertRequiredConsumerSourceReleaseEvidence(plan, (program, args) =>
@@ -908,20 +901,25 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		).toThrow(/does not resolve to the reviewed tag object and source commit/i);
 		expect(() =>
 			assertRequiredConsumerSourceReleaseEvidence(plan, (program, args) =>
-				program === "tea"
+				program === "gh"
 					? JSON.stringify({
-							tag_name: "v0.3.0",
+							tag_name: "v0.4.0",
 							target_commitish: currentPatchConsumer.sourceCommit,
-							html_url: currentPatchConsumer.giteaRelease,
+							html_url: currentPatchConsumer.githubRelease,
 							draft: true,
 							prerelease: false,
 						})
 					: currentPatchSourceCommand(program, args),
 			),
-		).toThrow(/Gitea fleet patch release differs/i);
+		).toThrow(/GitHub patch release differs/i);
 	});
 
-	it("fails closed unless the executing toolchain is exact Node 24.19.0 and pnpm 11.21.0", () => {
+	it.each(["24.0.0", "24.99.0", "26.0.0", "26.99.0"])("accepts supported Node runtime %s without a patch pin", (nodeVersion) => {
+		const command = (_program: string, args: string[]) => args[0] === "--version" ? "11.21.0" : JSON.stringify({ version: nodeVersion, execPath: process.execPath });
+		expect(assertReleaseToolchain(command, nodeVersion).nodeVersion).toBe(nodeVersion);
+	});
+
+	it("requires a supported Node major, matching child runtime, and pnpm 11.21.0", () => {
 		const exactToolchain = (_program: string, args: string[]) =>
 			args[0] === "--version"
 				? "11.21.0"
@@ -936,8 +934,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			childNodeExecPath: process.execPath,
 		});
 		expect(() =>
-			assertReleaseToolchain(exactToolchain, "26.5.0", process.execPath),
-		).toThrow(/requires Node 24\.19\.0/i);
+			assertReleaseToolchain(exactToolchain, "23.0.0", process.execPath),
+		).toThrow(/requires Node 24 or 26/i);
 		expect(() =>
 			assertReleaseToolchain(() => "11.20.0", "24.19.0", process.execPath),
 		).toThrow(/requires pnpm 11\.21\.0/i);
@@ -950,7 +948,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				"24.19.0",
 				process.execPath,
 			),
-		).toThrow(/pnpm child runtime must be the exact Node 24\.19\.0/i);
+		).toThrow(/pnpm child runtime must be the exact Node 24 or 26/i);
 	});
 
 	it("admits only the canonical plan path and exact reviewed HEAD bytes", async () => {
@@ -969,7 +967,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 								version: process.versions.node,
 								execPath: process.execPath,
 							}),
-				nodeVersion: "24.19.0",
+				nodeVersion: process.versions.node,
 			}),
 		).rejects.toThrow(/canonical reviewed plan path/i);
 
@@ -1195,11 +1193,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		}
 	});
 
-	it("accepts the fleet's normative raw Ed25519 trust-root representation and fingerprint", () => {
+	it("accepts the patch's normative raw Ed25519 trust-root representation and fingerprint", () => {
 		const fixture = createFixture();
 		writeJson(fixture.trustRootPath, {
-			schemaVersion: "arcade-cabinet.orchestrator-trust-root/v1",
-			trustRootId: "arcade-cabinet-orchestrator-assignment-ed25519-v1",
+			schemaVersion: "rpgjs-solo.orchestrator-trust-root/v1",
+			trustRootId: "rpgjs-solo-orchestrator-assignment-ed25519-v1",
 			status: "ACTIVE",
 			normativeArtifact: true,
 			scope: ["jbcom-rpgjs-solo-release-review-assignment"],
@@ -1792,12 +1790,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			),
 		).toThrow(/squash tree does not match its exact reviewed head/i);
 		expect(calls.some((call) => call.startsWith("patch-id"))).toBe(false);
-		expect(calls.filter((call) => call.startsWith("ls-remote"))).toHaveLength(
-			2,
-		);
-		expect(calls).toContain(
-			`ls-remote ${plan.backup.repository} refs/heads/main`,
-		);
+		expect(calls.filter((call) => call.startsWith("ls-remote"))).toHaveLength(1);
 		expect(calls.some((call) => call.startsWith("ls-remote ls-remote"))).toBe(
 			false,
 		);
@@ -2927,148 +2920,24 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		]);
 	});
 
-	it("restates immutable Gitea metadata when publishing a draft", () => {
-		const expected = createExpectedRelease();
-		let invocation: string[] = [];
-		const adapter = createGiteaReleaseAdapter(
-			{
-				backup: {
-					apiRepository: "jbcom/rpgjs-solo",
-					repository: "https://git.example.test/jbcom/rpgjs-solo.git",
-				},
-				trainTag: expected.tag,
-			},
-			(program: string, args: string[]) => {
-				expect(program).toBe("tea");
-				invocation = args;
-				return "";
-			},
-		);
-		adapter.publishRelease({}, expected);
-		expect(invocation).toEqual([
-			"releases",
-			"edit",
-			expected.tag,
-			"--tag",
-			expected.tag,
-			"--target",
-			expected.target,
-			"--title",
-			expected.title,
-			"--note",
-			expected.body,
-			"--draft=false",
-			"--prerelease=true",
-			"--repo",
-			"jbcom/rpgjs-solo",
-		]);
-	});
-
-	it.each([
-		{ message: "not found" },
-		{
-			message: "not found",
-			url: "https://git.example.test/api/swagger",
-		},
-	])(
-		"treats tea 0.14.2 structured not-found output as an absent Gitea release %#",
-		(response) => {
-			const expected = createExpectedRelease();
-			const adapter = createGiteaReleaseAdapter(
-				{
-					backup: {
-						apiRepository: "jbcom/rpgjs-solo",
-						repository: "https://git.example.test/jbcom/rpgjs-solo.git",
-					},
-					trainTag: expected.tag,
-				},
-				(program: string, args: string[]) => {
-					expect(program).toBe("tea");
-					expect(args).toContain(
-						`repos/jbcom/rpgjs-solo/releases/tags/${encodeURIComponent(expected.tag)}`,
-					);
-					return JSON.stringify(response);
-				},
-			);
-
-			expect(adapter.getRelease(expected.tag)).toBeUndefined();
-		},
-	);
-
-	it.each([null, undefined])(
-		"normalizes tea 0.14.2 nullish assets for an asset-free Gitea release %#",
-		(assets) => {
-			const expected = createExpectedRelease();
-			const adapter = createGiteaReleaseAdapter(
-				{
-					backup: {
-						apiRepository: "jbcom/rpgjs-solo",
-						repository: "https://git.example.test/jbcom/rpgjs-solo.git",
-					},
-					trainTag: expected.tag,
-				},
-				() =>
-					JSON.stringify({
-						id: 1,
-						tag_name: expected.tag,
-						target_commitish: expected.target,
-						name: expected.title,
-						body: expected.body,
-						draft: true,
-						prerelease: true,
-						assets,
-					}),
-			);
-
-			expect(adapter.getRelease(expected.tag)).toMatchObject({ assets: [] });
-		},
-	);
-
-	it.each([
-		{ message: "not found", tag_name: "foreign" },
-		{ message: "permission denied" },
-		{ id: 1, tag_name: "tag-only" },
-		[],
-		null,
-	])(
-		"rejects malformed successful tea 0.14.2 Gitea release output %#",
-		(value) => {
-			const expected = createExpectedRelease();
-			const adapter = createGiteaReleaseAdapter(
-				{
-					backup: {
-						apiRepository: "jbcom/rpgjs-solo",
-						repository: "https://git.example.test/jbcom/rpgjs-solo.git",
-					},
-					trainTag: expected.tag,
-				},
-				() => JSON.stringify(value),
-			);
-
-			expect(() => adapter.getRelease(expected.tag)).toThrow(
-				/malformed successful response/i,
-			);
-		},
-	);
-
-	it("resumes Gitea after GitHub succeeds without recreating either release", async () => {
+	it("resumes secondary after GitHub succeeds without recreating either release", async () => {
 		const expected = createExpectedRelease();
 		const github = createReleaseAdapter("github", expected, { existing: true });
-		const gitea = createReleaseAdapter("gitea", expected, {
+		const secondary = createReleaseAdapter("secondary", expected, {
 			failCreateOnce: true,
 		});
 		await expect(
-			reconcileReleaseRemotes({ expected, remotes: [github, gitea] }),
+			reconcileReleaseRemotes({ expected, remotes: [github, secondary] }),
 		).rejects.toThrow(/temporarily unavailable/);
 		expect(github.calls.create).toBe(0);
 		await expect(
-			reconcileReleaseRemotes({ expected, remotes: [github, gitea] }),
+			reconcileReleaseRemotes({ expected, remotes: [github, secondary] }),
 		).resolves.toMatchObject({
 			github: { tag: expected.tag },
-			gitea: { tag: expected.tag },
+			secondary: { tag: expected.tag },
 		});
 		expect(github.calls.create).toBe(0);
-		expect(gitea.calls.create).toBe(2);
+		expect(secondary.calls.create).toBe(2);
 	});
 
 	it("preflights release-note bytes before overwriting output", () => {
@@ -3131,10 +3000,10 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					expect(globalNpmrcState.text).toBe("\n");
 					expect(npmrcState.text).toContain("do-not-persist");
 					expect(npmrcState.text).toContain(
-						`@arcade-cabinet:registry=${currentPatchConsumer.registry}`,
+						`registry=${currentPatchConsumer.registry}`,
 					);
 					expect(npmrcState.text).not.toMatch(
-						/api\/packages\/arcade-cabinet\/npm\/.*:_authToken/,
+						/@[^\n]+:registry=/,
 					);
 					throw new Error("stop");
 				}),
@@ -3155,10 +3024,10 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(existsSync(globalNpmrc)).toBe(false);
 	});
 
-	it("uses a token-free fleet registry configuration and removes it", async () => {
+	it("uses a token-free patch registry configuration and removes it", async () => {
 		let npmrc = "";
 		let globalNpmrc = "";
-		await withAnonymousFleetRegistry(
+		await withAnonymousPatchRegistry(
 			currentPatchConsumer.registry,
 			async (env) => {
 				npmrc = env.npm_config_userconfig ?? "";
@@ -3173,7 +3042,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				expect(globalNpmrcState.mode).toBe(0o600);
 				expect(globalNpmrcState.text).toBe("\n");
 				expect(npmrcState.text).toContain(
-					`@arcade-cabinet:registry=${currentPatchConsumer.registry}`,
+					`registry=${currentPatchConsumer.registry}`,
 				);
 				expect(npmrcState.text).not.toContain("_authToken");
 				expect(npmrcState.text).toContain("always-auth=false");

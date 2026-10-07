@@ -20,7 +20,8 @@
         "Analyze (javascript-typescript)",
         "CodeQL",
         "CodeRabbit",
-        "tests (24.19.0)"
+        "tests (24)",
+        "tests (26)"
       ]
     },
     "releasePullRequest": {
@@ -32,7 +33,8 @@
         "Analyze (actions)",
         "Analyze (javascript-typescript)",
         "CodeQL",
-        "tests (24.19.0)"
+        "tests (24)",
+        "tests (26)"
       ]
     },
     "supersededRejectedReleasePullRequests": [
@@ -74,17 +76,13 @@
   "upstreamCommit": "2fab01fb8e93ad13902b07db28935f058b387213",
   "previousVersion": "5.0.0-beta.29.solo.1",
   "version": "5.0.0-beta.29.solo.2",
-  "registry": "https://git.local.jonbogaty.com/api/packages/jbcom/npm/",
+  "registry": "https://registry.npmjs.org/",
   "candidateDistTag": "beta29-solo2-candidate",
   "promotionDistTag": "latest",
   "trainTag": "solo-v5.0.0-beta.29.solo.2",
   "canonical": {
     "repository": "https://github.com/jbcom/rpgjs-solo.git",
     "branch": "main"
-  },
-  "backup": {
-    "repository": "ssh://gitea@git.local.jonbogaty.com/jbcom/rpgjs-solo.git",
-    "apiRepository": "jbcom/rpgjs-solo"
   },
   "packages": [
     {
@@ -173,18 +171,23 @@
       "id": "wise-action-battle-guards",
       "sha256": "0e3041a807b735c0adca81223de2e0c5323e466a7ef58a85aa60bfb7a0ad9cb9",
       "introducedBy": "81f8ad075a404548f9ff3ed388d1ef0eda0f89bd"
+    },
+    {
+      "id": "public-patch-consumer",
+      "sha256": "11ae0ed5ed83f44b15b33e3b40ea5efe90c5aad4cf9ca1ff6b787c4b03e8668b"
     }
   ],
   "requiredConsumer": {
-    "package": "@arcade-cabinet/rpgjs-patches",
-    "version": "0.3.0",
-    "registry": "https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/",
-    "integrity": "sha512-KEpLrX/xkKfUftLcPDS9i6VTSzsAqndYvybFBSoFnHPA20cLlyZ7KyhVZ+nq7zX7gVUWkxP6AuDwtJ8VvSO5oQ==",
-    "shasum": "fe8e6ed84f31d06415c82a61fbc212e151664362",
-    "tarball": "https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/%40arcade-cabinet%2Frpgjs-patches/-/0.3.0/rpgjs-patches-0.3.0.tgz",
-    "tarballSha256": "09ee17ac365c08e96487a6e59da349bf7fe358f81683b0cc3bb1010338c122b3",
-    "sourceCommit": "432cc108b1b6229577d907611487c315ad03e8f8",
-    "tagObject": "78677ce7379dcedac13dc19b5aa529017fb0ab36",
-    "giteaRelease": "https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0"
+    "package": "rpgjs-patches",
+    "version": "0.4.0",
+    "range": "^0.4.0",
+    "registry": "https://registry.npmjs.org/",
+    "integrity": "sha512-QvuonXRzBrEDbPJxResH2x6LcbdBvpY6mi7cF0ArC224u8bCQ+Vl32q3R721a7ttmAR7ff6qYU4a9X1mF9JDBA==",
+    "shasum": "d401481b2ce41834bdf970f233f6e6d68a55cfcd",
+    "tarball": "https://registry.npmjs.org/rpgjs-patches/-/rpgjs-patches-0.4.0.tgz",
+    "tarballSha256": "c223c34a6eda57e1b024095eac244fe3ad1458a5228fcb0002a5d1790b90c62e",
+    "sourceCommit": "7608ef012078a1aa1d88f5af20d52309497947f6",
+    "tagObject": "7608ef012078a1aa1d88f5af20d52309497947f6",
+    "githubRelease": "https://github.com/jbcom/rpgjs-patches/releases/tag/v0.4.0"
   }
 }

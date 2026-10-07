@@ -2,17 +2,17 @@
 
 Status: source PR #26 merged to canonical GitHub `main` as
 `732d8fb540f89827443939f20d2d102531da8d17` after its exact head passed the
-Node 24.19.0 cohort, CodeQL, dependency, audit, build, package, API, type,
+Node 24 cohort, CodeQL, dependency, audit, build, package, API, type,
 runtime, unit, and sample-build gates. This transaction advances the four
 `@jbcom/rpgjs-solo*` packages together from `.solo.1` to `.solo.2` and binds
-the clean-consumer gate to `@arcade-cabinet/rpgjs-patches@0.3.0`,
+the clean-consumer gate to `rpgjs-patches@^0.4.0`,
 CanvasEngine 2.2.0, and Vite 8.2.1.
 
 Historical release-transition PR #27 merged as
 `013d59e4d5d619ad11ceb3df405ea6d6a987ed94`, but its independent post-merge
 audit rejected that exact merge: the Cloudflare MMORPG sample retained stale
 esbuild 0.28.1, and the documented
-`mise exec node@24.19.0 -- pnpm verify:published-package-contracts` route failed
+`mise exec node@24 -- pnpm verify:published-package-contracts` route failed
 when pnpm's `manage-package-manager-versions` setting leaked into child npm.
 No independent ACCEPT receipt was created. The rejected plan's exact raw-byte
 SHA-512 is
@@ -35,7 +35,7 @@ without versioning or deleting it. The release command must never invoke the
 repository-wide Changesets version command or advance inherited RPGJS package
 versions.
 
-The release CLI runs only with exact Node 24.19.0 and pnpm 11.21.0. Remote
+The release CLI runs only with exact Node 24 and pnpm 11.21.0. Remote
 mutation remains a dry run unless both `--execute` and
 `RPGJS_SOLO_RELEASE_CONFIRM=5.0.0-beta.29.solo.2` are present. npm credentials
 are accepted only through `RPGJS_SOLO_NPM_TOKEN` and the tool's ephemeral,
@@ -57,7 +57,7 @@ mode-0600 npm configuration.
    because its external quota made exact-head status nondeterministic during
    this transition. Exact-head Codex review, CodeQL, the full CI gate, and the
    producer-disjoint signed auditor remain mandatory.
-4. Work only from the exact canonical GitHub merge. Prove GitHub and Gitea
+4. Work only from the exact canonical GitHub merge. Prove local/GitHub
    `main` equality, the upstream and source ancestry bindings, both PRs,
    required checks, and resolved threads. The supervisor supplies the detached
    mode-0600 trust root, separately pinned key id, and root-signed assignment
@@ -70,18 +70,11 @@ mode-0600 npm configuration.
    archive/API/type boundaries, Solo production and packed-consumer contracts,
    the full unit suite, both Cloudflare runtime suites, and every playground and
    sample build.
-6. Do not pack or publish until `@arcade-cabinet/rpgjs-patches@0.3.0` is proven
-   immutable at the private registry and by an anonymous clean install/fetch.
-   That proof must include the exact registry integrity, source/tag identity,
-   and Gitea release. The patches are Gitea-only: `arcade-cabinet/rpgjs-patches`
-   is their sole home, so there is no GitHub release to prove. The plan binds
-   all of those identities. Pack, publish, and candidate verification re-read exact
-   integrity, shasum, tarball URL, and `latest`, then anonymously fetch and
-   compare the tarball SHA-256, SHA-1, and SHA-512 before installing it. The
-   wrapper replaces both user and global npm configuration with mode-0600 files
-   and runs registry commands from that isolated directory, preventing project,
-   user, global, or ambient-environment credentials from authenticating the
-   fleet-package proof.
+6. Verify `rpgjs-patches@0.4.0` anonymously against npmjs and
+   [its GitHub source](https://github.com/jbcom/rpgjs-patches). The consumer
+   dependency range is `^0.4.0`; release evidence pins the exact tarball URL,
+   SHA-256, SHA-1, SHA-512, source commit, and tag. Isolated mode-0600 user and
+   global npm configurations keep the artifact proof anonymous.
 7. Run `pnpm release:solo:pack --artifacts <absolute-directory-outside-repo>`
    once with `RPGJS_SOLO_PROVENANCE_SIGNING_KEY_FILE`. Pack rechecks the bound
    patch metadata through a token-free npm configuration before it creates any
@@ -93,17 +86,13 @@ mode-0600 npm configuration.
    resumable transaction, not a successful release. Publish repeats the
    token-free patch-package preflight before creating immutable Solo versions.
 9. Run `pnpm release:solo:verify-candidate --manifest <manifest> --execute`.
-   It must install the four exact candidate packages plus the exact fleet patch
-   package in a fresh workspace-isolated consumer. The npm configuration grants
-   credentials only to the private `@jbcom` registry; the fleet patch remains
-   anonymous during the real install. The gate then executes the transport-free
-   Node surfaces and typechecks and production-builds the renderer/CanvasEngine
-   browser surface.
+   It installs the Solo cohort and public patch dependency in a fresh
+   workspace-isolated consumer, executes the transport-free Node surfaces,
+   and typechecks and production-builds the browser integration.
 10. Promote only the verified cohort with
     `pnpm release:solo:promote --manifest <manifest> --execute`, then reconcile
-    exact GitHub and Gitea tags, releases, and byte-identical assets through
+    exact GitHub tags, releases, and byte-identical assets through
     `pnpm release:solo:publish-releases --manifest <manifest> --execute`.
 
-This package release proves a reusable engine cohort. It does not prove the
-Quest game or its authored content complete; that requires its own silent
-headed gameplay, narrative, visual, persistence, and deployment evidence.
+This package release proves a reusable engine cohort. Application gameplay and
+authored content require separate silent headed-browser evidence.

@@ -10,8 +10,7 @@ games that will never be multiplayer.
 - `main` on GitHub is the canonical RPGJS Solo product branch.
 - Start work from `main` on a focused feature branch and open a review back to
   `main` on GitHub.
-- Gitea is a checked downstream backup and the private package registry. It is
-  not an independent development record.
+- Packages use the public npmjs registry.
 - Audit upstream changes on the tracking branch before porting them. A newer
   upstream release is not adopted by copying package versions alone; relevant
   behavior, tests, migrations, and bundle effects must be reconciled.
@@ -147,7 +146,7 @@ pnpm build
 pnpm test -- --run
 ```
 
-Solo development, CI, and releases use exact Node 24.19.0 LTS and pnpm 11.21.0.
+Solo development, CI, and releases use Node 24 or 26 and pnpm 11.21.0.
 Do not retain an older inherited runtime merely because upstream still tests it.
 
 ## Packages and releases

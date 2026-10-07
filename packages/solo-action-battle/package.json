@@ -36,11 +36,12 @@
     "verify:boundary": "node scripts/verify-boundary.mjs"
   },
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24 <25 || >=26 <27"
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://git.local.jonbogaty.com/api/packages/jbcom/npm/"
+    "registry": "https://registry.npmjs.org/",
+    "provenance": true
   },
   "dependencies": {
     "@jbcom/rpgjs-solo": "workspace:5.0.0-beta.29.solo.2"
@@ -51,5 +52,6 @@
     "vite": "8.2.1",
     "vite-plugin-dts": "5.0.3",
     "vitest": "4.1.10"
-  }
+  },
+  "author": "Jon Bogaty <jon@jonbogaty.com>"
 }
