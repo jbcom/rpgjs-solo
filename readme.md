@@ -70,14 +70,13 @@ dependencies are exact versions, and every release rechecks them against the
 current compatible upstream releases. A Solo package is not
 feature-complete while that check reports a knowingly stale direct dependency.
 
-After the Node 24 build, tests, Solo boundary, and
+After the supported Node 24.15+ or Node 26 build, tests, Solo boundary, and
 `pnpm verify:solo-package-contracts` pass, an authenticated maintainer publishes
 the filtered package set in dependency order with `pnpm publish:solo`. The
 shared publish guard rejects npm for every Solo package, and the package check
 proves every pnpm-packed manifest is consumer-safe and contains no unresolved
-workspace protocol. Credentials remain outside the repository; anonymous LAN
-access is not assumed, so consumers authenticate to the private `jbcom`
-registry through their user-level npm configuration.
+workspace protocol. Publication requires a supported npm provenance CI
+environment. Consumers install publicly from npmjs without credentials.
 
 ## Non-negotiable release gates
 
@@ -96,7 +95,7 @@ A Solo runtime release must prove all of the following:
   a substantial real game vertical slice;
 - an automated bundle audit fails if multiplayer-only code leaks back into the
   shipped Solo packages.
-- the supported Node 24 or 26 and committed pnpm 11.21.0 install the frozen
+- the supported Node 24.15+ or 26 and committed pnpm 11.21.0 install the frozen
   lockfile, and each private package is built and tested with current compatible
   TypeScript, Vite, Vitest, and declaration tooling.
 
@@ -145,7 +144,7 @@ pnpm build
 pnpm test -- --run
 ```
 
-The supported contributor and release toolchain is Node 24 or 26 with
+The supported contributor and release toolchain is Node 24.15+ or 26 with
 pnpm 11.21.0. Consumer engines retain the compatible Node 24 major range. The
 repository remains a pnpm monorepo while the direct runtime is extracted.
 Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before changing engine architecture.

@@ -35,7 +35,7 @@ without versioning or deleting it. The release command must never invoke the
 repository-wide Changesets version command or advance inherited RPGJS package
 versions.
 
-The release CLI runs only with exact Node 24 and pnpm 11.21.0. Remote
+The release CLI runs with Node 24.15+ or Node 26 and pnpm 11.21.0. Remote
 mutation remains a dry run unless both `--execute` and
 `RPGJS_SOLO_RELEASE_CONFIRM=5.0.0-beta.29.solo.2` are present. npm credentials
 are accepted only through `RPGJS_SOLO_NPM_TOKEN` and the tool's ephemeral,

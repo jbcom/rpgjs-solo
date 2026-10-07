@@ -140,7 +140,7 @@ sprite-alpha bounds; and associated documentation and tests.
 The merge is expected to conflict in four inherited manifests,
 `packages/studio/src/server.ts`, and `pnpm-lock.yaml`. Resolutions must take the
 beta.29 inherited package identities and behavior while retaining the fork's
-newer exact Node 24/pnpm 11.21.0/Vite/declaration toolchain, direct-dependency currency,
+supported Node 24.15+ or 26/pnpm 11.21.0/Vite/declaration toolchain, direct-dependency currency,
 Hono exclusion, Solo packages, GitHub authority, and production-boundary gates.
 The lockfile is regenerated; it is never resolved by choosing one parent.
 
@@ -162,7 +162,7 @@ look safe on `main`, because a later exact `v5` fast-forward can replace those
 bytes without a fork review.
 
 Fork validation lives at the distinct `.github/workflows/fork-ci.yml` path on
-canonical `main`. It has read-only permissions, exact Node 24, the complete Solo gate,
+canonical `main`. It has read-only permissions, Node 24.15+ or 26, the complete Solo gate,
 no versioning or publishing job, and a required `workflow_dispatch` commit input
 for validating an exact tracking SHA. Every future `v5` fast-forward follows
 this order:
