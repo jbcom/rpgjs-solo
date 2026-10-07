@@ -3,7 +3,7 @@
   "name": "rpgjs-playground-studio",
   "main": "src/entries/cloudflare.ts",
   "compatibility_date": "2024-12-30",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "allow_eval_during_startup"],
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",

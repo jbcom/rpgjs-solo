@@ -67,14 +67,14 @@ const canonicalMetadata = {
 	bugsUrl: "https://github.com/jbcom/rpgjs-solo/issues",
 };
 const releaseNodeMajors = new Set([24, 26]);
-const releasePnpmVersion = "11.21.0";
+const releasePnpmVersion = "12.10.1";
 const patchCompatibility = new Map([
 	[
 		"0.4.0",
 		{
 			range: "^0.4.0",
-			canvasengine: "2.2.0",
-			vite: "8.2.1",
+			canvasengine: "2.4.0",
+			vite: "8.3.3",
 			registry:
 				"https://registry.npmjs.org/",
 			integrity:

@@ -146,7 +146,7 @@ pnpm build
 pnpm test -- --run
 ```
 
-Solo development, CI, and releases use Node 24.15+ or 26 and pnpm 11.21.0.
+Solo development, CI, and releases use Node 24.15+ or 26 and pnpm 12.10.1.
 Do not retain an older inherited runtime merely because upstream still tests it.
 
 ## Packages and releases

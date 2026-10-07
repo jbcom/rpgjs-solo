@@ -1,4 +1,4 @@
-import { parseDocument } from "yaml";
+import { parseAllDocuments } from "yaml";
 
 const reportText = (value) =>
 	typeof value === "string" ? value : (value?.toString() ?? "");
@@ -246,23 +246,34 @@ export const parsePnpmWorkspaceProjects = (result) => {
 };
 
 export const parsePnpmLockImporterIds = (lockfile) => {
-	const document = parseDocument(reportText(lockfile), { uniqueKeys: true });
-	if (document.errors.length > 0) {
-		const duplicate = document.errors.find(
-			(error) => error.code === "DUPLICATE_KEY",
-		);
-		throw new Error(
-			duplicate
-				? `pnpm lockfile contains a duplicate YAML key: ${duplicate.message}`
-				: `pnpm lockfile contains invalid YAML: ${document.errors[0].message}`,
-		);
+	const documents = parseAllDocuments(reportText(lockfile), { uniqueKeys: true });
+	for (const document of documents) {
+		if (document.errors.length > 0) {
+			const duplicate = document.errors.find(
+				(error) => error.code === "DUPLICATE_KEY",
+			);
+			throw new Error(
+				duplicate
+					? `pnpm lockfile contains a duplicate YAML key: ${duplicate.message}`
+					: `pnpm lockfile contains invalid YAML: ${document.errors[0].message}`,
+			);
+		}
+		if (document.warnings.length > 0) {
+			throw new Error(
+				`pnpm lockfile contains ambiguous YAML: ${document.warnings[0].message}`,
+			);
+		}
 	}
-	if (document.warnings.length > 0) {
-		throw new Error(
-			`pnpm lockfile contains ambiguous YAML: ${document.warnings[0].message}`,
-		);
+	if (documents.length !== 1 && documents.length !== 2) {
+		throw new Error("pnpm lockfile contains an unexpected number of YAML documents");
 	}
-	const parsed = document.toJS({ mapAsMap: false });
+	if (documents.length === 2) {
+		const environment = documents[0].toJS({ mapAsMap: false });
+		if (!environment?.importers?.["."]?.packageManagerDependencies?.pnpm) {
+			throw new Error("pnpm lockfile contains an invalid environment document");
+		}
+	}
+	const parsed = documents.at(-1).toJS({ mapAsMap: false });
 	const importers = parsed?.importers;
 	const importerIds =
 		importers && typeof importers === "object" && !Array.isArray(importers)

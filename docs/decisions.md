@@ -23,3 +23,27 @@ Publication requires a CI environment supported by npm provenance. A local shell
 is suitable for validation and packing, and must not bypass that requirement.
 
 The public transition has a distinct provisional solo.3 plan. Existing solo.2 artifacts are immutable; applying the reviewed next transaction consumes the public dependency Changeset and advances the complete cohort. Historical verification uses the entire original checkout and its original trust schema.
+
+## Current dependency and test runtime
+
+The workspace uses pnpm 12.10.1, CanvasEngine 2.4, Vite 8.3, and Vitest 5.
+The currency gate retains its existing intentional major boundaries and the
+low-severity audit remains mandatory. Vulnerable transitive versions are
+replaced with patched versions through bounded workspace overrides.
+
+The currency checker validates both pnpm 12 lockfile documents, rejecting
+duplicate keys in either, and enumerates importers only from the project
+document after validating the package-manager environment document.
+
+Cloudflare's Vitest pool only supports Vitest 4, so sample integration tests
+use Wrangler's public `createTestHarness()` API instead. The same request and
+WebSocket assertions run against built Workers in real workerd; each test
+resets storage and the suite closes its runtime. No peer compatibility rules
+or test assertions are bypassed.
+
+Studio compiles its canonical Ajv schemas during module initialization. Both
+its deployment and test configurations enable Cloudflare's supported
+[`allow_eval_during_startup`](https://developers.cloudflare.com/workers/configuration/compatibility-flags/#enable-eval-during-startup)
+flag for this initialization. Request-time dynamic code generation remains
+disabled. This matches the production runtime rather than the previous test
+pool's unrestricted eval facility.

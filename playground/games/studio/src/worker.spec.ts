@@ -1,6 +1,18 @@
-import { SELF } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { createTestHarness } from "wrangler";
 import payload from "../fixtures/studio-map-v2.json";
+
+// Exercise the actual workerd runtime with fresh storage for every test.
+const harness = createTestHarness({
+  workers: [{
+    configPath: "./wrangler.test.jsonc",
+    vars: { RPGJS_MAP_UPDATE_TOKEN: "test-map-update-token" },
+  }],
+});
+const SELF = harness.getWorker();
+beforeAll(async () => { await harness.listen(); });
+beforeEach(async () => { await harness.reset(); });
+afterAll(async () => { await harness.close(); });
 
 const url = "https://example.test/parties/main/map-seed-studio/map/update";
 

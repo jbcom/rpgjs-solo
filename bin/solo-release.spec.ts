@@ -727,12 +727,6 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			},
 		});
 
-		execFileSync("pnpm", ["install", "--ignore-scripts"], {
-			cwd: consumer,
-			stdio: "pipe",
-		});
-		expect(existsSync(join(consumer, "node_modules"))).toBe(false);
-
 		execFileSync("pnpm", [...publishedConsumerInstallArgs], {
 			cwd: consumer,
 			stdio: "pipe",
@@ -742,6 +736,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 				join(consumer, "node_modules", "solo-consumer-fixture", "package.json"),
 			),
 		).toBe(true);
+		expect(existsSync(join(parent, "node_modules"))).toBe(false);
+		expect(existsSync(join(parent, "pnpm-lock.yaml"))).toBe(false);
 	});
 
 	it("keeps browser-only renderer and CanvasEngine checks out of the Node runtime probe", () => {
@@ -761,10 +757,10 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			},
 		);
 
-		expect(contract.packageJson.dependencies.canvasengine).toBe("2.2.0");
-		expect(contract.packageJson.dependencies.vite).toBe("8.2.1");
-		expect(currentContract.packageJson.dependencies.canvasengine).toBe("2.2.0");
-		expect(currentContract.packageJson.dependencies.vite).toBe("8.2.1");
+		expect(contract.packageJson.dependencies.canvasengine).toBe("2.4.0");
+		expect(contract.packageJson.dependencies.vite).toBe("8.3.3");
+		expect(currentContract.packageJson.dependencies.canvasengine).toBe("2.4.0");
+		expect(currentContract.packageJson.dependencies.vite).toBe("8.3.3");
 		expect(contract.packageJson.dependencies["rpgjs-patches"]).toBe("^0.4.0");
 		expect(contract.packageJson.pnpm.overrides).toEqual({
 			"rpgjs-patches": "0.4.0",
@@ -953,24 +949,24 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	])("accepts supported Node runtime %s without a patch pin", (nodeVersion) => {
 		const command = (_program: string, args: string[]) =>
 			args[0] === "--version"
-				? "11.21.0"
+				? "12.10.1"
 				: JSON.stringify({ version: nodeVersion, execPath: process.execPath });
 		expect(assertReleaseToolchain(command, nodeVersion).nodeVersion).toBe(
 			nodeVersion,
 		);
 	});
 
-	it("requires a supported Node major, matching child runtime, and pnpm 11.21.0", () => {
+	it("requires a supported Node major, matching child runtime, and pnpm 12.10.1", () => {
 		const exactToolchain = (_program: string, args: string[]) =>
 			args[0] === "--version"
-				? "11.21.0"
+				? "12.10.1"
 				: JSON.stringify({ version: "24.19.0", execPath: process.execPath });
 		expect(
 			assertReleaseToolchain(exactToolchain, "24.19.0", process.execPath),
 		).toEqual({
 			nodeVersion: "24.19.0",
 			nodeExecPath: process.execPath,
-			pnpmVersion: "11.21.0",
+			pnpmVersion: "12.10.1",
 			childNodeVersion: "24.19.0",
 			childNodeExecPath: process.execPath,
 		});
@@ -982,12 +978,12 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		).toThrow(/requires Node 24.15\+ or 26/i);
 		expect(() =>
 			assertReleaseToolchain(() => "11.20.0", "24.19.0", process.execPath),
-		).toThrow(/requires pnpm 11\.21\.0/i);
+		).toThrow(/requires pnpm 12\.10\.1/i);
 		expect(() =>
 			assertReleaseToolchain(
 				(_program, args) =>
 					args[0] === "--version"
-						? "11.21.0"
+						? "12.10.1"
 						: JSON.stringify({ version: "26.5.0", execPath: "/usr/bin/false" }),
 				"24.19.0",
 				process.execPath,
@@ -1006,7 +1002,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			main(["validate", "--plan", externalPlan], {
 				toolchainCommand: (_program, args) =>
 					args[0] === "--version"
-						? "11.21.0"
+						? "12.10.1"
 						: JSON.stringify({
 								version: process.versions.node,
 								execPath: process.execPath,

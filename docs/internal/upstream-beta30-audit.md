@@ -92,7 +92,7 @@ prose is only a summary and grants no implementation authority by itself.
   defaults must not embed them.
 - The upstream release commit cannot replace the fork's exact Node 24,
   pnpm 11.21.0, Vite/CanvasEngine cohort, public Solo packages, release
-  transaction, GitHub-first authority, Gitea backup, or private-registry proof.
+  transaction, canonical GitHub authority, or public npmjs package proof.
 
 ## Required implementation sequence
 
@@ -117,8 +117,8 @@ prose is only a summary and grants no implementation authority by itself.
    ESM/CJS/declaration consumers, the matching starter branch, and a silent
    rendered browser interaction under exact Node 24.
 5. Obtain a producer-disjoint independent review and merge the exact reviewed
-   tree into public GitHub `main`; allow the checked GitHub-to-Gitea backup to
-   converge without making Gitea a development authority.
+   tree into public GitHub `main`; require green checks at its exact merge
+   commit and public npmjs consumer proof before considering adoption complete.
 6. Bind the exact hash of that Solo-owned Changeset into the reviewed release
    plan, then create one coherent four-package Solo prerelease derived from
    beta.30. The final suffix is selected by the release transaction and is not

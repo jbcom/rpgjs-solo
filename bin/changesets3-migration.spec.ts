@@ -78,7 +78,7 @@ const changesetStateSha256 = () => {
 describe("Changesets 3 repository migration", () => {
 	it("uses the current v3 CLI and schema", () => {
 		const manifest = readJson("package.json");
-		expect(manifest.devDependencies["@changesets/cli"]).toBe("3.0.0");
+		expect(manifest.devDependencies["@changesets/cli"]).toBe("3.0.3");
 		const config = readJson(".changeset/config.json");
 		expect(config.$schema).toBe(
 			"https://unpkg.com/@changesets/config@4.0.0/schema.json",

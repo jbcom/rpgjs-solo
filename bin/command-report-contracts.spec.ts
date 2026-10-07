@@ -268,6 +268,18 @@ describe("external command report contracts", () => {
 				`lockfileVersion: '9.0'\n\nimporters:\n\n  '.':\n    dependencies: {}\n\n  packages/solo:\n    devDependencies: {}\n\npackages:\n`,
 			),
 		).toEqual([".", "packages/solo"]);
+		const environment = `lockfileVersion: '9.0'\nimporters:\n  .:\n    packageManagerDependencies:\n      pnpm:\n        specifier: 12.10.1\n        version: 12.10.1\n`;
+		const project = `lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies: {}\n  packages/solo:\n    dependencies: {}\n`;
+		expect(parsePnpmLockImporterIds(`---\n${environment}---\n${project}`))
+			.toEqual([".", "packages/solo"]);
+		expect(() => parsePnpmLockImporterIds(`---\n${project}---\n${project}`))
+			.toThrow(/invalid environment document/i);
+		expect(() => parsePnpmLockImporterIds(`---\n${environment}---\n${project}---\n${project}`))
+			.toThrow(/unexpected number/i);
+		expect(() => parsePnpmLockImporterIds(`---\n${environment}---\n${project}  .: {}\n`))
+			.toThrow(/duplicate YAML key/i);
+		expect(() => parsePnpmLockImporterIds(`---\n${environment}bad: 1\nbad: 2\n---\n${project}`))
+			.toThrow(/duplicate YAML key/i);
 		expect(() =>
 			parsePnpmLockImporterIds(
 				`lockfileVersion: '9.0'\n\nimporters:\n  .:\n    dependencies: {}\n  .:\n    dependencies: {}\n`,

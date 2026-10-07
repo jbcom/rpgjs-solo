@@ -80,7 +80,6 @@ For multi-map worlds, a complete trusted publisher must also call
 The RPGJS Vite publisher performs that fan-out automatically when the resolved
 map payload contains `worldUpdates`.
 
-This sample pins the last Wrangler 3 runtime that supports the GLIBC 2.31
-development host used by the repository. Projects on a newer operating system
-should update Wrangler and `@cloudflare/vitest-pool-workers` together to their
-current compatible major versions.
+This sample uses current Wrangler 4 and Vitest 5. Integration tests use
+Wrangler's `createTestHarness()` API to run the built Worker in real workerd,
+with storage reset between tests and runtime cleanup at the end of the suite.
