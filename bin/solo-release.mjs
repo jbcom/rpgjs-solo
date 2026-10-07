@@ -2922,6 +2922,11 @@ export const createPublishedConsumerContract = (manifest, plan) => {
 			["typescript", "7.0.2"],
 			["vite", compatibility.vite],
 		]),
+		pnpm: {
+			overrides: {
+				[plan.requiredConsumer.package]: plan.requiredConsumer.version,
+			},
+		},
 	},
 	runtimeCheck: `import { SoloRuntime } from '@jbcom/rpgjs-solo'
 import { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'

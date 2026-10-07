@@ -755,6 +755,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(contract.packageJson.dependencies.vite).toBe("8.2.1");
 		expect(currentContract.packageJson.dependencies.canvasengine).toBe("2.2.0");
 		expect(currentContract.packageJson.dependencies.vite).toBe("8.2.1");
+		expect(contract.packageJson.dependencies["rpgjs-patches"]).toBe("^0.4.0");
+		expect(contract.packageJson.pnpm.overrides).toEqual({ "rpgjs-patches": "0.4.0" });
 		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo");
 		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-action-battle");
 		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-vite");

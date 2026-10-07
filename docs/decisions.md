@@ -4,6 +4,8 @@ RPGJS Solo consumers use `rpgjs-patches@^0.4.0` from npmjs and its public
 [source repository](https://github.com/jbcom/rpgjs-patches). The renderer retains
 its typed application-owned injection seam. Release verification binds the exact
 0.4.0 npm artifact hashes and GitHub tag, independently of that dependency range.
+The release consumer uses a pnpm override to install those exact reviewed bytes
+while keeping the application's declared dependency range visible.
 
 The release reviewer signature mechanism remains because it binds an independent
 reviewer to the exact release, source, and plan. Its raw Ed25519 trust-root schema
