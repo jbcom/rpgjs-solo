@@ -269,7 +269,13 @@ export const parsePnpmLockImporterIds = (lockfile) => {
 	}
 	if (documents.length === 2) {
 		const environment = documents[0].toJS({ mapAsMap: false });
-		if (!environment?.importers?.["."]?.packageManagerDependencies?.pnpm) {
+		const root = environment?.importers?.["."];
+		const configDependencies = root?.configDependencies;
+		const hasConfigDependencies = configDependencies &&
+			typeof configDependencies === "object" &&
+			!Array.isArray(configDependencies) &&
+			Object.keys(configDependencies).length > 0;
+		if (!root?.packageManagerDependencies?.pnpm && !hasConfigDependencies) {
 			throw new Error("pnpm lockfile contains an invalid environment document");
 		}
 	}

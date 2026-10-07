@@ -272,6 +272,11 @@ describe("external command report contracts", () => {
 		const project = `lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies: {}\n  packages/solo:\n    dependencies: {}\n`;
 		expect(parsePnpmLockImporterIds(`---\n${environment}---\n${project}`))
 			.toEqual([".", "packages/solo"]);
+		const configEnvironment = `lockfileVersion: '9.0'\nimporters:\n  .:\n    configDependencies:\n      example-config:\n        specifier: 1.0.0\n        version: 1.0.0\n`;
+		expect(parsePnpmLockImporterIds(`---\n${configEnvironment}---\n${project}`))
+			.toEqual([".", "packages/solo"]);
+		expect(() => parsePnpmLockImporterIds(`---\n${configEnvironment}bad: 1\nbad: 2\n---\n${project}`))
+			.toThrow(/duplicate YAML key/i);
 		expect(() => parsePnpmLockImporterIds(`---\n${project}---\n${project}`))
 			.toThrow(/invalid environment document/i);
 		expect(() => parsePnpmLockImporterIds(`---\n${environment}---\n${project}---\n${project}`))

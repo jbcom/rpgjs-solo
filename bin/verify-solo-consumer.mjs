@@ -37,10 +37,10 @@ try {
 
   const dependencies = {
     '@types/react': '19.2.17',
-    'pixi.js': '8.19.0',
+    'pixi.js': '8.22.0',
     react: '19.2.8',
     typescript: '7.0.2',
-    vite: '8.2.1'
+    vite: '8.3.3'
   }
   const localPackageOverrides = {}
 
@@ -224,6 +224,7 @@ console.log('RPGJS Solo packed runtime execution and browser build passed')
 
   run('pnpm', [
     'install',
+    '--strict-peer-dependencies',
     `--store-dir=${storeDirectory}`,
     '--registry=https://registry.npmjs.org/'
   ])

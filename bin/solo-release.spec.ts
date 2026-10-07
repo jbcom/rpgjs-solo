@@ -689,6 +689,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.version).toBe("5.0.0-beta.29.solo.3");
 		expect(plan.consumedChangesets.map(({ id }) => id)).toEqual([
 			"public-patch-consumer",
+			"current-solo-toolchain",
 		]);
 		expect(validateSoloReleaseState(rootDirectory, plan).phase).toBe("source");
 		expect(() => assertFinalReleaseBindings(plan)).toThrow();
@@ -759,8 +760,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 
 		expect(contract.packageJson.dependencies.canvasengine).toBe("2.4.0");
 		expect(contract.packageJson.dependencies.vite).toBe("8.3.3");
+		expect(contract.packageJson.dependencies["pixi.js"]).toBe("8.22.0");
+		expect(publishedConsumerInstallArgs).toContain("--strict-peer-dependencies");
 		expect(currentContract.packageJson.dependencies.canvasengine).toBe("2.4.0");
 		expect(currentContract.packageJson.dependencies.vite).toBe("8.3.3");
+		expect(currentContract.packageJson.dependencies["pixi.js"]).toBe("8.22.0");
 		expect(contract.packageJson.dependencies["rpgjs-patches"]).toBe("^0.4.0");
 		expect(contract.packageJson.pnpm.overrides).toEqual({
 			"rpgjs-patches": "0.4.0",
@@ -1072,6 +1076,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.requiredConsumer).toEqual(currentPatchConsumer);
 		expect(plan.consumedChangesets).toEqual([
 			expect.objectContaining({ id: "public-patch-consumer" }),
+			expect.objectContaining({ id: "current-solo-toolchain" }),
 		]);
 		expect(
 			plan.carriedChangesets.find(

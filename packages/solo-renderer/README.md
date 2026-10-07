@@ -84,7 +84,7 @@ interface. Install `rpgjs-patches@^0.4.0` from npmjs and inject it as above.
 Applications may omit the hook when no compatibility layer is required.
 
 The validated patch matrix is exported as `rpgjsSoloRendererCompatibility`.
-This source cohort requires `canvasengine@2.2.0`, Vite `8.2.1`, and consumer-injected
+This source cohort requires `canvasengine@2.4.0`, Vite `8.3.3`, and consumer-injected
 `rpgjs-patches@^0.4.0`. The installer must run before scene
 creation; `SoloRenderer` guarantees that order when it receives
 `installCanvasEnginePatches` in its options.

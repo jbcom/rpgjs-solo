@@ -22,7 +22,7 @@ checkouts; sanitization must never be mistaken for replacing historical evidence
 Publication requires a CI environment supported by npm provenance. A local shell
 is suitable for validation and packing, and must not bypass that requirement.
 
-The public transition has a distinct provisional solo.3 plan. Existing solo.2 artifacts are immutable; applying the reviewed next transaction consumes the public dependency Changeset and advances the complete cohort. Historical verification uses the entire original checkout and its original trust schema.
+The public transition has a distinct provisional solo.3 plan. Existing solo.2 artifacts are immutable; applying the reviewed next transaction consumes the public dependency and Solo toolchain Changesets and advances the complete cohort. The inherited toolchain Changeset remains pending for its own release. Historical verification uses the entire original checkout and its original trust schema.
 
 ## Current dependency and test runtime
 
@@ -33,7 +33,8 @@ replaced with patched versions through bounded workspace overrides.
 
 The currency checker validates both pnpm 12 lockfile documents, rejecting
 duplicate keys in either, and enumerates importers only from the project
-document after validating the package-manager environment document.
+document after validating the config-dependency or package-manager environment
+document.
 
 Cloudflare's Vitest pool only supports Vitest 4, so sample integration tests
 use Wrangler's public `createTestHarness()` API instead. The same request and

@@ -2899,6 +2899,7 @@ export const publishedConsumerInstallArgs = Object.freeze([
 	"install",
 	"--ignore-scripts",
 	"--ignore-workspace",
+	"--strict-peer-dependencies",
 ]);
 
 export const createPublishedConsumerContract = (manifest, plan) => {
@@ -2919,7 +2920,7 @@ export const createPublishedConsumerContract = (manifest, plan) => {
 			[plan.requiredConsumer.package, plan.requiredConsumer.range ?? "^0.4.0"],
 			["@types/react", "19.2.17"],
 			["canvasengine", compatibility.canvasengine],
-			["pixi.js", "8.19.0"],
+			["pixi.js", "8.22.0"],
 			["react", "19.2.8"],
 			["typescript", "7.0.2"],
 			["vite", compatibility.vite],

@@ -103,12 +103,16 @@
 		{
 			"id": "public-patch-consumer",
 			"sha256": "11ae0ed5ed83f44b15b33e3b40ea5efe90c5aad4cf9ca1ff6b787c4b03e8668b"
+		},
+		{
+			"id": "current-solo-toolchain",
+			"sha256": "def92e701be05570eca24d1033607959badcdc942c069c09b458f0cd8e8ca8f2"
 		}
 	],
 	"carriedChangesets": [
 		{
 			"id": "current-toolchain",
-			"sha256": "d0d7a495cde7953f40e6c5fec4c4fb27df39d6c0d76114b74afd6cf4b28f0e3f"
+			"sha256": "7e9ce565f253291a2dd05e01ac1af662bd1da15932dfb373bc3f6c302136bb3c"
 		},
 		{
 			"id": "calm-music-package-boundaries",
