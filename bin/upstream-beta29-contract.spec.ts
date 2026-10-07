@@ -31,7 +31,7 @@ const soloManifests = [
 	"packages/solo-vite/package.json",
 ];
 const releasePlan = readJson(
-	"docs/internal/releases/solo-beta29-solo2.plan.json",
+	"docs/internal/releases/solo-beta29-solo3.plan.json",
 );
 
 const currentSoloPhase = () => {

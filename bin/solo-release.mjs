@@ -51,10 +51,10 @@ import {
 export const rootDirectory = dirname(dirname(fileURLToPath(import.meta.url)));
 export const defaultPlanPath = join(
 	rootDirectory,
-	"docs/internal/releases/solo-beta29-solo2.plan.json",
+	"docs/internal/releases/solo-beta29-solo3.plan.json",
 );
 const canonicalPlanRelativePath =
-	"docs/internal/releases/solo-beta29-solo2.plan.json";
+	"docs/internal/releases/solo-beta29-solo3.plan.json";
 const dependencyFields = [
 	"dependencies",
 	"devDependencies",

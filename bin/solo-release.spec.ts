@@ -57,6 +57,7 @@ import {
 	publishedConsumerInstallArgs,
 	publishVerifiedPackageBytes,
 	readTransactionJournal,
+	rootDirectory,
 	reconcileReleaseRemotes,
 	reconcileReleaseWithAdapter,
 	secureAtomicWriteJson,
@@ -74,19 +75,16 @@ const currentPatchConsumer = {
 	package: "rpgjs-patches",
 	version: "0.4.0",
 	range: "^0.4.0",
-	registry:
-		"https://registry.npmjs.org/",
+	registry: "https://registry.npmjs.org/",
 	integrity:
 		"sha512-QvuonXRzBrEDbPJxResH2x6LcbdBvpY6mi7cF0ArC224u8bCQ+Vl32q3R721a7ttmAR7ff6qYU4a9X1mF9JDBA==",
 	shasum: "d401481b2ce41834bdf970f233f6e6d68a55cfcd",
-	tarball:
-		"https://registry.npmjs.org/rpgjs-patches/-/rpgjs-patches-0.4.0.tgz",
+	tarball: "https://registry.npmjs.org/rpgjs-patches/-/rpgjs-patches-0.4.0.tgz",
 	tarballSha256:
 		"c223c34a6eda57e1b024095eac244fe3ad1458a5228fcb0002a5d1790b90c62e",
 	sourceCommit: "7608ef012078a1aa1d88f5af20d52309497947f6",
 	tagObject: "7608ef012078a1aa1d88f5af20d52309497947f6",
-	githubRelease:
-		"https://github.com/jbcom/rpgjs-patches/releases/tag/v0.4.0",
+	githubRelease: "https://github.com/jbcom/rpgjs-patches/releases/tag/v0.4.0",
 };
 const currentPatchSourceCommand = (program: string, args: string[]) => {
 	const tagReference = `refs/tags/v${currentPatchConsumer.version}`;
@@ -100,7 +98,9 @@ const currentPatchSourceCommand = (program: string, args: string[]) => {
 			draft: false,
 			prerelease: false,
 		});
-	throw new Error(`Unexpected source-release command ${program} ${args.join(" ")}`);
+	throw new Error(
+		`Unexpected source-release command ${program} ${args.join(" ")}`,
+	);
 };
 const previousVersion = "5.0.0-beta.29.solo.0";
 const version = "5.0.0-beta.29.solo.1";
@@ -683,6 +683,16 @@ function createReleaseAdapter(
 }
 
 describe("Solo beta.29 coordinated release transaction", () => {
+	it("requires a new release identity and finalized bindings for the public transition", () => {
+		const plan = loadSoloReleasePlan();
+		expect(plan.previousVersion).toBe("5.0.0-beta.29.solo.2");
+		expect(plan.version).toBe("5.0.0-beta.29.solo.3");
+		expect(plan.consumedChangesets.map(({ id }) => id)).toEqual([
+			"public-patch-consumer",
+		]);
+		expect(validateSoloReleaseState(rootDirectory, plan).phase).toBe("source");
+		expect(() => assertFinalReleaseBindings(plan)).toThrow();
+	});
 	it("normalizes inherited-stdio command results without trimming null", () => {
 		expect(normalizeCommandOutput(null)).toBe("");
 		expect(normalizeCommandOutput(undefined, false)).toBe("");
@@ -756,7 +766,9 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(currentContract.packageJson.dependencies.canvasengine).toBe("2.2.0");
 		expect(currentContract.packageJson.dependencies.vite).toBe("8.2.1");
 		expect(contract.packageJson.dependencies["rpgjs-patches"]).toBe("^0.4.0");
-		expect(contract.packageJson.pnpm.overrides).toEqual({ "rpgjs-patches": "0.4.0" });
+		expect(contract.packageJson.pnpm.overrides).toEqual({
+			"rpgjs-patches": "0.4.0",
+		});
 		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo");
 		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-action-battle");
 		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-vite");
@@ -804,10 +816,13 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			latest: currentPatchConsumer.version,
 		});
 		expect(() =>
-			assertRequiredConsumerRegistryEvidence(plan, {}, (spec, field, registryPlan) =>
-				field === "dist.integrity"
-					? "sha512-foreign"
-					: view(spec, field, registryPlan),
+			assertRequiredConsumerRegistryEvidence(
+				plan,
+				{},
+				(spec, field, registryPlan) =>
+					field === "dist.integrity"
+						? "sha512-foreign"
+						: view(spec, field, registryPlan),
 			),
 		).toThrow(/registry evidence differs from the reviewed release plan/i);
 	});
@@ -849,32 +864,46 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			return responseFor(bytes);
 		};
 		expect(
-			await verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
-				view,
-				fetcher,
-				command: currentPatchSourceCommand,
-			}),
+			await verifyRequiredConsumerAnonymousArtifact(
+				fixturePlan,
+				{},
+				{
+					view,
+					fetcher,
+					command: currentPatchSourceCommand,
+				},
+			),
 		).toMatchObject({
 			tarballSha256: requiredConsumer.tarballSha256,
 			bytes: bytes.length,
 		});
 		await expect(
-			verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
-				view,
-				command: currentPatchSourceCommand,
-				fetcher: async (url, options) => {
-					await fetcher(url, options);
-					return responseFor(Buffer.from("foreign"));
+			verifyRequiredConsumerAnonymousArtifact(
+				fixturePlan,
+				{},
+				{
+					view,
+					command: currentPatchSourceCommand,
+					fetcher: async (url, options) => {
+						await fetcher(url, options);
+						return responseFor(Buffer.from("foreign"));
+					},
 				},
-			}),
-		).rejects.toThrow(/anonymous tarball bytes differ from the reviewed release plan/i);
+			),
+		).rejects.toThrow(
+			/anonymous tarball bytes differ from the reviewed release plan/i,
+		);
 		await expect(
-			verifyRequiredConsumerAnonymousArtifact(fixturePlan, {}, {
-				view,
-				command: currentPatchSourceCommand,
-				fetcher: async () =>
-					responseFor(Buffer.alloc(16 * 1024 * 1024 + 1), 1),
-			}),
+			verifyRequiredConsumerAnonymousArtifact(
+				fixturePlan,
+				{},
+				{
+					view,
+					command: currentPatchSourceCommand,
+					fetcher: async () =>
+						responseFor(Buffer.alloc(16 * 1024 * 1024 + 1), 1),
+				},
+			),
 		).rejects.toThrow(/tarball has an unsafe size/i);
 	});
 
@@ -916,9 +945,19 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		).toThrow(/GitHub patch release differs/i);
 	});
 
-	it.each(["24.15.0", "24.99.0", "26.0.0", "26.99.0"])("accepts supported Node runtime %s without a patch pin", (nodeVersion) => {
-		const command = (_program: string, args: string[]) => args[0] === "--version" ? "11.21.0" : JSON.stringify({ version: nodeVersion, execPath: process.execPath });
-		expect(assertReleaseToolchain(command, nodeVersion).nodeVersion).toBe(nodeVersion);
+	it.each([
+		"24.15.0",
+		"24.99.0",
+		"26.0.0",
+		"26.99.0",
+	])("accepts supported Node runtime %s without a patch pin", (nodeVersion) => {
+		const command = (_program: string, args: string[]) =>
+			args[0] === "--version"
+				? "11.21.0"
+				: JSON.stringify({ version: nodeVersion, execPath: process.execPath });
+		expect(assertReleaseToolchain(command, nodeVersion).nodeVersion).toBe(
+			nodeVersion,
+		);
 	});
 
 	it("requires a supported Node major, matching child runtime, and pnpm 11.21.0", () => {
@@ -938,8 +977,9 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(() =>
 			assertReleaseToolchain(exactToolchain, "23.0.0", process.execPath),
 		).toThrow(/requires Node 24.15\+ or 26/i);
-		expect(() => assertReleaseToolchain(exactToolchain, "24.14.99", process.execPath))
-			.toThrow(/requires Node 24.15\+ or 26/i);
+		expect(() =>
+			assertReleaseToolchain(exactToolchain, "24.14.99", process.execPath),
+		).toThrow(/requires Node 24.15\+ or 26/i);
 		expect(() =>
 			assertReleaseToolchain(() => "11.20.0", "24.19.0", process.execPath),
 		).toThrow(/requires pnpm 11\.21\.0/i);
@@ -1020,35 +1060,22 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		);
 	});
 
-	it("pins the current beta.29 Solo increment to the exact source merge", () => {
+	it("binds the next beta.29 Solo increment and rejects provisional release authority", () => {
 		const plan = loadSoloReleasePlan();
-		expect(plan.previousVersion).toBe("5.0.0-beta.29.solo.1");
-		expect(plan.version).toBe("5.0.0-beta.29.solo.2");
+		expect(plan.previousVersion).toBe("5.0.0-beta.29.solo.2");
+		expect(plan.version).toBe("5.0.0-beta.29.solo.3");
 		expect(plan.requiredSourceCommit).toBe(
-			"732d8fb540f89827443939f20d2d102531da8d17",
+			"43fbf92b800d46296a5d8edaf87874472414faa8",
 		);
 		expect(plan.sourceBaseCommit).toBe(plan.requiredSourceCommit);
 		expect(plan.reviewEvidence.enginePullRequest.mergeCommit).toBe(
 			plan.requiredSourceCommit,
 		);
-		expect(plan.reviewEvidence.enginePullRequest.number).toBe(26);
-		expect(plan.reviewEvidence.releasePullRequest.number).toBe(28);
-		expect(plan.reviewEvidence.supersededRejectedReleasePullRequests).toEqual([
-			expect.objectContaining({
-				number: 27,
-				baseCommit: "732d8fb540f89827443939f20d2d102531da8d17",
-				headCommit: "6f2f6c13cc12801a71921a2255e4ad049dc402f9",
-				mergeCommit: "013d59e4d5d619ad11ceb3df405ea6d6a987ed94",
-				planSha512:
-					"a3ed4697a604bf6f47ebdd8c562010719e0c65aae2eb16f40852923b0f73dd7bc33fe3fb741223cbdd1f82952fe8ade1074d178bd0cdfe508b9924b207f11a23",
-				outcome: "rejected",
-				receiptCreated: false,
-				authority: "historical-only",
-			}),
-		]);
+		expect(plan.reviewEvidence.enginePullRequest.number).toBe(34);
+		expect(plan.reviewEvidence.releasePullRequest.number).toBeNull();
 		expect(plan.requiredConsumer).toEqual(currentPatchConsumer);
 		expect(plan.consumedChangesets).toEqual([
-			expect.objectContaining({ id: "current-solo-canvasengine-2-2" }),
+			expect.objectContaining({ id: "public-patch-consumer" }),
 		]);
 		expect(
 			plan.carriedChangesets.find(
@@ -1058,20 +1085,14 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.inheritedReleaseDirectories).toEqual(
 			inheritedReleaseDirectories,
 		);
-		expect(plan.sourceBinding.status).toBe("final");
-		expect(plan.reviewEvidence.status).toBe("final");
-		expect(plan.reviewEvidence.independentReceipt.status).toBe("final");
+		expect(plan.sourceBinding.status).toBe("provisional");
+		expect(plan.reviewEvidence.status).toBe("provisional");
+		expect(plan.reviewEvidence.independentReceipt.status).toBe("provisional");
 		expect(
 			plan.reviewEvidence.independentReceipt.orchestratorAssignment.status,
-		).toBe("final");
-		expect(plan.provenanceAttestation.status).toBe("final");
-		expect(assertFinalReleaseBindings(plan)).toEqual({
-			sourceBinding: "final",
-			reviewEvidence: "final",
-			independentReceipt: "final",
-			orchestratorAssignment: "final",
-			provenanceAttestation: "final",
-		});
+		).toBe("provisional");
+		expect(plan.provenanceAttestation.status).toBe("provisional");
+		expect(() => assertFinalReleaseBindings(plan)).toThrow(/final/i);
 	});
 
 	it("keeps reviewer trust outside the plan and authenticates a producer-disjoint detached assignment", () => {
@@ -1281,7 +1302,9 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			"utf8",
 		);
 		expect(updatedHistory).toContain(`## ${version}`);
-		expect(updatedHistory).toContain(retainedHistory.slice(retainedHistory.indexOf("##")));
+		expect(updatedHistory).toContain(
+			retainedHistory.slice(retainedHistory.indexOf("##")),
+		);
 		expect(updatedHistory.indexOf(`## ${version}`)).toBeLessThan(
 			updatedHistory.indexOf(`## ${previousVersion}`),
 		);
@@ -1794,7 +1817,9 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			),
 		).toThrow(/squash tree does not match its exact reviewed head/i);
 		expect(calls.some((call) => call.startsWith("patch-id"))).toBe(false);
-		expect(calls.filter((call) => call.startsWith("ls-remote"))).toHaveLength(1);
+		expect(calls.filter((call) => call.startsWith("ls-remote"))).toHaveLength(
+			1,
+		);
 		expect(calls.some((call) => call.startsWith("ls-remote ls-remote"))).toBe(
 			false,
 		);
@@ -3008,9 +3033,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 					expect(npmrcState.text).toContain(
 						`registry=${currentPatchConsumer.registry}`,
 					);
-					expect(npmrcState.text).not.toMatch(
-						/@[^\n]+:registry=/,
-					);
+					expect(npmrcState.text).not.toMatch(/@[^\n]+:registry=/);
 					throw new Error("stop");
 				}),
 			).rejects.toThrow("stop");

@@ -21,3 +21,5 @@ publisher. Historical signed plans remain available through immutable Git
 checkouts; sanitization must never be mistaken for replacing historical evidence.
 Publication requires a CI environment supported by npm provenance. A local shell
 is suitable for validation and packing, and must not bypass that requirement.
+
+The public transition has a distinct provisional solo.3 plan. Existing solo.2 artifacts are immutable; applying the reviewed next transaction consumes the public dependency Changeset and advances the complete cohort. Historical verification uses the entire original checkout and its original trust schema.
