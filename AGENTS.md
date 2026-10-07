@@ -2,9 +2,8 @@
 
 Read `CONTRIBUTING.md` completely before changing this repository.
 
-- GitHub `main` is the canonical public product branch. Gitea is a checked
-  downstream backup and the private package registry, not a second development
-  authority.
+- GitHub `main` is the canonical public product branch. Packages and compatibility
+  dependencies use the public npmjs registry and public GitHub source repositories.
 - `v5` is the exact upstream-tracking branch; product changes belong on focused
   feature branches based on `main` and merge back to `main`.
 - Do not open pull requests or contribute changes to upstream RPGJS. Preserve

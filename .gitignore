@@ -34,3 +34,7 @@ public
 .vite
 .env.local
 .dev.vars
+.agent-state/
+.claude/
+CLAUDE.md
+*.tgz

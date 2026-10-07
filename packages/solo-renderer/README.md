@@ -1,9 +1,9 @@
 # @jbcom/rpgjs-solo-renderer
 
 The renderer accepts a game-owned CanvasEngine compatibility installer and runs
-it before scene creation. This keeps the canonical public package independent
-from private registries while allowing fleet games to centralize lifecycle
-workarounds in versioned `@arcade-cabinet/rpgjs-patches` releases. Each active
+it before scene creation. Applications use the public
+[`rpgjs-patches`](https://github.com/jbcom/rpgjs-patches) package to centralize
+lifecycle workarounds. Each active
 map also owns an isolated, keyed viewport and `TiledMap` element so stale async
 tileset loads or retiring camera directives cannot overwrite a newer
 destination.
@@ -24,11 +24,11 @@ There is no socket, room, sync, prediction, reconciliation, or game-facing
 Pixi adapter. Pixi remains an implementation detail of CanvasEngine.
 
 CanvasEngine, its Tiled/preset packages, Pixi, Vite, TypeScript, Vitest, and
-declaration tooling are pinned to versions checked as current for each private
+declaration tooling are pinned to versions checked as current for each
 release; renderer feature-completeness includes that alignment gate.
 Release this workspace package with `pnpm publish`, which rewrites its
 `workspace:` core dependency to the exact published Solo version. The shared
-Solo publish guard rejects `npm publish`, and the fleet-wide packed-manifest
+Solo publish guard rejects `npm publish`, and the workspace-wide packed-manifest
 check prevents registry consumers from receiving an unresolved workspace
 protocol.
 
@@ -41,7 +41,7 @@ composed path is inside a button, form control, dialog, editable region, or
 
 ```ts
 import { SoloRuntime } from '@jbcom/rpgjs-solo'
-import { installCanvasEnginePatches } from '@arcade-cabinet/rpgjs-patches'
+import { installCanvasEnginePatches } from 'rpgjs-patches'
 import {
   SoloRenderer,
   createSoloTileObstacles,
@@ -79,15 +79,13 @@ const renderer = new SoloRenderer({
 await renderer.start()
 ```
 
-The private installer is deliberately supplied by the game, not declared by
-this public package. Fleet production consumers must pin the current compatible
-release and inject it as above; public or upstream-oriented consumers may omit
-the hook when no compatibility layer is required.
+The public installer is supplied by the application through the typed injection
+interface. Install `rpgjs-patches@^0.4.0` from npmjs and inject it as above.
+Applications may omit the hook when no compatibility layer is required.
 
-The validated fleet matrix is exported as `rpgjsSoloRendererCompatibility`.
-This source cohort requires `canvasengine@2.2.0`, Vite `8.2.1`, and, for fleet
-production games, consumer-injected
-`@arcade-cabinet/rpgjs-patches@0.3.0`. The installer must run before scene
+The validated patch matrix is exported as `rpgjsSoloRendererCompatibility`.
+This source cohort requires `canvasengine@2.4.0`, Vite `8.3.3`, and consumer-injected
+`rpgjs-patches@^0.4.0`. The installer must run before scene
 creation; `SoloRenderer` guarantees that order when it receives
 `installCanvasEnginePatches` in its options.
 

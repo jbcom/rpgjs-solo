@@ -51,10 +51,10 @@ import {
 export const rootDirectory = dirname(dirname(fileURLToPath(import.meta.url)));
 export const defaultPlanPath = join(
 	rootDirectory,
-	"docs/internal/releases/solo-beta29-solo2.plan.json",
+	"docs/internal/releases/solo-beta29-solo3.plan.json",
 );
 const canonicalPlanRelativePath =
-	"docs/internal/releases/solo-beta29-solo2.plan.json";
+	"docs/internal/releases/solo-beta29-solo3.plan.json";
 const dependencyFields = [
 	"dependencies",
 	"devDependencies",
@@ -66,42 +66,39 @@ const canonicalMetadata = {
 	homepageRoot: "https://github.com/jbcom/rpgjs-solo/tree/main/",
 	bugsUrl: "https://github.com/jbcom/rpgjs-solo/issues",
 };
-const releaseNodeVersion = "24.19.0";
-const releasePnpmVersion = "11.21.0";
-const fleetPatchCompatibility = new Map([
-	["0.2.0", { canvasengine: "2.1.1", vite: "8.2.0" }],
+const releaseNodeMajors = new Set([24, 26]);
+const releasePnpmVersion = "12.10.1";
+const patchCompatibility = new Map([
 	[
-		"0.3.0",
+		"0.4.0",
 		{
-			canvasengine: "2.2.0",
-			vite: "8.2.1",
+			range: "^0.4.0",
+			canvasengine: "2.4.0",
+			vite: "8.3.3",
 			registry:
-				"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/",
+				"https://registry.npmjs.org/",
 			integrity:
-				"sha512-KEpLrX/xkKfUftLcPDS9i6VTSzsAqndYvybFBSoFnHPA20cLlyZ7KyhVZ+nq7zX7gVUWkxP6AuDwtJ8VvSO5oQ==",
-			shasum: "fe8e6ed84f31d06415c82a61fbc212e151664362",
+				"sha512-QvuonXRzBrEDbPJxResH2x6LcbdBvpY6mi7cF0ArC224u8bCQ+Vl32q3R721a7ttmAR7ff6qYU4a9X1mF9JDBA==",
+			shasum: "d401481b2ce41834bdf970f233f6e6d68a55cfcd",
 			tarball:
-				"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/%40arcade-cabinet%2Frpgjs-patches/-/0.3.0/rpgjs-patches-0.3.0.tgz",
+				"https://registry.npmjs.org/rpgjs-patches/-/rpgjs-patches-0.4.0.tgz",
 			tarballSha256:
-				"09ee17ac365c08e96487a6e59da349bf7fe358f81683b0cc3bb1010338c122b3",
-			sourceCommit: "432cc108b1b6229577d907611487c315ad03e8f8",
-			tagObject: "78677ce7379dcedac13dc19b5aa529017fb0ab36",
-			giteaRelease:
-				"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches/releases/tag/v0.3.0",
+				"c223c34a6eda57e1b024095eac244fe3ad1458a5228fcb0002a5d1790b90c62e",
+			sourceCommit: "7608ef012078a1aa1d88f5af20d52309497947f6",
+			tagObject: "7608ef012078a1aa1d88f5af20d52309497947f6",
+			githubRelease:
+				"https://github.com/jbcom/rpgjs-patches/releases/tag/v0.4.0",
 		},
 	],
 ]);
-const currentFleetPatchVersion = "0.3.0";
-const maximumFleetTarballBytes = 16 * 1024 * 1024;
-// The patches live only on Gitea. jbcom on GitHub is for public OSS releases;
-// rpgjs-patches is private fleet tooling, so its GitHub copy was removed on
-// 2026-08-09 after verifying the Gitea repository carried the identical history,
-// tags, release, and published package.
-const fleetPatchSourceRepositories = {
-	gitea: {
-		repository: "arcade-cabinet/rpgjs-patches",
+const currentPatchVersion = "0.4.0";
+const maximumPatchTarballBytes = 16 * 1024 * 1024;
+// Public source and npm artifact are verified independently.
+const patchSourceRepositories = {
+	github: {
+		repository: "jbcom/rpgjs-patches",
 		gitUrl:
-			"https://git.local.jonbogaty.com/arcade-cabinet/rpgjs-patches.git",
+			"https://github.com/jbcom/rpgjs-patches.git",
 	},
 };
 const standardChangesetDocuments = new Set(["README.md"]);
@@ -496,8 +493,9 @@ export const assertReleaseToolchain = (
 	nodeExecPath = process.execPath,
 ) => {
 	assert(
-		nodeVersion === releaseNodeVersion,
-		`Solo release requires Node ${releaseNodeVersion}; received ${nodeVersion}`,
+		releaseNodeMajors.has(Number(nodeVersion.split(".")[0])) &&
+			(Number(nodeVersion.split(".")[0]) !== 24 || Number(nodeVersion.split(".")[1]) >= 15),
+		`Solo release requires Node 24.15+ or 26; received ${nodeVersion}`,
 	);
 	const pnpmVersion = command("pnpm", ["--version"]);
 	assert(
@@ -513,9 +511,9 @@ export const assertReleaseToolchain = (
 		]),
 	);
 	assert(
-		childNode.version === releaseNodeVersion &&
+		childNode.version === nodeVersion &&
 			realpathSync(childNode.execPath) === realpathSync(nodeExecPath),
-		`Solo release pnpm child runtime must be the exact Node ${releaseNodeVersion} CLI runtime; received ${childNode.version} at ${childNode.execPath}`,
+		`Solo release pnpm child runtime must be the exact Node 24 or 26 CLI runtime; received ${childNode.version} at ${childNode.execPath}`,
 	);
 	return {
 		nodeVersion,
@@ -610,8 +608,8 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 		"upstreamCommit must be immutable",
 	);
 	assert(
-		plan.registry === "https://git.local.jonbogaty.com/api/packages/jbcom/npm/",
-		"Solo registry must be the documented Gitea registry",
+		plan.registry === "https://registry.npmjs.org/",
+		"Solo registry must be the public npm registry",
 	);
 	assert(
 		plan.canonical?.repository === "https://github.com/jbcom/rpgjs-solo.git" &&
@@ -691,16 +689,16 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 			),
 		"Inherited release directories must be unique package paths",
 	);
-	const requiredCompatibility = fleetPatchCompatibility.get(
+	const requiredCompatibility = patchCompatibility.get(
 		plan.requiredConsumer?.version,
 	);
 	assert(
-		plan.requiredConsumer?.package === "@arcade-cabinet/rpgjs-patches" &&
+		plan.requiredConsumer?.package === "rpgjs-patches" &&
 			requiredCompatibility &&
 			Object.entries(requiredCompatibility)
 				.filter(([field]) => !["canvasengine", "vite"].includes(field))
 				.every(([field, value]) => plan.requiredConsumer[field] === value),
-		"The release plan must name a supported exact fleet compatibility consumer",
+		"The release plan must name a supported exact patch compatibility consumer",
 	);
 	assert(
 		["provisional", "final"].includes(plan.reviewEvidence?.status),
@@ -924,7 +922,7 @@ const assertPackageMetadata = (record, manifest, plan) => {
 	);
 	assert(manifest.private !== true, `${record.name} is not publishable`);
 	assert(
-		manifest.engines?.node === ">=24 <25",
+		manifest.engines?.node === ">=24 <25 || >=26 <27",
 		`${record.name} must require Node 24`,
 	);
 	assert(
@@ -1234,7 +1232,7 @@ const ed25519PublicKeyFromRaw = (bytes) =>
 	});
 
 const parseExternalTrustRoot = (trustRoot, pinnedKeyId) => {
-	if (trustRoot.schemaVersion === "arcade-cabinet.orchestrator-trust-root/v1") {
+	if (trustRoot.schemaVersion === "rpgjs-solo.orchestrator-trust-root/v1") {
 		const raw = decodeCanonicalBase64(
 			trustRoot.publicKey?.value,
 			32,
@@ -1243,7 +1241,7 @@ const parseExternalTrustRoot = (trustRoot, pinnedKeyId) => {
 		const keyId = digest("sha256", raw);
 		assert(
 			trustRoot.trustRootId ===
-				"arcade-cabinet-orchestrator-assignment-ed25519-v1" &&
+				"rpgjs-solo-orchestrator-assignment-ed25519-v1" &&
 				trustRoot.status === "ACTIVE" &&
 				trustRoot.normativeArtifact === true &&
 				trustRoot.scope?.includes(
@@ -1255,7 +1253,7 @@ const parseExternalTrustRoot = (trustRoot, pinnedKeyId) => {
 				trustRoot.publicKey?.rawBytes === 32 &&
 				trustRoot.publicKey?.sha256 === keyId &&
 				keyId === pinnedKeyId,
-			"External arcade-cabinet orchestrator trust root does not match its raw-key fingerprint pin",
+			"External rpgjs-solo orchestrator trust root does not match its raw-key fingerprint pin",
 		);
 		return { key: ed25519PublicKeyFromRaw(raw), keyId, representation: "raw" };
 	}
@@ -1600,10 +1598,10 @@ const expectedAppliedManifest = (source, path, plan) => {
 	return `${JSON.stringify(manifest, null, 2)}\n`;
 };
 
-const readHeadEntry = (root, path, command = run) => {
-	const treeEntry = command("git", ["ls-tree", "HEAD", "--", path], {
-		cwd: root,
-	});
+const readHeadEntry = (root, path, command = run, treeEntries) => {
+	const treeEntry = treeEntries
+		? (treeEntries.get(path) ?? "")
+		: command("git", ["ls-tree", "HEAD", "--", path], { cwd: root });
 	const match = /^(100644|100755) blob [0-9a-f]{40}\t/.exec(treeEntry);
 	assert(match, `${path} HEAD entry must be a regular Git blob`);
 	return {
@@ -1617,10 +1615,21 @@ const readHeadEntry = (root, path, command = run) => {
 
 const createApplyContentTransitions = (root, plan, command = run) => {
 	const cohort = new Set(plan.packages.map(({ name }) => name));
+	// Read immutable HEAD metadata once. NUL delimiters preserve exact paths;
+	// readHeadEntry still rejects every entry that is not a regular Git blob.
+	const treeEntries = new Map(
+		command("git", ["ls-tree", "-r", "-z", "HEAD"], {
+			cwd: root,
+			trim: false,
+		})
+			.split("\0")
+			.filter(Boolean)
+			.map((entry) => [entry.slice(entry.indexOf("\t") + 1), entry]),
+	);
 	const descriptors = [];
 	for (const absolutePath of walkPackageJson(root)) {
 		const path = relative(root, absolutePath);
-		const { source, mode } = readHeadEntry(root, path, command);
+		const { source, mode } = readHeadEntry(root, path, command, treeEntries);
 		const manifest = JSON.parse(source);
 		const dependencyNames = dependencyFields.flatMap((field) =>
 			Object.keys(manifest[field] ?? {}),
@@ -1641,7 +1650,7 @@ const createApplyContentTransitions = (root, plan, command = run) => {
 	}
 	const changesets = plan.consumedChangesets.map((entry) => {
 		const path = `.changeset/${entry.id}.md`;
-		const { source } = readHeadEntry(root, path, command);
+		const { source } = readHeadEntry(root, path, command, treeEntries);
 		assert(
 			digest("sha256", source) === entry.sha256,
 			`${entry.id} HEAD bytes differ from the release plan`,
@@ -1650,19 +1659,9 @@ const createApplyContentTransitions = (root, plan, command = run) => {
 	});
 	for (const record of plan.packages) {
 		const path = `${record.directory}/CHANGELOG.md`;
-		let headEntry = "";
-		try {
-			headEntry = command(
-				"git",
-				["ls-tree", "--name-only", "HEAD", "--", path],
-				{
-					cwd: root,
-				},
-			);
-		} catch {
-			headEntry = "";
-		}
-		const existing = headEntry ? readHeadEntry(root, path, command) : null;
+		const existing = treeEntries.has(path)
+			? readHeadEntry(root, path, command, treeEntries)
+			: null;
 		descriptors.push({
 			path,
 			kind: "changelog",
@@ -1674,7 +1673,7 @@ const createApplyContentTransitions = (root, plan, command = run) => {
 	}
 	for (const entry of plan.consumedChangesets) {
 		const path = `.changeset/${entry.id}.md`;
-		const { source, mode } = readHeadEntry(root, path, command);
+		const { source, mode } = readHeadEntry(root, path, command, treeEntries);
 		descriptors.push({
 			path,
 			kind: "changeset-delete",
@@ -1957,20 +1956,7 @@ export const assertCanonicalMain = (root, plan, command = run) => {
 		],
 		{ cwd: root },
 	).split(/\s/)[0];
-	const giteaHead = command(
-		"git",
-		[
-			"ls-remote",
-			plan.backup.repository,
-			`refs/heads/${plan.canonical.branch}`,
-		],
-		{ cwd: root },
-	).split(/\s/)[0];
 	assert(head === githubHead, "Local HEAD is not exact canonical GitHub main");
-	assert(
-		head === giteaHead,
-		"Gitea backup main is not exact canonical GitHub main",
-	);
 	assertReleaseCommitAncestry(root, plan, head, command);
 	const reviewEvidence = assertReviewedCanonicalMain(plan, head, command, root);
 	const tree = command("git", ["rev-parse", "HEAD^{tree}"], { cwd: root });
@@ -2410,13 +2396,13 @@ const isolatedNpmCommandOptions = (env) => ({
 		: {}),
 });
 
-export const withAnonymousFleetRegistry = async (registry, callback) => {
+export const withAnonymousPatchRegistry = async (registry, callback) => {
 	const directory = mkdtempSync(join(tmpdir(), "rpgjs-solo-npm-auth-"));
 	const npmrc = join(directory, ".npmrc");
 	const globalNpmrc = join(directory, "global.npmrc");
 	writeExclusiveFile(
 		npmrc,
-		`registry=https://registry.npmjs.org/\n@arcade-cabinet:registry=${registry}\nalways-auth=false\n`,
+		`registry=${registry}\nalways-auth=false\n`,
 		0o600,
 	);
 	writeExclusiveFile(globalNpmrc, "\n", 0o600);
@@ -2440,11 +2426,9 @@ export const withEphemeralNpmAuth = async (token, registry, callback) => {
 	const npmrc = join(directory, ".npmrc");
 	const globalNpmrc = join(directory, "global.npmrc");
 	const registryPath = new URL(registry).host + new URL(registry).pathname;
-	const arcadeRegistry =
-		"https://git.local.jonbogaty.com/api/packages/arcade-cabinet/npm/";
 	writeExclusiveFile(
 		npmrc,
-		`registry=https://registry.npmjs.org/\n@jbcom:registry=${registry}\n@arcade-cabinet:registry=${arcadeRegistry}\n//${registryPath}:_authToken=${token}\nalways-auth=true\n`,
+		`registry=${registry}\n//${registryPath}:_authToken=${token}\nalways-auth=true\n`,
 		0o600,
 	);
 	writeExclusiveFile(globalNpmrc, "\n", 0o600);
@@ -2517,7 +2501,7 @@ export const loadProvenance = (
 	assert(
 		JSON.stringify(manifest.requiredConsumer) ===
 			JSON.stringify(plan.requiredConsumer),
-		"Provenance fleet compatibility consumer drifted",
+		"Provenance patch compatibility consumer drifted",
 	);
 	assert(
 		manifest.lockfile.path === "pnpm-lock.yaml",
@@ -2715,7 +2699,7 @@ const parseRemoteTagEvidence = (output, tagReference) => {
 	);
 	return {
 		tagObject: references.get(tagReference),
-		sourceCommit: references.get(`${tagReference}^{}`),
+		sourceCommit: references.get(`${tagReference}^{}`) ?? references.get(tagReference),
 	};
 };
 
@@ -2725,18 +2709,18 @@ export const assertRequiredConsumerSourceReleaseEvidence = (
 ) => {
 	const consumer = plan.requiredConsumer;
 	assert(
-		consumer.version === currentFleetPatchVersion,
-		"Fleet patch source-release verification requires the current reviewed version",
+		consumer.version === currentPatchVersion,
+		"Patch source-release verification requires the current reviewed version",
 	);
-	const tag = `v${currentFleetPatchVersion}`;
+	const tag = `v${currentPatchVersion}`;
 	const tagReference = `refs/tags/${tag}`;
-	const expectedGiteaRelease =
-		`https://git.local.jonbogaty.com/${fleetPatchSourceRepositories.gitea.repository}/releases/tag/${tag}`;
+	const expectedGithubRelease =
+		`https://github.com/${patchSourceRepositories.github.repository}/releases/tag/${tag}`;
 	assert(
-		consumer.giteaRelease === expectedGiteaRelease,
-		"Fleet patch source release URLs differ from the reviewed repositories",
+		consumer.githubRelease === expectedGithubRelease,
+		"Patch source release URLs differ from the reviewed repositories",
 	);
-	for (const source of Object.values(fleetPatchSourceRepositories)) {
+	for (const source of Object.values(patchSourceRepositories)) {
 		const observed = parseRemoteTagEvidence(
 			command(
 				"git",
@@ -2751,31 +2735,28 @@ export const assertRequiredConsumerSourceReleaseEvidence = (
 			`${source.repository} ${tag} does not resolve to the reviewed tag object and source commit`,
 		);
 	}
-	const giteaRelease = JSON.parse(
+	const githubRelease = JSON.parse(
 		command(
-			"tea",
+			"gh",
 			[
 				"api",
-				`repos/${fleetPatchSourceRepositories.gitea.repository}/releases/tags/${tag}`,
-				"--repo",
-				fleetPatchSourceRepositories.gitea.repository,
+				`repos/${patchSourceRepositories.github.repository}/releases/tags/${tag}`,
 			],
 			{ timeout: 600_000 },
 		),
 	);
 	assert(
-		giteaRelease.tag_name === tag &&
-			giteaRelease.target_commitish === consumer.sourceCommit &&
-			giteaRelease.html_url === consumer.giteaRelease &&
-			giteaRelease.draft === false &&
-			giteaRelease.prerelease === false,
-		"Gitea fleet patch release differs from the reviewed release plan",
+		githubRelease.tag_name === tag &&
+			githubRelease.html_url === consumer.githubRelease &&
+			githubRelease.draft === false &&
+			githubRelease.prerelease === false,
+		"GitHub patch release differs from the reviewed release plan",
 	);
 	return {
 		tag,
 		tagObject: consumer.tagObject,
 		sourceCommit: consumer.sourceCommit,
-		giteaRelease: consumer.giteaRelease,
+		githubRelease: consumer.githubRelease,
 	};
 };
 
@@ -2788,14 +2769,14 @@ export const verifyRequiredConsumerAnonymousArtifact = async (
 	const sourceRelease = assertRequiredConsumerSourceReleaseEvidence(plan, command);
 	assert(
 		typeof fetcher === "function",
-		"Anonymous fleet package verification requires fetch",
+		"Anonymous patch package verification requires fetch",
 	);
-	const reviewedCompatibility = fleetPatchCompatibility.get(
-		currentFleetPatchVersion,
+	const reviewedCompatibility = patchCompatibility.get(
+		currentPatchVersion,
 	);
 	assert(
 		plan.requiredConsumer.tarball === reviewedCompatibility.tarball,
-		"Fleet compatibility tarball URL differs from the executable review allowlist",
+		"Patch compatibility tarball URL differs from the executable review allowlist",
 	);
 	const response = await fetcher(reviewedCompatibility.tarball, {
 		redirect: "error",
@@ -2811,12 +2792,12 @@ export const verifyRequiredConsumerAnonymousArtifact = async (
 	if (declaredLength !== null && declaredLength !== undefined)
 		assert(
 			/^\d+$/.test(declaredLength) &&
-				Number(declaredLength) <= maximumFleetTarballBytes,
-			"Fleet compatibility tarball declares an unsafe size",
+				Number(declaredLength) <= maximumPatchTarballBytes,
+			"Patch compatibility tarball declares an unsafe size",
 		);
 	assert(
 		response.body && typeof response.body.getReader === "function",
-		"Fleet compatibility tarball response is not a readable byte stream",
+		"Patch compatibility tarball response is not a readable byte stream",
 	);
 	const reader = response.body.getReader();
 	const chunks = [];
@@ -2827,12 +2808,12 @@ export const verifyRequiredConsumerAnonymousArtifact = async (
 			if (done) break;
 			assert(
 				value instanceof Uint8Array,
-				"Fleet compatibility tarball stream returned a non-byte chunk",
+				"Patch compatibility tarball stream returned a non-byte chunk",
 			);
 			tarballLength += value.byteLength;
-			if (tarballLength > maximumFleetTarballBytes) {
+			if (tarballLength > maximumPatchTarballBytes) {
 				await reader.cancel();
-				throw new Error("Fleet compatibility tarball has an unsafe size");
+				throw new Error("Patch compatibility tarball has an unsafe size");
 			}
 			chunks.push(Buffer.from(value));
 		}
@@ -2841,8 +2822,8 @@ export const verifyRequiredConsumerAnonymousArtifact = async (
 	}
 	const tarballBytes = Buffer.concat(chunks, tarballLength);
 	assert(
-		tarballBytes.length > 0 && tarballBytes.length <= maximumFleetTarballBytes,
-		"Fleet compatibility tarball has an unsafe size",
+		tarballBytes.length > 0 && tarballBytes.length <= maximumPatchTarballBytes,
+		"Patch compatibility tarball has an unsafe size",
 	);
 	assert(
 		digest("sha256", tarballBytes) === plan.requiredConsumer.tarballSha256 &&
@@ -2918,10 +2899,11 @@ export const publishedConsumerInstallArgs = Object.freeze([
 	"install",
 	"--ignore-scripts",
 	"--ignore-workspace",
+	"--strict-peer-dependencies",
 ]);
 
 export const createPublishedConsumerContract = (manifest, plan) => {
-	const compatibility = fleetPatchCompatibility.get(
+	const compatibility = patchCompatibility.get(
 		plan.requiredConsumer.version,
 	);
 	assert(
@@ -2935,14 +2917,19 @@ export const createPublishedConsumerContract = (manifest, plan) => {
 		type: "module",
 		dependencies: Object.fromEntries([
 			...manifest.packages.map(({ name }) => [name, plan.version]),
-			[plan.requiredConsumer.package, plan.requiredConsumer.version],
+			[plan.requiredConsumer.package, plan.requiredConsumer.range ?? "^0.4.0"],
 			["@types/react", "19.2.17"],
 			["canvasengine", compatibility.canvasengine],
-			["pixi.js", "8.19.0"],
+			["pixi.js", "8.22.0"],
 			["react", "19.2.8"],
 			["typescript", "7.0.2"],
 			["vite", compatibility.vite],
 		]),
+		pnpm: {
+			overrides: {
+				[plan.requiredConsumer.package]: plan.requiredConsumer.version,
+			},
+		},
 	},
 	runtimeCheck: `import { SoloRuntime } from '@jbcom/rpgjs-solo'
 import { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'
@@ -2975,7 +2962,7 @@ export default defineConfig({
   plugins: [rpgjsSoloBoundary()]
 })
 `,
-	browserEntry: `import { installCanvasEnginePatches } from '@arcade-cabinet/rpgjs-patches'
+	browserEntry: `import { installCanvasEnginePatches } from 'rpgjs-patches'
 import { SoloRuntime } from '@jbcom/rpgjs-solo'
 import { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'
 import { resolveInitialMute } from '@jbcom/rpgjs-solo-renderer'
@@ -3191,7 +3178,8 @@ export const publishVerifiedPackageBytes = async ({
 		token,
 		forceAuth: { token },
 		defaultTag: plan.candidateDistTag,
-		access: null,
+		access: "public",
+		provenance: true,
 		npmVersion: `rpgjs-solo-release/${plan.version}`,
 		algorithms: ["sha512"],
 	});
@@ -3275,7 +3263,7 @@ export const publishCandidateCohort = async ({
 
 const publishCandidate = async (manifest, manifestPath, plan, args) => {
 	requireExecution(args, plan);
-	await withAnonymousFleetRegistry(plan.requiredConsumer.registry, async (env) =>
+	await withAnonymousPatchRegistry(plan.requiredConsumer.registry, async (env) =>
 		verifyRequiredConsumerAnonymousArtifact(plan, env),
 	);
 	await withEphemeralNpmAuth(
@@ -3796,147 +3784,6 @@ export const createGitHubReleaseAdapter = (plan, command = run) => {
 	};
 };
 
-export const createGiteaReleaseAdapter = (plan, command = run) => {
-	const repo = plan.backup.apiRepository;
-	assert(/^[^/]+\/[^/]+$/.test(repo), "Invalid Gitea API repository");
-	const endpoint = `repos/${repo}/releases`;
-	return {
-		name: "gitea",
-		getRelease(tag) {
-			try {
-				const value = JSON.parse(
-					command(
-						"tea",
-						[
-							"api",
-							`${endpoint}/tags/${encodeURIComponent(tag)}`,
-							"--repo",
-							repo,
-						],
-						{ timeout: 600_000 },
-					),
-				);
-				const isRecord =
-					value !== null && typeof value === "object" && !Array.isArray(value);
-				const keys = isRecord ? Object.keys(value).sort() : [];
-				if (
-					isRecord &&
-					value.message === "not found" &&
-					keys.every((key) => key === "message" || key === "url") &&
-					(value.url === undefined || typeof value.url === "string")
-				)
-					return undefined;
-				assert(
-					isRecord &&
-						Number.isInteger(value.id) &&
-						typeof value.tag_name === "string" &&
-						typeof value.target_commitish === "string" &&
-						typeof value.name === "string" &&
-						typeof value.body === "string" &&
-						typeof value.draft === "boolean" &&
-						typeof value.prerelease === "boolean" &&
-						(value.assets == null || Array.isArray(value.assets)),
-					"Gitea release API returned a malformed successful response",
-				);
-				return {
-					id: value.id,
-					tag: value.tag_name,
-					target: value.target_commitish,
-					title: value.name,
-					body: value.body,
-					draft: value.draft,
-					prerelease: value.prerelease,
-					assets: value.assets ?? [],
-				};
-			} catch (error) {
-				if (errorLooksMissing(error)) return undefined;
-				throw error;
-			}
-		},
-		createDraftRelease(expected) {
-			command(
-				"tea",
-				[
-					"releases",
-					"create",
-					"--tag",
-					expected.tag,
-					"--target",
-					expected.target,
-					"--title",
-					expected.title,
-					"--note-file",
-					expected.notesPath,
-					"--draft",
-					"--prerelease",
-					"--repo",
-					repo,
-				],
-				{ timeout: 600_000 },
-			);
-		},
-		publishRelease(_release, expected) {
-			command(
-				"tea",
-				[
-					"releases",
-					"edit",
-					expected.tag,
-					"--tag",
-					expected.tag,
-					"--target",
-					expected.target,
-					"--title",
-					expected.title,
-					"--note",
-					expected.body,
-					"--draft=false",
-					"--prerelease=true",
-					"--repo",
-					repo,
-				],
-				{ timeout: 600_000 },
-			);
-		},
-		uploadAsset(_release, asset) {
-			command(
-				"tea",
-				[
-					"releases",
-					"assets",
-					"create",
-					plan.trainTag,
-					asset.path,
-					"--repo",
-					repo,
-				],
-				{ timeout: 600_000 },
-			);
-		},
-		downloadAsset(_release, asset, destination) {
-			assert(
-				typeof asset.browser_download_url === "string" &&
-					asset.browser_download_url.startsWith("https://") &&
-					new URL(asset.browser_download_url).hostname ===
-						new URL(plan.backup.repository).hostname,
-				`Gitea asset ${asset.name} has no authenticated download URL`,
-			);
-			command(
-				"tea",
-				[
-					"api",
-					asset.browser_download_url,
-					"--output",
-					destination,
-					"--repo",
-					repo,
-				],
-				{ timeout: 600_000 },
-			);
-		},
-	};
-};
-
 const publishReleases = async (manifest, manifestPath, plan, args) => {
 	requireExecution(args, plan);
 	const expected = prepareReleaseEvidence(manifest, manifestPath, plan, {
@@ -3984,7 +3831,6 @@ const publishReleases = async (manifest, manifestPath, plan, args) => {
 	reconcileLocalTags(tags, manifest.source.commit);
 	reconcileRemoteTags(plan.canonical.repository, tags, manifest.source.commit);
 	const github = createGitHubReleaseAdapter(plan);
-	const gitea = createGiteaReleaseAdapter(plan);
 	await reconcileReleaseRemotes({
 		expected,
 		remotes: [github],
@@ -3993,16 +3839,7 @@ const publishReleases = async (manifest, manifestPath, plan, args) => {
 			secureAtomicWriteJson(journalPath, journal, { purpose: journalPurpose });
 		},
 	});
-	reconcileRemoteTags(plan.backup.repository, tags, manifest.source.commit);
-	await reconcileReleaseRemotes({
-		expected,
-		remotes: [gitea],
-		onVerified(name, result) {
-			journal.remotes[name] = result;
-			secureAtomicWriteJson(journalPath, journal, { purpose: journalPurpose });
-		},
-	});
-	journal.complete = ["github", "gitea"].every(
+	journal.complete = ["github"].every(
 		(name) => journal.remotes[name]?.tag === plan.trainTag,
 	);
 	assert(journal.complete, "Source release reconciliation is incomplete");
@@ -4055,7 +3892,7 @@ export const main = async (
 			validateSoloReleaseState(rootDirectory, plan).phase === "applied",
 			"pack requires the applied version phase",
 		);
-		await withAnonymousFleetRegistry(
+		await withAnonymousPatchRegistry(
 			plan.requiredConsumer.registry,
 			async (env) => verifyRequiredConsumerAnonymousArtifact(plan, env),
 		);
@@ -4089,7 +3926,7 @@ export const main = async (
 		await publishCandidate(manifest, args.manifest, plan, args);
 	else if (args.command === "verify-candidate") {
 		requireExecution(args, plan);
-		await withAnonymousFleetRegistry(
+		await withAnonymousPatchRegistry(
 			plan.requiredConsumer.registry,
 			async (env) => verifyRequiredConsumerAnonymousArtifact(plan, env),
 		);

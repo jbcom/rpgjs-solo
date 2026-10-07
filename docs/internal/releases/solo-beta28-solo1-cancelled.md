@@ -10,7 +10,7 @@ already advanced from adopted commit
 `c858081051a18bc9410cb2f78deafcc31a40f07f` to released commit
 `2fab01fb8e93ad13902b07db28935f058b387213`.
 
-Publishing the beta.28 train as `latest` would violate the repository and fleet
+Publishing the beta.28 train as `latest` would violate the repository and patch
 rule that a private package cannot be feature-complete against a knowingly
 stale underlying release. No package was versioned, tagged, or published. The
 draft release branch is retained only as local rejected evidence until branch

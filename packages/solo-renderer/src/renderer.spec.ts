@@ -60,7 +60,7 @@ describe('SoloRenderer CanvasEngine compatibility', () => {
     renderer.destroy()
   })
 
-  it('does not require a private fleet package in public consumers', () => {
+  it('allows consumers to omit the compatibility installer', () => {
     const target = document.createElement('div')
     const options = {
       target,
@@ -78,11 +78,11 @@ describe('SoloRenderer CanvasEngine compatibility', () => {
 
   it('publishes the exact consumer-injected compatibility matrix', () => {
     expect(rpgjsSoloRendererCompatibility).toEqual({
-      canvasengine: '2.2.0',
-      vite: '8.2.1',
+      canvasengine: '2.4.0',
+      vite: '8.3.3',
       patches: {
-        package: '@arcade-cabinet/rpgjs-patches',
-        version: '0.3.0',
+        package: 'rpgjs-patches',
+        version: '^0.4.0',
         installer: 'installCanvasEnginePatches',
         timing: 'before-scene-bootstrap'
       }

@@ -17,7 +17,6 @@ silently re-enter Solo.
 ```bash
 git fetch upstream v5
 git fetch origin v5 main
-git fetch gitea v5 main
 git rev-list --left-right --count origin/v5...upstream/v5
 git log --oneline origin/v5..upstream/v5
 ```
@@ -49,11 +48,8 @@ to upstream.
 ## Repository topology
 
 `https://github.com/jbcom/rpgjs-solo` is the canonical public repository.
-`https://git.local.jonbogaty.com/jbcom/rpgjs-solo` is a checked downstream
-backup and hosts the private `@jbcom` package registry. The Mini's no-force
-synchronization service must run in `github-to-gitea` mode so GitHub refs may
-advance Gitea but Gitea never becomes an independent development authority.
-Any divergence alerts and stops for manual reconciliation.
+Package distribution uses the public npmjs registry. Product changes and
+release evidence belong to the canonical GitHub repository.
 
 ## Current baseline
 
@@ -80,18 +76,16 @@ Any divergence alerts and stops for manual reconciliation.
 ### Downstream package stewardship blocker
 
 The public renderer exposes a typed `installCanvasEnginePatches` injection
-boundary instead of depending on the fleet's private registry. Fleet production
-consumers must inject a validated private release with an exact compatible
-CanvasEngine peer. The 2.2 cohort requires
-`@arcade-cabinet/rpgjs-patches@0.3.0` with exact `canvasengine@2.2.0`; the Solo
-line is not fleet-release-complete until that immutable package is merged,
-published, anonymously fetched, and proved in a real LAN game consumer.
+boundary. Applications inject the public `rpgjs-patches@^0.4.0` release
+from [jbcom/rpgjs-patches](https://github.com/jbcom/rpgjs-patches), with
+`canvasengine@2.4.0`. The release verifier checks the exact npm artifact and
+GitHub source identity before running the clean consumer.
 
 ### 2026-08-09 CanvasEngine 2.2 and current-toolchain overlay
 
 The upstream RPGJS baseline remains `2fab01fb`; this is a deliberately separate
 fork-owned compatibility overlay rather than a fabricated upstream sync. The
-complete 32-importer workspace advances to Node `24.19.0`, pnpm `11.21.0`, Vite
+complete 32-importer workspace advances to Node `24` or `26`, pnpm `11.21.0`, Vite
 `8.2.1`, and CanvasEngine/compiler/presets/Tiled/testing `2.2.0`.
 
 CanvasEngine 2.2 made two previously implicit boundaries observable during the
@@ -105,14 +99,14 @@ architecture intact.
 
 `@jbcom/rpgjs-solo-renderer` exports
 `rpgjsSoloRendererCompatibility` as the machine-readable admission record. It
-retains the public, consumer-owned injection seam and records the exact private
-patch package without importing private registry code into this public fork.
+retains the public, consumer-owned injection seam and records the reviewed public
+patch package without importing public registry code into this public fork.
 
 ### `c8580810..2fab01fb` audited product candidate
 
 The beta.29 line arrived after the beta.28 Solo source and toolchain work had
 passed exact-main checks. Therefore `5.0.0-beta.28.solo.1` must not be published
-or promoted to the private registry's `latest` tag. The current-underlying rule
+or promoted to the public registry's `latest` tag. The current-underlying rule
 requires beta.29 adoption first.
 
 The fixed audit range contains 17 implementation commits followed by three
@@ -133,7 +127,7 @@ sprite-alpha bounds; and associated documentation and tests.
   decision authority.
 - **Routed to the existing Yuka governor seam:** combat-planning and boss-phase
   semantics are gap-audited into downstream
-  `@arcade-cabinet/ai-yuka@0.18.0`. The upstream behavior-tree and `RpgPlayer`
+  `@rpgjs-solo/ai-yuka@0.18.0`. The upstream behavior-tree and `RpgPlayer`
   implementation is excluded from Solo execution. Solo does not depend on
   Yuka; governors consume the same public command/proposal contract as human
   controls.
@@ -146,7 +140,7 @@ sprite-alpha bounds; and associated documentation and tests.
 The merge is expected to conflict in four inherited manifests,
 `packages/studio/src/server.ts`, and `pnpm-lock.yaml`. Resolutions must take the
 beta.29 inherited package identities and behavior while retaining the fork's
-newer exact Node 24.19.0/pnpm 11.21.0/Vite/declaration toolchain, direct-dependency currency,
+supported Node 24.15+ or 26/pnpm 12.10.1/Vite/declaration toolchain, direct-dependency currency,
 Hono exclusion, Solo packages, GitHub authority, and production-boundary gates.
 The lockfile is regenerated; it is never resolved by choosing one parent.
 
@@ -168,7 +162,7 @@ look safe on `main`, because a later exact `v5` fast-forward can replace those
 bytes without a fork review.
 
 Fork validation lives at the distinct `.github/workflows/fork-ci.yml` path on
-canonical `main`. It has read-only permissions, exact Node 24.19.0, the complete Solo gate,
+canonical `main`. It has read-only permissions, Node 24.15+ or 26, the complete Solo gate,
 no versioning or publishing job, and a required `workflow_dispatch` commit input
 for validating an exact tracking SHA. Every future `v5` fast-forward follows
 this order:

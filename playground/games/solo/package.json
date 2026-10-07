@@ -12,10 +12,10 @@
     "@jbcom/rpgjs-solo": "workspace:5.0.0-beta.29.solo.2",
     "@jbcom/rpgjs-solo-renderer": "workspace:5.0.0-beta.29.solo.2",
     "@rpgjs/ui-css": "workspace:5.0.0-beta.25",
-    "pixi.js": "8.19.0"
+    "pixi.js": "8.22.0"
   },
   "devDependencies": {
     "@jbcom/rpgjs-solo-vite": "workspace:5.0.0-beta.29.solo.2",
-    "vite": "8.2.1"
+    "vite": "8.3.3"
   }
 }

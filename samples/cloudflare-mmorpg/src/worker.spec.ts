@@ -1,5 +1,18 @@
-import { SELF } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { createTestHarness } from "wrangler";
+
+// Run the built Worker in real workerd without coupling the test runner to
+// Cloudflare's Vitest-4-only pool internals. Reset storage before each test.
+const harness = createTestHarness({
+  workers: [{
+    configPath: "./wrangler.test.jsonc",
+    vars: { RPGJS_MAP_UPDATE_TOKEN: "test-map-update-token" },
+  }],
+});
+const SELF = harness.getWorker();
+beforeAll(async () => { await harness.listen(); });
+beforeEach(async () => { await harness.reset(); });
+afterAll(async () => { await harness.close(); });
 
 const mapPayload = {
   id: "demo",

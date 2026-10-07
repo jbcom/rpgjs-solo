@@ -34,17 +34,18 @@
     "verify:toolchain-currency": "node bin/verify-toolchain-currency.mjs",
     "verify:upstream-beta30-disposition": "node bin/verify-upstream-beta30-disposition.mjs",
     "test": "vitest",
-    "test:types": "vitest --typecheck run packages/action-battle/src/public-api-types.spec.ts packages/client/src/public-api-types.spec.ts packages/common/src/foundation.spec.ts packages/server/tests/server-api-types.spec.ts"
+    "test:types": "vitest --typecheck run packages/action-battle/src/public-api-types.spec.ts packages/client/src/public-api-types.spec.ts packages/common/src/foundation.spec.ts packages/server/tests/server-api-types.spec.ts",
+    "verify": "node bin/verify.mjs"
   },
   "author": "Samuel Ronce",
   "license": "MIT",
   "description": "RPGJS is a framework for creating RPG/MMORPG games",
   "dependencies": {
     "execa": "^9.6.1",
-    "pnpm": "11.21.0",
-    "tsx": "4.23.12",
-    "unicode-case-folding": "1.1.1",
-    "wait-on": "^9.0.10"
+    "pnpm": "12.10.1",
+    "tsx": "4.23.15",
+    "unicode-case-folding": "1.1.2",
+    "wait-on": "^9.5.1"
   },
   "keywords": [
     "rpg",
@@ -53,26 +54,26 @@
     "javascript",
     "typescript"
   ],
-  "packageManager": "pnpm@11.21.0",
+  "packageManager": "pnpm@12.10.1",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24.15 <25 || >=26 <27"
   },
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@canvasengine/compiler": "2.2.0",
-    "@canvasengine/presets": "2.2.0",
-    "@changesets/cli": "3.0.0",
-    "@types/node": "24.13.3",
+    "@canvasengine/compiler": "2.4.0",
+    "@canvasengine/presets": "2.4.0",
+    "@changesets/cli": "3.0.3",
+    "@types/node": "24.19.1",
     "@typescript/typescript6": "6.0.2",
-    "canvasengine": "2.2.0",
+    "canvasengine": "2.4.0",
     "jsdom": "^29.1.1",
-    "libnpmpublish": "12.0.0",
-    "pixi.js": "^8.19.0",
+    "libnpmpublish": "12.0.1",
+    "pixi.js": "^8.22.0",
     "ts-morph": "^28.0.0",
     "typescript": "^6.0.3",
-    "vite": "8.2.1",
-    "vitest": "4.1.10",
-    "yaml": "2.9.0"
+    "vite": "8.3.3",
+    "vitest": "5.0.3",
+    "yaml": "2.9.1"
   }
 }

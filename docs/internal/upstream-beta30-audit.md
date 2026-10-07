@@ -90,9 +90,9 @@ prose is only a summary and grants no implementation authority by itself.
 - The concrete hosted Studio playground project/map UUIDs and
   `rpgjs.studio` API/assets endpoints are rejected; local examples and runtime
   defaults must not embed them.
-- The upstream release commit cannot replace the fork's exact Node 24.19.0,
-  pnpm 11.21.0, Vite/CanvasEngine cohort, public Solo packages, release
-  transaction, GitHub-first authority, Gitea backup, or private-registry proof.
+- The upstream release commit cannot replace the fork's supported Node 24.15+ or 26,
+  pnpm 12.10.1, Vite/CanvasEngine cohort, public Solo packages, release
+  transaction, canonical GitHub authority, or public npmjs package proof.
 
 ## Required implementation sequence
 
@@ -115,16 +115,16 @@ prose is only a summary and grants no implementation authority by itself.
    bookkeeping cannot substitute for this record.
 4. Run frozen install, build, complete unit/type/API/boundary gates, packed
    ESM/CJS/declaration consumers, the matching starter branch, and a silent
-   rendered browser interaction under exact Node 24.19.0.
+   rendered browser interaction under exact Node 24.
 5. Obtain a producer-disjoint independent review and merge the exact reviewed
-   tree into public GitHub `main`; allow the checked GitHub-to-Gitea backup to
-   converge without making Gitea a development authority.
+   tree into public GitHub `main`; require green checks at its exact merge
+   commit and public npmjs consumer proof before considering adoption complete.
 6. Bind the exact hash of that Solo-owned Changeset into the reviewed release
    plan, then create one coherent four-package Solo prerelease derived from
    beta.30. The final suffix is selected by the release transaction and is not
    guessed in this audit. Publish only byte-identical reviewed artifacts, tags,
    releases, registry metadata, and tarballs.
 
-Quest for the Crown may adopt the cohort only after this complete release gate.
+An application may adopt the cohort only after this complete release gate.
 The currently published `5.0.0-beta.29.solo.2` packages are newer than Quest's
 pin but do not satisfy the accepted beta.30-derived dependency contract.
