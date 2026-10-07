@@ -19,3 +19,5 @@ or newer within the 24 major because libnpmpublish 12 declares that minimum.
 Public access and npm provenance are passed explicitly to the programmatic
 publisher. Historical signed plans remain available through immutable Git
 checkouts; sanitization must never be mistaken for replacing historical evidence.
+Publication requires a CI environment supported by npm provenance. A local shell
+is suitable for validation and packing, and must not bypass that requirement.
