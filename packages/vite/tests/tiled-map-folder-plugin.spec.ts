@@ -115,20 +115,20 @@ describe("tiledMapFolderPlugin production path contract", () => {
 
   it("normalizes Vite root, repository base, and a base-prefixed publicPath", () => {
     const root = createFixture();
-    const plugin = createPlugin({ publicPath: "/quest-for-the-crown/map/" });
+    const plugin = createPlugin({ publicPath: "/example-game/map/" });
 
-    resolvePlugin(plugin, root, { base: "/quest-for-the-crown/" } as Partial<ResolvedConfig>);
+    resolvePlugin(plugin, root, { base: "/example-game/" } as Partial<ResolvedConfig>);
     generate(plugin);
 
     expect(existsSync(join(root, "dist/map/simplemap.tmx"))).toBe(true);
-    expect(existsSync(join(root, "dist/quest-for-the-crown/map/simplemap.tmx"))).toBe(false);
+    expect(existsSync(join(root, "dist/example-game/map/simplemap.tmx"))).toBe(false);
   });
 
   it("supports the Vite base root without inventing an extra output directory", () => {
     const root = createFixture();
     const plugin = createPlugin({ publicPath: "/" });
 
-    resolvePlugin(plugin, root, { base: "/quest-for-the-crown/" } as Partial<ResolvedConfig>);
+    resolvePlugin(plugin, root, { base: "/example-game/" } as Partial<ResolvedConfig>);
     generate(plugin);
 
     expect(existsSync(join(root, "dist/simplemap.tmx"))).toBe(true);
@@ -153,7 +153,7 @@ describe("tiledMapFolderPlugin development routing", () => {
     const plugin = createPlugin({ publicPath: "/map" });
     resolvePlugin(plugin, root, {
       command: "serve",
-      base: "/quest-for-the-crown/",
+      base: "/example-game/",
     } as Partial<ResolvedConfig>);
 
     let middleware: ((req: any, res: any, next: () => void) => void) | undefined;
@@ -179,7 +179,7 @@ describe("tiledMapFolderPlugin development routing", () => {
     };
     const next = vi.fn();
 
-    middleware!({ url: "/quest-for-the-crown/map/nested/terrain.tsx?cache=1" }, response, next);
+    middleware!({ url: "/example-game/map/nested/terrain.tsx?cache=1" }, response, next);
     expect(statusCode).toBe(200);
     expect(headers.get("Content-Type")).toBe("application/xml");
     expect(body).toContain("terrain");
@@ -187,11 +187,11 @@ describe("tiledMapFolderPlugin development routing", () => {
 
     statusCode = 200;
     body = "";
-    middleware!({ url: "/quest-for-the-crown/map/%2e%2e/private.tmx" }, response, next);
+    middleware!({ url: "/example-game/map/%2e%2e/private.tmx" }, response, next);
     expect(statusCode).toBe(403);
     expect(body).toBe("Forbidden");
 
-    middleware!({ url: "/quest-for-the-crown/maps/simplemap.tmx" }, response, next);
+    middleware!({ url: "/example-game/maps/simplemap.tmx" }, response, next);
     expect(next).toHaveBeenCalledTimes(1);
   });
 
