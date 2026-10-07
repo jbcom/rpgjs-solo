@@ -90,8 +90,8 @@ prose is only a summary and grants no implementation authority by itself.
 - The concrete hosted Studio playground project/map UUIDs and
   `rpgjs.studio` API/assets endpoints are rejected; local examples and runtime
   defaults must not embed them.
-- The upstream release commit cannot replace the fork's exact Node 24,
-  pnpm 11.21.0, Vite/CanvasEngine cohort, public Solo packages, release
+- The upstream release commit cannot replace the fork's supported Node 24.15+ or 26,
+  pnpm 12.10.1, Vite/CanvasEngine cohort, public Solo packages, release
   transaction, canonical GitHub authority, or public npmjs package proof.
 
 ## Required implementation sequence

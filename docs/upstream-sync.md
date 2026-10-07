@@ -78,7 +78,7 @@ release evidence belong to the canonical GitHub repository.
 The public renderer exposes a typed `installCanvasEnginePatches` injection
 boundary. Applications inject the public `rpgjs-patches@^0.4.0` release
 from [jbcom/rpgjs-patches](https://github.com/jbcom/rpgjs-patches), with
-`canvasengine@2.2.0`. The release verifier checks the exact npm artifact and
+`canvasengine@2.4.0`. The release verifier checks the exact npm artifact and
 GitHub source identity before running the clean consumer.
 
 ### 2026-08-09 CanvasEngine 2.2 and current-toolchain overlay
@@ -140,7 +140,7 @@ sprite-alpha bounds; and associated documentation and tests.
 The merge is expected to conflict in four inherited manifests,
 `packages/studio/src/server.ts`, and `pnpm-lock.yaml`. Resolutions must take the
 beta.29 inherited package identities and behavior while retaining the fork's
-supported Node 24.15+ or 26/pnpm 11.21.0/Vite/declaration toolchain, direct-dependency currency,
+supported Node 24.15+ or 26/pnpm 12.10.1/Vite/declaration toolchain, direct-dependency currency,
 Hono exclusion, Solo packages, GitHub authority, and production-boundary gates.
 The lockfile is regenerated; it is never resolved by choosing one parent.
 
