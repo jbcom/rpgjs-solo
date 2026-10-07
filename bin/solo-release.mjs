@@ -1598,10 +1598,10 @@ const expectedAppliedManifest = (source, path, plan) => {
 	return `${JSON.stringify(manifest, null, 2)}\n`;
 };
 
-const readHeadEntry = (root, path, command = run) => {
-	const treeEntry = command("git", ["ls-tree", "HEAD", "--", path], {
-		cwd: root,
-	});
+const readHeadEntry = (root, path, command = run, treeEntries) => {
+	const treeEntry = treeEntries
+		? (treeEntries.get(path) ?? "")
+		: command("git", ["ls-tree", "HEAD", "--", path], { cwd: root });
 	const match = /^(100644|100755) blob [0-9a-f]{40}\t/.exec(treeEntry);
 	assert(match, `${path} HEAD entry must be a regular Git blob`);
 	return {
@@ -1615,10 +1615,21 @@ const readHeadEntry = (root, path, command = run) => {
 
 const createApplyContentTransitions = (root, plan, command = run) => {
 	const cohort = new Set(plan.packages.map(({ name }) => name));
+	// Read immutable HEAD metadata once. NUL delimiters preserve exact paths;
+	// readHeadEntry still rejects every entry that is not a regular Git blob.
+	const treeEntries = new Map(
+		command("git", ["ls-tree", "-r", "-z", "HEAD"], {
+			cwd: root,
+			trim: false,
+		})
+			.split("\0")
+			.filter(Boolean)
+			.map((entry) => [entry.slice(entry.indexOf("\t") + 1), entry]),
+	);
 	const descriptors = [];
 	for (const absolutePath of walkPackageJson(root)) {
 		const path = relative(root, absolutePath);
-		const { source, mode } = readHeadEntry(root, path, command);
+		const { source, mode } = readHeadEntry(root, path, command, treeEntries);
 		const manifest = JSON.parse(source);
 		const dependencyNames = dependencyFields.flatMap((field) =>
 			Object.keys(manifest[field] ?? {}),
@@ -1639,7 +1650,7 @@ const createApplyContentTransitions = (root, plan, command = run) => {
 	}
 	const changesets = plan.consumedChangesets.map((entry) => {
 		const path = `.changeset/${entry.id}.md`;
-		const { source } = readHeadEntry(root, path, command);
+		const { source } = readHeadEntry(root, path, command, treeEntries);
 		assert(
 			digest("sha256", source) === entry.sha256,
 			`${entry.id} HEAD bytes differ from the release plan`,
@@ -1648,19 +1659,9 @@ const createApplyContentTransitions = (root, plan, command = run) => {
 	});
 	for (const record of plan.packages) {
 		const path = `${record.directory}/CHANGELOG.md`;
-		let headEntry = "";
-		try {
-			headEntry = command(
-				"git",
-				["ls-tree", "--name-only", "HEAD", "--", path],
-				{
-					cwd: root,
-				},
-			);
-		} catch {
-			headEntry = "";
-		}
-		const existing = headEntry ? readHeadEntry(root, path, command) : null;
+		const existing = treeEntries.has(path)
+			? readHeadEntry(root, path, command, treeEntries)
+			: null;
 		descriptors.push({
 			path,
 			kind: "changelog",
@@ -1672,7 +1673,7 @@ const createApplyContentTransitions = (root, plan, command = run) => {
 	}
 	for (const entry of plan.consumedChangesets) {
 		const path = `.changeset/${entry.id}.md`;
-		const { source, mode } = readHeadEntry(root, path, command);
+		const { source, mode } = readHeadEntry(root, path, command, treeEntries);
 		descriptors.push({
 			path,
 			kind: "changeset-delete",
