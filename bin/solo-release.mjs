@@ -493,8 +493,9 @@ export const assertReleaseToolchain = (
 	nodeExecPath = process.execPath,
 ) => {
 	assert(
-		releaseNodeMajors.has(Number(nodeVersion.split(".")[0])),
-		`Solo release requires Node 24 or 26; received ${nodeVersion}`,
+		releaseNodeMajors.has(Number(nodeVersion.split(".")[0])) &&
+			(Number(nodeVersion.split(".")[0]) !== 24 || Number(nodeVersion.split(".")[1]) >= 15),
+		`Solo release requires Node 24.15+ or 26; received ${nodeVersion}`,
 	);
 	const pnpmVersion = command("pnpm", ["--version"]);
 	assert(
@@ -3175,7 +3176,8 @@ export const publishVerifiedPackageBytes = async ({
 		token,
 		forceAuth: { token },
 		defaultTag: plan.candidateDistTag,
-		access: null,
+		access: "public",
+		provenance: true,
 		npmVersion: `rpgjs-solo-release/${plan.version}`,
 		algorithms: ["sha512"],
 	});

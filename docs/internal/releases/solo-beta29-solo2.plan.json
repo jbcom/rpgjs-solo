@@ -20,8 +20,7 @@
         "Analyze (javascript-typescript)",
         "CodeQL",
         "CodeRabbit",
-        "tests (24)",
-        "tests (26)"
+        "tests (24.19.0)"
       ]
     },
     "releasePullRequest": {
@@ -33,8 +32,7 @@
         "Analyze (actions)",
         "Analyze (javascript-typescript)",
         "CodeQL",
-        "tests (24)",
-        "tests (26)"
+        "tests (24.19.0)"
       ]
     },
     "supersededRejectedReleasePullRequests": [

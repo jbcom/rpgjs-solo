@@ -14,4 +14,8 @@ producer/reviewer separation checks remain enforced. The private backup release
 adapter and its adapter-specific tests have been removed; GitHub is authoritative.
 
 Node 24 and 26 are supported by major version. The pnpm child must use the same
-Node runtime as the invoking process; no exact Node patch release is required.
+Node runtime as the invoking process; no exact Node patch release is required. Release tooling requires Node 24.15
+or newer within the 24 major because libnpmpublish 12 declares that minimum.
+Public access and npm provenance are passed explicitly to the programmatic
+publisher. Historical signed plans remain available through immutable Git
+checkouts; sanitization must never be mistaken for replacing historical evidence.

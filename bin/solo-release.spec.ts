@@ -916,7 +916,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		).toThrow(/GitHub patch release differs/i);
 	});
 
-	it.each(["24.0.0", "24.99.0", "26.0.0", "26.99.0"])("accepts supported Node runtime %s without a patch pin", (nodeVersion) => {
+	it.each(["24.15.0", "24.99.0", "26.0.0", "26.99.0"])("accepts supported Node runtime %s without a patch pin", (nodeVersion) => {
 		const command = (_program: string, args: string[]) => args[0] === "--version" ? "11.21.0" : JSON.stringify({ version: nodeVersion, execPath: process.execPath });
 		expect(assertReleaseToolchain(command, nodeVersion).nodeVersion).toBe(nodeVersion);
 	});
@@ -937,7 +937,9 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		});
 		expect(() =>
 			assertReleaseToolchain(exactToolchain, "23.0.0", process.execPath),
-		).toThrow(/requires Node 24 or 26/i);
+		).toThrow(/requires Node 24.15\+ or 26/i);
+		expect(() => assertReleaseToolchain(exactToolchain, "24.14.99", process.execPath))
+			.toThrow(/requires Node 24.15\+ or 26/i);
 		expect(() =>
 			assertReleaseToolchain(() => "11.20.0", "24.19.0", process.execPath),
 		).toThrow(/requires pnpm 11\.21\.0/i);
@@ -2032,6 +2034,8 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			token: "fixture-token",
 			forceAuth: { token: "fixture-token" },
 			defaultTag: "candidate",
+			access: "public",
+			provenance: true,
 			algorithms: ["sha512"],
 		});
 		expect(item.publishManifest).toEqual({ name: item.name, version });

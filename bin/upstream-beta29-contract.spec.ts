@@ -122,7 +122,7 @@ describe("RPGJS beta.29 adoption contract", () => {
 		);
 		const workspacePolicy = readText("pnpm-workspace.yaml");
 		const lockfile = readText("pnpm-lock.yaml");
-		expect(rootManifest.engines).toEqual({ node: ">=24 <25 || >=26 <27" });
+		expect(rootManifest.engines).toEqual({ node: ">=24.15 <25 || >=26 <27" });
 		expect(rootManifest.packageManager).toBe("pnpm@11.21.0");
 		expect(rootManifest.devDependencies.vite).toBe("8.2.1");
 		expect(rootManifest.devDependencies.canvasengine).toBe("2.2.0");

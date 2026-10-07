@@ -35,7 +35,10 @@ This is one coordinated four-package release. It advances only the Solo counter
 from `.solo.0` to `.solo.1`; it must never invoke the repository-wide
 Changesets version command or move inherited `@rpgjs/*` packages to beta.30.
 The machine-readable authority is
-[`solo-beta29-solo1.plan.json`](solo-beta29-solo1.plan.json).
+[the immutable historical plan](https://github.com/jbcom/rpgjs-solo/blob/43fbf92b/docs/internal/releases/solo-beta29-solo1.plan.json).
+
+Historical signatures and artifact verification require that exact historical
+checkout. This sanitized source tree does not rewrite or replace signed evidence.
 
 The planner consumes six Solo-owned changesets: the beta.29 baseline, atomic
 Solo runtime, reactive renderer props, current Solo toolchain, the Solo half of
