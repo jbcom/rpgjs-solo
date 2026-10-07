@@ -13,16 +13,16 @@
   "license": "MIT",
   "description": "",
   "devDependencies": {
-    "vite": "8.2.1",
-    "vite-plugin-dts": "^5.0.2"
+    "vite": "8.3.3",
+    "vite-plugin-dts": "^5.1.2"
   },
   "dependencies": {
-    "@canvasengine/testing": "2.2.0",
+    "@canvasengine/testing": "2.4.0",
     "@rpgjs/client": "workspace:*",
     "@rpgjs/common": "workspace:*",
     "@rpgjs/server": "workspace:*",
     "@signe/di": "3.1.1",
-    "canvasengine": "2.2.0",
+    "canvasengine": "2.4.0",
     "rxjs": "^7.8.2",
     "vitest-webgl-canvas-mock": "^1.1.0"
   },

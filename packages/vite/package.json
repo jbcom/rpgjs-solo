@@ -18,33 +18,33 @@
   },
   "dependencies": {
     "@babel/generator": "^7.29.8",
-    "@babel/parser": "^7.29.8",
-    "@babel/traverse": "^7.29.8",
+    "@babel/parser": "^7.29.9",
+    "@babel/traverse": "^7.29.10",
     "@babel/types": "^7.29.8",
-    "@canvasengine/compiler": "2.2.0",
-    "@canvasengine/tiled": "2.2.0",
+    "@canvasengine/compiler": "2.4.0",
+    "@canvasengine/tiled": "2.4.0",
     "@iarna/toml": "^2.2.5",
     "@rpgjs/server": "workspace:*",
     "@signe/di": "3.1.1",
     "@signe/reactive": "3.1.1",
-    "@signe/room": "3.2.0",
+    "@signe/room": "3.2.1",
     "@signe/sync": "3.1.1",
-    "@types/node": "24.13.3",
-    "acorn": "^8.17.0",
+    "@types/node": "24.19.1",
+    "acorn": "^8.19.0",
     "acorn-walk": "^8.3.5",
     "magic-string": "^0.30.21",
-    "probe-image-size": "^7.3.0",
+    "probe-image-size": "^7.4.0",
     "rxjs": "^7.8.2",
     "typescript": "^6.0.3",
-    "vite": "8.2.1",
-    "vite-plugin-dts": "^5.0.2",
-    "vitest": "^4.1.9",
-    "ws": "^8.21.3"
+    "vite": "8.3.3",
+    "vite-plugin-dts": "^5.1.2",
+    "vitest": "^5.0.3",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@types/babel__generator": "^7.27.0",
     "@types/babel__traverse": "^7.28.0",
     "@types/probe-image-size": "^7.2.5",
-    "@types/ws": "^8.18.1"
+    "@types/ws": "^8.18.2"
   }
 }

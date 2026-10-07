@@ -52,14 +52,14 @@
   "license": "MIT",
   "description": "A deterministic 2D top-down physics library for RPG, sandbox and MMO games",
   "devDependencies": {
-    "@types/node": "24.13.3",
-    "@vitest/coverage-v8": "^4.1.9",
-    "@vitest/ui": "^4.1.9",
-    "tsx": "^4.23.12",
+    "@types/node": "24.19.1",
+    "@vitest/coverage-v8": "^5.0.3",
+    "@vitest/ui": "^5.0.3",
+    "tsx": "^4.23.15",
     "typedoc": "^0.28.19",
     "typescript": "^6.0.3",
-    "vite": "8.2.1",
-    "vite-plugin-dts": "^5.0.2",
-    "vitest": "^4.1.9"
+    "vite": "8.3.3",
+    "vite-plugin-dts": "^5.1.2",
+    "vitest": "^5.0.3"
   }
 }
