@@ -1,19 +1,19 @@
 {
 	"schemaVersion": 2,
 	"releaseId": "solo-beta29-solo3",
-	"sourceBaseCommit": "43fbf92b800d46296a5d8edaf87874472414faa8",
-	"requiredSourceCommit": "43fbf92b800d46296a5d8edaf87874472414faa8",
+	"sourceBaseCommit": "47ee59427f9b41755adcf266078afeb2b8bf11a3",
+	"requiredSourceCommit": "47ee59427f9b41755adcf266078afeb2b8bf11a3",
 	"sourceBinding": {
 		"status": "provisional",
-		"requiredUpdate": "Bind the exact canonical merge of PR #34 before applying this release transaction."
+		"requiredUpdate": "Bind the exact canonical merge of the unscoped package-identity and OIDC release-transition pull requests before applying this release transaction."
 	},
 	"reviewEvidence": {
 		"status": "provisional",
-		"requiredUpdate": "Finalize PR #34 source binding and a separate release-transition review before applying or publishing.",
+		"requiredUpdate": "Finalize the unscoped package-identity and OIDC release-transition reviews before applying or publishing.",
 		"enginePullRequest": {
 			"repository": "jbcom/rpgjs-solo",
-			"number": 34,
-			"mergeCommit": "43fbf92b800d46296a5d8edaf87874472414faa8",
+			"number": 35,
+			"mergeCommit": "47ee59427f9b41755adcf266078afeb2b8bf11a3",
 			"minimumApprovals": 1,
 			"requiredChecks": [
 				"tests (24)",
@@ -63,6 +63,12 @@
 	"registry": "https://registry.npmjs.org/",
 	"candidateDistTag": "beta29-solo3-candidate",
 	"promotionDistTag": "latest",
+	"promotionBaseline": {
+		"rpgjs-solo": null,
+		"rpgjs-solo-action-battle": null,
+		"rpgjs-solo-renderer": null,
+		"rpgjs-solo-vite": null
+	},
 	"trainTag": "solo-v5.0.0-beta.29.solo.3",
 	"canonical": {
 		"repository": "https://github.com/jbcom/rpgjs-solo.git",
@@ -70,22 +76,22 @@
 	},
 	"packages": [
 		{
-			"name": "@jbcom/rpgjs-solo",
+			"name": "rpgjs-solo",
 			"directory": "packages/solo",
 			"tag": "rpgjs-solo-v5.0.0-beta.29.solo.3"
 		},
 		{
-			"name": "@jbcom/rpgjs-solo-action-battle",
+			"name": "rpgjs-solo-action-battle",
 			"directory": "packages/solo-action-battle",
 			"tag": "rpgjs-solo-action-battle-v5.0.0-beta.29.solo.3"
 		},
 		{
-			"name": "@jbcom/rpgjs-solo-renderer",
+			"name": "rpgjs-solo-renderer",
 			"directory": "packages/solo-renderer",
 			"tag": "rpgjs-solo-renderer-v5.0.0-beta.29.solo.3"
 		},
 		{
-			"name": "@jbcom/rpgjs-solo-vite",
+			"name": "rpgjs-solo-vite",
 			"directory": "packages/solo-vite",
 			"tag": "rpgjs-solo-vite-v5.0.0-beta.29.solo.3"
 		}
@@ -102,11 +108,15 @@
 	"consumedChangesets": [
 		{
 			"id": "public-patch-consumer",
-			"sha256": "11ae0ed5ed83f44b15b33e3b40ea5efe90c5aad4cf9ca1ff6b787c4b03e8668b"
+			"sha256": "b31149368b99ca0872aa8a150192b9e2c21ea6cc76e74053ac6b58416eface89"
 		},
 		{
 			"id": "current-solo-toolchain",
-			"sha256": "def92e701be05570eca24d1033607959badcdc942c069c09b458f0cd8e8ca8f2"
+			"sha256": "5d5da0b796db530349ba4f4128aa31d4e0ba92aed00668c5b6bd512afd4bf5f8"
+		},
+		{
+			"id": "unscoped-solo-package-identity",
+			"sha256": "ab581baa068aa83b4b7b87dc0786130a9108aa669f4405f48736c71d7ff6aefd"
 		}
 	],
 	"carriedChangesets": [
@@ -166,7 +176,7 @@
 		},
 		{
 			"id": "tidy-solo-changesets-three",
-			"sha256": "3d9f4f290a70ddc53480deb1b4b9846264508aa38a5e53bc1237f1438b0cf888"
+			"sha256": "b154cdbdd5aaeb973190a4b77c346e6312faadd696f938f2972483cb8dd11e94"
 		}
 	],
 	"requiredConsumer": {

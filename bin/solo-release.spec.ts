@@ -36,6 +36,7 @@ import {
 	assertFinalReleaseBindings,
 	assertLivePromotedCohort,
 	assertMonotonicLatestPromotion,
+	assertPromotionBaseline,
 	assertRequiredConsumerRegistryEvidence,
 	assertRequiredConsumerSourceReleaseEvidence,
 	assertReleaseToolchain,
@@ -55,6 +56,7 @@ import {
 	prepareReleaseEvidence,
 	publishCandidateCohort,
 	publishedConsumerInstallArgs,
+	publishVerifiedPackageArchiveWithOidc,
 	publishVerifiedPackageBytes,
 	readTransactionJournal,
 	rootDirectory,
@@ -424,6 +426,9 @@ function createFixture() {
 		registry,
 		candidateDistTag: "candidate",
 		promotionDistTag: "latest",
+		promotionBaseline: Object.fromEntries(
+			packages.map(({ name }) => [name, null]),
+		),
 		trainTag: `solo-v${version}`,
 		canonical: {
 			repository: "https://github.com/jbcom/rpgjs-solo.git",
@@ -698,19 +703,15 @@ function createReleaseAdapter(
 
 describe("Solo beta.29 coordinated release transaction", () => {
 	it("requires a new release identity and finalized bindings for the public transition", () => {
-		expect(() => loadSoloReleasePlan()).toThrow(
-			/package order, directory, or immutable tag drifted/i,
-		);
-		const plan = loadCurrentIdentityReleasePlan();
+		const plan = loadSoloReleasePlan();
 		expect(plan.previousVersion).toBe("5.0.0-beta.29.solo.2");
 		expect(plan.version).toBe("5.0.0-beta.29.solo.3");
 		expect(plan.consumedChangesets.map(({ id }) => id)).toEqual([
 			"public-patch-consumer",
 			"current-solo-toolchain",
+			"unscoped-solo-package-identity",
 		]);
-		expect(() => validateSoloReleaseState(rootDirectory, plan)).toThrow(
-			/public-patch-consumer SHA-256 does not match the release plan/i,
-		);
+		expect(validateSoloReleaseState(rootDirectory, plan).phase).toBe("source");
 		expect(() => assertFinalReleaseBindings(plan)).toThrow();
 	});
 	it("normalizes inherited-stdio command results without trimming null", () => {
@@ -1088,22 +1089,23 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	});
 
 	it("binds the next beta.29 Solo increment and rejects provisional release authority", () => {
-		const plan = loadCurrentIdentityReleasePlan();
+		const plan = loadSoloReleasePlan();
 		expect(plan.previousVersion).toBe("5.0.0-beta.29.solo.2");
 		expect(plan.version).toBe("5.0.0-beta.29.solo.3");
 		expect(plan.requiredSourceCommit).toBe(
-			"43fbf92b800d46296a5d8edaf87874472414faa8",
+			"47ee59427f9b41755adcf266078afeb2b8bf11a3",
 		);
 		expect(plan.sourceBaseCommit).toBe(plan.requiredSourceCommit);
 		expect(plan.reviewEvidence.enginePullRequest.mergeCommit).toBe(
 			plan.requiredSourceCommit,
 		);
-		expect(plan.reviewEvidence.enginePullRequest.number).toBe(34);
+		expect(plan.reviewEvidence.enginePullRequest.number).toBe(35);
 		expect(plan.reviewEvidence.releasePullRequest.number).toBeNull();
 		expect(plan.requiredConsumer).toEqual(currentPatchConsumer);
 		expect(plan.consumedChangesets).toEqual([
 			expect.objectContaining({ id: "public-patch-consumer" }),
 			expect.objectContaining({ id: "current-solo-toolchain" }),
+			expect.objectContaining({ id: "unscoped-solo-package-identity" }),
 		]);
 		expect(
 			plan.carriedChangesets.find(
@@ -2094,6 +2096,35 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(item.publishManifest).toEqual({ name: item.name, version });
 	});
 
+	it("passes only the verified archive to the npm OIDC CLI transport", () => {
+		const candidate = createCandidateFixture();
+		const item = candidate.manifest.packages[0];
+		const sourcePath = join(candidate.directory, item.archive);
+		const tarballData = readFileSync(sourcePath);
+		const calls: Array<{ command: string; args: string[] }> = [];
+		publishVerifiedPackageArchiveWithOidc({
+			item,
+			tarballData,
+			plan: { registry, candidateDistTag: "candidate" },
+			env: {},
+			command: (command, args) => {
+				calls.push({ command, args });
+				expect(readFileSync(args[1])).toEqual(tarballData);
+				expect(statSync(args[1]).mode & 0o777).toBe(0o600);
+			},
+		});
+		expect(calls).toHaveLength(1);
+		expect(calls[0]).toMatchObject({
+			command: "npm",
+			args: [
+				"publish", expect.stringMatching(/rpgjs-solo-oidc-publish-/),
+				"--registry", registry, "--tag", "candidate", "--access", "public",
+				"--provenance",
+			],
+		});
+		expect(existsSync(dirname(calls[0].args[1]))).toBe(false);
+	});
+
 	it("refuses manifest identity, byte, and token drift before invoking libnpmpublish", async () => {
 		const candidate = createCandidateFixture();
 		const item = candidate.manifest.packages[0];
@@ -2834,6 +2865,25 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		stale = true;
 		expect(() => assertLivePromotedCohort(manifest, plan, {}, view)).toThrow(
 			/live latest/i,
+		);
+	});
+
+	it("refuses a fresh promotion when any live tag differs from its immutable baseline", () => {
+		const manifest = {
+			packages: packages.map(({ name }) => ({ name })),
+		};
+		const plan = {
+			promotionDistTag: "latest",
+			promotionBaseline: Object.fromEntries(
+				packages.map(({ name }) => [name, null]),
+			),
+		};
+		const view = (spec: string, field: string) => {
+			if (field !== "dist-tags") return undefined;
+			return spec === packages[1].name ? { latest: previousVersion } : {};
+		};
+		expect(() => assertPromotionBaseline(manifest, plan, {}, view)).toThrow(
+			new RegExp(`${packages[1].name} latest differs from the immutable promotion baseline`),
 		);
 	});
 
