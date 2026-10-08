@@ -71,18 +71,18 @@ describe("RPGJS beta.29 adoption contract", () => {
 
 		const actionBattle = readJson("packages/solo-action-battle/package.json");
 		const renderer = readJson("packages/solo-renderer/package.json");
-		expect(actionBattle.dependencies["@jbcom/rpgjs-solo"]).toBe(
+		expect(actionBattle.dependencies["rpgjs-solo"]).toBe(
 			`workspace:${soloVersion}`,
 		);
-		expect(renderer.dependencies["@jbcom/rpgjs-solo"]).toBe(
+		expect(renderer.dependencies["rpgjs-solo"]).toBe(
 			`workspace:${soloVersion}`,
 		);
 
 		const playground = readJson("playground/games/solo/package.json");
 		for (const name of [
-			"@jbcom/rpgjs-solo",
-			"@jbcom/rpgjs-solo-renderer",
-			"@jbcom/rpgjs-solo-vite",
+			"rpgjs-solo",
+			"rpgjs-solo-renderer",
+			"rpgjs-solo-vite",
 		]) {
 			expect(
 				playground.dependencies[name] ?? playground.devDependencies[name],

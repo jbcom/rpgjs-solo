@@ -1,5 +1,5 @@
 import { computed, signal, type Signal, type WritableSignal } from 'canvasengine'
-import type { SoloDirection, SoloEntityState, SoloRuntime, SoloRuntimeEvent } from '@jbcom/rpgjs-solo'
+import type { SoloDirection, SoloEntityState, SoloRuntime, SoloRuntimeEvent } from 'rpgjs-solo'
 import type { SoloEntityAppearance, SoloRenderedMap, SoloRendererOptions } from './types'
 
 export interface SoloRenderEntity {

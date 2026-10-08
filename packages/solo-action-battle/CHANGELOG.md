@@ -1,4 +1,4 @@
-# @jbcom/rpgjs-solo-action-battle
+# rpgjs-solo-action-battle
 
 ## 5.0.0-beta.29.solo.2
 

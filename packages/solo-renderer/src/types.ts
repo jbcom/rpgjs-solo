@@ -1,5 +1,5 @@
 import type { TiledMap } from '@canvasengine/tiled'
-import type { SoloEntityState, SoloMapDefinition, SoloRuntime } from '@jbcom/rpgjs-solo'
+import type { SoloEntityState, SoloMapDefinition, SoloRuntime } from 'rpgjs-solo'
 
 export interface SoloRenderedMap {
   id: string

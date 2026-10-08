@@ -24,7 +24,7 @@ export default defineConfig({
       fileName: 'index'
     },
     rollupOptions: {
-      external: ['@jbcom/rpgjs-solo']
+      external: ['rpgjs-solo']
     }
   }
 })

@@ -42,7 +42,7 @@ try {
     env: {
       ...process.env,
       npm_config_user_agent: 'npm/11.0.0',
-      npm_package_name: '@jbcom/rpgjs-solo'
+      npm_package_name: 'rpgjs-solo'
     },
     stdio: 'pipe'
   })

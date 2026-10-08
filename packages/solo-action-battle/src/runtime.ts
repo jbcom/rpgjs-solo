@@ -8,7 +8,7 @@ import type {
   SoloRuntime,
   SoloRuntimeEvent,
   SoloVector
-} from '@jbcom/rpgjs-solo'
+} from 'rpgjs-solo'
 import { normalizeSoloAttackProfile } from './profiles'
 import type {
   NormalizedSoloAttackProfile,

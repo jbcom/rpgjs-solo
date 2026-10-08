@@ -1,5 +1,5 @@
 {
-  "name": "@jbcom/rpgjs-solo-vite",
+  "name": "rpgjs-solo-vite",
   "version": "5.0.0-beta.29.solo.2",
   "description": "Vite production-boundary enforcement for RPGJS Solo games",
   "license": "MIT",

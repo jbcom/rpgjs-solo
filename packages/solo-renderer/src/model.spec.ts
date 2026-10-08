@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SoloRuntime } from '@jbcom/rpgjs-solo'
+import { SoloRuntime } from 'rpgjs-solo'
 import { SoloRendererModel } from './model'
 import { soloRenderedMapSceneKey } from './scene'
 import type { SoloAppearanceResolver, SoloRenderedMap, SoloRendererOptions } from './types'

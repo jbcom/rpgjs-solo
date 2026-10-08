@@ -1,10 +1,10 @@
-# @jbcom/rpgjs-solo
+# rpgjs-solo
 
 The transport-free, single-process runtime from RPGJS Solo. It is intentionally
 prerelease while RPGJS v5 and the Solo compatibility surface stabilize.
 
 ```ts
-import { SoloRuntime } from '@jbcom/rpgjs-solo'
+import { SoloRuntime } from 'rpgjs-solo'
 
 const runtime = new SoloRuntime()
 runtime.registerMap({ id: 'village', width: 1280, height: 720 })

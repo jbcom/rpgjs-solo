@@ -25,7 +25,7 @@ export default defineConfig({
     },
     rollupOptions: {
       external: [
-        '@jbcom/rpgjs-solo',
+        'rpgjs-solo',
         '@canvasengine/presets',
         '@canvasengine/tiled',
         'canvasengine',
