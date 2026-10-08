@@ -37,7 +37,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: pnpm
@@ -69,7 +69,7 @@ jobs:
           esac
       - name: Restore the hash-bound pack artifact
         if: inputs.execute == true && inputs.command != 'validate' && inputs.command != 'pack'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: solo-release-artifacts
           path: ${{ runner.temp }}/solo-release-artifacts
@@ -91,7 +91,7 @@ jobs:
         run: pnpm release:solo:pack -- --artifacts "$RUNNER_TEMP/solo-release-artifacts"
       - name: Persist the hash-bound pack artifact
         if: inputs.execute == true && inputs.command == 'pack'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: solo-release-artifacts
           path: ${{ runner.temp }}/solo-release-artifacts
@@ -122,7 +122,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-      - uses: actions/setup-node@49933ea5288caeca8642e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: pnpm
@@ -135,7 +135,7 @@ jobs:
           case "$ARTIFACT_RUN_ID" in
             *[!0-9]* | 0) exit 1 ;;
           esac
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: solo-release-artifacts
           path: ${{ runner.temp }}/solo-release-artifacts
