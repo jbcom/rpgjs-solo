@@ -10,7 +10,7 @@ applied. That transaction consumes `public-patch-consumer` and advances all four
 Solo manifests, workspace references, changelogs, and the lockfile together to
 solo.3. Packing and publication require the applied solo.3 cohort.
 
-Before application, bind the exact canonical PR #34 merge, a separate release
+Before application, bind the exact canonical PR #35 merge, a separate release
 transition review, a producer-disjoint independent receipt, and the new signing
 key. Provisional bindings fail closed. This preparation creates no tag, release,
 or publication.
@@ -22,8 +22,15 @@ evidence. Publication requires public access and npm provenance in supported CI.
 
 The manual release workflow uses GitHub-hosted runners, Node 24, npm 11.21 or
 later, `id-token: write`, and no npm token fallback. Its protected environment
-is `npm-release`. npm trusted-publisher configuration must bind every unscoped
-package to `jbcom/rpgjs-solo` and `solo-release.yml`.
+is `npm-release`, restricted to `main`. A successful `pack` dispatch uploads a
+90-day `solo-release-artifacts` artifact containing the signed provenance
+manifest, its sidecar and attestation, any independent receipt, and the packed
+archives. Later dispatches accept only that producing Actions run ID, restore
+the artifact, and re-hash the manifest and archives before acting. The source
+release reconciliation is a separate `contents: write` job; OIDC publishing
+never receives Git or GitHub write permission. npm trusted-publisher
+configuration must bind every unscoped package to `jbcom/rpgjs-solo` and
+`solo-release.yml`.
 
 The four unscoped names do not yet exist on npm, so neither `npm trust` nor
 `npm stage publish` can configure their first release: both commands require an
