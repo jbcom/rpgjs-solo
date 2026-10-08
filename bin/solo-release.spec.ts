@@ -2100,24 +2100,29 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		const candidate = createCandidateFixture();
 		const item = candidate.manifest.packages[0];
 		const sourcePath = join(candidate.directory, item.archive);
+		const tarballData = readFileSync(sourcePath);
 		const calls: Array<{ command: string; args: string[] }> = [];
 		publishVerifiedPackageArchiveWithOidc({
 			item,
-			sourcePath,
-			tarballData: readFileSync(sourcePath),
+			tarballData,
 			plan: { registry, candidateDistTag: "candidate" },
 			env: {},
-			command: (command, args) => calls.push({ command, args }),
-		});
-		expect(calls).toEqual([
-			{
-				command: "npm",
-				args: [
-					"publish", sourcePath, "--registry", registry, "--tag", "candidate",
-					"--access", "public", "--provenance",
-				],
+			command: (command, args) => {
+				calls.push({ command, args });
+				expect(readFileSync(args[1])).toEqual(tarballData);
+				expect(statSync(args[1]).mode & 0o777).toBe(0o600);
 			},
-		]);
+		});
+		expect(calls).toHaveLength(1);
+		expect(calls[0]).toMatchObject({
+			command: "npm",
+			args: [
+				"publish", expect.stringMatching(/rpgjs-solo-oidc-publish-/),
+				"--registry", registry, "--tag", "candidate", "--access", "public",
+				"--provenance",
+			],
+		});
+		expect(existsSync(dirname(calls[0].args[1]))).toBe(false);
 	});
 
 	it("refuses manifest identity, byte, and token drift before invoking libnpmpublish", async () => {

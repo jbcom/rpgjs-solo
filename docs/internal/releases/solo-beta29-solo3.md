@@ -38,14 +38,21 @@ if any live tag differs from that plan value, and an interrupted promotion
 without its same-run journal refuses rather than adopting a later registry
 state. This keeps a retry from treating an outside dist-tag change as its own.
 
-The four unscoped names do not yet exist on npm, so neither `npm trust` nor
-`npm stage publish` can configure their first release: both commands require an
-existing package. After this reviewed plan and its packed artifacts exist, the
-owner must perform the one-time direct 2FA publish for each package, then run
-`npm trust github <package> --repo jbcom/rpgjs-solo --file solo-release.yml
---env npm-release --allow-publish`. Later releases may use the workflow's OIDC
-route and staged publishing if its trust permission is added. This is a release
-gap, not evidence that the archive consumer is registry-backed.
+The four unscoped names are currently absent from npm. Bootstrap them only with
+the separately reviewed `5.0.0-beta.29.solo.2` archives from canonical commit
+`47ee59427f9b41755adcf266078afeb2b8bf11a3`, using the dedicated
+`beta29-solo2-bootstrap` tag and owner 2FA. The archive handoff packet records
+the exact paths and SHA-256 digests. Do not bootstrap the planned solo.3 bytes:
+solo.3 remains a new, hash-bound OIDC candidate release, with its own
+provenance and candidate verification.
+
+After all four bootstrap packages exist, the owner runs `npm trust github
+<package> --repo jbcom/rpgjs-solo --file solo-release.yml --env npm-release
+--allow-publish` for each package, then enables **Allow npm dist-tag** for each
+trusted publisher in npm's package settings. That separate permission is
+required before the workflow can promote the reviewed candidate to `latest`.
+The bootstrap does not establish registry-consumption proof for solo.3; only
+the later OIDC workflow can do that.
 
 Historical releases must be verified using their complete original checkout,
 including its original plan and trust schema. Current neutral signature schemas

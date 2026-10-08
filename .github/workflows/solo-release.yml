@@ -52,7 +52,10 @@ jobs:
           test -z "${NODE_AUTH_TOKEN:-}"
           test -z "${RPGJS_SOLO_NPM_TOKEN:-}"
       - run: pnpm install --frozen-lockfile --strict-peer-dependencies
-      - run: pnpm release:solo:validate
+      - name: Validate reviewed Solo release bindings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pnpm release:solo:validate
       - name: Stop unapproved execution
         if: inputs.execute != true
         run: |
@@ -87,6 +90,7 @@ jobs:
       - name: Pack the reviewed Solo cohort
         if: inputs.execute == true && inputs.command == 'pack'
         env:
+          GH_TOKEN: ${{ github.token }}
           RPGJS_SOLO_RELEASE_CONFIRM: 5.0.0-beta.29.solo.3
         run: pnpm release:solo:pack -- --artifacts "$RUNNER_TEMP/solo-release-artifacts"
       - name: Persist the hash-bound pack artifact
@@ -100,6 +104,7 @@ jobs:
       - name: Execute reviewed OIDC release action
         if: inputs.execute == true && inputs.command != 'validate' && inputs.command != 'pack'
         env:
+          GH_TOKEN: ${{ github.token }}
           RPGJS_SOLO_RELEASE_CONFIRM: 5.0.0-beta.29.solo.3
         run: |
           command="${{ inputs.command }}"
@@ -150,7 +155,10 @@ jobs:
           test "${manifest#"$RUNNER_TEMP/solo-release-artifacts/"}" != "$manifest"
           printf 'manifest=%s\n' "$manifest" >> "$GITHUB_OUTPUT"
       - run: pnpm install --frozen-lockfile --strict-peer-dependencies
-      - run: pnpm release:solo:validate
+      - name: Validate reviewed Solo release bindings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pnpm release:solo:validate
       - name: Reconcile the reviewed source release
         env:
           GITHUB_TOKEN: ${{ github.token }}

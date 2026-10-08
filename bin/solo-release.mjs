@@ -3221,36 +3221,42 @@ export const publishVerifiedPackageBytes = async ({
 	});
 };
 
+/** Publishes an immutable private copy of the verified archive through npm OIDC. */
 export const publishVerifiedPackageArchiveWithOidc = ({
 	item,
-	sourcePath,
 	tarballData,
 	plan,
 	env,
 	command = run,
 }) => {
 	assert(
-		isAbsolute(sourcePath) &&
 		Buffer.isBuffer(tarballData) &&
-		digest("sha512", tarballData) === item.sha512 &&
-		snapshotIntegrity(tarballData) === item.integrity,
+			digest("sha512", tarballData) === item.sha512 &&
+			snapshotIntegrity(tarballData) === item.integrity,
 		`${item.name} OIDC publication archive drifted`,
 	);
-	command(
-		"npm",
-		[
-			"publish",
-			sourcePath,
-			"--registry",
-			plan.registry,
-			"--tag",
-			plan.candidateDistTag,
-			"--access",
-			"public",
-			"--provenance",
-		],
-		isolatedNpmCommandOptions(env),
-	);
+	const directory = mkdtempSync(join(tmpdir(), "rpgjs-solo-oidc-publish-"));
+	const archive = join(directory, "verified-package.tgz");
+	try {
+		writeExclusiveFile(archive, tarballData, 0o600);
+		command(
+			"npm",
+			[
+				"publish",
+				archive,
+				"--registry",
+				plan.registry,
+				"--tag",
+				plan.candidateDistTag,
+				"--access",
+				"public",
+				"--provenance",
+			],
+			isolatedNpmCommandOptions(env),
+		);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
 };
 
 export const publishCandidateCohort = async ({
@@ -3301,7 +3307,6 @@ export const publishCandidateCohort = async ({
 			});
 			await publisher({
 				item,
-				sourcePath: sourceRealPath,
 				tarballData: publishState.bytes,
 				plan,
 				token: authToken,
