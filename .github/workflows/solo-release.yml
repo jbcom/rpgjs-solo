@@ -121,7 +121,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
@@ -153,6 +153,12 @@ jobs:
       - run: pnpm release:solo:validate
       - name: Reconcile the reviewed source release
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
           RPGJS_SOLO_RELEASE_CONFIRM: 5.0.0-beta.29.solo.3
-        run: pnpm release:solo:publish-releases -- --manifest "${{ steps.provenance.outputs.manifest }}" --execute
+        run: |
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          # shellcheck disable=SC2016 # expand this token only when Git requests credentials
+          git config --local credential.helper '!f() { echo username=x-access-token; echo password=$GITHUB_TOKEN; }; f'
+          trap 'git config --local --unset-all credential.helper || true; git config --local --unset-all http.https://github.com/.extraheader || true' EXIT
+          pnpm release:solo:publish-releases -- --manifest "${{ steps.provenance.outputs.manifest }}" --execute

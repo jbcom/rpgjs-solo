@@ -32,6 +32,12 @@ never receives Git or GitHub write permission. npm trusted-publisher
 configuration must bind every unscoped package to `jbcom/rpgjs-solo` and
 `solo-release.yml`.
 
+The plan also binds the `latest` value for every package before promotion. For
+this first unscoped cohort, every baseline is `null`. A fresh promotion refuses
+if any live tag differs from that plan value, and an interrupted promotion
+without its same-run journal refuses rather than adopting a later registry
+state. This keeps a retry from treating an outside dist-tag change as its own.
+
 The four unscoped names do not yet exist on npm, so neither `npm trust` nor
 `npm stage publish` can configure their first release: both commands require an
 existing package. After this reviewed plan and its packed artifacts exist, the

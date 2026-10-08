@@ -36,6 +36,7 @@ import {
 	assertFinalReleaseBindings,
 	assertLivePromotedCohort,
 	assertMonotonicLatestPromotion,
+	assertPromotionBaseline,
 	assertRequiredConsumerRegistryEvidence,
 	assertRequiredConsumerSourceReleaseEvidence,
 	assertReleaseToolchain,
@@ -425,6 +426,9 @@ function createFixture() {
 		registry,
 		candidateDistTag: "candidate",
 		promotionDistTag: "latest",
+		promotionBaseline: Object.fromEntries(
+			packages.map(({ name }) => [name, null]),
+		),
 		trainTag: `solo-v${version}`,
 		canonical: {
 			repository: "https://github.com/jbcom/rpgjs-solo.git",
@@ -2856,6 +2860,25 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		stale = true;
 		expect(() => assertLivePromotedCohort(manifest, plan, {}, view)).toThrow(
 			/live latest/i,
+		);
+	});
+
+	it("refuses a fresh promotion when any live tag differs from its immutable baseline", () => {
+		const manifest = {
+			packages: packages.map(({ name }) => ({ name })),
+		};
+		const plan = {
+			promotionDistTag: "latest",
+			promotionBaseline: Object.fromEntries(
+				packages.map(({ name }) => [name, null]),
+			),
+		};
+		const view = (spec: string, field: string) => {
+			if (field !== "dist-tags") return undefined;
+			return spec === packages[1].name ? { latest: previousVersion } : {};
+		};
+		expect(() => assertPromotionBaseline(manifest, plan, {}, view)).toThrow(
+			new RegExp(`${packages[1].name} latest differs from the immutable promotion baseline`),
 		);
 	});
 

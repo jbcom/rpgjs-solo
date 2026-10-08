@@ -63,6 +63,12 @@
 	"registry": "https://registry.npmjs.org/",
 	"candidateDistTag": "beta29-solo3-candidate",
 	"promotionDistTag": "latest",
+	"promotionBaseline": {
+		"rpgjs-solo": null,
+		"rpgjs-solo-action-battle": null,
+		"rpgjs-solo-renderer": null,
+		"rpgjs-solo-vite": null
+	},
 	"trainTag": "solo-v5.0.0-beta.29.solo.3",
 	"canonical": {
 		"repository": "https://github.com/jbcom/rpgjs-solo.git",
