@@ -55,6 +55,7 @@ import {
 	prepareReleaseEvidence,
 	publishCandidateCohort,
 	publishedConsumerInstallArgs,
+	publishVerifiedPackageArchiveWithOidc,
 	publishVerifiedPackageBytes,
 	readTransactionJournal,
 	rootDirectory,
@@ -698,19 +699,15 @@ function createReleaseAdapter(
 
 describe("Solo beta.29 coordinated release transaction", () => {
 	it("requires a new release identity and finalized bindings for the public transition", () => {
-		expect(() => loadSoloReleasePlan()).toThrow(
-			/package order, directory, or immutable tag drifted/i,
-		);
-		const plan = loadCurrentIdentityReleasePlan();
+		const plan = loadSoloReleasePlan();
 		expect(plan.previousVersion).toBe("5.0.0-beta.29.solo.2");
 		expect(plan.version).toBe("5.0.0-beta.29.solo.3");
 		expect(plan.consumedChangesets.map(({ id }) => id)).toEqual([
 			"public-patch-consumer",
 			"current-solo-toolchain",
+			"unscoped-solo-package-identity",
 		]);
-		expect(() => validateSoloReleaseState(rootDirectory, plan)).toThrow(
-			/public-patch-consumer SHA-256 does not match the release plan/i,
-		);
+		expect(validateSoloReleaseState(rootDirectory, plan).phase).toBe("source");
 		expect(() => assertFinalReleaseBindings(plan)).toThrow();
 	});
 	it("normalizes inherited-stdio command results without trimming null", () => {
@@ -1088,11 +1085,11 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	});
 
 	it("binds the next beta.29 Solo increment and rejects provisional release authority", () => {
-		const plan = loadCurrentIdentityReleasePlan();
+		const plan = loadSoloReleasePlan();
 		expect(plan.previousVersion).toBe("5.0.0-beta.29.solo.2");
 		expect(plan.version).toBe("5.0.0-beta.29.solo.3");
 		expect(plan.requiredSourceCommit).toBe(
-			"43fbf92b800d46296a5d8edaf87874472414faa8",
+			"47ee59427f9b41755adcf266078afeb2b8bf11a3",
 		);
 		expect(plan.sourceBaseCommit).toBe(plan.requiredSourceCommit);
 		expect(plan.reviewEvidence.enginePullRequest.mergeCommit).toBe(
@@ -1104,6 +1101,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.consumedChangesets).toEqual([
 			expect.objectContaining({ id: "public-patch-consumer" }),
 			expect.objectContaining({ id: "current-solo-toolchain" }),
+			expect.objectContaining({ id: "unscoped-solo-package-identity" }),
 		]);
 		expect(
 			plan.carriedChangesets.find(
@@ -2092,6 +2090,30 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			algorithms: ["sha512"],
 		});
 		expect(item.publishManifest).toEqual({ name: item.name, version });
+	});
+
+	it("passes only the verified archive to the npm OIDC CLI transport", () => {
+		const candidate = createCandidateFixture();
+		const item = candidate.manifest.packages[0];
+		const sourcePath = join(candidate.directory, item.archive);
+		const calls: Array<{ command: string; args: string[] }> = [];
+		publishVerifiedPackageArchiveWithOidc({
+			item,
+			sourcePath,
+			tarballData: readFileSync(sourcePath),
+			plan: { registry, candidateDistTag: "candidate" },
+			env: {},
+			command: (command, args) => calls.push({ command, args }),
+		});
+		expect(calls).toEqual([
+			{
+				command: "npm",
+				args: [
+					"publish", sourcePath, "--registry", registry, "--tag", "candidate",
+					"--access", "public", "--provenance",
+				],
+			},
+		]);
 	});
 
 	it("refuses manifest identity, byte, and token drift before invoking libnpmpublish", async () => {

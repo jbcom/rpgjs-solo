@@ -2446,6 +2446,18 @@ export const withEphemeralNpmAuth = async (token, registry, callback) => {
 	}
 };
 
+export const withTrustedNpmOidc = async (registry, callback) => {
+	assert(
+		process.env.GITHUB_ACTIONS === "true" &&
+			typeof process.env.ACTIONS_ID_TOKEN_REQUEST_URL === "string" &&
+			typeof process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN === "string",
+		"Trusted npm publication requires a GitHub Actions OIDC identity",
+	);
+	for (const name of ["RPGJS_SOLO_NPM_TOKEN", "NODE_AUTH_TOKEN", "NPM_TOKEN"])
+		assert(!process.env[name], `Trusted npm publication rejects ${name}`);
+	return withAnonymousPatchRegistry(registry, callback);
+};
+
 export const loadProvenance = (
 	manifestPath,
 	plan,
@@ -3185,6 +3197,38 @@ export const publishVerifiedPackageBytes = async ({
 	});
 };
 
+export const publishVerifiedPackageArchiveWithOidc = ({
+	item,
+	sourcePath,
+	tarballData,
+	plan,
+	env,
+	command = run,
+}) => {
+	assert(
+		isAbsolute(sourcePath) &&
+		Buffer.isBuffer(tarballData) &&
+		digest("sha512", tarballData) === item.sha512 &&
+		snapshotIntegrity(tarballData) === item.integrity,
+		`${item.name} OIDC publication archive drifted`,
+	);
+	command(
+		"npm",
+		[
+			"publish",
+			sourcePath,
+			"--registry",
+			plan.registry,
+			"--tag",
+			plan.candidateDistTag,
+			"--access",
+			"public",
+			"--provenance",
+		],
+		isolatedNpmCommandOptions(env),
+	);
+};
+
 export const publishCandidateCohort = async ({
 	manifest,
 	manifestPath,
@@ -3233,6 +3277,7 @@ export const publishCandidateCohort = async ({
 			});
 			await publisher({
 				item,
+				sourcePath: sourceRealPath,
 				tarballData: publishState.bytes,
 				plan,
 				token: authToken,
@@ -3240,7 +3285,7 @@ export const publishCandidateCohort = async ({
 			});
 		} else if (action === "tag")
 			command(
-				"pnpm",
+				"npm",
 				[
 					"dist-tag",
 					"add",
@@ -3266,16 +3311,13 @@ const publishCandidate = async (manifest, manifestPath, plan, args) => {
 	await withAnonymousPatchRegistry(plan.requiredConsumer.registry, async (env) =>
 		verifyRequiredConsumerAnonymousArtifact(plan, env),
 	);
-	await withEphemeralNpmAuth(
-		process.env.RPGJS_SOLO_NPM_TOKEN,
-		plan.registry,
-		async (env, token) =>
+	await withTrustedNpmOidc(plan.registry, async (env) =>
 			publishCandidateCohort({
 				manifest,
 				manifestPath,
 				plan,
 				env,
-				authToken: token,
+				publisher: publishVerifiedPackageArchiveWithOidc,
 			}),
 	);
 };
@@ -3284,8 +3326,7 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 	requireExecution(args, plan);
 	const journalPath = `${manifestPath}.promotion.json`;
 	const journalPurpose = `solo-promotion:${plan.releaseId}`;
-	await withEphemeralNpmAuth(
-		process.env.RPGJS_SOLO_NPM_TOKEN,
+	await withTrustedNpmOidc(
 		plan.registry,
 		async (env) => {
 			assertCandidateCohort(manifest, plan, env);
@@ -3370,7 +3411,7 @@ const promoteLatest = async (manifest, manifestPath, plan, args) => {
 				);
 				if (action === "promote")
 					run(
-						"pnpm",
+						"npm",
 						[
 							"dist-tag",
 							"add",
@@ -3814,8 +3855,7 @@ const publishReleases = async (manifest, manifestPath, plan, args) => {
 	} else {
 		journal = { ...identity, remotes: {} };
 	}
-	await withEphemeralNpmAuth(
-		process.env.RPGJS_SOLO_NPM_TOKEN,
+	await withTrustedNpmOidc(
 		plan.registry,
 		async (env) => assertLivePromotedCohort(manifest, plan, env),
 	);
@@ -3930,8 +3970,7 @@ export const main = async (
 			plan.requiredConsumer.registry,
 			async (env) => verifyRequiredConsumerAnonymousArtifact(plan, env),
 		);
-		await withEphemeralNpmAuth(
-			process.env.RPGJS_SOLO_NPM_TOKEN,
+		await withTrustedNpmOidc(
 			plan.registry,
 			async (env) => {
 				assertCandidateCohort(manifest, plan, env);

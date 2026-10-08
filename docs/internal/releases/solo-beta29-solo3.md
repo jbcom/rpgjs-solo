@@ -20,6 +20,18 @@ The required consumer declares public npm `rpgjs-patches ^0.4.0` and verifies th
 reviewed 0.4.0 artifact using an exact consumer override and npmjs integrity
 evidence. Publication requires public access and npm provenance in supported CI.
 
+The manual release workflow uses GitHub-hosted runners, Node 24, npm 11.21 or
+later, `id-token: write`, and no npm token fallback. Its protected environment
+is `npm-release`. npm trusted-publisher configuration must bind every unscoped
+package to `jbcom/rpgjs-solo` and `solo-release.yml`.
+
+The four unscoped names do not yet exist on npm, so trusted publishing cannot
+be configured yet. After this reviewed plan and its packed artifacts exist, the
+owner must perform the one-time staged bootstrap for each package, approve it
+with 2FA, then configure the trusted publisher before any workflow command can
+publish a later cohort. This is a release gap, not evidence that the archive
+consumer is registry-backed.
+
 Historical releases must be verified using their complete original checkout,
 including its original plan and trust schema. Current neutral signature schemas
 do not reinterpret old evidence.
