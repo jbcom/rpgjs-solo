@@ -97,7 +97,7 @@ interpret regular-expression literals while locating `</script>`. Both changes
 are small, isolated compatibility adaptations and leave the inherited product
 architecture intact.
 
-`@jbcom/rpgjs-solo-renderer` exports
+`rpgjs-solo-renderer` exports
 `rpgjsSoloRendererCompatibility` as the machine-readable admission record. It
 retains the public, consumer-owned injection seam and records the reviewed public
 patch package without importing public registry code into this public fork.

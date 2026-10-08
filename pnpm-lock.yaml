@@ -479,7 +479,7 @@ importers:
 
   packages/solo-action-battle:
     dependencies:
-      '@jbcom/rpgjs-solo':
+      rpgjs-solo:
         specifier: workspace:5.0.0-beta.29.solo.2
         version: link:../solo
     devDependencies:
@@ -507,12 +507,12 @@ importers:
       '@canvasengine/tiled':
         specifier: 2.4.0
         version: 2.4.0
-      '@jbcom/rpgjs-solo':
-        specifier: workspace:5.0.0-beta.29.solo.2
-        version: link:../solo
       canvasengine:
         specifier: 2.4.0
         version: 2.4.0(@types/react@19.2.17)(pixi.js@8.22.0)(react@19.2.8)
+      rpgjs-solo:
+        specifier: workspace:5.0.0-beta.29.solo.2
+        version: link:../solo
     devDependencies:
       '@typescript/typescript6':
         specifier: 6.0.2
@@ -1048,20 +1048,20 @@ importers:
 
   playground/games/solo:
     dependencies:
-      '@jbcom/rpgjs-solo':
-        specifier: workspace:5.0.0-beta.29.solo.2
-        version: link:../../../packages/solo
-      '@jbcom/rpgjs-solo-renderer':
-        specifier: workspace:5.0.0-beta.29.solo.2
-        version: link:../../../packages/solo-renderer
       '@rpgjs/ui-css':
         specifier: workspace:5.0.0-beta.25
         version: link:../../../packages/ui-css
       pixi.js:
         specifier: 8.22.0
         version: 8.22.0
+      rpgjs-solo:
+        specifier: workspace:5.0.0-beta.29.solo.2
+        version: link:../../../packages/solo
+      rpgjs-solo-renderer:
+        specifier: workspace:5.0.0-beta.29.solo.2
+        version: link:../../../packages/solo-renderer
     devDependencies:
-      '@jbcom/rpgjs-solo-vite':
+      rpgjs-solo-vite:
         specifier: workspace:5.0.0-beta.29.solo.2
         version: link:../../../packages/solo-vite
       vite:

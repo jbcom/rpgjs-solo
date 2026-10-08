@@ -1,4 +1,4 @@
-# @jbcom/rpgjs-solo-renderer
+# rpgjs-solo-renderer
 
 The renderer accepts a game-owned CanvasEngine compatibility installer and runs
 it before scene creation. Applications use the public
@@ -40,7 +40,7 @@ composed path is inside a button, form control, dialog, editable region, or
 `data-solo-input-owner` surface do not leak into movement, interaction, or pause.
 
 ```ts
-import { SoloRuntime } from '@jbcom/rpgjs-solo'
+import { SoloRuntime } from 'rpgjs-solo'
 import { installCanvasEnginePatches } from 'rpgjs-patches'
 import {
   SoloRenderer,
@@ -48,7 +48,7 @@ import {
   createRpgMakerSpritesheet,
   loadSoloTiledMap,
   replaceSoloTiledLayers
-} from '@jbcom/rpgjs-solo-renderer'
+} from 'rpgjs-solo-renderer'
 
 const runtime = new SoloRuntime()
 const field = await loadSoloTiledMap({ id: 'field', basePath: '/maps' })
@@ -90,7 +90,7 @@ creation; `SoloRenderer` guarantees that order when it receives
 `installCanvasEnginePatches` in its options.
 
 ```ts
-import { rpgjsSoloRendererCompatibility } from '@jbcom/rpgjs-solo-renderer'
+import { rpgjsSoloRendererCompatibility } from 'rpgjs-solo-renderer'
 
 console.log(
   `${rpgjsSoloRendererCompatibility.patches.package}@${rpgjsSoloRendererCompatibility.patches.version}`

@@ -1,4 +1,4 @@
-# @jbcom/rpgjs-solo-action-battle
+# rpgjs-solo-action-battle
 
 Deterministic, transport-free action combat for RPGJS Solo. It adapts RPGJS
 v5's attack-profile and hit-policy vocabulary to the Solo fixed-tick runtime;
@@ -20,8 +20,8 @@ This keeps targeted melee, projectile, and governed class actions correct after
 kiting or knockback changes the actor's old facing.
 
 ```ts
-import { SoloRuntime } from '@jbcom/rpgjs-solo'
-import { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'
+import { SoloRuntime } from 'rpgjs-solo'
+import { SoloActionBattle } from 'rpgjs-solo-action-battle'
 
 const runtime = new SoloRuntime()
 const combat = new SoloActionBattle(runtime)

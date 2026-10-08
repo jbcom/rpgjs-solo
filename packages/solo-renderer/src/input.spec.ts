@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SoloRuntime } from '@jbcom/rpgjs-solo'
+import { SoloRuntime } from 'rpgjs-solo'
 import { SoloKeyboardInput } from './input'
 
 describe('SoloKeyboardInput UI ownership', () => {

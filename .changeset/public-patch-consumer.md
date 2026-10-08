@@ -1,8 +1,8 @@
 ---
-"@jbcom/rpgjs-solo": patch
-"@jbcom/rpgjs-solo-action-battle": patch
-"@jbcom/rpgjs-solo-renderer": patch
-"@jbcom/rpgjs-solo-vite": patch
+"rpgjs-solo": patch
+"rpgjs-solo-action-battle": patch
+"rpgjs-solo-renderer": patch
+"rpgjs-solo-vite": patch
 ---
 
 Use the public `rpgjs-patches` package at `^0.4.0` for the consumer-injected

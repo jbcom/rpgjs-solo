@@ -1,5 +1,5 @@
 import { MapClass, TiledParser, type TiledLayer, type TiledMap, type TiledObject } from '@canvasengine/tiled'
-import type { SoloObstacleDefinition } from '@jbcom/rpgjs-solo'
+import type { SoloObstacleDefinition } from 'rpgjs-solo'
 import type { SoloRenderedMap } from './types'
 
 export interface LoadSoloTiledMapOptions {

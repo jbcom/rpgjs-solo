@@ -1,4 +1,4 @@
-import type { SoloRuntime, SoloVector } from '@jbcom/rpgjs-solo'
+import type { SoloRuntime, SoloVector } from 'rpgjs-solo'
 import type { SoloInputOptions } from './types'
 
 const DIRECTION_KEYS: Record<string, SoloVector> = {

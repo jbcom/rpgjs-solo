@@ -110,7 +110,7 @@ prose is only a summary and grants no implementation authority by itself.
    world adjacency/border transfers, HUD continuity, icon aliasing, scene and
    terrain readiness, graphic bounds, and direct-command action-bar behavior.
    Add its negative boundary tests for every excluded behavior. Add a new
-   Solo-owned Changeset that names all four `@jbcom/rpgjs-solo*` packages and
+   Solo-owned Changeset that names all four `rpgjs-solo*` packages and
    describes only the behavior actually implemented; upstream release
    bookkeeping cannot substitute for this record.
 4. Run frozen install, build, complete unit/type/API/boundary gates, packed

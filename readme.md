@@ -59,10 +59,10 @@ publishable from the inherited RPGJS package graph:
 
 | Package | Responsibility |
 |---|---|
-| `@jbcom/rpgjs-solo` | Direct commands, deterministic local worlds, authoritative entities, pause, actions, and saves |
-| `@jbcom/rpgjs-solo-action-battle` | Fixed-tick attack profiles, targeting, guard, statuses, melee/projectiles, damage, defeat, and combat telemetry |
-| `@jbcom/rpgjs-solo-renderer` | Native Tiled maps, CanvasEngine scenes, camera, spritesheets, fog of war, direct input, `@rpgjs/ui-css` host, and test auto-mute |
-| `@jbcom/rpgjs-solo-vite` | Production-bundle rejection of room/sync/socket/prediction regressions |
+| `rpgjs-solo` | Direct commands, deterministic local worlds, authoritative entities, pause, actions, and saves |
+| `rpgjs-solo-action-battle` | Fixed-tick attack profiles, targeting, guard, statuses, melee/projectiles, damage, defeat, and combat telemetry |
+| `rpgjs-solo-renderer` | Native Tiled maps, CanvasEngine scenes, camera, spritesheets, fog of war, direct input, `@rpgjs/ui-css` host, and test auto-mute |
+| `rpgjs-solo-vite` | Production-bundle rejection of room/sync/socket/prediction regressions |
 
 All Solo packages are versioned against the exact RPGJS beta baseline and
 publish to the public npmjs registry. Their direct runtime and build

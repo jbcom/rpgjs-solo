@@ -4,7 +4,7 @@ import type {
   SoloJsonValue,
   SoloRuntime,
   SoloVector
-} from '@jbcom/rpgjs-solo'
+} from 'rpgjs-solo'
 
 export type SoloCombatActionMode = 'instant' | 'melee' | 'projectile'
 export type SoloCombatTarget = 'enemy' | 'ally' | 'self' | 'any'

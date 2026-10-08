@@ -627,22 +627,22 @@ export const loadSoloReleasePlan = (planPath = defaultPlanPath) => {
 	);
 	const expectedPackages = [
 		{
-			name: "@jbcom/rpgjs-solo",
+			name: "rpgjs-solo",
 			directory: "packages/solo",
 			tag: `rpgjs-solo-v${plan.version}`,
 		},
 		{
-			name: "@jbcom/rpgjs-solo-action-battle",
+			name: "rpgjs-solo-action-battle",
 			directory: "packages/solo-action-battle",
 			tag: `rpgjs-solo-action-battle-v${plan.version}`,
 		},
 		{
-			name: "@jbcom/rpgjs-solo-renderer",
+			name: "rpgjs-solo-renderer",
 			directory: "packages/solo-renderer",
 			tag: `rpgjs-solo-renderer-v${plan.version}`,
 		},
 		{
-			name: "@jbcom/rpgjs-solo-vite",
+			name: "rpgjs-solo-vite",
 			directory: "packages/solo-vite",
 			tag: `rpgjs-solo-vite-v${plan.version}`,
 		},
@@ -2931,9 +2931,9 @@ export const createPublishedConsumerContract = (manifest, plan) => {
 			},
 		},
 	},
-	runtimeCheck: `import { SoloRuntime } from '@jbcom/rpgjs-solo'
-import { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'
-import { inspectSoloBundle } from '@jbcom/rpgjs-solo-vite'
+	runtimeCheck: `import { SoloRuntime } from 'rpgjs-solo'
+import { SoloActionBattle } from 'rpgjs-solo-action-battle'
+import { inspectSoloBundle } from 'rpgjs-solo-vite'
 
 const runtime = new SoloRuntime({ fixedStepMs: 16 })
 runtime.registerMap({ id: 'release', width: 32, height: 32, entities: [{ id: 'hero', kind: 'player', x: 1, y: 1 }] })
@@ -2956,16 +2956,16 @@ if (inspectSoloBundle({}).length !== 0) throw new Error('vite boundary failed')
 		include: ["src", "vite.config.ts"],
 	},
 	viteConfig: `import { defineConfig } from 'vite'
-import { rpgjsSoloBoundary } from '@jbcom/rpgjs-solo-vite'
+import { rpgjsSoloBoundary } from 'rpgjs-solo-vite'
 
 export default defineConfig({
   plugins: [rpgjsSoloBoundary()]
 })
 `,
 	browserEntry: `import { installCanvasEnginePatches } from 'rpgjs-patches'
-import { SoloRuntime } from '@jbcom/rpgjs-solo'
-import { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'
-import { resolveInitialMute } from '@jbcom/rpgjs-solo-renderer'
+import { SoloRuntime } from 'rpgjs-solo'
+import { SoloActionBattle } from 'rpgjs-solo-action-battle'
+import { resolveInitialMute } from 'rpgjs-solo-renderer'
 import { Sprite, Viewport } from 'canvasengine'
 
 const runtime = new SoloRuntime({ fixedStepMs: 16 })

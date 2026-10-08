@@ -1,5 +1,5 @@
-import { SoloRuntime } from '@jbcom/rpgjs-solo'
-import { SoloRenderer, loadSoloTiledMap } from '@jbcom/rpgjs-solo-renderer'
+import { SoloRuntime } from 'rpgjs-solo'
+import { SoloRenderer, loadSoloTiledMap } from 'rpgjs-solo-renderer'
 import '@rpgjs/ui-css/index.css'
 import '@rpgjs/ui-css/theme-default.css'
 import './style.css'

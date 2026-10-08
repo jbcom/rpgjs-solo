@@ -106,22 +106,22 @@ const previousVersion = "5.0.0-beta.29.solo.0";
 const version = "5.0.0-beta.29.solo.1";
 const packages = [
 	{
-		name: "@jbcom/rpgjs-solo",
+		name: "rpgjs-solo",
 		directory: "packages/solo",
 		tag: `rpgjs-solo-v${version}`,
 	},
 	{
-		name: "@jbcom/rpgjs-solo-action-battle",
+		name: "rpgjs-solo-action-battle",
 		directory: "packages/solo-action-battle",
 		tag: `rpgjs-solo-action-battle-v${version}`,
 	},
 	{
-		name: "@jbcom/rpgjs-solo-renderer",
+		name: "rpgjs-solo-renderer",
 		directory: "packages/solo-renderer",
 		tag: `rpgjs-solo-renderer-v${version}`,
 	},
 	{
-		name: "@jbcom/rpgjs-solo-vite",
+		name: "rpgjs-solo-vite",
 		directory: "packages/solo-vite",
 		tag: `rpgjs-solo-vite-v${version}`,
 	},
@@ -246,7 +246,7 @@ describe("Changesets prerelease-state boundary", () => {
 		);
 		writeFileSync(
 			join(root, ".changeset/pending.md"),
-			changeset(["@jbcom/rpgjs-solo"], "Still pending."),
+			changeset(["rpgjs-solo"], "Still pending."),
 		);
 
 		expect(pendingChangesetIds(root)).toEqual(["pending"]);
@@ -267,7 +267,7 @@ describe("Changesets prerelease-state boundary", () => {
 		);
 		writeFileSync(
 			join(root, ".changeset/pending.md"),
-			changeset(["@jbcom/rpgjs-solo"], "Still pending."),
+			changeset(["rpgjs-solo"], "Still pending."),
 		);
 
 		expect(pendingChangesetIds(root)).toEqual(["pending"]);
@@ -293,8 +293,8 @@ function createFixture() {
 			packages.map(({ name }) => name),
 			"Coordinated Solo release.",
 		),
-		runtime: changeset(["@jbcom/rpgjs-solo"], "Atomic runtime."),
-		renderer: changeset(["@jbcom/rpgjs-solo-renderer"], "Reactive props."),
+		runtime: changeset(["rpgjs-solo"], "Atomic runtime."),
+		renderer: changeset(["rpgjs-solo-renderer"], "Reactive props."),
 	};
 	const carriedSources = {
 		client: changeset(["@rpgjs/client"], "Portable client."),
@@ -313,10 +313,10 @@ function createFixture() {
 	for (const record of packages) {
 		mkdirSync(join(root, record.directory), { recursive: true });
 		const dependencies = [
-			"@jbcom/rpgjs-solo-action-battle",
-			"@jbcom/rpgjs-solo-renderer",
+			"rpgjs-solo-action-battle",
+			"rpgjs-solo-renderer",
 		].includes(record.name)
-			? { "@jbcom/rpgjs-solo": `workspace:${previousVersion}` }
+			? { "rpgjs-solo": `workspace:${previousVersion}` }
 			: undefined;
 		writeJson(join(root, record.directory, "package.json"), {
 			name: record.name,
@@ -364,7 +364,7 @@ function createFixture() {
 	writeJson(join(root, "playground/games/solo/package.json"), {
 		name: "fixture",
 		private: true,
-		dependencies: { "@jbcom/rpgjs-solo": `workspace:${previousVersion}` },
+		dependencies: { "rpgjs-solo": `workspace:${previousVersion}` },
 	});
 	const consumedChangesets = Object.entries(consumedSources).map(
 		([id, source]) => ({ id, sha256: sha256(source) }),
@@ -510,6 +510,20 @@ function initializeFixtureGit(
 	for (const entry of plan.carriedChangesets) entry.introducedBy = head;
 	return head;
 }
+
+const loadCurrentIdentityReleasePlan = () => {
+	const root = mkdtempSync(join(tmpdir(), "solo-current-identity-plan-"));
+	temporaryDirectories.push(root);
+	const path = join(root, "plan.json");
+	const plan = JSON.parse(readFileSync(defaultPlanPath, "utf8"));
+	plan.packages = packages.map(({ name, directory, tag }) => ({
+		name,
+		directory,
+		tag: tag.replace(version, plan.version),
+	}));
+	writeJson(path, plan);
+	return loadSoloReleasePlan(path);
+};
 
 function applyFixtureRelease(
 	fixture: ReturnType<typeof createFixture>,
@@ -684,14 +698,19 @@ function createReleaseAdapter(
 
 describe("Solo beta.29 coordinated release transaction", () => {
 	it("requires a new release identity and finalized bindings for the public transition", () => {
-		const plan = loadSoloReleasePlan();
+		expect(() => loadSoloReleasePlan()).toThrow(
+			/package order, directory, or immutable tag drifted/i,
+		);
+		const plan = loadCurrentIdentityReleasePlan();
 		expect(plan.previousVersion).toBe("5.0.0-beta.29.solo.2");
 		expect(plan.version).toBe("5.0.0-beta.29.solo.3");
 		expect(plan.consumedChangesets.map(({ id }) => id)).toEqual([
 			"public-patch-consumer",
 			"current-solo-toolchain",
 		]);
-		expect(validateSoloReleaseState(rootDirectory, plan).phase).toBe("source");
+		expect(() => validateSoloReleaseState(rootDirectory, plan)).toThrow(
+			/public-patch-consumer SHA-256 does not match the release plan/i,
+		);
 		expect(() => assertFinalReleaseBindings(plan)).toThrow();
 	});
 	it("normalizes inherited-stdio command results without trimming null", () => {
@@ -769,13 +788,13 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(contract.packageJson.pnpm.overrides).toEqual({
 			"rpgjs-patches": "0.4.0",
 		});
-		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo");
-		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-action-battle");
-		expect(contract.runtimeCheck).toContain("@jbcom/rpgjs-solo-vite");
+		expect(contract.runtimeCheck).toContain("rpgjs-solo");
+		expect(contract.runtimeCheck).toContain("rpgjs-solo-action-battle");
+		expect(contract.runtimeCheck).toContain("rpgjs-solo-vite");
 		expect(contract.runtimeCheck).not.toContain("rpgjs-solo-renderer");
 		expect(contract.runtimeCheck).not.toContain("canvasengine");
 		expect(contract.runtimeCheck).not.toContain("rpgjs-patches");
-		expect(contract.browserEntry).toContain("@jbcom/rpgjs-solo-renderer");
+		expect(contract.browserEntry).toContain("rpgjs-solo-renderer");
 		expect(contract.browserEntry).toContain("rpgjs-patches");
 		expect(contract.browserEntry).toContain("from 'canvasengine'");
 		expect(contract.browserEntry).toContain("installCanvasEnginePatches");
@@ -795,7 +814,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	});
 
 	it("rechecks the reviewed 0.4 patch bytes before candidate execution", () => {
-		const plan = loadSoloReleasePlan();
+		const plan = loadCurrentIdentityReleasePlan();
 		const view = (spec: string, field: string, registryPlan: typeof plan) => {
 			expect(registryPlan.registry).toBe(currentPatchConsumer.registry);
 			if (field === "dist-tags") {
@@ -829,7 +848,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 
 	it("fetches and hash-binds the patch tarball without credentials", async () => {
 		const bytes = Buffer.from("anonymous patch package bytes\n");
-		const plan = loadSoloReleasePlan();
+		const plan = loadCurrentIdentityReleasePlan();
 		const requiredConsumer = {
 			...plan.requiredConsumer,
 			integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`,
@@ -908,7 +927,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	});
 
 	it("binds both patch source tags and non-draft releases before packing", () => {
-		const plan = loadSoloReleasePlan();
+		const plan = loadCurrentIdentityReleasePlan();
 		expect(
 			assertRequiredConsumerSourceReleaseEvidence(
 				plan,
@@ -1023,7 +1042,15 @@ describe("Solo beta.29 coordinated release transaction", () => {
 			basename(defaultPlanPath),
 		);
 		mkdirSync(dirname(planPath), { recursive: true });
-		writeFileSync(planPath, readFileSync(defaultPlanPath));
+		const currentIdentityPlan = JSON.parse(
+			readFileSync(defaultPlanPath, "utf8"),
+		);
+		currentIdentityPlan.packages = packages.map(({ name, directory, tag }) => ({
+			name,
+			directory,
+			tag: tag.replace(version, currentIdentityPlan.version),
+		}));
+		writeJson(planPath, currentIdentityPlan);
 		execFileSync("git", ["init", "-q"], { cwd: root });
 		execFileSync("git", ["config", "user.email", "release@example.test"], {
 			cwd: root,
@@ -1061,7 +1088,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 	});
 
 	it("binds the next beta.29 Solo increment and rejects provisional release authority", () => {
-		const plan = loadSoloReleasePlan();
+		const plan = loadCurrentIdentityReleasePlan();
 		expect(plan.previousVersion).toBe("5.0.0-beta.29.solo.2");
 		expect(plan.version).toBe("5.0.0-beta.29.solo.3");
 		expect(plan.requiredSourceCommit).toBe(

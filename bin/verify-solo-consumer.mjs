@@ -106,7 +106,7 @@ ${Object.entries(localPackageOverrides)
   writeFileSync(
     join(consumerDirectory, 'vite.config.ts'),
     `import { defineConfig } from 'vite'
-import { rpgjsSoloBoundary } from '@jbcom/rpgjs-solo-vite'
+import { rpgjsSoloBoundary } from 'rpgjs-solo-vite'
 
 export default defineConfig({
   plugins: [rpgjsSoloBoundary()]
@@ -116,9 +116,9 @@ export default defineConfig({
   mkdirSync(join(consumerDirectory, 'src'))
   writeFileSync(
     join(consumerDirectory, 'src', 'main.ts'),
-    `import { SoloRuntime } from '@jbcom/rpgjs-solo'
-import { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'
-import { resolveInitialMute } from '@jbcom/rpgjs-solo-renderer'
+    `import { SoloRuntime } from 'rpgjs-solo'
+import { SoloActionBattle } from 'rpgjs-solo-action-battle'
+import { resolveInitialMute } from 'rpgjs-solo-renderer'
 
 const runtime = new SoloRuntime({ fixedStepMs: 16 })
 runtime.registerMap({
@@ -170,9 +170,9 @@ document.querySelector('#app')!.textContent = 'packed Solo consumer passed'
   )
   writeFileSync(
     join(consumerDirectory, 'runtime-check.mjs'),
-    `import { SoloRuntime } from '@jbcom/rpgjs-solo'
-import { SoloActionBattle } from '@jbcom/rpgjs-solo-action-battle'
-import { inspectSoloBundle } from '@jbcom/rpgjs-solo-vite'
+    `import { SoloRuntime } from 'rpgjs-solo'
+import { SoloActionBattle } from 'rpgjs-solo-action-battle'
+import { inspectSoloBundle } from 'rpgjs-solo-vite'
 
 const runtime = new SoloRuntime({ fixedStepMs: 16 })
 runtime.registerMap({

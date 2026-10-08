@@ -23,8 +23,8 @@ if (violations.length > 0) {
   throw new Error(`Solo action-battle boundary contains banned terms: ${violations.join(', ')}`)
 }
 const dependencies = Object.keys(manifest.dependencies ?? {})
-if (dependencies.length !== 1 || dependencies[0] !== '@jbcom/rpgjs-solo') {
-  throw new Error(`Solo action-battle must depend only on @jbcom/rpgjs-solo; found ${dependencies.join(', ')}`)
+if (dependencies.length !== 1 || dependencies[0] !== 'rpgjs-solo') {
+  throw new Error(`Solo action-battle must depend only on rpgjs-solo; found ${dependencies.join(', ')}`)
 }
 if (size > 75_000) throw new Error(`Solo action-battle entry is ${size} bytes; expected at most 75000`)
 
