@@ -25,12 +25,14 @@ later, `id-token: write`, and no npm token fallback. Its protected environment
 is `npm-release`. npm trusted-publisher configuration must bind every unscoped
 package to `jbcom/rpgjs-solo` and `solo-release.yml`.
 
-The four unscoped names do not yet exist on npm, so trusted publishing cannot
-be configured yet. After this reviewed plan and its packed artifacts exist, the
-owner must perform the one-time staged bootstrap for each package, approve it
-with 2FA, then configure the trusted publisher before any workflow command can
-publish a later cohort. This is a release gap, not evidence that the archive
-consumer is registry-backed.
+The four unscoped names do not yet exist on npm, so neither `npm trust` nor
+`npm stage publish` can configure their first release: both commands require an
+existing package. After this reviewed plan and its packed artifacts exist, the
+owner must perform the one-time direct 2FA publish for each package, then run
+`npm trust github <package> --repo jbcom/rpgjs-solo --file solo-release.yml
+--env npm-release --allow-publish`. Later releases may use the workflow's OIDC
+route and staged publishing if its trust permission is added. This is a release
+gap, not evidence that the archive consumer is registry-backed.
 
 Historical releases must be verified using their complete original checkout,
 including its original plan and trust schema. Current neutral signature schemas
