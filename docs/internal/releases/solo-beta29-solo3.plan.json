@@ -12,7 +12,7 @@
 		"requiredUpdate": "Finalize the unscoped package-identity and OIDC release-transition reviews before applying or publishing.",
 		"enginePullRequest": {
 			"repository": "jbcom/rpgjs-solo",
-			"number": 34,
+			"number": 35,
 			"mergeCommit": "47ee59427f9b41755adcf266078afeb2b8bf11a3",
 			"minimumApprovals": 1,
 			"requiredChecks": [

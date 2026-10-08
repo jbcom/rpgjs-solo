@@ -1095,7 +1095,7 @@ describe("Solo beta.29 coordinated release transaction", () => {
 		expect(plan.reviewEvidence.enginePullRequest.mergeCommit).toBe(
 			plan.requiredSourceCommit,
 		);
-		expect(plan.reviewEvidence.enginePullRequest.number).toBe(34);
+		expect(plan.reviewEvidence.enginePullRequest.number).toBe(35);
 		expect(plan.reviewEvidence.releasePullRequest.number).toBeNull();
 		expect(plan.requiredConsumer).toEqual(currentPatchConsumer);
 		expect(plan.consumedChangesets).toEqual([
